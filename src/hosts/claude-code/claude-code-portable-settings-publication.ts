@@ -215,7 +215,7 @@ async function sourceOrNull(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StableFileReadResult> | null> {
-  let resource;
+  let resource: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     resource = await root.inspectExistingResource(CLAUDE_CODE_PORTABLE_SETTINGS_REF);
   } catch (error: unknown) {

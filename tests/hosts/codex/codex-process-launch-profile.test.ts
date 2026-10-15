@@ -9,7 +9,7 @@ import { CODEX_HOOK_OBSERVER_COMMAND } from "../../../src/hosts/codex/codex-hook
 import { CODEX_MCP_CONFIGURATION } from "../../../src/hosts/codex/codex-process-launch-profile.js";
 
 for (const selection of ["host", "unset", "empty", "invalid-host"] as const) {
-  test("Codex MCP 和 hook 的实际启动遵守 Node 选择：" + selection, {
+  test(`Codex MCP 和 hook 的实际启动遵守 Node 选择：${selection}`, {
     skip: process.platform === "win32",
   }, (t) => {
     const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-node-"));

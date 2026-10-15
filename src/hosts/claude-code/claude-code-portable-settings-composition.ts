@@ -368,7 +368,7 @@ export async function planClaudeCodePortableSettingsComposition(
   const request = parseRequest(requestValue);
   if (request.signal?.aborted === true) fail("aborted", "$signal");
   const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
-  let placements;
+  let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
   try {
     placements = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.model);
   } catch (error: unknown) {

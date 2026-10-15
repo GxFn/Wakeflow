@@ -288,6 +288,7 @@ export class WakeflowConfigError extends Error {
   }
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in config text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/u;
 

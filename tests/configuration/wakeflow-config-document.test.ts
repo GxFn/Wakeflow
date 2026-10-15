@@ -7,6 +7,7 @@ import {
 } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
+import { fixtureMember } from "../support/fixture-member.js";
 import {
   createMinimalWakeflowConfig,
   serializeWakeflowConfigFixture,
@@ -27,11 +28,11 @@ test("optional nested fields survive representation normalization", () => {
     supportSurfaces: Record<string, unknown>[];
     windows: Record<string, unknown>[];
   };
-  topology.repositories[0]!.description = "Repository description";
-  topology.supportSurfaces[0]!.description = "Design description";
-  topology.supportSurfaces[1]!.ownership = "external-owned";
-  topology.supportSurfaces[1]!.instructionManagement = "managed-block";
-  topology.windows[0]!.description = "Controller description";
+  fixtureMember(topology.repositories, 0).description = "Repository description";
+  fixtureMember(topology.supportSurfaces, 0).description = "Design description";
+  fixtureMember(topology.supportSurfaces, 1).ownership = "external-owned";
+  fixtureMember(topology.supportSurfaces, 1).instructionManagement = "managed-block";
+  fixtureMember(topology.windows, 0).description = "Controller description";
   value.hosts = {
     codex: {
       launch: {

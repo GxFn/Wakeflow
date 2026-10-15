@@ -94,6 +94,9 @@
     },
     {
       "includes": [
+        "src/configuration/wakeflow-config-authority-replacement-contract.ts",
+        "src/configuration/wakeflow-config-authority-replacement-recovery.ts",
+        "src/configuration/wakeflow-config.ts",
         "src/foundation/artifact/loaded-artifact-tree-identity.ts",
         "src/foundation/artifact/loaded-artifact-tree-transfer-plan.ts",
         "src/foundation/data/passive-own-data.ts",
@@ -122,35 +125,17 @@
         "src/foundation/filesystem/stable-file-read.ts",
         "src/foundation/filesystem/whole-file-content-transition.ts",
         "src/foundation/git/git-ignore-observation.ts",
-        "src/foundation/node/process-instance.ts"
+        "src/foundation/node/process-instance.ts",
+        "src/hosts/claude-code/claude-code-maintenance-capability.ts",
+        "src/hosts/claude-code/claude-code-portable-settings-composition.ts",
+        "src/hosts/claude-code/claude-code-portable-settings-operation-executor.ts",
+        "src/hosts/claude-code/claude-code-portable-settings-publication.ts",
+        "src/hosts/claude-code/claude-code-portable-settings-transition.ts"
       ],
       "linter": {
         "rules": {
           "complexity": {
             "noExcessiveCognitiveComplexity": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "src/hosts/**",
-        "tests/hosts/**",
-        "src/configuration/**",
-        "tests/configuration/**"
-      ],
-      "linter": {
-        "rules": {
-          "complexity": {
-            "noExcessiveCognitiveComplexity": "off"
-          },
-          "suspicious": {
-            "noImplicitAnyLet": "off",
-            "noControlCharactersInRegex": "off"
-          },
-          "style": {
-            "noNonNullAssertion": "off",
-            "useImportType": "off"
           }
         }
       }

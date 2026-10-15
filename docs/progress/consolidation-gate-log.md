@@ -4703,3 +4703,25 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 深挖 §10 跟踪指标：Biome 豁免行数占比下降——`src/foundation` 22,668 行 + `tests/foundation` 出豁免（原 78% 的分母是五个旧域目录；hosts/configuration/workspace/governance 仍在豁免内）；严格配置下的复杂度错误数 233 中 54 处改为逐文件登记（规则对这 29 份文件关，其余 foundation 文件开）；旧错误类数 189 不变但家族表多了 8 个此前漏登记的码；其余指标不动。
 
 本批改动 `biome.json`（foundation 出豁免 + 29 份文件的复杂度允许清单）、src/foundation（130 份格式 + 12 处类型注解 + 3 处 biome-ignore + 7 处守卫改写 + 1 处 catch）、tests/foundation（格式 + 2 处 biome-ignore + 1 处守卫改写）、`src/kernel/legacy-error-families.ts`（+8）、`tests/kernel/legacy-error-families.test.ts`（正则）、docs/（gate-log、登记 L2、深挖批次表、docs README）与两个制品（124 份）；第一步已提交 0d079753，第二步未提交，main 领先 origin/main 16 个提交。
+
+### 13.172 技术债务批次 6 第二、三目录：hosts 与 configuration 出 Biome 豁免（2026-10-14）
+
+按 §13.171 的两步法接着做 `src/hosts` + `tests/hosts`（43 份）与 `src/configuration` + `tests/configuration`（20 份）。
+
+- **第一步：只有格式的提交（f2226217）。** 四个目录从豁免 override 拿出，过渡 override 只关规则；`biome check --write` 改了 55 份文件（格式 55、import 整理 15）；`tests/hosts` + `tests/configuration` 105 项与仓库范围的 lint / format / knip / 架构规则通过。
+- **第二步：规则全开。** 删掉过渡 override。严格配置量到的非格式诊断 56 条：18 处隐式 any 的 `let` 补类型——多数是 `Awaited<ReturnType<typeof …>>`，`parseWakeflowDurableIdOfKind` 用实例化表达式 `ReturnType<typeof parseWakeflowDurableIdOfKind<"surface">>`，`parseWakeflowConfigAuthorityExpectation` 里四层 `pickOwnDataProperties` 投影改成一个返回对象的 IIFE（`const` 让类型随键集合推导，catch 里 `return fail(...)`）；16 处非空断言全在 configuration 的测试夹具里（`topology.repositories[0]!.x = …`），新增 `tests/support/fixture-member.ts` 的 `fixtureMember(items, index)`（缺位即抛出）替换；1 处控制字符正则是 `wakeflow-config.ts` 有意拒绝配置文本里控制字符的 `CONTROL_PATTERN`，加 `biome-ignore` 说明；3 处 `useImportType` 与 2 处 `useTemplate`（Codex 启动 profile 的 shell 命令与一个测试标题的字符串拼接）改模板字符串或由 `--write` 改好；格式器把 `codex-hook-fragment.test.ts` 的常量折成两行后原有的 `biome-ignore` 与字面量隔开失效，挪到字面量正上方。16 处认知复杂度超限（8 份文件：wakeflow-config-authority-replacement-contract.ts、wakeflow-config-authority-replacement-recovery.ts、wakeflow-config.ts、claude-code-maintenance-capability.ts、claude-code-portable-settings-composition.ts、claude-code-portable-settings-operation-executor.ts、claude-code-portable-settings-publication.ts、claude-code-portable-settings-transition.ts）按 §13.171 同一做法进 `biome.json` 的按文件允许清单（现在共 37 份文件、70 处），所有者仍是批次 7 A.5 的拆分。处理后四个目录 `biome check` 零诊断。
+- **没做的：** 复杂度本身没有下降；workspace（83 处）与 governance（81 处）两个最大的目录待后续；knip 的 `ignore` 仍覆盖五个旧域目录（待 Q12）。
+
+文档：登记 L2（允许清单扩到 37 份）、深挖批次表第 6 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 第一步后：`tests/hosts` + `tests/configuration` 105 项通过，lint / format / knip / 架构规则通过。
+- 第二步后：四个目录 `biome check` 零诊断；hosts、configuration 与旧错误家族清点 106 项通过；lint / format / knip / 架构规则通过。制品重建改了 40 份文件，`smoke:artifacts` 在重建后的制品上两个 verify ok、hook observer landed（第一次排队的 smoke 抢在重建完成前跑完，作废，重排了一次）。
+- 完整门一次即过：run-uNzntt（01:39–01:57，18.4 分钟）1505/1505 全通过、316 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-uNzntt/receipt.json`：316 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-2jRMPc）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
+- 深挖 §10 跟踪指标：Biome 豁免再去掉 `src/hosts`、`src/configuration` 及其测试（剩 workspace 与 governance 两个目录在豁免内）；严格配置下的复杂度错误 233 处中累计 70 处改为逐文件登记；其余指标不动。
+
+本批改动 `biome.json`（四目录出豁免 + 允许清单扩到 37 份）、src/hosts 与 src/configuration（格式 + 18 处类型注解/IIFE + 1 处 biome-ignore + 2 处模板字符串 + import type）、tests/hosts 与 tests/configuration（格式 + 16 处 `fixtureMember` + 1 处 biome-ignore 挪位 + 1 处模板字符串）、`tests/support/fixture-member.ts`（新增）、docs/（gate-log、登记 L2、深挖批次表、docs README）、耗时表与两个制品（40 份）；第一步已提交 f2226217，第二步未提交，main 领先 origin/main 19 个提交。

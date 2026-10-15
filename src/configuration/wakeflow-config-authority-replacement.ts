@@ -4,7 +4,7 @@ import {
   replaceFileAtomically,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   RootedExclusiveFileLockError,
   withRootedExclusiveFileLock,

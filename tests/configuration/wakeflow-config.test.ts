@@ -10,6 +10,7 @@ import {
   type WakeflowConfigErrorReason,
 } from "../../src/configuration/wakeflow-config.js";
 import { WAKEFLOW_CONFIG_SCHEMA } from "../../src/contracts/generated/configuration/wakeflow-config.generated.js";
+import { fixtureMember } from "../support/fixture-member.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 function expectConfigError(
@@ -109,7 +110,7 @@ test("Schema owns closed shape, cardinality, ownership, host constraints and the
       topology(value).windows.pop();
     },
     (value) => {
-      topology(value).supportSurfaces[0]!.instructionManagement = "managed-block";
+      fixtureMember(topology(value).supportSurfaces, 0).instructionManagement = "managed-block";
     },
     (value) => {
       value.hosts = { github: {} };
@@ -119,7 +120,7 @@ test("Schema owns closed shape, cardinality, ownership, host constraints and the
       value.governance = { audit: { preservedReviewAfterDays: 30 } };
     },
     (value) => {
-      topology(value).repositories[0]!.validation = { residueExceptions: [] };
+      fixtureMember(topology(value).repositories, 0).validation = { residueExceptions: [] };
     },
   ];
   for (const mutate of cases) {
@@ -131,17 +132,23 @@ test("Schema owns closed shape, cardinality, ownership, host constraints and the
 
 test("typed identity, references and topology relationships are validated together", () => {
   const collision = createMinimalWakeflowConfig();
-  topology(collision).repositories[0]!.repositoryId =
+  fixtureMember(topology(collision).repositories, 0).repositoryId =
     "repository_11111111-1111-4111-8111-111111111111";
   expectConfigError(() => parseWakeflowConfig(collision), "identifier-collision");
 
   const missingReference = createMinimalWakeflowConfig();
-  const productRoot = topology(missingReference).windows[3]!.root as Record<string, unknown>;
+  const productRoot = fixtureMember(topology(missingReference).windows, 3).root as Record<
+    string,
+    unknown
+  >;
   productRoot.repositoryId = "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   expectConfigError(() => parseWakeflowConfig(missingReference), "reference");
 
   const wrongCapability = createMinimalWakeflowConfig();
-  const designRoot = topology(wrongCapability).windows[1]!.root as Record<string, unknown>;
+  const designRoot = fixtureMember(topology(wrongCapability).windows, 1).root as Record<
+    string,
+    unknown
+  >;
   designRoot.surfaceId = "surface_44444444-4444-4444-8444-444444444444";
   expectConfigError(() => parseWakeflowConfig(wrongCapability), "topology");
 
@@ -158,7 +165,7 @@ test("typed identity, references and topology relationships are validated togeth
 test("placement adds Unicode and per-segment canonicality beyond the public Schema", () => {
   for (const placement of ["Design/ nested", "cafe\u0301"] as const) {
     const value = createMinimalWakeflowConfig();
-    topology(value).supportSurfaces[0]!.path = placement;
+    fixtureMember(topology(value).supportSurfaces, 0).path = placement;
     expectConfigError(() => parseWakeflowConfig(value), "placement");
   }
   for (const placement of ["C:\\workspace", "Design\\nested"] as const) {
@@ -173,7 +180,7 @@ test("repositories 与 supportSurfaces 的 placement 至多一个前导 ..：拒
     ["supportSurfaces", "../../../Design"],
   ] as const) {
     const value = createMinimalWakeflowConfig();
-    topology(value)[collection][0]!.path = placement;
+    fixtureMember(topology(value)[collection], 0).path = placement;
     // `parseWakeflowConfig` 先跑 Schema 再跑 placement 准入，所以实际触发的永远是 "schema"：
     // 解析器里同一条上限是纵深防御，不是第二条可达路径（下面用 Schema 的语法本身证明够不到）。
     expectConfigError(() => parseWakeflowConfig(value), "schema");
@@ -214,7 +221,7 @@ test("repositories 与 supportSurfaces 的 placement 至多一个前导 ..：拒
   deepEqual(admittedWithTwoParents, []);
 
   const oneLevel = createMinimalWakeflowConfig();
-  topology(oneLevel).supportSurfaces[0]!.path = "../Design";
+  fixtureMember(topology(oneLevel).supportSurfaces, 0).path = "../Design";
   equal(parseWakeflowConfig(oneLevel).topology.supportSurfaces[0]?.path, "../Design");
 
   // 只有拓扑放置收紧：账本根仍可以是更深的相对位置。

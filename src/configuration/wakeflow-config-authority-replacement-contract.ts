@@ -17,9 +17,9 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import {
+import type {
   RootedExclusiveFileLockError,
-  type RootedExclusiveFileLockOptions,
+  RootedExclusiveFileLockOptions,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
@@ -278,34 +278,34 @@ export function parseWakeflowConfigAuthorityExpectation(
   value: unknown,
   expectedUserId: bigint,
 ): Readonly<ParsedWakeflowConfigAuthorityExpectation> {
-  let projected;
-  let modelProjected;
-  let programProjected;
-  let sourceProjected;
-  try {
-    projected = pickOwnDataProperties(
-      value,
-      ["configDigest", "model", "source", "workspaceRoot"] as const,
-      "$expected",
-    );
-    modelProjected = pickOwnDataProperties(
-      projected.model,
-      ["program"] as const,
-      "$/expected/model",
-    );
-    programProjected = pickOwnDataProperties(
-      modelProjected.program,
-      ["programId"] as const,
-      "$/expected/model/program",
-    );
-    sourceProjected = pickOwnDataProperties(
-      projected.source,
-      ["byteCount", "digest", "node", "resourcePath"] as const,
-      "$/expected/source",
-    );
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$expected");
-  }
+  // 四层投影在一个 try 里取出：任何一层的形状问题都是同一个 input 拒绝；const 让类型随键集合推导。
+  const { projected, programProjected, sourceProjected } = (() => {
+    try {
+      const projected = pickOwnDataProperties(
+        value,
+        ["configDigest", "model", "source", "workspaceRoot"] as const,
+        "$expected",
+      );
+      const modelProjected = pickOwnDataProperties(
+        projected.model,
+        ["program"] as const,
+        "$/expected/model",
+      );
+      const programProjected = pickOwnDataProperties(
+        modelProjected.program,
+        ["programId"] as const,
+        "$/expected/model/program",
+      );
+      const sourceProjected = pickOwnDataProperties(
+        projected.source,
+        ["byteCount", "digest", "node", "resourcePath"] as const,
+        "$/expected/source",
+      );
+      return { projected, programProjected, sourceProjected };
+    } catch {
+      return failWakeflowConfigAuthorityReplacement("input", "$expected");
+    }
+  })();
   if (
     typeof projected.workspaceRoot !== "string" ||
     projected.configDigest === undefined ||

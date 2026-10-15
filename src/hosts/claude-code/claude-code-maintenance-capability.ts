@@ -333,7 +333,7 @@ async function executeOperation(
   ) {
     fail("operation", "$operation");
   }
-  let executed;
+  let executed: Awaited<ReturnType<typeof executeClaudeCodePortableSettingsOperation>>;
   try {
     executed = await executeClaudeCodePortableSettingsOperation(root, {
       config: request.config,

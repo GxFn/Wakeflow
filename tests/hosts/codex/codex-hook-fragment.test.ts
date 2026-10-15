@@ -38,8 +38,8 @@ const EXPECTED_COMMAND = `"${NODE_PLACEHOLDER}" "${PLUGIN_ROOT_PLACEHOLDER}/hook
  * 渲染字节的期望形状写成字面量，不由片段或 `JSON.stringify` 推导：Codex 的信任按定义哈希记录，
  * 缩进、键序、命令串的 JSON 转义与尾随换行都是哈希的输入，必须由测试而不是实现表达式钉住。
  */
-// biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
 const EXPECTED_COMMAND_LINE =
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: 宿主在运行时展开该占位符
   '            "command": "\\"${CODEX_MCP_NODE_PATH:-node}\\" \\"${PLUGIN_ROOT}/hooks/observe.mjs\\" --wakeflow-hook-observer-v1 --host codex",';
 const EXPECTED_PREFIX: string = [
   "{",

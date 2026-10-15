@@ -158,7 +158,7 @@ Claude 宿主层 18 文件 5,595 行（助手、状态行、四份可移植设�
 | 3 安全最小集（已执行，§13.168） | F7 威胁模型 ADR-0020（proposed，待 Q5）；F1 服务器侧助手字节核对进 prepare_delivery 前置条件 + status `hostAssets`（助手不自检）；F2 角色工具归属表 + Claude 支撑面与启动的按角色允许规则（退役整服务器规则）；F4 只读遗留残留观察（status `legacyResidue`、verify 点名、fresh 拒绝）；E2 `attempt.sendReturn` 由 Wakeflow 算摘要、评审检查显示 `evidenceKind`、文本标明自述 | M | F7 先于其余 |
 | 4 发布基线（不依赖裁决的部分已执行，§13.170） | 已做：C15 隐藏锁文件核对、C9 三份 README 的更新章节与 0.9.x 段落、C17 过期 server 的换代归属按宿主画像、C18 启动意图漂移信息。待裁决或后续：Q2 ADR；tag + `release:check` 真跑一次；CI tag 作业与字节→版本门；C6/C11 升级身份（持久格式与宿主安装目标，见登记） | M | Q1/Q2/Q11 裁决 |
 | 5 测试体系（已执行，§13.169） | 场景链一场景一 `test()` 并按宿主参数化、每宿主一个测试文件（Codex 兄弟布局 / Claude Code 嵌套布局各 23 个），新增 rejected-before-send → rearm、rework 闭环、blocked → 恢复三条评审分支场景；lab 矩阵拆成两个宿主文件；负载敏感标签 `loadSensitive` 与推荐并发（时钟注入未做）；ledger、Demand 发布存储/暂存/事件读取器、证据负载物化器与持久化事件信封的镜像测试；模型测试反例落盘 `.build/model/` 与 CI 按 run_number 轮换种子；CI 加 handoff 作业（图谱检查未入 CI：74 处指纹漂移且无刷新器） | M–L | 批 1 的共享夹具 |
-| 6 质量门解除（foundation 已执行，§13.171） | 按目录解除 Biome 豁免（foundation 已出豁免：格式 + 五条规则，54 处复杂度登记为按文件允许清单；hosts→configuration→workspace→governance 待做）；恢复模块接线或删除；knip 收缩到全 src；未使用导出清理 | L（每目录 S–M） | Q12；与批 7 交错 |
+| 6 质量门解除（foundation、hosts、configuration 已执行，§13.171–§13.172） | 按目录解除 Biome 豁免（三个目录已出豁免：格式 + 五条规则，70 处复杂度登记为按文件允许清单；workspace→governance 待做）；恢复模块接线或删除；knip 收缩到全 src；未使用导出清理 | L（每目录 S–M） | Q12；与批 7 交错 |
 | 7 架构收敛 | 错误体系按目录收敛；三个切片吸收旧域导入；合同接缝上移 contracts；decider/aggregate/预览拆分；共享切片上下文；阶段转移表；tmux 助手改真实模块；能力层去 tmux 字面量 | L | 批 6 同步 |
 | 8 产品缺口 | J1 detach 与 J2 缺省（Q9）；H2/H10 supplement 血缘；H5 research 流程；K4 角色子集（Q5）；K5 摘要模式；K6 按 id 投递；H7/H8（Q10）；E1 标注；I4 技能瘦身与渲染字节预算 | M–L | 对应裁决 |
 

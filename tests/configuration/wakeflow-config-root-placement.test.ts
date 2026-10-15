@@ -9,6 +9,7 @@ import {
   WakeflowConfigRootPlacementError,
 } from "../../src/configuration/wakeflow-config-root-placement.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { fixtureMember } from "../support/fixture-member.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext): Promise<
@@ -33,9 +34,9 @@ function placementModel(overlap = false) {
     supportSurfaces: Record<string, unknown>[];
   };
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-  topology.repositories[0]!.path = "Repositories/ProductA";
-  topology.supportSurfaces[0]!.path = overlap ? "Shared" : "Support/Design";
-  topology.supportSurfaces[1]!.path = overlap ? "shared/child" : "Support/Test";
+  fixtureMember(topology.repositories, 0).path = "Repositories/ProductA";
+  fixtureMember(topology.supportSurfaces, 0).path = overlap ? "Shared" : "Support/Design";
+  fixtureMember(topology.supportSurfaces, 1).path = overlap ? "shared/child" : "Support/Test";
   return parseWakeflowConfig(value);
 }
 

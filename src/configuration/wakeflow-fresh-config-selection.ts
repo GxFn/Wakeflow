@@ -214,7 +214,7 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
   seed: Sha256Digest,
   key: string,
 ): WakeflowDurableId<Kind> {
-  let uuid;
+  let uuid: ReturnType<typeof createUuidV4>;
   try {
     uuid =
       options.uuidFactory === undefined

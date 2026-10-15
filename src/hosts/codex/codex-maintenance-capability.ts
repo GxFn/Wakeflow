@@ -65,7 +65,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
       root: RootedDirectory,
       request: PlanWakeflowHostMaintenanceContributionRequest,
     ) => {
-      let plan;
+      let plan: Awaited<ReturnType<typeof planWakeflowWindowRuntimeProjectionMaintenance>>;
       try {
         plan = await planWakeflowWindowRuntimeProjectionMaintenance(root, {
           action: request.action,

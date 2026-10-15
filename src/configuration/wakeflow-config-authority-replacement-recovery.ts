@@ -5,7 +5,7 @@ import {
   readDurableAtomicFileStageOwnerState,
 } from "../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
@@ -56,7 +56,7 @@ async function inspectRecoveryStages(
   expectedUserId: bigint,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  let directory;
+  let directory: Awaited<ReturnType<typeof readStableRootDirectory>>;
   try {
     directory = await readStableRootDirectory(root, {
       maximumEntries: DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES,
@@ -76,7 +76,7 @@ async function inspectRecoveryStages(
   );
   for (const entry of directory.entries) {
     if (!hasDurableAtomicFileStagePrefix(entry.name)) continue;
-    let address;
+    let address: ReturnType<typeof parseDurableAtomicFileStageFileName>;
     try {
       address = parseDurableAtomicFileStageFileName(entry.name);
     } catch {
@@ -154,7 +154,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
   await assertWakeflowConfigAuthorityDesiredPlacements(root, desired.model);
   assertWakeflowConfigAuthorityNotAborted(parsed.signal);
 
-  let observation;
+  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
     observation = await inspectRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF);
   } catch (error: unknown) {

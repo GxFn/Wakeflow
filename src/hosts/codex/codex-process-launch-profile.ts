@@ -11,7 +11,7 @@ export const CODEX_MCP_CONFIGURATION = Object.freeze({
   mcpServers: Object.freeze({
     wakeflow: Object.freeze({
       command: "/bin/sh",
-      args: Object.freeze(["-c", "exec " + CODEX_NODE_SHELL_WORD + ' ./mcp/server.mjs "$@"', "--"]),
+      args: Object.freeze(["-c", `exec ${CODEX_NODE_SHELL_WORD} ./mcp/server.mjs "$@"`, "--"]),
       cwd: ".",
       env_vars: Object.freeze(["CODEX_MCP_NODE_PATH"]),
     }),

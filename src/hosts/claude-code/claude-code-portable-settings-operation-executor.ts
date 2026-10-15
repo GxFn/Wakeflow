@@ -177,7 +177,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
   if (record.rootKind !== "support-surface") {
     fail("operation", "$operation.root.rootKind");
   }
-  let rootId;
+  let rootId: ReturnType<typeof parseWakeflowDurableIdOfKind<"surface">>;
   try {
     rootId = parseWakeflowDurableIdOfKind(record.rootId, "surface", "$operation.root.rootId");
   } catch (error: unknown) {
@@ -186,7 +186,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
     }
     throw error;
   }
-  let configuredPlacement;
+  let configuredPlacement: ReturnType<typeof parseWakeflowConfigPlacement>;
   try {
     configuredPlacement = parseWakeflowConfigPlacement(
       record.configuredPlacement,
@@ -297,7 +297,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     if (error instanceof WakeflowConfigError) fail("config", error.path);
     throw error;
   }
-  let profile;
+  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
   } catch (error: unknown) {
@@ -351,7 +351,7 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
       throw error;
     }
   }
-  let inspection;
+  let inspection: Awaited<ReturnType<typeof inspectClaudeCodePortableSettings>>;
   try {
     inspection = await inspectClaudeCodePortableSettings(root, {
       rules: claudeCodePortableSettingsRulesFor(request.operation.root),
@@ -394,7 +394,7 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
   if (expected.operationDigest !== request.operation.operationDigest) {
     fail("source-stale", "$operation.operationDigest");
   }
-  let published;
+  let published: Awaited<ReturnType<typeof publishClaudeCodePortableSettings>>;
   try {
     published = await publishClaudeCodePortableSettings(root, {
       rules: claudeCodePortableSettingsRulesFor(request.operation.root),
@@ -454,7 +454,7 @@ export async function executeClaudeCodePortableSettingsOperation(
   let targetRoot = workspaceRootValue;
   let closeTarget = false;
   if (authoritativeRoot.rootKind === "support-surface") {
-    let placements;
+    let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
     try {
       placements = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.model);
     } catch (error: unknown) {

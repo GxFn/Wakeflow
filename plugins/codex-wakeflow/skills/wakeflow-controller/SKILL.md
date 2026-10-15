@@ -62,14 +62,14 @@ blockers, and apply only after they confirm. Depth: `references/workspace-and-wi
 
 ### Step 1 - Open windows and register their bindings
 
-Inspect each returned window with `wakeflow_register_window_binding` for current
-host launch instructions; the execution root may differ from the startup root.
-First: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given. If this chat is not that Controller, tell the user which chat is and continue there instead of running the Controller flow from here. For each one:
-use list_projects to resolve the existing outer workspace project by canonical path and host, then create_thread with target.type project, that projectId, and environment.type local for every role. Never register role directories as projects or substitute projectless chats or codex exec sessions. The chat starts in the workspace root; the role's execution root is separate and must be stated in its startup prompt with windowId, role skill, scope and return pointer. Read the execution root's instructions explicitly and use it as command workdir. Retain the creation result and wait for a ready threadId; clientThreadId is not a binding handle. Read back project membership and actual startup before registration. If the list omits a newly created chat, use direct UI confirmation and disclose that limitation; cwd and title alone do not prove project membership. A missing project or unavailable creation tool is a blocker, not permission for an external fallback. Do not retry creation after an ambiguous result until you establish whether the first chat exists. Keep requested role chats visible; archive only when the user authorizes retiring them. A thread is never moved into a new process, so relocate does not apply on this host; replace a gone thread only with an authorized new chat in the same outer project. Then register the handle you observed with
-`wakeflow_register_window_binding`; it needs a real `session-start` at the host
-startup root, and a refusal names the missing evidence - re-inspect the window
-and the host's hook trust before retrying. The same tool inspects a window,
-replaces a stale binding, retires a window, or force-releases an expired claim.
+Inspect each returned window with `wakeflow_register_window_binding` for its
+current host launch instructions (the execution root may differ from the startup
+root), open it exactly as "Step 1 - Windows and bindings" in
+`references/workspace-and-windows.md` says (bootstrap once, one launch per
+window), then register the handle you observed with the same tool: it needs a
+real `session-start` at the host startup root, and a refusal names the missing
+evidence - re-inspect the window and the host's hook trust before retrying.
+Every host effect is one call of your own Codex thread tool, kept exactly as it returned; Wakeflow never sends anything for you.
 
 ### Step 5 - Claim a requirement package into a Demand
 

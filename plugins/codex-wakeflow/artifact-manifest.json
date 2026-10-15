@@ -120,8 +120,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13513,
-      "sha256": "sha256:a430fd25f1766e0d0dabe639efb2f975ecd1904c07c2e30cbfe810e35bd7edb2"
+      "bytes": 11751,
+      "sha256": "sha256:222a10a017cc838b24ea5f7a9bf62c53e7e77e9aeb61ff73201ad2efa47f5b59"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
@@ -6521,8 +6521,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13513,
-      "sha256": "sha256:a430fd25f1766e0d0dabe639efb2f975ecd1904c07c2e30cbfe810e35bd7edb2",
+      "bytes": 11751,
+      "sha256": "sha256:222a10a017cc838b24ea5f7a9bf62c53e7e77e9aeb61ff73201ad2efa47f5b59",
       "mode": "0644",
       "scope": "agent-text"
     },

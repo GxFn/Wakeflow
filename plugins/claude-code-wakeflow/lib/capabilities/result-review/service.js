@@ -8,6 +8,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
+import { deliveryPermitPromptRef, materializeDeliveryPermitPrompt, } from "../../governance/delivery/delivery-permit-prompt-file.js";
 import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, openDemandReadAuthorityContext, } from "../../governance/demand/demand-operation-authority-context.js";
 import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { parseDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -282,6 +283,11 @@ function receipts(commandResult) {
         },
         stateDigest: last.resultingStateDigest,
     };
+}
+/** 回调许可一经签发（含重放），prompt 就以文件落在 Demand 根下，目标侧助手按 `promptRef` 读取并核对摘要（K6）。 */
+async function materializedCallbackPermit(context, outcome) {
+    await materializeDeliveryPermitPrompt(context.authority.demandRoot, "callback", outcome.callback.callbackId, outcome.callback.portablePrompt, signalOptions(context.options.signal));
+    return outcome;
 }
 function deliveryTargetOf(context, deliveryId) {
     const candidates = context.authority.loaded.aggregate.state.targetTasks.filter((entry) => entry.phase !== "planned" &&
@@ -591,6 +597,8 @@ function importResult(envelope, outcome, nextProjection) {
             callbackId: callback.callbackId,
             permit: {
                 prompt: callback.portablePrompt,
+                promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", callback.callbackId),
+                promptDigest: callback.promptDigest,
                 hostAction: {
                     effect: "send-prompt-to-window",
                     hostId: window.binding.hostId,
@@ -630,7 +638,7 @@ export async function executeTargetResultImportRequest(facade, value, options = 
         open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope.demandId, facade, options, "append"),
         close: closeContext,
         privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeImport(context, input, binding)),
+        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, async () => materializedCallbackPermit(context, await executeImport(context, input, binding))),
         next,
         result: importResult,
     }, value, commandShellExecutionOptions(options.durability, options.signal));

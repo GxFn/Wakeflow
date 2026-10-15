@@ -1,6 +1,7 @@
 import path from "node:path";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
+import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
@@ -8,31 +9,31 @@ import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import { computeDeliveryPromptDigest, createDeliveryEnvelope, DeliveryEnvelopeError, deliveryTaskPackageRef, } from "../../governance/delivery/delivery-envelope.js";
 import { createDeliveryOutcome, DeliveryOutcomeError, } from "../../governance/delivery/delivery-outcome.js";
+import { deliveryPermitPromptRef, materializeDeliveryPermitPrompt, } from "../../governance/delivery/delivery-permit-prompt-file.js";
 import { createDeliveryRearm, DeliveryRearmError, } from "../../governance/delivery/delivery-rearm.js";
 import { createTargetDeliveryProductDefectRemediationContext, TargetDeliveryProductDefectRemediationContextError, } from "../../governance/delivery/target-delivery-product-defect-remediation-context.js";
 import { createTargetDeliveryReworkContext, TargetDeliveryReworkContextError, } from "../../governance/delivery/target-delivery-rework-context.js";
 import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, } from "../../governance/demand/demand-operation-authority-context.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
-import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
 import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { parseDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { observeHostAssetState, } from "../../governance/observation/workspace-observation.js";
 import { deriveTargetResultCallbackStatus, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
 import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../../governance/review/controller-implementation-review-decision.js";
 import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { computeTaskPackageDigest, } from "../../governance/tasking/task-package.js";
 import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, TestExecutionAttemptError, } from "../../governance/testing/test-execution-attempt.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
-import { fail, failWithBlockers as rejectWith, isWakeflowError } from "../../kernel/error.js";
-import { observeHostAssetState, } from "../../governance/observation/workspace-observation.js";
+import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
+import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
 import { createWorkClaim, deriveWorkClaimId, inspectWorkClaim, releaseWorkClaim, releaseWorkClaimIfHeld, takeWorkClaim, } from "../../kernel/work-claims.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
@@ -42,6 +43,17 @@ import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, d
 import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
+}
+/** 许可一经签发（含重放与重臂），prompt 就以文件落在 Demand 根下，助手按 `promptRef` 读取并核对摘要（K6）。 */
+async function materializedPermit(context, outcome) {
+    const permit = outcome;
+    if (isCallbackPermit(permit)) {
+        await materializeDeliveryPermitPrompt(context.authority.demandRoot, "callback", permit.callbackId, permit.prompt, signalOptions(context.options.signal));
+    }
+    else {
+        await materializeDeliveryPermitPrompt(context.authority.demandRoot, "delivery", permit.envelope.deliveryId, permit.envelope.portablePrompt, signalOptions(context.options.signal));
+    }
+    return outcome;
 }
 const HANDLER_ERROR_TABLE = Object.freeze({
     "concurrency-conflict": [
@@ -783,6 +795,8 @@ function permitBody(envelope, outcome, nextProjection) {
         },
         permit: {
             prompt: outcome.envelope.portablePrompt,
+            promptRef: deliveryPermitPromptRef(envelope.demandId, "delivery", outcome.envelope.deliveryId),
+            promptDigest: outcome.envelope.promptDigest,
             hostAction: {
                 effect: "send-prompt-to-window",
                 hostId: route.binding.hostId,
@@ -842,6 +856,8 @@ function callbackPermitBody(envelope, outcome, nextProjection) {
         },
         permit: {
             prompt: outcome.prompt,
+            promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", outcome.callbackId),
+            promptDigest: outcome.promptDigest,
             hostAction: {
                 effect: "send-prompt-to-window",
                 hostId: route.binding.hostId,
@@ -918,7 +934,7 @@ export async function executePrepareDeliveryRequest(facade, value, options = {})
         open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope, facade, options),
         close: closeContext,
         privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executePrepare(context, input, binding)),
+        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, async () => materializedPermit(context, await executePrepare(context, input, binding))),
         next,
         result: prepareResult,
     }, value, commandShellExecutionOptions(options.durability, options.signal));
@@ -1448,7 +1464,7 @@ export async function executeRearmDeliveryRequest(facade, value, options = {}) {
         open: (workspaceRoot, envelope) => openContext(workspaceRoot, envelope, facade, options),
         close: closeContext,
         privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
-        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, () => executeRearm(context, input, binding)),
+        execute: (context, input, binding) => afterMutationRefresh(context.workspaceRoot, context.options.signal, async () => materializedPermit(context, await executeRearm(context, input, binding))),
         next,
         result: rearmResult,
     }, value, commandShellExecutionOptions(options.durability, options.signal));

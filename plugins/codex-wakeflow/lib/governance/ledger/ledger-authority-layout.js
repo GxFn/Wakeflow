@@ -1,11 +1,11 @@
 import { types } from "node:util";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF, } from "./ledger-authority-paths.js";
 import { currentUserId, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_DIRECTORY_MODE, } from "./ledger-authority-storage-policy.js";
-import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
-import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG, } from "./ledger-resource-catalog.js";
+import { throwLedgerAuthorityStoreError as fail } from "./ledger-authority-store-contract.js";
+import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "./ledger-resource-catalog.js";
 /**
  * Wakeflow Governance / Ledger：Ledger 根内固定容器的只读观察与幂等物化。
  *
@@ -38,10 +38,10 @@ export const LEDGER_AUTHORITY_LAYOUT_DIGEST = computeCanonicalJsonSha256Digest({
     declarations: WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
 });
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -53,11 +53,9 @@ async function inspectEntry(root, policy) {
     try {
         const resource = await root.inspectExistingResource(policy.resourcePath, `$layout/${policy.resourcePath}`);
         const userId = currentUserId();
-        const current = resource.node.kind === "directory"
-            && resource.node.permissionBits === policy.mode
-            && (!policy.requireCurrentUser
-                || userId === null
-                || resource.node.userId === userId);
+        const current = resource.node.kind === "directory" &&
+            resource.node.permissionBits === policy.mode &&
+            (!policy.requireCurrentUser || userId === null || resource.node.userId === userId);
         return Object.freeze({
             resourcePath: policy.resourcePath,
             expectedMode: policy.mode,
@@ -69,8 +67,7 @@ async function inspectEntry(root, policy) {
         });
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return Object.freeze({
                 resourcePath: policy.resourcePath,
                 expectedMode: policy.mode,
@@ -98,7 +95,7 @@ export async function inspectLedgerAuthorityLayout(rootValue, signal) {
             fail("root-scope", "$root");
         throw error;
     }
-    const entries = Object.freeze(await Promise.all(LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => (inspectEntry(rootValue, policy)))));
+    const entries = Object.freeze(await Promise.all(LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => inspectEntry(rootValue, policy))));
     assertNotAborted(signal);
     try {
         await rootValue.assertCurrent("$root");

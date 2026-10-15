@@ -1,6 +1,6 @@
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowResourceProcessingContract, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
 /**
  * Wakeflow Workspace：资源声明的纯数据合同。
@@ -70,18 +70,8 @@ const FAMILY_SET = new Set(WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES);
 const SCOPE_SET = new Set(WAKEFLOW_WORKSPACE_RESOURCE_SCOPES);
 const TRACKING_SET = new Set(WAKEFLOW_WORKSPACE_RESOURCE_TRACKING_DISPOSITIONS);
 const PRIVACY_SET = new Set(WAKEFLOW_WORKSPACE_RESOURCE_PRIVACY_CLASSES);
-const FILE_MODE_SET = new Set([
-    "0600",
-    "0644",
-    "0700",
-    "0755",
-    "owner-defined",
-]);
-const DIRECTORY_MODE_SET = new Set([
-    "0700",
-    "0755",
-    "owner-defined",
-]);
+const FILE_MODE_SET = new Set(["0600", "0644", "0700", "0755", "owner-defined"]);
+const DIRECTORY_MODE_SET = new Set(["0700", "0755", "owner-defined"]);
 const DECLARATION_ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9_-]*)+$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const DECLARATION_FIELDS = new Set([
@@ -100,24 +90,14 @@ const SIMPLE_ROOT_FIELDS = new Set(["kind"]);
 const SUPPORT_ROOT_FIELDS = new Set(["kind", "surfaceId"]);
 const REPOSITORY_ROOT_FIELDS = new Set(["kind", "repositoryId"]);
 const TRACKING_FIELDS = new Set(["disposition", "privacy"]);
-const FILE_NODE_POLICY_FIELDS = new Set([
-    "kind",
-    "mode",
-    "linkPolicy",
-    "executablePolicy",
-]);
+const FILE_NODE_POLICY_FIELDS = new Set(["kind", "mode", "linkPolicy", "executablePolicy"]);
 const DIRECTORY_NODE_POLICY_FIELDS = new Set([
     "kind",
     "mode",
     "symlinkPolicy",
     "existingModePolicy",
 ]);
-const TREE_NODE_POLICY_FIELDS = new Set([
-    "kind",
-    "rootMode",
-    "symlinkPolicy",
-    "executablePolicy",
-]);
+const TREE_NODE_POLICY_FIELDS = new Set(["kind", "rootMode", "symlinkPolicy", "executablePolicy"]);
 function fail(reason, path) {
     throw new WakeflowWorkspaceResourceDeclarationError(reason, path);
 }
@@ -126,7 +106,9 @@ function propertyPath(base, key) {
     return `${base}/${escaped}`;
 }
 function assertExactFields(record, allowed, path) {
-    const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+    const unknown = Object.keys(record)
+        .sort()
+        .find((key) => !allowed.has(key));
     if (unknown !== undefined)
         fail("shape", propertyPath(path, unknown));
 }
@@ -141,10 +123,10 @@ function plainRecord(value, path) {
     }
 }
 function stableIdentifier(value, pattern, reason, path) {
-    if (typeof value !== "string"
-        || !value.isWellFormed()
-        || value.normalize("NFC") !== value
-        || !pattern.test(value)) {
+    if (typeof value !== "string" ||
+        !value.isWellFormed() ||
+        value.normalize("NFC") !== value ||
+        !pattern.test(value)) {
         fail(reason, path);
     }
     return value;
@@ -293,7 +275,8 @@ function parseNodePolicy(value) {
         if (record.symlinkPolicy !== "reject") {
             fail("node-policy", "$/nodePolicy/symlinkPolicy");
         }
-        if (record.executablePolicy !== "forbidden" && record.executablePolicy !== "manifest-declared") {
+        if (record.executablePolicy !== "forbidden" &&
+            record.executablePolicy !== "manifest-declared") {
             fail("node-policy", "$/nodePolicy/executablePolicy");
         }
         return Object.freeze({
@@ -344,9 +327,9 @@ function assertProcessingNodeCompatibility(processing, nodePolicy) {
         }
         return;
     }
-    if (processing.role !== "external-reference"
-        && processing.role !== "transaction-artifact"
-        && nodePolicy.kind !== "file") {
+    if (processing.role !== "external-reference" &&
+        processing.role !== "transaction-artifact" &&
+        nodePolicy.kind !== "file") {
         fail("compatibility", "$/nodePolicy/kind");
     }
 }
@@ -363,23 +346,18 @@ function expectedManagedMode(tracking, nodePolicy) {
     return privateResource ? "0600" : "0644";
 }
 function assertTrackingNodeCompatibility(tracking, nodePolicy) {
-    if (tracking.disposition === "tracked"
-        && tracking.privacy === "runtime-private") {
+    if (tracking.disposition === "tracked" && tracking.privacy === "runtime-private") {
         fail("compatibility", "$/tracking/privacy");
     }
     const mode = nodeMode(nodePolicy);
     if (tracking.disposition === "owner-defined") {
         if (mode !== "owner-defined") {
-            fail("compatibility", nodePolicy.kind === "tree"
-                ? "$/nodePolicy/rootMode"
-                : "$/nodePolicy/mode");
+            fail("compatibility", nodePolicy.kind === "tree" ? "$/nodePolicy/rootMode" : "$/nodePolicy/mode");
         }
         return;
     }
     if (mode !== expectedManagedMode(tracking, nodePolicy)) {
-        fail("compatibility", nodePolicy.kind === "tree"
-            ? "$/nodePolicy/rootMode"
-            : "$/nodePolicy/mode");
+        fail("compatibility", nodePolicy.kind === "tree" ? "$/nodePolicy/rootMode" : "$/nodePolicy/mode");
     }
     if (nodePolicy.kind === "file" && nodePolicy.linkPolicy !== "single-link") {
         fail("compatibility", "$/nodePolicy/linkPolicy");
@@ -392,13 +370,12 @@ function assertDeclarationCompatibility(familyValue, placement, tracking, nodePo
     }
     assertProcessingNodeCompatibility(processing, nodePolicy);
     assertTrackingNodeCompatibility(tracking, nodePolicy);
-    if (processing.kind === "resource"
-        && processing.role === "external-reference"
-        && tracking.disposition !== "owner-defined") {
+    if (processing.kind === "resource" &&
+        processing.role === "external-reference" &&
+        tracking.disposition !== "owner-defined") {
         fail("compatibility", "$/tracking/disposition");
     }
-    if (processing.kind === "directory-container"
-        && tracking.disposition === "owner-defined") {
+    if (processing.kind === "directory-container" && tracking.disposition === "owner-defined") {
         fail("compatibility", "$/tracking/disposition");
     }
 }

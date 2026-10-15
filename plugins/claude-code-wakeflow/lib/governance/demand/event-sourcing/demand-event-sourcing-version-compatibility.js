@@ -1,4 +1,4 @@
-import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS, DEMAND_EVENT_SOURCING_EVENT_TYPES, DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS, } from "./demand-event-sourcing-event-version-codec.js";
 import { DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION, DEMAND_EVENT_SOURCING_SUPPORTED_STATE_MODEL_VERSIONS, } from "./demand-event-sourcing-state-version.js";
 /**

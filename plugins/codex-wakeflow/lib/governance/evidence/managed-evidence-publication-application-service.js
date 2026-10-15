@@ -1,17 +1,16 @@
 import { types } from "node:util";
-import { WakeflowError } from "../../kernel/error.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, openDemandOperationAuthorityContext, openDemandOperationRoot, DemandOperationAuthorityContextError, } from "../demand/demand-operation-authority-context.js";
-import {} from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
-import { openConfiguredManagedEvidenceSourceRoot, ManagedEvidenceConfiguredSourceRootError, } from "./managed-evidence-configured-source-root.js";
-import { materializeManagedEvidencePublicationStage, ManagedEvidencePublicationStageMaterializationError, } from "./managed-evidence-publication-stage-materializer.js";
+import { WakeflowError } from "../../kernel/error.js";
+import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, openDemandOperationRoot, } from "../demand/demand-operation-authority-context.js";
+import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidenceSourceRoot, } from "./managed-evidence-configured-source-root.js";
+import { ManagedEvidencePublicationStageMaterializationError, materializeManagedEvidencePublicationStage, } from "./managed-evidence-publication-stage-materializer.js";
+import { computeManagedEvidencePublicationTransactionDigest, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
+import { appendManagedEvidencePublicationEvent, completeManagedEvidencePublicationTransaction, findManagedEvidencePublicationCommit, loadCurrentManagedEvidencePublicationTransaction, loadManagedEvidencePublicationHealthyAuthority, loadManagedEvidencePublicationTransactionAuthority, ManagedEvidencePublicationTransactionSettlementError, retireStaleManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-settlement.js";
 import { createManagedEvidencePublicationTransactionJournal, loadManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
-import { appendManagedEvidencePublicationEvent, completeManagedEvidencePublicationTransaction, findManagedEvidencePublicationCommit, loadCurrentManagedEvidencePublicationTransaction, loadManagedEvidencePublicationHealthyAuthority, loadManagedEvidencePublicationTransactionAuthority, retireStaleManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionSettlementError, } from "./managed-evidence-publication-transaction-settlement.js";
-import { computeManagedEvidencePublicationTransactionDigest, parseManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "./managed-evidence-publication-transaction.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence publication application input is invalid.",
     transaction: "Managed evidence publication transaction is invalid.",
@@ -94,8 +93,7 @@ function parseApplyInput(transactionValue, transactionDigestValue) {
         }
         throw error;
     }
-    if (computeManagedEvidencePublicationTransactionDigest(transaction) !==
-        transactionDigest) {
+    if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
         fail("transaction");
     }
     return Object.freeze({ transaction, transactionDigest });
@@ -347,9 +345,7 @@ export class ManagedEvidencePublicationApplicationService {
                 sourceRoot = await openSourceRoot(this.#workspaceRoot, context.config, transaction, options.signal);
                 let stored;
                 try {
-                    stored = await createManagedEvidencePublicationTransactionJournal(context.demandRoot, transaction, options.signal === undefined
-                        ? undefined
-                        : { signal: options.signal });
+                    stored = await createManagedEvidencePublicationTransactionJournal(context.demandRoot, transaction, options.signal === undefined ? undefined : { signal: options.signal });
                 }
                 catch (error) {
                     if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
@@ -394,9 +390,10 @@ export class ManagedEvidencePublicationApplicationService {
             }
             catch (error) {
                 if (failure === undefined) {
-                    failure = error instanceof DemandOperationAuthorityContextError
-                        ? new ManagedEvidencePublicationApplicationServiceError(error.reason === "aborted" ? "aborted" : "demand", error.code, error.reason, publicationAuthority)
-                        : error;
+                    failure =
+                        error instanceof DemandOperationAuthorityContextError
+                            ? new ManagedEvidencePublicationApplicationServiceError(error.reason === "aborted" ? "aborted" : "demand", error.code, error.reason, publicationAuthority)
+                            : error;
                 }
             }
         }
@@ -444,8 +441,8 @@ export class ManagedEvidencePublicationApplicationService {
                 if (stored.transaction.manifest.demandId !== demandId)
                     fail("journal");
                 const authority = await loadManagedEvidencePublicationTransactionAuthority(roots.demandRoot, roots.ledgerRoot, options.signal);
-                if (authority.inventory.managedEvidence.publication
-                    ?.transactionDigest !== stored.transactionDigest) {
+                if (authority.inventory.managedEvidence.publication?.transactionDigest !==
+                    stored.transactionDigest) {
                     fail("closure");
                 }
                 await assertConfigCurrent(this.#workspaceRoot, roots.config, options.signal);

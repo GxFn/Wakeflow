@@ -1,5 +1,5 @@
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
@@ -60,8 +60,7 @@ function digest(value, path) {
     }
 }
 function setupDirective(policy, mode) {
-    return policy === "reuse-existing" ||
-        (policy === "fresh-once" && mode === "rerun")
+    return policy === "reuse-existing" || (policy === "fresh-once" && mode === "rerun")
         ? "reuse-confirmed-environment"
         : "prepare-fresh-environment";
 }

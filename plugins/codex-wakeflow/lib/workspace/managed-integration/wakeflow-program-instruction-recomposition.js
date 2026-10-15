@@ -1,9 +1,8 @@
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { inspectWakeflowProgramInstruction, WakeflowProgramInstructionInspectionError, WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE, } from "./wakeflow-program-instruction-inspection.js";
-import { admitWakeflowProgramInstructionLockOperations, assertCurrentUserWakeflowProgramInstructionRoot, assertWakeflowProgramInstructionRecompositionNotAborted, assertWakeflowProgramInstructionRecompositionRoot, currentWakeflowProgramInstructionRecompositionUserId, failWakeflowProgramInstructionRecomposition as fail, mapWakeflowProgramInstructionLockError, parseWakeflowProgramInstructionRecompositionOptions, parseWakeflowProgramInstructionRecompositionRequest, wakeflowProgramInstructionInspectionRequest, wakeflowProgramInstructionLockOptions, wakeflowProgramInstructionLockRef, wakeflowProgramInstructionTargetRef, WakeflowProgramInstructionRecompositionError, } from "./wakeflow-program-instruction-recomposition-contract.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectWakeflowProgramInstruction, WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
+import { admitWakeflowProgramInstructionLockOperations, assertCurrentUserWakeflowProgramInstructionRoot, assertWakeflowProgramInstructionRecompositionNotAborted, assertWakeflowProgramInstructionRecompositionRoot, currentWakeflowProgramInstructionRecompositionUserId, failWakeflowProgramInstructionRecomposition as fail, mapWakeflowProgramInstructionLockError, parseWakeflowProgramInstructionRecompositionOptions, parseWakeflowProgramInstructionRecompositionRequest, WakeflowProgramInstructionRecompositionError, wakeflowProgramInstructionInspectionRequest, wakeflowProgramInstructionLockOptions, wakeflowProgramInstructionLockRef, wakeflowProgramInstructionTargetRef, } from "./wakeflow-program-instruction-recomposition-contract.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的锁内 CAS owner。
  *
@@ -31,9 +30,7 @@ async function inspectCurrent(root, request, signal, afterCommit) {
                 fail("capacity", "$target");
             if (error.reason === "source-capacity")
                 fail("capacity", "$source");
-            if (error.reason === "input"
-                || error.reason === "context"
-                || error.reason === "authority") {
+            if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
                 fail("input", error.path);
             }
             fail("source-invalid", "$source");
@@ -48,9 +45,9 @@ function mapAtomicError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$target");
-    if (error.reason === "target-exists"
-        || error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure") {
+    if (error.reason === "target-exists" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "expectation-read-failure") {
         fail("conflict", "$source");
     }
     if (error.reason === "root-scope" || error.reason === "parent-changed") {
@@ -59,10 +56,10 @@ function mapAtomicError(error) {
     if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$resourcePath");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     fail("effect-failure", "$resourcePath");
@@ -93,45 +90,43 @@ async function publishTarget(root, request, inspection, signal) {
     }
 }
 function sameSource(left, right) {
-    return left.resourcePath === right.resourcePath
-        && left.byteCount === right.byteCount
-        && left.digest === right.digest
-        && sameFileNodeSnapshot(left.node, right.node);
+    return (left.resourcePath === right.resourcePath &&
+        left.byteCount === right.byteCount &&
+        left.digest === right.digest &&
+        sameFileNodeSnapshot(left.node, right.node));
 }
 function assertReadback(request, before, effect, after, expectedUserId) {
     const target = before.transition.target;
     const source = after.source;
-    if (before.status !== "recompose-required"
-        || target === null
-        || source === null
-        || after.status !== "managed-current"
-        || after.transition.sourceAuthority !== "desired"
-        || after.transition.target !== null
-        || after.context.matrixDigest !== before.context.matrixDigest
-        || after.currentConfigDigest !== before.currentConfigDigest
-        || after.desiredConfigDigest !== before.desiredConfigDigest
-        || after.desiredAuthority.authorityDigest
-            !== before.desiredAuthority.authorityDigest
-        || after.desiredAuthority.bodyDigest !== before.desiredAuthority.bodyDigest
-        || effect.resourcePath !== wakeflowProgramInstructionTargetRef(request)
-        || effect.digest !== target.digest
-        || effect.byteCount !== target.byteCount
-        || effect.node.kind !== "file"
-        || effect.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE
-        || effect.node.linkCount !== 1n
-        || effect.node.userId !== expectedUserId
-        || source.resourcePath !== effect.resourcePath
-        || source.digest !== effect.digest
-        || source.byteCount !== effect.byteCount
-        || !sameFileNodeSnapshot(source.node, effect.node)) {
+    if (before.status !== "recompose-required" ||
+        target === null ||
+        source === null ||
+        after.status !== "managed-current" ||
+        after.transition.sourceAuthority !== "desired" ||
+        after.transition.target !== null ||
+        after.context.matrixDigest !== before.context.matrixDigest ||
+        after.currentConfigDigest !== before.currentConfigDigest ||
+        after.desiredConfigDigest !== before.desiredConfigDigest ||
+        after.desiredAuthority.authorityDigest !== before.desiredAuthority.authorityDigest ||
+        after.desiredAuthority.bodyDigest !== before.desiredAuthority.bodyDigest ||
+        effect.resourcePath !== wakeflowProgramInstructionTargetRef(request) ||
+        effect.digest !== target.digest ||
+        effect.byteCount !== target.byteCount ||
+        effect.node.kind !== "file" ||
+        effect.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE ||
+        effect.node.linkCount !== 1n ||
+        effect.node.userId !== expectedUserId ||
+        source.resourcePath !== effect.resourcePath ||
+        source.digest !== effect.digest ||
+        source.byteCount !== effect.byteCount ||
+        !sameFileNodeSnapshot(source.node, effect.node)) {
         fail("commit-uncertain", "$resourcePath");
     }
     if (effect.publication === "created") {
         if (before.source !== null)
             fail("commit-uncertain", "$resourcePath");
     }
-    else if (before.source === null
-        || !sameSource(effect.previous, before.source)) {
+    else if (before.source === null || !sameSource(effect.previous, before.source)) {
         fail("commit-uncertain", "$resourcePath");
     }
 }
@@ -171,7 +166,9 @@ export async function recomposeWakeflowProgramInstruction(rootValue, requestValu
     await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
     let committed = false;
     try {
-        return await withRootedExclusiveFileLock(rootValue, wakeflowProgramInstructionLockRef(request), () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => { committed = true; }), wakeflowProgramInstructionLockOptions(options));
+        return await withRootedExclusiveFileLock(rootValue, wakeflowProgramInstructionLockRef(request), () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+            committed = true;
+        }), wakeflowProgramInstructionLockOptions(options));
     }
     catch (error) {
         if (error instanceof WakeflowProgramInstructionRecompositionError) {
@@ -183,4 +180,4 @@ export async function recomposeWakeflowProgramInstruction(rootValue, requestValu
         fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
     }
 }
-export { WakeflowProgramInstructionRecompositionError, WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, } from "./wakeflow-program-instruction-recomposition-contract.js";
+export { WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, WakeflowProgramInstructionRecompositionError, } from "./wakeflow-program-instruction-recomposition-contract.js";

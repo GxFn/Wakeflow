@@ -31,19 +31,19 @@ export async function inspectPackageForDemandPublication(root, transaction, sign
     }
 }
 function sameLineage(source, transaction) {
-    return source.state.requirementId === transaction.requirementId
-        && source.state.requirementId === transaction.identity.source.requirementId
-        && source.state.recordDigest === transaction.identity.source.recordDigest
-        && source.state.programId === transaction.identity.programId;
+    return (source.state.requirementId === transaction.requirementId &&
+        source.state.requirementId === transaction.identity.source.requirementId &&
+        source.state.recordDigest === transaction.identity.source.recordDigest &&
+        source.state.programId === transaction.identity.programId);
 }
 /** 状态已经由同一 Demand 从计划里的前序认领时返回它，否则返回 `null`。 */
 export function exactClaimedPackage(source, transaction) {
-    if (source === null
-        || !sameLineage(source, transaction)
-        || source.state.status !== "claimed"
-        || source.state.claim === null
-        || source.state.claim.demandId !== transaction.demandId
-        || source.state.previousStateDigest !== transaction.expectedClaimStateDigest) {
+    if (source === null ||
+        !sameLineage(source, transaction) ||
+        source.state.status !== "claimed" ||
+        source.state.claim === null ||
+        source.state.claim.demandId !== transaction.demandId ||
+        source.state.previousStateDigest !== transaction.expectedClaimStateDigest) {
         return null;
     }
     return Object.freeze({ state: source.state, digest: source.digest });
@@ -52,9 +52,9 @@ export function exactClaimedPackage(source, transaction) {
 export function assertPendingPackage(source, transaction) {
     if (source === null)
         fail("package-not-found", "$board");
-    if (!sameLineage(source, transaction)
-        || source.state.status !== "pending"
-        || source.digest !== transaction.expectedClaimStateDigest) {
+    if (!sameLineage(source, transaction) ||
+        source.state.status !== "pending" ||
+        source.digest !== transaction.expectedClaimStateDigest) {
         fail("cas-mismatch", "$board");
     }
     return source;

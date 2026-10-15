@@ -1,26 +1,26 @@
-import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
 import { createWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { deriveUuidV4, parseUuidV4, } from "../../../foundation/identity/uuid-v4.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { deriveUuidV4, parseUuidV4 } from "../../../foundation/identity/uuid-v4.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
-import { cancelDemandAggregateState, authorizeProductDefectRemediationInDemandAggregateState, completeDemandAggregateState, continueDemandAggregateState, createInitialDemandAggregateState, historicalTestTargetIdsAtContinuation, decideTargetResultReviewInDemandAggregateState, escalateDemandAggregateState, recordDeliveryOutcomeInDemandAggregateState, prepareDeliveryInDemandAggregateState, rearmDeliveryInDemandAggregateState, recordDecisionInDemandAggregateState, recordManagedEvidenceInDemandAggregateState, recordTargetResultInDemandAggregateState, reissueCallbackInDemandAggregateState, planTargetTaskInDemandAggregateState, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
-import { computeDemandAuthorityDigest, parseDemandAuthority, DemandAuthorityError, } from "../model/demand-authority.js";
-import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../../delivery/delivery-envelope.js";
 import { DeliveryOutcomeError, parseDeliveryOutcome, } from "../../delivery/delivery-outcome.js";
 import { DeliveryRearmError, parseDeliveryRearm, } from "../../delivery/delivery-rearm.js";
-import { createTargetDeliveryReworkContext, TargetDeliveryReworkContextError, } from "../../delivery/target-delivery-rework-context.js";
 import { createTargetDeliveryProductDefectRemediationContext, TargetDeliveryProductDefectRemediationContextError, } from "../../delivery/target-delivery-product-defect-remediation-context.js";
-import { parseTargetResult, targetResultRecordedEventIdFromResult, TargetResultError, } from "../../result/target-result.js";
-import { parseControllerImplementationReviewDecision, ControllerImplementationReviewDecisionError, } from "../../review/controller-implementation-review-decision.js";
-import { controllerReviewDecisionEventId, parseControllerReviewDecision, ControllerReviewDecisionError, } from "../../review/controller-review-decision.js";
+import { createTargetDeliveryReworkContext, TargetDeliveryReworkContextError, } from "../../delivery/target-delivery-rework-context.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../../evidence/managed-evidence-manifest.js";
+import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
+import { parseTargetResult, TargetResultError, targetResultRecordedEventIdFromResult, } from "../../result/target-result.js";
 import { parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, parseTargetResultEvidenceResolutions, TargetResultCallbackError, } from "../../result/target-result-callback.js";
-import { parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, ControllerProductDefectRemediationAuthorizationError, } from "../../review/controller-product-defect-remediation-authorization.js";
-import { parseDemandUncommittedEvent, DemandEventSourcingEventError, } from "./demand-event-sourcing-event.js";
-import { parseManagedEvidenceManifest, ManagedEvidenceManifestError, } from "../../evidence/managed-evidence-manifest.js";
-import { parseDemandCompletion, DemandCompletionError, } from "../../lifecycle/demand-completion.js";
+import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../../review/controller-implementation-review-decision.js";
+import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, } from "../../review/controller-product-defect-remediation-authorization.js";
+import { ControllerReviewDecisionError, controllerReviewDecisionEventId, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
+import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 import { assertTestExecutionAttemptMatchesPackage, TestExecutionAttemptError, } from "../../testing/test-execution-attempt.js";
+import { authorizeProductDefectRemediationInDemandAggregateState, cancelDemandAggregateState, completeDemandAggregateState, continueDemandAggregateState, createInitialDemandAggregateState, DemandAggregateStateError, decideTargetResultReviewInDemandAggregateState, escalateDemandAggregateState, historicalTestTargetIdsAtContinuation, parseDemandAggregateState, planTargetTaskInDemandAggregateState, prepareDeliveryInDemandAggregateState, rearmDeliveryInDemandAggregateState, recordDecisionInDemandAggregateState, recordDeliveryOutcomeInDemandAggregateState, recordManagedEvidenceInDemandAggregateState, recordTargetResultInDemandAggregateState, reissueCallbackInDemandAggregateState, } from "../model/demand-aggregate-state.js";
+import { computeDemandAuthorityDigest, DemandAuthorityError, parseDemandAuthority, } from "../model/demand-authority.js";
+import { DemandEventSourcingEventError, parseDemandUncommittedEvent, } from "./demand-event-sourcing-event.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing command input is invalid.",
     identifier: "Demand Event Sourcing command contains an invalid identity.",
@@ -163,6 +163,7 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
     "commandVersion",
     "decision",
 ]);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 function fail(reason, path) {
     throw new DemandEventSourcingDecisionError(reason, path);
@@ -217,8 +218,7 @@ const PROBE_EVENT_ID = "demand-event_00000000-0000-4000-8000-000000000000";
 const PROBE_RECORDED_AT = "2000-01-01T00:00:00.000Z";
 function exactCommand(record, fields) {
     const keys = Object.keys(record).sort();
-    if (keys.length !== fields.length ||
-        keys.some((key, index) => key !== fields[index])) {
+    if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
         fail("input", "$command");
     }
     return record;
@@ -415,9 +415,7 @@ export function parseDemandEventSourcingCommand(value) {
         const command = exactCommand(base, [
             ...PREPARE_DELIVERY_BASE_FIELDS,
             ...(hasReworkSource ? ["reworkSource"] : []),
-            ...(hasProductDefectRemediationSource
-                ? ["productDefectRemediationSource"]
-                : []),
+            ...(hasProductDefectRemediationSource ? ["productDefectRemediationSource"] : []),
         ].sort());
         let envelope;
         let taskPackage;
@@ -591,9 +589,7 @@ export function parseDemandEventSourcingCommand(value) {
             envelope,
             taskPackage,
             ...(reworkSource === undefined ? {} : { reworkSource }),
-            ...(productDefectRemediationSource === undefined
-                ? {}
-                : { productDefectRemediationSource }),
+            ...(productDefectRemediationSource === undefined ? {} : { productDefectRemediationSource }),
         });
     }
     if (base.commandType === "delivery.record-delivery-outcome") {
@@ -722,12 +718,9 @@ export function parseDemandEventSourcingCommand(value) {
         }
         if (authorization.source.testReviewDecision.targetReviewDecisionId !==
             decision.targetReviewDecisionId ||
-            authorization.source.testReviewDecision.decisionDigest !==
-                decision.decisionDigest ||
-            authorization.source.reviewSnapshotDigest !==
-                decision.reviewed.snapshotDigest ||
-            authorization.source.streamRevision !==
-                decision.reviewed.streamRevision + 1) {
+            authorization.source.testReviewDecision.decisionDigest !== decision.decisionDigest ||
+            authorization.source.reviewSnapshotDigest !== decision.reviewed.snapshotDigest ||
+            authorization.source.streamRevision !== decision.reviewed.streamRevision + 1) {
             fail("controller-product-defect-remediation-authorization", "$/authorization/source");
         }
         return Object.freeze({
@@ -1000,9 +993,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
             eventType: "lifecycle.demand-continued",
             data: {
                 continuation: command.continuation,
-                ...(historicalTestTargetIds.length === 0
-                    ? {}
-                    : { historicalTestTargetIds }),
+                ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
             },
         }));
     }
@@ -1064,9 +1055,7 @@ function decideReview(state, command) {
     if (escalation !== null)
         return Object.freeze([decidedEvent, escalation]);
     const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
-    return brake === null
-        ? singleEvent(decidedEvent)
-        : Object.freeze([decidedEvent, brake]);
+    return brake === null ? singleEvent(decidedEvent) : Object.freeze([decidedEvent, brake]);
 }
 function reviewEscalationContent(decision) {
     if (decision.decision !== "escalate")

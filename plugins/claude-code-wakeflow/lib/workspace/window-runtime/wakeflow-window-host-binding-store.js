@@ -1,12 +1,12 @@
 import { types } from "node:util";
-import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
@@ -55,12 +55,7 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    const allowed = new Set([
-        "acquireTimeoutMilliseconds",
-        "signal",
-        "uuidFactory",
-        "wallClock",
-    ]);
+    const allowed = new Set(["acquireTimeoutMilliseconds", "signal", "uuidFactory", "wallClock"]);
     if (Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
     }
@@ -227,7 +222,8 @@ async function readInventory(root, authority, signal) {
         }
         if (binding.programId !== authority.programId ||
             binding.hostId !== authority.resourceProfile.hostId ||
-            wakeflowWindowHostBindingRef(authority.resourceProfile, binding.windowId) !== entry.resourcePath) {
+            wakeflowWindowHostBindingRef(authority.resourceProfile, binding.windowId) !==
+                entry.resourcePath) {
             fail("inventory", "$inventory");
         }
         bindings.push(binding);
@@ -276,8 +272,7 @@ async function assertInventoryLockAbsent(root, authority) {
     }
 }
 function sameInventory(left, right) {
-    return (canonicalizeJson(left, "$leftInventory") ===
-        canonicalizeJson(right, "$rightInventory"));
+    return canonicalizeJson(left, "$leftInventory") === canonicalizeJson(right, "$rightInventory");
 }
 /**
  * 零写入观察一份稳定的完整Binding inventory。
@@ -320,8 +315,10 @@ export async function withWakeflowWindowHostBindingStore(root, authoritySource, 
     try {
         return await withRootedExclusiveFileLock(root, authority.lockRef, async () => {
             const current = typeof authoritySource === "function" ? await authoritySource() : authority;
-            if (current.lockRef !== authority.lockRef || current.bindingRootRef !== authority.bindingRootRef ||
-                current.programId !== authority.programId || current.resourceProfile.hostId !== authority.resourceProfile.hostId) {
+            if (current.lockRef !== authority.lockRef ||
+                current.bindingRootRef !== authority.bindingRootRef ||
+                current.programId !== authority.programId ||
+                current.resourceProfile.hostId !== authority.resourceProfile.hostId) {
                 fail("input", "$authority");
             }
             await recoverStages(root, current.bindingRefs, options.signal);
@@ -353,9 +350,7 @@ export async function createWakeflowWindowHostBindingInStore(root, authority, co
     let registeredAt;
     try {
         registeredAt =
-            context.wallClock === undefined
-                ? readUtcWallClock()
-                : readUtcWallClock(context.wallClock);
+            context.wallClock === undefined ? readUtcWallClock() : readUtcWallClock(context.wallClock);
     }
     catch (error) {
         if (error instanceof UtcWallClockError)

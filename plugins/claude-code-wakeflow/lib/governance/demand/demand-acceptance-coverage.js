@@ -35,7 +35,8 @@ export async function readDemandAcceptanceCoverage(demandRoot, ledgerRoot, loade
         const task = planned.event.data.taskPackage;
         const references = task.workType === "test" ? task.testContract.steps : task.acceptanceAnchors;
         for (const { requirementRef } of references) {
-            if (requirementRef.recordDigest !== record.recordDigest || requirementRef.sectionAnchor !== "acceptance-criteria") {
+            if (requirementRef.recordDigest !== record.recordDigest ||
+                requirementRef.sectionAnchor !== "acceptance-criteria") {
                 fail("precondition-failed", "coverage-reference-drift", "$coverage");
             }
             (task.workType === "test" ? tested : implemented).add(requirementRef.itemId);
@@ -44,8 +45,14 @@ export async function readDemandAcceptanceCoverage(demandRoot, ledgerRoot, loade
     const required = loaded.authority.testingDecision.mode === "real-environment" ? tested : implemented;
     return Object.freeze({
         total: criteria.length,
-        implementationCovered: Object.freeze(criteria.filter((criterion) => implemented.has(criterion.itemId)).map((criterion) => criterion.itemId)),
-        testCovered: Object.freeze(criteria.filter((criterion) => tested.has(criterion.itemId)).map((criterion) => criterion.itemId)),
-        uncovered: Object.freeze(criteria.filter((criterion) => !required.has(criterion.itemId)).map((criterion) => criterion.itemId)),
+        implementationCovered: Object.freeze(criteria
+            .filter((criterion) => implemented.has(criterion.itemId))
+            .map((criterion) => criterion.itemId)),
+        testCovered: Object.freeze(criteria
+            .filter((criterion) => tested.has(criterion.itemId))
+            .map((criterion) => criterion.itemId)),
+        uncovered: Object.freeze(criteria
+            .filter((criterion) => !required.has(criterion.itemId))
+            .map((criterion) => criterion.itemId)),
     });
 }

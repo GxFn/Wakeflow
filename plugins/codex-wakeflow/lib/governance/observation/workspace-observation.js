@@ -1,6 +1,6 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
-import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -9,26 +9,26 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { inspectActiveLayout, } from "../../kernel/active-projection.js";
-import { countIncidents } from "../../kernel/incident.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, scanHostHookObservations, } from "../../kernel/hook-observations.js";
+import { countIncidents } from "../../kernel/incident.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
 import { listPodWorktreeReceiptsAnyHost, observeWorktreeCheckout, } from "../../kernel/pod-worktree-receipts.js";
 import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
+import { scanWakeflowLegacyResidue, } from "../../workspace/wakeflow-legacy-residue-scan.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { inspectWakeflowWindowRuntimeProjectionSet, WakeflowWindowRuntimeProjectionError, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
-import { buildDemandControllerRoute } from "../controller/demand-controller-route.js";
+import { buildDemandControllerRoute, } from "../controller/demand-controller-route.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../demand/demand-operation-authority-context.js";
 import { loadDemandEventSourcingRootAuthority, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { derivePodState } from "../pod/pod-state.js";
 import { readDemandResultReviewSnapshot, } from "../review/demand-result-review-snapshot.js";
 import { observeArchivedDemands, } from "./archived-demand-observation.js";
-import { WAKEFLOW_OBSERVATION_POLICY } from "./observation-policy.js";
+import { WAKEFLOW_OBSERVATION_POLICY, } from "./observation-policy.js";
 import { observeRepositoryPointers, } from "./repository-pointer-observation.js";
-import { scanWakeflowLegacyResidue, } from "../../workspace/wakeflow-legacy-residue-scan.js";
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 /** Bound the session aggregate independently of the number of records scanned. */
 const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
@@ -60,7 +60,11 @@ async function observeDomain(name, read) {
                 throw error;
             fail("io-failure", "aborted", "$signal", { cause: error });
         }
-        return Object.freeze({ status: "unavailable", issue: `${name}:${reason}`, value: null });
+        return Object.freeze({
+            status: "unavailable",
+            issue: `${name}:${reason}`,
+            value: null,
+        });
     }
 }
 // ---- 各域 ----------------------------------------------------------------------
@@ -112,7 +116,14 @@ async function observeDemand(root, store, demandId, signal) {
         const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, store, signalOptions(signal));
         const reviewSnapshot = await readDemandResultReviewSnapshot(demandRoot, signalOptions(signal));
         const route = buildDemandControllerRoute(loaded, reviewSnapshot);
-        return Object.freeze({ demandId, status: "observed", issue: null, loaded, reviewSnapshot, route });
+        return Object.freeze({
+            demandId,
+            status: "observed",
+            issue: null,
+            loaded,
+            reviewSnapshot,
+            route,
+        });
     }
     catch (error) {
         const reason = reasonOf(error);
@@ -149,7 +160,9 @@ async function observeClaims(root, signal) {
             maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
             ...signalOptions(signal),
         });
-        names = listing.entries.filter((entry) => entry.node.kind === "file").map((entry) => entry.name);
+        names = listing.entries
+            .filter((entry) => entry.node.kind === "file")
+            .map((entry) => entry.name);
     }
     catch (error) {
         if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
@@ -246,7 +259,8 @@ async function observeHostHooks(root, hostId, current, signal) {
         const startKeys = new Map();
         const startDigests = new Map();
         const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
-            if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
+            if (!latestBySession.has(record.sessionId) &&
+                latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
                 fail("io-failure", "observation-session-limit", "$observations");
             }
             const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
@@ -436,8 +450,8 @@ async function observeSettingsEntry(root, settings, signal) {
         if (entry === undefined)
             return "drift";
         const expected = settings.expectedEntry(root.absolutePath);
-        return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings"))
-            === computeCanonicalJsonSha256Digest(expected)
+        return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings")) ===
+            computeCanonicalJsonSha256Digest(expected)
             ? "current"
             : "drift";
     }
@@ -533,8 +547,7 @@ async function observeHostProjections(root, snapshot, host, current, signal) {
         });
     }
     catch (error) {
-        if (error instanceof WakeflowWindowRuntimeProjectionError &&
-            error.reason === "aborted") {
+        if (error instanceof WakeflowWindowRuntimeProjectionError && error.reason === "aborted") {
             fail("io-failure", "aborted", "$signal", { cause: error });
         }
         const reason = reasonOf(error);
@@ -566,7 +579,10 @@ function archivedDemandCandidates(board, demands) {
 }
 function terminalCandidateOf(state) {
     if (state.status === "archived" && state.archive !== null) {
-        return Object.freeze({ demandId: state.archive.demandId, archivedAt: state.archive.archivedAt });
+        return Object.freeze({
+            demandId: state.archive.demandId,
+            archivedAt: state.archive.archivedAt,
+        });
     }
     if (state.status === "withdrawn" &&
         state.withdrawal !== null &&
@@ -658,7 +674,8 @@ export function orphanWorkClaims(observation) {
         .filter((demand) => demand.loaded?.aggregate.state.lifecycle === "active")
         .map((demand) => demand.demandId));
     const bindingIds = new Set(observation.bindings.flatMap((host) => host.bindings.map((binding) => binding.bindingId)));
-    const bindingsObserved = observation.scope === "full" && observation.bindings.every((host) => host.status === "observed");
+    const bindingsObserved = observation.scope === "full" &&
+        observation.bindings.every((host) => host.status === "observed");
     return Object.freeze((observation.claims.value?.claims ?? []).filter((claim) => !activeDemandIds.has(claim.holder.demandId) ||
         (bindingsObserved && !bindingIds.has(claim.bindingId))));
 }

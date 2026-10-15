@@ -1,6 +1,5 @@
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { inspectWakeflowWorkspaceGitignore, WakeflowGitignoreInspectionError, } from "./wakeflow-gitignore-inspection.js";
 import { admitWakeflowGitignoreRecompositionLockOperations, assertCurrentUserWakeflowGitignoreRecompositionRoot, assertWakeflowGitignoreRecompositionNotAborted, assertWakeflowGitignoreRecompositionRoot, currentWakeflowGitignoreRecompositionUserId, failWakeflowGitignoreRecomposition as fail, mapWakeflowGitignoreRecompositionLockError, parseWakeflowGitignoreRecompositionOptions, parseWakeflowGitignoreRecompositionRequest, WAKEFLOW_GITIGNORE_FILE_MODE, WakeflowGitignoreRecompositionError, wakeflowGitignoreInspectionRequest, wakeflowGitignoreRecompositionLockOptions, } from "./wakeflow-gitignore-recomposition-contract.js";
@@ -29,9 +28,7 @@ async function inspectCurrent(root, request, signal, afterCommit) {
                 fail("aborted", "$signal");
             if (error.reason === "target-capacity")
                 fail("capacity", "$target");
-            if (error.reason === "input"
-                || error.reason === "context"
-                || error.reason === "authority") {
+            if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
                 fail("input", error.path);
             }
             if (error.reason === "git" || error.reason === "git-repository") {
@@ -49,32 +46,31 @@ function mapAtomicError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$target");
-    if (error.reason === "target-exists"
-        || error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure") {
+    if (error.reason === "target-exists" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "expectation-read-failure") {
         fail("conflict", "$source");
     }
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed") {
+    if (error.reason === "root-scope" || error.reason === "parent-changed") {
         fail("root-scope", "$root");
     }
     if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$resourcePath");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     fail("effect-failure", "$resourcePath");
 }
 async function publishTarget(root, inspection, signal) {
     const target = inspection.target;
-    if (inspection.status !== "recompose-required"
-        || target === null
-        || inspection.targetGitRuleChecks === null
-        || inspection.targetGitRuleChecks.some((entry) => !entry.ignored)) {
+    if (inspection.status !== "recompose-required" ||
+        target === null ||
+        inspection.targetGitRuleChecks === null ||
+        inspection.targetGitRuleChecks.some((entry) => !entry.ignored)) {
         fail("source-invalid", "$target");
     }
     try {
@@ -97,46 +93,45 @@ async function publishTarget(root, inspection, signal) {
     }
 }
 function sameSource(left, right) {
-    return left.resourcePath === right.resourcePath
-        && left.byteCount === right.byteCount
-        && left.digest === right.digest
-        && sameFileNodeSnapshot(left.node, right.node);
+    return (left.resourcePath === right.resourcePath &&
+        left.byteCount === right.byteCount &&
+        left.digest === right.digest &&
+        sameFileNodeSnapshot(left.node, right.node));
 }
 function assertReadback(before, effect, after, expectedUserId) {
     const target = before.target;
     const source = after.source;
-    if (before.status !== "recompose-required"
-        || target === null
-        || before.targetGitRuleChecks === null
-        || before.targetGitRuleChecks.some((entry) => !entry.ignored)
-        || source === null
-        || after.status !== "managed-current"
-        || after.target !== null
-        || after.targetGitRuleChecks !== null
-        || after.gitRuleChecks.some((entry) => !entry.ignored)
-        || after.envelope.kind !== "managed"
-        || after.context.matrixDigest !== before.context.matrixDigest
-        || after.authority.authorityDigest !== before.authority.authorityDigest
-        || after.authority.bodyDigest !== before.authority.bodyDigest
-        || effect.resourcePath !== WAKEFLOW_GITIGNORE_REF
-        || effect.digest !== target.digest
-        || effect.byteCount !== target.byteCount
-        || effect.node.kind !== "file"
-        || effect.node.permissionBits !== WAKEFLOW_GITIGNORE_FILE_MODE
-        || effect.node.linkCount !== 1n
-        || effect.node.userId !== expectedUserId
-        || source.resourcePath !== effect.resourcePath
-        || source.digest !== effect.digest
-        || source.byteCount !== effect.byteCount
-        || !sameFileNodeSnapshot(source.node, effect.node)) {
+    if (before.status !== "recompose-required" ||
+        target === null ||
+        before.targetGitRuleChecks === null ||
+        before.targetGitRuleChecks.some((entry) => !entry.ignored) ||
+        source === null ||
+        after.status !== "managed-current" ||
+        after.target !== null ||
+        after.targetGitRuleChecks !== null ||
+        after.gitRuleChecks.some((entry) => !entry.ignored) ||
+        after.envelope.kind !== "managed" ||
+        after.context.matrixDigest !== before.context.matrixDigest ||
+        after.authority.authorityDigest !== before.authority.authorityDigest ||
+        after.authority.bodyDigest !== before.authority.bodyDigest ||
+        effect.resourcePath !== WAKEFLOW_GITIGNORE_REF ||
+        effect.digest !== target.digest ||
+        effect.byteCount !== target.byteCount ||
+        effect.node.kind !== "file" ||
+        effect.node.permissionBits !== WAKEFLOW_GITIGNORE_FILE_MODE ||
+        effect.node.linkCount !== 1n ||
+        effect.node.userId !== expectedUserId ||
+        source.resourcePath !== effect.resourcePath ||
+        source.digest !== effect.digest ||
+        source.byteCount !== effect.byteCount ||
+        !sameFileNodeSnapshot(source.node, effect.node)) {
         fail("commit-uncertain", "$resourcePath");
     }
     if (effect.publication === "created") {
         if (before.source !== null)
             fail("commit-uncertain", "$resourcePath");
     }
-    else if (before.source === null
-        || !sameSource(effect.previous, before.source)) {
+    else if (before.source === null || !sameSource(effect.previous, before.source)) {
         fail("commit-uncertain", "$resourcePath");
     }
 }
@@ -176,7 +171,9 @@ export async function recomposeWakeflowWorkspaceGitignore(rootValue, requestValu
     await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
     let committed = false;
     try {
-        return await withRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => { committed = true; }), wakeflowGitignoreRecompositionLockOptions(options));
+        return await withRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+            committed = true;
+        }), wakeflowGitignoreRecompositionLockOptions(options));
     }
     catch (error) {
         if (error instanceof WakeflowGitignoreRecompositionError)

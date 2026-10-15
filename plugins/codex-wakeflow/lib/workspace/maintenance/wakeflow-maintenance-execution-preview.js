@@ -1,10 +1,10 @@
 import { types } from "node:util";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import { RootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { assertWakeflowHostMaintenanceCapability, assertWakeflowHostMaintenanceContributionCapability, WakeflowHostMaintenanceCapabilityError, } from "./wakeflow-host-maintenance-capability.js";
 import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContributionError, } from "./wakeflow-host-maintenance-contribution.js";
 import { createWakeflowMaintenanceExecutionPlan, } from "./wakeflow-maintenance-execution-plan.js";
-import { previewWakeflowStaticMaterialization, } from "./wakeflow-static-materialization-preview.js";
+import { previewWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
 import { parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance execution preview input is invalid.",
@@ -59,10 +59,10 @@ async function resolveDesiredConfig(root, request, expectedDigest) {
 }
 /** 构建共享静态步骤与当前宿主操作合并后的唯一 preview-only 计划。 */
 export async function previewWakeflowMaintenanceExecution(rootValue, requestValue, capabilityValue, gateContextValue) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     let request;
@@ -91,9 +91,7 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
     }
     let sharedPreview;
     try {
-        sharedPreview = await previewWakeflowStaticMaterialization(rootValue, requestValue, gateContextValue === undefined
-            ? {}
-            : { gateContext: gateContextValue });
+        sharedPreview = await previewWakeflowStaticMaterialization(rootValue, requestValue, gateContextValue === undefined ? {} : { gateContext: gateContextValue });
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
@@ -124,8 +122,8 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
         }
         catch (error) {
             assertNotAborted(request.signal);
-            if (error instanceof WakeflowHostMaintenanceContributionError
-                || error instanceof WakeflowHostMaintenanceCapabilityError) {
+            if (error instanceof WakeflowHostMaintenanceContributionError ||
+                error instanceof WakeflowHostMaintenanceCapabilityError) {
                 fail("contribution", error.path);
             }
             throw error;

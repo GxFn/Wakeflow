@@ -1,5 +1,5 @@
-import { computeSha256Digest, } from "../../foundation/crypto/sha256.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { inspectWakeflowManagedTextEnvelope, parseWakeflowManagedTextEnvelopeTarget, recomposeWakeflowManagedTextEnvelope, WakeflowManagedTextEnvelopeError, } from "./wakeflow-managed-text-envelope.js";
 const ERROR_MESSAGES = {
@@ -58,16 +58,15 @@ function parseRequest(value) {
             fail("input", error.path);
         throw error;
     }
-    if (Object.keys(record).sort().join("\u0000")
-        !== "currentTargets\u0000desiredTarget") {
+    if (Object.keys(record).sort().join("\u0000") !== "currentTargets\u0000desiredTarget") {
         fail("input", "$request");
     }
     const desiredTarget = parseTarget(record.desiredTarget, "$request.desiredTarget");
-    const currentTargets = Object.freeze(currentValues.map((target, index) => (parseTarget(target, `$request.currentTargets/${index}`))));
+    const currentTargets = Object.freeze(currentValues.map((target, index) => parseTarget(target, `$request.currentTargets/${index}`)));
     const seenDigests = new Set();
     for (const [index, current] of currentTargets.entries()) {
-        if (current.target.component !== desiredTarget.target.component
-            || current.target.owner !== desiredTarget.target.owner) {
+        if (current.target.component !== desiredTarget.target.component ||
+            current.target.owner !== desiredTarget.target.owner) {
             fail("relation", `$request.currentTargets/${index}`);
         }
         if (seenDigests.has(current.bodyDigest)) {
@@ -89,9 +88,9 @@ function inspectSource(value) {
     }
 }
 function sameManagedBody(envelope, target) {
-    return envelope.kind === "managed"
-        && envelope.bodyDigest === target.bodyDigest
-        && envelope.body === target.target.body;
+    return (envelope.kind === "managed" &&
+        envelope.bodyDigest === target.bodyDigest &&
+        envelope.body === target.target.body);
 }
 /**
  * 检查当前正文所有权并生成零 I/O 的幂等 current 或精确重组候选。
@@ -100,9 +99,9 @@ export function planWakeflowManagedTextAuthorityTransition(sourceValue, requestV
     const request = parseRequest(requestValue);
     const sourceEnvelope = inspectSource(sourceValue);
     const desired = request.desiredTarget;
-    if (sourceEnvelope.kind === "managed"
-        && (sourceEnvelope.component !== desired.target.component
-            || sourceEnvelope.owner !== desired.target.owner)) {
+    if (sourceEnvelope.kind === "managed" &&
+        (sourceEnvelope.component !== desired.target.component ||
+            sourceEnvelope.owner !== desired.target.owner)) {
         fail("relation", "$source");
     }
     if (sameManagedBody(sourceEnvelope, desired)) {
@@ -113,7 +112,7 @@ export function planWakeflowManagedTextAuthorityTransition(sourceValue, requestV
         });
     }
     if (sourceEnvelope.kind === "managed") {
-        const admitted = request.currentTargets.some((target) => (sameManagedBody(sourceEnvelope, target)));
+        const admitted = request.currentTargets.some((target) => sameManagedBody(sourceEnvelope, target));
         if (!admitted)
             fail("unadmitted-source", "$source");
     }
@@ -131,9 +130,7 @@ export function planWakeflowManagedTextAuthorityTransition(sourceValue, requestV
         fail("envelope", "$source");
     return Object.freeze({
         disposition: "recompose-required",
-        sourceAuthority: sourceEnvelope.kind === "managed"
-            ? "admitted-current"
-            : "unmanaged",
+        sourceAuthority: sourceEnvelope.kind === "managed" ? "admitted-current" : "unmanaged",
         target,
     });
 }

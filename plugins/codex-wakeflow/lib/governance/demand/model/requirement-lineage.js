@@ -1,11 +1,11 @@
-import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA, } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../../foundation/filesystem/portable-resource-path.js";
-import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { requirementRootRef } from "../../ledger/ledger-authority-paths.js";
 /**
  * Wakeflow Governance / Demand Model：Demand 身份绑定的需求包谱系引用。
@@ -17,11 +17,11 @@ import { requirementRootRef } from "../../ledger/ledger-authority-paths.js";
 const REQUIREMENT_LINEAGE_ARTIFACT_KIND = "wakeflow-requirement-lineage";
 const REQUIREMENT_LINEAGE_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    "json": "Requirement lineage is not passive JSON data.",
-    "schema": "Requirement lineage does not satisfy its portable Schema.",
-    "identifier": "Requirement lineage contains an invalid requirement identity.",
-    "path": "Requirement lineage contains an invalid record reference.",
-    "digest": "Requirement lineage contains an invalid digest.",
+    json: "Requirement lineage is not passive JSON data.",
+    schema: "Requirement lineage does not satisfy its portable Schema.",
+    identifier: "Requirement lineage contains an invalid requirement identity.",
+    path: "Requirement lineage contains an invalid record reference.",
+    digest: "Requirement lineage contains an invalid digest.",
 };
 export class RequirementLineageError extends Error {
     name = "RequirementLineageError";

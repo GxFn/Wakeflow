@@ -1,15 +1,15 @@
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA, } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
-import { parseDemandEventSourcingStateModelVersion, DemandEventSourcingStateVersionError, } from "./demand-event-sourcing-state-version.js";
-import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
+import { DemandEventSourcingStateVersionError, parseDemandEventSourcingStateModelVersion, } from "./demand-event-sourcing-state-version.js";
+import { DemandEventStreamPositionError, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：跨事件版本稳定的持久化事件封装。
  *
@@ -19,14 +19,14 @@ import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from 
 export const DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND = "wakeflow-demand-event-sourcing-event";
 export const DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    "json": "Demand Event Sourcing persisted event is not passive JSON data.",
-    "schema": "Demand Event Sourcing persisted event envelope does not satisfy its Schema.",
-    "identifier": "Demand Event Sourcing persisted event identity is invalid.",
-    "time": "Demand Event Sourcing persisted event time is invalid.",
-    "revision": "Demand Event Sourcing persisted event revision is invalid.",
-    "digest": "Demand Event Sourcing persisted event state digest is invalid.",
+    json: "Demand Event Sourcing persisted event is not passive JSON data.",
+    schema: "Demand Event Sourcing persisted event envelope does not satisfy its Schema.",
+    identifier: "Demand Event Sourcing persisted event identity is invalid.",
+    time: "Demand Event Sourcing persisted event time is invalid.",
+    revision: "Demand Event Sourcing persisted event revision is invalid.",
+    digest: "Demand Event Sourcing persisted event state digest is invalid.",
     "state-version": "Demand Event Sourcing persisted event state-model version is invalid.",
-    "representation": "Demand Event Sourcing persisted event bytes are not deterministic.",
+    representation: "Demand Event Sourcing persisted event bytes are not deterministic.",
 };
 export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
     name = "DemandEventSourcingPersistedEventEnvelopeError";
@@ -54,9 +54,7 @@ function parseId(value, kind, path) {
     }
 }
 function isJsonObject(value) {
-    return value !== null
-        && typeof value === "object"
-        && !Array.isArray(value);
+    return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 /** 解析 envelope；未知 eventType/eventVersion 在本层仍是有效路由事实。 */
 export function parseDemandEventSourcingPersistedEventEnvelope(value) {

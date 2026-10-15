@@ -1,8 +1,8 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
-import { wakeflowProgramInstructionRecompositionLockRef, } from "../workspace-host-resource-catalog.js";
+import { wakeflowProgramInstructionRecompositionLockRef } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowProgramInstructionInspectionRequest, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
@@ -43,10 +43,10 @@ export function failWakeflowProgramInstructionRecomposition(reason, path) {
     throw new WakeflowProgramInstructionRecompositionError(reason, path);
 }
 export function assertWakeflowProgramInstructionRecompositionRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failWakeflowProgramInstructionRecomposition("input", "$root");
     }
 }
@@ -77,29 +77,22 @@ export function parseWakeflowProgramInstructionRecompositionRequest(value) {
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function positiveMilliseconds(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0
-        || value > 300_000) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
         failWakeflowProgramInstructionRecomposition("input", path);
     }
     return value;
 }
 export function parseWakeflowProgramInstructionRecompositionOptions(value) {
     const record = plainRecord(value === undefined ? {} : value, "$options");
-    const allowed = new Set([
-        "acquireTimeoutMilliseconds",
-        "retryDelayMilliseconds",
-        "signal",
-    ]);
-    if (Object.keys(record).some((key) => !allowed.has(key))
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
+    if (Object.keys(record).some((key) => !allowed.has(key)) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         failWakeflowProgramInstructionRecomposition("input", "$options");
     }
     return Object.freeze({
@@ -114,8 +107,8 @@ export function parseWakeflowProgramInstructionRecompositionOptions(value) {
 }
 export function parseWakeflowProgramInstructionRecompositionRecoveryOptions(value) {
     const record = plainRecord(value === undefined ? {} : value, "$options");
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         failWakeflowProgramInstructionRecomposition("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
@@ -208,9 +201,9 @@ export function mapWakeflowProgramInstructionLockError(error, committed) {
     if (error.reason === "root-scope" || error.reason === "parent") {
         failWakeflowProgramInstructionRecomposition("root-scope", "$root");
     }
-    if (error.reason === "owner-active"
-        || error.reason === "residue-changed"
-        || error.reason === "release-failure") {
+    if (error.reason === "owner-active" ||
+        error.reason === "residue-changed" ||
+        error.reason === "release-failure") {
         failWakeflowProgramInstructionRecomposition("recovery-required", "$lock");
     }
     failWakeflowProgramInstructionRecomposition("lock-unsafe", "$lock");

@@ -1,5 +1,5 @@
 import { buildWakeflowConfigIndexes, computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { parseWakeflowWorkspaceResourceDeclaration, WakeflowWorkspaceResourceDeclarationError, } from "../workspace-resource-declaration.js";
 /**
@@ -145,9 +145,7 @@ export function createWakeflowManagedSupportResourceCatalog(configValue, profile
     for (const surface of config.topology.supportSurfaces) {
         if (surface.ownership !== "wakeflow-managed")
             continue;
-        const window = surface.capability === "design"
-            ? indexes.designWindow
-            : indexes.testWindow;
+        const window = surface.capability === "design" ? indexes.designWindow : indexes.testWindow;
         if (window.root.surfaceId !== surface.surfaceId) {
             fail("topology", `$/topology/supportSurfaces/${surface.surfaceId}`);
         }

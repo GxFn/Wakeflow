@@ -1,12 +1,12 @@
-import { WAKEFLOW_CONFIG_SCHEMA, } from "../../contracts/generated/configuration/wakeflow-config.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA, } from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA, } from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
-import { createWakeflowConfigDocumentValue, } from "../../configuration/wakeflow-config-document.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
+import { WAKEFLOW_CONFIG_SCHEMA } from "../../contracts/generated/configuration/wakeflow-config.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA, } from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { createRuntimeJsonSchemaValidator, } from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
 import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContributionError, } from "./wakeflow-host-maintenance-contribution.js";
 import { createWakeflowMaintenanceExecutionPlan, parseWakeflowMaintenanceExecutionPlan, WakeflowMaintenanceExecutionPlanError, } from "./wakeflow-maintenance-execution-plan.js";
@@ -111,7 +111,7 @@ function normalizedRequest(preview, desiredConfig, currentHostProfileValue, host
 }
 function sortedProfiles(values) {
     // Intent v1把当时完整的两宿主集合写入恢复格式；扩展集合必须新建版本并迁移。
-    const sorted = [...values].sort((left, right) => (left.hostId < right.hostId ? -1 : left.hostId > right.hostId ? 1 : 0));
+    const sorted = [...values].sort((left, right) => left.hostId < right.hostId ? -1 : left.hostId > right.hostId ? 1 : 0);
     if (sorted.length !== 2 || sorted[0] === undefined || sorted[1] === undefined) {
         fail("request", "$/hostProfiles");
     }
@@ -135,11 +135,10 @@ function normalize(wire) {
         }
         throw error;
     }
-    if (plan.status !== "ready"
-        || plan.steps.length === 0
-        || plan.planDigest !== wire.planDigest
-        || sharedPreview.desiredConfigDigest
-            !== computeWakeflowConfigDigest(desiredConfig)) {
+    if (plan.status !== "ready" ||
+        plan.steps.length === 0 ||
+        plan.planDigest !== wire.planDigest ||
+        sharedPreview.desiredConfigDigest !== computeWakeflowConfigDigest(desiredConfig)) {
         fail("relation", "$intent");
     }
     const intent = Object.freeze({
@@ -212,12 +211,12 @@ export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planV
         throw error;
     }
     const desiredConfig = normalizeConfig(desiredConfigValue);
-    if (request.action !== plan.sharedPreview.action
-        || request.currentHostProfile.hostId !== plan.hostId
-        || (request.action !== "reconcile"
-            && request.desiredConfig !== null
-            && computeWakeflowConfigDigest(request.desiredConfig)
-                !== computeWakeflowConfigDigest(desiredConfig))) {
+    if (request.action !== plan.sharedPreview.action ||
+        request.currentHostProfile.hostId !== plan.hostId ||
+        (request.action !== "reconcile" &&
+            request.desiredConfig !== null &&
+            computeWakeflowConfigDigest(request.desiredConfig) !==
+                computeWakeflowConfigDigest(desiredConfig))) {
         fail("relation", "$request");
     }
     return parseWakeflowMaintenanceExecutionIntent({
@@ -240,9 +239,7 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(value) {
         plan: normalized.plan,
         request: Object.freeze({
             action: intent.sharedPreview.action,
-            desiredConfig: intent.sharedPreview.action === "reconcile"
-                ? null
-                : intent.desiredConfig,
+            desiredConfig: intent.sharedPreview.action === "reconcile" ? null : intent.desiredConfig,
             currentHostProfile: intent.currentHostProfile,
             hostProfiles: intent.hostProfiles,
         }),

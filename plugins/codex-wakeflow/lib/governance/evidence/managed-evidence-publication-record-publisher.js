@@ -1,13 +1,13 @@
 import { types } from "node:util";
-import { inspectDirectoryTreeCandidate, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { publishDirectoryTreeCandidateDurably, DurableDirectoryTreePublicationError, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { DurableDirectoryTreePublicationError, publishDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
-import { createManagedEvidenceRecordResourceDeclaration, } from "./managed-evidence-resource-catalog.js";
-import { requireCurrentManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
-import { deriveManagedEvidencePublicationRecordTreePlan, parseManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "./managed-evidence-publication-transaction.js";
+import { deriveManagedEvidencePublicationRecordTreePlan, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
+import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-store.js";
 import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, } from "./managed-evidence-record-tree-plan.js";
+import { createManagedEvidenceRecordResourceDeclaration } from "./managed-evidence-resource-catalog.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence publication record publisher input is invalid.",
     journal: "Managed evidence publication record journal is absent, changed, or different.",
@@ -102,8 +102,7 @@ async function nodeOrNull(root, resourcePath) {
         return (await root.inspectExistingResource(resourcePath, "$resource")).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -120,8 +119,7 @@ async function inspectPhysicalState(root, plan) {
 function assertPrivateRootNode(node, owner) {
     if (node.kind !== "directory" ||
         node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" &&
-            node.userId !== BigInt(process.geteuid()))) {
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
     }
 }
@@ -173,8 +171,7 @@ function mapPublicationError(error) {
     if (error.reason === "commit-uncertain") {
         fail("commit-uncertain", "$final");
     }
-    if (error.reason === "source-changed" ||
-        error.reason === "source-conflict") {
+    if (error.reason === "source-changed" || error.reason === "source-conflict") {
         fail("stage-conflict", "$stage");
     }
     fail("operation-failure", "$final");

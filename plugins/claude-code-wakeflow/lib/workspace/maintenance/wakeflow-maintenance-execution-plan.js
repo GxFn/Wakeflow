@@ -1,9 +1,9 @@
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parseJsonValue, JsonValueError, } from "../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
-import { createWakeflowWorkspaceStaticResourceMatrix, } from "../wakeflow-workspace-static-resource-matrix.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContributionError, } from "./wakeflow-host-maintenance-contribution.js";
 import { parseWakeflowStaticMaterializationPreview, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
 const ERROR_MESSAGES = {
@@ -98,9 +98,7 @@ function orderedSteps(preview, contribution) {
     if (contribution !== null) {
         for (const operation of contribution.operations) {
             const predecessor = steps.at(-1);
-            const dependencies = predecessor === undefined
-                ? []
-                : [predecessor.stepId];
+            const dependencies = predecessor === undefined ? [] : [predecessor.stepId];
             steps.push(hostStep(contribution.hostId, contribution.capabilityId, operation, dependencies));
         }
     }
@@ -171,8 +169,7 @@ export function createWakeflowMaintenanceExecutionPlan(previewValue, currentHost
         }
         throw error;
     }
-    if (createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest
-        !== preview.matrixDigest) {
+    if (createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== preview.matrixDigest) {
         fail("matrix", "$profile");
     }
     return buildPlan(profile.hostId, preview, parseContribution(contributionValue));
@@ -197,8 +194,7 @@ function equivalentJson(left, right, path) {
             fail("input", error.path);
         throw error;
     }
-    return computeCanonicalJsonSha256Digest(leftJson)
-        === computeCanonicalJsonSha256Digest(right);
+    return computeCanonicalJsonSha256Digest(leftJson) === computeCanonicalJsonSha256Digest(right);
 }
 /** 把任意输入重验为可由两类已知来源唯一推导的聚合执行计划。 */
 export function parseWakeflowMaintenanceExecutionPlan(value) {
@@ -211,18 +207,18 @@ export function parseWakeflowMaintenanceExecutionPlan(value) {
             fail("input", error.path);
         throw error;
     }
-    if (Object.keys(record).sort().join("\u0000")
-        !== "blockerCodes\u0000executionBoundary\u0000hostContribution\u0000hostId\u0000kind\u0000planDigest\u0000schemaVersion\u0000sharedPreview\u0000status\u0000steps"
-        || record.kind !== "WakeflowMaintenanceExecutionPlan"
-        || record.schemaVersion !== 1
-        || record.executionBoundary !== "preview-only"
-        || (record.status !== "ready" && record.status !== "blocked")) {
+    if (Object.keys(record).sort().join("\u0000") !==
+        "blockerCodes\u0000executionBoundary\u0000hostContribution\u0000hostId\u0000kind\u0000planDigest\u0000schemaVersion\u0000sharedPreview\u0000status\u0000steps" ||
+        record.kind !== "WakeflowMaintenanceExecutionPlan" ||
+        record.schemaVersion !== 1 ||
+        record.executionBoundary !== "preview-only" ||
+        (record.status !== "ready" && record.status !== "blocked")) {
         fail("input", "$plan");
     }
     const expected = buildPlan(parseHostId(record.hostId, "$plan.hostId"), parseSharedPreview(record.sharedPreview), parseContribution(record.hostContribution));
-    if (record.status !== expected.status
-        || !equivalentJson(record.blockerCodes, expected.blockerCodes, "$plan.blockerCodes")
-        || !equivalentJson(record.steps, expected.steps, "$plan.steps")) {
+    if (record.status !== expected.status ||
+        !equivalentJson(record.blockerCodes, expected.blockerCodes, "$plan.blockerCodes") ||
+        !equivalentJson(record.steps, expected.steps, "$plan.steps")) {
         fail("order", "$plan");
     }
     if (digest(record.planDigest, "$plan.planDigest") !== expected.planDigest) {

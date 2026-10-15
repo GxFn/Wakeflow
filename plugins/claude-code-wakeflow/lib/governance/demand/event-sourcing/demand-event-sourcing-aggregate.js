@@ -1,20 +1,20 @@
-import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { computeDemandAggregateStateDigest, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
-import { computeDemandEventSourcingStoredEventDigest, parseDemandEventSourcingStoredEvent, DemandEventSourcingStoredEventError, } from "./demand-event-sourcing-stored-event.js";
-import { parseDemandEventCommitSequence, parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
-import { upcastDemandEventSourcingStoredEvent, DemandEventSourcingUpcasterError, } from "./demand-event-sourcing-upcaster.js";
+import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { computeDemandAggregateStateDigest, DemandAggregateStateError, parseDemandAggregateState, } from "../model/demand-aggregate-state.js";
 import { assertSupportedDemandEventSourcingStateModelVersion, DemandEventSourcingStateVersionError, } from "./demand-event-sourcing-state-version.js";
+import { computeDemandEventSourcingStoredEventDigest, DemandEventSourcingStoredEventError, parseDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-stored-event.js";
+import { DemandEventSourcingUpcasterError, upcastDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-upcaster.js";
+import { DemandEventStreamPositionError, parseDemandEventCommitSequence, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
 const ERROR_MESSAGES = {
-    "input": "Demand Event Sourcing aggregate input is invalid.",
-    "identifier": "Demand Event Sourcing aggregate contains an invalid identity.",
-    "position": "Demand Event Sourcing aggregate contains an invalid cursor.",
-    "digest": "Demand Event Sourcing aggregate contains an invalid digest.",
-    "event": "Demand Event Sourcing aggregate contains an invalid tail event.",
-    "version": "Demand Event Sourcing aggregate tail version is unsupported.",
-    "state": "Demand Event Sourcing aggregate contains an invalid state.",
-    "relation": "Demand Event Sourcing aggregate cursor, tail and state do not close.",
+    input: "Demand Event Sourcing aggregate input is invalid.",
+    identifier: "Demand Event Sourcing aggregate contains an invalid identity.",
+    position: "Demand Event Sourcing aggregate contains an invalid cursor.",
+    digest: "Demand Event Sourcing aggregate contains an invalid digest.",
+    event: "Demand Event Sourcing aggregate contains an invalid tail event.",
+    version: "Demand Event Sourcing aggregate tail version is unsupported.",
+    state: "Demand Event Sourcing aggregate contains an invalid state.",
+    relation: "Demand Event Sourcing aggregate cursor, tail and state do not close.",
 };
 export class DemandEventSourcingAggregateError extends Error {
     name = "DemandEventSourcingAggregateError";
@@ -62,8 +62,7 @@ export function parseDemandEventSourcingAggregate(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== FIELDS.length
-        || keys.some((key, index) => key !== FIELDS[index])) {
+    if (keys.length !== FIELDS.length || keys.some((key, index) => key !== FIELDS[index])) {
         fail("input", "$aggregate");
     }
     let demandId;
@@ -91,8 +90,8 @@ export function parseDemandEventSourcingAggregate(value) {
         upcastDemandEventSourcingStoredEvent(lastEvent);
     }
     catch (error) {
-        if (error instanceof DemandEventSourcingStateVersionError
-            || error instanceof DemandEventSourcingUpcasterError) {
+        if (error instanceof DemandEventSourcingStateVersionError ||
+            error instanceof DemandEventSourcingUpcasterError) {
             fail("version", "$/lastEvent");
         }
         throw error;
@@ -120,14 +119,13 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     const lastEventDigest = parseDigest(record.lastEventDigest, "$/lastEventDigest");
     const stateDigest = parseDigest(record.stateDigest, "$/stateDigest");
-    if (commitSequence > streamRevision
-        ||
-            lastEvent.demandId !== demandId
-        || lastEvent.streamRevision !== streamRevision
-        || state.demandId !== demandId
-        || computeDemandEventSourcingStoredEventDigest(lastEvent) !== lastEventDigest
-        || computeDemandAggregateStateDigest(state) !== stateDigest
-        || lastEvent.resultingStateDigest !== stateDigest) {
+    if (commitSequence > streamRevision ||
+        lastEvent.demandId !== demandId ||
+        lastEvent.streamRevision !== streamRevision ||
+        state.demandId !== demandId ||
+        computeDemandEventSourcingStoredEventDigest(lastEvent) !== lastEventDigest ||
+        computeDemandAggregateStateDigest(state) !== stateDigest ||
+        lastEvent.resultingStateDigest !== stateDigest) {
         fail("relation", "$aggregate");
     }
     return Object.freeze({

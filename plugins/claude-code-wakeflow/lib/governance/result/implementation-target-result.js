@@ -1,7 +1,7 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../delivery/delivery-envelope.js";
-import { parseImplementationTargetResultReport, ImplementationTargetResultReportError, } from "./implementation-target-result-report.js";
+import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
+import { ImplementationTargetResultReportError, parseImplementationTargetResultReport, } from "./implementation-target-result-report.js";
 import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "./target-result.js";
 const ERROR_MESSAGES = {
     "task-package": "Implementation Target Result requires a valid implementation TaskPackage.",

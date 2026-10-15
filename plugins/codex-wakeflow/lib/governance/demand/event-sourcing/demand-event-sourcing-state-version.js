@@ -6,9 +6,11 @@
  * 使用当前归约器冒充旧版本摘要校验逻辑。
  */
 export const DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION = 1;
-export const DEMAND_EVENT_SOURCING_SUPPORTED_STATE_MODEL_VERSIONS = Object.freeze([DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION]);
+export const DEMAND_EVENT_SOURCING_SUPPORTED_STATE_MODEL_VERSIONS = Object.freeze([
+    DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
+]);
 const ERROR_MESSAGES = {
-    "input": "Demand Event Sourcing state-model version is invalid.",
+    input: "Demand Event Sourcing state-model version is invalid.",
     "unsupported-version": "Demand Event Sourcing state-model version is unsupported.",
 };
 export class DemandEventSourcingStateVersionError extends Error {

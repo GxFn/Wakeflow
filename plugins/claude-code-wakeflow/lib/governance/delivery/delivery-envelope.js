@@ -1,27 +1,27 @@
 import { WAKEFLOW_PRESENTATION_LANGUAGES, } from "../../configuration/wakeflow-config.js";
-import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../contracts/generated/workspace/window-host-binding.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { computePromptDigest, DELIVERY_PROMPT_MAXIMUM_CHARACTERS, } from "../../kernel/prompt-digest.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
-import { WAKEFLOW_WORKSPACE_HOST_IDS } from "../../workspace/workspace-host-resource-profile.js";
+import { computePromptDigest, DELIVERY_PROMPT_MAXIMUM_CHARACTERS, } from "../../kernel/prompt-digest.js";
 import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { WAKEFLOW_WORKSPACE_HOST_IDS } from "../../workspace/workspace-host-resource-profile.js";
 import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
-import { parseTestExecutionAttempt, TestExecutionAttemptError, } from "../testing/test-execution-attempt.js";
 import { computeTaskPackageDigest, parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
-import { taskPackageProjectionRef, TaskPackageProjectionPathError, } from "../tasking/task-package-projection-paths.js";
+import { TaskPackageProjectionPathError, taskPackageProjectionRef, } from "../tasking/task-package-projection-paths.js";
+import { parseTestExecutionAttempt, TestExecutionAttemptError, } from "../testing/test-execution-attempt.js";
 const ERROR_MESSAGES = {
     json: "Delivery Envelope is not passive JSON data.",
     schema: "Delivery Envelope does not satisfy its portable Schema.",
@@ -55,6 +55,7 @@ const MAXIMUM_REWORK_RATIONALE_CODE_POINTS = 1_024;
 const MAXIMUM_REWORK_METHOD_CODE_POINTS = 512;
 const MAXIMUM_REWORK_OBSERVATION_CODE_POINTS = 1_024;
 const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set(WAKEFLOW_WORKSPACE_HOST_IDS);
 const LANGUAGES = new Set(WAKEFLOW_PRESENTATION_LANGUAGES);
@@ -94,8 +95,7 @@ function exactRecord(value, fields, path) {
     }
     const keys = Object.keys(record).sort();
     const expected = [...fields].sort();
-    if (keys.length !== expected.length ||
-        keys.some((key, index) => key !== expected[index])) {
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
         fail("rework", path);
     }
     return record;
@@ -138,8 +138,7 @@ export function parseTargetDeliveryReworkContext(value, path = "$rework") {
     const corrections = correctionValues.map((value, index) => {
         const correctionPath = `${path}/requiredCorrections/${index}`;
         const correction = exactRecord(value, ["checkId", "outcome", "methodSummary", "observationSummary"], correctionPath);
-        if (correction.outcome !== "failed" &&
-            correction.outcome !== "inconclusive") {
+        if (correction.outcome !== "failed" && correction.outcome !== "inconclusive") {
             fail("rework", `${correctionPath}/outcome`);
         }
         return Object.freeze({
@@ -149,15 +148,17 @@ export function parseTargetDeliveryReworkContext(value, path = "$rework") {
             observationSummary: reworkText(correction.observationSummary, MAXIMUM_REWORK_OBSERVATION_CODE_POINTS, `${correctionPath}/observationSummary`),
         });
     });
-    if (new Set(corrections.map((correction) => correction.checkId)).size !==
-        corrections.length ||
+    if (new Set(corrections.map((correction) => correction.checkId)).size !== corrections.length ||
         !corrections.some((correction) => correction.outcome === "failed")) {
         fail("rework", `${path}/requiredCorrections`);
     }
     const first = corrections[0];
     if (first === undefined)
         fail("rework", `${path}/requiredCorrections`);
-    const requiredCorrections = Object.freeze([first, ...corrections.slice(1)]);
+    const requiredCorrections = Object.freeze([
+        first,
+        ...corrections.slice(1),
+    ]);
     return Object.freeze({
         decision: Object.freeze({
             targetReviewDecisionId: parseId(decision.targetReviewDecisionId, "target-review-decision", `${path}/decision/targetReviewDecisionId`),
@@ -211,8 +212,7 @@ function remediationRecord(value, fields, path) {
     }
     const keys = Object.keys(record).sort();
     const expected = [...fields].sort();
-    if (keys.length !== expected.length ||
-        keys.some((key, index) => key !== expected[index])) {
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
         fail("product-defect-remediation", path);
     }
     return record;
@@ -270,8 +270,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(value, path =
             observedSummary: remediationText(correction.observedSummary, MAXIMUM_REWORK_OBSERVATION_CODE_POINTS, `${correctionPath}/observedSummary`),
         });
     });
-    if (new Set(corrections.map((correction) => correction.stepId)).size !==
-        corrections.length) {
+    if (new Set(corrections.map((correction) => correction.stepId)).size !== corrections.length) {
         fail("product-defect-remediation", `${path}/requiredCorrections`);
     }
     const first = corrections[0];
@@ -493,7 +492,9 @@ export function parseDeliveryEnvelope(value) {
         basis = envelopeBasis({ ...shared, workType: "test", attempt });
     }
     else {
-        const rework = wire.rework === undefined ? undefined : parseTargetDeliveryReworkContext(wire.rework, "$/rework");
+        const rework = wire.rework === undefined
+            ? undefined
+            : parseTargetDeliveryReworkContext(wire.rework, "$/rework");
         const productDefectRemediation = wire.productDefectRemediation === undefined
             ? undefined
             : parseTargetDeliveryProductDefectRemediationContext(wire.productDefectRemediation, "$/productDefectRemediation");
@@ -514,8 +515,15 @@ export function parseDeliveryEnvelope(value) {
 }
 /** 从草稿封一份信封。 */
 export function createDeliveryEnvelope(draft) {
-    const basis = envelopeBasis({ ...draft, kind: "WakeflowDeliveryEnvelope", schemaVersion: 1 });
-    return parseDeliveryEnvelope({ ...basis, envelopeDigest: computeCanonicalJsonSha256Digest(basis) });
+    const basis = envelopeBasis({
+        ...draft,
+        kind: "WakeflowDeliveryEnvelope",
+        schemaVersion: 1,
+    });
+    return parseDeliveryEnvelope({
+        ...basis,
+        envelopeDigest: computeCanonicalJsonSha256Digest(basis),
+    });
 }
 /** 实现投递的目的由其上下文决定：初次、评审返工或产品缺陷修复。 */
 export function deliveryPurpose(envelope) {

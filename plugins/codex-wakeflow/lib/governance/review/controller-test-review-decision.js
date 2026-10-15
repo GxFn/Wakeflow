@@ -1,9 +1,9 @@
-import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { createWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
@@ -26,6 +26,7 @@ import { normalizeControllerReviewCallbackLanding, normalizeControllerReviewResu
 const DECISION_KIND = "WakeflowControllerTestReviewDecision";
 const DECISION_SCHEMA_VERSION = 1;
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const ERROR_MESSAGES = {
     json: "Controller Test Review Decision is not passive JSON data.",
@@ -168,8 +169,7 @@ export function assertControllerTestReviewJudgment(judgment, resultOutcome, targ
             assessment.conclusion === "satisfied") ||
         (decision === "blocked" &&
             (blockingReasons.length === 0 ||
-                (assessment.conclusion === "satisfied" &&
-                    assessment.evidenceSufficiency === "sufficient")))) {
+                (assessment.conclusion === "satisfied" && assessment.evidenceSufficiency === "sufficient")))) {
         fail("relation", "$/decision");
     }
 }
@@ -290,18 +290,14 @@ export function createControllerTestReviewDecision(input, options = {}) {
         targetReviewDecisionId = createWakeflowDurableId("target-review-decision", createUuidV4(options.uuidFactory));
     }
     catch (error) {
-        if (error instanceof UuidV4Error ||
-            error instanceof WakeflowDurableIdError) {
+        if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
             fail("identifier", "$uuidFactory");
         }
         throw error;
     }
     let decidedAt;
     try {
-        decidedAt =
-            options.clock === undefined
-                ? readUtcWallClock()
-                : readUtcWallClock(options.clock);
+        decidedAt = options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
     }
     catch (error) {
         if (error instanceof UtcWallClockError)

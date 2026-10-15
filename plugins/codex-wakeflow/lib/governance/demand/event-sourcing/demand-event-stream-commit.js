@@ -1,23 +1,23 @@
 import { types } from "node:util";
-import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { computeDemandAggregateStateDigest, } from "../model/demand-aggregate-state.js";
-import { evolveDemandEventSourcingState, DemandEventSourcingDecisionError, } from "./demand-event-sourcing-decider.js";
-import { parseDemandEventSourcingAggregate, DemandEventSourcingAggregateError, } from "./demand-event-sourcing-aggregate.js";
-import { parseDemandUncommittedEvent, DemandEventSourcingEventError, } from "./demand-event-sourcing-event.js";
-import { computeDemandEventSourcingStoredEventDigest, createDemandEventSourcingStoredEvent, parseDemandEventSourcingStoredEvent, DemandEventSourcingStoredEventError, } from "./demand-event-sourcing-stored-event.js";
-import { upcastDemandEventSourcingStoredEvent, DemandEventSourcingUpcasterError, } from "./demand-event-sourcing-upcaster.js";
+import { DemandEventSourcingAggregateError, parseDemandEventSourcingAggregate, } from "./demand-event-sourcing-aggregate.js";
+import { DemandEventSourcingDecisionError, evolveDemandEventSourcingState, } from "./demand-event-sourcing-decider.js";
+import { DemandEventSourcingEventError, parseDemandUncommittedEvent, } from "./demand-event-sourcing-event.js";
 import { assertSupportedDemandEventSourcingStateModelVersion, DemandEventSourcingStateVersionError, } from "./demand-event-sourcing-state-version.js";
-import { parseDemandEventCommitSequence, parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
+import { computeDemandEventSourcingStoredEventDigest, createDemandEventSourcingStoredEvent, DemandEventSourcingStoredEventError, parseDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-stored-event.js";
+import { DemandEventSourcingUpcasterError, upcastDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-upcaster.js";
+import { DemandEventStreamPositionError, parseDemandEventCommitSequence, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：一次原子追加产生的不可变提交记录。
  *
@@ -84,11 +84,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_STRE
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-const PREPARE_FIELDS = Object.freeze([
-    "commandDigest",
-    "commitId",
-    "events",
-]);
+const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"]);
 const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency"]);
 const ISSUED_PREPARED_COMMITS = new WeakSet();
 function fail(reason, path) {
@@ -375,8 +371,7 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingUpcasterError) {
-                if (error.reason === "unsupported-version" ||
-                    error.reason === "unsupported-event-type") {
+                if (error.reason === "unsupported-version" || error.reason === "unsupported-event-type") {
                     fail("event-version", `$/events/${index}/eventVersion`);
                 }
                 fail("event", `$/events/${index}`);
@@ -395,8 +390,7 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
             throw error;
         }
         if (storedEvent.streamRevision !== commit.firstStreamRevision + index ||
-            storedEvent.resultingStateDigest !==
-                computeDemandAggregateStateDigest(next)) {
+            storedEvent.resultingStateDigest !== computeDemandAggregateStateDigest(next)) {
             fail("transition", `$/events/${index}`);
         }
         state = next;

@@ -1,8 +1,8 @@
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../../workspace/workspace-resource-declaration.js";
+import { LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF, ledgerAuthorityMemberRef, ledgerAuthorityRecordRef, ledgerAuthorityRootRef, ledgerRecordPublicationIntentRef, ledgerRecordPublicationLockRef, } from "./ledger-authority-paths.js";
 import { parseLedgerAuthorityRecord, } from "./ledger-authority-record.js";
-import { ledgerAuthorityMemberRef, ledgerAuthorityRecordRef, ledgerAuthorityRootRef, ledgerRecordPublicationIntentRef, ledgerRecordPublicationLockRef, LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF, } from "./ledger-authority-paths.js";
 /**
  * Wakeflow Governance / Ledger：需求包记录职责所有者的资源目录。
  *
@@ -95,10 +95,7 @@ function transactionDeclaration(declarationId, relativePath) {
         processing: {
             kind: "resource",
             role: "transaction-artifact",
-            allowedMutationRecipes: [
-                "exclusive-create",
-                "exact-retire",
-            ],
+            allowedMutationRecipes: ["exclusive-create", "exact-retire"],
             recoveryStrategy: "owner-transaction-recovery",
         },
     });
@@ -156,11 +153,5 @@ export function createLedgerAuthorityResourceCatalog(recordValue) {
     const members = record.documents.map((document) => durableFactDeclaration(`${prefix}.${memberDeclarationId(record, document.path)}`, ledgerAuthorityMemberRef(record, document.path)));
     const intent = transactionDeclaration(`${prefix}.intent`, ledgerRecordPublicationIntentRef(record));
     const lock = transactionDeclaration(`${prefix}.lock`, ledgerRecordPublicationLockRef(record));
-    return Object.freeze([
-        root,
-        manifest,
-        ...members,
-        intent,
-        lock,
-    ]);
+    return Object.freeze([root, manifest, ...members, intent, lock]);
 }

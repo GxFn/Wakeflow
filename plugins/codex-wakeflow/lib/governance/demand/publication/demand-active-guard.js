@@ -1,23 +1,22 @@
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
-import { readStrictTextFile, StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
-import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
-import { fail } from "../../../kernel/error.js";
-import { listRequirementClaimStates, } from "../../../kernel/requirement-board.js";
-import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
-import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
-import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
-import { closeDemandOperationRoot, DemandOperationAuthorityContextError, openDemandOperationRoot, } from "../demand-operation-authority-context.js";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { parsePortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import { readStableResourceDirectory, StableDirectoryReadError } from "../../../foundation/filesystem/stable-directory-read.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
+import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { readStrictTextFile, StrictTextFileError, } from "../../../foundation/filesystem/strict-text-file.js";
+import { fail } from "../../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
+import { listRequirementClaimStates, } from "../../../kernel/requirement-board.js";
 import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
-import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
-import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "./demand-publication-paths.js";
+import { closeDemandOperationRoot, DemandOperationAuthorityContextError, openDemandOperationRoot, } from "../demand-operation-authority-context.js";
+import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "./demand-publication-paths.js";
+import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
+import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
+import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalRootRef, } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand：活动 Demand 守卫（ADR-0011 D7，按 ADR-0010 D3 收窄到 pod）。
  *
@@ -31,8 +30,7 @@ async function resourceExists(root, ref) {
         return true;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return false;
         }
         if (error instanceof RootedDirectoryError) {
@@ -162,7 +160,9 @@ export async function readDemandPodId(root, demandId, signal) {
     }
     const options = signal === undefined ? {} : { signal };
     const config = await readWakeflowConfigAuthoritySnapshot(root, options);
-    const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", { durability: root.durability });
+    const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", {
+        durability: root.durability,
+    });
     try {
         return (await locateLatestDemandArchive(ledger, demandId, signal))?.podId ?? null;
     }
@@ -173,7 +173,8 @@ export async function readDemandPodId(root, demandId, signal) {
 async function pendingEntries(root, ref, signal) {
     try {
         return (await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
-            maximumEntries: 4096, ...(signal === undefined ? {} : { signal }),
+            maximumEntries: 4096,
+            ...(signal === undefined ? {} : { signal }),
         })).entries;
     }
     catch (error) {

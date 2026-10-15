@@ -1,4 +1,4 @@
-import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
@@ -6,7 +6,7 @@ import { readStableResourceDirectory, StableDirectoryReadError, } from "../../fo
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { parseUtcInstant, UtcInstantError } from "../../foundation/time/utc-instant.js";
+import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
 const ARCHIVE_NAME_PATTERN = /^[0-9]{10}$/u;

@@ -1,6 +1,6 @@
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { hostRuntimeProfilesRootRef, hostRuntimeRootRef } from "../kernel/layout.js";
-import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 /** Wakeflow Workspace：共享 hosts 根与当前宿主命名空间的可移植路径词汇。 */
 export const WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF = hostRuntimeProfilesRootRef();
 export function wakeflowHostRuntimeRootRef(profileValue) {

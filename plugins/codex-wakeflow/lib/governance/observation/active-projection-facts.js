@@ -12,7 +12,8 @@ function progressOf(state) {
         implementationTargets: implementation.length,
         implementationAccepted: implementation.filter((target) => target.phase === "accepted").length,
         deliveriesInFlight: targets.filter((target) => target.phase.includes("delivery-prepared") || target.phase.includes("host-effect-")).length,
-        resultsAwaitingReview: targets.filter((target) => target.phase.endsWith("result-reported")).length,
+        resultsAwaitingReview: targets.filter((target) => target.phase.endsWith("result-reported"))
+            .length,
         testTargets: tests.length,
         testAccepted: tests.filter((target) => target.phase === "test-accepted").length,
     });
@@ -64,7 +65,7 @@ export function acceptedBranchFacts(demandId, snapshot, repositories, source) {
             commit: commit.value,
             acceptedAt: target.reviewDecision.decidedAt,
             // 核对过 = 分支清单读全了，并且在里面真的看见了这个分支尖端。
-            repositoryObserved: repository !== undefined && repository.branchesComplete && tip !== undefined,
+            repositoryObserved: repository?.branchesComplete === true && tip !== undefined,
             source,
         }));
     }
@@ -194,9 +195,9 @@ function projectionScopeOf(observation) {
 function demandEvidenceOf(observation) {
     const demands = observation.demands.value;
     return Object.freeze({
-        observed: observation.demands.status === "observed"
-            && demands !== null
-            && demands.every((demand) => demand.status === "observed"),
+        observed: observation.demands.status === "observed" &&
+            demands !== null &&
+            demands.every((demand) => demand.status === "observed"),
         activeDemandIds: Object.freeze((demands ?? []).map((demand) => demand.demandId).sort()),
     });
 }

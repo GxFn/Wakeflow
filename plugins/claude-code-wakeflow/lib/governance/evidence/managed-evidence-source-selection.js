@@ -1,9 +1,9 @@
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import { isWakeflowHostId, } from "../../contracts/vocabulary/wakeflow-host-id.js";
-import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError } from "../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { HOST_HOOK_EVENTS } from "../../kernel/hook-observations.js";
 const ERROR_MESSAGES = {

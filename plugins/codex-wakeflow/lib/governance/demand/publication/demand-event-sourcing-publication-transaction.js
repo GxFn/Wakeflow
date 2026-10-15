@@ -1,26 +1,26 @@
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA, } from "../../../contracts/generated/governance/demand/demand-event-sourcing-publication-transaction.generated.js";
-import { WAKEFLOW_DEMAND_AUTHORITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-authority.generated.js";
-import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
-import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_DEMAND_AUTHORITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-authority.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-publication-transaction.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../../foundation/filesystem/portable-resource-path.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
-import { computeDemandEventSourcingCommandDigest, decideDemandEventSourcingCommand, parseDemandEventSourcingCommand, DemandEventSourcingDecisionError, } from "../event-sourcing/demand-event-sourcing-decider.js";
-import { computeDemandEventStreamCommitDigest, parseDemandEventStreamCommit, planDemandEventStreamCommit, DemandEventStreamCommitError, } from "../event-sourcing/demand-event-stream-commit.js";
-import { computeDemandAuthorityDigest, parseDemandAuthority, DemandAuthorityError, } from "../model/demand-authority.js";
-import { computeDemandIdentityDigest, parseDemandIdentity, DemandIdentityError, } from "../model/demand-identity.js";
-import { demandFinalRootRef, demandPublicationStageRef, } from "./demand-publication-paths.js";
+import { computeDemandEventSourcingCommandDigest, DemandEventSourcingDecisionError, decideDemandEventSourcingCommand, parseDemandEventSourcingCommand, } from "../event-sourcing/demand-event-sourcing-decider.js";
+import { computeDemandEventStreamCommitDigest, DemandEventStreamCommitError, parseDemandEventStreamCommit, planDemandEventStreamCommit, } from "../event-sourcing/demand-event-stream-commit.js";
+import { computeDemandAuthorityDigest, DemandAuthorityError, parseDemandAuthority, } from "../model/demand-authority.js";
+import { computeDemandIdentityDigest, DemandIdentityError, parseDemandIdentity, } from "../model/demand-identity.js";
+import { demandFinalRootRef, demandPublicationStageRef } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源恢复计划。
  *
@@ -31,18 +31,18 @@ import { demandFinalRootRef, demandPublicationStageRef, } from "./demand-publica
 const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND = "wakeflow-demand-event-sourcing-publication-transaction";
 const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    "input": "Demand Event Sourcing publication transaction input is invalid.",
-    "json": "Demand Event Sourcing publication transaction is not passive JSON data.",
-    "schema": "Demand Event Sourcing publication transaction does not satisfy its Schema.",
-    "identifier": "Demand Event Sourcing publication transaction contains an invalid identity.",
-    "path": "Demand Event Sourcing publication transaction contains an invalid path.",
-    "digest": "Demand Event Sourcing publication transaction contains an invalid digest.",
-    "identity": "Demand Event Sourcing publication transaction contains an invalid Demand identity.",
-    "authority": "Demand Event Sourcing publication transaction contains invalid authority.",
-    "command": "Demand Event Sourcing publication transaction contains an invalid initial command.",
-    "commit": "Demand Event Sourcing publication transaction contains an invalid initial commit.",
-    "relation": "Demand Event Sourcing publication transaction fields do not form one publication.",
-    "representation": "Demand Event Sourcing publication transaction bytes are not deterministic.",
+    input: "Demand Event Sourcing publication transaction input is invalid.",
+    json: "Demand Event Sourcing publication transaction is not passive JSON data.",
+    schema: "Demand Event Sourcing publication transaction does not satisfy its Schema.",
+    identifier: "Demand Event Sourcing publication transaction contains an invalid identity.",
+    path: "Demand Event Sourcing publication transaction contains an invalid path.",
+    digest: "Demand Event Sourcing publication transaction contains an invalid digest.",
+    identity: "Demand Event Sourcing publication transaction contains an invalid Demand identity.",
+    authority: "Demand Event Sourcing publication transaction contains invalid authority.",
+    command: "Demand Event Sourcing publication transaction contains an invalid initial command.",
+    commit: "Demand Event Sourcing publication transaction contains an invalid initial commit.",
+    relation: "Demand Event Sourcing publication transaction fields do not form one publication.",
+    representation: "Demand Event Sourcing publication transaction bytes are not deterministic.",
 };
 export class DemandEventSourcingPublicationTransactionError extends Error {
     name = "DemandEventSourcingPublicationTransactionError";
@@ -98,8 +98,7 @@ function parsePath(value, path) {
     }
 }
 function sameCommit(left, right) {
-    return computeDemandEventStreamCommitDigest(left)
-        === computeDemandEventStreamCommitDigest(right);
+    return computeDemandEventStreamCommitDigest(left) === computeDemandEventStreamCommitDigest(right);
 }
 export function parseDemandEventSourcingPublicationTransaction(value) {
     let json;
@@ -193,28 +192,28 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
         });
     }
     catch (error) {
-        if (error instanceof DemandEventSourcingDecisionError
-            || error instanceof DemandEventStreamCommitError) {
+        if (error instanceof DemandEventSourcingDecisionError ||
+            error instanceof DemandEventStreamCommitError) {
             fail("relation", "$transaction");
         }
         throw error;
     }
-    if (identity.demandId !== demandId
-        || authority.demandId !== demandId
-        || identity.source.requirementId !== requirementId
-        || stageRef !== demandPublicationStageRef(demandId)
-        || finalRootRef !== demandFinalRootRef(demandId)
-        || identityDigest !== computeDemandIdentityDigest(identity)
-        || authorityDigest !== computeDemandAuthorityDigest(authority)
-        || initialCommand.demandId !== demandId
-        || initialCommand.identityDigest !== identityDigest
-        || initialCommand.authorityDigest !== authorityDigest
-        || initialCommandDigest !== computeDemandEventSourcingCommandDigest(initialCommand)
-        || initialCommit.demandId !== demandId
-        || initialCommit.commitSequence !== 1
-        || initialCommit.expectedStreamRevision !== 0
-        || initialCommitDigest !== computeDemandEventStreamCommitDigest(initialCommit)
-        || !sameCommit(initialCommit, recomputed)) {
+    if (identity.demandId !== demandId ||
+        authority.demandId !== demandId ||
+        identity.source.requirementId !== requirementId ||
+        stageRef !== demandPublicationStageRef(demandId) ||
+        finalRootRef !== demandFinalRootRef(demandId) ||
+        identityDigest !== computeDemandIdentityDigest(identity) ||
+        authorityDigest !== computeDemandAuthorityDigest(authority) ||
+        initialCommand.demandId !== demandId ||
+        initialCommand.identityDigest !== identityDigest ||
+        initialCommand.authorityDigest !== authorityDigest ||
+        initialCommandDigest !== computeDemandEventSourcingCommandDigest(initialCommand) ||
+        initialCommit.demandId !== demandId ||
+        initialCommit.commitSequence !== 1 ||
+        initialCommit.expectedStreamRevision !== 0 ||
+        initialCommitDigest !== computeDemandEventStreamCommitDigest(initialCommit) ||
+        !sameCommit(initialCommit, recomputed)) {
         fail("relation", "$transaction");
     }
     return Object.freeze({
@@ -247,8 +246,8 @@ export function createDemandEventSourcingPublicationTransaction(value) {
         throw error;
     }
     const keys = Object.keys(input).sort();
-    if (keys.length !== CREATE_FIELDS.length
-        || keys.some((key, index) => key !== CREATE_FIELDS[index])) {
+    if (keys.length !== CREATE_FIELDS.length ||
+        keys.some((key, index) => key !== CREATE_FIELDS[index])) {
         fail("input", "$input");
     }
     let identity;
@@ -260,9 +259,9 @@ export function createDemandEventSourcingPublicationTransaction(value) {
         commitId = parseWakeflowDurableIdOfKind(input.commitId, "demand-event-commit", "$/commitId");
     }
     catch (error) {
-        if (error instanceof DemandIdentityError
-            || error instanceof DemandAuthorityError
-            || error instanceof WakeflowDurableIdError) {
+        if (error instanceof DemandIdentityError ||
+            error instanceof DemandAuthorityError ||
+            error instanceof WakeflowDurableIdError) {
             fail("input", "$input");
         }
         throw error;
@@ -302,8 +301,8 @@ export function createDemandEventSourcingPublicationTransaction(value) {
         });
     }
     catch (error) {
-        if (error instanceof DemandEventSourcingDecisionError
-            || error instanceof DemandEventStreamCommitError) {
+        if (error instanceof DemandEventSourcingDecisionError ||
+            error instanceof DemandEventStreamCommitError) {
             fail("commit", "$initialCommit");
         }
         throw error;

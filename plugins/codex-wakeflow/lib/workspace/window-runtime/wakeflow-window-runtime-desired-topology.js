@@ -1,5 +1,5 @@
 import { buildWakeflowConfigIndexes, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 /**
  * Wakeflow Workspace / Window Runtime：由 Config 编译的期望窗口拓扑。
@@ -34,11 +34,7 @@ function fail(reason, path) {
     throw new WakeflowWindowRuntimeDesiredTopologyError(reason, path);
 }
 function compareWindowId(left, right) {
-    return left.windowId < right.windowId
-        ? -1
-        : left.windowId > right.windowId
-            ? 1
-            : 0;
+    return left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0;
 }
 function desiredWindow(model, indexes, window) {
     let logicalRoot;

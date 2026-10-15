@@ -1,9 +1,9 @@
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { hostPodReceiptsRootRef } from "../kernel/layout.js";
-import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
-import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./window-runtime/wakeflow-window-runtime-paths.js";
+import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
 import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "./workspace-host-runtime-paths.js";
+import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 function hostRuntimeRef(profile, suffix) {
     return parsePortableResourcePath(suffix === undefined
         ? wakeflowHostRuntimeRootRef(profile)
@@ -113,12 +113,12 @@ function privateProjectionFileDeclaration(declarationId, ownerId, relativePath) 
 }
 /** Profile 是否声明任一 `operations/` 下的表面；目录与布局 authority 共用此判定。 */
 export function hostProfileHasOperationSurface(profile) {
-    return profile.surfaces.keepLive
-        || profile.surfaces.windowLocator
-        || profile.surfaces.statuslineAsset !== null
-        || profile.surfaces.tmuxAsset !== null
-        || profile.surfaces.activityMonitor
-        || profile.surfaces.temporaryPrompts;
+    return (profile.surfaces.keepLive ||
+        profile.surfaces.windowLocator ||
+        profile.surfaces.statuslineAsset !== null ||
+        profile.surfaces.tmuxAsset !== null ||
+        profile.surfaces.activityMonitor ||
+        profile.surfaces.temporaryPrompts);
 }
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {

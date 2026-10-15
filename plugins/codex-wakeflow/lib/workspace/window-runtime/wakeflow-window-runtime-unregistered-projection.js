@@ -1,12 +1,12 @@
 import { parseWakeflowConfigPlacement, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA, } from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA, } from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parseDeterministicJsonDocument, renderDeterministicJsonDocument, DeterministicJsonDocumentError, } from "../../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, JsonValueError, } from "../../foundation/data/json-value.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
-import { createRuntimeJsonSchemaValidator, } from "../../foundation/schema/runtime-json-schema.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { compileWakeflowWindowRuntimeDesiredTopology, WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
 import { wakeflowWindowRuntimeProjectionRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
@@ -192,10 +192,9 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(value) {
         logicalRoot: root,
         configuredPlacement: placement,
     });
-    if (actualObservationDigest !== expectedObservation.observationDigest
-        || sourceFingerprints.rootObservationDigest
-            !== expectedObservation.observationDigest
-        || sourceFingerprints.windowTopologyDigest !== expectedWindowTopologyDigest) {
+    if (actualObservationDigest !== expectedObservation.observationDigest ||
+        sourceFingerprints.rootObservationDigest !== expectedObservation.observationDigest ||
+        sourceFingerprints.windowTopologyDigest !== expectedWindowTopologyDigest) {
         failRecord("relation", "$/sourceFingerprints");
     }
     const normalized = {
@@ -235,8 +234,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(text) {
         throw error;
     }
     const projection = parseWakeflowWindowRuntimeUnregisteredProjection(value);
-    if (renderDeterministicJsonDocument(projection, "$windowRuntimeProjection")
-        !== text) {
+    if (renderDeterministicJsonDocument(projection, "$windowRuntimeProjection") !== text) {
         failRecord("representation", "$windowRuntimeProjection");
     }
     return projection;

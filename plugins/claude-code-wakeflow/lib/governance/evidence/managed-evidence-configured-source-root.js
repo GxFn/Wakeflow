@@ -30,9 +30,7 @@ function sourcePlacement(config, root) {
     if (!entityExists)
         fail("placement");
     const placement = config.placements.roots.find((entry) => entry.key === selectedRootKey(root));
-    if (placement === undefined ||
-        placement.state !== "present" ||
-        placement.realPath === null) {
+    if (placement === undefined || placement.state !== "present" || placement.realPath === null) {
         fail("placement");
     }
     return placement;
@@ -53,7 +51,8 @@ async function listReceipts(workspaceRoot, podId, signal) {
 /** worktree 检出：pod 与仓库都在配置里，回执存在，且打开后的根等于回执路径。 */
 async function openPodWorktreeRoot(workspaceRoot, config, root, signal) {
     const pod = config.indexes.podById[root.podId];
-    if (pod === undefined || !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)) {
+    if (pod === undefined ||
+        !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)) {
         fail("placement");
     }
     const receipt = (await listReceipts(workspaceRoot, root.podId, signal)).find((entry) => entry.repositoryId === root.repositoryId);

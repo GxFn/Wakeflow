@@ -1,5 +1,5 @@
 import { types } from "node:util";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { deriveWakeflowExternalInstructionAuthorities, parseWakeflowExternalInstructionInspectionRequest, WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE, WakeflowExternalInstructionInspectionError, wakeflowExternalInstructionInspectionOf, wakeflowExternalInstructionManagedBlockFileRequest, } from "./wakeflow-external-instruction-inspection.js";
 import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "./wakeflow-managed-block-file.js";
@@ -32,10 +32,10 @@ function fail(reason, path) {
     throw new WakeflowExternalInstructionRecompositionError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -56,10 +56,10 @@ function parseOptions(value) {
     }
     if (record.signal === undefined)
         return undefined;
-    if (typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)) {
+    if (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)) {
         fail("input", "$options.signal");
     }
     return record.signal;
@@ -69,10 +69,10 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function parseRequest(value, signal) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || Object.hasOwn(value, "signal")) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        Object.hasOwn(value, "signal")) {
         fail("input", "$request");
     }
     try {

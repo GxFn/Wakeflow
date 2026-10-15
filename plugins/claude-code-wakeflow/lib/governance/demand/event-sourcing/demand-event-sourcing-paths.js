@@ -1,7 +1,7 @@
-import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { parseUuidV4, UuidV4Error } from "../../../foundation/identity/uuid-v4.js";
-import { parseDemandEventCommitSequence, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
+import { DemandEventStreamPositionError, parseDemandEventCommitSequence, } from "./demand-event-stream-position.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：本地文件事件存储的路径词汇。
  *
@@ -48,12 +48,12 @@ function parseAppendOwnerToken(value) {
     const pid = Number(groups?.pid);
     const threadId = Number(groups?.threadId);
     const uuid = groups?.token;
-    if (groups === undefined
-        || !Number.isSafeInteger(pid)
-        || pid <= 0
-        || !Number.isSafeInteger(threadId)
-        || threadId < 0
-        || uuid === undefined) {
+    if (groups === undefined ||
+        !Number.isSafeInteger(pid) ||
+        pid <= 0 ||
+        !Number.isSafeInteger(threadId) ||
+        threadId < 0 ||
+        uuid === undefined) {
         fail("append-owner-token", "$ownerToken");
     }
     try {
@@ -124,11 +124,11 @@ export function parseDemandEventAppendCandidateFileName(value) {
     if (groups === undefined) {
         fail("append-candidate-file-name", "$fileName");
     }
-    if (groups.sequence === undefined
-        || groups.commitId === undefined
-        || groups.pid === undefined
-        || groups.threadId === undefined
-        || groups.token === undefined) {
+    if (groups.sequence === undefined ||
+        groups.commitId === undefined ||
+        groups.pid === undefined ||
+        groups.threadId === undefined ||
+        groups.token === undefined) {
         fail("append-candidate-file-name", "$fileName");
     }
     let commitId;
@@ -140,9 +140,9 @@ export function parseDemandEventAppendCandidateFileName(value) {
         owner = parseAppendOwnerToken(`${groups.pid}-${groups.threadId}-${groups.token}`);
     }
     catch (error) {
-        if (error instanceof WakeflowDurableIdError
-            || error instanceof DemandEventStreamPositionError
-            || error instanceof DemandEventSourcingPathError) {
+        if (error instanceof WakeflowDurableIdError ||
+            error instanceof DemandEventStreamPositionError ||
+            error instanceof DemandEventSourcingPathError) {
             fail("append-candidate-file-name", "$fileName");
         }
         throw error;

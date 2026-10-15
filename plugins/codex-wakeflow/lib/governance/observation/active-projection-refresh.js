@@ -85,7 +85,9 @@ export async function refreshActiveProjectionQuietly(root, signal) {
         await refreshActiveProjection(root, signalOptions(signal));
     }
     catch (error) {
-        if (!(error instanceof WakeflowError) || error.reason === "aborted" || error.code === "unexpected") {
+        if (!(error instanceof WakeflowError) ||
+            error.reason === "aborted" ||
+            error.code === "unexpected") {
             throw error;
         }
     }

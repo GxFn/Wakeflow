@@ -11,7 +11,10 @@ import { AbsoluteNodeObservationError, listAbsoluteDirectoryEntryNames, observeA
  * 相对路径与行号，让用户自己删；绝不写任何根。读不出的文件只计数，不当作"没有"。
  */
 export const WAKEFLOW_LEGACY_SCOPE_MARKER = "<!-- wakeflow:scope:start -->";
-export const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze(["CLAUDE.md", "AGENTS.md"]);
+export const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze([
+    "CLAUDE.md",
+    "AGENTS.md",
+]);
 export const WAKEFLOW_LEGACY_SETTINGS_FILE_PATHS = Object.freeze([
     ".claude/settings.json",
     ".claude/settings.local.json",
@@ -70,7 +73,13 @@ async function scanInstructionFiles(collector, root) {
         const line = lineOf(text, WAKEFLOW_LEGACY_SCOPE_MARKER);
         if (line === null)
             continue;
-        push(collector, { root: root.key, kind: "scope-block", path: name, line, detail: WAKEFLOW_LEGACY_SCOPE_MARKER });
+        push(collector, {
+            root: root.key,
+            kind: "scope-block",
+            path: name,
+            line,
+            detail: WAKEFLOW_LEGACY_SCOPE_MARKER,
+        });
     }
 }
 function stringArray(value) {

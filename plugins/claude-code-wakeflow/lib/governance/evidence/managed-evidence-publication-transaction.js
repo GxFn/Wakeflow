@@ -1,21 +1,21 @@
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { computeDemandEventSourcingCommandDigest, parseDemandEventSourcingCommand, DemandEventSourcingDecisionError, } from "../demand/event-sourcing/demand-event-sourcing-decider.js";
-import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "../demand/event-sourcing/demand-event-stream-position.js";
-import { createManagedEvidenceCapturePlan, parseManagedEvidenceCapturePlan, ManagedEvidenceCapturePlanError, } from "./managed-evidence-capture-plan.js";
-import { parseManagedEvidenceManifest, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
-import { planManagedEvidenceRecordTree, ManagedEvidenceRecordTreePlanError, } from "./managed-evidence-record-tree-plan.js";
+import { computeDemandEventSourcingCommandDigest, DemandEventSourcingDecisionError, parseDemandEventSourcingCommand, } from "../demand/event-sourcing/demand-event-sourcing-decider.js";
+import { DemandEventStreamPositionError, parseDemandEventStreamRevision, } from "../demand/event-sourcing/demand-event-stream-position.js";
+import { createManagedEvidenceCapturePlan, ManagedEvidenceCapturePlanError, parseManagedEvidenceCapturePlan, } from "./managed-evidence-capture-plan.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "./managed-evidence-manifest.js";
+import { ManagedEvidenceRecordTreePlanError, planManagedEvidenceRecordTree, } from "./managed-evidence-record-tree-plan.js";
 /**
  * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的不可变事务合同。
  *
@@ -63,11 +63,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_MANAGED_EVIDENCE_
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-const CREATE_FIELDS = Object.freeze([
-    "capturePlan",
-    "commitId",
-    "eventId",
-]);
+const CREATE_FIELDS = Object.freeze(["capturePlan", "commitId", "eventId"]);
 function fail(reason, path) {
     throw new ManagedEvidencePublicationTransactionError(reason, path);
 }

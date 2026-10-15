@@ -1,15 +1,14 @@
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import { computeTaskPackageDigest, } from "../../tasking/task-package.js";
-import { applyDemandEventStreamCommit, DemandEventStreamCommitError, } from "./demand-event-stream-commit.js";
-import { createDemandEventSourcingSnapshot, restoreDemandEventSourcingSnapshot, DemandEventSourcingSnapshotError, } from "./demand-event-sourcing-snapshot.js";
-import { DemandFileEventStore, DemandFileEventStoreError, } from "./demand-file-event-store.js";
-import { DemandFileEventSnapshotStore, DemandFileEventSnapshotStoreError, } from "./demand-file-event-snapshot-store.js";
+import { computeTaskPackageDigest } from "../../tasking/task-package.js";
+import { createDemandEventSourcingSnapshot, DemandEventSourcingSnapshotError, restoreDemandEventSourcingSnapshot, } from "./demand-event-sourcing-snapshot.js";
 import { computeDemandEventSourcingStoredEventDigest, } from "./demand-event-sourcing-stored-event.js";
-import { upcastDemandEventSourcingStoredEvent, DemandEventSourcingUpcasterError, } from "./demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "./demand-event-stream-commit.js";
+import { DemandEventSourcingUpcasterError, upcastDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-upcaster.js";
+import { applyDemandEventStreamCommit, computeDemandEventStreamCommitDigest, DemandEventStreamCommitError, } from "./demand-event-stream-commit.js";
+import { DemandFileEventSnapshotStore, DemandFileEventSnapshotStoreError, } from "./demand-file-event-snapshot-store.js";
+import { DemandFileEventStore, DemandFileEventStoreError, } from "./demand-file-event-store.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：聚合仓储。
  *
@@ -32,8 +31,7 @@ function taskPackageMatchesTargetSummary(taskPackage, target) {
     return (target.workType !== "test" &&
         taskPackage.assignment.repositoryId === target.repositoryId &&
         taskPackage.commitExpectation === target.commitExpectation &&
-        taskPackage.acceptanceAnchors.length ===
-            target.acceptanceAnchorIds.length &&
+        taskPackage.acceptanceAnchors.length === target.acceptanceAnchorIds.length &&
         taskPackage.acceptanceAnchors.every((anchor, index) => anchor.anchorId === target.acceptanceAnchorIds[index]));
 }
 const ERROR_MESSAGES = {
@@ -141,7 +139,9 @@ export class DemandEventSourcingRepository {
         // stream-changed，此时立即重读一次；仍失败（含崩溃残留的暂存文件）则视为
         // 本次没有可用快照，退回完整重放并以 `snapshotStatus: "invalid"` 报告。
         // 缓存问题绝不变成加载失败；只有中止照常上抛。
-        let observations = Object.freeze({ snapshots: Object.freeze([]) });
+        let observations = Object.freeze({
+            snapshots: Object.freeze([]),
+        });
         let snapshotStoreFailed = false;
         for (let attempt = 1; attempt <= 2; attempt += 1) {
             try {
@@ -150,8 +150,7 @@ export class DemandEventSourcingRepository {
                 break;
             }
             catch (error) {
-                if (!(error instanceof DemandFileEventSnapshotStoreError) ||
-                    error.reason === "aborted") {
+                if (!(error instanceof DemandFileEventSnapshotStoreError) || error.reason === "aborted") {
                     mapStoreError(error);
                 }
                 snapshotStoreFailed = true;
@@ -186,8 +185,7 @@ export class DemandEventSourcingRepository {
                     snapshotAttemptFailed = true;
                     continue;
                 }
-                if (error instanceof DemandFileEventStoreError &&
-                    error.reason === "stream-invalid") {
+                if (error instanceof DemandFileEventStoreError && error.reason === "stream-invalid") {
                     snapshotAttemptFailed = true;
                     continue;
                 }
@@ -211,9 +209,7 @@ export class DemandEventSourcingRepository {
         const aggregate = replayCommits(null, stream.commits);
         return Object.freeze({
             aggregate,
-            snapshotStatus: snapshotAttemptFailed
-                ? "invalid"
-                : "missing",
+            snapshotStatus: snapshotAttemptFailed ? "invalid" : "missing",
             snapshotCommitSequence: null,
             replayedCommitCount: stream.commits.length,
         });
@@ -358,12 +354,10 @@ export class DemandEventSourcingRepository {
                     // resumption 只指向同一目标上更早的 blocked 或 escalate 决定，且每份决定至多被续接一次。
                     const resumption = decision.resumption;
                     if (resumption !== null) {
-                        const previous = targetReviewDecisions.find((entry) => entry.decision.targetReviewDecisionId ===
-                            resumption.previousDecisionId);
+                        const previous = targetReviewDecisions.find((entry) => entry.decision.targetReviewDecisionId === resumption.previousDecisionId);
                         if (previous === undefined ||
                             previous.decision.targetTaskId !== decision.targetTaskId ||
-                            previous.decision.reviewed.targetResultId !==
-                                decision.reviewed.targetResultId ||
+                            previous.decision.reviewed.targetResultId !== decision.reviewed.targetResultId ||
                             resumedDecisionIds.has(resumption.previousDecisionId) ||
                             (resumption.basis.kind === "condition-cleared") !==
                                 (previous.decision.decision === "blocked") ||
@@ -418,8 +412,7 @@ export class DemandEventSourcingRepository {
             const taskPackageSource = taskPackageById.get(target.taskPackageId);
             if (taskPackageSource === undefined ||
                 !taskPackageMatchesTargetSummary(taskPackageSource.taskPackage, target) ||
-                computeTaskPackageDigest(taskPackageSource.taskPackage) !==
-                    target.taskPackageDigest ||
+                computeTaskPackageDigest(taskPackageSource.taskPackage) !== target.taskPackageDigest ||
                 taskPackageSource.sourceEvent.streamRevision > aggregate.streamRevision) {
                 fail("stream", "$events");
             }
@@ -439,18 +432,13 @@ export class DemandEventSourcingRepository {
             }
             const resultSource = targetResultById.get(target.currentDelivery.targetResult.targetResultId);
             if (resultSource === undefined ||
-                (resultSource.result.workType === "test") !==
-                    (target.workType === "test") ||
+                (resultSource.result.workType === "test") !== (target.workType === "test") ||
                 resultSource.result.targetTaskId !== target.targetTaskId ||
-                resultSource.result.taskPackage.taskPackageId !==
-                    target.taskPackageId ||
+                resultSource.result.taskPackage.taskPackageId !== target.taskPackageId ||
                 resultSource.result.taskPackage.digest !== target.taskPackageDigest ||
-                resultSource.result.resultDigest !==
-                    target.currentDelivery.targetResult.resultDigest ||
-                resultSource.result.report.outcome !==
-                    target.currentDelivery.targetResult.outcome ||
-                resultSource.result.report.reportedAt !==
-                    target.currentDelivery.targetResult.reportedAt ||
+                resultSource.result.resultDigest !== target.currentDelivery.targetResult.resultDigest ||
+                resultSource.result.report.outcome !== target.currentDelivery.targetResult.outcome ||
+                resultSource.result.report.reportedAt !== target.currentDelivery.targetResult.reportedAt ||
                 resultSource.sourceEvent.streamRevision > aggregate.streamRevision) {
                 fail("stream", "$events");
             }
@@ -465,34 +453,27 @@ export class DemandEventSourcingRepository {
                 callback.bindingId !== summary.bindingId) {
                 fail("stream", "$events");
             }
-            if (target.phase === "result-reported" ||
-                target.phase === "test-result-reported") {
+            if (target.phase === "result-reported" || target.phase === "test-result-reported") {
                 continue;
             }
             const decisionSource = reviewDecisionById.get(target.currentDelivery.reviewDecision.targetReviewDecisionId);
             if (decisionSource === undefined ||
-                (decisionSource.decision.kind ===
-                    "WakeflowControllerTestReviewDecision") !==
+                (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision") !==
                     (target.workType === "test") ||
                 decisionSource.decision.targetTaskId !== target.targetTaskId ||
-                decisionSource.decision.reviewed.targetResultId !==
-                    resultSource.result.targetResultId ||
-                decisionSource.decision.reviewed.targetResultDigest !==
-                    resultSource.result.resultDigest ||
+                decisionSource.decision.reviewed.targetResultId !== resultSource.result.targetResultId ||
+                decisionSource.decision.reviewed.targetResultDigest !== resultSource.result.resultDigest ||
                 decisionSource.decision.decisionDigest !==
                     target.currentDelivery.reviewDecision.decisionDigest ||
-                decisionSource.decision.decision !==
-                    target.currentDelivery.reviewDecision.decision ||
+                decisionSource.decision.decision !== target.currentDelivery.reviewDecision.decision ||
                 decisionSource.decision.controllerWindowId !==
                     target.currentDelivery.reviewDecision.controllerWindowId ||
-                decisionSource.decision.decidedAt !==
-                    target.currentDelivery.reviewDecision.decidedAt ||
+                decisionSource.decision.decidedAt !== target.currentDelivery.reviewDecision.decidedAt ||
                 decisionSource.sourceEvent.streamRevision > aggregate.streamRevision ||
                 (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision" &&
                     decisionSource.decision.decision === "escalate" &&
                     (target.phase === "test-product-defect") !==
-                        (decisionSource.decision.escalation?.classification ===
-                            "product-defect"))) {
+                        (decisionSource.decision.escalation?.classification === "product-defect"))) {
                 fail("stream", "$events");
             }
         }
@@ -534,36 +515,25 @@ export class DemandEventSourcingRepository {
                 decision.kind !== "WakeflowControllerTestReviewDecision" ||
                 decision.decision !== "escalate" ||
                 remediation === undefined ||
-                authorization.authorizationRationale !==
-                    remediation.authorizationRationale ||
+                authorization.authorizationRationale !== remediation.authorizationRationale ||
                 decision.programId !== authorization.programId ||
                 decision.demandId !== authorization.demandId ||
                 decision.controllerWindowId !== authorization.controllerWindowId ||
                 decision.targetTaskId !== authorization.source.testTargetTaskId ||
-                decision.decisionDigest !==
-                    authorization.source.testReviewDecision.decisionDigest ||
-                decision.decidedAt !==
-                    authorization.source.testReviewDecision.decidedAt ||
-                decision.reviewed.targetResultId !==
-                    authorization.source.targetResult.targetResultId ||
-                decision.reviewed.targetResultDigest !==
-                    authorization.source.targetResult.resultDigest ||
-                decision.testExecution.testAttemptId !==
-                    authorization.source.testAttemptId ||
-                sourceDecision?.sourceEvent.streamRevision !==
-                    authorization.source.streamRevision ||
-                source.sourceEvent.streamRevision !==
-                    authorization.source.streamRevision + 1 ||
-                priorStoredEvent?.resultingStateDigest !==
-                    authorization.source.stateDigest ||
+                decision.decisionDigest !== authorization.source.testReviewDecision.decisionDigest ||
+                decision.decidedAt !== authorization.source.testReviewDecision.decidedAt ||
+                decision.reviewed.targetResultId !== authorization.source.targetResult.targetResultId ||
+                decision.reviewed.targetResultDigest !== authorization.source.targetResult.resultDigest ||
+                decision.testExecution.testAttemptId !== authorization.source.testAttemptId ||
+                sourceDecision?.sourceEvent.streamRevision !== authorization.source.streamRevision ||
+                source.sourceEvent.streamRevision !== authorization.source.streamRevision + 1 ||
+                priorStoredEvent?.resultingStateDigest !== authorization.source.stateDigest ||
                 sourceTestPackage === undefined ||
                 sourceTestPackage.taskPackage.workType !== "test" ||
                 computeTaskPackageDigest(sourceTestPackage.taskPackage) !==
                     authorization.source.testTaskPackage.taskPackageDigest ||
-                sourceTestPackage.taskPackage.targetTaskId !==
-                    authorization.source.testTargetTaskId ||
-                sourceTestPackage.sourceEvent.streamRevision >=
-                    authorization.source.streamRevision ||
+                sourceTestPackage.taskPackage.targetTaskId !== authorization.source.testTargetTaskId ||
+                sourceTestPackage.sourceEvent.streamRevision >= authorization.source.streamRevision ||
                 expectedFailedSteps.length !== authorization.failedSteps.length ||
                 expectedFailedSteps.some((step, index) => {
                     const projected = authorization.failedSteps[index];
@@ -571,8 +541,7 @@ export class DemandEventSourcingRepository {
                         projected.stepId !== step.stepId ||
                         projected.observed !== step.observed);
                 }) ||
-                remediation.affectedTargets.length !==
-                    authorization.affectedTargets.length ||
+                remediation.affectedTargets.length !== authorization.affectedTargets.length ||
                 remediation.affectedTargets.some((declared) => {
                     const affected = authorization.affectedTargets.find((entry) => entry.baseline.targetTaskId === declared.targetTaskId);
                     return (affected === undefined ||
@@ -596,24 +565,19 @@ export class DemandEventSourcingRepository {
                     packageBaseline.windowId !== baseline.windowId ||
                     packageBaseline.targetResultId !== baseline.targetResultId ||
                     packageBaseline.resultDigest !== baseline.resultDigest ||
-                    packageBaseline.targetReviewDecisionId !==
-                        baseline.targetReviewDecisionId ||
+                    packageBaseline.targetReviewDecisionId !== baseline.targetReviewDecisionId ||
                     packageBaseline.decisionDigest !== baseline.decisionDigest ||
-                    taskPackageSource?.taskPackage.targetTaskId !==
-                        baseline.targetTaskId ||
+                    taskPackageSource?.taskPackage.targetTaskId !== baseline.targetTaskId ||
                     taskPackageSource.taskPackage.workType !== "implementation" ||
-                    computeTaskPackageDigest(taskPackageSource.taskPackage) !==
-                        baseline.taskPackageDigest ||
+                    computeTaskPackageDigest(taskPackageSource.taskPackage) !== baseline.taskPackageDigest ||
                     resultSource?.result.targetTaskId !== baseline.targetTaskId ||
                     resultSource.result.workType !== "implementation" ||
                     resultSource.result.resultDigest !== baseline.resultDigest ||
-                    reviewSource?.decision.kind !==
-                        "WakeflowControllerImplementationReviewDecision" ||
+                    reviewSource?.decision.kind !== "WakeflowControllerImplementationReviewDecision" ||
                     reviewSource.decision.decision !== "accept" ||
                     reviewSource.decision.targetTaskId !== baseline.targetTaskId ||
                     reviewSource.decision.decisionDigest !== baseline.decisionDigest ||
-                    reviewSource.sourceEvent.streamRevision >=
-                        source.sourceEvent.streamRevision) {
+                    reviewSource.sourceEvent.streamRevision >= source.sourceEvent.streamRevision) {
                     fail("stream", "$events");
                 }
             }
@@ -629,12 +593,9 @@ export class DemandEventSourcingRepository {
             const remediationSource = remediationById.get(lineage.productDefectRemediationId);
             const previousTestTarget = targetById.get(lineage.retestsTargetTaskId);
             if (remediationSource === undefined ||
-                remediationSource.authorization.authorizationDigest !==
-                    lineage.authorizationDigest ||
-                remediationSource.authorization.source.testTargetTaskId !==
-                    lineage.retestsTargetTaskId ||
-                remediationSource.sourceEvent.streamRevision >=
-                    source.sourceEvent.streamRevision ||
+                remediationSource.authorization.authorizationDigest !== lineage.authorizationDigest ||
+                remediationSource.authorization.source.testTargetTaskId !== lineage.retestsTargetTaskId ||
+                remediationSource.sourceEvent.streamRevision >= source.sourceEvent.streamRevision ||
                 previousTestTarget?.workType !== "test" ||
                 previousTestTarget.phase !== "test-product-defect" ||
                 consumedRemediationIds.has(lineage.productDefectRemediationId)) {
@@ -653,8 +614,7 @@ export class DemandEventSourcingRepository {
             if (unconsumedRemediations.length !== 1 ||
                 source === undefined ||
                 source.authorization.productDefectRemediationId !==
-                    pendingTestRetest.productDefectRemediation
-                        .productDefectRemediationId ||
+                    pendingTestRetest.productDefectRemediation.productDefectRemediationId ||
                 source.authorization.authorizationDigest !==
                     pendingTestRetest.productDefectRemediation.authorizationDigest ||
                 source.authorization.source.testTargetTaskId !==
@@ -663,8 +623,7 @@ export class DemandEventSourcingRepository {
                     pendingTestRetest.previousTestTarget.taskPackageId ||
                 source.authorization.source.testTaskPackage.taskPackageDigest !==
                     pendingTestRetest.previousTestTarget.taskPackageDigest ||
-                source.authorization.source.testReviewDecision
-                    .targetReviewDecisionId !==
+                source.authorization.source.testReviewDecision.targetReviewDecisionId !==
                     pendingTestRetest.testReviewDecision.targetReviewDecisionId ||
                 source.authorization.source.testReviewDecision.decisionDigest !==
                     pendingTestRetest.testReviewDecision.decisionDigest) {
@@ -680,17 +639,13 @@ export class DemandEventSourcingRepository {
                 affected === undefined ||
                 source.authorization.authorizationDigest !==
                     target.productDefectRemediation.authorizationDigest ||
-                source.authorization.source.testReviewDecision
-                    .targetReviewDecisionId !==
+                source.authorization.source.testReviewDecision.targetReviewDecisionId !==
                     target.productDefectRemediation.testReviewDecisionId ||
                 source.authorization.source.testReviewDecision.decisionDigest !==
                     target.productDefectRemediation.testReviewDecisionDigest ||
-                source.authorization.authorizedAt !==
-                    target.productDefectRemediation.authorizedAt ||
-                affected.correctionObjective !==
-                    target.productDefectRemediation.correctionObjective ||
-                affected.failedStepIds.length !==
-                    target.productDefectRemediation.failedStepIds.length ||
+                source.authorization.authorizedAt !== target.productDefectRemediation.authorizedAt ||
+                affected.correctionObjective !== target.productDefectRemediation.correctionObjective ||
+                affected.failedStepIds.length !== target.productDefectRemediation.failedStepIds.length ||
                 affected.failedStepIds.some((id, index) => id !== target.productDefectRemediation.failedStepIds[index])) {
                 fail("stream", "$events");
             }
@@ -724,7 +679,8 @@ export class DemandEventSourcingRepository {
             }
             throw error;
         }
-        const found = await this.#findUniqueEvent("tasking.target-task-planned", (event) => event.eventType === "tasking.target-task-planned" && event.data.taskPackage.taskPackageId === taskPackageId, signal);
+        const found = await this.#findUniqueEvent("tasking.target-task-planned", (event) => event.eventType === "tasking.target-task-planned" &&
+            event.data.taskPackage.taskPackageId === taskPackageId, signal);
         if (found === null)
             return null;
         const aggregate = found.aggregate;
@@ -756,7 +712,8 @@ export class DemandEventSourcingRepository {
                 fail("input", "$deliveryId");
             throw error;
         }
-        const found = await this.#findUniqueEvent("delivery.delivery-prepared", (event) => event.eventType === "delivery.delivery-prepared" && event.data.envelope.deliveryId === deliveryId, signal);
+        const found = await this.#findUniqueEvent("delivery.delivery-prepared", (event) => event.eventType === "delivery.delivery-prepared" &&
+            event.data.envelope.deliveryId === deliveryId, signal);
         if (found === null)
             return null;
         const aggregate = found.aggregate;
@@ -828,7 +785,8 @@ export class DemandEventSourcingRepository {
                 fail("input", "$claimId");
             throw error;
         }
-        const found = await this.#findUniqueEvent("result.target-result-recorded", (event) => event.eventType === "result.target-result-recorded" && event.data.result.delivery.fence.claimId === claimId, signal);
+        const found = await this.#findUniqueEvent("result.target-result-recorded", (event) => event.eventType === "result.target-result-recorded" &&
+            event.data.result.delivery.fence.claimId === claimId, signal);
         if (found === null)
             return null;
         const aggregate = found.aggregate;
@@ -955,7 +913,7 @@ export class DemandEventSourcingRepository {
         catch (error) {
             mapStoreError(error);
         }
-        return (stream.commits.find((commit) => commit.commitId === commitId) ?? null);
+        return stream.commits.find((commit) => commit.commitId === commitId) ?? null;
     }
     /** 按客户端幂等键定位提交：索引 O(1)，索引不可用时回退完整读取。 */
     async findCommitByIdempotencyKey(key, options) {
@@ -983,7 +941,7 @@ export class DemandEventSourcingRepository {
         catch (error) {
             mapStoreError(error);
         }
-        return (stream.commits.find((commit) => commit.idempotency?.key === key) ?? null);
+        return stream.commits.find((commit) => commit.idempotency?.key === key) ?? null;
     }
     /** 持久追加一条已经由决策器和状态演进逻辑完整准备的不可变提交记录。 */
     async appendPreparedCommit(prepared, options) {

@@ -1,17 +1,17 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { admitDemandAuthority, DemandAuthorityError, } from "../model/demand-authority.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/ledger-authority-store.js";
-import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "./demand-event-sourcing-publication-transaction.js";
-import { DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, DemandEventSourcingPublicationServiceError, failDemandEventSourcingPublication as fail, } from "./demand-event-sourcing-publication-contract.js";
-import { assertPrivatePublicationNode, ensurePublicationTransaction, initializePublicationStorage, publicationNodeOrNull, readPublicationTransactionAt, recoverPublicationTransactionStages, retirePublicationFile, samePublicationTransaction, } from "./demand-event-sourcing-publication-storage.js";
-import { assertPendingPackage, claimPackageForDemandPublication, exactClaimedPackage, inspectPackageForDemandPublication, } from "./demand-event-sourcing-publication-package.js";
+import { admitDemandAuthority, DemandAuthorityError } from "../model/demand-authority.js";
 import { assertNoActiveDemand } from "./demand-active-guard.js";
+import { DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, DemandEventSourcingPublicationServiceError, failDemandEventSourcingPublication as fail, } from "./demand-event-sourcing-publication-contract.js";
+import { assertPendingPackage, claimPackageForDemandPublication, exactClaimedPackage, inspectPackageForDemandPublication, } from "./demand-event-sourcing-publication-package.js";
 import { loadFinalDemandPublication, materializeDemandPublicationStage, publishDemandStage, } from "./demand-event-sourcing-publication-stage.js";
-import { demandFinalPublicationMarkerRef, demandPublicationLockRef, demandPublicationTransactionRef, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, } from "./demand-publication-paths.js";
+import { assertPrivatePublicationNode, ensurePublicationTransaction, initializePublicationStorage, publicationNodeOrNull, readPublicationTransactionAt, recoverPublicationTransactionStages, retirePublicationFile, samePublicationTransaction, } from "./demand-event-sourcing-publication-storage.js";
+import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "./demand-event-sourcing-publication-transaction.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalPublicationMarkerRef, demandPublicationLockRef, demandPublicationTransactionRef, } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源发布流程编排。
  *
@@ -20,18 +20,18 @@ import { demandFinalPublicationMarkerRef, demandPublicationLockRef, demandPublic
  * 追加不使用该流程锁或发布事务。
  */
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root", "unchanged");
     }
 }
 function assertLedgerStore(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof LedgerAuthorityStore)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof LedgerAuthorityStore)) {
         fail("input", "$ledgerStore", "unchanged");
     }
 }
@@ -47,9 +47,9 @@ function parseSignal(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined
-            && (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined &&
+            (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return record.signal;
@@ -131,9 +131,9 @@ function mapLockError(error) {
         fail("lock-timeout", "$lock");
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "unsafe-lock"
-        || error.reason === "parent"
-        || error.reason === "root-scope") {
+    if (error.reason === "unsafe-lock" ||
+        error.reason === "parent" ||
+        error.reason === "root-scope") {
         fail("lock-unsafe", "$lock");
     }
     fail("recovery-required", "$lock");
@@ -154,10 +154,11 @@ async function runLocked(root, transaction, signal, operation) {
     }
 }
 async function loadIdempotentResult(root, ledgerStore, transaction, signal) {
-    if (await publicationNodeOrNull(root, transaction.finalRootRef) === null) {
+    if ((await publicationNodeOrNull(root, transaction.finalRootRef)) === null) {
         return null;
     }
-    if (await publicationNodeOrNull(root, demandFinalPublicationMarkerRef(transaction.demandId)) !== null) {
+    if ((await publicationNodeOrNull(root, demandFinalPublicationMarkerRef(transaction.demandId))) !==
+        null) {
         return null;
     }
     const claim = exactClaimedPackage(await inspectPackageForDemandPublication(root, transaction, signal), transaction);
@@ -174,9 +175,7 @@ async function loadIdempotentResult(root, ledgerStore, transaction, signal) {
 }
 function rethrowWithPublicationAuthority(error, publicationAuthority) {
     if (error instanceof DemandEventSourcingPublicationServiceError) {
-        throw new DemandEventSourcingPublicationServiceError(error.reason, error.path, error.publicationAuthority === "unknown"
-            ? publicationAuthority
-            : error.publicationAuthority);
+        throw new DemandEventSourcingPublicationServiceError(error.reason, error.path, error.publicationAuthority === "unknown" ? publicationAuthority : error.publicationAuthority);
     }
     throw error;
 }
@@ -191,8 +190,7 @@ async function classifyPublicationAuthority(root, ledgerStore, transaction, sign
                 ? "recoverable"
                 : "unknown";
         }
-        if ((await loadIdempotentResult(root, ledgerStore, transaction, signal)) !==
-            null) {
+        if ((await loadIdempotentResult(root, ledgerStore, transaction, signal)) !== null) {
             return "current";
         }
         if ((await publicationNodeOrNull(root, transaction.finalRootRef)) !== null ||
@@ -227,12 +225,9 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
             await admitDemandAuthority(transaction.identity, transaction.authority, ledgerStore, signal === undefined ? undefined : { signal });
         }
         catch (error) {
-            if (error instanceof DemandAuthorityError ||
-                error instanceof LedgerAuthorityStoreError) {
-                if ((error instanceof DemandAuthorityError &&
-                    error.reason === "aborted") ||
-                    (error instanceof LedgerAuthorityStoreError &&
-                        error.reason === "aborted")) {
+            if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
+                if ((error instanceof DemandAuthorityError && error.reason === "aborted") ||
+                    (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")) {
                     fail("aborted", "$signal");
                 }
                 fail("authority", "$authority");
@@ -255,7 +250,7 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
         await initializePublicationStorage(root, signal);
         return await runLocked(root, transaction, signal, async () => {
             const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
-            if (await publicationNodeOrNull(root, sidecarRef) === null) {
+            if ((await publicationNodeOrNull(root, sidecarRef)) === null) {
                 const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
                 if (idempotent !== null)
                     return idempotent;
@@ -268,8 +263,7 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
     }
     catch (error) {
         let publicationAuthority = await classifyPublicationAuthority(root, ledgerStore, transaction, signal);
-        if (publicationIntentWriteAttempted &&
-            publicationAuthority === "unchanged") {
+        if (publicationIntentWriteAttempted && publicationAuthority === "unchanged") {
             publicationAuthority = "unknown";
         }
         rethrowWithPublicationAuthority(error, publicationAuthority);

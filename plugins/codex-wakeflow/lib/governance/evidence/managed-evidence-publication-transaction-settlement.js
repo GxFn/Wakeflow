@@ -1,15 +1,14 @@
-import { inspectDirectoryTreeCandidate, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { settleDirectoryTreeCandidateRetirement, DurableDirectoryTreeCandidateRetirementError, } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { executeDemandEventSourcingCommand, DemandEventSourcingCommandHandlerError, } from "../demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { DurableDirectoryTreeCandidateRetirementError, settleDirectoryTreeCandidateRetirement, } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
+import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingCommand, } from "../demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
-import { loadDemandEventSourcingRootAuthority, loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication, DemandEventSourcingRootAuthorityError, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import { upcastDemandEventSourcingStoredEvent, DemandEventSourcingUpcasterError, } from "../demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
+import { DemandEventSourcingUpcasterError, upcastDemandEventSourcingStoredEvent, } from "../demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
-import { publishManagedEvidencePublicationRecord, ManagedEvidencePublicationRecordPublisherError, } from "./managed-evidence-publication-record-publisher.js";
-import { requireCurrentManagedEvidencePublicationTransaction, retireManagedEvidencePublicationTransactionJournal, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
+import { ManagedEvidencePublicationRecordPublisherError, publishManagedEvidencePublicationRecord, } from "./managed-evidence-publication-record-publisher.js";
 import { computeManagedEvidencePublicationTransactionDigest, deriveManagedEvidencePublicationEventSourcingCommand, deriveManagedEvidencePublicationRecordTreePlan, } from "./managed-evidence-publication-transaction.js";
+import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, retireManagedEvidencePublicationTransactionJournal, } from "./managed-evidence-publication-transaction-store.js";
 const ERROR_MESSAGES = {
     journal: "Managed evidence publication settlement journal is unavailable or conflicting.",
     "event-sourcing": "Managed evidence publication settlement Event is invalid or conflicting.",
@@ -171,8 +170,7 @@ async function publishFinal(demandRoot, transaction, signal) {
         if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
             if (error.reason === "aborted")
                 fail("aborted", error);
-            if (error.reason === "commit-uncertain" ||
-                error.reason === "durability-failure") {
+            if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
                 fail("recovery-required", error);
             }
             fail("final", error);
@@ -205,8 +203,7 @@ export async function completeManagedEvidencePublicationTransaction(demandRoot, 
     }
     const record = await publishFinal(demandRoot, transaction, signal);
     const finalAuthority = await loadManagedEvidencePublicationTransactionAuthority(demandRoot, ledgerRoot, signal);
-    if (finalAuthority.inventory.managedEvidence.publication?.physicalState !==
-        "final" ||
+    if (finalAuthority.inventory.managedEvidence.publication?.physicalState !== "final" ||
         finalAuthority.inventory.managedEvidence.publication.transactionDigest !==
             stored.transactionDigest) {
         fail("closure");
@@ -224,8 +221,8 @@ export async function completeManagedEvidencePublicationTransaction(demandRoot, 
 export async function retireStaleManagedEvidencePublicationTransaction(demandRoot, ledgerRoot, stored, signal) {
     const beforeRetirement = await loadManagedEvidencePublicationTransactionAuthority(demandRoot, ledgerRoot, signal);
     const targetSelector = beforeRetirement.aggregate.state.managedEvidence?.find((selector) => selector.evidenceId === stored.transaction.manifest.evidenceId);
-    if (beforeRetirement.inventory.managedEvidence.publication
-        ?.transactionDigest !== stored.transactionDigest ||
+    if (beforeRetirement.inventory.managedEvidence.publication?.transactionDigest !==
+        stored.transactionDigest ||
         targetSelector !== undefined ||
         (await findManagedEvidencePublicationCommit(demandRoot, stored.transaction, signal)) !== null) {
         fail("recovery-required");
@@ -255,8 +252,7 @@ export async function retireStaleManagedEvidencePublicationTransaction(demandRoo
  * journal已经退休后，从健康Root重新证明同一Transaction的Event与完整final仍current。
  */
 export async function loadCurrentManagedEvidencePublicationTransaction(demandRoot, ledgerRoot, transaction, transactionDigest, signal) {
-    if (computeManagedEvidencePublicationTransactionDigest(transaction) !==
-        transactionDigest) {
+    if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
         fail("event-sourcing");
     }
     const loaded = await loadManagedEvidencePublicationHealthyAuthority(demandRoot, ledgerRoot, signal);

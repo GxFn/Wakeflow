@@ -1,8 +1,8 @@
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { createWakeflowWorkspaceHostResourceCatalog, } from "../workspace-host-resource-catalog.js";
-import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION, } from "../workspace-host-runtime-resource-catalog.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { createWakeflowWorkspaceHostResourceCatalog } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
-import { createWakeflowWindowRuntimeProjectionResourceCatalog, } from "./wakeflow-window-runtime-resource-catalog.js";
+import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION } from "../workspace-host-runtime-resource-catalog.js";
+import { createWakeflowWindowRuntimeProjectionResourceCatalog } from "./wakeflow-window-runtime-resource-catalog.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, WakeflowWindowRuntimeUnregisteredProjectionError, } from "./wakeflow-window-runtime-unregistered-projection.js";
 const ERROR_MESSAGES = {
     profile: "Fresh Window Runtime requires a host with window identity support.",
@@ -47,7 +47,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileV
         `host-runtime.${profile.hostId}.window-runtime-projections-root`,
     ];
     const hostDeclarations = requiredIds.map((declarationId) => {
-        const declaration = hostCatalog.find((entry) => (entry.declarationId === declarationId));
+        const declaration = hostCatalog.find((entry) => entry.declarationId === declarationId);
         if (declaration === undefined)
             fail("catalog", "$layoutDeclarations");
         return declaration;
@@ -60,8 +60,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileV
     let projectionDeclarations;
     try {
         projectionSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(configValue, profile);
-        projectionDeclarations =
-            createWakeflowWindowRuntimeProjectionResourceCatalog(configValue, profile);
+        projectionDeclarations = createWakeflowWindowRuntimeProjectionResourceCatalog(configValue, profile);
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
@@ -69,13 +68,13 @@ export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileV
         }
         throw error;
     }
-    if (projectionDeclarations.length !== projectionSet.entries.length
-        || projectionDeclarations.some((declaration, index) => {
+    if (projectionDeclarations.length !== projectionSet.entries.length ||
+        projectionDeclarations.some((declaration, index) => {
             const entry = projectionSet.entries[index];
-            return entry === undefined
-                || declaration.declarationId
-                    !== `host-runtime.${projectionSet.hostId}.window-runtime.${entry.windowId}`
-                || declaration.placement.relativePath !== entry.resourceRef;
+            return (entry === undefined ||
+                declaration.declarationId !==
+                    `host-runtime.${projectionSet.hostId}.window-runtime.${entry.windowId}` ||
+                declaration.placement.relativePath !== entry.resourceRef);
         })) {
         fail("catalog", "$projectionDeclarations");
     }

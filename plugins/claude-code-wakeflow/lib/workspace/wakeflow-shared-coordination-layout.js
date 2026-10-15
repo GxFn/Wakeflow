@@ -1,12 +1,12 @@
 import { types } from "node:util";
-import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../foundation/filesystem/durable-directory-materialization.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
-import { WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION, WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./workspace-shared-runtime-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
+import { WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION, WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./workspace-shared-runtime-resource-catalog.js";
 /** Wakeflow Workspace：shared/coordination/工作声明静态目录链的唯一物化 owner。 */
 /** 窗口工作声明目录：路径由内核 `layout.ts` 定义，物化与静态矩阵由本模块声明。 */
 export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION = privateWorkspaceDirectoryDeclaration({
@@ -51,9 +51,7 @@ function fail(reason, path) {
     throw new WakeflowSharedCoordinationLayoutError(reason, path);
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
@@ -95,9 +93,7 @@ function parseOptions(value) {
     }
     return Object.freeze({
         mode: record.mode,
-        ...(record.signal === undefined
-            ? {}
-            : { signal: record.signal }),
+        ...(record.signal === undefined ? {} : { signal: record.signal }),
     });
 }
 async function optionalDirectory(root, declaration) {
@@ -110,8 +106,7 @@ async function optionalDirectory(root, declaration) {
         return true;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return false;
         }
         if (error instanceof WakeflowSharedCoordinationLayoutError)
@@ -131,8 +126,7 @@ export async function inspectWakeflowSharedCoordinationLayout(root) {
     }
     const status = existingDirectoryCount === 0
         ? "missing"
-        : existingDirectoryCount ===
-            WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS.length
+        : existingDirectoryCount === WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS.length
             ? "current"
             : "partial";
     const basis = {

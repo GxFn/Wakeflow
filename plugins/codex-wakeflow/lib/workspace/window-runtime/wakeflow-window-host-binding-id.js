@@ -21,8 +21,7 @@ function fail(reason, path) {
 }
 /** 严格解析一个 Window Host Binding 代际 ID。 */
 export function parseWakeflowWindowHostBindingId(value, path = "$bindingId") {
-    if (typeof value !== "string"
-        || !value.startsWith(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX)) {
+    if (typeof value !== "string" || !value.startsWith(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX)) {
         fail("format", path);
     }
     try {
@@ -38,14 +37,11 @@ export function parseWakeflowWindowHostBindingId(value, path = "$bindingId") {
 /** 使用密码学 UUIDv4 源创建新的 Binding 代际 ID。 */
 export function createWakeflowWindowHostBindingId(uuidFactory) {
     try {
-        const uuid = uuidFactory === undefined
-            ? createUuidV4()
-            : createUuidV4(uuidFactory);
+        const uuid = uuidFactory === undefined ? createUuidV4() : createUuidV4(uuidFactory);
         return parseWakeflowWindowHostBindingId(`${WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX}${uuid}`);
     }
     catch (error) {
-        if (error instanceof UuidV4Error
-            || error instanceof WakeflowWindowHostBindingIdError) {
+        if (error instanceof UuidV4Error || error instanceof WakeflowWindowHostBindingIdError) {
             fail("factory", "$uuidFactory");
         }
         throw error;

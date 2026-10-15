@@ -1,19 +1,19 @@
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { inspectDirectoryTreeCandidate, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { sameFileNodeSnapshot, FileNodeSnapshotError, } from "../../foundation/filesystem/file-node-snapshot.js";
-import { joinPortableResourcePath, parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
+import { joinPortableResourcePath, PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { ByteCountError, parseByteCount, } from "../../foundation/numeric/byte-count.js";
-import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, parseManagedEvidenceManifestDocument, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
-import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE, MANAGED_EVIDENCE_RECORD_FILE_MODE, planManagedEvidenceRecordTree, ManagedEvidenceRecordTreePlanError, } from "./managed-evidence-record-tree-plan.js";
-import { managedEvidenceRecordAddress, MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME, ManagedEvidenceResourcePathError, } from "./managed-evidence-resource-paths.js";
+import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, ManagedEvidenceManifestError, parseManagedEvidenceManifestDocument, } from "./managed-evidence-manifest.js";
+import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE, MANAGED_EVIDENCE_RECORD_FILE_MODE, ManagedEvidenceRecordTreePlanError, planManagedEvidenceRecordTree, } from "./managed-evidence-record-tree-plan.js";
+import { MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME, ManagedEvidenceResourcePathError, managedEvidenceRecordAddress, } from "./managed-evidence-resource-paths.js";
 /**
  * Wakeflow Governance / Evidence：一份immutable final record的按需物理读取。
  *
@@ -213,8 +213,7 @@ function mapDirectoryError(error) {
         fail("root-scope", "$root");
     if (error.reason === "not-found")
         fail("not-found", "$record");
-    if (error.reason === "source-changed" ||
-        error.reason === "expectation-changed") {
+    if (error.reason === "source-changed" || error.reason === "expectation-changed") {
         fail("source-changed", "$record");
     }
     if (error.reason === "symlink" ||
@@ -270,14 +269,12 @@ function mapManifestReadError(error) {
             fail("aborted", "$signal");
         if (error.reason === "root-scope")
             fail("root-scope", "$root");
-        if (error.reason === "source-changed" ||
-            error.reason === "expectation-changed") {
+        if (error.reason === "source-changed" || error.reason === "expectation-changed") {
             fail("source-changed", "$record/manifest");
         }
         fail("manifest", "$record/manifest");
     }
-    if (error instanceof StrictTextFileError ||
-        error instanceof DeterministicJsonDocumentError) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
         fail("manifest", "$record/manifest");
     }
     throw error;
@@ -394,13 +391,10 @@ function mapMemberReadError(error) {
         fail("root-scope", "$root");
     if (error.reason === "too-large")
         fail("capacity", "$member");
-    if (error.reason === "source-changed" ||
-        error.reason === "expectation-changed") {
+    if (error.reason === "source-changed" || error.reason === "expectation-changed") {
         fail("source-changed", "$member");
     }
-    if (error.reason === "not-found" ||
-        error.reason === "symlink" ||
-        error.reason === "not-file") {
+    if (error.reason === "not-found" || error.reason === "symlink" || error.reason === "not-file") {
         fail("content-mismatch", "$member");
     }
     fail("operation-failure", "$member");

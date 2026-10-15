@@ -29,10 +29,8 @@ export function compileWakeflowWindowHostBindingStoreAuthority(configValue, reso
     let resourceProfile;
     let identityProfile;
     try {
-        resourceProfile =
-            parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
-        identityProfile =
-            parseWakeflowWindowHostIdentityProfile(identityProfileValue);
+        resourceProfile = parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
+        identityProfile = parseWakeflowWindowHostIdentityProfile(identityProfileValue);
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError ||

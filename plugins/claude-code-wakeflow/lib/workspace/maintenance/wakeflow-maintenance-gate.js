@@ -1,11 +1,11 @@
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
-import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
@@ -63,10 +63,7 @@ function createOperationId(factory) {
 function positiveMilliseconds(value, path) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0
-        || value > 300_000) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
         fail("input", path);
     }
     return value;
@@ -90,22 +87,21 @@ function parseOptions(value) {
         "signal",
         "uuidFactory",
     ]);
-    if (!Object.hasOwn(record, "expectedCoreLayoutInspectionDigest")
-        || Object.keys(record).some((key) => !allowed.has(key))
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))
-        || (record.uuidFactory !== undefined
-            && (typeof record.uuidFactory !== "function"
-                || types.isProxy(record.uuidFactory)))
-        || (record.operationId !== undefined && record.uuidFactory !== undefined)) {
+    if (!Object.hasOwn(record, "expectedCoreLayoutInspectionDigest") ||
+        Object.keys(record).some((key) => !allowed.has(key)) ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal))) ||
+        (record.uuidFactory !== undefined &&
+            (typeof record.uuidFactory !== "function" || types.isProxy(record.uuidFactory))) ||
+        (record.operationId !== undefined && record.uuidFactory !== undefined)) {
         fail("input", "$options");
     }
-    if (record.bootstrap !== undefined
-        && record.bootstrap !== "fresh"
-        && record.bootstrap !== "repair") {
+    if (record.bootstrap !== undefined &&
+        record.bootstrap !== "fresh" &&
+        record.bootstrap !== "repair") {
         fail("input", "$options.bootstrap");
     }
     let expectedCoreLayoutInspectionDigest;
@@ -131,10 +127,10 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -164,9 +160,9 @@ function mapLockError(error) {
         fail("aborted", "$signal");
     if (error.reason === "timeout")
         fail("busy", "$gate");
-    if (error.reason === "owner-active"
-        || error.reason === "residue-changed"
-        || error.reason === "release-failure") {
+    if (error.reason === "owner-active" ||
+        error.reason === "residue-changed" ||
+        error.reason === "release-failure") {
         fail("recovery-required", "$gate");
     }
     if (error.reason === "input")
@@ -177,11 +173,11 @@ function mapLockError(error) {
  * 解析一个仍在当前 gate callback 内有效的 context，并验证它属于指定 Workspace 根。
  */
 export function assertWakeflowMaintenanceGateContext(value, root) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !ACTIVE_CONTEXTS.has(value)
-        || CONTEXT_ROOTS.get(value) !== root) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !ACTIVE_CONTEXTS.has(value) ||
+        CONTEXT_ROOTS.get(value) !== root) {
         fail("input", "$context");
     }
 }
@@ -213,7 +209,9 @@ async function runCorrelatedGate(root, operationId, options, operation, prepare)
                     maintenanceGuard: async () => {
                         assertWakeflowMaintenanceGateContext(context, root);
                         const current = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-                        if (current.status !== "held" || current.ownerState !== "active" || current.record.token !== expectedLockToken)
+                        if (current.status !== "held" ||
+                            current.ownerState !== "active" ||
+                            current.record.token !== expectedLockToken)
                             fail("recovery-required", "$gate");
                     },
                 });
@@ -255,28 +253,24 @@ export function parseWakeflowExistingMaintenanceGateOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => (key !== "acquireTimeoutMilliseconds"
-        && key !== "retryDelayMilliseconds"
-        && key !== "signal"))) {
+    if (Object.keys(record).some((key) => key !== "acquireTimeoutMilliseconds" &&
+        key !== "retryDelayMilliseconds" &&
+        key !== "signal")) {
         fail("input", "$options");
     }
     const signal = record.signal;
-    if (signal !== undefined
-        && (typeof signal !== "object"
-            || signal === null
-            || types.isProxy(signal)
-            || !(signal instanceof AbortSignal))) {
+    if (signal !== undefined &&
+        (typeof signal !== "object" ||
+            signal === null ||
+            types.isProxy(signal) ||
+            !(signal instanceof AbortSignal))) {
         fail("input", "$options.signal");
     }
     const acquireTimeoutMilliseconds = positiveMilliseconds(record.acquireTimeoutMilliseconds, "$options.acquireTimeoutMilliseconds");
     const retryDelayMilliseconds = positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds");
     return Object.freeze({
-        ...(acquireTimeoutMilliseconds === undefined
-            ? {}
-            : { acquireTimeoutMilliseconds }),
-        ...(retryDelayMilliseconds === undefined
-            ? {}
-            : { retryDelayMilliseconds }),
+        ...(acquireTimeoutMilliseconds === undefined ? {} : { acquireTimeoutMilliseconds }),
+        ...(retryDelayMilliseconds === undefined ? {} : { retryDelayMilliseconds }),
         ...(signal === undefined ? {} : { signal: signal }),
     });
 }
@@ -301,9 +295,9 @@ async function admitLockedCoreInspection(root, before, expectedLockToken, signal
             mapLockError(error);
         throw error;
     }
-    if (lock.status !== "held"
-        || lock.ownerState !== "active"
-        || lock.record.token !== expectedLockToken) {
+    if (lock.status !== "held" ||
+        lock.ownerState !== "active" ||
+        lock.record.token !== expectedLockToken) {
         fail("recovery-required", "$gate");
     }
     let after;
@@ -318,15 +312,14 @@ async function admitLockedCoreInspection(root, before, expectedLockToken, signal
         }
         throw error;
     }
-    if (after.active.status !== before.active.status
-        || after.active.nodeDigest !== before.active.nodeDigest) {
+    if (after.active.status !== before.active.status ||
+        after.active.nodeDigest !== before.active.nodeDigest) {
         fail("stale-preview", "$activeLayout");
     }
-    if (after.local.status !== "busy"
-        || !after.local.protocolComplete
-        || after.issueCodes.length !== 0) {
-        fail(after.issueCodes.some((code) => (code === "maintenance-transaction-residue"
-            || code === "maintenance-gate-stage-residue"))
+    if (after.local.status !== "busy" ||
+        !after.local.protocolComplete ||
+        after.issueCodes.length !== 0) {
+        fail(after.issueCodes.some((code) => code === "maintenance-transaction-residue" || code === "maintenance-gate-stage-residue")
             ? "recovery-required"
             : "bootstrap-conflict", "$bootstrap");
     }
@@ -339,8 +332,7 @@ export async function withWakeflowMaintenanceGate(rootValue, optionsValue, opera
     const options = parseOptions(optionsValue);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const operationId = options.operationId
-        ?? createOperationId(options.uuidFactory);
+    const operationId = options.operationId ?? createOperationId(options.uuidFactory);
     let inspection;
     try {
         inspection = await inspectWakeflowWorkspaceCoreLayout(rootValue, options.signal === undefined ? {} : { signal: options.signal });
@@ -356,18 +348,18 @@ export async function withWakeflowMaintenanceGate(rootValue, optionsValue, opera
     if (inspection.inspectionDigest !== options.expectedCoreLayoutInspectionDigest) {
         fail("stale-preview", "$options.expectedCoreLayoutInspectionDigest");
     }
-    if (inspection.local.status !== "absent"
-        && inspection.local.status !== "bootstrap-prefix"
-        && inspection.local.status !== "idle") {
+    if (inspection.local.status !== "absent" &&
+        inspection.local.status !== "bootstrap-prefix" &&
+        inspection.local.status !== "idle") {
         fail(inspection.local.status === "busy"
             ? "busy"
             : inspection.local.status === "recovery-required"
                 ? "recovery-required"
                 : "bootstrap-conflict", "$bootstrap");
     }
-    if (inspection.local.status !== "idle"
-        && !inspection.local.freshCompatible
-        && options.bootstrap !== "repair") {
+    if (inspection.local.status !== "idle" &&
+        !inspection.local.freshCompatible &&
+        options.bootstrap !== "repair") {
         fail("bootstrap-conflict", "$bootstrap");
     }
     await materialize(rootValue, WAKEFLOW_RUNTIME_ROOT_REF, options.signal);

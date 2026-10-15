@@ -1,28 +1,28 @@
-import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { isEvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
-import { isEvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.js";
-import { parseManagedEvidenceManifest, ManagedEvidenceManifestError, } from "../../evidence/managed-evidence-manifest.js";
-import { computeTaskPackageDigest, parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
-import { deliveryPurpose, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../../delivery/delivery-envelope.js";
+import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { DeliveryEnvelopeError, deliveryPurpose, parseDeliveryEnvelope, } from "../../delivery/delivery-envelope.js";
 import { DeliveryOutcomeError, parseDeliveryOutcome, } from "../../delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT, DeliveryRearmError, parseDeliveryRearm, } from "../../delivery/delivery-rearm.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../../evidence/managed-evidence-manifest.js";
+import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
 import { parseTargetResult, TargetResultError, } from "../../result/target-result.js";
-import { parseControllerReviewDecision, ControllerReviewDecisionError, } from "../../review/controller-review-decision.js";
-import { parseControllerProductDefectRemediationAuthorization, ControllerProductDefectRemediationAuthorizationError, } from "../../review/controller-product-defect-remediation-authorization.js";
 import { deriveTargetResultCallbackId, parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TargetResultCallbackError, } from "../../result/target-result-callback.js";
-import { parseDemandCompletion, DemandCompletionError, } from "../../lifecycle/demand-completion.js";
+import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, } from "../../review/controller-product-defect-remediation-authorization.js";
+import { ControllerReviewDecisionError, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
+import { computeTaskPackageDigest, parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 import { assertRerunTestExecutionAttemptFollows, parseTestExecutionAttempt, TestExecutionAttemptError, } from "../../testing/test-execution-attempt.js";
-import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 /**
  * Wakeflow Governance / Demand Model：领域事件归约器生成的纯聚合状态。
  *
@@ -279,7 +279,7 @@ function testReviewPhaseForDecision(decision) {
         ? decision.escalation?.classification === "product-defect"
             ? "test-product-defect"
             : "test-escalated"
-        : testReviewPhasesForDecision(decision.decision)[0] ?? "test-review-blocked";
+        : (testReviewPhasesForDecision(decision.decision)[0] ?? "test-review-blocked");
 }
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 function compareStepId(left, right) {
@@ -315,8 +315,7 @@ function parseManagedEvidenceSummaries(values) {
             fail("schema", `$/managedEvidence/${index}`);
         const path = `$/managedEvidence/${index}`;
         const evidenceId = parseId(value.evidenceId, "evidence", `${path}/evidenceId`);
-        if (previousEvidenceId !== undefined &&
-            compareText(previousEvidenceId, evidenceId) >= 0) {
+        if (previousEvidenceId !== undefined && compareText(previousEvidenceId, evidenceId) >= 0) {
             fail("relation", path);
         }
         previousEvidenceId = evidenceId;
@@ -353,15 +352,22 @@ function parsePendingTestRetest(value) {
 }
 function parseProductDefectRemediationSummary(value, acceptedDecision, path) {
     const parsedStepIds = value.failedStepIds;
-    if (parsedStepIds.some((stepId, index) => !STEP_ID_PATTERN.test(stepId) ||
-        (index > 0 && compareStepId(parsedStepIds[index - 1], stepId) >= 0))) {
+    if (parsedStepIds.some((stepId, index) => {
+        if (!STEP_ID_PATTERN.test(stepId))
+            return true;
+        const previous = index > 0 ? parsedStepIds[index - 1] : undefined;
+        return previous !== undefined && compareStepId(previous, stepId) >= 0;
+    })) {
         fail("relation", `${path}/failedStepIds`);
     }
     const firstStepId = parsedStepIds[0];
     if (firstStepId === undefined) {
         fail("relation", `${path}/failedStepIds`);
     }
-    const failedStepIds = Object.freeze([firstStepId, ...parsedStepIds.slice(1)]);
+    const failedStepIds = Object.freeze([
+        firstStepId,
+        ...parsedStepIds.slice(1),
+    ]);
     let authorizedAt;
     try {
         authorizedAt = parseUtcInstant(value.authorizedAt, `${path}/authorizedAt`);
@@ -436,8 +442,7 @@ function parseTestAttemptLineage(values, target, path) {
     const deliveryIds = new Set();
     const priorResultIds = new Set();
     const reviewDecisionIds = new Set();
-    for (let index = 0; index < attempts.length; index += 1) {
-        const state = attempts[index];
+    for (const [index, state] of attempts.entries()) {
         const attempt = state.attempt;
         const previous = index === 0 ? undefined : attempts[index - 1];
         if (attemptIds.has(attempt.testAttemptId) ||
@@ -646,9 +651,7 @@ function parseTargetTasks(values) {
             repositoryId,
             commitExpectation: value.commitExpectation,
             acceptanceAnchorIds: parseAcceptanceAnchorIds(value.acceptanceAnchorIds, `${path}/acceptanceAnchorIds`),
-            ...(value.reworkCount === undefined
-                ? {}
-                : { reworkCount: value.reworkCount }),
+            ...(value.reworkCount === undefined ? {} : { reworkCount: value.reworkCount }),
         };
         const productCurrentDelivery = value.currentDelivery;
         if (value.phase === "superseded") {
@@ -785,8 +788,7 @@ function replaceRejectedTestAttemptDelivery(current, target, attempt, replacemen
     const rejected = lastTestAttempt(target.testAttempts);
     if (target.currentDelivery.generation <= DELIVERY_REARM_LIMIT ||
         rejected.delivery.deliveryId !== target.currentDelivery.deliveryId ||
-        computeCanonicalJsonSha256Digest(rejected.attempt) !==
-            computeCanonicalJsonSha256Digest(attempt)) {
+        computeCanonicalJsonSha256Digest(rejected.attempt) !== computeCanonicalJsonSha256Digest(attempt)) {
         fail("transition", "$/targetTasks");
     }
     return parseDemandAggregateState({
@@ -889,8 +891,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
                 target.currentDelivery.reviewDecision.targetReviewDecisionId ||
             rerunSource.reviewDecision.decisionDigest !==
                 target.currentDelivery.reviewDecision.decisionDigest ||
-            target.currentDelivery.reviewDecision.decision !==
-                "request-another-attempt") {
+            target.currentDelivery.reviewDecision.decision !== "request-another-attempt") {
             fail("transition", "$/targetTasks");
         }
         return parseDemandAggregateState({
@@ -956,8 +957,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
                 target.currentDelivery.targetResult.resultDigest ||
             remediation.requiredCorrections.length !==
                 target.productDefectRemediation.failedStepIds.length ||
-            remediation.requiredCorrections.some((correction, index) => correction.stepId !==
-                target.productDefectRemediation.failedStepIds[index])) {
+            remediation.requiredCorrections.some((correction, index) => correction.stepId !== target.productDefectRemediation.failedStepIds[index])) {
             fail("transition", "$/targetTasks");
         }
     }
@@ -1073,8 +1073,7 @@ export function rearmDeliveryInDemandAggregateState(currentValue, rearmValue) {
     // rearmedAt 只保留来源时钟的审计事实；因果关系由处置摘要、围栏与追加 CAS 建立。
     if (target === undefined ||
         current.lifecycle !== "active" ||
-        (target.phase !== "host-effect-rejected" &&
-            target.phase !== "test-host-effect-rejected") ||
+        (target.phase !== "host-effect-rejected" && target.phase !== "test-host-effect-rejected") ||
         target.currentDelivery.generation !== rearm.previousGeneration ||
         target.currentDelivery.fence.claimId !== rearm.previousFence.claimId ||
         target.currentDelivery.fence.claimDigest !== rearm.previousFence.claimDigest ||
@@ -1099,9 +1098,7 @@ export function rearmDeliveryInDemandAggregateState(currentValue, rearmValue) {
         targetTasks: current.targetTasks.map((entry) => entry.targetTaskId === target.targetTaskId
             ? {
                 ...entry,
-                phase: target.workType === "test"
-                    ? "test-delivery-prepared"
-                    : "delivery-prepared",
+                phase: target.workType === "test" ? "test-delivery-prepared" : "delivery-prepared",
                 currentDelivery: rearmed,
             }
             : entry),
@@ -1155,18 +1152,13 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
             target.taskPackageDigest !== result.taskPackage.digest ||
             target.windowId !== result.assignment.windowId ||
             target.currentDelivery.deliveryId !== result.deliveryId ||
-            target.currentDelivery.testAttemptId !==
-                result.testExecution.testAttemptId ||
+            target.currentDelivery.testAttemptId !== result.testExecution.testAttemptId ||
             target.currentDelivery.generation !== result.delivery.generation ||
             target.currentDelivery.fence.claimId !== result.delivery.fence.claimId ||
-            target.currentDelivery.fence.claimDigest !==
-                result.delivery.fence.claimDigest ||
-            target.currentDelivery.outcome.outcomeDigest !==
-                result.delivery.outcomeDigest ||
-            target.currentDelivery.outcome.disposition !==
-                result.delivery.disposition ||
-            target.currentDelivery.outcome.readbackStatus !==
-                result.delivery.readbackStatus ||
+            target.currentDelivery.fence.claimDigest !== result.delivery.fence.claimDigest ||
+            target.currentDelivery.outcome.outcomeDigest !== result.delivery.outcomeDigest ||
+            target.currentDelivery.outcome.disposition !== result.delivery.disposition ||
+            target.currentDelivery.outcome.readbackStatus !== result.delivery.readbackStatus ||
             targetResultIdInUse(current.targetTasks, result.targetResultId)) {
             fail("transition", "$/targetTasks");
         }
@@ -1204,8 +1196,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
             : result.report.repositoryChange.disposition !== "committed");
     if (current.lifecycle !== "active" ||
         result.demandId !== current.demandId ||
-        (target.phase !== "host-effect-accepted" &&
-            target.phase !== "host-effect-indeterminate") ||
+        (target.phase !== "host-effect-accepted" && target.phase !== "host-effect-indeterminate") ||
         target.taskPackageId !== result.taskPackage.taskPackageId ||
         target.taskPackageDigest !== result.taskPackage.digest ||
         target.repositoryId !== result.assignment.repositoryId ||
@@ -1213,14 +1204,10 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
         target.currentDelivery.deliveryId !== result.deliveryId ||
         target.currentDelivery.generation !== result.delivery.generation ||
         target.currentDelivery.fence.claimId !== result.delivery.fence.claimId ||
-        target.currentDelivery.fence.claimDigest !==
-            result.delivery.fence.claimDigest ||
-        target.currentDelivery.outcome.outcomeDigest !==
-            result.delivery.outcomeDigest ||
-        target.currentDelivery.outcome.disposition !==
-            result.delivery.disposition ||
-        target.currentDelivery.outcome.readbackStatus !==
-            result.delivery.readbackStatus ||
+        target.currentDelivery.fence.claimDigest !== result.delivery.fence.claimDigest ||
+        target.currentDelivery.outcome.outcomeDigest !== result.delivery.outcomeDigest ||
+        target.currentDelivery.outcome.disposition !== result.delivery.disposition ||
+        target.currentDelivery.outcome.readbackStatus !== result.delivery.readbackStatus ||
         result.report.repositoryChange.repositoryId !== target.repositoryId ||
         reportAnchorIds.some((anchorId) => !target.acceptanceAnchorIds.includes(anchorId)) ||
         !completedAnchorsClose ||
@@ -1332,8 +1319,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
     }
     const target = current.targetTasks.find((entry) => entry.targetTaskId === decision.targetTaskId);
     const duplicateDecision = current.targetTasks.some((entry) => {
-        if (!("currentDelivery" in entry) ||
-            !("reviewDecision" in entry.currentDelivery)) {
+        if (!("currentDelivery" in entry) || !("reviewDecision" in entry.currentDelivery)) {
             return false;
         }
         return (entry.currentDelivery.reviewDecision.targetReviewDecisionId ===
@@ -1342,8 +1328,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
     if (current.lifecycle !== "active" ||
         decision.demandId !== current.demandId ||
         target === undefined ||
-        decision.reviewed.stateDigest !==
-            computeDemandAggregateStateDigest(current) ||
+        decision.reviewed.stateDigest !== computeDemandAggregateStateDigest(current) ||
         decision.reviewed.taskPackageId !== target.taskPackageId ||
         decision.reviewed.taskPackageDigest !== target.taskPackageDigest ||
         duplicateDecision) {
@@ -1354,16 +1339,11 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
             (target.phase !== "test-result-reported" &&
                 target.phase !== "test-review-blocked" &&
                 target.phase !== "test-escalated") ||
-            decision.reviewed.targetResultId !==
-                target.currentDelivery.targetResult.targetResultId ||
-            decision.reviewed.targetResultDigest !==
-                target.currentDelivery.targetResult.resultDigest ||
-            decision.reviewed.targetResultOutcome !==
-                target.currentDelivery.targetResult.outcome ||
-            decision.reviewed.targetResultReportedAt !==
-                target.currentDelivery.targetResult.reportedAt ||
-            decision.testExecution.testAttemptId !==
-                target.currentDelivery.testAttemptId) {
+            decision.reviewed.targetResultId !== target.currentDelivery.targetResult.targetResultId ||
+            decision.reviewed.targetResultDigest !== target.currentDelivery.targetResult.resultDigest ||
+            decision.reviewed.targetResultOutcome !== target.currentDelivery.targetResult.outcome ||
+            decision.reviewed.targetResultReportedAt !== target.currentDelivery.targetResult.reportedAt ||
+            decision.testExecution.testAttemptId !== target.currentDelivery.testAttemptId) {
             fail("transition", "$/targetTasks");
         }
         if (target.phase === "test-result-reported") {
@@ -1394,14 +1374,10 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
             target.phase !== "escalated")) {
         fail("transition", "$/targetTasks");
     }
-    if (decision.reviewed.targetResultId !==
-        target.currentDelivery.targetResult.targetResultId ||
-        decision.reviewed.targetResultDigest !==
-            target.currentDelivery.targetResult.resultDigest ||
-        decision.reviewed.targetResultOutcome !==
-            target.currentDelivery.targetResult.outcome ||
-        decision.reviewed.targetResultReportedAt !==
-            target.currentDelivery.targetResult.reportedAt) {
+    if (decision.reviewed.targetResultId !== target.currentDelivery.targetResult.targetResultId ||
+        decision.reviewed.targetResultDigest !== target.currentDelivery.targetResult.resultDigest ||
+        decision.reviewed.targetResultOutcome !== target.currentDelivery.targetResult.outcome ||
+        decision.reviewed.targetResultReportedAt !== target.currentDelivery.targetResult.reportedAt) {
         fail("transition", "$/targetTasks");
     }
     if (target.phase === "result-reported") {
@@ -1412,9 +1388,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
         assertResumptionAdmitted(current, target, decision);
     }
     const phase = reviewPhaseForDecision(decision.decision);
-    const reworkCount = decision.decision === "rework"
-        ? (target.reworkCount ?? 0) + 1
-        : target.reworkCount;
+    const reworkCount = decision.decision === "rework" ? (target.reworkCount ?? 0) + 1 : target.reworkCount;
     return parseDemandAggregateState({
         ...current,
         targetTasks: current.targetTasks.map((entry) => entry.targetTaskId === target.targetTaskId
@@ -1435,8 +1409,7 @@ export function authorizeProductDefectRemediationInDemandAggregateState(currentV
     const current = parseDemandAggregateState(currentValue);
     let authorization;
     try {
-        authorization =
-            parseControllerProductDefectRemediationAuthorization(authorizationValue);
+        authorization = parseControllerProductDefectRemediationAuthorization(authorizationValue);
     }
     catch (error) {
         if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
@@ -1447,18 +1420,14 @@ export function authorizeProductDefectRemediationInDemandAggregateState(currentV
     const testTarget = current.targetTasks.find((target) => target.targetTaskId === authorization.source.testTargetTaskId);
     if (current.lifecycle !== "active" ||
         authorization.demandId !== current.demandId ||
-        authorization.source.stateDigest !==
-            computeDemandAggregateStateDigest(current) ||
+        authorization.source.stateDigest !== computeDemandAggregateStateDigest(current) ||
         current.pendingTestRetest !== undefined ||
         testTarget === undefined ||
         testTarget.workType !== "test" ||
         testTarget.phase !== "test-product-defect" ||
-        testTarget.taskPackageId !==
-            authorization.source.testTaskPackage.taskPackageId ||
-        testTarget.taskPackageDigest !==
-            authorization.source.testTaskPackage.taskPackageDigest ||
-        testTarget.currentDelivery.testAttemptId !==
-            authorization.source.testAttemptId ||
+        testTarget.taskPackageId !== authorization.source.testTaskPackage.taskPackageId ||
+        testTarget.taskPackageDigest !== authorization.source.testTaskPackage.taskPackageDigest ||
+        testTarget.currentDelivery.testAttemptId !== authorization.source.testAttemptId ||
         testTarget.currentDelivery.targetResult.targetResultId !==
             authorization.source.targetResult.targetResultId ||
         testTarget.currentDelivery.targetResult.resultDigest !==
@@ -1485,14 +1454,11 @@ export function authorizeProductDefectRemediationInDemandAggregateState(currentV
                 target.taskPackageDigest !== baseline.taskPackageDigest ||
                 target.repositoryId !== baseline.repositoryId ||
                 target.windowId !== baseline.windowId ||
-                target.currentDelivery.targetResult.targetResultId !==
-                    baseline.targetResultId ||
-                target.currentDelivery.targetResult.resultDigest !==
-                    baseline.resultDigest ||
+                target.currentDelivery.targetResult.targetResultId !== baseline.targetResultId ||
+                target.currentDelivery.targetResult.resultDigest !== baseline.resultDigest ||
                 target.currentDelivery.reviewDecision.targetReviewDecisionId !==
                     baseline.targetReviewDecisionId ||
-                target.currentDelivery.reviewDecision.decisionDigest !==
-                    baseline.decisionDigest ||
+                target.currentDelivery.reviewDecision.decisionDigest !== baseline.decisionDigest ||
                 target.currentDelivery.reviewDecision.decision !== "accept");
         })) {
         fail("transition", "$state/targetTasks");
@@ -1565,12 +1531,9 @@ function normalizeState(wire) {
     if (pendingTestRetest !== undefined &&
         (openTestTargets.length !== 0 ||
             !testTargets.some((target) => target.phase === "test-product-defect" &&
-                target.targetTaskId ===
-                    pendingTestRetest.previousTestTarget.targetTaskId &&
-                target.taskPackageId ===
-                    pendingTestRetest.previousTestTarget.taskPackageId &&
-                target.taskPackageDigest ===
-                    pendingTestRetest.previousTestTarget.taskPackageDigest &&
+                target.targetTaskId === pendingTestRetest.previousTestTarget.targetTaskId &&
+                target.taskPackageId === pendingTestRetest.previousTestTarget.taskPackageId &&
+                target.taskPackageDigest === pendingTestRetest.previousTestTarget.taskPackageDigest &&
                 target.currentDelivery.reviewDecision.targetReviewDecisionId ===
                     pendingTestRetest.testReviewDecision.targetReviewDecisionId &&
                 target.currentDelivery.reviewDecision.decisionDigest ===
@@ -1583,8 +1546,7 @@ function normalizeState(wire) {
             // research（not-applicable）零实现目标也能 completed（§13.94 D8）；实现目标数量由完成转换按测试模式把关。
             liveImplementationTargets.some((target) => target.phase !== "accepted") ||
             (testTargets.length > 0 &&
-                (openTestTargets.length !== 1 ||
-                    openTestTargets[0]?.phase !== "test-accepted")))) {
+                (openTestTargets.length !== 1 || openTestTargets[0]?.phase !== "test-accepted")))) {
         fail("relation", "$/lifecycle");
     }
     return Object.freeze({
@@ -1850,11 +1812,9 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
         const lineageCloses = lineage === null
             ? pendingTestRetest === undefined && testTargets.length === 0
             : pendingTestRetest !== undefined &&
-                lineage.retestsTargetTaskId ===
-                    pendingTestRetest.previousTestTarget.targetTaskId &&
+                lineage.retestsTargetTaskId === pendingTestRetest.previousTestTarget.targetTaskId &&
                 lineage.productDefectRemediationId ===
-                    pendingTestRetest.productDefectRemediation
-                        .productDefectRemediationId &&
+                    pendingTestRetest.productDefectRemediation.productDefectRemediationId &&
                 lineage.authorizationDigest ===
                     pendingTestRetest.productDefectRemediation.authorizationDigest;
         if (!lineageCloses ||
@@ -1869,14 +1829,11 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
                     baseline.taskPackageDigest !== target.taskPackageDigest ||
                     baseline.repositoryId !== target.repositoryId ||
                     baseline.windowId !== target.windowId ||
-                    baseline.targetResultId !==
-                        target.currentDelivery.targetResult.targetResultId ||
-                    baseline.resultDigest !==
-                        target.currentDelivery.targetResult.resultDigest ||
+                    baseline.targetResultId !== target.currentDelivery.targetResult.targetResultId ||
+                    baseline.resultDigest !== target.currentDelivery.targetResult.resultDigest ||
                     baseline.targetReviewDecisionId !==
                         target.currentDelivery.reviewDecision.targetReviewDecisionId ||
-                    baseline.decisionDigest !==
-                        target.currentDelivery.reviewDecision.decisionDigest);
+                    baseline.decisionDigest !== target.currentDelivery.reviewDecision.decisionDigest);
             })) {
             fail("transition", "$state/targetTasks");
         }
@@ -1896,15 +1853,12 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
             ].sort((left, right) => compareText(left.targetTaskId, right.targetTaskId)),
         });
     }
-    if (current.pendingTestRetest !== undefined ||
-        currentTestTargetsOf(current).length > 0) {
+    if (current.pendingTestRetest !== undefined || currentTestTargetsOf(current).length > 0) {
         fail("transition", "$state/targetTasks");
     }
     const superseded = applyLineage(current, taskPackage);
     const nextTargetTasks = [
-        ...current.targetTasks.map((entry) => entry.targetTaskId === superseded
-            ? supersedeTarget(entry, taskPackage.targetTaskId)
-            : entry),
+        ...current.targetTasks.map((entry) => entry.targetTaskId === superseded ? supersedeTarget(entry, taskPackage.targetTaskId) : entry),
         Object.freeze({
             targetTaskId: taskPackage.targetTaskId,
             taskPackageId: taskPackage.taskPackageId,
@@ -1965,8 +1919,7 @@ export function completeDemandAggregateState(currentValue, completionValue) {
     if (current.lifecycle !== "active" ||
         completion.demandId !== current.demandId ||
         completion.authorityDigest !== current.authorityDigest ||
-        completion.observedState.stateDigest !==
-            computeDemandAggregateStateDigest(current) ||
+        completion.observedState.stateDigest !== computeDemandAggregateStateDigest(current) ||
         !targetsClosed ||
         current.awaitingDecision !== undefined ||
         current.continuation?.planningRequired === true ||

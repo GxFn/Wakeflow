@@ -1,11 +1,11 @@
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { loadDemandEventSourcingRootAuthority, DemandEventSourcingRootAuthorityError, } from "./event-sourcing/demand-event-sourcing-root-authority.js";
-import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
-import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
 import { fail as failWakeflow } from "../../kernel/error.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../ledger/ledger-authority-store.js";
+import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, } from "./event-sourcing/demand-event-sourcing-root-authority.js";
+import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
+import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
 const ERROR_MESSAGES = {
     root: "Demand operation root could not be held safely.",
     config: "Demand operation Config authority is invalid.",
@@ -41,9 +41,7 @@ function fail(reason, cause) {
     throw new DemandOperationAuthorityContextError(reason, ownString(cause, "code"), ownString(cause, "reason"));
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 /** 从Workspace root安全打开一个已发布Demand的私有根目录。 */
 export async function openDemandOperationRoot(workspaceRoot, demandId) {
@@ -57,8 +55,7 @@ export async function openDemandOperationRoot(workspaceRoot, demandId) {
         throw error;
     }
     if (observation.node.kind !== "directory" ||
-        observation.node.permissionBits !==
-            DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
+        observation.node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
         (currentUserId() !== null && observation.node.userId !== currentUserId())) {
         fail("root");
     }

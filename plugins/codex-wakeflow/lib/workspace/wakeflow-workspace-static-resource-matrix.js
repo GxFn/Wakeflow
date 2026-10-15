@@ -1,19 +1,19 @@
 import { types } from "node:util";
 import { WAKEFLOW_CONFIG_RESOURCE_CATALOG } from "../configuration/wakeflow-config-resource-catalog.js";
-import { parseSha256Digest, Sha256Error, } from "../foundation/crypto/sha256.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
+import { parseSha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../foundation/data/passive-own-data.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
-import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
-import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG, WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG, } from "./wakeflow-active-static-resource-catalog.js";
-import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG, WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG, } from "./wakeflow-active-static-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
-import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
-import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, } from "./workspace-host-resource-profile.js";
-import { parseWakeflowWorkspaceResourceDeclaration, WakeflowWorkspaceResourceDeclarationError, WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES, } from "./workspace-resource-declaration.js";
+import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
+import { parseWakeflowWorkspaceResourceDeclaration, WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES, WakeflowWorkspaceResourceDeclarationError, } from "./workspace-resource-declaration.js";
+import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
 /**
  * Wakeflow Workspace：静态资源矩阵。
  *
@@ -119,8 +119,7 @@ function assertPlacementTopology(declarations) {
                 if (segment === undefined) {
                     fail("placement-collision", "$/declarations");
                 }
-                ancestorPath =
-                    ancestorPath.length === 0 ? segment : `${ancestorPath}/${segment}`;
+                ancestorPath = ancestorPath.length === 0 ? segment : `${ancestorPath}/${segment}`;
                 ancestorPaths.push(ancestorPath);
             }
             for (const ancestorPath of ancestorPaths) {
@@ -273,7 +272,7 @@ function queryText(value, path) {
 /** 按全局声明 ID 查找一个静态资源；不存在时返回 `null`。 */
 export function findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, declarationIdValue) {
     const declarationId = queryText(declarationIdValue, "$/declarationId");
-    return (matrix.declarations.find((entry) => entry.declarationId === declarationId) ?? null);
+    return matrix.declarations.find((entry) => entry.declarationId === declarationId) ?? null;
 }
 /** 按资源 family 返回保持矩阵顺序的新冻结数组。 */
 export function selectWakeflowWorkspaceStaticResourcesByFamily(matrix, familyValue) {

@@ -1,15 +1,15 @@
-import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA, } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../../foundation/time/wall-clock.js";
 import { parseRequirementLineageReference, RequirementLineageError, } from "./requirement-lineage.js";
@@ -23,14 +23,14 @@ import { parseRequirementLineageReference, RequirementLineageError, } from "./re
 const DEMAND_IDENTITY_ARTIFACT_KIND = "wakeflow-demand-identity";
 const DEMAND_IDENTITY_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    "input": "Demand identity input is invalid.",
-    "json": "Demand identity is not passive JSON data.",
-    "schema": "Demand identity does not satisfy its portable Schema.",
-    "identifier": "Demand identity contains an invalid typed identity.",
-    "time": "Demand identity contains an invalid creation time.",
-    "text": "Demand identity contains non-canonical text.",
-    "source": "Demand identity requirement lineage is invalid.",
-    "representation": "Demand identity bytes are not its deterministic domain representation.",
+    input: "Demand identity input is invalid.",
+    json: "Demand identity is not passive JSON data.",
+    schema: "Demand identity does not satisfy its portable Schema.",
+    identifier: "Demand identity contains an invalid typed identity.",
+    time: "Demand identity contains an invalid creation time.",
+    text: "Demand identity contains non-canonical text.",
+    source: "Demand identity requirement lineage is invalid.",
+    representation: "Demand identity bytes are not its deterministic domain representation.",
 };
 export class DemandIdentityError extends Error {
     name = "DemandIdentityError";
@@ -50,6 +50,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_IDENTITY_S
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
     "completionDefinition",
@@ -66,9 +67,9 @@ function fail(reason, path) {
     throw new DemandIdentityError(reason, path);
 }
 function parseCanonicalText(value, path) {
-    if (!value.isWellFormed()
-        || value.normalize("NFC") !== value
-        || CONTROL_EXCEPT_LF_PATTERN.test(value)) {
+    if (!value.isWellFormed() ||
+        value.normalize("NFC") !== value ||
+        CONTROL_EXCEPT_LF_PATTERN.test(value)) {
         fail("text", path);
     }
     return value;
@@ -166,8 +167,8 @@ export function createDemandIdentity(draft, options = {}) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== DRAFT_FIELDS.length
-        || keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
+    if (keys.length !== DRAFT_FIELDS.length ||
+        keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
         fail("input", "$draft");
     }
     const admitted = parseDemandIdentity({

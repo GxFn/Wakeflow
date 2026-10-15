@@ -1,12 +1,12 @@
-import { buildWakeflowConfigIndexes, parseWakeflowConfig, WakeflowConfigError, WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT, WAKEFLOW_PRESENTATION_LANGUAGES, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { buildWakeflowConfigIndexes, parseWakeflowConfig, WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT, WAKEFLOW_PRESENTATION_LANGUAGES, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
-import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { MarkdownJsonStringLiteralError, renderMarkdownJsonStringLiteral, } from "../../foundation/text/markdown-json-string-literal.js";
-import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
+import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的正文权威。
  *
@@ -122,9 +122,7 @@ function englishBody(config, profile, controllerWindowId) {
 function simplifiedChineseBody(config, profile, controllerWindowId) {
     const description = config.program.description === undefined
         ? []
-        : [
-            `- 程序说明：${markdownDataLiteral(config.program.description, "$/program/description")}`,
-        ];
+        : [`- 程序说明：${markdownDataLiteral(config.program.description, "$/program/description")}`];
     return `${[
         "## Wakeflow 程序指令",
         "",
@@ -161,13 +159,13 @@ function simplifiedChineseBody(config, profile, controllerWindowId) {
 const MANAGED_MARKER_NAMESPACE_PREFIX = "<!-- wakeflow:managed-content:";
 /** 正文进入信封前的剖面：良构 NFC、无 BOM/CR、以单个换行结尾且不含 marker 命名空间。 */
 function isAdmissibleInstructionBody(body) {
-    return body.isWellFormed()
-        && body.normalize("NFC") === body
-        && !body.startsWith("\ufeff")
-        && !body.includes("\r")
-        && body.endsWith("\n")
-        && !body.endsWith("\n\n")
-        && !body.includes(MANAGED_MARKER_NAMESPACE_PREFIX);
+    return (body.isWellFormed() &&
+        body.normalize("NFC") === body &&
+        !body.startsWith("\ufeff") &&
+        !body.includes("\r") &&
+        body.endsWith("\n") &&
+        !body.endsWith("\n\n") &&
+        !body.includes(MANAGED_MARKER_NAMESPACE_PREFIX));
 }
 function renderBody(config, profile, controllerWindowId) {
     const body = config.presentation.language === "en"
@@ -194,8 +192,7 @@ function authorityDigestBasis(programId, controllerWindowId, hostId, instruction
 export function createWakeflowProgramInstructionBodyAuthority(configValue, profileValue) {
     const config = parseConfig(configValue);
     const profile = parseProfile(profileValue);
-    const controllerWindowId = buildWakeflowConfigIndexes(config)
-        .controllerWindow.windowId;
+    const controllerWindowId = buildWakeflowConfigIndexes(config).controllerWindow.windowId;
     const body = renderBody(config, profile, controllerWindowId);
     let bodyDigest;
     try {
@@ -277,16 +274,15 @@ export function parseWakeflowProgramInstructionBodyAuthority(value) {
         "programId",
         "schemaVersion",
     ];
-    if (keys.length !== expectedKeys.length
-        || keys.some((key, index) => key !== expectedKeys[index])
-        || record.kind !== WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_KIND
-        || record.schemaVersion
-            !== WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_SCHEMA_VERSION
-        || typeof record.hostId !== "string"
-        || !HOST_ID_SET.has(record.hostId)
-        || typeof record.language !== "string"
-        || !PRESENTATION_LANGUAGE_SET.has(record.language)
-        || typeof record.body !== "string") {
+    if (keys.length !== expectedKeys.length ||
+        keys.some((key, index) => key !== expectedKeys[index]) ||
+        record.kind !== WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_KIND ||
+        record.schemaVersion !== WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_SCHEMA_VERSION ||
+        typeof record.hostId !== "string" ||
+        !HOST_ID_SET.has(record.hostId) ||
+        typeof record.language !== "string" ||
+        !PRESENTATION_LANGUAGE_SET.has(record.language) ||
+        typeof record.body !== "string") {
         fail("authority", "$authority");
     }
     const programId = parseAuthorityId(record.programId, "program", "$authority.programId");
@@ -308,17 +304,15 @@ export function parseWakeflowProgramInstructionBodyAuthority(value) {
             fail("authority", error.path);
         throw error;
     }
-    if (computeSha256Digest(encodeUtf8(record.body), "$authority.body")
-        !== bodyDigest
-        || computeCanonicalJsonSha256Digest(authorityDigestBasis(programId, controllerWindowId, hostId, instructionFileName, language, bodyDigest)) !== authorityDigest) {
+    if (computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||
+        computeCanonicalJsonSha256Digest(authorityDigestBasis(programId, controllerWindowId, hostId, instructionFileName, language, bodyDigest)) !== authorityDigest) {
         fail("authority", "$authority");
     }
     const target = plainRecord(record.envelopeTarget, "$authority.envelopeTarget");
-    if (Object.keys(target).sort().join("\u0000")
-        !== "body\u0000component\u0000owner"
-        || target.component !== WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT
-        || target.owner !== WAKEFLOW_PROGRAM_INSTRUCTION_OWNER
-        || target.body !== record.body) {
+    if (Object.keys(target).sort().join("\u0000") !== "body\u0000component\u0000owner" ||
+        target.component !== WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT ||
+        target.owner !== WAKEFLOW_PROGRAM_INSTRUCTION_OWNER ||
+        target.body !== record.body) {
         fail("authority", "$authority.envelopeTarget");
     }
     return Object.freeze({

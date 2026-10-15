@@ -2,7 +2,7 @@ import { parseWakeflowDurableIdOfKind, } from "../../contracts/identity/wakeflow
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../../workspace/workspace-resource-declaration.js";
 import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
-import { managedEvidenceRecordRootRef, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, MANAGED_EVIDENCE_ROOT_REF, } from "./managed-evidence-resource-paths.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, MANAGED_EVIDENCE_ROOT_REF, managedEvidenceRecordRootRef, } from "./managed-evidence-resource-paths.js";
 /**
  * Wakeflow Governance / Evidence：Managed Evidence资源的领域所有权声明。
  *

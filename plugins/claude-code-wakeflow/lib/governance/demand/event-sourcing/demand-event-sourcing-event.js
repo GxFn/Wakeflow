@@ -1,25 +1,25 @@
-import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { parseJsonValue, JsonValueError, } from "../../../foundation/data/json-value.js";
-import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
-import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
+import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../../foundation/time/utc-instant.js";
-import { parseManagedEvidenceManifest, ManagedEvidenceManifestError, } from "../../evidence/managed-evidence-manifest.js";
-import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
-import { parseTargetResult, targetResultRecordedEventIdFromResult, TargetResultError, } from "../../result/target-result.js";
-import { controllerReviewDecisionEventId, parseControllerReviewDecision, ControllerReviewDecisionError, } from "../../review/controller-review-decision.js";
-import { deriveTargetResultCallbackId, parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, parseTargetResultEvidenceResolutions, TargetResultCallbackError, } from "../../result/target-result-callback.js";
-import { parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, ControllerProductDefectRemediationAuthorizationError, } from "../../review/controller-product-defect-remediation-authorization.js";
-import { parseDemandCompletion, DemandCompletionError, } from "../../lifecycle/demand-completion.js";
 import { DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../../delivery/delivery-envelope.js";
 import { DeliveryOutcomeError, parseDeliveryOutcome, } from "../../delivery/delivery-outcome.js";
 import { DeliveryRearmError, parseDeliveryRearm, } from "../../delivery/delivery-rearm.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../../evidence/managed-evidence-manifest.js";
+import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
+import { parseTargetResult, TargetResultError, targetResultRecordedEventIdFromResult, } from "../../result/target-result.js";
+import { deriveTargetResultCallbackId, parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, parseTargetResultEvidenceResolutions, TargetResultCallbackError, } from "../../result/target-result-callback.js";
+import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, } from "../../review/controller-product-defect-remediation-authorization.js";
+import { ControllerReviewDecisionError, controllerReviewDecisionEventId, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
+import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing event input is invalid.",
     identifier: "Demand Event Sourcing event contains an invalid identity.",
@@ -97,9 +97,7 @@ function lifecycleData(validate, value, path) {
         fail("lifecycle-data", path);
     return Object.freeze(result.value);
 }
-const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze([
-    "manifest",
-]);
+const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze(["manifest"]);
 const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze(["taskPackage"]);
 const DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["envelope"]);
 const DELIVERY_OUTCOME_RECORDED_DATA_FIELDS = Object.freeze(["outcome"]);
@@ -110,12 +108,9 @@ const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze([
     "result",
 ]);
 const CALLBACK_REISSUED_DATA_FIELDS = Object.freeze(["reissue"]);
-const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze([
-    "decision",
-]);
-const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze([
-    "authorization",
-]);
+const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"]);
+const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze(["authorization"]);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 function fail(reason, path) {
     throw new DemandEventSourcingEventError(reason, path);
@@ -131,8 +126,7 @@ function exactRecord(value, fields, path) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== fields.length ||
-        keys.some((key, index) => key !== fields[index])) {
+    if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
         fail("input", path);
     }
     return record;
@@ -187,8 +181,7 @@ export function parseDemandUncommittedEvent(value) {
     const recordedAt = parseTime(record.recordedAt);
     if (record.eventType === "publication.demand-published") {
         const data = exactRecord(record.data, PUBLISHED_DATA_FIELDS, "$/data");
-        if (data.identityRef !== "identity.json" ||
-            data.authorityRef !== "authority.json") {
+        if (data.identityRef !== "identity.json" || data.authorityRef !== "authority.json") {
             fail("event-type", "$/data");
         }
         return Object.freeze({
@@ -226,8 +219,7 @@ export function parseDemandUncommittedEvent(value) {
             }
             throw error;
         }
-        if (completion.demandId !== demandId ||
-            completion.completedAt !== recordedAt) {
+        if (completion.demandId !== demandId || completion.completedAt !== recordedAt) {
             fail("relation", "$event");
         }
         return Object.freeze({
@@ -317,8 +309,7 @@ export function parseDemandUncommittedEvent(value) {
             }
             throw error;
         }
-        if (taskPackage.demandId !== demandId ||
-            taskPackage.createdAt !== recordedAt) {
+        if (taskPackage.demandId !== demandId || taskPackage.createdAt !== recordedAt) {
             fail("relation", "$event");
         }
         return Object.freeze({

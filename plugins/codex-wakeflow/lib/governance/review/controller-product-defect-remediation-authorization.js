@@ -1,6 +1,6 @@
-import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
 import { createWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
@@ -10,8 +10,8 @@ import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identi
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
-import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "../demand/event-sourcing/demand-event-stream-position.js";
-import { parseControllerTestReviewDecision, ControllerTestReviewDecisionError, } from "./controller-test-review-decision.js";
+import { DemandEventStreamPositionError, parseDemandEventStreamRevision, } from "../demand/event-sourcing/demand-event-stream-position.js";
+import { ControllerTestReviewDecisionError, parseControllerTestReviewDecision, } from "./controller-test-review-decision.js";
 /**
  * Wakeflow Governance / Review：Controller对Test产品缺陷作出的产品返工授权。
  *
@@ -22,6 +22,7 @@ import { parseControllerTestReviewDecision, ControllerTestReviewDecisionError, }
 const AUTHORIZATION_KIND = "WakeflowControllerProductDefectRemediationAuthorization";
 const AUTHORIZATION_SCHEMA_VERSION = 1;
 const AUTHORIZATION_ID_PREFIX = "product-defect-remediation_";
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 const ERROR_MESSAGES = {
@@ -124,7 +125,8 @@ function admitStepIds(values, path) {
     if (first === undefined)
         fail("relation", path);
     stepIds.forEach((value, index) => {
-        if (index > 0 && compareStepId(stepIds[index - 1], value) >= 0) {
+        const previous = index > 0 ? stepIds[index - 1] : undefined;
+        if (previous !== undefined && compareStepId(previous, value) >= 0) {
             fail("relation", `${path}/${index}`);
         }
     });
@@ -159,7 +161,8 @@ function parseFailedSteps(values, path) {
     if (first === undefined)
         fail("relation", path);
     steps.forEach((step, index) => {
-        if (index > 0 && compareStepId(steps[index - 1].stepId, step.stepId) >= 0) {
+        const previous = index > 0 ? steps[index - 1] : undefined;
+        if (previous !== undefined && compareStepId(previous.stepId, step.stepId) >= 0) {
             fail("relation", `${path}/${index}/stepId`);
         }
     });
@@ -198,8 +201,9 @@ function assertRelations(source, failedSteps, affectedTargets) {
     affectedTargets.forEach((target, index) => {
         const path = `$/affectedTargets/${index}`;
         const baseline = target.baseline;
-        if ((index > 0 &&
-            compareText(affectedTargets[index - 1].baseline.targetTaskId, baseline.targetTaskId) >= 0) ||
+        const previousTarget = index > 0 ? affectedTargets[index - 1] : undefined;
+        if ((previousTarget !== undefined &&
+            compareText(previousTarget.baseline.targetTaskId, baseline.targetTaskId) >= 0) ||
             targetTaskIds.has(baseline.targetTaskId) ||
             taskPackageIds.has(baseline.taskPackageId) ||
             repositoryIds.has(baseline.repositoryId) ||
@@ -208,8 +212,7 @@ function assertRelations(source, failedSteps, affectedTargets) {
             baseline.targetTaskId === source.testTargetTaskId ||
             baseline.taskPackageId === source.testTaskPackage.taskPackageId ||
             baseline.targetResultId === source.targetResult.targetResultId ||
-            baseline.targetReviewDecisionId ===
-                source.testReviewDecision.targetReviewDecisionId) {
+            baseline.targetReviewDecisionId === source.testReviewDecision.targetReviewDecisionId) {
             fail("relation", `${path}/baseline`);
         }
         targetTaskIds.add(baseline.targetTaskId);
@@ -379,8 +382,7 @@ export function createControllerProductDefectRemediationAuthorization(input, opt
         productDefectRemediationId = createWakeflowDurableId("product-defect-remediation", createUuidV4(options.uuidFactory));
     }
     catch (error) {
-        if (error instanceof UuidV4Error ||
-            error instanceof WakeflowDurableIdError) {
+        if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
             fail("identifier", "$uuidFactory");
         }
         throw error;
@@ -388,9 +390,7 @@ export function createControllerProductDefectRemediationAuthorization(input, opt
     let authorizedAt;
     try {
         authorizedAt =
-            options.clock === undefined
-                ? readUtcWallClock()
-                : readUtcWallClock(options.clock);
+            options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
@@ -444,8 +444,7 @@ export function parseControllerProductDefectRemediationAuthorizationDocument(tex
         throw error;
     }
     const authorization = parseControllerProductDefectRemediationAuthorization(json);
-    if (renderControllerProductDefectRemediationAuthorization(authorization) !==
-        textValue) {
+    if (renderControllerProductDefectRemediationAuthorization(authorization) !== textValue) {
         fail("representation", "$authorization");
     }
     return authorization;

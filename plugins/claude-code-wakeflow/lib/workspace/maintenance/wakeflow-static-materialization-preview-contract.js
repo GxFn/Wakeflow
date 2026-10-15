@@ -2,10 +2,10 @@ import { types } from "node:util";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "../managed-integration/wakeflow-gitignore-body-authority.js";
-import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 /** 静态物化 preview 的闭合词汇、请求准入与稳定错误合同。 */
 export const WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS = Object.freeze([
     "fresh-initialize",
@@ -66,12 +66,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         }
         throw error;
     }
-    const required = [
-        "action",
-        "currentHostProfile",
-        "desiredConfig",
-        "hostProfiles",
-    ];
+    const required = ["action", "currentHostProfile", "desiredConfig", "hostProfiles"];
     const expected = record.signal === undefined ? required : [...required, "signal"].sort();
     const keys = Object.keys(record).sort();
     if (keys.length !== expected.length ||
@@ -134,8 +129,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         throw error;
     }
     const matching = parsedProfiles.find((profile) => profile.hostId === currentHostProfile.hostId);
-    if (matching === undefined ||
-        !sameStaticResourceMatrix(matching, currentHostProfile)) {
+    if (matching === undefined || !sameStaticResourceMatrix(matching, currentHostProfile)) {
         failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
     }
     return Object.freeze({
@@ -301,16 +295,14 @@ export function parseWakeflowStaticMaterializationPreview(value) {
     const status = record.status;
     const currentConfigDigest = nullableDigest(record.currentConfigDigest, "$preview.currentConfigDigest");
     const desiredConfigDigest = nullableDigest(record.desiredConfigDigest, "$preview.desiredConfigDigest");
-    if (((action === "fresh-initialize" || action === "reconfigure") &&
-        desiredConfigDigest === null) ||
+    if (((action === "fresh-initialize" || action === "reconfigure") && desiredConfigDigest === null) ||
         (action === "reconcile" && desiredConfigDigest !== currentConfigDigest) ||
         (action === "reconcile" && configIndexes.length !== 0) ||
         (status === "ready" &&
             ((action === "fresh-initialize" && currentConfigDigest !== null) ||
                 (action !== "fresh-initialize" && currentConfigDigest === null) ||
                 (action !== "reconcile" &&
-                    configIndexes.length !==
-                        (currentConfigDigest === desiredConfigDigest ? 0 : 1))))) {
+                    configIndexes.length !== (currentConfigDigest === desiredConfigDigest ? 0 : 1))))) {
         failWakeflowStaticMaterializationPreview("input", "$preview");
     }
     const plan = Object.freeze({

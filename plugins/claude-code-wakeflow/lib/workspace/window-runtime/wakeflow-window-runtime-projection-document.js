@@ -49,9 +49,9 @@ export async function inspectWakeflowWindowRuntimeProjectionDocument(root, targe
                 fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
             }
         }
-        if (error instanceof StableFileReadError
-            || error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StableFileReadError ||
+            error instanceof StrictTextFileError ||
+            error instanceof DeterministicJsonDocumentError) {
             return Object.freeze({
                 resourceRef: target.resourceRef,
                 status: "unsafe",

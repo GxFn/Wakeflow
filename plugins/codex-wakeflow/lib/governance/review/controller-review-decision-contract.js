@@ -1,6 +1,7 @@
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 function reviewText(value, path, fail, maximum = 8192) {
     if (value.length === 0 ||
@@ -116,10 +117,7 @@ export function normalizeControllerTestReviewEscalation(wire, path, fail) {
         const [firstStep, ...otherSteps] = target.failedStepIds;
         if (firstStep === undefined)
             fail("text", `${targetPath}/failedStepIds`);
-        const failedStepIds = Object.freeze([
-            firstStep,
-            ...otherSteps,
-        ]);
+        const failedStepIds = Object.freeze([firstStep, ...otherSteps]);
         return Object.freeze({
             targetTaskId: reviewId(target.targetTaskId, "target-task", `${targetPath}/targetTaskId`, fail),
             failedStepIds,

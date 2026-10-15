@@ -1,17 +1,17 @@
-import { WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA, } from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
 import { WAKEFLOW_DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA } from "../../contracts/generated/foundation/directory-tree-candidate-plan.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
 import { WAKEFLOW_REQUIREMENT_RECORD_SCHEMA } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parseDirectoryTreeCandidatePlan, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { ledgerAuthorityRootRef, ledgerRecordPublicationIntentRef, ledgerRecordPublicationLockRef, ledgerRecordPublicationStageRef, } from "./ledger-authority-paths.js";
-import { parseLedgerAuthorityRecord, renderLedgerAuthorityRecord, LedgerAuthorityRecordError, } from "./ledger-authority-record.js";
+import { LedgerAuthorityRecordError, parseLedgerAuthorityRecord, renderLedgerAuthorityRecord, } from "./ledger-authority-record.js";
 import { LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, } from "./ledger-authority-storage-policy.js";
 /**
  * Wakeflow Governance / Ledger：不可变记录目录树的短期发布意图记录。
@@ -83,31 +83,34 @@ function normalizeTreePlan(value) {
 }
 function expectedPlanFiles(record) {
     const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
-    return Object.freeze([{
+    return Object.freeze([
+        {
             path: "record.json",
             digest: computeSha256Digest(recordBytes),
             mode: LEDGER_DURABLE_FILE_MODE,
             byteCount: recordBytes.byteLength,
-        }, ...record.documents.map((document) => ({
+        },
+        ...record.documents.map((document) => ({
             path: document.path,
             digest: document.digest,
             mode: LEDGER_DURABLE_FILE_MODE,
             byteCount: null,
-        }))].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)));
+        })),
+    ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)));
 }
 function assertTreePlanMatchesRecord(record, plan) {
     const expected = expectedPlanFiles(record);
-    if (plan.directoryMode !== LEDGER_DURABLE_DIRECTORY_MODE
-        || plan.files.length !== expected.length) {
+    if (plan.directoryMode !== LEDGER_DURABLE_DIRECTORY_MODE ||
+        plan.files.length !== expected.length) {
         fail("relation", "$/treePlan");
     }
     for (const [index, file] of plan.files.entries()) {
         const target = expected[index];
-        if (target === undefined
-            || file.path !== target.path
-            || file.digest !== target.digest
-            || file.mode !== target.mode
-            || (target.byteCount !== null && file.byteCount !== target.byteCount)) {
+        if (target === undefined ||
+            file.path !== target.path ||
+            file.digest !== target.digest ||
+            file.mode !== target.mode ||
+            (target.byteCount !== null && file.byteCount !== target.byteCount)) {
             fail("relation", `$/treePlan/files/${index}`);
         }
     }
@@ -120,10 +123,10 @@ function normalize(wire) {
     const intentRef = ledgerRecordPublicationIntentRef(record);
     const lockRef = ledgerRecordPublicationLockRef(record);
     const stageRef = ledgerRecordPublicationStageRef(record);
-    if (wire.finalRootRef !== finalRootRef
-        || wire.intentRef !== intentRef
-        || wire.lockRef !== lockRef
-        || wire.stageRef !== stageRef) {
+    if (wire.finalRootRef !== finalRootRef ||
+        wire.intentRef !== intentRef ||
+        wire.lockRef !== lockRef ||
+        wire.stageRef !== stageRef) {
         fail("relation", "$intent");
     }
     return Object.freeze({
@@ -192,6 +195,6 @@ export function parseLedgerRecordPublicationIntentDocument(text) {
 }
 /** 比较两份已准入的意图记录是否描述同一次精确发布。 */
 export function sameLedgerRecordPublicationIntent(leftValue, rightValue) {
-    return renderLedgerRecordPublicationIntent(leftValue)
-        === renderLedgerRecordPublicationIntent(rightValue);
+    return (renderLedgerRecordPublicationIntent(leftValue) ===
+        renderLedgerRecordPublicationIntent(rightValue));
 }

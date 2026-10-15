@@ -1,10 +1,10 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../delivery/delivery-envelope.js";
+import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
 import { assertTestExecutionAttemptMatchesPackage, TestExecutionAttemptError, } from "../testing/test-execution-attempt.js";
-import { parseTestTargetResultReport, TestTargetResultReportError, } from "./test-target-result-report.js";
 import { assertDeliveryBindingFollowsEnvelope, ImplementationTargetResultError, } from "./implementation-target-result.js";
 import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "./target-result.js";
+import { parseTestTargetResultReport, TestTargetResultReportError, } from "./test-target-result-report.js";
 const ERROR_MESSAGES = {
     "task-package": "Test Target Result requires a valid Test TaskPackage.",
     envelope: "Test Target Result requires a valid test Delivery Envelope.",
@@ -31,7 +31,9 @@ function fail(reason) {
  */
 function assertReportMatchesContract(report, taskPackage, scope) {
     // 重跑范围已由 assertTestExecutionAttemptMatchesPackage 证明属于合同。
-    const scopedIds = scope === null ? new Set(taskPackage.testContract.steps.map((step) => step.stepId)) : new Set(scope);
+    const scopedIds = scope === null
+        ? new Set(taskPackage.testContract.steps.map((step) => step.stepId))
+        : new Set(scope);
     const seen = new Set();
     for (const step of report.steps) {
         if (!scopedIds.has(step.stepId) || seen.has(step.stepId))

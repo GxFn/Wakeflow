@@ -1,5 +1,5 @@
+import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF } from "./workspace-host-runtime-paths.js";
 import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
-import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, } from "./workspace-host-runtime-paths.js";
 /**
  * Wakeflow Workspace：所有宿主本地运行目录共同使用的 host profiles 父容器。
  *

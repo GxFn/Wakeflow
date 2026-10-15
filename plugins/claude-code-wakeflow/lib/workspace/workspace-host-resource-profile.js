@@ -1,4 +1,4 @@
-import { PassiveOwnDataError, parsePlainRecord, } from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 /**
  * Wakeflow Workspace：会改变资源矩阵形状的宿主静态画像。
@@ -11,10 +11,7 @@ import { PortableResourcePathError, parsePortableResourcePath, splitPortableReso
  * 规范化后的数据，不得通过 `hostId` 分支重新推导宿主差异。
  */
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND = "WakeflowWorkspaceHostResourceProfile";
-export const WAKEFLOW_WORKSPACE_HOST_IDS = Object.freeze([
-    "codex",
-    "claude-code",
-]);
+export const WAKEFLOW_WORKSPACE_HOST_IDS = Object.freeze(["codex", "claude-code"]);
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
     "windowIdentity",
     "podReceipts",
@@ -90,7 +87,9 @@ function propertyPath(base, key) {
     return `${base}/${escaped}`;
 }
 function assertExactFields(record, allowed, path) {
-    const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+    const unknown = Object.keys(record)
+        .sort()
+        .find((key) => !allowed.has(key));
     if (unknown !== undefined)
         fail("shape", propertyPath(path, unknown));
 }
@@ -169,8 +168,8 @@ function parseWorktreeTemplate(value) {
     if (typeof launch !== "string" || !WORKTREE_LAUNCH_SET.has(launch)) {
         fail("surface", "$/surfaces/worktree/launch");
     }
-    if (typeof attachedDirectories !== "string"
-        || !ATTACHED_DIRECTORY_MODE_SET.has(attachedDirectories)) {
+    if (typeof attachedDirectories !== "string" ||
+        !ATTACHED_DIRECTORY_MODE_SET.has(attachedDirectories)) {
         fail("surface", "$/surfaces/worktree/attachedDirectories");
     }
     return Object.freeze({
@@ -188,8 +187,8 @@ function parseSurfaces(value) {
     assertExactFields(record, SURFACE_FIELDS, "$/surfaces");
     const settingsIntegration = parseSettingsIntegration(record.settingsIntegration);
     const statuslineAsset = parseStatuslineAsset(record.statuslineAsset);
-    if (settingsIntegration !== null
-        && settingsIntegration.portablePath === settingsIntegration.localPath) {
+    if (settingsIntegration !== null &&
+        settingsIntegration.portablePath === settingsIntegration.localPath) {
         fail("contradiction", "$/surfaces/settingsIntegration/localPath");
     }
     if (statuslineAsset !== null && settingsIntegration === null) {

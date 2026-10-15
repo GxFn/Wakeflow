@@ -1,10 +1,10 @@
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
-import { computeDemandAggregateStateDigest, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
-import { parseDemandUncommittedEvent, DemandEventSourcingEventError, } from "./demand-event-sourcing-event.js";
-import { encodeCurrentDemandEventVersion, } from "./demand-event-sourcing-event-version-codec.js";
-import { computeDemandEventSourcingPersistedEventEnvelopeDigest, parseDemandEventSourcingPersistedEventEnvelope, DemandEventSourcingPersistedEventEnvelopeError, DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND, DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION, } from "./demand-event-sourcing-persisted-event-envelope.js";
-import { DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION, } from "./demand-event-sourcing-state-version.js";
-import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
+import { computeDemandAggregateStateDigest, DemandAggregateStateError, parseDemandAggregateState, } from "../model/demand-aggregate-state.js";
+import { DemandEventSourcingEventError, parseDemandUncommittedEvent, } from "./demand-event-sourcing-event.js";
+import { encodeCurrentDemandEventVersion } from "./demand-event-sourcing-event-version-codec.js";
+import { computeDemandEventSourcingPersistedEventEnvelopeDigest, DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND, DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION, DemandEventSourcingPersistedEventEnvelopeError, parseDemandEventSourcingPersistedEventEnvelope, } from "./demand-event-sourcing-persisted-event-envelope.js";
+import { DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION } from "./demand-event-sourcing-state-version.js";
+import { DemandEventStreamPositionError, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
 /**
  * Demand 事件溯源持久化事件的兼容门面和当前版本写入器。
  *
@@ -15,14 +15,14 @@ import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from 
 const DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND = DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND;
 const DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA_VERSION = DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION;
 const ERROR_MESSAGES = {
-    "json": "Demand Event Sourcing stored event is not passive JSON data.",
-    "schema": "Demand Event Sourcing stored event envelope is invalid.",
-    "event": "Demand Event Sourcing current event is invalid.",
-    "revision": "Demand Event Sourcing stored event revision is invalid.",
-    "digest": "Demand Event Sourcing stored event digest is invalid.",
+    json: "Demand Event Sourcing stored event is not passive JSON data.",
+    schema: "Demand Event Sourcing stored event envelope is invalid.",
+    event: "Demand Event Sourcing current event is invalid.",
+    revision: "Demand Event Sourcing stored event revision is invalid.",
+    digest: "Demand Event Sourcing stored event digest is invalid.",
     "state-version": "Demand Event Sourcing stored event state-model version is invalid.",
-    "state": "Demand Event Sourcing stored event requires a valid resulting state.",
-    "representation": "Demand Event Sourcing stored event bytes are not deterministic.",
+    state: "Demand Event Sourcing stored event requires a valid resulting state.",
+    representation: "Demand Event Sourcing stored event bytes are not deterministic.",
 };
 export class DemandEventSourcingStoredEventError extends Error {
     name = "DemandEventSourcingStoredEventError";

@@ -1,5 +1,5 @@
+import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { parseWakeflowDurableIdOfKind, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, } from "../workspace-host-runtime-paths.js";
 /**
  * Wakeflow Workspace / Window Runtime：当前宿主的 identity 与 projection 路径词汇。

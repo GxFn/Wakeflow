@@ -1,5 +1,5 @@
-import { parseSha256Digest, Sha256Error, } from "../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
+import { parseSha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
 import { findWakeflowWorkspaceStaticResourceByDeclarationId, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "./wakeflow-workspace-static-resource-matrix.js";
 /**
@@ -45,12 +45,12 @@ function plainRecord(value, path) {
 function parseRequest(value) {
     const record = plainRecord(value, "$request");
     const keys = Object.keys(record).sort();
-    if (keys.length !== 3
-        || keys[0] !== "declarationId"
-        || keys[1] !== "expectedMatrixDigest"
-        || keys[2] !== "recipe"
-        || typeof record.declarationId !== "string"
-        || record.declarationId.length === 0) {
+    if (keys.length !== 3 ||
+        keys[0] !== "declarationId" ||
+        keys[1] !== "expectedMatrixDigest" ||
+        keys[2] !== "recipe" ||
+        typeof record.declarationId !== "string" ||
+        record.declarationId.length === 0) {
         fail("input", "$request");
     }
     let expectedMatrixDigest;

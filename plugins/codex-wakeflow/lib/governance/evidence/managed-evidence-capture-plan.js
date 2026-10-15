@@ -1,9 +1,9 @@
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "../demand/event-sourcing/demand-event-stream-position.js";
-import { parseManagedEvidenceManifest, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { DemandEventStreamPositionError, parseDemandEventStreamRevision, } from "../demand/event-sourcing/demand-event-stream-position.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "./managed-evidence-manifest.js";
 /**
  * Wakeflow Governance / Evidence：零写capture结果的纯计划合同。
  *
@@ -33,11 +33,7 @@ export class ManagedEvidenceCapturePlanError extends Error {
         this.path = path;
     }
 }
-const CREATE_FIELDS = Object.freeze([
-    "configDigest",
-    "expectedDemand",
-    "manifest",
-]);
+const CREATE_FIELDS = Object.freeze(["configDigest", "expectedDemand", "manifest"]);
 const PLAN_FIELDS = Object.freeze([
     "configDigest",
     "expectedDemand",
@@ -67,8 +63,7 @@ function exactRecord(value, fields, path) {
     }
     const actual = Object.keys(record).sort();
     const expected = [...fields].sort();
-    if (actual.length !== expected.length ||
-        actual.some((key, index) => key !== expected[index])) {
+    if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
         fail("input", path);
     }
     return record;

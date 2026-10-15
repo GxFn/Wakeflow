@@ -1,21 +1,20 @@
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA, } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile, } from "../../foundation/filesystem/deterministic-json-file.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { readStableResourceTree, StableResourceTreeReadError, } from "../../foundation/filesystem/stable-resource-tree-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { computeLedgerAuthorityRecordDigest, parseLedgerAuthorityRecordDocument, LedgerAuthorityRecordError, } from "./ledger-authority-record.js";
 import { LEDGER_AUTHORITY_FAMILY, ledgerAuthorityMemberRef, ledgerAuthorityRecordRef, ledgerAuthorityRootRef, requirementRootRef, } from "./ledger-authority-paths.js";
-import { assertLedgerAuthorityNode, throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { computeLedgerAuthorityRecordDigest, LedgerAuthorityRecordError, parseLedgerAuthorityRecordDocument, } from "./ledger-authority-record.js";
 import { LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, } from "./ledger-authority-storage-policy.js";
+import { assertLedgerAuthorityNode, throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
 /**
  * Wakeflow Governance / Ledger：不可变权威目录树读取器与成员引用编解码器。
  *
@@ -51,11 +50,11 @@ function expectedResourcePaths(record) {
 function mapTreeError(error) {
     if (error.reason === "not-found")
         fail("not-found", "$record");
-    if (error.reason === "entry-limit"
-        || error.reason === "depth-limit"
-        || error.reason === "file-count"
-        || error.reason === "file-bytes"
-        || error.reason === "total-bytes") {
+    if (error.reason === "entry-limit" ||
+        error.reason === "depth-limit" ||
+        error.reason === "file-count" ||
+        error.reason === "file-bytes" ||
+        error.reason === "total-bytes") {
         fail("capacity", "$record");
     }
     if (error.reason === "aborted")
@@ -82,8 +81,7 @@ async function readRecordDocument(root, recordRef, expectedNode, signal) {
                 fail("capacity", "$record");
             fail("conflict", "$record");
         }
-        if (error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("record", "$record");
         }
         throw error;
@@ -126,8 +124,8 @@ export async function loadLedgerAuthorityRecord(root, requirementId, signal) {
     if (record.requirementId !== requirementId)
         fail("conflict", "$record");
     const expected = expectedResourcePaths(record);
-    if (tree.entries.length !== expected.size
-        || tree.entries.some((entry) => {
+    if (tree.entries.length !== expected.size ||
+        tree.entries.some((entry) => {
             const kind = expected.get(entry.resourcePath);
             return kind === undefined || entry.node.kind !== kind;
         })) {
@@ -197,8 +195,8 @@ export function parseLedgerAuthorityMemberReference(value) {
     const recordRef = parseReferencePath(result.value.recordRef, "$/recordRef");
     const recordDigest = parseReferenceDigest(result.value.recordDigest, "$/recordDigest");
     const memberPath = parseReferencePath(result.value.memberPath, "$/memberPath");
-    if (memberPath.toLowerCase() === "record.json"
-        || memberPath.toLowerCase().startsWith("record.json/")) {
+    if (memberPath.toLowerCase() === "record.json" ||
+        memberPath.toLowerCase().startsWith("record.json/")) {
         fail("input", "$/memberPath");
     }
     const memberRef = parseReferencePath(result.value.memberRef, "$/memberRef");
@@ -213,8 +211,8 @@ export function parseLedgerAuthorityMemberReference(value) {
         throw error;
     }
     const expectedRoot = requirementRootRef(recordId);
-    if (recordRef !== `${expectedRoot}/record.json`
-        || memberRef !== `${expectedRoot}/${memberPath}`) {
+    if (recordRef !== `${expectedRoot}/record.json` ||
+        memberRef !== `${expectedRoot}/${memberPath}`) {
         fail("input", "$reference");
     }
     return Object.freeze({
@@ -254,13 +252,13 @@ export function createLedgerAuthorityMemberReference(loaded, memberPathValue) {
 /** 解析成员引用，读取对应的不可变成员，并复验摘要与记录关系。 */
 export async function resolveLoadedLedgerAuthorityMemberReference(root, loaded, reference, signal) {
     const document = loaded.documents.find((candidate) => candidate.path === reference.memberPath);
-    if (loaded.recordRef !== reference.recordRef
-        || loaded.recordDigest !== reference.recordDigest
-        || document === undefined
-        || document.memberRef !== reference.memberRef
-        || document.digest !== reference.memberDigest
-        || document.role !== reference.role
-        || document.mediaType !== reference.mediaType) {
+    if (loaded.recordRef !== reference.recordRef ||
+        loaded.recordDigest !== reference.recordDigest ||
+        document === undefined ||
+        document.memberRef !== reference.memberRef ||
+        document.digest !== reference.memberDigest ||
+        document.role !== reference.role ||
+        document.mediaType !== reference.mediaType) {
         fail("conflict", "$reference");
     }
     let read;

@@ -1,5 +1,5 @@
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 /**
  * Wakeflow Governance / Ledger：需求包记录和精简发布意图记录的固定可移植路径词汇。
  *

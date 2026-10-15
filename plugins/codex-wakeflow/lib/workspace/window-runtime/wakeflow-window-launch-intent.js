@@ -1,7 +1,7 @@
 import { buildWakeflowConfigIndexes, computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
-import { WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS, } from "./wakeflow-window-runtime-desired-topology.js";
+import { WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS } from "./wakeflow-window-runtime-desired-topology.js";
 const ERROR_MESSAGES = {
     config: "Wakeflow window launch intent Config is invalid.",
     profile: "Wakeflow window launch intent Host Profile is invalid.",
@@ -128,19 +128,14 @@ function createIntent(model, profile, configDigest, profileDigest, indexes, wind
 export function compileWakeflowWindowLaunchIntents(configValue, profileValue) {
     const model = parseConfig(configValue);
     const profile = parseProfile(profileValue);
-    if (model.topology.windows.length
-        > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
+    if (model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
         fail("capacity", "$/topology/windows");
     }
     const indexes = buildWakeflowConfigIndexes(model);
     const configDigest = computeWakeflowConfigDigest(model);
     const profileDigest = computeCanonicalJsonSha256Digest(profile);
     const intents = Object.freeze([...model.topology.windows]
-        .sort((left, right) => (left.windowId < right.windowId
-        ? -1
-        : left.windowId > right.windowId
-            ? 1
-            : 0))
+        .sort((left, right) => left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0)
         .map((window) => createIntent(model, profile, configDigest, profileDigest, indexes, window)));
     const basis = Object.freeze({
         kind: "WakeflowWindowLaunchIntentSet",

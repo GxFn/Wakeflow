@@ -1,14 +1,14 @@
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
@@ -58,6 +58,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TASK_PACKAGE_SCHE
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
     "acceptanceAnchors",
@@ -425,14 +426,16 @@ function normalizeWire(wire) {
     const windowId = parseId(wire.assignment.windowId, "window", "$/assignment/windowId");
     const acceptanceAnchors = parseAcceptanceAnchors(wire.acceptanceAnchors);
     if (wire.workType === "implementation") {
-        if (!("repositoryId" in wire.assignment) ||
-            wire.commitExpectation === undefined) {
+        if (!("repositoryId" in wire.assignment) || wire.commitExpectation === undefined) {
             fail("schema", "$/assignment");
         }
         const firstAnchor = acceptanceAnchors[0];
         if (firstAnchor === undefined)
             fail("schema", "$/acceptanceAnchors");
-        const parsedAnchors = Object.freeze([firstAnchor, ...acceptanceAnchors.slice(1)]);
+        const parsedAnchors = Object.freeze([
+            firstAnchor,
+            ...acceptanceAnchors.slice(1),
+        ]);
         const implementation = {
             ...common,
             assignment: Object.freeze({

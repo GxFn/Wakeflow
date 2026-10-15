@@ -1,12 +1,12 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
 import { historicalWakeflowManagedTextTargets, WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
@@ -73,10 +73,10 @@ function parseConfig(value, path) {
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 /** 快照并绑定 Matrix、Host Profile 与 current/desired Config 摘要。 */
 export function parseWakeflowProgramInstructionInspectionRequest(value) {
@@ -99,12 +99,10 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
         "matrix",
         "profile",
     ];
-    const validKeys = record.signal === undefined
-        ? requiredKeys
-        : [...requiredKeys, "signal"].sort();
-    if (keys.length !== validKeys.length
-        || keys.some((key, index) => key !== validKeys[index])
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
+    if (keys.length !== validKeys.length ||
+        keys.some((key, index) => key !== validKeys[index]) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$request");
     }
     let matrix;
@@ -131,9 +129,8 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
         }
         throw error;
     }
-    if (profile.hostId !== matrix.hostId
-        || createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest
-            !== matrix.matrixDigest) {
+    if (profile.hostId !== matrix.hostId ||
+        createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== matrix.matrixDigest) {
         fail("input", "$request.matrix");
     }
     const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
@@ -172,10 +169,10 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -191,10 +188,10 @@ async function readSource(root, request, expectedUserId) {
             maximumBytes: WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (read.node.kind !== "file"
-            || read.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE
-            || read.node.linkCount !== 1n
-            || read.node.userId !== expectedUserId) {
+        if (read.node.kind !== "file" ||
+            read.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE ||
+            read.node.linkCount !== 1n ||
+            read.node.userId !== expectedUserId) {
             fail("source-policy", "$source");
         }
         return Object.freeze({
@@ -233,9 +230,9 @@ async function revalidateSource(root, request, initial) {
             ...(initial === null ? {} : { expectedNode: initial.facts.node }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (initial === null
-            || current.digest !== initial.facts.digest
-            || current.byteCount !== initial.facts.byteCount) {
+        if (initial === null ||
+            current.digest !== initial.facts.digest ||
+            current.byteCount !== initial.facts.byteCount) {
             fail("source", "$source");
         }
     }
@@ -284,9 +281,7 @@ export async function inspectWakeflowProgramInstruction(rootValue, requestValue)
         }
         throw error;
     }
-    const currentAuthority = request.currentConfig === null
-        ? null
-        : createAuthority(request.currentConfig, request.profile);
+    const currentAuthority = request.currentConfig === null ? null : createAuthority(request.currentConfig, request.profile);
     const desiredAuthority = createAuthority(request.desiredConfig, request.profile);
     const read = await readSource(rootValue, request, currentUserId());
     let transition;
@@ -315,15 +310,13 @@ export async function inspectWakeflowProgramInstruction(rootValue, requestValue)
         }
         throw error;
     }
-    if (transition.target !== null
-        && transition.target.byteCount > WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES) {
+    if (transition.target !== null &&
+        transition.target.byteCount > WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES) {
         fail("target-capacity", "$target");
     }
     await revalidateSource(rootValue, request, read);
     return Object.freeze({
-        status: transition.disposition === "current"
-            ? "managed-current"
-            : "recompose-required",
+        status: transition.disposition === "current" ? "managed-current" : "recompose-required",
         context,
         currentConfigDigest: request.currentConfigDigest,
         desiredConfigDigest: request.desiredConfigDigest,

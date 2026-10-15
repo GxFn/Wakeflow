@@ -1,5 +1,5 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, } from "./ledger-authority-storage-policy.js";
 const ERROR_MESSAGES = {
     input: "Ledger authority store input is invalid.",
@@ -33,10 +33,10 @@ export function throwLedgerAuthorityStoreError(reason, path) {
     throw new LedgerAuthorityStoreError(reason, path);
 }
 export function isLedgerAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 export function parseLedgerAuthorityStoreOptions(value) {
     let record;
@@ -59,11 +59,10 @@ export function parseLedgerAuthorityStoreOptions(value) {
     return Object.freeze({ signal: record.signal });
 }
 export function assertLedgerAuthorityNode(node, kind, path) {
-    if (node.kind !== kind
-        || node.permissionBits !== (kind === "file"
-            ? LEDGER_DURABLE_FILE_MODE
-            : LEDGER_DURABLE_DIRECTORY_MODE)
-        || (kind === "file" && node.linkCount !== 1n)) {
+    if (node.kind !== kind ||
+        node.permissionBits !==
+            (kind === "file" ? LEDGER_DURABLE_FILE_MODE : LEDGER_DURABLE_DIRECTORY_MODE) ||
+        (kind === "file" && node.linkCount !== 1n)) {
         throwLedgerAuthorityStoreError("node-policy", path);
     }
 }

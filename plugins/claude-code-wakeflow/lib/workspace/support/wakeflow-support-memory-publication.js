@@ -1,8 +1,7 @@
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectWakeflowSupportMemory, WakeflowSupportMemoryInspectionError, WAKEFLOW_SUPPORT_MEMORY_FILE_MODE, } from "./wakeflow-support-memory-inspection.js";
-import { assertWakeflowSupportMemoryPublicationNotAborted, failWakeflowSupportMemoryPublication as fail, parseWakeflowSupportMemoryPublicationOptions, parseWakeflowSupportMemoryPublicationRequest, wakeflowSupportMemoryInspectionRequest, WakeflowSupportMemoryPublicationError, } from "./wakeflow-support-memory-publication-contract.js";
+import { inspectWakeflowSupportMemory, WAKEFLOW_SUPPORT_MEMORY_FILE_MODE, WakeflowSupportMemoryInspectionError, } from "./wakeflow-support-memory-inspection.js";
+import { assertWakeflowSupportMemoryPublicationNotAborted, failWakeflowSupportMemoryPublication as fail, parseWakeflowSupportMemoryPublicationOptions, parseWakeflowSupportMemoryPublicationRequest, WakeflowSupportMemoryPublicationError, wakeflowSupportMemoryInspectionRequest, } from "./wakeflow-support-memory-publication-contract.js";
 /**
  * Wakeflow Workspace / Support：whole-file memory 的无锁单资源 CAS 发布 owner。
  *
@@ -17,12 +16,12 @@ function mapInspectionError(error, afterCommit) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$target");
-    if (error.reason === "input"
-        || error.reason === "config"
-        || error.reason === "profile"
-        || error.reason === "catalog"
-        || error.reason === "surface"
-        || error.reason === "authority") {
+    if (error.reason === "input" ||
+        error.reason === "config" ||
+        error.reason === "profile" ||
+        error.reason === "catalog" ||
+        error.reason === "surface" ||
+        error.reason === "authority") {
         fail("input", error.path);
     }
     fail("source-invalid", "$source");
@@ -45,25 +44,25 @@ function mapAtomicError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$target");
-    if (error.reason === "target-exists"
-        || error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure") {
+    if (error.reason === "target-exists" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "expectation-read-failure") {
         fail("conflict", "$source");
     }
     if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$resourcePath");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     fail("effect-failure", "$resourcePath");
 }
 async function publishTarget(supportRoot, request, inspection, signal) {
-    if (inspection.status !== "publication-required"
-        || inspection.transition.disposition === "current") {
+    if (inspection.status !== "publication-required" ||
+        inspection.transition.disposition === "current") {
         fail("source-invalid", "$target");
     }
     const target = inspection.transition;
@@ -94,10 +93,10 @@ async function publishTarget(supportRoot, request, inspection, signal) {
     }
 }
 function sameSource(left, right) {
-    return left.resourcePath === right.resourcePath
-        && left.byteCount === right.byteCount
-        && left.digest === right.digest
-        && sameFileNodeSnapshot(left.node, right.node);
+    return (left.resourcePath === right.resourcePath &&
+        left.byteCount === right.byteCount &&
+        left.digest === right.digest &&
+        sameFileNodeSnapshot(left.node, right.node));
 }
 function currentUserId() {
     if (process.platform === "win32" || typeof process.geteuid !== "function") {
@@ -108,35 +107,33 @@ function currentUserId() {
 function assertReadback(request, before, effect, after) {
     const source = after.source;
     const target = before.transition;
-    if (before.status !== "publication-required"
-        || target.disposition === "current"
-        || source === null
-        || after.status !== "current"
-        || after.transition.sourceAuthority !== "desired"
-        || after.currentConfigDigest !== before.currentConfigDigest
-        || after.desiredConfigDigest !== before.desiredConfigDigest
-        || after.catalogDigest !== before.catalogDigest
-        || after.desiredAuthority.authorityDigest
-            !== before.desiredAuthority.authorityDigest
-        || effect.resourcePath !== request.profile.instructionFileName
-        || effect.digest !== target.desiredDigest
-        || effect.byteCount !== target.desiredByteCount
-        || effect.node.kind !== "file"
-        || effect.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE
-        || effect.node.linkCount !== 1n
-        || effect.node.userId !== currentUserId()
-        || source.resourcePath !== effect.resourcePath
-        || source.digest !== effect.digest
-        || source.byteCount !== effect.byteCount
-        || !sameFileNodeSnapshot(source.node, effect.node)) {
+    if (before.status !== "publication-required" ||
+        target.disposition === "current" ||
+        source === null ||
+        after.status !== "current" ||
+        after.transition.sourceAuthority !== "desired" ||
+        after.currentConfigDigest !== before.currentConfigDigest ||
+        after.desiredConfigDigest !== before.desiredConfigDigest ||
+        after.catalogDigest !== before.catalogDigest ||
+        after.desiredAuthority.authorityDigest !== before.desiredAuthority.authorityDigest ||
+        effect.resourcePath !== request.profile.instructionFileName ||
+        effect.digest !== target.desiredDigest ||
+        effect.byteCount !== target.desiredByteCount ||
+        effect.node.kind !== "file" ||
+        effect.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
+        effect.node.linkCount !== 1n ||
+        effect.node.userId !== currentUserId() ||
+        source.resourcePath !== effect.resourcePath ||
+        source.digest !== effect.digest ||
+        source.byteCount !== effect.byteCount ||
+        !sameFileNodeSnapshot(source.node, effect.node)) {
         fail("commit-uncertain", "$resourcePath");
     }
     if (effect.publication === "created") {
         if (before.source !== null)
             fail("commit-uncertain", "$resourcePath");
     }
-    else if (before.source === null
-        || !sameSource(effect.previous, before.source)) {
+    else if (before.source === null || !sameSource(effect.previous, before.source)) {
         fail("commit-uncertain", "$resourcePath");
     }
 }

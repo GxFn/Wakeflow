@@ -1,15 +1,15 @@
 import { types } from "node:util";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { GitIgnoreCandidateObservationError, observeGitIgnoreCandidate, } from "../../foundation/git/git-ignore-candidate-observation.js";
 import { GitIgnoreObservationError, observeGitIgnorePaths, } from "../../foundation/git/git-ignore-observation.js";
-import { parseByteCount, } from "../../foundation/numeric/byte-count.js";
-import { decodeUtf8, Utf8Error, } from "../../foundation/text/utf8.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { classifyWakeflowGitignoreExactOutsideRules, createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
-import { WAKEFLOW_GITIGNORE_REF, } from "./wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-catalog.js";
 import { inspectWakeflowManagedTextEnvelope, recomposeWakeflowManagedTextEnvelope, WakeflowManagedTextEnvelopeError, } from "./wakeflow-managed-text-envelope.js";
 import { historicalWakeflowManagedTextBodies, WAKEFLOW_GITIGNORE_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
 /**
@@ -52,10 +52,10 @@ function fail(reason, path) {
     throw new WakeflowGitignoreInspectionError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -70,14 +70,13 @@ function parseRequest(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if ((keys.length !== 3 && keys.length !== 4)
-        || keys[0] !== "expectedMatrixDigest"
-        || keys[1] !== "hostProfiles"
-        || keys[2] !== "matrix"
-        || (keys.length === 4 && keys[3] !== "signal")
-        || (record.signal !== undefined
-            && (types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if ((keys.length !== 3 && keys.length !== 4) ||
+        keys[0] !== "expectedMatrixDigest" ||
+        keys[1] !== "hostProfiles" ||
+        keys[2] !== "matrix" ||
+        (keys.length === 4 && keys[3] !== "signal") ||
+        (record.signal !== undefined &&
+            (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))) {
         fail("input", "$request");
     }
     return Object.freeze({
@@ -99,10 +98,10 @@ async function readSource(root, signal, expectedUserId) {
             maximumBytes: WAKEFLOW_GITIGNORE_MAXIMUM_BYTES,
             ...(signal === undefined ? {} : { signal }),
         });
-        if (read.node.kind !== "file"
-            || read.node.permissionBits !== 0o644
-            || read.node.linkCount !== 1n
-            || read.node.userId !== expectedUserId) {
+        if (read.node.kind !== "file" ||
+            read.node.permissionBits !== 0o644 ||
+            read.node.linkCount !== 1n ||
+            read.node.userId !== expectedUserId) {
             fail("source-policy", "$source");
         }
         return Object.freeze({
@@ -123,8 +122,7 @@ async function readSource(root, signal, expectedUserId) {
                 return null;
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            if (error.reason === "symlink"
-                || error.reason === "not-file") {
+            if (error.reason === "symlink" || error.reason === "not-file") {
                 fail("source-policy", "$source");
             }
             fail("source", "$source");
@@ -139,9 +137,9 @@ async function revalidateSource(root, initial, signal) {
             ...(initial === null ? {} : { expectedNode: initial.facts.node }),
             ...(signal === undefined ? {} : { signal }),
         });
-        if (initial === null
-            || current.digest !== initial.facts.digest
-            || current.byteCount !== initial.facts.byteCount) {
+        if (initial === null ||
+            current.digest !== initial.facts.digest ||
+            current.byteCount !== initial.facts.byteCount) {
             fail("source", "$source");
         }
     }
@@ -224,8 +222,7 @@ async function observeRules(root, rules, signal) {
     return ruleChecks(rules, probes, observed.paths);
 }
 function ruleChecks(rules, probes, observations) {
-    if (observations.length !== rules.length
-        || probes.length !== rules.length) {
+    if (observations.length !== rules.length || probes.length !== rules.length) {
         fail("git", "$git");
     }
     return Object.freeze(rules.map((rule, index) => {
@@ -237,8 +234,7 @@ function ruleChecks(rules, probes, observations) {
         return Object.freeze({
             rule,
             probePath: pathObservation.path,
-            ignored: pathObservation.ignored
-                && pathObservation.decision?.source === ".gitignore",
+            ignored: pathObservation.ignored && pathObservation.decision?.source === ".gitignore",
         });
     }));
 }
@@ -268,8 +264,8 @@ async function observeTargetRules(root, rules, target, signal) {
         }
         throw error;
     }
-    if (observed.candidateByteCount !== target.byteCount
-        || observed.candidateDigest !== target.digest) {
+    if (observed.candidateByteCount !== target.byteCount ||
+        observed.candidateDigest !== target.digest) {
         fail("git", "$git");
     }
     const checks = ruleChecks(rules, probes, observed.paths);
@@ -343,18 +339,18 @@ export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue)
     const read = await readSource(rootValue, request.signal, expectedUserId);
     const bytes = read?.bytes ?? new Uint8Array();
     const envelope = inspectEnvelope(bytes);
-    if (envelope.kind === "managed"
-        && (envelope.component !== authority.envelopeTarget.component
-            || envelope.owner !== authority.envelopeTarget.owner)) {
+    if (envelope.kind === "managed" &&
+        (envelope.component !== authority.envelopeTarget.component ||
+            envelope.owner !== authority.envelopeTarget.owner)) {
         fail("envelope", "$source");
     }
-    const managedBodyCurrent = envelope.kind === "managed"
-        && envelope.bodyDigest === authority.bodyDigest
-        && envelope.body === authority.body;
+    const managedBodyCurrent = envelope.kind === "managed" &&
+        envelope.bodyDigest === authority.bodyDigest &&
+        envelope.body === authority.body;
     // C5（§13.167）：前序渲染的正文被准入但不算 current，走下面的重组路径换成当前渲染。
-    const managedBodyHistorical = envelope.kind === "managed"
-        && !managedBodyCurrent
-        && historicalWakeflowManagedTextBodies(WAKEFLOW_GITIGNORE_BODY_HISTORY, authority.body, request.hostProfiles).includes(envelope.body);
+    const managedBodyHistorical = envelope.kind === "managed" &&
+        !managedBodyCurrent &&
+        historicalWakeflowManagedTextBodies(WAKEFLOW_GITIGNORE_BODY_HISTORY, authority.body, request.hostProfiles).includes(envelope.body);
     if (envelope.kind === "managed" && !managedBodyCurrent && !managedBodyHistorical) {
         fail("unknown-managed-body", "$source");
     }

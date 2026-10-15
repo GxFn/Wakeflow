@@ -1,16 +1,16 @@
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { isWakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
-import { withWakeflowWindowHostBindingStore, WakeflowWindowHostBindingStoreError, } from "./wakeflow-window-host-binding-store.js";
-import { compileWakeflowWindowHostBindingStoreAuthority, WakeflowWindowHostBindingStoreAuthorityError, } from "./wakeflow-window-host-binding-store-authority.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
+import { WakeflowWindowHostBindingStoreError, withWakeflowWindowHostBindingStore, } from "./wakeflow-window-host-binding-store.js";
+import { compileWakeflowWindowHostBindingStoreAuthority, WakeflowWindowHostBindingStoreAuthorityError, } from "./wakeflow-window-host-binding-store-authority.js";
 import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
 import { inspectWakeflowWindowRuntimeProjectionDocument, publishWakeflowWindowRuntimeProjectionDocument, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_FILE_MODE, } from "./wakeflow-window-runtime-projection-document.js";
 import { admitWakeflowWindowRuntimeProjectionInputs, compileWakeflowWindowRuntimeProjectionExpectedEntries, failWindowRuntimeProjection, inspectWakeflowWindowRuntimeProjectionEntries, resolveWakeflowWindowRuntimeProjectionExpectedEntries, } from "./wakeflow-window-runtime-projection-inspection.js";
@@ -194,7 +194,11 @@ export async function refreshWakeflowWindowRuntimeProjections(rootValue, request
     }
     catch (error) {
         if (isWakeflowError(error))
-            failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : error.reason === "config-authority" ? "input" : "effect", "$projection");
+            failWindowRuntimeProjection(error.reason === "aborted"
+                ? "aborted"
+                : error.reason === "config-authority"
+                    ? "input"
+                    : "effect", "$projection");
         throw error;
     }
 }
@@ -368,9 +372,9 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(rootValue,
         if (expected.kind !== "entries")
             failWindowRuntimeProjection("plan", "$operation");
         const entry = expected.entries.find((candidate) => candidate.windowId === request.targetKey);
-        if (entry === undefined
-            || request.operationId !== `window-runtime-projection:${entry.windowId}`
-            || entry.target.documentDigest !== request.targetDigest) {
+        if (entry === undefined ||
+            request.operationId !== `window-runtime-projection:${entry.windowId}` ||
+            entry.target.documentDigest !== request.targetDigest) {
             failWindowRuntimeProjection("plan", "$operation");
         }
         let receipt;

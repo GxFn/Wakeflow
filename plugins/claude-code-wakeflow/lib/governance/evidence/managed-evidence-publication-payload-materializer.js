@@ -1,18 +1,18 @@
 import { types } from "node:util";
-import { materializeLoadedArtifactTreeTransferCandidate, LoadedArtifactTreeTransferCandidateError, } from "../../foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
-import { planLoadedArtifactTreeTransfer, LoadedArtifactTreeTransferPlanError, } from "../../foundation/artifact/loaded-artifact-tree-transfer-plan.js";
+import { LoadedArtifactTreeTransferCandidateError, materializeLoadedArtifactTreeTransferCandidate, } from "../../foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
+import { LoadedArtifactTreeTransferPlanError, planLoadedArtifactTreeTransfer, } from "../../foundation/artifact/loaded-artifact-tree-transfer-plan.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { copyFileToCandidateDurably, DurableFileCopyCandidateError, } from "../../foundation/filesystem/durable-file-copy-candidate.js";
 import { sameFileNodeIdentity } from "../../foundation/filesystem/file-node-snapshot.js";
-import { joinDirectoryTreeCandidatePath, } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parseManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "./managed-evidence-publication-transaction.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME, } from "./managed-evidence-resource-paths.js";
+import { ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
+import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE, MANAGED_EVIDENCE_RECORD_FILE_MODE, ManagedEvidenceRecordTreePlanError, parseManagedEvidenceRecordTreePlan, } from "./managed-evidence-record-tree-plan.js";
+import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME } from "./managed-evidence-resource-paths.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
-import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE, MANAGED_EVIDENCE_RECORD_FILE_MODE, parseManagedEvidenceRecordTreePlan, ManagedEvidenceRecordTreePlanError, } from "./managed-evidence-record-tree-plan.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence publication payload materialization input is invalid.",
     "source-root-scope": "Managed evidence publication payload escaped its admitted source root.",
@@ -113,8 +113,7 @@ function assertProgressRelation(progress, plan) {
     if (progress.missingDirectories.some((entry) => !directories.has(entry)) ||
         progress.missingFiles.some((entry) => !files.has(entry)) ||
         (progress.status === "complete" &&
-            (progress.missingDirectories.length !== 0 ||
-                progress.missingFiles.length !== 0)) ||
+            (progress.missingDirectories.length !== 0 || progress.missingFiles.length !== 0)) ||
         (progress.status === "incomplete" &&
             progress.missingDirectories.length === 0 &&
             progress.missingFiles.length === 0)) {

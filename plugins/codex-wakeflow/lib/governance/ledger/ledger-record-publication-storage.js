@@ -1,22 +1,22 @@
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { DeterministicJsonDocumentError, } from "../../foundation/data/deterministic-json-document.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesMatchingTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { inspectDirectoryTreeCandidate, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { publishDirectoryTreeCandidateDurably, DurableDirectoryTreePublicationError, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesMatchingTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { DurableDirectoryTreePublicationError, publishDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
-import { LedgerAuthorityStoreError, throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { currentUserId, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_TRANSACTION_FILE_MODE, } from "./ledger-authority-storage-policy.js";
+import { throwLedgerAuthorityStoreError as fail, LedgerAuthorityStoreError, } from "./ledger-authority-store-contract.js";
+import { LedgerRecordPublicationIntentError, parseLedgerRecordPublicationIntentDocument, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, } from "./ledger-record-publication-intent.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
-import { parseLedgerRecordPublicationIntentDocument, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, } from "./ledger-record-publication-intent.js";
-import { LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_FILE_MODE, currentUserId, } from "./ledger-authority-storage-policy.js";
 function admitLedgerResourceOperation(intent, resourcePath, recipe) {
     const declaration = createLedgerAuthorityResourceCatalog(intent.record).find((entry) => entry.placement.relativePath === resourcePath);
     if (declaration === undefined)
@@ -36,8 +36,7 @@ export async function ledgerPublicationResourceNodeOrNull(root, resourcePath) {
         return (await root.inspectExistingResource(resourcePath)).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -47,18 +46,18 @@ export async function ledgerPublicationResourceNodeOrNull(root, resourcePath) {
 }
 function assertTransactionFileNode(node) {
     const userId = currentUserId();
-    if (node.kind !== "file"
-        || node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE
-        || node.linkCount !== 1n
-        || (userId !== null && node.userId !== userId)) {
+    if (node.kind !== "file" ||
+        node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE ||
+        node.linkCount !== 1n ||
+        (userId !== null && node.userId !== userId)) {
         fail("conflict", "$intent");
     }
 }
 function assertTransactionStageNode(node) {
     const userId = currentUserId();
-    if (node.kind !== "directory"
-        || node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
-        || (userId !== null && node.userId !== userId)) {
+    if (node.kind !== "directory" ||
+        node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE ||
+        (userId !== null && node.userId !== userId)) {
         fail("conflict", "$stage");
     }
 }
@@ -80,8 +79,7 @@ async function readStoredIntent(root, intentRef, expectedNode, signal) {
                 fail("capacity", "$intent");
             fail("conflict", "$intent");
         }
-        if (error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("conflict", "$intent");
         }
         throw error;
@@ -129,11 +127,11 @@ export async function ensureLedgerRecordPublicationIntent(root, expected, signal
                 fail("capacity", "$intent");
             if (error.reason === "root-scope")
                 fail("root-scope", "$root");
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "stage-cleanup-failure"
-                || error.reason === "stage-recovery-required"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "stage-recovery-required" ||
+                error.reason === "close-failure") {
                 fail("recovery-required", "$intent");
             }
             if (error.reason !== "target-exists") {
@@ -145,8 +143,7 @@ export async function ensureLedgerRecordPublicationIntent(root, expected, signal
         }
     }
     const stored = await existingLedgerRecordPublicationIntentOrNull(root, expected.intentRef, signal);
-    if (stored === null
-        || !sameLedgerRecordPublicationIntent(stored.intent, expected)) {
+    if (stored === null || !sameLedgerRecordPublicationIntent(stored.intent, expected)) {
         fail("conflict", "$intent");
     }
     return stored;
@@ -223,9 +220,9 @@ function mapLockError(error) {
         fail("lock-timeout", "$lock");
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "unsafe-lock"
-        || error.reason === "parent"
-        || error.reason === "root-scope") {
+    if (error.reason === "unsafe-lock" ||
+        error.reason === "parent" ||
+        error.reason === "root-scope") {
         fail("lock-unsafe", "$lock");
     }
     fail("recovery-required", "$lock");
@@ -266,9 +263,9 @@ export async function loadExactPublishedLedgerRecord(root, intent, signal) {
         throw error;
     }
     const loaded = await loadLedgerAuthorityRecord(root, intent.record.requirementId, signal);
-    if (loaded.recordDigest !== computeLedgerAuthorityRecordDigest(intent.record)
-        || loaded.documents.length !== intent.record.documents.length
-        || loaded.documents.some((document, index) => (document.digest !== intent.record.documents[index]?.digest))) {
+    if (loaded.recordDigest !== computeLedgerAuthorityRecordDigest(intent.record) ||
+        loaded.documents.length !== intent.record.documents.length ||
+        loaded.documents.some((document, index) => document.digest !== intent.record.documents[index]?.digest)) {
         fail("conflict", "$record");
     }
     return loaded;
@@ -284,8 +281,7 @@ export async function publishLedgerRecordStage(root, intent, candidate, signal) 
                 fail("aborted", "$signal");
             if (error.reason === "cross-device")
                 fail("root-scope", "$stage");
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure") {
+            if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
                 fail("recovery-required", "$stage");
             }
             fail("conflict", "$stage");

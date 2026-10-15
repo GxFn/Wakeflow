@@ -1,13 +1,13 @@
 import { types } from "node:util";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
-import { DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, parseDemandEventStreamCommitFileName, DemandEventSourcingPathError, } from "./demand-event-sourcing-paths.js";
-import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE, DEMAND_FILE_EVENT_STORE_FILE_MODE, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS, } from "./demand-file-event-store.js";
-import { parseTaskPackageProjectionFileName, TaskPackageProjectionPathError, TASK_PACKAGE_PROJECTIONS_ROOT_REF, } from "../../tasking/task-package-projection-paths.js";
 import { inspectManagedEvidenceRecordSetInventory, ManagedEvidenceRecordSetInventoryError, } from "../../evidence/managed-evidence-record-set-inventory.js";
-import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME, } from "../../evidence/managed-evidence-resource-paths.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME } from "../../evidence/managed-evidence-resource-paths.js";
+import { parseTaskPackageProjectionFileName, TASK_PACKAGE_PROJECTIONS_ROOT_REF, TaskPackageProjectionPathError, } from "../../tasking/task-package-projection-paths.js";
+import { DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, DemandEventSourcingPathError, parseDemandEventStreamCommitFileName, } from "./demand-event-sourcing-paths.js";
+import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE, DEMAND_FILE_EVENT_STORE_FILE_MODE, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS, } from "./demand-file-event-store.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing root inventory input is invalid.",
     "root-scope": "Demand Event Sourcing root changed during inventory.",
@@ -42,10 +42,7 @@ const EVENT_SOURCING_NAMES = Object.freeze([
     "index",
     "snapshots",
 ]);
-const ARTIFACT_NAMES = new Set([
-    "managed-evidence",
-    "task-packages",
-]);
+const ARTIFACT_NAMES = new Set(["managed-evidence", "task-packages"]);
 function fail(reason, path) {
     throw new DemandEventSourcingRootInventoryError(reason, path);
 }
@@ -64,8 +61,7 @@ function assertArtifactNames(read) {
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" &&
-            node.userId !== BigInt(process.geteuid()))) {
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail("node-policy", path);
     }
 }
@@ -73,8 +69,7 @@ function assertFile(node, path) {
     if (node.kind !== "file" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
         node.linkCount !== 1n ||
-        (typeof process.geteuid === "function" &&
-            node.userId !== BigInt(process.geteuid()))) {
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail("node-policy", path);
     }
 }
@@ -151,8 +146,7 @@ function parseOptions(value) {
         fail("input", "$options");
     }
     return Object.freeze({
-        phase: record.phase === "demand-publication" ||
-            record.phase === "managed-evidence-publication"
+        phase: record.phase === "demand-publication" || record.phase === "managed-evidence-publication"
             ? record.phase
             : "healthy",
         signal: record.signal,
@@ -242,8 +236,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
             fail("tree-shape", "$transactions");
     }
     else if (phase === "demand-publication") {
-        if (transactions.entries.length !== 1 ||
-            transactions.entries[0]?.name !== "publication.json") {
+        if (transactions.entries.length !== 1 || transactions.entries[0]?.name !== "publication.json") {
             fail("tree-shape", "$transactions");
         }
         assertFile(transactions.entries[0].node, "$transactions/publication.json");
@@ -253,8 +246,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     }
     else {
         if (transactions.entries.length !== 1 ||
-            transactions.entries[0]?.name !==
-                MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME) {
+            transactions.entries[0]?.name !== MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME) {
             fail("tree-shape", "$transactions");
         }
         managedEvidenceTransactionNode = transactions.entries[0].node;
@@ -263,9 +255,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     let managedEvidence;
     try {
         managedEvidence = await inspectManagedEvidenceRecordSetInventory(root, {
-            ...(managedEvidenceNode === undefined
-                ? {}
-                : { expectedRootNode: managedEvidenceNode }),
+            ...(managedEvidenceNode === undefined ? {} : { expectedRootNode: managedEvidenceNode }),
             ...(managedEvidenceTransactionNode === undefined
                 ? {}
                 : { expectedTransactionNode: managedEvidenceTransactionNode }),
@@ -343,8 +333,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     return Object.freeze({
         commitCount: commits.entries.length,
         snapshotCount: snapshots.entries.length,
-        artifactCount: taskPackages.entries.length +
-            managedEvidence.recordCount,
+        artifactCount: taskPackages.entries.length + managedEvidence.recordCount,
         transactionCount: transactions.entries.length,
         appendCandidateCount: 0,
         managedEvidence,

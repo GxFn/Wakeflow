@@ -3,29 +3,31 @@ import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { materializeDirectoryPath } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
-import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { fail } from "../../kernel/error.js";
 import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../kernel/layout.js";
 import { openDemandOperationRoot } from "./demand-operation-authority-context.js";
-import { DemandFileEventStore } from "./event-sourcing/demand-file-event-store.js";
 import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "./event-sourcing/demand-event-sourcing-root-authority.js";
+import { DemandFileEventStore } from "./event-sourcing/demand-file-event-store.js";
 import { parseDemandIdentityDocument } from "./model/demand-identity.js";
-import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, demandPublicationLockRef } from "./publication/demand-publication-paths.js";
+import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, demandPublicationLockRef, } from "./publication/demand-publication-paths.js";
 const DEMAND_NAME = /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const IDENTITY_REF = parsePortableResourcePath("identity.json");
 /** 节点期望是私有 CAS 输入，只发布其摘要；不把 PID、候选文件名或机器路径发到模型。 */
 function nodeValue(node) {
     return Object.fromEntries(Object.entries(node).map(([key, value]) => [
-        key, typeof value === "bigint" ? String(value) : value,
+        key,
+        typeof value === "bigint" ? String(value) : value,
     ]));
 }
 export async function inspectDemandRuntimeRecovery(workspaceRoot, options = {}) {
     const config = await readWakeflowConfigAuthoritySnapshot(workspaceRoot, options);
     const listing = await readStableResourceDirectory(workspaceRoot, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, {
-        maximumEntries: 4096, ...options,
+        maximumEntries: 4096,
+        ...options,
     });
     const demands = [];
     const blockers = [];
@@ -38,7 +40,10 @@ export async function inspectDemandRuntimeRecovery(workspaceRoot, options = {}) 
             const candidates = await new DemandFileEventStore(root).inspectAppendCandidates(options);
             if (candidates.length === 0)
                 continue;
-            const identity = await readStrictTextFile(root, IDENTITY_REF, { maximumBytes: DEMAND_IDENTITY_MAXIMUM_BYTES, ...options });
+            const identity = await readStrictTextFile(root, IDENTITY_REF, {
+                maximumBytes: DEMAND_IDENTITY_MAXIMUM_BYTES,
+                ...options,
+            });
             const parsed = parseDemandIdentityDocument(identity.text);
             if (parsed.demandId !== demandId || parsed.programId !== config.model.program.programId) {
                 fail("precondition-failed", "recovery-demand-identity", "$demandRoot");
@@ -51,7 +56,9 @@ export async function inspectDemandRuntimeRecovery(workspaceRoot, options = {}) 
                 identityDigest: identity.digest,
                 root: nodeValue(await root.assertCurrent()),
                 candidates: candidates.map(({ entry: candidate, ownerState }) => ({
-                    ref: candidate.resourcePath, node: nodeValue(candidate.node), ownerState,
+                    ref: candidate.resourcePath,
+                    node: nodeValue(candidate.node),
+                    ownerState,
                 })),
             }));
             demands.push(Object.freeze({ demandId, candidateCount: candidates.length, digest }));
@@ -61,7 +68,8 @@ export async function inspectDemandRuntimeRecovery(workspaceRoot, options = {}) 
         }
     }
     return Object.freeze({
-        demands: Object.freeze(demands), blockers: Object.freeze(blockers),
+        demands: Object.freeze(demands),
+        blockers: Object.freeze(blockers),
         digest: computeCanonicalJsonSha256Digest(parseJsonValue({ demands, blockers })),
     });
 }
@@ -70,7 +78,10 @@ export async function applyDemandRuntimeRecovery(workspaceRoot, expected, option
     if (current.digest !== expected.digest || current.blockers.length > 0) {
         fail("precondition-failed", "recovery-plan-drift", "$planDigest");
     }
-    await materializeDirectoryPath(workspaceRoot, DEMAND_PUBLICATION_LOCKS_ROOT_REF, { mode: 0o700, ...options });
+    await materializeDirectoryPath(workspaceRoot, DEMAND_PUBLICATION_LOCKS_ROOT_REF, {
+        mode: 0o700,
+        ...options,
+    });
     const recovered = [];
     for (const demand of expected.demands) {
         const demandId = parseWakeflowDurableIdOfKind(demand.demandId, "demand");

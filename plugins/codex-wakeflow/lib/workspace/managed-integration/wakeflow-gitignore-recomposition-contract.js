@@ -1,10 +1,10 @@
 import { types } from "node:util";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
-import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
+import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
 /**
  * Gitignore 重组与显式恢复共享的输入、错误和机械操作准入合同。
@@ -47,10 +47,10 @@ export function failWakeflowGitignoreRecomposition(reason, path) {
     throw new WakeflowGitignoreRecompositionError(reason, path);
 }
 export function assertWakeflowGitignoreRecompositionRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failWakeflowGitignoreRecomposition("input", "$root");
     }
 }
@@ -108,10 +108,10 @@ function parseProfiles(value) {
 export function parseWakeflowGitignoreRecompositionRequest(value) {
     const record = plainRecord(value, "$request");
     const keys = Object.keys(record).sort();
-    if (keys.length !== 3
-        || keys[0] !== "expectedMatrixDigest"
-        || keys[1] !== "hostProfiles"
-        || keys[2] !== "matrix") {
+    if (keys.length !== 3 ||
+        keys[0] !== "expectedMatrixDigest" ||
+        keys[1] !== "hostProfiles" ||
+        keys[2] !== "matrix") {
         failWakeflowGitignoreRecomposition("input", "$request");
     }
     let matrix;
@@ -138,38 +138,30 @@ export function parseWakeflowGitignoreRecompositionRequest(value) {
         failWakeflowGitignoreRecomposition("input", "$request.expectedMatrixDigest");
     }
     const hostProfiles = parseProfiles(record.hostProfiles);
-    const currentProfile = hostProfiles.find((profile) => (profile.hostId === matrix.hostId));
-    if (currentProfile === undefined
-        || createWakeflowWorkspaceStaticResourceMatrix(currentProfile).matrixDigest
-            !== matrix.matrixDigest) {
+    const currentProfile = hostProfiles.find((profile) => profile.hostId === matrix.hostId);
+    if (currentProfile === undefined ||
+        createWakeflowWorkspaceStaticResourceMatrix(currentProfile).matrixDigest !== matrix.matrixDigest) {
         failWakeflowGitignoreRecomposition("input", "$request.matrix");
     }
     return Object.freeze({ matrix, expectedMatrixDigest, hostProfiles });
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function positiveMilliseconds(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0
-        || value > 300_000) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
         failWakeflowGitignoreRecomposition("input", path);
     }
     return value;
 }
 export function parseWakeflowGitignoreRecompositionOptions(value) {
     const record = plainRecord(value === undefined ? {} : value, "$options");
-    const allowed = new Set([
-        "acquireTimeoutMilliseconds",
-        "retryDelayMilliseconds",
-        "signal",
-    ]);
-    if (Object.keys(record).some((key) => !allowed.has(key))
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
+    if (Object.keys(record).some((key) => !allowed.has(key)) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         failWakeflowGitignoreRecomposition("input", "$options");
     }
     return Object.freeze({
@@ -184,8 +176,8 @@ export function parseWakeflowGitignoreRecompositionOptions(value) {
 }
 export function parseWakeflowGitignoreRecompositionRecoveryOptions(value) {
     const record = plainRecord(value === undefined ? {} : value, "$options");
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         failWakeflowGitignoreRecomposition("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
@@ -267,9 +259,9 @@ export function mapWakeflowGitignoreRecompositionLockError(error, committed) {
     if (error.reason === "root-scope" || error.reason === "parent") {
         failWakeflowGitignoreRecomposition("root-scope", "$root");
     }
-    if (error.reason === "owner-active"
-        || error.reason === "residue-changed"
-        || error.reason === "release-failure") {
+    if (error.reason === "owner-active" ||
+        error.reason === "residue-changed" ||
+        error.reason === "release-failure") {
         failWakeflowGitignoreRecomposition("recovery-required", "$lock");
     }
     failWakeflowGitignoreRecomposition("lock-unsafe", "$lock");

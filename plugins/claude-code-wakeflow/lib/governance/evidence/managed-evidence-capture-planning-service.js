@@ -2,28 +2,28 @@ import { types } from "node:util";
 import pLimit from "p-limit";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
-import { inspectLoadedArtifactTree, validateLoadedArtifactTreeManifest, LoadedArtifactTreeIdentityError, } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
+import { inspectLoadedArtifactTree, LoadedArtifactTreeIdentityError, validateLoadedArtifactTreeManifest, } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { sameFileNodeIdentity, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { readStableFile, StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { WakeflowError } from "../../kernel/error.js";
+import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, scanPrivacyText, } from "../../kernel/privacy-scan.js";
-import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, openDemandOperationAuthorityContext, DemandOperationAuthorityContextError, } from "../demand/demand-operation-authority-context.js";
-import { loadDemandEventSourcingRootAuthority, DemandEventSourcingRootAuthorityError, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
+import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, } from "../demand/demand-operation-authority-context.js";
+import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { createManagedEvidenceCapturePlan, ManagedEvidenceCapturePlanError, } from "./managed-evidence-capture-plan.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
-import { openConfiguredManagedEvidenceSourceRoot, ManagedEvidenceConfiguredSourceRootError, } from "./managed-evidence-configured-source-root.js";
+import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidenceSourceRoot, } from "./managed-evidence-configured-source-root.js";
 import { createManagedEvidenceManifest, MANAGED_EVIDENCE_PAYLOAD_LIMITS, MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
-import { assertManagedEvidenceKindMatchesSource, managedEvidenceSourceKey, parseManagedEvidenceSourceSelection, ManagedEvidenceSourceSelectionError, } from "./managed-evidence-source-selection.js";
+import { assertManagedEvidenceKindMatchesSource, ManagedEvidenceSourceSelectionError, managedEvidenceSourceKey, parseManagedEvidenceSourceSelection, } from "./managed-evidence-source-selection.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence capture planning input is invalid.",
     config: "Managed evidence capture planning Config is invalid.",
@@ -121,8 +121,7 @@ function parseSelection(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceSourceSelectionError) {
-            const mismatch = error.reason === "kind"
-                && isEvidenceKind(value.kind);
+            const mismatch = error.reason === "kind" && isEvidenceKind(value.kind);
             fail(mismatch ? "kind" : "input", error);
         }
         throw error;
@@ -244,7 +243,10 @@ function compareFinding(left, right) {
 }
 /** 同一行同一种命中只保留一条；Manifest要求(ref, line, kind)严格递增。 */
 function uniqueFindings(sorted) {
-    return sorted.filter((finding, index) => index === 0 || compareFinding(sorted[index - 1], finding) !== 0);
+    return sorted.filter((finding, index) => {
+        const previous = index === 0 ? undefined : sorted[index - 1];
+        return previous === undefined || compareFinding(previous, finding) !== 0;
+    });
 }
 function reviewOf(classified) {
     const findings = uniqueFindings(classified.flatMap((entry) => entry.content.findings).sort(compareFinding));
@@ -324,7 +326,8 @@ async function openSelectedTreeRoot(sourceRoot, source, expectedNode) {
             fail("source", error);
         throw error;
     }
-    if (observation.node.kind !== "directory" || !sameFileNodeIdentity(observation.node, expectedNode)) {
+    if (observation.node.kind !== "directory" ||
+        !sameFileNodeIdentity(observation.node, expectedNode)) {
         fail("source-type");
     }
     let treeRoot;
@@ -382,7 +385,10 @@ async function classifyTreeFiles(treeRoot, identity, policy, signal) {
         if (Number(read.byteCount) !== file.bytes || read.digest !== file.digest) {
             fail("source-changed");
         }
-        return Object.freeze({ ref: file.ref, content: classifyContent(read.bytes, file.ref, policy) });
+        return Object.freeze({
+            ref: file.ref,
+            content: classifyContent(read.bytes, file.ref, policy),
+        });
     })));
     for (const result of settled) {
         if (result.status === "rejected")

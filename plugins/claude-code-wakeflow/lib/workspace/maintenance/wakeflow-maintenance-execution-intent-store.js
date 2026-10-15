@@ -1,19 +1,19 @@
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { readDeterministicJsonFile, } from "../../foundation/filesystem/deterministic-json-file.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
-import { parseByteCount, } from "../../foundation/numeric/byte-count.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintenanceIntentResourceDeclaration, parseWakeflowMaintenanceExecutionIntent, renderWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
+import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 /**
  * Wakeflow Workspace / Maintenance：immutable execution intent 的私有物理 store。
  *
@@ -88,9 +88,7 @@ function currentUserId() {
     return BigInt(process.geteuid());
 }
 function assertSource(value) {
-    if (typeof value !== "object"
-        || value === null
-        || !ISSUED_SOURCES.has(value)) {
+    if (typeof value !== "object" || value === null || !ISSUED_SOURCES.has(value)) {
         fail("input", "$intentSource");
     }
 }
@@ -108,7 +106,9 @@ function admitOperation(operationId, recipe) {
 async function assertTransactionEntries(root, expected) {
     let read;
     try {
-        read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, { maximumEntries: expected.length });
+        read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+            maximumEntries: expected.length,
+        });
     }
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
@@ -118,8 +118,8 @@ async function assertTransactionEntries(root, expected) {
     }
     const actual = read.entries.map((entry) => entry.resourcePath).sort();
     const sortedExpected = [...expected].sort();
-    if (actual.length !== sortedExpected.length
-        || actual.some((entry, index) => entry !== sortedExpected[index])) {
+    if (actual.length !== sortedExpected.length ||
+        actual.some((entry, index) => entry !== sortedExpected[index])) {
         fail("transactions-shape", "$transactions");
     }
 }
@@ -144,10 +144,10 @@ export async function assertWakeflowMaintenanceIntentAndJournalAreOnlyTransactio
 }
 async function assertIntentSourceCurrent(root, source) {
     const current = await readWakeflowMaintenanceExecutionIntent(root, source.operationId);
-    if (current.digest !== source.digest
-        || current.intentDigest !== source.intentDigest
-        || current.node.deviceId !== source.node.deviceId
-        || current.node.inodeId !== source.node.inodeId) {
+    if (current.digest !== source.digest ||
+        current.intentDigest !== source.intentDigest ||
+        current.node.deviceId !== source.node.deviceId ||
+        current.node.inodeId !== source.node.inodeId) {
         fail("conflict", "$intent");
     }
 }
@@ -156,8 +156,7 @@ async function resourceNodeOrNull(root, resourcePath) {
         return (await root.inspectExistingResource(resourcePath)).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -186,10 +185,10 @@ export async function recoverWakeflowMaintenanceExecutionIntentStages(root, oper
     }
 }
 async function readIntentAtNode(root, operationId, node) {
-    if (node.kind !== "file"
-        || node.permissionBits !== 0o600
-        || node.linkCount !== 1n
-        || node.userId !== currentUserId()) {
+    if (node.kind !== "file" ||
+        node.permissionBits !== 0o600 ||
+        node.linkCount !== 1n ||
+        node.userId !== currentUserId()) {
         fail("source-policy", "$intent");
     }
     const resourcePath = wakeflowMaintenanceIntentRef(operationId);
@@ -206,8 +205,7 @@ async function readIntentAtNode(root, operationId, node) {
                 fail("capacity", "$intent");
             fail("source", "$intent");
         }
-        if (error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("intent", "$intent");
         }
         throw error;
@@ -295,10 +293,10 @@ export async function publishWakeflowMaintenanceExecutionIntent(root, context, i
             if (error.reason === "stage-recovery-required") {
                 fail("recovery-required", "$intent");
             }
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "stage-cleanup-failure"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "close-failure") {
                 fail("commit-uncertain", "$intent");
             }
             fail("effect-failure", "$intent");
@@ -312,12 +310,12 @@ export async function publishWakeflowMaintenanceExecutionIntent(root, context, i
     catch {
         fail("commit-uncertain", "$intent");
     }
-    if (publication.resourcePath !== source.resourcePath
-        || publication.digest !== source.digest
-        || publication.byteCount !== source.node.byteCount
-        || publication.node.deviceId !== source.node.deviceId
-        || publication.node.inodeId !== source.node.inodeId
-        || source.intentDigest !== intendedDigest) {
+    if (publication.resourcePath !== source.resourcePath ||
+        publication.digest !== source.digest ||
+        publication.byteCount !== source.node.byteCount ||
+        publication.node.deviceId !== source.node.deviceId ||
+        publication.node.inodeId !== source.node.inodeId ||
+        source.intentDigest !== intendedDigest) {
         fail("commit-uncertain", "$intent");
     }
     return source;
@@ -341,17 +339,18 @@ export async function retireWakeflowMaintenanceExecutionIntent(root, context, so
     await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, source);
     let retirement;
     try {
-        retirement = await unlinkRegularFileExactly(root, source.resourcePath, { expectedNode: source.node });
+        retirement = await unlinkRegularFileExactly(root, source.resourcePath, {
+            expectedNode: source.node,
+        });
     }
     catch (error) {
         if (error instanceof ExactRegularFileUnlinkError) {
-            if (error.reason === "source-changed"
-                || error.reason === "source-not-found") {
+            if (error.reason === "source-changed" || error.reason === "source-not-found") {
                 fail("conflict", "$intent");
             }
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "close-failure") {
                 fail("commit-uncertain", "$intent");
             }
             fail("effect-failure", "$intent");
@@ -359,9 +358,7 @@ export async function retireWakeflowMaintenanceExecutionIntent(root, context, so
         throw error;
     }
     try {
-        await assertTransactionEntries(root, [
-            wakeflowMaintenanceJournalRef(context.operationId),
-        ]);
+        await assertTransactionEntries(root, [wakeflowMaintenanceJournalRef(context.operationId)]);
     }
     catch {
         fail("commit-uncertain", "$intent");

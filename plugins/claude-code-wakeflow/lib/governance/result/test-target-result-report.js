@@ -1,17 +1,17 @@
-import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
+import { isTestFailureClassification, isTestFailureOwner, isTestStepVerdict, } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
-import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
-import { isTestFailureClassification, isTestFailureOwner, isTestStepVerdict, } from "../../contracts/vocabulary/test-step-vocabulary.js";
 /**
  * Wakeflow Governance / Result：Test Agent提交的逐步执行结果陈述。
  *
@@ -22,6 +22,7 @@ import { isTestFailureClassification, isTestFailureOwner, isTestStepVerdict, } f
  */
 const REPORT_KIND = "WakeflowTestTargetResultReport";
 const REPORT_SCHEMA_VERSION = 1;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
 const MAXIMUM_CONTRACT_STEPS = 20;
@@ -71,8 +72,7 @@ function exactRecord(value, fields, path) {
     }
     const keys = Object.keys(json).sort();
     const expected = [...fields].sort();
-    if (keys.length !== expected.length ||
-        keys.some((key, index) => key !== expected[index])) {
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
         fail("input", path);
     }
     return json;
@@ -214,14 +214,7 @@ function parseSteps(value, locators) {
 }
 /** 准入不含时钟和摘要的Test Agent业务陈述。 */
 export function parseTestTargetResultReportContent(value) {
-    const record = exactRecord(value, [
-        "evidenceLocators",
-        "outcome",
-        "risks",
-        "steps",
-        "summary",
-        "verification",
-    ], "$content");
+    const record = exactRecord(value, ["evidenceLocators", "outcome", "risks", "steps", "summary", "verification"], "$content");
     if (record.outcome !== "completed" &&
         record.outcome !== "blocked" &&
         record.outcome !== "needs-review") {

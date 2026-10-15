@@ -1,5 +1,5 @@
 import { parseTargetResult, TargetResultError, } from "../result/target-result.js";
-import { parseControllerProductDefectRemediationAuthorization, ControllerProductDefectRemediationAuthorizationError, } from "../review/controller-product-defect-remediation-authorization.js";
+import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, } from "../review/controller-product-defect-remediation-authorization.js";
 import { projectTargetDeliveryProductDefectRemediationContext, } from "./delivery-envelope.js";
 const ERROR_MESSAGES = {
     authorization: "Target Delivery product-defect remediation context requires a valid Controller Authorization.",
@@ -44,8 +44,7 @@ export function createTargetDeliveryProductDefectRemediationContext(input) {
         affected === undefined ||
         authorization.programId !== previousResult.programId ||
         authorization.demandId !== previousResult.demandId ||
-        affected.baseline.taskPackageId !==
-            previousResult.taskPackage.taskPackageId ||
+        affected.baseline.taskPackageId !== previousResult.taskPackage.taskPackageId ||
         affected.baseline.taskPackageDigest !== previousResult.taskPackage.digest ||
         affected.baseline.repositoryId !== previousResult.assignment.repositoryId ||
         affected.baseline.windowId !== previousResult.assignment.windowId ||

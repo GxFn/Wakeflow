@@ -1,14 +1,14 @@
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
-import { parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidateFromFileDescriptors, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidateFromFileDescriptors, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { parseManagedEvidenceManifest, renderManagedEvidenceManifest, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
-import { managedEvidencePublicationStageRef, managedEvidenceRecordRootRef, MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME, } from "./managed-evidence-resource-paths.js";
+import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, renderManagedEvidenceManifest, } from "./managed-evidence-manifest.js";
+import { MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME, managedEvidencePublicationStageRef, managedEvidenceRecordRootRef, } from "./managed-evidence-resource-paths.js";
 /**
  * Wakeflow Governance / Evidence：完整final record tree的纯清单计划。
  *
@@ -78,8 +78,7 @@ function exactRecord(value) {
     }
     const actual = Object.keys(record).sort();
     const expected = [...PLAN_FIELDS].sort();
-    if (actual.length !== expected.length ||
-        actual.some((key, index) => key !== expected[index])) {
+    if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
         fail("input", "$plan");
     }
     return record;

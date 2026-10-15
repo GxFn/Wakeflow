@@ -1,19 +1,19 @@
 import pLimit from "p-limit";
-import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { computeDemandEventStreamCommitDigest, parseDemandEventStreamCommitDocument, DemandEventStreamCommitError, renderDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
-import { computeDemandEventSourcingStoredEventDigest, } from "./demand-event-sourcing-stored-event.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import { parseDemandEventCommitSequence, parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
-import { demandEventStreamCommitRef, parseDemandEventStreamCommitFileName, DemandEventSourcingPathError, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, } from "./demand-event-sourcing-paths.js";
-import { DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS, DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES, DemandFileEventStoreError, assertDemandFileEventStoreDirectory, assertDemandFileEventStoreFile, failDemandFileEventStore as fail, } from "./demand-file-event-store-contract.js";
+import { DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, DemandEventSourcingPathError, demandEventStreamCommitRef, parseDemandEventStreamCommitFileName, } from "./demand-event-sourcing-paths.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
+import { computeDemandEventStreamCommitDigest, DemandEventStreamCommitError, parseDemandEventStreamCommitDocument, renderDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
+import { DemandEventStreamPositionError, parseDemandEventCommitSequence, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
+import { assertDemandFileEventStoreDirectory, assertDemandFileEventStoreFile, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS, DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES, DemandFileEventStoreError, failDemandFileEventStore as fail, } from "./demand-file-event-store-contract.js";
 /** Demand 文件事件存储的稳定提交清单与读取边界。 */
 const COMMIT_READ_CONCURRENCY = 8;
 function assertDirectoryPolicy(node, path, policy) {
@@ -33,15 +33,15 @@ function assertFilePolicy(node, path, policy, admittedLinkCounts = [1n]) {
     }
 }
 function sameDirectoryRead(left, right) {
-    return sameFileNodeSnapshot(left.directoryNode, right.directoryNode)
-        && left.entries.length === right.entries.length
-        && left.entries.every((entry, index) => {
+    return (sameFileNodeSnapshot(left.directoryNode, right.directoryNode) &&
+        left.entries.length === right.entries.length &&
+        left.entries.every((entry, index) => {
             const other = right.entries[index];
-            return other !== undefined
-                && entry.name === other.name
-                && entry.resourcePath === other.resourcePath
-                && sameFileNodeSnapshot(entry.node, other.node);
-        });
+            return (other !== undefined &&
+                entry.name === other.name &&
+                entry.resourcePath === other.resourcePath &&
+                sameFileNodeSnapshot(entry.node, other.node));
+        }));
 }
 export async function readDemandFileEventDirectory(root, ref, maximumEntries, signal, expectedNode, policy = "private") {
     try {
@@ -86,25 +86,22 @@ export async function readDemandFileEventCommit(root, resourcePath, expectedNode
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            if (error.reason === "root-scope"
-                || error.reason === "unsupported-platform") {
+            if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
                 fail("root-scope", "$root");
             }
-            if (error.reason === "not-found"
-                || error.reason === "expectation-changed"
-                || error.reason === "source-changed") {
+            if (error.reason === "not-found" ||
+                error.reason === "expectation-changed" ||
+                error.reason === "source-changed") {
                 fail("stream-changed", path);
             }
             if (error.reason === "too-large")
                 fail("capacity", path);
-            if (error.reason === "symlink"
-                || error.reason === "not-file") {
+            if (error.reason === "symlink" || error.reason === "not-file") {
                 fail("stream-invalid", path);
             }
             fail("operation-failure", path);
         }
-        if (error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("stream-invalid", path);
         }
         throw error;
@@ -128,14 +125,14 @@ function assertCommitChain(commits) {
     const commitIds = new Set();
     const eventIds = new Set();
     for (const [index, commit] of commits.entries()) {
-        if (commit.commitSequence !== index + 1
-            || commitIds.has(commit.commitId)
-            || (previous === null && (commit.expectedStreamRevision !== 0
-                || commit.previousCommitDigest !== null))
-            || (previous !== null && (commit.demandId !== previous.demandId
-                || commit.expectedStreamRevision !== previous.lastStreamRevision
-                || commit.previousCommitDigest
-                    !== computeDemandEventStreamCommitDigest(previous)))) {
+        if (commit.commitSequence !== index + 1 ||
+            commitIds.has(commit.commitId) ||
+            (previous === null &&
+                (commit.expectedStreamRevision !== 0 || commit.previousCommitDigest !== null)) ||
+            (previous !== null &&
+                (commit.demandId !== previous.demandId ||
+                    commit.expectedStreamRevision !== previous.lastStreamRevision ||
+                    commit.previousCommitDigest !== computeDemandEventStreamCommitDigest(previous)))) {
             fail("stream-invalid", `$commits/${index}`);
         }
         commitIds.add(commit.commitId);
@@ -168,10 +165,10 @@ function parseCursor(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== 3
-        || keys[0] !== "commitSequence"
-        || keys[1] !== "lastCommitDigest"
-        || keys[2] !== "streamRevision") {
+    if (keys.length !== 3 ||
+        keys[0] !== "commitSequence" ||
+        keys[1] !== "lastCommitDigest" ||
+        keys[2] !== "streamRevision") {
         fail("input", "$cursor");
     }
     let lastCommitDigest;
@@ -199,7 +196,7 @@ function parseCursor(value) {
 }
 async function readCommitEntries(root, entries, indexOffset, signal, policy = "private") {
     const limit = pLimit(COMMIT_READ_CONCURRENCY);
-    const settled = await Promise.allSettled(entries.map((entry, index) => (limit(() => readDemandFileEventCommit(root, entry.resourcePath, entry.node, signal, `$commits/${indexOffset + index}`, [1n], policy)))));
+    const settled = await Promise.allSettled(entries.map((entry, index) => limit(() => readDemandFileEventCommit(root, entry.resourcePath, entry.node, signal, `$commits/${indexOffset + index}`, [1n], policy))));
     const loaded = [];
     for (const result of settled) {
         if (result.status === "rejected")
@@ -250,10 +247,10 @@ export async function readDemandFileEventCommitsAfter(root, cursorValue, signal)
     // 尾部读取按序号逐文件探测，不枚举整个提交目录：成本只与尾部长度有关。
     const anchorLoaded = await readDemandFileEventCommitOrNull(root, demandEventStreamCommitRef(cursor.commitSequence), signal);
     const anchor = anchorLoaded?.commit;
-    if (anchor === undefined
-        || anchor.commitSequence !== cursor.commitSequence
-        || anchor.lastStreamRevision !== cursor.streamRevision
-        || computeDemandEventStreamCommitDigest(anchor) !== cursor.lastCommitDigest) {
+    if (anchor === undefined ||
+        anchor.commitSequence !== cursor.commitSequence ||
+        anchor.lastStreamRevision !== cursor.streamRevision ||
+        computeDemandEventStreamCommitDigest(anchor) !== cursor.lastCommitDigest) {
         fail("stream-invalid", "$cursor");
     }
     const commits = [];
@@ -263,11 +260,10 @@ export async function readDemandFileEventCommitsAfter(root, cursorValue, signal)
         if (loaded === null)
             break;
         const commit = loaded.commit;
-        if (commit.commitSequence !== sequence
-            || commit.demandId !== previous.demandId
-            || commit.expectedStreamRevision !== previous.lastStreamRevision
-            || commit.previousCommitDigest
-                !== computeDemandEventStreamCommitDigest(previous)) {
+        if (commit.commitSequence !== sequence ||
+            commit.demandId !== previous.demandId ||
+            commit.expectedStreamRevision !== previous.lastStreamRevision ||
+            commit.previousCommitDigest !== computeDemandEventStreamCommitDigest(previous)) {
             fail("stream-invalid", `$tail/${commits.length}`);
         }
         commits.push(commit);
@@ -288,8 +284,7 @@ export async function readDemandFileEventCommitOrNull(root, ref, signal, admitte
         resource = await root.inspectExistingResource(ref);
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -326,18 +321,16 @@ export function assertDemandFileEventAppendAdmissionAgainstPrefix(prefixCommits,
     }
     const currentBytes = prefix.commits.reduce((total, current) => total + encodeUtf8(renderDemandEventStreamCommit(current)).byteLength, 0);
     const commitBytes = encodeUtf8(renderDemandEventStreamCommit(commit)).byteLength;
-    if (prefix.commits.length >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS
-        || commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES
-        || currentBytes + commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES) {
+    if (prefix.commits.length >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS ||
+        commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES ||
+        currentBytes + commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES) {
         fail("capacity", "$commit");
     }
     if (commit.commitSequence === 1) {
-        if (commit.expectedStreamRevision !== 0
-            || commit.previousCommitDigest !== null) {
+        if (commit.expectedStreamRevision !== 0 || commit.previousCommitDigest !== null) {
             fail("concurrency-conflict", "$commit");
         }
-        if (sourceExpectation.lastEventDigest !== null
-            || sourceExpectation.stateDigest !== null) {
+        if (sourceExpectation.lastEventDigest !== null || sourceExpectation.stateDigest !== null) {
             fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
         }
     }
@@ -345,27 +338,25 @@ export function assertDemandFileEventAppendAdmissionAgainstPrefix(prefixCommits,
         const previous = prefix.commits.at(-1);
         if (previous === undefined)
             fail("stream-invalid", "$commits");
-        if (previous.lastStreamRevision !== commit.expectedStreamRevision
-            || computeDemandEventStreamCommitDigest(previous)
-                !== commit.previousCommitDigest
-            || previous.demandId !== commit.demandId) {
+        if (previous.lastStreamRevision !== commit.expectedStreamRevision ||
+            computeDemandEventStreamCommitDigest(previous) !== commit.previousCommitDigest ||
+            previous.demandId !== commit.demandId) {
             fail("concurrency-conflict", "$commit");
         }
         const previousLastEvent = previous.events.at(-1);
         if (previousLastEvent === undefined)
             fail("stream-invalid", "$commits/last");
-        if (sourceExpectation.stateDigest
-            !== previousLastEvent.resultingStateDigest
-            || sourceExpectation.lastEventDigest
-                !== computeDemandEventSourcingStoredEventDigest(previousLastEvent)) {
+        if (sourceExpectation.stateDigest !== previousLastEvent.resultingStateDigest ||
+            sourceExpectation.lastEventDigest !==
+                computeDemandEventSourcingStoredEventDigest(previousLastEvent)) {
             fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
         }
     }
     if (prefix.commits.some((current) => current.commitId === commit.commitId)) {
         fail("append-identity-conflict", "$commit/commitId");
     }
-    if (commit.idempotency !== undefined
-        && prefix.commits.some((current) => current.idempotency?.key === commit.idempotency?.key)) {
+    if (commit.idempotency !== undefined &&
+        prefix.commits.some((current) => current.idempotency?.key === commit.idempotency?.key)) {
         fail("append-identity-conflict", "$commit/idempotency/key");
     }
     const eventIds = new Set();

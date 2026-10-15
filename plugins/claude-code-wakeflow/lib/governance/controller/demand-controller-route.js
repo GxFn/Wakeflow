@@ -331,7 +331,8 @@ function routeBasis(loaded, postAcceptanceRoute) {
             const frontiers = Object.freeze([
                 resolveDemandControllerDemandFrontierDescriptor("research-completion-required"),
             ]);
-            if (stage.status === "completion-preflight" && stage.testingClosure.mode === "not-applicable") {
+            if (stage.status === "completion-preflight" &&
+                stage.testingClosure.mode === "not-applicable") {
                 return { ...common, disposition: "work-available", frontiers, blockers: Object.freeze([]) };
             }
             if (stage.status !== "not-ready" || stage.reason !== "research-evidence-missing") {

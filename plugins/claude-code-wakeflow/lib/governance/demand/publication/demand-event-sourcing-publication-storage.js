@@ -1,10 +1,10 @@
 import nodePath from "node:path";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesMatchingTargets, DurableAtomicFileStageRecoveryError, } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../../foundation/filesystem/durable-directory-materialization.js";
-import { readDeterministicJsonFile, } from "../../../foundation/filesystem/deterministic-json-file.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
+import { readDeterministicJsonFile, } from "../../../foundation/filesystem/deterministic-json-file.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesMatchingTargets, } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../../foundation/filesystem/durable-directory-materialization.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeIdentity, } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { splitPortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
@@ -13,12 +13,12 @@ import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import { createDemandEventSourcingResourceCatalog, WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG, } from "../demand-resource-catalog.js";
-import { parseDemandEventSourcingPublicationTransactionDocument, renderDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "./demand-event-sourcing-publication-transaction.js";
-import { DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE, DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE, DemandEventSourcingPublicationServiceError, failDemandEventSourcingPublication as fail, } from "./demand-event-sourcing-publication-contract.js";
-import { DEMAND_PUBLICATION_MARKER_REF, } from "./demand-publication-paths.js";
 import { assertActiveLayoutCurrent } from "../../../kernel/active-projection.js";
 import { WakeflowError } from "../../../kernel/error.js";
+import { createDemandEventSourcingResourceCatalog, WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG, } from "../demand-resource-catalog.js";
+import { DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE, DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE, DemandEventSourcingPublicationServiceError, failDemandEventSourcingPublication as fail, } from "./demand-event-sourcing-publication-contract.js";
+import { DemandEventSourcingPublicationTransactionError, parseDemandEventSourcingPublicationTransactionDocument, renderDemandEventSourcingPublicationTransaction, } from "./demand-event-sourcing-publication-transaction.js";
+import { DEMAND_PUBLICATION_MARKER_REF } from "./demand-publication-paths.js";
 /** Demand 事件溯源发布流程的根作用域文件存储边界。 */
 const TRANSACTION_MAXIMUM_BYTES = parseByteCount(24 * 1024 * 1024);
 function admitProcessing(processing, recipe) {
@@ -42,14 +42,12 @@ function mapPublicationReadError(error, path) {
     if (error instanceof StableFileReadError) {
         if (error.reason === "aborted")
             fail("aborted", "$signal");
-        if (error.reason === "root-scope"
-            || error.reason === "unsupported-platform") {
+        if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
             fail("root-scope", "$root");
         }
         fail("conflict", path);
     }
-    if (error instanceof StrictTextFileError
-        || error instanceof DeterministicJsonDocumentError) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
         fail("conflict", path);
     }
     throw error;
@@ -59,8 +57,7 @@ export async function publicationNodeOrNull(root, ref) {
         return (await root.inspectExistingResource(ref)).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -69,13 +66,13 @@ export async function publicationNodeOrNull(root, ref) {
     }
 }
 export function assertPrivatePublicationNode(node, kind, path, admittedFileLinks = [1n]) {
-    if (node.kind !== kind
-        || node.permissionBits !== (kind === "file"
-            ? DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE
-            : DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE)
-        || (kind === "file" && !admittedFileLinks.includes(node.linkCount))
-        || (typeof process.geteuid === "function"
-            && node.userId !== BigInt(process.geteuid()))) {
+    if (node.kind !== kind ||
+        node.permissionBits !==
+            (kind === "file"
+                ? DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE
+                : DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE) ||
+        (kind === "file" && !admittedFileLinks.includes(node.linkCount)) ||
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail("conflict", path);
     }
 }
@@ -119,8 +116,7 @@ export async function ensureExactPublicationTextFile(root, ref, text, maximumByt
             node = created.node;
         }
         catch (error) {
-            if (error instanceof DurableAtomicFileWriteError
-                && error.reason === "target-exists") {
+            if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
                 node = await publicationNodeOrNull(root, ref);
             }
             else if (error instanceof DurableAtomicFileWriteError) {
@@ -130,11 +126,11 @@ export async function ensureExactPublicationTextFile(root, ref, text, maximumByt
                     fail("capacity", "$write");
                 if (error.reason === "root-scope")
                     fail("root-scope", "$root");
-                if (error.reason === "commit-uncertain"
-                    || error.reason === "durability-failure"
-                    || error.reason === "stage-cleanup-failure"
-                    || error.reason === "stage-recovery-required"
-                    || error.reason === "close-failure") {
+                if (error.reason === "commit-uncertain" ||
+                    error.reason === "durability-failure" ||
+                    error.reason === "stage-cleanup-failure" ||
+                    error.reason === "stage-recovery-required" ||
+                    error.reason === "close-failure") {
                     fail("recovery-required", "$write");
                 }
                 fail("operation-failure", "$write");
@@ -195,8 +191,8 @@ function publicationPhysicalPath(root, ref) {
     return nodePath.join(root.absolutePath, ...splitPortableResourcePath(ref));
 }
 export function samePublicationTransaction(left, right) {
-    return renderDemandEventSourcingPublicationTransaction(left)
-        === renderDemandEventSourcingPublicationTransaction(right);
+    return (renderDemandEventSourcingPublicationTransaction(left) ===
+        renderDemandEventSourcingPublicationTransaction(right));
 }
 export async function initializePublicationStorage(root, signal) {
     try {
@@ -233,8 +229,7 @@ export async function initializePublicationStorage(root, signal) {
 export async function recoverPublicationTransactionStages(root, transactionRef, signal) {
     try {
         const receipt = await recoverDurableAtomicFileStagesMatchingTargets(root, Object.freeze([transactionRef]), signal === undefined ? undefined : { signal });
-        if (receipt.activeStageCount !== 0
-            || receipt.unknownStageCount !== 0) {
+        if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
             fail("recovery-required", "$transaction/stage");
         }
     }
@@ -250,10 +245,11 @@ export async function recoverPublicationTransactionStages(root, transactionRef, 
 export async function openDemandPublicationRoot(workspaceRoot, ref, expectedNode) {
     let opened;
     try {
-        opened = await RootedDirectory.open(publicationPhysicalPath(workspaceRoot, ref), undefined, { durability: workspaceRoot.durability });
+        opened = await RootedDirectory.open(publicationPhysicalPath(workspaceRoot, ref), undefined, {
+            durability: workspaceRoot.durability,
+        });
         const current = await opened.assertCurrent("$demandRoot");
-        if (expectedNode !== undefined
-            && !sameFileNodeIdentity(expectedNode, current)) {
+        if (expectedNode !== undefined && !sameFileNodeIdentity(expectedNode, current)) {
             fail("conflict", "$demandRoot");
         }
         assertPrivatePublicationNode(current, "directory", "$demandRoot");

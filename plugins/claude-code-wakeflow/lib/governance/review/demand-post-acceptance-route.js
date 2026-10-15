@@ -1,12 +1,12 @@
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { closeDemandOperationAuthorityContext, openDemandOperationAuthorityContext, DemandOperationAuthorityContextError, } from "../demand/demand-operation-authority-context.js";
+import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, } from "../demand/demand-operation-authority-context.js";
 import { currentTestTargetsOf, } from "../demand/model/demand-aggregate-state.js";
 import { TEST_ENVIRONMENT_AUTHORITY_ROLE, } from "../demand/model/demand-authority.js";
-import { readDemandResultReviewSnapshot, DemandResultReviewSnapshotError, } from "./demand-result-review-snapshot.js";
+import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "./demand-result-review-snapshot.js";
 /**
  * Wakeflow Governance / Review：Controller完成Implementation或Test审查后的下一阶段路由读模型。
  *
@@ -49,9 +49,7 @@ function targetPhase(target) {
         : target.phase;
 }
 function targetWorkType(target) {
-    return target.status === "awaiting-result"
-        ? target.workType
-        : target.taskPackage.workType;
+    return target.status === "awaiting-result" ? target.workType : target.taskPackage.workType;
 }
 function acceptedTarget(target) {
     if (target.status !== "review-decided" ||
@@ -91,7 +89,8 @@ export function resolveDemandTestEnvironmentAuthority(loaded) {
         candidates.length !== 1 ||
         source === undefined ||
         source.reference.memberDigest !==
-            source.record.documents.find((document) => document.memberRef === source.reference.memberRef)?.digest) {
+            source.record.documents.find((document) => document.memberRef === source.reference.memberRef)
+                ?.digest) {
         fail("relation");
     }
     return source.reference;
@@ -303,8 +302,7 @@ function openTestStage(testTarget) {
 }
 function routeBasis(loaded, snapshot) {
     const { snapshotDigest: suppliedSnapshotDigest, ...snapshotBasis } = snapshot;
-    if (computeCanonicalJsonSha256Digest(snapshotBasis) !==
-        suppliedSnapshotDigest ||
+    if (computeCanonicalJsonSha256Digest(snapshotBasis) !== suppliedSnapshotDigest ||
         loaded.identity.demandId !== snapshot.demand.demandId ||
         loaded.aggregate.demandId !== snapshot.demand.demandId ||
         loaded.aggregate.state.lifecycle !== snapshot.demand.lifecycle ||

@@ -1,7 +1,7 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
@@ -68,10 +68,10 @@ function parseConfig(value, path) {
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function hasTarget(config, target) {
     const key = wakeflowExternalInstructionTargetKey(target);
@@ -97,12 +97,10 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
         "profile",
         "target",
     ];
-    const validKeys = record.signal === undefined
-        ? requiredKeys
-        : [...requiredKeys, "signal"].sort();
-    if (keys.length !== validKeys.length
-        || keys.some((key, index) => key !== validKeys[index])
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
+    if (keys.length !== validKeys.length ||
+        keys.some((key, index) => key !== validKeys[index]) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$request");
     }
     let profile;
@@ -162,10 +160,10 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }

@@ -1,23 +1,23 @@
 import { types } from "node:util";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { hasDurableAtomicFileStagePrefix, } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
-import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { sameFileNodeIdentity, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { WAKEFLOW_RUNTIME_ROOT_REF, } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
+import { WakeflowWindowRuntimeDesiredTopologyError } from "./wakeflow-window-runtime-desired-topology.js";
 import { compileWakeflowFreshWindowRuntimeAuthority, WakeflowFreshWindowRuntimeAuthorityError, } from "./wakeflow-window-runtime-fresh-authority.js";
-import { WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
 import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./wakeflow-window-runtime-paths.js";
 import { WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES } from "./wakeflow-window-runtime-projection-document.js";
 import { parseWakeflowWindowRuntimeUnregisteredProjectionDocument, WakeflowWindowRuntimeUnregisteredProjectionRecordError, } from "./wakeflow-window-runtime-unregistered-projection.js";
@@ -73,14 +73,14 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (!Object.hasOwn(record, "recoveringFreshPublication")
-        || Object.keys(record).some((key) => (key !== "recoveringFreshPublication" && key !== "signal"))
-        || typeof record.recoveringFreshPublication !== "boolean"
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (!Object.hasOwn(record, "recoveringFreshPublication") ||
+        Object.keys(record).some((key) => key !== "recoveringFreshPublication" && key !== "signal") ||
+        typeof record.recoveringFreshPublication !== "boolean" ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -89,15 +89,13 @@ function parseOptions(value) {
     });
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertPrivateNode(node, kind, path) {
-    if (node.kind !== kind
-        || node.permissionBits !== (kind === "directory" ? 0o700 : 0o600)
-        || (kind === "file" && node.linkCount !== 1n)
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== kind ||
+        node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
+        (kind === "file" && node.linkCount !== 1n) ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("prefix-conflict", path);
     }
 }
@@ -127,8 +125,7 @@ async function ensureDirectory(root, resourcePath, recovering, signal) {
         });
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             try {
                 const created = await createDirectoryAtomically(root, resourcePath, {
                     mode: 0o700,
@@ -188,8 +185,8 @@ async function assertBindingsEmpty(root, bindingRoot, signal) {
 async function assertExactDirectoryChildren(root, resourcePath, expectedNames, signal) {
     const read = await readPrivateDirectory(root, resourcePath, expectedNames.length + 1, signal);
     const expected = new Set(expectedNames);
-    if (read.entries.length !== expected.size
-        || read.entries.some((entry) => !expected.has(entry.name))) {
+    if (read.entries.length !== expected.size ||
+        read.entries.some((entry) => !expected.has(entry.name))) {
         fail("prefix-conflict", `$layout/${resourcePath}`);
     }
 }
@@ -218,9 +215,8 @@ async function recoverProjectionStages(root, authority, signal) {
 }
 async function assertProjectionNamespaceNames(root, authority, signal) {
     const expected = new Set(authority.projectionSet.entries.map(expectedFileName));
-    const inventory = await readPrivateDirectory(root, authority.projectionSet.projectionRootRef, (expected.size * 2) + 1, signal);
-    if (inventory.entries.some((entry) => (!expected.has(entry.name)
-        && !hasDurableAtomicFileStagePrefix(entry.name)))) {
+    const inventory = await readPrivateDirectory(root, authority.projectionSet.projectionRootRef, expected.size * 2 + 1, signal);
+    if (inventory.entries.some((entry) => !expected.has(entry.name) && !hasDurableAtomicFileStagePrefix(entry.name))) {
         fail("prefix-conflict", "$projectionInventory");
     }
 }
@@ -291,11 +287,11 @@ async function createMissingProjections(root, authority, current, signal) {
                     fail("capacity", "$projectionWrite");
                 if (error.reason === "root-scope")
                     fail("root-scope", "$root");
-                if (error.reason === "commit-uncertain"
-                    || error.reason === "durability-failure"
-                    || error.reason === "stage-cleanup-failure"
-                    || error.reason === "stage-recovery-required"
-                    || error.reason === "close-failure") {
+                if (error.reason === "commit-uncertain" ||
+                    error.reason === "durability-failure" ||
+                    error.reason === "stage-cleanup-failure" ||
+                    error.reason === "stage-recovery-required" ||
+                    error.reason === "close-failure") {
                     fail("recovery-required", "$projectionWrite");
                 }
                 fail("operation-failure", "$projectionWrite");
@@ -307,10 +303,10 @@ async function createMissingProjections(root, authority, current, signal) {
 }
 /** 独占发布 Fresh host-local Window Runtime，或恢复同一 exact 未注册集合。 */
 export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, profileValue, optionsValue) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const options = parseOptions(optionsValue);
@@ -321,10 +317,10 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
         authority = compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue);
     }
     catch (error) {
-        if (error instanceof WakeflowFreshWindowRuntimeAuthorityError
-            || error instanceof WakeflowWindowRuntimeDesiredTopologyError
-            || error instanceof WakeflowWorkspaceHostResourceProfileError
-            || error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
+        if (error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
+            error instanceof WakeflowWindowRuntimeDesiredTopologyError ||
+            error instanceof WakeflowWorkspaceHostResourceProfileError ||
+            error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
             fail("authority", error.path);
         }
         throw error;
@@ -344,9 +340,9 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
     for (const resourcePath of directoryPaths) {
         directoryEffects.push(await ensureDirectory(rootValue, resourcePath, options.recoveringFreshPublication, options.signal));
     }
-    const declaredLayoutPaths = authority.layoutDeclarations.map((entry) => (entry.placement.relativePath));
-    if (declaredLayoutPaths.length !== directoryPaths.length
-        || declaredLayoutPaths.some((resourcePath, index) => (resourcePath !== directoryPaths[index]))) {
+    const declaredLayoutPaths = authority.layoutDeclarations.map((entry) => entry.placement.relativePath);
+    if (declaredLayoutPaths.length !== directoryPaths.length ||
+        declaredLayoutPaths.some((resourcePath, index) => resourcePath !== directoryPaths[index])) {
         fail("authority", "$layoutDeclarations");
     }
     await assertExactDirectoryChildren(rootValue, WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF, [profile.runtimeDirectoryName], options.signal);
@@ -382,7 +378,7 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
             fail("prefix-conflict", `$layout/${effect.resourcePath}`);
         }
     }
-    const createdDirectoryCount = directoryEffects.filter((entry) => (entry.disposition === "created")).length;
+    const createdDirectoryCount = directoryEffects.filter((entry) => entry.disposition === "created").length;
     const observationBasis = {
         kind: "WakeflowFreshWindowRuntimePublicationObservation",
         authorityDigest: authority.authorityDigest,
@@ -403,9 +399,7 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
         }),
     };
     return Object.freeze({
-        disposition: createdDirectoryCount === 0 && createdProjectionCount === 0
-            ? "current"
-            : "created",
+        disposition: createdDirectoryCount === 0 && createdProjectionCount === 0 ? "current" : "created",
         authorityDigest: authority.authorityDigest,
         projectionSetDigest: authority.projectionSet.projectionSetDigest,
         createdDirectoryCount,

@@ -1,7 +1,7 @@
-import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
@@ -171,9 +171,7 @@ export function createDemandCompletion(input, options = {}) {
     let completedAt;
     try {
         completedAt =
-            options.clock === undefined
-                ? readUtcWallClock()
-                : readUtcWallClock(options.clock);
+            options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
     }
     catch (error) {
         if (error instanceof UtcWallClockError)

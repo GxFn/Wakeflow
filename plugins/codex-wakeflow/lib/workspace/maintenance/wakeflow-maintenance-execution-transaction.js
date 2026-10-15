@@ -1,10 +1,9 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, } from "../../configuration/wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { createWakeflowWorkspaceStaticResourceMatrix, } from "../wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { assertWakeflowHostMaintenanceCapability, assertWakeflowHostMaintenanceContributionCapability, WakeflowHostMaintenanceCapabilityError, } from "./wakeflow-host-maintenance-capability.js";
 import { computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintenanceExecutionIntent, reconstructWakeflowMaintenanceExecutionFromIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
 import { assertWakeflowMaintenanceExecutionIntentCapacity, assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction, assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix, publishWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntentOrNull, recoverWakeflowMaintenanceExecutionIntentStages, retireWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentStoreError, } from "./wakeflow-maintenance-execution-intent-store.js";
@@ -78,9 +77,7 @@ function createOperationId(factory) {
     }
 }
 function effectiveSignal(requestSignal, optionSignal) {
-    if (requestSignal !== undefined
-        && optionSignal !== undefined
-        && requestSignal !== optionSignal) {
+    if (requestSignal !== undefined && optionSignal !== undefined && requestSignal !== optionSignal) {
         fail("input", "$options.signal");
     }
     return optionSignal ?? requestSignal;
@@ -97,10 +94,7 @@ function requestWithSignal(request, signal) {
 function positiveMilliseconds(value, path) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0
-        || value > 300_000) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
         fail("input", path);
     }
     return value;
@@ -115,22 +109,21 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => (key !== "acquireTimeoutMilliseconds"
-        && key !== "retryDelayMilliseconds"
-        && key !== "signal"
-        && key !== "uuidFactory"))) {
+    if (Object.keys(record).some((key) => key !== "acquireTimeoutMilliseconds" &&
+        key !== "retryDelayMilliseconds" &&
+        key !== "signal" &&
+        key !== "uuidFactory")) {
         fail("input", "$options");
     }
-    if (record.signal !== undefined
-        && (typeof record.signal !== "object"
-            || record.signal === null
-            || types.isProxy(record.signal)
-            || !(record.signal instanceof AbortSignal))) {
+    if (record.signal !== undefined &&
+        (typeof record.signal !== "object" ||
+            record.signal === null ||
+            types.isProxy(record.signal) ||
+            !(record.signal instanceof AbortSignal))) {
         fail("input", "$options.signal");
     }
-    if (record.uuidFactory !== undefined
-        && (typeof record.uuidFactory !== "function"
-            || types.isProxy(record.uuidFactory))) {
+    if (record.uuidFactory !== undefined &&
+        (typeof record.uuidFactory !== "function" || types.isProxy(record.uuidFactory))) {
         fail("input", "$options.uuidFactory");
     }
     return Object.freeze({
@@ -145,8 +138,7 @@ async function currentConfigSnapshot(root, signal, operationId = null) {
         return await readWakeflowConfigAuthoritySnapshot(root, signal === undefined ? undefined : { signal });
     }
     catch (error) {
-        if (error instanceof WakeflowConfigAuthoritySnapshotError
-            && error.reason === "source") {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError && error.reason === "source") {
             return null;
         }
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
@@ -179,36 +171,35 @@ function parseCapability(plan, value) {
     return value;
 }
 function assertRequestMatchesPlan(plan, request) {
-    if (request.action !== plan.sharedPreview.action
-        || request.currentHostProfile.hostId !== plan.hostId
-        || createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile).matrixDigest !== plan.sharedPreview.matrixDigest) {
+    if (request.action !== plan.sharedPreview.action ||
+        request.currentHostProfile.hostId !== plan.hostId ||
+        createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile).matrixDigest !==
+            plan.sharedPreview.matrixDigest) {
         fail("input", "$request");
     }
 }
 function validateJournalPlan(source, intentSource, plan) {
     const preview = plan.sharedPreview;
-    if (source.journal.intentDigest !== intentSource.intentDigest
-        || source.journal.planDigest !== plan.planDigest
-        || source.journal.action !== preview.action
-        || source.journal.matrixDigest !== preview.matrixDigest
-        || source.journal.currentConfigDigest !== preview.currentConfigDigest
-        || source.journal.desiredConfigDigest !== preview.desiredConfigDigest
-        || source.journal.stepIds.length !== plan.steps.length
-        || source.journal.stepIds.some((stepId, index) => (stepId !== plan.steps[index]?.stepId))) {
+    if (source.journal.intentDigest !== intentSource.intentDigest ||
+        source.journal.planDigest !== plan.planDigest ||
+        source.journal.action !== preview.action ||
+        source.journal.matrixDigest !== preview.matrixDigest ||
+        source.journal.currentConfigDigest !== preview.currentConfigDigest ||
+        source.journal.desiredConfigDigest !== preview.desiredConfigDigest ||
+        source.journal.stepIds.length !== plan.steps.length ||
+        source.journal.stepIds.some((stepId, index) => stepId !== plan.steps[index]?.stepId)) {
         fail("journal", "$journal", source.operationId);
     }
 }
 async function assertTerminalConfig(root, plan, operationId) {
     const current = await currentConfigSnapshot(root, undefined, operationId);
-    if (plan.sharedPreview.desiredConfigDigest === null
-        || current?.configDigest !== plan.sharedPreview.desiredConfigDigest) {
+    if (plan.sharedPreview.desiredConfigDigest === null ||
+        current?.configDigest !== plan.sharedPreview.desiredConfigDigest) {
         fail("terminal-closure", "$config", operationId);
     }
 }
 function desiredConfigForExecution(request, sourceConfig, operationId) {
-    const config = request.action === "reconcile"
-        ? sourceConfig
-        : request.desiredConfig;
+    const config = request.action === "reconcile" ? sourceConfig : request.desiredConfig;
     if (config === null)
         fail("source-config", "$config", operationId);
     return config;
@@ -247,10 +238,10 @@ async function executeStep(root, context, plan, requestValue, request, sourceCon
     if (capability === undefined) {
         fail("capability", "$capability", context.operationId);
     }
-    const operation = plan.hostContribution?.operations.find((entry) => (entry.operationId === step.operationId));
-    if (operation === undefined
-        || operation.payloadDigest !== step.payloadDigest
-        || operation.targetDigest !== step.targetDigest) {
+    const operation = plan.hostContribution?.operations.find((entry) => entry.operationId === step.operationId);
+    if (operation === undefined ||
+        operation.payloadDigest !== step.payloadDigest ||
+        operation.targetDigest !== step.targetDigest) {
         fail("step", `$step:${stepId}`, context.operationId);
     }
     try {
@@ -261,8 +252,8 @@ async function executeStep(root, context, plan, requestValue, request, sourceCon
             recoveringAffectedOperation,
             ...(signal === undefined ? {} : { signal }),
         });
-        if (executed.operationId !== operation.operationId
-            || executed.observationDigest !== operation.targetDigest) {
+        if (executed.operationId !== operation.operationId ||
+            executed.observationDigest !== operation.targetDigest) {
             fail("step", `$step:${stepId}`, context.operationId);
         }
         return receipt(step, executed.disposition, executed.observationDigest);
@@ -356,16 +347,14 @@ function mapGateError(error, operationId, persistentTransaction = false) {
 function intentStoreFailureReason(error) {
     if (error.reason === "transactions-shape")
         return "transaction";
-    return error.reason === "commit-uncertain"
-        || error.reason === "recovery-required"
+    return error.reason === "commit-uncertain" || error.reason === "recovery-required"
         ? "recovery-required"
         : "intent";
 }
 function journalStoreFailureReason(error) {
     if (error.reason === "transactions-shape")
         return "transaction";
-    return error.reason === "commit-uncertain"
-        || error.reason === "recovery-required"
+    return error.reason === "commit-uncertain" || error.reason === "recovery-required"
         ? "recovery-required"
         : "journal";
 }
@@ -405,12 +394,9 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
         });
     }
     const current = await currentConfigSnapshot(root, signal);
-    const desiredConfig = request.action === "reconcile"
-        ? current?.model ?? null
-        : request.desiredConfig;
-    if (desiredConfig === null
-        || computeWakeflowConfigDigest(desiredConfig)
-            !== plan.sharedPreview.desiredConfigDigest) {
+    const desiredConfig = request.action === "reconcile" ? (current?.model ?? null) : request.desiredConfig;
+    if (desiredConfig === null ||
+        computeWakeflowConfigDigest(desiredConfig) !== plan.sharedPreview.desiredConfigDigest) {
         fail("source-config", "$config");
     }
     const operationId = createOperationId(options.uuidFactory);
@@ -421,8 +407,8 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
         assertWakeflowPreparedMaintenanceJournalCapacity(operationId, computeWakeflowMaintenanceExecutionIntentDigest(intent), plan);
     }
     catch (error) {
-        if (error instanceof WakeflowMaintenanceExecutionIntentError
-            || error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
+        if (error instanceof WakeflowMaintenanceExecutionIntentError ||
+            error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
             fail("intent", "$intent", null);
         }
         if (error instanceof WakeflowMaintenanceJournalStoreError) {
@@ -488,9 +474,9 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
     }
 }
 async function recoverTerminalJournalWithoutIntent(root, operationId, initial, options) {
-    if (initial.journal.state !== "terminal"
-        || initial.journal.affectedStepId !== null
-        || initial.journal.checkpoint !== initial.journal.stepIds.length) {
+    if (initial.journal.state !== "terminal" ||
+        initial.journal.affectedStepId !== null ||
+        initial.journal.checkpoint !== initial.journal.stepIds.length) {
         fail("intent", "$intent", operationId);
     }
     assertNotAborted(options.signal, operationId);
@@ -502,10 +488,10 @@ async function recoverTerminalJournalWithoutIntent(root, operationId, initial, o
     await retireInactiveCorrelatedGate(root, operationId);
     return withExistingWakeflowMaintenanceGate(root, operationId, async (context) => {
         const source = await readWakeflowMaintenanceJournal(root, operationId);
-        if (source.digest !== initial.digest
-            || source.journalDigest !== initial.journalDigest
-            || source.node.deviceId !== initial.node.deviceId
-            || source.node.inodeId !== initial.node.inodeId) {
+        if (source.digest !== initial.digest ||
+            source.journalDigest !== initial.journalDigest ||
+            source.node.deviceId !== initial.node.deviceId ||
+            source.node.inodeId !== initial.node.inodeId) {
             fail("journal", "$journal", operationId);
         }
         await retireTerminalWakeflowMaintenanceJournal(root, context, source);
@@ -519,34 +505,32 @@ async function recoverTerminalJournalWithoutIntent(root, operationId, initial, o
 }
 function assertRecoveryConfigState(plan, journal, current, operationId) {
     if (journal === null) {
-        if ((current?.configDigest ?? null)
-            !== plan.sharedPreview.currentConfigDigest) {
+        if ((current?.configDigest ?? null) !== plan.sharedPreview.currentConfigDigest) {
             fail("source-config", "$config", operationId);
         }
         return current?.model ?? null;
     }
-    const configIndex = plan.steps.findIndex((entry) => (entry.boundary === "shared-static" && entry.stepKind === "publish-config"));
+    const configIndex = plan.steps.findIndex((entry) => entry.boundary === "shared-static" && entry.stepKind === "publish-config");
     if (configIndex >= 0 && current?.configDigest === plan.sharedPreview.desiredConfigDigest) {
         const configStepId = plan.steps[configIndex]?.stepId;
-        if (journal.journal.checkpoint <= configIndex
-            && journal.journal.affectedStepId !== configStepId) {
+        if (journal.journal.checkpoint <= configIndex &&
+            journal.journal.affectedStepId !== configStepId) {
             fail("source-config", "$config", operationId);
         }
     }
-    if (configIndex >= 0
-        && current?.configDigest === plan.sharedPreview.currentConfigDigest
-        && journal.journal.checkpoint > configIndex) {
+    if (configIndex >= 0 &&
+        current?.configDigest === plan.sharedPreview.currentConfigDigest &&
+        journal.journal.checkpoint > configIndex) {
         fail("source-config", "$config", operationId);
     }
     if (plan.sharedPreview.currentConfigDigest === null) {
-        if (current !== null
-            && current.configDigest !== plan.sharedPreview.desiredConfigDigest) {
+        if (current !== null && current.configDigest !== plan.sharedPreview.desiredConfigDigest) {
             fail("source-config", "$config", operationId);
         }
         return null;
     }
-    if (current?.configDigest === plan.sharedPreview.currentConfigDigest
-        || current?.configDigest === plan.sharedPreview.desiredConfigDigest) {
+    if (current?.configDigest === plan.sharedPreview.currentConfigDigest ||
+        current?.configDigest === plan.sharedPreview.desiredConfigDigest) {
         return current.model;
     }
     fail("source-config", "$config", operationId);
@@ -589,14 +573,15 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
         await retireInactiveCorrelatedGate(root, operationId);
         return await withExistingWakeflowMaintenanceGate(root, operationId, async (context) => {
             const currentIntent = await readWakeflowMaintenanceExecutionIntent(root, operationId);
-            if (currentIntent.intentDigest !== intentSource.intentDigest
-                || currentIntent.digest !== intentSource.digest
-                || currentIntent.node.deviceId !== intentSource.node.deviceId
-                || currentIntent.node.inodeId !== intentSource.node.inodeId) {
+            if (currentIntent.intentDigest !== intentSource.intentDigest ||
+                currentIntent.digest !== intentSource.digest ||
+                currentIntent.node.deviceId !== intentSource.node.deviceId ||
+                currentIntent.node.inodeId !== intentSource.node.inodeId) {
                 fail("intent", "$intent", operationId);
             }
             const existingJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
-            const source = existingJournal ?? (await publishPreparedWakeflowMaintenanceJournal(root, context, currentIntent, plan));
+            const source = existingJournal ??
+                (await publishPreparedWakeflowMaintenanceJournal(root, context, currentIntent, plan));
             validateJournalPlan(source, currentIntent, plan);
             const advanced = await advanceJournal(root, context, currentIntent, source, plan, requestValue, request, sourceConfig, capability, true, options.signal);
             await assertTerminalConfig(root, plan, operationId);

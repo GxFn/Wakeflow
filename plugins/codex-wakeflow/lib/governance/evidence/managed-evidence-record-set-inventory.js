@@ -1,14 +1,14 @@
 import { types } from "node:util";
 import pLimit from "p-limit";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { sameFileNodeSnapshot, FileNodeSnapshotError, } from "../../foundation/filesystem/file-node-snapshot.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { deriveManagedEvidencePublicationRecordTreePlan, } from "./managed-evidence-publication-transaction.js";
 import { loadManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
 import { loadManagedEvidenceRecord, ManagedEvidenceRecordReaderError, } from "./managed-evidence-record-reader.js";
-import { parseManagedEvidenceRecordDirectoryName, parseManagedEvidenceStageDirectoryName, MANAGED_EVIDENCE_ROOT_REF, ManagedEvidenceResourcePathError, } from "./managed-evidence-resource-paths.js";
+import { MANAGED_EVIDENCE_ROOT_REF, ManagedEvidenceResourcePathError, parseManagedEvidenceRecordDirectoryName, parseManagedEvidenceStageDirectoryName, } from "./managed-evidence-resource-paths.js";
 /**
  * Wakeflow Governance / Evidence：Demand根内Managed Evidence记录集合的稳定只读清单。
  *
@@ -80,9 +80,7 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "expectedRootNode" &&
-        key !== "expectedTransactionNode" &&
-        key !== "signal") ||
+    if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "expectedTransactionNode" && key !== "signal") ||
         (record.signal !== undefined &&
             (typeof record.signal !== "object" ||
                 record.signal === null ||
@@ -99,8 +97,7 @@ function parseOptions(value) {
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== 0o700 ||
-        (typeof process.geteuid === "function" &&
-            node.userId !== BigInt(process.geteuid()))) {
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail("node-policy", path);
     }
 }
@@ -112,8 +109,7 @@ function mapDirectoryError(error) {
     if (error.reason === "too-many-entries") {
         fail("capacity", "$managedEvidence");
     }
-    if (error.reason === "source-changed" ||
-        error.reason === "expectation-changed") {
+    if (error.reason === "source-changed" || error.reason === "expectation-changed") {
         fail("source-changed", "$managedEvidence");
     }
     if (error.reason === "not-found" ||
@@ -167,8 +163,7 @@ async function readTransaction(root, expectedNode, signal) {
         }
         throw error;
     }
-    if (stored === null ||
-        !sameFileNodeSnapshot(stored.source.node, expectedNode)) {
+    if (stored === null || !sameFileNodeSnapshot(stored.source.node, expectedNode)) {
         fail("source-changed", "$transaction");
     }
     return stored;
@@ -379,8 +374,7 @@ export async function inspectManagedEvidenceRecordSetInventory(root, optionsValu
         if (stageEntry !== undefined && final !== undefined) {
             fail("transaction", "$managedEvidence");
         }
-        if (final !== undefined &&
-            final.recordTreePlanDigest !== transaction.recordTreePlanDigest) {
+        if (final !== undefined && final.recordTreePlanDigest !== transaction.recordTreePlanDigest) {
             fail("transaction", "$managedEvidence");
         }
         if (final !== undefined) {

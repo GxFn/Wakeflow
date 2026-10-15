@@ -1,5 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, } from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseWakeflowGitignoreHostProfileSet, renderWakeflowGitignoreRootRule, } from "./wakeflow-gitignore-body-authority.js";

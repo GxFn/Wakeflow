@@ -1,20 +1,20 @@
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { readDeterministicJsonFile, } from "../../foundation/filesystem/deterministic-json-file.js";
-import { DeterministicJsonDocumentError, } from "../../foundation/data/deterministic-json-document.js";
-import { recoverDurableAtomicFileStagesForTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction, assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix, WakeflowMaintenanceExecutionIntentStoreError, } from "./wakeflow-maintenance-execution-intent-store.js";
-import { computeWakeflowMaintenanceJournalDigest, createPreparedWakeflowMaintenanceJournal, createWakeflowMaintenanceJournalResourceDeclaration, parseWakeflowMaintenanceJournal, isWakeflowMaintenanceJournalSuccessor, renderWakeflowMaintenanceJournal, WakeflowMaintenanceJournalError, } from "./wakeflow-maintenance-journal.js";
+import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
+import { computeWakeflowMaintenanceJournalDigest, createPreparedWakeflowMaintenanceJournal, createWakeflowMaintenanceJournalResourceDeclaration, isWakeflowMaintenanceJournalSuccessor, parseWakeflowMaintenanceJournal, renderWakeflowMaintenanceJournal, WakeflowMaintenanceJournalError, } from "./wakeflow-maintenance-journal.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 /**
  * Wakeflow Workspace / Maintenance：maintenance journal（prepared、executing 或 terminal）的 gate-bound 物理 store。
  *
@@ -28,8 +28,7 @@ export async function recoverWakeflowMaintenanceJournalStages(root, operationIdV
     const operationId = admittedOperationId(operationIdValue);
     try {
         const receipt = await recoverDurableAtomicFileStagesForTargets(root, Object.freeze([wakeflowMaintenanceJournalRef(operationId)]));
-        if (receipt.activeStageCount !== 0
-            || receipt.unknownStageCount !== 0) {
+        if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
             fail("recovery-required", "$journalStage");
         }
         return receipt;
@@ -134,7 +133,9 @@ function admitOperation(operationId, recipe) {
 }
 async function assertTransactionsEmpty(root) {
     try {
-        await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, { maximumEntries: 0 });
+        await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+            maximumEntries: 0,
+        });
     }
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
@@ -148,14 +149,14 @@ async function assertTransactionsEmpty(root) {
 }
 /** 在任何退休效果前证明 transactions 只含指定 exact journal。 */
 export async function assertWakeflowMaintenanceJournalIsOnlyTransaction(root, sourceValue) {
-    if (typeof sourceValue !== "object"
-        || sourceValue === null
-        || !ISSUED_SOURCES.has(sourceValue)) {
+    if (typeof sourceValue !== "object" || sourceValue === null || !ISSUED_SOURCES.has(sourceValue)) {
         fail("input", "$source");
     }
     let read;
     try {
-        read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, { maximumEntries: 1 });
+        read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+            maximumEntries: 1,
+        });
     }
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
@@ -166,8 +167,7 @@ export async function assertWakeflowMaintenanceJournalIsOnlyTransaction(root, so
         }
         throw error;
     }
-    if (read.entries.length !== 1
-        || read.entries[0]?.resourcePath !== sourceValue.resourcePath) {
+    if (read.entries.length !== 1 || read.entries[0]?.resourcePath !== sourceValue.resourcePath) {
         fail("transactions-shape", "$transactions");
     }
 }
@@ -192,16 +192,15 @@ export async function readWakeflowMaintenanceJournal(root, operationIdValue) {
             }
             fail("source", "$journal");
         }
-        if (error instanceof StrictTextFileError
-            || error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("journal", "$journal");
         }
         throw error;
     }
-    if (read.node.kind !== "file"
-        || read.node.permissionBits !== 0o600
-        || read.node.linkCount !== 1n
-        || read.node.userId !== currentUserId()) {
+    if (read.node.kind !== "file" ||
+        read.node.permissionBits !== 0o600 ||
+        read.node.linkCount !== 1n ||
+        read.node.userId !== currentUserId()) {
         fail("source-policy", "$journal");
     }
     let journal;
@@ -214,8 +213,8 @@ export async function readWakeflowMaintenanceJournal(root, operationIdValue) {
         }
         throw error;
     }
-    if (journal.operationId !== operationId
-        || renderWakeflowMaintenanceJournal(journal) !== read.text) {
+    if (journal.operationId !== operationId ||
+        renderWakeflowMaintenanceJournal(journal) !== read.text) {
         fail("journal", "$journal");
     }
     const journalDigest = computeWakeflowMaintenanceJournalDigest(journal);
@@ -237,8 +236,7 @@ export async function readWakeflowMaintenanceJournalOrNull(root, operationIdValu
         await root.inspectExistingResource(wakeflowMaintenanceJournalRef(operationId));
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -260,8 +258,8 @@ export async function publishPreparedWakeflowMaintenanceJournal(root, context, i
         }
         throw error;
     }
-    if (intentSource.operationId !== context.operationId
-        || intentSource.intent.planDigest !== journal.planDigest) {
+    if (intentSource.operationId !== context.operationId ||
+        intentSource.intent.planDigest !== journal.planDigest) {
         fail("input", "$intentSource");
     }
     admitOperation(context.operationId, "exclusive-create");
@@ -291,10 +289,10 @@ export async function publishPreparedWakeflowMaintenanceJournal(root, context, i
             if (error.reason === "stage-recovery-required") {
                 fail("recovery-required", "$journal");
             }
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "stage-cleanup-failure"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "close-failure") {
                 fail("commit-uncertain", "$journal");
             }
             fail("effect-failure", "$journal");
@@ -308,14 +306,14 @@ export async function publishPreparedWakeflowMaintenanceJournal(root, context, i
     catch {
         fail("commit-uncertain", "$journal");
     }
-    if (publication.resourcePath !== source.resourcePath
-        || publication.digest !== source.digest
-        || publication.byteCount !== source.node.byteCount
-        || publication.node.deviceId !== source.node.deviceId
-        || publication.node.inodeId !== source.node.inodeId
-        || source.journal.intentDigest !== intentSource.intentDigest
-        || source.journal.planDigest !== journal.planDigest
-        || source.journalDigest !== intendedDigest) {
+    if (publication.resourcePath !== source.resourcePath ||
+        publication.digest !== source.digest ||
+        publication.byteCount !== source.node.byteCount ||
+        publication.node.deviceId !== source.node.deviceId ||
+        publication.node.inodeId !== source.node.inodeId ||
+        source.journal.intentDigest !== intentSource.intentDigest ||
+        source.journal.planDigest !== journal.planDigest ||
+        source.journalDigest !== intendedDigest) {
         fail("commit-uncertain", "$journal");
     }
     return source;
@@ -323,10 +321,10 @@ export async function publishPreparedWakeflowMaintenanceJournal(root, context, i
 /** 在有效 gate scope 内以CAS写入一个且仅一个合法 journal 后继。 */
 export async function checkpointWakeflowMaintenanceJournal(root, context, intentSource, sourceValue, proposedValue) {
     assertGate(root, context);
-    if (typeof sourceValue !== "object"
-        || sourceValue === null
-        || !ISSUED_SOURCES.has(sourceValue)
-        || sourceValue.operationId !== context.operationId) {
+    if (typeof sourceValue !== "object" ||
+        sourceValue === null ||
+        !ISSUED_SOURCES.has(sourceValue) ||
+        sourceValue.operationId !== context.operationId) {
         fail("input", "$source");
     }
     let proposed;
@@ -352,8 +350,8 @@ export async function checkpointWakeflowMaintenanceJournal(root, context, intent
         }
         throw error;
     }
-    if (intentSource.operationId !== context.operationId
-        || sourceValue.journal.intentDigest !== intentSource.intentDigest) {
+    if (intentSource.operationId !== context.operationId ||
+        sourceValue.journal.intentDigest !== intentSource.intentDigest) {
         fail("input", "$intentSource");
     }
     try {
@@ -369,10 +367,10 @@ export async function checkpointWakeflowMaintenanceJournal(root, context, intent
         throw error;
     }
     const current = await readWakeflowMaintenanceJournal(root, context.operationId);
-    if (current.digest !== sourceValue.digest
-        || current.journalDigest !== sourceValue.journalDigest
-        || current.node.deviceId !== sourceValue.node.deviceId
-        || current.node.inodeId !== sourceValue.node.inodeId) {
+    if (current.digest !== sourceValue.digest ||
+        current.journalDigest !== sourceValue.journalDigest ||
+        current.node.deviceId !== sourceValue.node.deviceId ||
+        current.node.inodeId !== sourceValue.node.inodeId) {
         fail("conflict", "$journal");
     }
     const proposedBytes = encodeUtf8(renderWakeflowMaintenanceJournal(proposed));
@@ -394,18 +392,18 @@ export async function checkpointWakeflowMaintenanceJournal(root, context, intent
         if (error instanceof DurableAtomicFileWriteError) {
             if (error.reason === "input")
                 fail("input", error.path);
-            if (error.reason === "expectation-changed"
-                || error.reason === "expectation-read-failure"
-                || error.reason === "target-exists") {
+            if (error.reason === "expectation-changed" ||
+                error.reason === "expectation-read-failure" ||
+                error.reason === "target-exists") {
                 fail("conflict", "$journal");
             }
             if (error.reason === "stage-recovery-required") {
                 fail("recovery-required", "$journal");
             }
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "stage-cleanup-failure"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "close-failure") {
                 fail("commit-uncertain", "$journal");
             }
             fail("effect-failure", "$journal");
@@ -419,11 +417,11 @@ export async function checkpointWakeflowMaintenanceJournal(root, context, intent
     catch {
         fail("commit-uncertain", "$journal");
     }
-    if (replacement.digest !== source.digest
-        || replacement.byteCount !== source.node.byteCount
-        || replacement.node.deviceId !== source.node.deviceId
-        || replacement.node.inodeId !== source.node.inodeId
-        || source.journalDigest !== proposedDigest) {
+    if (replacement.digest !== source.digest ||
+        replacement.byteCount !== source.node.byteCount ||
+        replacement.node.deviceId !== source.node.deviceId ||
+        replacement.node.inodeId !== source.node.inodeId ||
+        source.journalDigest !== proposedDigest) {
         fail("commit-uncertain", "$journal");
     }
     return source;
@@ -433,25 +431,26 @@ async function retireExactWakeflowMaintenanceJournal(root, context, source) {
     admitOperation(context.operationId, "exact-retire");
     await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, source);
     const current = await readWakeflowMaintenanceJournal(root, context.operationId);
-    if (current.digest !== source.digest
-        || current.journalDigest !== source.journalDigest
-        || current.node.deviceId !== source.node.deviceId
-        || current.node.inodeId !== source.node.inodeId) {
+    if (current.digest !== source.digest ||
+        current.journalDigest !== source.journalDigest ||
+        current.node.deviceId !== source.node.deviceId ||
+        current.node.inodeId !== source.node.inodeId) {
         fail("conflict", "$journal");
     }
     let retirement;
     try {
-        retirement = await unlinkRegularFileExactly(root, source.resourcePath, { expectedNode: source.node });
+        retirement = await unlinkRegularFileExactly(root, source.resourcePath, {
+            expectedNode: source.node,
+        });
     }
     catch (error) {
         if (error instanceof ExactRegularFileUnlinkError) {
-            if (error.reason === "source-changed"
-                || error.reason === "source-not-found") {
+            if (error.reason === "source-changed" || error.reason === "source-not-found") {
                 fail("conflict", "$journal");
             }
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "close-failure") {
                 fail("commit-uncertain", "$journal");
             }
             fail("effect-failure", "$journal");
@@ -469,12 +468,12 @@ async function retireExactWakeflowMaintenanceJournal(root, context, source) {
 /** 在同一有效 gate scope 内退休尚未执行任何 step 的 exact prepared journal。 */
 export async function retirePreparedWakeflowMaintenanceJournal(root, context, sourceValue) {
     assertGate(root, context);
-    if (typeof sourceValue !== "object"
-        || sourceValue === null
-        || !ISSUED_SOURCES.has(sourceValue)
-        || sourceValue.operationId !== context.operationId
-        || sourceValue.journal.checkpoint !== 0
-        || sourceValue.journal.state !== "prepared") {
+    if (typeof sourceValue !== "object" ||
+        sourceValue === null ||
+        !ISSUED_SOURCES.has(sourceValue) ||
+        sourceValue.operationId !== context.operationId ||
+        sourceValue.journal.checkpoint !== 0 ||
+        sourceValue.journal.state !== "prepared") {
         fail("input", "$source");
     }
     const retirement = await retireExactWakeflowMaintenanceJournal(root, context, sourceValue);
@@ -488,13 +487,13 @@ export async function retirePreparedWakeflowMaintenanceJournal(root, context, so
 /** 在同一有效 gate scope 内退休已经terminal的exact journal。 */
 export async function retireTerminalWakeflowMaintenanceJournal(root, context, sourceValue) {
     assertGate(root, context);
-    if (typeof sourceValue !== "object"
-        || sourceValue === null
-        || !ISSUED_SOURCES.has(sourceValue)
-        || sourceValue.operationId !== context.operationId
-        || sourceValue.journal.state !== "terminal"
-        || sourceValue.journal.affectedStepId !== null
-        || sourceValue.journal.checkpoint !== sourceValue.journal.stepIds.length) {
+    if (typeof sourceValue !== "object" ||
+        sourceValue === null ||
+        !ISSUED_SOURCES.has(sourceValue) ||
+        sourceValue.operationId !== context.operationId ||
+        sourceValue.journal.state !== "terminal" ||
+        sourceValue.journal.affectedStepId !== null ||
+        sourceValue.journal.checkpoint !== sourceValue.journal.stepIds.length) {
         fail("input", "$source");
     }
     await retireExactWakeflowMaintenanceJournal(root, context, sourceValue);

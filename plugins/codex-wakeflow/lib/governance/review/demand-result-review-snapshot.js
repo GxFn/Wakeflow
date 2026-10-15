@@ -1,6 +1,6 @@
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStoreError } from "../demand/event-sourcing/demand-file-event-store-contract.js";
@@ -117,8 +117,7 @@ function reproduceDecidedReviewUnitDigest(basis, stored) {
 function priorReviewHistory(sources, targetTaskId, beforeStreamRevision) {
     const decisions = sources.targetReviewDecisions
         .filter((entry) => entry.decision.targetTaskId === targetTaskId &&
-        (beforeStreamRevision === null ||
-            entry.sourceEvent.streamRevision < beforeStreamRevision))
+        (beforeStreamRevision === null || entry.sourceEvent.streamRevision < beforeStreamRevision))
         .map((entry) => Object.freeze({
         sourceEvent: entry.sourceEvent,
         decision: entry.decision,
@@ -147,13 +146,11 @@ function buildTargets(sources) {
         const taskPackageSource = taskPackageById.get(target.taskPackageId);
         if (taskPackageSource === undefined ||
             taskPackageSource.taskPackage.targetTaskId !== target.targetTaskId ||
-            (taskPackageSource.taskPackage.workType === "test") !==
-                (target.workType === "test") ||
+            (taskPackageSource.taskPackage.workType === "test") !== (target.workType === "test") ||
             taskPackageSource.taskPackage.assignment.windowId !== target.windowId ||
             (taskPackageSource.taskPackage.workType === "implementation" &&
                 (target.workType === "test" ||
-                    taskPackageSource.taskPackage.assignment.repositoryId !==
-                        target.repositoryId)) ||
+                    taskPackageSource.taskPackage.assignment.repositoryId !== target.repositoryId)) ||
             (taskPackageSource.taskPackage.workType === "test" && target.workType !== "test")) {
             fail("relation");
         }
@@ -172,19 +169,15 @@ function buildTargets(sources) {
         }
         const targetResultSource = targetResultById.get(target.currentDelivery.targetResult.targetResultId);
         if (targetResultSource === undefined ||
-            (targetResultSource.result.workType === "test") !==
-                (target.workType === "test") ||
+            (targetResultSource.result.workType === "test") !== (target.workType === "test") ||
             targetResultSource.result.targetTaskId !== target.targetTaskId ||
             targetResultSource.result.taskPackage.taskPackageId !==
                 taskPackageSource.taskPackage.taskPackageId ||
-            targetResultSource.result.taskPackage.digest !==
-                target.taskPackageDigest ||
-            targetResultSource.result.resultDigest !==
-                target.currentDelivery.targetResult.resultDigest) {
+            targetResultSource.result.taskPackage.digest !== target.taskPackageDigest ||
+            targetResultSource.result.resultDigest !== target.currentDelivery.targetResult.resultDigest) {
             fail("relation");
         }
-        if (target.phase === "result-reported" ||
-            target.phase === "test-result-reported") {
+        if (target.phase === "result-reported" || target.phase === "test-result-reported") {
             const reportedBasis = reportedTargetBasis(target.targetTaskId, taskPackageSource.sourceEvent, taskPackageSource.taskPackage, targetResultSource.sourceEvent, targetResultSource.result, priorReviewHistory(sources, target.targetTaskId, null));
             return Object.freeze({
                 ...reportedBasis,
@@ -193,8 +186,7 @@ function buildTargets(sources) {
         }
         const decisionSource = reviewDecisionById.get(target.currentDelivery.reviewDecision.targetReviewDecisionId);
         if (decisionSource === undefined ||
-            (decisionSource.decision.kind ===
-                "WakeflowControllerTestReviewDecision") !==
+            (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision") !==
                 (target.workType === "test") ||
             decisionSource.decision.targetTaskId !== target.targetTaskId ||
             decisionSource.decision.reviewed.targetResultId !==

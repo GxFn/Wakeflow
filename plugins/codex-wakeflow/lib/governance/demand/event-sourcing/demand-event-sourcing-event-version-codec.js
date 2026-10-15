@@ -1,40 +1,40 @@
-import { WAKEFLOW_DEMAND_CANCELLED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-cancelled-event-data-v1.generated.js";
-import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_COMPLETED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-completed-event-data-v1.generated.js";
-import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
-import { WAKEFLOW_DEMAND_PUBLISHED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-published-event-data-v1.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/managed-evidence-recorded-event-data-v1.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
-import { WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
-import { WAKEFLOW_CONTROLLER_TARGET_REVIEW_DECIDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/controller-target-review-decided-event-data-v1.generated.js";
-import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
-import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
-import { WAKEFLOW_CALLBACK_REISSUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/callback-reissued-event-data-v1.generated.js";
-import { WAKEFLOW_PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/product-defect-remediation-authorized-event-data-v1.generated.js";
-import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
-import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../../contracts/generated/governance/result/target-result.generated.js";
-import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
-import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report.generated.js";
-import { WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-prepared-event-data-v1.generated.js";
-import { WAKEFLOW_DELIVERY_OUTCOME_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-outcome-recorded-event-data-v1.generated.js";
-import { WAKEFLOW_DELIVERY_REARMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-rearmed-event-data-v1.generated.js";
-import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
-import { WAKEFLOW_DELIVERY_OUTCOME_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-outcome.generated.js";
-import { WAKEFLOW_DELIVERY_REARM_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-rearm.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
+import { WAKEFLOW_DELIVERY_OUTCOME_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-outcome.generated.js";
+import { WAKEFLOW_DELIVERY_REARM_SCHEMA } from "../../../contracts/generated/governance/delivery/delivery-rearm.generated.js";
+import { WAKEFLOW_CALLBACK_REISSUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/callback-reissued-event-data-v1.generated.js";
+import { WAKEFLOW_CONTROLLER_TARGET_REVIEW_DECIDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/controller-target-review-decided-event-data-v1.generated.js";
+import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_OUTCOME_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-outcome-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-prepared-event-data-v1.generated.js";
+import { WAKEFLOW_DELIVERY_REARMED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/delivery-rearmed-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_CANCELLED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-cancelled-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_COMPLETED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-completed-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
+import { WAKEFLOW_DEMAND_PUBLISHED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-published-event-data-v1.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/managed-evidence-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/product-defect-remediation-authorized-event-data-v1.generated.js";
+import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
+import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../../contracts/generated/governance/result/target-result.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
+import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
+import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../../contracts/generated/workspace/window-host-binding.generated.js";
 import { parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { EventSourcingVersionEvolutionRegistry, EventSourcingVersionEvolutionError, } from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
+import { EventSourcingVersionEvolutionError, EventSourcingVersionEvolutionRegistry, } from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { parseDemandUncommittedEvent, } from "./demand-event-sourcing-event.js";
 /** Demand 事件溯源各事件家族的持久化版本编解码器和当前版本写入器。 */
@@ -376,8 +376,7 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
     "tasking.target-task-planned": TARGET_TASK_PLANNED_REGISTRY.supportedVersions,
 });
 function isDemandEventSourcingCurrentEventType(value) {
-    return (typeof value === "string" &&
-        Object.hasOwn(DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS, value));
+    return (typeof value === "string" && Object.hasOwn(DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS, value));
 }
 function isJsonObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);

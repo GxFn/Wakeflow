@@ -1,16 +1,16 @@
 import { types } from "node:util";
-import { WAKEFLOW_DEMAND_AUTHORITY_SCHEMA, } from "../../../contracts/generated/governance/demand/demand-authority.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_DEMAND_AUTHORITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-authority.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../../foundation/filesystem/portable-resource-path.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { createRuntimeJsonSchemaValidator, } from "../../../foundation/schema/runtime-json-schema.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, parseLedgerAuthorityMemberReference, } from "../../ledger/ledger-authority-store.js";
 import { computeDemandIdentityDigest, parseDemandIdentity, } from "./demand-identity.js";
 /**
@@ -24,20 +24,20 @@ import { computeDemandIdentityDigest, parseDemandIdentity, } from "./demand-iden
 const DEMAND_AUTHORITY_ARTIFACT_KIND = "wakeflow-demand-authority";
 const DEMAND_AUTHORITY_SCHEMA_VERSION = 1;
 const ERROR_MESSAGES = {
-    "input": "Demand authority input is invalid.",
-    "json": "Demand authority is not passive JSON data.",
-    "schema": "Demand authority does not satisfy its portable Schema.",
-    "identifier": "Demand authority contains an invalid Demand identity.",
-    "digest": "Demand authority contains an invalid identity digest.",
-    "text": "Demand authority contains non-canonical text.",
-    "reference": "Demand authority contains an invalid Ledger member reference.",
-    "ordering": "Demand authority references are not in canonical unique order.",
-    "identity": "Demand authority does not bind its exact immutable identity.",
-    "role": "Demand authority does not contain its required role closure.",
-    "testing": "Demand authority testing decision is inconsistent.",
-    "resolution": "Demand authority reference cannot be resolved exactly.",
-    "aborted": "Demand authority admission was aborted.",
-    "representation": "Demand authority bytes are not its deterministic domain representation.",
+    input: "Demand authority input is invalid.",
+    json: "Demand authority is not passive JSON data.",
+    schema: "Demand authority does not satisfy its portable Schema.",
+    identifier: "Demand authority contains an invalid Demand identity.",
+    digest: "Demand authority contains an invalid identity digest.",
+    text: "Demand authority contains non-canonical text.",
+    reference: "Demand authority contains an invalid Ledger member reference.",
+    ordering: "Demand authority references are not in canonical unique order.",
+    identity: "Demand authority does not bind its exact immutable identity.",
+    role: "Demand authority does not contain its required role closure.",
+    testing: "Demand authority testing decision is inconsistent.",
+    resolution: "Demand authority reference cannot be resolved exactly.",
+    aborted: "Demand authority admission was aborted.",
+    representation: "Demand authority bytes are not its deterministic domain representation.",
 };
 export class DemandAuthorityError extends Error {
     name = "DemandAuthorityError";
@@ -63,11 +63,9 @@ const REQUIRED_ROLES = Object.freeze({
     supplement: PACKAGE_ROLES,
     research: PACKAGE_ROLES,
 });
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const DRAFT_FIELDS = Object.freeze([
-    "authorityRefs",
-    "testingDecision",
-]);
+const DRAFT_FIELDS = Object.freeze(["authorityRefs", "testingDecision"]);
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_AUTHORITY_SCHEMA, [
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
@@ -106,18 +104,18 @@ function parseReferences(values) {
     for (let index = 1; index < references.length; index += 1) {
         const previous = references[index - 1];
         const current = references[index];
-        if (previous === undefined
-            || current === undefined
-            || referenceLocationKey(previous) >= referenceLocationKey(current)) {
+        if (previous === undefined ||
+            current === undefined ||
+            referenceLocationKey(previous) >= referenceLocationKey(current)) {
             fail("ordering", `$/authorityRefs/${index}`);
         }
     }
     return references;
 }
 function parseCanonicalText(value, path) {
-    if (!value.isWellFormed()
-        || value.normalize("NFC") !== value
-        || CONTROL_EXCEPT_LF_PATTERN.test(value)) {
+    if (!value.isWellFormed() ||
+        value.normalize("NFC") !== value ||
+        CONTROL_EXCEPT_LF_PATTERN.test(value)) {
         fail("text", path);
     }
     return value;
@@ -142,14 +140,14 @@ function parseTestingDecision(value) {
     });
 }
 function assertIdentityRelations(authority, identity) {
-    if (authority.demandId !== identity.demandId
-        || authority.identityDigest !== computeDemandIdentityDigest(identity)) {
+    if (authority.demandId !== identity.demandId ||
+        authority.identityDigest !== computeDemandIdentityDigest(identity)) {
         fail("identity", "$authority");
     }
     // 每个成员都必须来自身份所记录的同一个需求包记录。
-    if (authority.authorityRefs.some((entry) => entry.recordId !== identity.source.requirementId
-        || entry.recordRef !== identity.source.recordRef
-        || entry.recordDigest !== identity.source.recordDigest)) {
+    if (authority.authorityRefs.some((entry) => entry.recordId !== identity.source.requirementId ||
+        entry.recordRef !== identity.source.recordRef ||
+        entry.recordDigest !== identity.source.recordDigest)) {
         fail("identity", "$/authorityRefs");
     }
     // 每个必需角色恰好一个成员：下游按角色 `.find` 环境权威，不允许两个成员争同一角色。
@@ -229,8 +227,8 @@ export function createDemandAuthority(identityValue, draft) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== DRAFT_FIELDS.length
-        || keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
+    if (keys.length !== DRAFT_FIELDS.length ||
+        keys.some((key, index) => key !== DRAFT_FIELDS[index])) {
         fail("input", "$draft");
     }
     let draftRefs;
@@ -274,10 +272,10 @@ export function createDemandAuthority(identityValue, draft) {
 export async function admitDemandAuthority(identityValue, authorityValue, ledgerStore, options) {
     const identity = parseDemandIdentity(identityValue);
     const authority = parseDemandAuthority(authorityValue, identity);
-    if (typeof ledgerStore !== "object"
-        || ledgerStore === null
-        || types.isProxy(ledgerStore)
-        || !(ledgerStore instanceof LedgerAuthorityStore)) {
+    if (typeof ledgerStore !== "object" ||
+        ledgerStore === null ||
+        types.isProxy(ledgerStore) ||
+        !(ledgerStore instanceof LedgerAuthorityStore)) {
         fail("input", "$ledgerStore");
     }
     let optionRecord;
@@ -289,12 +287,12 @@ export async function admitDemandAuthority(identityValue, authorityValue, ledger
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(optionRecord).some((key) => key !== "signal")
-        || (optionRecord.signal !== undefined
-            && (typeof optionRecord.signal !== "object"
-                || optionRecord.signal === null
-                || types.isProxy(optionRecord.signal)
-                || !(optionRecord.signal instanceof AbortSignal)))) {
+    if (Object.keys(optionRecord).some((key) => key !== "signal") ||
+        (optionRecord.signal !== undefined &&
+            (typeof optionRecord.signal !== "object" ||
+                optionRecord.signal === null ||
+                types.isProxy(optionRecord.signal) ||
+                !(optionRecord.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     const signal = optionRecord.signal;

@@ -1,11 +1,11 @@
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, } from "../../contracts/identity/wakeflow-durable-id.js";
-import { parseWakeflowWorkspaceResourceDeclaration, } from "../../workspace/workspace-resource-declaration.js";
-import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
-import { demandEventSourcingSnapshotRef, demandEventStreamCommitRef, DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_AUTHORITY_REF, DEMAND_EVENT_SOURCING_IDENTITY_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, } from "./event-sourcing/demand-event-sourcing-paths.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { streamIndexRef } from "../../kernel/event-stream/stream-index.js";
-import { demandFinalPublicationMarkerRef, demandFinalRootRef, DEMAND_PUBLICATION_LOCKS_ROOT_REF, DEMAND_PUBLICATION_ROOT_REF, DEMAND_PUBLICATION_STAGES_ROOT_REF, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandPublicationLockRef, demandPublicationTransactionRef, } from "./publication/demand-publication-paths.js";
-import { taskPackageProjectionRef, TASK_PACKAGE_PROJECTIONS_ROOT_REF, } from "../tasking/task-package-projection-paths.js";
+import { parseWakeflowWorkspaceResourceDeclaration, } from "../../workspace/workspace-resource-declaration.js";
+import { TASK_PACKAGE_PROJECTIONS_ROOT_REF, taskPackageProjectionRef, } from "../tasking/task-package-projection-paths.js";
+import { DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_AUTHORITY_REF, DEMAND_EVENT_SOURCING_IDENTITY_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, demandEventSourcingSnapshotRef, demandEventStreamCommitRef, } from "./event-sourcing/demand-event-sourcing-paths.js";
+import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
+import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, DEMAND_PUBLICATION_ROOT_REF, DEMAND_PUBLICATION_STAGES_ROOT_REF, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalPublicationMarkerRef, demandFinalRootRef, demandPublicationLockRef, demandPublicationTransactionRef, } from "./publication/demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
  *

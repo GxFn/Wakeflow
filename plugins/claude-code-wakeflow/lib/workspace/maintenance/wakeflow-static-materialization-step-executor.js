@@ -5,7 +5,7 @@ import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { AbsoluteDirectoryMaterializationError, materializeAbsoluteDirectoryPlacement, } from "../../foundation/filesystem/absolute-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { LEDGER_AUTHORITY_LAYOUT_DIGEST } from "../../governance/ledger/ledger-authority-layout.js";
@@ -90,9 +90,7 @@ function parseExecutionOptions(value) {
     }
     if (!Object.hasOwn(record, "recoveringAffectedStep") ||
         !Object.hasOwn(record, "sourceConfig") ||
-        Object.keys(record).some((key) => key !== "recoveringAffectedStep" &&
-            key !== "signal" &&
-            key !== "sourceConfig") ||
+        Object.keys(record).some((key) => key !== "recoveringAffectedStep" && key !== "signal" && key !== "sourceConfig") ||
         typeof record.recoveringAffectedStep !== "boolean" ||
         (record.signal !== undefined &&
             (typeof record.signal !== "object" ||
@@ -151,8 +149,7 @@ async function optionalConfigSnapshot(root, signal) {
         return await readWakeflowConfigAuthoritySnapshot(root, signal === undefined ? undefined : { signal });
     }
     catch (error) {
-        if (error instanceof WakeflowConfigAuthoritySnapshotError &&
-            error.reason === "source") {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError && error.reason === "source") {
             return null;
         }
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
@@ -227,11 +224,7 @@ async function executeSharedCoordinationLayout(root, step, action, recovering, s
     assertStepTarget(step, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST);
     try {
         const result = await materializeWakeflowSharedCoordinationLayout(root, {
-            mode: action === "fresh-initialize"
-                ? recovering
-                    ? "recover"
-                    : "fresh"
-                : "ensure",
+            mode: action === "fresh-initialize" ? (recovering ? "recover" : "fresh") : "ensure",
             ...(signal === undefined ? {} : { signal }),
         });
         return receipt(step.stepId, result.disposition, {
@@ -260,8 +253,7 @@ async function requirementBoardRootExists(root) {
         return true;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return false;
         }
         if (error instanceof RootedDirectoryError)
@@ -595,9 +587,7 @@ async function executeProgramInstruction(root, step, request, sourceConfig, desi
             expectedMatrixDigest: matrix.matrixDigest,
             profile,
             currentConfig: sourceConfig,
-            expectedCurrentConfigDigest: sourceConfig === null
-                ? null
-                : computeWakeflowConfigDigest(sourceConfig),
+            expectedCurrentConfigDigest: sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
             desiredConfig: desired,
             expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         }, signal === undefined ? undefined : { signal });
@@ -654,7 +644,9 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
         fail("root-scope", "$externalRoot");
     let externalRoot;
     try {
-        externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", { durability: root.durability });
+        externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", {
+            durability: root.durability,
+        });
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
@@ -669,9 +661,7 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
             profile,
             target,
             currentConfig: sourceConfig,
-            expectedCurrentConfigDigest: sourceConfig === null
-                ? null
-                : computeWakeflowConfigDigest(sourceConfig),
+            expectedCurrentConfigDigest: sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
             desiredConfig: desired,
             expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         }, signal === undefined ? undefined : { signal });
@@ -705,8 +695,7 @@ async function executeSupportGitignore(root, step, request, desired, signal) {
     if (authority === null)
         fail("plan", "$step.kind");
     assertStepTarget(step, authority.authorityDigest);
-    const surface = desired.topology.supportSurfaces.find((entry) => entry.surfaceId === step.targetKey &&
-        entry.ownership === "wakeflow-managed");
+    const surface = desired.topology.supportSurfaces.find((entry) => entry.surfaceId === step.targetKey && entry.ownership === "wakeflow-managed");
     if (surface === undefined)
         fail("plan", "$step.targetKey");
     let placements;
@@ -724,7 +713,9 @@ async function executeSupportGitignore(root, step, request, desired, signal) {
         fail("root-scope", "$supportRoot");
     let supportRoot;
     try {
-        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", { durability: root.durability });
+        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", {
+            durability: root.durability,
+        });
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
@@ -792,7 +783,9 @@ async function executeSupportMemory(root, step, request, sourceConfig, desired, 
         fail("root-scope", "$supportRoot");
     let supportRoot;
     try {
-        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", { durability: root.durability });
+        supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", {
+            durability: root.durability,
+        });
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
@@ -806,9 +799,7 @@ async function executeSupportMemory(root, step, request, sourceConfig, desired, 
         const catalog = createWakeflowManagedSupportResourceCatalog(desired, profile);
         result = await publishWakeflowSupportMemory(root, supportRoot, {
             currentConfig: sourceConfig,
-            expectedCurrentConfigDigest: sourceConfig === null
-                ? null
-                : computeWakeflowConfigDigest(sourceConfig),
+            expectedCurrentConfigDigest: sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
             desiredConfig: desired,
             expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
             profile,
@@ -860,8 +851,7 @@ async function executeConfig(root, step, preview, desired, signal) {
                 sourceDigest: result.authority.source.digest,
             });
         }
-        if (current === null ||
-            current.configDigest !== preview.currentConfigDigest) {
+        if (current === null || current.configDigest !== preview.currentConfigDigest) {
             fail("source-config", "$config");
         }
         const result = await replaceWakeflowConfigAuthority(root, desired, current, signal === undefined ? undefined : { signal });
@@ -917,9 +907,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
         }
         throw error;
     }
-    if (typeof stepIdValue !== "string" ||
-        stepIdValue.length > 256 ||
-        !stepIdValue.isWellFormed()) {
+    if (typeof stepIdValue !== "string" || stepIdValue.length > 256 || !stepIdValue.isWellFormed()) {
         fail("input", "$stepId");
     }
     const step = preview.steps.find((entry) => entry.stepId === stepIdValue);
@@ -930,8 +918,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     const { sourceConfig, signal } = parsedOptions;
     const recovering = parsedOptions.recoveringAffectedStep;
     const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
-    if (preview.action !== request.action ||
-        preview.matrixDigest !== matrix.matrixDigest) {
+    if (preview.action !== request.action || preview.matrixDigest !== matrix.matrixDigest) {
         fail("plan", "$preview");
     }
     const desired = desiredConfig(request, sourceConfig);
@@ -939,8 +926,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
         fail("plan", "$preview.desiredConfigDigest");
     }
     const sourceDigest = sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig);
-    if (step.kind !== "publish-config" &&
-        sourceDigest !== preview.currentConfigDigest) {
+    if (step.kind !== "publish-config" && sourceDigest !== preview.currentConfigDigest) {
         fail("source-config", "$options.sourceConfig");
     }
     if (step.kind === "materialize-local-protocol") {

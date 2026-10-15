@@ -1,10 +1,10 @@
 import { types } from "node:util";
-import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { computeDemandEventSourcingCommandDigest, decideDemandEventSourcingCommand, parseDemandEventSourcingCommand, DemandEventSourcingDecisionError, } from "./demand-event-sourcing-decider.js";
-import { prepareDemandEventStreamCommit, DemandEventStreamCommitError, } from "./demand-event-stream-commit.js";
+import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { computeDemandEventSourcingCommandDigest, DemandEventSourcingDecisionError, decideDemandEventSourcingCommand, parseDemandEventSourcingCommand, } from "./demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "./demand-event-sourcing-repository.js";
+import { DemandEventStreamCommitError, prepareDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
 import { DemandFileEventStoreError } from "./demand-file-event-store.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing Command Handler input is invalid.",
@@ -25,12 +25,7 @@ export class DemandEventSourcingCommandHandlerError extends Error {
         this.path = path;
     }
 }
-const OPTION_FIELDS = new Set([
-    "commitId",
-    "expectedStreamRevision",
-    "idempotency",
-    "signal",
-]);
+const OPTION_FIELDS = new Set(["commitId", "expectedStreamRevision", "idempotency", "signal"]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 function fail(reason, path) {
     throw new DemandEventSourcingCommandHandlerError(reason, path);
@@ -72,8 +67,7 @@ function parseOptions(value) {
         fail("input", "$/expectedStreamRevision");
     }
     const signal = record.signal;
-    if (signal !== undefined &&
-        (types.isProxy(signal) || !(signal instanceof AbortSignal))) {
+    if (signal !== undefined && (types.isProxy(signal) || !(signal instanceof AbortSignal))) {
         fail("input", "$/signal");
     }
     let idempotency;
@@ -247,9 +241,7 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
             commitId: options.commitId,
             commandDigest,
             events,
-            ...(options.idempotency === undefined
-                ? {}
-                : { idempotency: options.idempotency }),
+            ...(options.idempotency === undefined ? {} : { idempotency: options.idempotency }),
         });
     }
     catch (error) {

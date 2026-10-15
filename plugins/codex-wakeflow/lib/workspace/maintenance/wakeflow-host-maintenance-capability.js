@@ -1,5 +1,5 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow host maintenance capability input is invalid.",
     host: "Wakeflow host maintenance capability does not match the current host.",
@@ -34,27 +34,26 @@ export function assertWakeflowHostMaintenanceCapability(value, expectedHostId) {
             fail("input", error.path);
         throw error;
     }
-    if (!Object.isFrozen(value)
-        ||
-            Object.keys(record).sort().join("\u0000")
-                !== "capabilityId\u0000executeOperation\u0000hostId\u0000kind\u0000planContribution"
-        || record.kind !== "WakeflowHostMaintenanceCapability"
-        || record.hostId !== expectedHostId
-        || typeof record.capabilityId !== "string"
-        || record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH
-        || !record.capabilityId.isWellFormed()
-        || !CAPABILITY_ID_PATTERN.test(record.capabilityId)
-        || typeof record.planContribution !== "function"
-        || types.isProxy(record.planContribution)
-        || typeof record.executeOperation !== "function"
-        || types.isProxy(record.executeOperation)) {
+    if (!Object.isFrozen(value) ||
+        Object.keys(record).sort().join("\u0000") !==
+            "capabilityId\u0000executeOperation\u0000hostId\u0000kind\u0000planContribution" ||
+        record.kind !== "WakeflowHostMaintenanceCapability" ||
+        record.hostId !== expectedHostId ||
+        typeof record.capabilityId !== "string" ||
+        record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH ||
+        !record.capabilityId.isWellFormed() ||
+        !CAPABILITY_ID_PATTERN.test(record.capabilityId) ||
+        typeof record.planContribution !== "function" ||
+        types.isProxy(record.planContribution) ||
+        typeof record.executeOperation !== "function" ||
+        types.isProxy(record.executeOperation)) {
         fail(record.hostId === expectedHostId ? "identity" : "host", "$capability");
     }
 }
 /** 验证 contribution 确由当前 capability 的公开身份命名。 */
 export function assertWakeflowHostMaintenanceContributionCapability(capability, contribution) {
-    if (contribution.hostId !== capability.hostId
-        || contribution.capabilityId !== capability.capabilityId) {
+    if (contribution.hostId !== capability.hostId ||
+        contribution.capabilityId !== capability.capabilityId) {
         fail("contribution", "$contribution");
     }
 }

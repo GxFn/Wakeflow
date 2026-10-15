@@ -1,4 +1,4 @@
-import { WAKEFLOW_LOCAL_ROOT, } from "../../configuration/wakeflow-config.js";
+import { WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
 /**

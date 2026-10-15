@@ -1,19 +1,19 @@
-import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
-import { parseGitObjectId, GitObjectIdError, } from "../../foundation/git/git-object-id.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { GitObjectIdError, parseGitObjectId, } from "../../foundation/git/git-object-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
-import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 /**
  * Wakeflow Governance / Result：目标 Agent 提交的单仓库 implementation 结果陈述。
  *
@@ -24,6 +24,7 @@ import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 const REPORT_KIND = "WakeflowImplementationTargetResultReport";
 const REPORT_SCHEMA_VERSION = 1;
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/u;
 const ERROR_MESSAGES = {
@@ -73,8 +74,7 @@ function jsonRecord(value, fields, path) {
     }
     const keys = Object.keys(json).sort();
     const expected = [...fields].sort();
-    if (keys.length !== expected.length ||
-        keys.some((key, index) => key !== expected[index])) {
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
         fail("input", path);
     }
     return json;
@@ -191,8 +191,7 @@ export function parseImplementationTargetResultReportContent(value) {
         (repository.disposition === "committed") !== commits.length > 0) {
         fail("relation", "$/repositoryChange/commits");
     }
-    if (!Array.isArray(record.evidenceLocators) ||
-        record.evidenceLocators.length > 64) {
+    if (!Array.isArray(record.evidenceLocators) || record.evidenceLocators.length > 64) {
         fail("input", "$/evidenceLocators");
     }
     const locators = record.evidenceLocators.map((entry, index) => {
@@ -210,8 +209,7 @@ export function parseImplementationTargetResultReportContent(value) {
     if (new Set(locatorKeys).size !== locatorKeys.length) {
         fail("relation", "$/evidenceLocators");
     }
-    if (!Array.isArray(record.anchorEvidence) ||
-        record.anchorEvidence.length > 32) {
+    if (!Array.isArray(record.anchorEvidence) || record.anchorEvidence.length > 32) {
         fail("input", "$/anchorEvidence");
     }
     const locatorRefs = new Set(locators.map((entry) => `${entry.ref}\0${entry.digest}`));

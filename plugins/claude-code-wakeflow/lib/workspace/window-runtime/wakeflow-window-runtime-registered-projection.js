@@ -1,11 +1,11 @@
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA, } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA, } from "../../contracts/generated/workspace/window-runtime-registered-projection.generated.js";
-import { WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA, } from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, } from "../../foundation/crypto/sha256.js";
-import { renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, } from "../../foundation/data/json-value.js";
-import { createRuntimeJsonSchemaValidator, } from "../../foundation/schema/runtime-json-schema.js";
+import { WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA } from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
+import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { parseWakeflowWindowHostBinding, } from "./wakeflow-window-host-binding.js";
@@ -28,10 +28,7 @@ export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
         this.path = path;
     }
 }
-const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA, [
-    WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
-]);
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA]);
 function fail(reason, path) {
     throw new WakeflowWindowRuntimeRegisteredProjectionError(reason, path);
 }
@@ -52,11 +49,11 @@ function projectionBasis(value) {
     };
 }
 function assertSources(profile, source, binding) {
-    if (!profile.surfaces.windowIdentity
-        || profile.hostId !== source.hostId
-        || source.programId !== binding.programId
-        || source.hostId !== binding.hostId
-        || source.windowId !== binding.windowId) {
+    if (!profile.surfaces.windowIdentity ||
+        profile.hostId !== source.hostId ||
+        source.programId !== binding.programId ||
+        source.hostId !== binding.hostId ||
+        source.windowId !== binding.windowId) {
         fail("source", "$sources");
     }
 }

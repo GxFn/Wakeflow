@@ -1,22 +1,22 @@
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
-import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
-import { computeDemandAggregateStateDigest, parseDemandAggregateState, DemandAggregateStateError, } from "../model/demand-aggregate-state.js";
-import { computeDemandEventStreamCommitDigest, parseDemandEventStreamCommit, DemandEventStreamCommitError, } from "./demand-event-stream-commit.js";
-import { parseDemandEventSourcingAggregate, DemandEventSourcingAggregateError, } from "./demand-event-sourcing-aggregate.js";
+import { computeDemandAggregateStateDigest, DemandAggregateStateError, parseDemandAggregateState, } from "../model/demand-aggregate-state.js";
+import { DemandEventSourcingAggregateError, parseDemandEventSourcingAggregate, } from "./demand-event-sourcing-aggregate.js";
 import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
-import { parseDemandEventCommitSequence, parseDemandEventStreamRevision, DemandEventStreamPositionError, } from "./demand-event-stream-position.js";
 import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-event-sourcing-version-compatibility.js";
+import { computeDemandEventStreamCommitDigest, DemandEventStreamCommitError, parseDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
+import { DemandEventStreamPositionError, parseDemandEventCommitSequence, parseDemandEventStreamRevision, } from "./demand-event-stream-position.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。
  *
@@ -122,8 +122,7 @@ export function parseDemandEventSourcingSnapshot(value) {
     if (state.demandId !== demandId ||
         commitSequence > streamRevision ||
         computeDemandAggregateStateDigest(state) !== stateDigest ||
-        versionCompatibilityDigest !==
-            computeDemandEventSourcingVersionCompatibilityDigest()) {
+        versionCompatibilityDigest !== computeDemandEventSourcingVersionCompatibilityDigest()) {
         fail("mismatch", "$snapshot");
     }
     return Object.freeze({
@@ -182,11 +181,9 @@ export function restoreDemandEventSourcingSnapshot(snapshotValue, anchorCommitVa
         anchor.demandId !== snapshot.demandId ||
         anchor.commitSequence !== snapshot.commitSequence ||
         anchor.lastStreamRevision !== snapshot.streamRevision ||
-        computeDemandEventStreamCommitDigest(anchor) !==
-            snapshot.lastCommitDigest ||
+        computeDemandEventStreamCommitDigest(anchor) !== snapshot.lastCommitDigest ||
         lastEvent.eventId !== snapshot.lastEventId ||
-        computeDemandEventSourcingStoredEventDigest(lastEvent) !==
-            snapshot.lastEventDigest ||
+        computeDemandEventSourcingStoredEventDigest(lastEvent) !== snapshot.lastEventDigest ||
         lastEvent.resultingStateDigest !== snapshot.stateDigest) {
         fail("mismatch", "$snapshot");
     }

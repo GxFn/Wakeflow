@@ -1,7 +1,7 @@
 import { types } from "node:util";
-import { createFileAtomically, replaceFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { ByteCountError, parseByteCount, } from "../../foundation/numeric/byte-count.js";
@@ -40,18 +40,18 @@ function fail(reason, path) {
     throw new WakeflowManagedBlockFileError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseRequest(value) {
     if (typeof value !== "object" || value === null || types.isProxy(value)) {
@@ -97,7 +97,9 @@ function parseRequest(value) {
     }
     return Object.freeze({
         resourcePath,
-        currentTargets: Object.freeze([...value.currentTargets]),
+        currentTargets: Object.freeze([
+            ...value.currentTargets,
+        ]),
         desiredTarget: value.desiredTarget,
         maximumBytes,
         signal: value.signal,
@@ -132,9 +134,9 @@ async function readSource(root, request, expectedUserId) {
             maximumBytes: request.maximumBytes,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (read.node.kind !== "file"
-            || read.node.linkCount !== 1n
-            || read.node.userId !== expectedUserId) {
+        if (read.node.kind !== "file" ||
+            read.node.linkCount !== 1n ||
+            read.node.userId !== expectedUserId) {
             fail("source-policy", "$source");
         }
         return Object.freeze({
@@ -172,9 +174,9 @@ async function revalidateSource(root, request, initial) {
             ...(initial === null ? {} : { expectedNode: initial.facts.node }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (initial === null
-            || current.digest !== initial.facts.digest
-            || current.byteCount !== initial.facts.byteCount) {
+        if (initial === null ||
+            current.digest !== initial.facts.digest ||
+            current.byteCount !== initial.facts.byteCount) {
             fail("source", "$source");
         }
     }
@@ -217,9 +219,7 @@ async function inspectParsed(root, request, expectedUserId) {
     }
     await revalidateSource(root, request, read);
     return Object.freeze({
-        status: transition.disposition === "current"
-            ? "managed-current"
-            : "recompose-required",
+        status: transition.disposition === "current" ? "managed-current" : "recompose-required",
         resourcePath: request.resourcePath,
         source: read?.facts ?? null,
         transition,
@@ -238,9 +238,9 @@ function mapAtomicError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("target-capacity", "$target");
-    if (error.reason === "target-exists"
-        || error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure") {
+    if (error.reason === "target-exists" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "expectation-read-failure") {
         fail("conflict", "$source");
     }
     if (error.reason === "root-scope" || error.reason === "parent-changed") {
@@ -249,10 +249,10 @@ function mapAtomicError(error) {
     if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$resourcePath");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     fail("effect-failure", "$resourcePath");
@@ -282,33 +282,31 @@ async function publishTarget(root, request, inspection, createMode) {
     }
 }
 function sameSource(left, right) {
-    return left.resourcePath === right.resourcePath
-        && left.byteCount === right.byteCount
-        && left.digest === right.digest
-        && sameFileNodeSnapshot(left.node, right.node);
+    return (left.resourcePath === right.resourcePath &&
+        left.byteCount === right.byteCount &&
+        left.digest === right.digest &&
+        sameFileNodeSnapshot(left.node, right.node));
 }
 function assertReadback(request, before, effect, after, expectedUserId, createMode) {
     const target = before.transition.target;
     const source = after.source;
-    const expectedMode = before.source === null
-        ? createMode
-        : before.source.node.permissionBits;
-    if (target === null
-        || source === null
-        || after.status !== "managed-current"
-        || after.transition.sourceAuthority !== "desired"
-        || after.transition.target !== null
-        || effect.resourcePath !== request.resourcePath
-        || effect.digest !== target.digest
-        || effect.byteCount !== target.byteCount
-        || effect.node.kind !== "file"
-        || effect.node.permissionBits !== expectedMode
-        || effect.node.linkCount !== 1n
-        || effect.node.userId !== expectedUserId
-        || source.resourcePath !== effect.resourcePath
-        || source.digest !== effect.digest
-        || source.byteCount !== effect.byteCount
-        || !sameFileNodeSnapshot(source.node, effect.node)) {
+    const expectedMode = before.source === null ? createMode : before.source.node.permissionBits;
+    if (target === null ||
+        source === null ||
+        after.status !== "managed-current" ||
+        after.transition.sourceAuthority !== "desired" ||
+        after.transition.target !== null ||
+        effect.resourcePath !== request.resourcePath ||
+        effect.digest !== target.digest ||
+        effect.byteCount !== target.byteCount ||
+        effect.node.kind !== "file" ||
+        effect.node.permissionBits !== expectedMode ||
+        effect.node.linkCount !== 1n ||
+        effect.node.userId !== expectedUserId ||
+        source.resourcePath !== effect.resourcePath ||
+        source.digest !== effect.digest ||
+        source.byteCount !== effect.byteCount ||
+        !sameFileNodeSnapshot(source.node, effect.node)) {
         fail("commit-uncertain", "$resourcePath");
     }
     if (effect.publication === "created") {
@@ -320,17 +318,17 @@ function assertReadback(request, before, effect, after, expectedUserId, createMo
     }
 }
 function parseOptions(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || Object.keys(value).some((key) => key !== "createMode")) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        Object.keys(value).some((key) => key !== "createMode")) {
         fail("input", "$options");
     }
     const createMode = value.createMode;
-    if (typeof createMode !== "number"
-        || !Number.isInteger(createMode)
-        || createMode < 0
-        || createMode > 0o777) {
+    if (typeof createMode !== "number" ||
+        !Number.isInteger(createMode) ||
+        createMode < 0 ||
+        createMode > 0o777) {
         fail("input", "$options.createMode");
     }
     return createMode;

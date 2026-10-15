@@ -1,5 +1,5 @@
-import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind, } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../../kernel/layout.js";
 /**
  * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand

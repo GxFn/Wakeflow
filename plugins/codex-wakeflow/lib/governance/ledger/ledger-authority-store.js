@@ -1,10 +1,10 @@
 import { types } from "node:util";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
-import { createLedgerAuthorityMemberReference, loadLedgerAuthorityRecord, parseLedgerAuthorityMemberReference, resolveLoadedLedgerAuthorityMemberReference, } from "./ledger-authority-reader.js";
-import { LedgerAuthorityStoreError, isLedgerAbortSignal, parseLedgerAuthorityStoreOptions, throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectLedgerAuthorityLayout, materializeLedgerAuthorityLayout, } from "./ledger-authority-layout.js";
+import { createLedgerAuthorityMemberReference, loadLedgerAuthorityRecord, parseLedgerAuthorityMemberReference, resolveLoadedLedgerAuthorityMemberReference, } from "./ledger-authority-reader.js";
+import { throwLedgerAuthorityStoreError as fail, isLedgerAbortSignal, LedgerAuthorityStoreError, parseLedgerAuthorityStoreOptions, } from "./ledger-authority-store-contract.js";
 import { recoverExactLedgerAuthorityRecordPublication, recoverLedgerAuthorityRecordPublication, } from "./ledger-record-publication-recovery.js";
 import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
 const LEDGER_MEMBER_REFERENCE_BATCH_MAXIMUM = 32;
@@ -30,9 +30,9 @@ function parseInitializeOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (record.freshLedger !== true
-        || Object.keys(record).some((key) => key !== "freshLedger" && key !== "signal")
-        || (!isLedgerAbortSignal(record.signal) && record.signal !== undefined)) {
+    if (record.freshLedger !== true ||
+        Object.keys(record).some((key) => key !== "freshLedger" && key !== "signal") ||
+        (!isLedgerAbortSignal(record.signal) && record.signal !== undefined)) {
         fail("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
@@ -40,10 +40,10 @@ function parseInitializeOptions(value) {
 export class LedgerAuthorityStore {
     #root;
     constructor(root) {
-        if (typeof root !== "object"
-            || root === null
-            || types.isProxy(root)
-            || !(root instanceof RootedDirectory)) {
+        if (typeof root !== "object" ||
+            root === null ||
+            types.isProxy(root) ||
+            !(root instanceof RootedDirectory)) {
             fail("input", "$root");
         }
         this.#root = root;
@@ -132,7 +132,9 @@ export class LedgerAuthorityStore {
         }
         const resolved = [];
         for (let index = 0; index < prepared.length; index += LEDGER_MEMBER_READ_CONCURRENCY) {
-            const settled = await Promise.allSettled(prepared.slice(index, index + LEDGER_MEMBER_READ_CONCURRENCY).map(({ loaded, reference }) => (resolveLoadedLedgerAuthorityMemberReference(this.#root, loaded, reference, signal))));
+            const settled = await Promise.allSettled(prepared
+                .slice(index, index + LEDGER_MEMBER_READ_CONCURRENCY)
+                .map(({ loaded, reference }) => resolveLoadedLedgerAuthorityMemberReference(this.#root, loaded, reference, signal)));
             for (const result of settled) {
                 if (result.status === "rejected")
                     throw result.reason;
@@ -142,5 +144,5 @@ export class LedgerAuthorityStore {
         return Object.freeze(resolved);
     }
 }
-export { createLedgerAuthorityMemberReference, parseLedgerAuthorityMemberReference, };
 export { LedgerAuthorityStoreError } from "./ledger-authority-store-contract.js";
+export { createLedgerAuthorityMemberReference, parseLedgerAuthorityMemberReference };

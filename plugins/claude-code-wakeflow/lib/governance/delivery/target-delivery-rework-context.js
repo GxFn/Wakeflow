@@ -1,5 +1,5 @@
 import { parseTargetResult, TargetResultError, } from "../result/target-result.js";
-import { parseControllerImplementationReviewDecision, ControllerImplementationReviewDecisionError, } from "../review/controller-implementation-review-decision.js";
+import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../review/controller-implementation-review-decision.js";
 import { projectTargetDeliveryReworkContext, } from "./delivery-envelope.js";
 const ERROR_MESSAGES = {
     decision: "Target Delivery rework context requires a valid Controller Decision.",
@@ -45,14 +45,12 @@ export function createTargetDeliveryReworkContext(input) {
         decision.programId !== previousResult.programId ||
         decision.demandId !== previousResult.demandId ||
         decision.targetTaskId !== previousResult.targetTaskId ||
-        decision.reviewed.taskPackageId !==
-            previousResult.taskPackage.taskPackageId ||
+        decision.reviewed.taskPackageId !== previousResult.taskPackage.taskPackageId ||
         decision.reviewed.taskPackageDigest !== previousResult.taskPackage.digest ||
         decision.reviewed.targetResultId !== previousResult.targetResultId ||
         decision.reviewed.targetResultDigest !== previousResult.resultDigest ||
         decision.reviewed.targetResultOutcome !== previousResult.report.outcome ||
-        decision.reviewed.targetResultReportedAt !==
-            previousResult.report.reportedAt ||
+        decision.reviewed.targetResultReportedAt !== previousResult.report.reportedAt ||
         requiredCorrections.length === 0 ||
         !requiredCorrections.some((check) => check.outcome === "failed")) {
         fail("relation");

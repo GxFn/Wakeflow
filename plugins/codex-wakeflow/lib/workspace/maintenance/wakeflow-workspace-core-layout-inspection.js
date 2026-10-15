@@ -1,6 +1,6 @@
 import { types } from "node:util";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { hasDurableAtomicFileStagePrefix, } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -35,10 +35,10 @@ function fail(reason, path) {
 function parseSignal(value) {
     if (value === undefined)
         return undefined;
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof AbortSignal)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof AbortSignal)) {
         fail("input", "$options.signal");
     }
     return value;
@@ -48,10 +48,10 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -87,17 +87,14 @@ function directoryDigest(read) {
     });
 }
 function validPrivateDirectory(node) {
-    return node.kind === "directory"
-        && node.permissionBits === 0o700
-        && node.userId === currentUserId();
+    return (node.kind === "directory" && node.permissionBits === 0o700 && node.userId === currentUserId());
 }
 async function optionalResource(root, resourcePath) {
     try {
         return await root.inspectExistingResource(resourcePath, "$resourcePath");
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -121,8 +118,7 @@ async function readDirectory(root, resourcePath, signal) {
             if (error.reason === "source-changed") {
                 fail("source-changed", "$resourcePath");
             }
-            if (error.reason === "root-scope"
-                || error.reason === "expectation-changed") {
+            if (error.reason === "root-scope" || error.reason === "expectation-changed") {
                 fail("root-scope", "$root");
             }
             fail("inspection", "$resourcePath");
@@ -141,9 +137,7 @@ async function inspectActive(root, signal) {
                     : inspection.status === "incomplete"
                         ? "incomplete"
                         : "conflict",
-            nodeDigest: inspection.status === "absent"
-                ? null
-                : inspection.observationDigest,
+            nodeDigest: inspection.status === "absent" ? null : inspection.observationDigest,
         });
     }
     catch (error) {
@@ -243,7 +237,9 @@ async function inspectLocal(root, signal, issueCodes) {
     }
     const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
     // `incidents` 是边界诊断的可丢弃落点（§13.166 G1）：它的存在不说明工作区已被使用，不影响 fresh 兼容。
-    if (runtime.entries.some((entry) => (entry.name !== "maintenance" && entry.name !== "operation-admission" && entry.name !== "incidents"))) {
+    if (runtime.entries.some((entry) => entry.name !== "maintenance" &&
+        entry.name !== "operation-admission" &&
+        entry.name !== "incidents")) {
         freshCompatible = false;
     }
     const admission = entryNamed(runtime, "operation-admission");
@@ -256,7 +252,7 @@ async function inspectLocal(root, signal, issueCodes) {
                 freshCompatible = false;
         }
     }
-    const stagePresent = runtime.entries.some((entry) => (hasDurableAtomicFileStagePrefix(entry.name)));
+    const stagePresent = runtime.entries.some((entry) => hasDurableAtomicFileStagePrefix(entry.name));
     if (stagePresent)
         issueCodes.push("maintenance-gate-stage-residue");
     const maintenanceEntry = entryNamed(runtime, "maintenance");
@@ -264,9 +260,7 @@ async function inspectLocal(root, signal, issueCodes) {
     try {
         const lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
         if (lock.status === "held") {
-            lockState = lock.ownerState === "active"
-                ? "active"
-                : "inactive-or-unknown";
+            lockState = lock.ownerState === "active" ? "active" : "inactive-or-unknown";
             freshCompatible = false;
         }
     }
@@ -388,10 +382,10 @@ async function inspectLocal(root, signal, issueCodes) {
 /** 稳定分类 Workspace 核心私有布局；不执行任何写入或恢复。 */
 export async function inspectWakeflowWorkspaceCoreLayout(rootValue, optionsValue = {}) {
     assertRoot(rootValue);
-    if (typeof optionsValue !== "object"
-        || optionsValue === null
-        || types.isProxy(optionsValue)
-        || Object.keys(optionsValue).some((key) => key !== "signal")) {
+    if (typeof optionsValue !== "object" ||
+        optionsValue === null ||
+        types.isProxy(optionsValue) ||
+        Object.keys(optionsValue).some((key) => key !== "signal")) {
         fail("input", "$options");
     }
     const signal = parseSignal(optionsValue.signal);

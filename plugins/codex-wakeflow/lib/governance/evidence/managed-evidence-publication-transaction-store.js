@@ -1,9 +1,9 @@
 import { types } from "node:util";
-import { DeterministicJsonDocumentError, } from "../../foundation/data/deterministic-json-document.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile, } from "../../foundation/filesystem/deterministic-json-file.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
@@ -11,9 +11,9 @@ import { StrictTextFileError } from "../../foundation/filesystem/strict-text-fil
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { createManagedEvidencePublicationTransactionResourceDeclaration, } from "./managed-evidence-resource-catalog.js";
-import { computeManagedEvidencePublicationTransactionDigest, parseManagedEvidencePublicationTransaction, parseManagedEvidencePublicationTransactionDocument, renderManagedEvidencePublicationTransaction, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES, ManagedEvidencePublicationTransactionError, } from "./managed-evidence-publication-transaction.js";
-import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, } from "./managed-evidence-resource-paths.js";
+import { computeManagedEvidencePublicationTransactionDigest, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, parseManagedEvidencePublicationTransactionDocument, renderManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
+import { createManagedEvidencePublicationTransactionResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "./managed-evidence-resource-paths.js";
 /**
  * Wakeflow Governance / Evidence：固定Publication Transaction journal的耐久Store。
  *
@@ -88,9 +88,7 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertJournalNode(node) {
     const userId = currentUserId();
@@ -135,8 +133,7 @@ async function journalNodeOrNull(root) {
         return (await root.inspectExistingResource(MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, "$transaction")).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError)
@@ -148,16 +145,14 @@ function mapReadError(error) {
     if (error instanceof StableFileReadError) {
         if (error.reason === "aborted")
             fail("aborted", "$signal");
-        if (error.reason === "root-scope" ||
-            error.reason === "unsupported-platform") {
+        if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
             fail("root-scope", "$root");
         }
         if (error.reason === "too-large")
             fail("capacity", "$transaction");
         fail("conflict", "$transaction");
     }
-    if (error instanceof StrictTextFileError ||
-        error instanceof DeterministicJsonDocumentError) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
         fail("conflict", "$transaction");
     }
     throw error;
@@ -194,8 +189,8 @@ async function readStoredAtNode(root, expectedNode, signal) {
     return stored;
 }
 function sameTransaction(left, right) {
-    return renderManagedEvidencePublicationTransaction(left) ===
-        renderManagedEvidencePublicationTransaction(right);
+    return (renderManagedEvidencePublicationTransaction(left) ===
+        renderManagedEvidencePublicationTransaction(right));
 }
 /** 读取当前固定journal；严格absent返回null，非法或漂移资源失败关闭。 */
 export async function loadManagedEvidencePublicationTransaction(root, optionsValue = {}) {
@@ -203,9 +198,7 @@ export async function loadManagedEvidencePublicationTransaction(root, optionsVal
     const options = parseOptions(optionsValue);
     assertNotAborted(options.signal);
     const node = await journalNodeOrNull(root);
-    return node === null
-        ? null
-        : readStoredAtNode(root, node, options.signal);
+    return node === null ? null : readStoredAtNode(root, node, options.signal);
 }
 /** 读取并证明固定journal仍绑定exact Transaction与可选原始node。 */
 export async function requireCurrentManagedEvidencePublicationTransaction(root, transactionValue, expectedNodeValue, optionsValue = {}) {
@@ -225,11 +218,9 @@ export async function requireCurrentManagedEvidencePublicationTransaction(root, 
     const expectedNode = parseExpectedNode(expectedNodeValue);
     const stored = await loadManagedEvidencePublicationTransaction(root, options.signal === undefined ? undefined : { signal: options.signal });
     if (stored === null ||
-        stored.transactionDigest !==
-            computeManagedEvidencePublicationTransactionDigest(transaction) ||
+        stored.transactionDigest !== computeManagedEvidencePublicationTransactionDigest(transaction) ||
         !sameTransaction(stored.transaction, transaction) ||
-        (expectedNode !== undefined &&
-            !sameFileNodeSnapshot(stored.source.node, expectedNode))) {
+        (expectedNode !== undefined && !sameFileNodeSnapshot(stored.source.node, expectedNode))) {
         fail("conflict", "$transaction");
     }
     return stored;
@@ -271,8 +262,7 @@ export async function createManagedEvidencePublicationTransactionJournal(root, t
     admitMutation(transaction, "exclusive-create");
     const text = renderManagedEvidencePublicationTransaction(transaction);
     const bytes = encodeUtf8(text, "$transaction");
-    if (bytes.byteLength >
-        MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES) {
+    if (bytes.byteLength > MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES) {
         fail("capacity", "$transaction");
     }
     let publication;

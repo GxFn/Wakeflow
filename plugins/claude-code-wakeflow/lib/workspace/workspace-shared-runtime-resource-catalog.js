@@ -1,6 +1,6 @@
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
-import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
+import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 /** Wakeflow Workspace：宿主中立共享运行时与协调根的静态资源目录。 */
 export const WAKEFLOW_SHARED_RUNTIME_ROOT_REF = parsePortableResourcePath(`${WAKEFLOW_RUNTIME_ROOT_REF}/shared`);
 export const WAKEFLOW_SHARED_COORDINATION_ROOT_REF = parsePortableResourcePath(`${WAKEFLOW_SHARED_RUNTIME_ROOT_REF}/coordination`);

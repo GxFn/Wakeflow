@@ -1,22 +1,21 @@
 import { types } from "node:util";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesMatchingTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesMatchingTargets, DurableAtomicFileStageRecoveryError, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
-import {} from "../../foundation/filesystem/file-node-snapshot.js";
-import { joinDirectoryTreeCandidatePath, } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { createManagedEvidenceRootResourceDeclaration, } from "./managed-evidence-resource-catalog.js";
-import { renderManagedEvidenceManifest, } from "./managed-evidence-manifest.js";
-import { materializeManagedEvidencePublicationPayload, ManagedEvidencePublicationPayloadMaterializationError, } from "./managed-evidence-publication-payload-materializer.js";
-import { requireCurrentManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
-import { deriveManagedEvidencePublicationRecordTreePlan, parseManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "./managed-evidence-publication-transaction.js";
-import { MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_ROOT_REF, } from "./managed-evidence-resource-paths.js";
+import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
+import { ManagedEvidencePublicationPayloadMaterializationError, materializeManagedEvidencePublicationPayload, } from "./managed-evidence-publication-payload-materializer.js";
+import { deriveManagedEvidencePublicationRecordTreePlan, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
+import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-store.js";
 import { MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE, MANAGED_EVIDENCE_RECORD_FILE_MODE, } from "./managed-evidence-record-tree-plan.js";
+import { createManagedEvidenceRootResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+import { MANAGED_EVIDENCE_MANIFEST_FILE_NAME, MANAGED_EVIDENCE_ROOT_REF, } from "./managed-evidence-resource-paths.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence publication stage materialization input is invalid.",
     journal: "Managed evidence publication journal is absent, changed, or different.",
@@ -116,8 +115,7 @@ async function loadExactJournal(demandRoot, transaction, signal, expectedNode) {
 function assertPrivateDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" &&
-            node.userId !== BigInt(process.geteuid()))) {
+        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
         fail("stage-conflict", path);
     }
 }
@@ -273,10 +271,10 @@ function mapPayloadError(error) {
     fail("operation-failure", "$payload");
 }
 function onlyManifestMissing(progress) {
-    return progress.status === "incomplete" &&
+    return (progress.status === "incomplete" &&
         progress.missingDirectories.length === 0 &&
         progress.missingFiles.length === 1 &&
-        progress.missingFiles[0] === MANIFEST_REF;
+        progress.missingFiles[0] === MANIFEST_REF);
 }
 function assertOnlyManifestMissing(progress) {
     if (!onlyManifestMissing(progress))
@@ -310,8 +308,7 @@ async function publishManifest(demandRoot, transaction, plan, signal) {
         return "created";
     }
     catch (error) {
-        if (error instanceof DurableAtomicFileWriteError &&
-            error.reason === "target-exists") {
+        if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
             // 同一journal并发winner可能已经发布Manifest；完整stage复验决定能否接纳。
             await inspectComplete(demandRoot, plan, undefined);
             return "existing";

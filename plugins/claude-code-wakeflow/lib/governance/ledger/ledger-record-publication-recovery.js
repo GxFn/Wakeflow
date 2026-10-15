@@ -1,10 +1,9 @@
-import { inspectDirectoryTreeCandidateProgress, DurableDirectoryTreeCandidateError, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidateProgress, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { ledgerRecordPublicationIntentRefForIdentity, ledgerRecordPublicationLockRefForIdentity, } from "./ledger-authority-paths.js";
 import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
+import { LedgerRecordPublicationIntentError, parseLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, } from "./ledger-record-publication-intent.js";
 import { existingLedgerRecordPublicationIntentOrNull, inspectLedgerRecordPublicationResidues, ledgerPublicationResourceNodeOrNull, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, recoverLedgerIntentAtomicStages, retireLedgerRecordPublicationIntent, settleCommittedLedgerIntent, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
-import { parseLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, } from "./ledger-record-publication-intent.js";
 /** Wakeflow Governance / Ledger：由精简发布意图记录驱动的单记录前向恢复。 */
 function parseRecordIdentity(recordIdValue) {
     try {
@@ -34,24 +33,22 @@ async function recoverPublication(root, recordId, expectedIntent, signal) {
     const observed = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
     if (observed === null)
         fail("not-found", "$intent");
-    if (observed.intent.record.requirementId !== recordId
-        || observed.intent.lockRef !== lockRef
-        || (expectedIntent !== null
-            && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))) {
+    if (observed.intent.record.requirementId !== recordId ||
+        observed.intent.lockRef !== lockRef ||
+        (expectedIntent !== null && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))) {
         fail("conflict", "$intent");
     }
     await prepareLedgerRecordPublicationLockRecovery(root, lockRef);
     return withLedgerRecordPublicationLock(root, lockRef, signal, async () => {
         await recoverLedgerIntentAtomicStages(root, intentRef, signal);
         const stored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
-        if (stored === null
-            || !sameLedgerRecordPublicationIntent(stored.intent, observed.intent)
-            || (expectedIntent !== null
-                && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))) {
+        if (stored === null ||
+            !sameLedgerRecordPublicationIntent(stored.intent, observed.intent) ||
+            (expectedIntent !== null && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))) {
             fail("conflict", "$intent");
         }
         const residues = await inspectLedgerRecordPublicationResidues(root, stored.intent);
-        if (await ledgerPublicationResourceNodeOrNull(root, stored.intent.finalRootRef) !== null) {
+        if ((await ledgerPublicationResourceNodeOrNull(root, stored.intent.finalRootRef)) !== null) {
             const loaded = await settleCommittedLedgerIntent(root, stored, residues, signal);
             return Object.freeze({ wroteAuthority: false, loaded });
         }
@@ -84,8 +81,8 @@ async function recoverPublication(root, recordId, expectedIntent, signal) {
         await publishLedgerRecordStage(root, stored.intent, candidate, signal);
         const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
         const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
-        if (freshStored === null
-            || !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)) {
+        if (freshStored === null ||
+            !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)) {
             fail("recovery-required", "$intent");
         }
         await retireLedgerRecordPublicationIntent(root, freshStored, signal);

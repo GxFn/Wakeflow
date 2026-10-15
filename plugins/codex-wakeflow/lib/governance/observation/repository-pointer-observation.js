@@ -78,7 +78,11 @@ async function directoryEntries(root, ref, signal) {
             ...signalOptions(signal),
         });
         return Object.freeze({
-            entries: listing.entries.map((entry) => Object.freeze({ name: entry.name, resourcePath: entry.resourcePath, kind: entry.node.kind })),
+            entries: listing.entries.map((entry) => Object.freeze({
+                name: entry.name,
+                resourcePath: entry.resourcePath,
+                kind: entry.node.kind,
+            })),
             unreadable: false,
         });
     }
@@ -160,7 +164,9 @@ function resolveHead(text, branches) {
 async function observeCheckout(entryDirectory, gitdirText) {
     if (gitdirText === null)
         return "absent";
-    const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
+    const gitdirPath = path.isAbsolute(gitdirText)
+        ? gitdirText
+        : path.resolve(entryDirectory, gitdirText);
     try {
         const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
         if (observed.state === "missing")
@@ -186,7 +192,8 @@ async function collectWorktrees(root, branches, signal) {
             name: entry.name,
             head: resolved?.head ?? null,
             branch: resolved?.branch ?? null,
-            prunable: (await observeCheckout(path.join(root.absolutePath, entry.resourcePath), gitdir)) === "absent",
+            prunable: (await observeCheckout(path.join(root.absolutePath, entry.resourcePath), gitdir)) ===
+                "absent",
         }));
     }
     return Object.freeze(worktrees.sort((left, right) => left.name.localeCompare(right.name)));

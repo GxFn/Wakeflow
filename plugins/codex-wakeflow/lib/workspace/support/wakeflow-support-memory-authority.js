@@ -1,12 +1,12 @@
-import { buildWakeflowConfigIndexes, computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, WAKEFLOW_PRESENTATION_LANGUAGES, } from "../../configuration/wakeflow-config.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { parsePortableResourcePath, PortableResourcePathError, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { buildWakeflowConfigIndexes, computeWakeflowConfigDigest, parseWakeflowConfig, WAKEFLOW_PRESENTATION_LANGUAGES, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { MarkdownJsonStringLiteralError, renderMarkdownJsonStringLiteral, } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 /**
  * Wakeflow Workspace / Support：Wakeflow-managed Design/Test whole-file memory 权威。
  *
@@ -187,13 +187,13 @@ function simplifiedChineseBody(config, surface, windowId, profile) {
     ].join("\n")}\n`;
 }
 function assertBody(body, reason) {
-    if (!body.isWellFormed()
-        || body.normalize("NFC") !== body
-        || body.startsWith("\ufeff")
-        || body.includes("\r")
-        || !body.endsWith("\n")
-        || body.endsWith("\n\n")
-        || body.includes(MANAGED_MARKER_PREFIX)) {
+    if (!body.isWellFormed() ||
+        body.normalize("NFC") !== body ||
+        body.startsWith("\ufeff") ||
+        body.includes("\r") ||
+        !body.endsWith("\n") ||
+        body.endsWith("\n\n") ||
+        body.includes(MANAGED_MARKER_PREFIX)) {
         fail(reason, reason === "text" ? "$body" : "$authority.body");
     }
 }
@@ -233,9 +233,7 @@ export function createWakeflowSupportMemoryAuthority(configValue, profileValue, 
     if (surface === undefined || surface.ownership !== "wakeflow-managed") {
         fail("surface", "$surfaceId");
     }
-    const window = surface.capability === "design"
-        ? indexes.designWindow
-        : indexes.testWindow;
+    const window = surface.capability === "design" ? indexes.designWindow : indexes.testWindow;
     if (window.root.surfaceId !== surface.surfaceId) {
         fail("surface", "$surfaceId");
     }
@@ -328,17 +326,17 @@ export function parseWakeflowSupportMemoryAuthority(value) {
         "windowId",
     ];
     const keys = Object.keys(record).sort();
-    if (keys.length !== expectedKeys.length
-        || keys.some((key, index) => key !== expectedKeys[index])
-        || record.kind !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_KIND
-        || record.schemaVersion !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_SCHEMA_VERSION
-        || typeof record.hostId !== "string"
-        || !HOST_ID_SET.has(record.hostId)
-        || typeof record.role !== "string"
-        || !ROLE_SET.has(record.role)
-        || typeof record.language !== "string"
-        || !LANGUAGE_SET.has(record.language)
-        || typeof record.body !== "string") {
+    if (keys.length !== expectedKeys.length ||
+        keys.some((key, index) => key !== expectedKeys[index]) ||
+        record.kind !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_KIND ||
+        record.schemaVersion !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_SCHEMA_VERSION ||
+        typeof record.hostId !== "string" ||
+        !HOST_ID_SET.has(record.hostId) ||
+        typeof record.role !== "string" ||
+        !ROLE_SET.has(record.role) ||
+        typeof record.language !== "string" ||
+        !LANGUAGE_SET.has(record.language) ||
+        typeof record.body !== "string") {
         fail("authority", "$authority");
     }
     const programId = authorityId(record.programId, "program", "$authority.programId");
@@ -366,9 +364,8 @@ export function parseWakeflowSupportMemoryAuthority(value) {
             fail("authority", error.path);
         throw error;
     }
-    if (computeSha256Digest(encodeUtf8(record.body), "$authority.body")
-        !== bodyDigest
-        || computeCanonicalJsonSha256Digest(digestBasis(configDigest, programId, surfaceId, windowId, role, hostId, fileName, language, bodyDigest)) !== authorityDigest) {
+    if (computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||
+        computeCanonicalJsonSha256Digest(digestBasis(configDigest, programId, surfaceId, windowId, role, hostId, fileName, language, bodyDigest)) !== authorityDigest) {
         fail("authority", "$authority");
     }
     return Object.freeze({

@@ -1,15 +1,15 @@
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
-import { WAKEFLOW_DELIVERY_REARM_SCHEMA, } from "../../contracts/generated/governance/delivery/delivery-rearm.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_DELIVERY_REARM_SCHEMA, } from "../../contracts/generated/governance/delivery/delivery-rearm.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
-import { parseJsonValue, JsonValueError } from "../../foundation/data/json-value.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { parseUtcInstant, UtcInstantError } from "../../foundation/time/utc-instant.js";
+import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { MAXIMUM_WORK_CLAIM_GENERATION } from "../../kernel/work-claims.js";
 /**
  * Wakeflow Governance / Delivery：同一信封在 rejected-before-send 之后的新代际。
@@ -131,7 +131,8 @@ export function parseDeliveryRearm(value) {
         },
         rearmedAt,
     });
-    if (basis.generation !== basis.previousGeneration + 1 || basis.generation > DELIVERY_REARM_LIMIT + 1) {
+    if (basis.generation !== basis.previousGeneration + 1 ||
+        basis.generation > DELIVERY_REARM_LIMIT + 1) {
         fail("relation", "$/generation");
     }
     if (basis.fence.claimId === basis.previousFence.claimId)

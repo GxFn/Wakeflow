@@ -1,23 +1,23 @@
 import { types } from "node:util";
 import pLimit from "p-limit";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
-import { recoverDurableAtomicFileStagesInDirectory, DurableAtomicFileStageRecoveryError, } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
-import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesInDirectory, } from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import { createDemandEventSourcingSnapshotResourceDeclaration, } from "../demand-resource-catalog.js";
+import { createDemandEventSourcingSnapshotResourceDeclaration } from "../demand-resource-catalog.js";
+import { DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DemandEventSourcingPathError, demandEventSourcingSnapshotRef, parseDemandEventStreamCommitFileName, } from "./demand-event-sourcing-paths.js";
+import { computeDemandEventSourcingSnapshotDigest, DemandEventSourcingSnapshotError, parseDemandEventSourcingSnapshot, parseDemandEventSourcingSnapshotDocument, renderDemandEventSourcingSnapshot, } from "./demand-event-sourcing-snapshot.js";
 import { parseDemandEventCommitSequence, } from "./demand-event-stream-position.js";
-import { parseDemandEventSourcingSnapshot, parseDemandEventSourcingSnapshotDocument, computeDemandEventSourcingSnapshotDigest, renderDemandEventSourcingSnapshot, DemandEventSourcingSnapshotError, } from "./demand-event-sourcing-snapshot.js";
-import { demandEventSourcingSnapshotRef, parseDemandEventStreamCommitFileName, DemandEventSourcingPathError, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, } from "./demand-event-sourcing-paths.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE, DEMAND_FILE_EVENT_STORE_FILE_MODE, } from "./demand-file-event-store.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变快照文件存储。
@@ -30,16 +30,16 @@ const DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_FILES = 10_000;
 const DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$demandEventSourcingSnapshot.maximumBytes");
 const SNAPSHOT_READ_CONCURRENCY = 4;
 const ERROR_MESSAGES = {
-    "input": "Demand Event Sourcing Snapshot Store input is invalid.",
+    input: "Demand Event Sourcing Snapshot Store input is invalid.",
     "root-scope": "Demand Event Sourcing Snapshot Store root changed.",
     "not-initialized": "Demand Event Sourcing snapshots directory is not initialized.",
     "node-policy": "Demand Event Sourcing snapshot resource violates private node policy.",
-    "capacity": "Demand Event Sourcing snapshot inventory exceeds its capacity.",
-    "inventory": "Demand Event Sourcing snapshot inventory contains an unknown resource.",
+    capacity: "Demand Event Sourcing snapshot inventory exceeds its capacity.",
+    inventory: "Demand Event Sourcing snapshot inventory contains an unknown resource.",
     "stream-changed": "Demand Event Sourcing snapshot inventory changed during observation.",
-    "conflict": "Demand Event Sourcing snapshot sequence already contains different bytes.",
+    conflict: "Demand Event Sourcing snapshot sequence already contains different bytes.",
     "recovery-required": "Demand Event Sourcing snapshot publication stage requires recovery.",
-    "aborted": "Demand Event Sourcing snapshot operation was aborted.",
+    aborted: "Demand Event Sourcing snapshot operation was aborted.",
     "operation-failure": "Demand Event Sourcing snapshot operation failed.",
 };
 export class DemandFileEventSnapshotStoreError extends Error {
@@ -57,10 +57,10 @@ function fail(reason, path) {
     throw new DemandFileEventSnapshotStoreError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -74,46 +74,44 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return Object.freeze({ signal: record.signal });
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertPrivateDirectory(node) {
-    if (node.kind !== "directory"
-        || node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== "directory" ||
+        node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("node-policy", "$snapshots");
     }
 }
 function assertPrivateFile(node, path) {
-    if (node.kind !== "file"
-        || node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE
-        || node.linkCount !== 1n
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== "file" ||
+        node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
+        node.linkCount !== 1n ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("node-policy", path);
     }
 }
 function sameDirectoryRead(left, right) {
-    return sameFileNodeSnapshot(left.directoryNode, right.directoryNode)
-        && left.entries.length === right.entries.length
-        && left.entries.every((entry, index) => {
+    return (sameFileNodeSnapshot(left.directoryNode, right.directoryNode) &&
+        left.entries.length === right.entries.length &&
+        left.entries.every((entry, index) => {
             const other = right.entries[index];
-            return other !== undefined
-                && entry.name === other.name
-                && entry.resourcePath === other.resourcePath
-                && sameFileNodeSnapshot(entry.node, other.node);
-        });
+            return (other !== undefined &&
+                entry.name === other.name &&
+                entry.resourcePath === other.resourcePath &&
+                sameFileNodeSnapshot(entry.node, other.node));
+        }));
 }
 async function readDirectory(root, signal, expectedNode) {
     try {
@@ -180,21 +178,20 @@ async function readSnapshotAt(root, resourcePath, sequence, node, signal) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            if (error.reason === "root-scope"
-                || error.reason === "unsupported-platform") {
+            if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
                 fail("root-scope", "$root");
             }
-            if (error.reason === "not-found"
-                || error.reason === "expectation-changed"
-                || error.reason === "source-changed") {
+            if (error.reason === "not-found" ||
+                error.reason === "expectation-changed" ||
+                error.reason === "source-changed") {
                 fail("stream-changed", "$snapshots");
             }
             if (error.reason !== "too-large") {
                 fail("operation-failure", "$snapshot");
             }
         }
-        else if (!(error instanceof StrictTextFileError)
-            && !(error instanceof DeterministicJsonDocumentError)) {
+        else if (!(error instanceof StrictTextFileError) &&
+            !(error instanceof DeterministicJsonDocumentError)) {
             throw error;
         }
         // 可重建快照的容量、编码、文本或 JSON 损坏时，聚合仓储可以回退。
@@ -238,7 +235,7 @@ export class DemandFileEventSnapshotStore {
             fail("capacity", "$snapshots");
         }
         const limit = pLimit(SNAPSHOT_READ_CONCURRENCY);
-        const settled = await Promise.allSettled(snapshotEntries.map((entry) => (limit(() => readSnapshotAt(this.#root, entry.resourcePath, entry.sequence, entry.node, signal)))));
+        const settled = await Promise.allSettled(snapshotEntries.map((entry) => limit(() => readSnapshotAt(this.#root, entry.resourcePath, entry.sequence, entry.node, signal))));
         const snapshots = [];
         for (const result of settled) {
             if (result.status === "rejected")
@@ -257,8 +254,7 @@ export class DemandFileEventSnapshotStore {
         const parsed = parseOptions(options);
         try {
             const receipt = await recoverDurableAtomicFileStagesInDirectory(this.#root, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, parsed.signal === undefined ? undefined : { signal: parsed.signal });
-            if (receipt.activeStageCount !== 0
-                || receipt.unknownStageCount !== 0) {
+            if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
                 fail("recovery-required", "$snapshots");
             }
             return receipt;
@@ -412,11 +408,11 @@ export class DemandFileEventSnapshotStore {
                 fail("capacity", "$snapshot");
             if (error.reason === "root-scope")
                 fail("root-scope", "$root");
-            if (error.reason === "commit-uncertain"
-                || error.reason === "durability-failure"
-                || error.reason === "stage-cleanup-failure"
-                || error.reason === "stage-recovery-required"
-                || error.reason === "close-failure") {
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "stage-recovery-required" ||
+                error.reason === "close-failure") {
                 fail("recovery-required", "$snapshot");
             }
             if (error.reason !== "target-exists") {
@@ -433,8 +429,8 @@ export class DemandFileEventSnapshotStore {
             throw error;
         }
         const existing = await readSnapshotAt(this.#root, ref, snapshot.commitSequence, resource.node, signal);
-        if (existing.status !== "valid"
-            || renderDemandEventSourcingSnapshot(existing.snapshot) !== text) {
+        if (existing.status !== "valid" ||
+            renderDemandEventSourcingSnapshot(existing.snapshot) !== text) {
             fail("conflict", "$snapshot");
         }
         return Object.freeze({

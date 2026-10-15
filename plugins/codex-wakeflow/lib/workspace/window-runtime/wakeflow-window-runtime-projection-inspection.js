@@ -6,9 +6,9 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "./wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority, WakeflowWindowHostBindingStoreAuthorityError, } from "./wakeflow-window-host-binding-store-authority.js";
 import { parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "./wakeflow-window-host-identity-profile.js";
+import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import { inspectWakeflowWindowRuntimeProjectionDocument, } from "./wakeflow-window-runtime-projection-document.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "./wakeflow-window-runtime-registered-projection.js";
-import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, WakeflowWindowRuntimeUnregisteredProjectionError, } from "./wakeflow-window-runtime-unregistered-projection.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow window runtime projection input is invalid.",
@@ -34,10 +34,10 @@ export function failWindowRuntimeProjection(reason, path) {
     throw new WakeflowWindowRuntimeProjectionError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failWindowRuntimeProjection("input", "$root");
     }
 }
@@ -62,8 +62,8 @@ export function admitWakeflowWindowRuntimeProjectionInputs(rootValue, configValu
         return Object.freeze({ config, resourceProfile, identityProfile });
     }
     catch (error) {
-        if (error instanceof WakeflowWorkspaceHostResourceProfileError
-            || error instanceof WakeflowWindowHostIdentityProfileError) {
+        if (error instanceof WakeflowWorkspaceHostResourceProfileError ||
+            error instanceof WakeflowWindowHostIdentityProfileError) {
             failWindowRuntimeProjection("profile", error.path);
         }
         throw error;
@@ -91,14 +91,14 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(root
         authority = compileWakeflowWindowHostBindingStoreAuthority(config, resourceProfile, identityProfile);
     }
     catch (error) {
-        if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError
-            || error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
+        if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError ||
+            error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
             failWindowRuntimeProjection("topology", error.path);
         }
         throw error;
     }
-    if (options.projectionRootRequired !== false
-        && !(await resourcePresent(root, wakeflowWindowRuntimeProjectionRootRef(resourceProfile), "$projectionRoot"))) {
+    if (options.projectionRootRequired !== false &&
+        !(await resourcePresent(root, wakeflowWindowRuntimeProjectionRootRef(resourceProfile), "$projectionRoot"))) {
         return Object.freeze({ kind: "runtime-missing" });
     }
     let inventory;

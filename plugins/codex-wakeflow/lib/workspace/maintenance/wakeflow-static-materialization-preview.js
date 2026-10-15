@@ -25,6 +25,7 @@ import { createWakeflowSupportMemoryAuthority } from "../support/wakeflow-suppor
 import { inspectWakeflowSupportMemory, WakeflowSupportMemoryInspectionError, } from "../support/wakeflow-support-memory-inspection.js";
 import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
+import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 import { inspectWakeflowSharedCoordinationLayout, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST, WakeflowSharedCoordinationLayoutError, } from "../wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { WakeflowWindowRuntimeDesiredTopologyError } from "../window-runtime/wakeflow-window-runtime-desired-topology.js";
@@ -33,7 +34,6 @@ import { WakeflowMaintenanceGateError, wakeflowMaintenanceCoreInspectionForGateC
 import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
 import { computeWakeflowStaticMaterializationPreviewDigest, failWakeflowStaticMaterializationPreview as fail, parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, } from "./wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
-import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
@@ -44,8 +44,7 @@ async function configResourceExists(root) {
         return true;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return false;
         }
         if (error instanceof RootedDirectoryError)
@@ -250,8 +249,7 @@ function addBlocker(blockers, code) {
     blockers.add(code);
 }
 function placementFor(report, surfaceId) {
-    return (report.roots.find((entry) => entry.key === `support.${surfaceId}.root`) ??
-        null);
+    return report.roots.find((entry) => entry.key === `support.${surfaceId}.root`) ?? null;
 }
 function ledgerPlacement(report) {
     return report.roots.find((entry) => entry.key === "ledger.root") ?? null;
@@ -576,7 +574,8 @@ async function inspectSupportMemories(root, request, current, desired, report, b
 async function inspectExternalInstructions(root, request, current, desired, report, blockers, steps) {
     for (const target of listWakeflowExternalInstructionTargets(desired)) {
         assertNotAborted(request.signal);
-        const placement = report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ?? null;
+        const placement = report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ??
+            null;
         if (placement === null) {
             addBlocker(blockers, "external-instruction-placement-unavailable");
             continue;
@@ -588,7 +587,9 @@ async function inspectExternalInstructions(root, request, current, desired, repo
         }
         let externalRoot;
         try {
-            externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", { durability: root.durability });
+            externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", {
+                durability: root.durability,
+            });
         }
         catch {
             addBlocker(blockers, "external-instruction-root-unavailable");
@@ -680,8 +681,7 @@ async function requirementBoardRootAbsent(root) {
         return false;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError &&
-            error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return true;
         }
         if (error instanceof RootedDirectoryError)
@@ -916,9 +916,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
     if (desired === null)
         addBlocker(blockers, "desired-config-unavailable");
     let addedRepositories = Object.freeze([]);
-    if (request.action === "reconfigure" &&
-        current !== null &&
-        desired !== null) {
+    if (request.action === "reconfigure" && current !== null && desired !== null) {
         if (current.model.program.programId !== desired.program.programId) {
             addBlocker(blockers, "reconfigure-program-identity-change");
         }
@@ -1199,13 +1197,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
     const sortedBlockers = Object.freeze([...blockers].sort());
     const orderedSteps = [...steps].sort((left, right) => {
         const rank = (stepRank.get(left.kind) ?? 99) - (stepRank.get(right.kind) ?? 99);
-        return rank !== 0
-            ? rank
-            : left.stepId < right.stepId
-                ? -1
-                : left.stepId > right.stepId
-                    ? 1
-                    : 0;
+        return rank !== 0 ? rank : left.stepId < right.stepId ? -1 : left.stepId > right.stepId ? 1 : 0;
     });
     const stepPosition = new Map(orderedSteps.map((entry, index) => [entry.stepId, index]));
     const frozenSteps = Object.freeze(orderedSteps.map((entry) => step({

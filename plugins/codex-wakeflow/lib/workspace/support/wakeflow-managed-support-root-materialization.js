@@ -1,13 +1,13 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
-import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { materializeAbsoluteDirectoryPlacement, AbsoluteDirectoryMaterializationError, } from "../../foundation/filesystem/absolute-directory-materialization.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { AbsoluteDirectoryMaterializationError, materializeAbsoluteDirectoryPlacement, } from "../../foundation/filesystem/absolute-directory-materialization.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
@@ -52,10 +52,10 @@ function fail(reason, path) {
     throw new WakeflowManagedSupportRootMaterializationError(reason, path);
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseDigest(value, path) {
     try {
@@ -84,13 +84,11 @@ function parseRequest(value) {
         "profile",
         "surfaceId",
     ];
-    const expected = record.signal === undefined
-        ? required
-        : [...required, "signal"].sort();
+    const expected = record.signal === undefined ? required : [...required, "signal"].sort();
     const keys = Object.keys(record).sort();
-    if (keys.length !== expected.length
-        || keys.some((key, index) => key !== expected[index])
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (keys.length !== expected.length ||
+        keys.some((key, index) => key !== expected[index]) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$request");
     }
     let config;
@@ -131,7 +129,7 @@ function parseRequest(value) {
     if (catalog.catalogDigest !== catalogDigest) {
         fail("catalog", "$request.expectedCatalogDigest");
     }
-    const rootDeclaration = catalog.declarations.find((entry) => (entry.declarationId === `support.${surfaceId}.root`));
+    const rootDeclaration = catalog.declarations.find((entry) => entry.declarationId === `support.${surfaceId}.root`);
     if (rootDeclaration === undefined)
         fail("surface", "$request.surfaceId");
     try {
@@ -160,20 +158,20 @@ function currentUserId() {
     return BigInt(process.geteuid());
 }
 function assertWorkspaceRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 /** 目录里属于该 surface 根下的 scaffold 目录声明，按相对路径排序。 */
 function scaffoldPaths(request) {
     return Object.freeze(request.catalog.declarations
-        .filter((entry) => entry.placement.root.kind === "support-surface"
-        && entry.placement.root.surfaceId === request.surfaceId
-        && entry.placement.relativePath !== null
-        && entry.processing.kind === "directory-container")
+        .filter((entry) => entry.placement.root.kind === "support-surface" &&
+        entry.placement.root.surfaceId === request.surfaceId &&
+        entry.placement.relativePath !== null &&
+        entry.processing.kind === "directory-container")
         .map((entry) => entry.placement.relativePath)
         .sort());
 }
@@ -194,9 +192,9 @@ async function placementFor(workspaceRoot, request) {
     return placement;
 }
 function scaffoldDirectoryCurrent(node, expectedUserId) {
-    return node.kind === "directory"
-        && node.permissionBits === WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE
-        && node.userId === expectedUserId;
+    return (node.kind === "directory" &&
+        node.permissionBits === WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE &&
+        node.userId === expectedUserId);
 }
 async function openSupportRoot(workspaceRoot, absolutePath) {
     try {
@@ -244,8 +242,7 @@ async function observeScaffold(supportRoot, relativePath, expectedUserId) {
         });
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return Object.freeze({ relativePath, status: "absent" });
         }
         if (error instanceof RootedDirectoryError) {
@@ -356,11 +353,11 @@ export async function materializeWakeflowManagedSupportRoot(workspaceRootValue, 
         if (error instanceof AbsoluteDirectoryMaterializationError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            if (error.reason === "symlink"
-                || error.reason === "not-directory"
-                || error.reason === "alias"
-                || error.reason === "scope"
-                || error.reason === "path-changed") {
+            if (error.reason === "symlink" ||
+                error.reason === "not-directory" ||
+                error.reason === "alias" ||
+                error.reason === "scope" ||
+                error.reason === "path-changed") {
                 fail("placement", "$root");
             }
             fail("effect", "$root");
@@ -389,8 +386,8 @@ export async function materializeWakeflowManagedSupportRoot(workspaceRootValue, 
         throw error;
     }
     const finalPlacement = after.roots.find((entry) => entry.key === key);
-    if (finalPlacement?.state !== "present"
-        || finalPlacement.realPath !== materialized.absolutePath) {
+    if (finalPlacement?.state !== "present" ||
+        finalPlacement.realPath !== materialized.absolutePath) {
         fail("placement", "$root");
     }
     const rootCreated = materialized.segments.some((entry) => entry.disposition === "created");

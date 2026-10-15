@@ -1,13 +1,13 @@
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_MAINTENANCE_JOURNAL_SCHEMA, } from "../../contracts/generated/workspace/maintenance-journal.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA, } from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
+import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { createRuntimeJsonSchemaValidator, } from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
-import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
 import { parseWakeflowMaintenanceExecutionPlan, WakeflowMaintenanceExecutionPlanError, } from "./wakeflow-maintenance-execution-plan.js";
+import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance journal input is invalid.",
     schema: "Wakeflow maintenance journal does not satisfy its Schema.",
@@ -66,9 +66,9 @@ export function createPreparedWakeflowMaintenanceJournal(operationIdValue, inten
         }
         throw error;
     }
-    if (plan.status !== "ready"
-        || plan.steps.length === 0
-        || plan.sharedPreview.desiredConfigDigest === null) {
+    if (plan.status !== "ready" ||
+        plan.steps.length === 0 ||
+        plan.sharedPreview.desiredConfigDigest === null) {
         fail("plan", "$plan");
     }
     const stepIds = Object.freeze(plan.steps.map((entry) => entry.stepId));
@@ -116,14 +116,12 @@ export function parseWakeflowMaintenanceJournal(value) {
     const checkpoint = validated.value.checkpoint;
     const affectedStepId = validated.value.affectedStepId;
     const state = validated.value.state;
-    if (checkpoint > stepIds.length
-        || (state === "prepared" && (checkpoint !== 0 || affectedStepId !== null))
-        || (state === "executing"
-            && affectedStepId !== null
-            && (checkpoint >= stepIds.length
-                || stepIds[checkpoint] !== affectedStepId))
-        || (state === "terminal"
-            && (checkpoint !== stepIds.length || affectedStepId !== null))) {
+    if (checkpoint > stepIds.length ||
+        (state === "prepared" && (checkpoint !== 0 || affectedStepId !== null)) ||
+        (state === "executing" &&
+            affectedStepId !== null &&
+            (checkpoint >= stepIds.length || stepIds[checkpoint] !== affectedStepId)) ||
+        (state === "terminal" && (checkpoint !== stepIds.length || affectedStepId !== null))) {
         fail("schema", "$journal");
     }
     return Object.freeze({
@@ -160,22 +158,22 @@ function journalRepresentation(journal) {
     };
 }
 function sameImmutableJournal(left, right) {
-    return left.operationId === right.operationId
-        && left.intentDigest === right.intentDigest
-        && left.action === right.action
-        && left.planDigest === right.planDigest
-        && left.matrixDigest === right.matrixDigest
-        && left.currentConfigDigest === right.currentConfigDigest
-        && left.desiredConfigDigest === right.desiredConfigDigest
-        && left.stepIds.length === right.stepIds.length
-        && left.stepIds.every((stepId, index) => right.stepIds[index] === stepId);
+    return (left.operationId === right.operationId &&
+        left.intentDigest === right.intentDigest &&
+        left.action === right.action &&
+        left.planDigest === right.planDigest &&
+        left.matrixDigest === right.matrixDigest &&
+        left.currentConfigDigest === right.currentConfigDigest &&
+        left.desiredConfigDigest === right.desiredConfigDigest &&
+        left.stepIds.length === right.stepIds.length &&
+        left.stepIds.every((stepId, index) => right.stepIds[index] === stepId));
 }
 /** 把稳定 checkpoint 推进为“即将尝试当前 step”的 affected 状态。 */
 export function beginWakeflowMaintenanceJournalStep(value) {
     const journal = parseWakeflowMaintenanceJournal(value);
-    if (journal.state === "terminal"
-        || journal.affectedStepId !== null
-        || journal.checkpoint >= journal.stepIds.length) {
+    if (journal.state === "terminal" ||
+        journal.affectedStepId !== null ||
+        journal.checkpoint >= journal.stepIds.length) {
         fail("plan", "$journal");
     }
     return Object.freeze({
@@ -187,9 +185,9 @@ export function beginWakeflowMaintenanceJournalStep(value) {
 /** 在领域 owner 已完成并读回后，把 affected step 收敛为下一个稳定 checkpoint。 */
 export function completeWakeflowMaintenanceJournalStep(value) {
     const journal = parseWakeflowMaintenanceJournal(value);
-    if (journal.state !== "executing"
-        || journal.affectedStepId === null
-        || journal.stepIds[journal.checkpoint] !== journal.affectedStepId) {
+    if (journal.state !== "executing" ||
+        journal.affectedStepId === null ||
+        journal.stepIds[journal.checkpoint] !== journal.affectedStepId) {
         fail("plan", "$journal");
     }
     return Object.freeze({
@@ -201,9 +199,9 @@ export function completeWakeflowMaintenanceJournalStep(value) {
 /** 当全部 step 已有稳定 checkpoint 时，把 journal 标记为 terminal。 */
 export function terminalizeWakeflowMaintenanceJournal(value) {
     const journal = parseWakeflowMaintenanceJournal(value);
-    if (journal.state !== "executing"
-        || journal.affectedStepId !== null
-        || journal.checkpoint !== journal.stepIds.length) {
+    if (journal.state !== "executing" ||
+        journal.affectedStepId !== null ||
+        journal.checkpoint !== journal.stepIds.length) {
         fail("plan", "$journal");
     }
     return Object.freeze({ ...journal, state: "terminal" });
@@ -214,25 +212,25 @@ export function isWakeflowMaintenanceJournalSuccessor(currentValue, proposedValu
     const proposed = parseWakeflowMaintenanceJournal(proposedValue);
     if (!sameImmutableJournal(current, proposed))
         return false;
-    if (current.state !== "terminal"
-        && current.affectedStepId === null
-        && current.checkpoint < current.stepIds.length) {
-        return proposed.state === "executing"
-            && proposed.checkpoint === current.checkpoint
-            && proposed.affectedStepId === current.stepIds[current.checkpoint];
+    if (current.state !== "terminal" &&
+        current.affectedStepId === null &&
+        current.checkpoint < current.stepIds.length) {
+        return (proposed.state === "executing" &&
+            proposed.checkpoint === current.checkpoint &&
+            proposed.affectedStepId === current.stepIds[current.checkpoint]);
     }
-    if (current.state === "executing"
-        && current.affectedStepId === current.stepIds[current.checkpoint]) {
-        return proposed.state === "executing"
-            && proposed.checkpoint === current.checkpoint + 1
-            && proposed.affectedStepId === null;
+    if (current.state === "executing" &&
+        current.affectedStepId === current.stepIds[current.checkpoint]) {
+        return (proposed.state === "executing" &&
+            proposed.checkpoint === current.checkpoint + 1 &&
+            proposed.affectedStepId === null);
     }
-    return current.state === "executing"
-        && current.affectedStepId === null
-        && current.checkpoint === current.stepIds.length
-        && proposed.state === "terminal"
-        && proposed.checkpoint === current.checkpoint
-        && proposed.affectedStepId === null;
+    return (current.state === "executing" &&
+        current.affectedStepId === null &&
+        current.checkpoint === current.stepIds.length &&
+        proposed.state === "terminal" &&
+        proposed.checkpoint === current.checkpoint &&
+        proposed.affectedStepId === null);
 }
 /** 生成 maintenance journal（prepared、executing 或 terminal）的唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowMaintenanceJournal(value) {
@@ -265,11 +263,7 @@ export function createWakeflowMaintenanceJournalResourceDeclaration(operationIdV
         processing: {
             kind: "resource",
             role: "transaction-artifact",
-            allowedMutationRecipes: [
-                "exclusive-create",
-                "exact-source-replace",
-                "exact-retire"
-            ],
+            allowedMutationRecipes: ["exclusive-create", "exact-source-replace", "exact-retire"],
             recoveryStrategy: "owner-transaction-recovery",
         },
     });

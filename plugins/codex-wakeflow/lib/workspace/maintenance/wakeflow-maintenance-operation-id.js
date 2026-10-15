@@ -1,7 +1,7 @@
 import { WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
-import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
+import { createUuidV4, parseUuidV4, UuidV4Error, } from "../../foundation/identity/uuid-v4.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 const ERROR_MESSAGES = {
     format: "Wakeflow maintenance operation ID is invalid.",
     factory: "Wakeflow maintenance operation ID could not be generated.",
@@ -23,8 +23,7 @@ function fail(reason, path) {
 }
 /** 严格解析一个 maintenance operation ID。 */
 export function parseWakeflowMaintenanceOperationId(value, errorPath = "$operationId") {
-    if (typeof value !== "string"
-        || !value.startsWith(WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX)) {
+    if (typeof value !== "string" || !value.startsWith(WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX)) {
         fail("format", errorPath);
     }
     try {
@@ -45,14 +44,11 @@ export function wakeflowMaintenanceOperationUuid(value) {
 /** 使用密码学 UUIDv4 源创建一个 maintenance operation ID。 */
 export function createWakeflowMaintenanceOperationId(uuidFactory) {
     try {
-        const uuid = uuidFactory === undefined
-            ? createUuidV4()
-            : createUuidV4(uuidFactory);
+        const uuid = uuidFactory === undefined ? createUuidV4() : createUuidV4(uuidFactory);
         return parseWakeflowMaintenanceOperationId(`${WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX}${uuid}`);
     }
     catch (error) {
-        if (error instanceof UuidV4Error
-            || error instanceof WakeflowMaintenanceOperationIdError) {
+        if (error instanceof UuidV4Error || error instanceof WakeflowMaintenanceOperationIdError) {
             fail("factory", "$uuidFactory");
         }
         throw error;

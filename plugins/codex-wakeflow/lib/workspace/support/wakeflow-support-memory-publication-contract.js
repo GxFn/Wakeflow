@@ -1,5 +1,5 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { parseWakeflowSupportMemoryInspectionRequest, WakeflowSupportMemoryInspectionError, } from "./wakeflow-support-memory-inspection.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow support memory publication input is invalid.",
@@ -52,12 +52,12 @@ export function parseWakeflowSupportMemoryPublicationOptions(value) {
         }
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         failWakeflowSupportMemoryPublication("input", "$options");
     }
     return Object.freeze({ signal: record.signal });

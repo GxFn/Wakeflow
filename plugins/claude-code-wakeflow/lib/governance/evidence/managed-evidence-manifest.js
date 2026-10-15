@@ -1,22 +1,22 @@
-import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
+import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS, LoadedArtifactTreeIdentityError, validateLoadedArtifactTreeManifest, } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS, validateLoadedArtifactTreeManifest, LoadedArtifactTreeIdentityError, } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
-import { parsePortableResourcePath, PortableResourcePathError, } from "../../foundation/filesystem/portable-resource-path.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
-import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
-import { assertManagedEvidenceKindMatchesSource, parseManagedEvidenceSourceDescriptor, ManagedEvidenceSourceSelectionError, } from "./managed-evidence-source-selection.js";
+import { assertManagedEvidenceKindMatchesSource, ManagedEvidenceSourceSelectionError, parseManagedEvidenceSourceDescriptor, } from "./managed-evidence-source-selection.js";
 /**
  * Wakeflow Governance / Evidence：本地managed evidence的不可变内容与来源清单。
  *
@@ -43,8 +43,7 @@ export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
     maxFileBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,
     maxFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles - 1,
     maxRefBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxRefBytes - 8,
-    maxTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes -
-        MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+    maxTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
 });
 export const MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT = 64;
 const ERROR_MESSAGES = {
@@ -184,8 +183,7 @@ function parsePayload(value) {
         throw error;
     }
     const artifactDigest = parseDigest(value.artifactDigest, "$/payload/artifactDigest");
-    if (computeCanonicalJsonSha256Digest(treeManifest, "$/payload/treeManifest") !==
-        artifactDigest) {
+    if (computeCanonicalJsonSha256Digest(treeManifest, "$/payload/treeManifest") !== artifactDigest) {
         fail("payload", "$/payload/artifactDigest");
     }
     return Object.freeze({ artifactDigest, treeManifest });
@@ -206,8 +204,7 @@ function parseContentReview(value, payload) {
         if (!payloadRefs.has(ref)) {
             fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
         }
-        if (index > 0 &&
-            compareText(value.opaqueFileRefs[index - 1] ?? "", ref) >= 0) {
+        if (index > 0 && compareText(value.opaqueFileRefs[index - 1] ?? "", ref) >= 0) {
             fail("ordering", `$/contentReview/opaqueFileRefs/${index}`);
         }
         return ref;
@@ -247,8 +244,7 @@ function manifestBasis(wire) {
     // 目录树之外的来源（单文件与三种引用投影）都规范化为单一 `content` 成员。
     const singleContent = source.kind !== "managed-path" || source.resourceType === "file";
     if (singleContent &&
-        (payload.treeManifest.fileCount !== 1 ||
-            payload.treeManifest.files[0]?.ref !== "content")) {
+        (payload.treeManifest.fileCount !== 1 || payload.treeManifest.files[0]?.ref !== "content")) {
         fail("payload", "$/payload/treeManifest/files");
     }
     return Object.freeze({
@@ -282,8 +278,8 @@ export function parseManagedEvidenceManifest(value) {
     }
     if (
     // 容量按实际写入的确定性文档（缩进渲染加换行）计量，而不是紧凑规范形式。
-    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest")
-        .byteLength > MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES) {
+    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest").byteLength >
+        MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES) {
         fail("capacity", "$manifest");
     }
     const result = validateWire(json);

@@ -1,20 +1,20 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../../foundation/data/passive-own-data.js";
+import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
-import { admitDemandAuthority, computeDemandAuthorityDigest, parseDemandAuthorityDocument, DemandAuthorityError, } from "../model/demand-authority.js";
-import { computeDemandIdentityDigest, parseDemandIdentityDocument, DemandIdentityError, } from "../model/demand-identity.js";
+import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/ledger-authority-store.js";
+import { admitDemandAuthority, computeDemandAuthorityDigest, DemandAuthorityError, parseDemandAuthorityDocument, } from "../model/demand-authority.js";
+import { computeDemandIdentityDigest, DemandIdentityError, parseDemandIdentityDocument, } from "../model/demand-identity.js";
+import { DEMAND_EVENT_SOURCING_AUTHORITY_REF, DEMAND_EVENT_SOURCING_IDENTITY_REF, } from "./demand-event-sourcing-paths.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "./demand-event-sourcing-repository.js";
 import { DemandEventSourcingRootInventoryError, inspectDemandEventSourcingRootInventory, } from "./demand-event-sourcing-root-inventory.js";
-import { DEMAND_EVENT_SOURCING_AUTHORITY_REF, DEMAND_EVENT_SOURCING_IDENTITY_REF, } from "./demand-event-sourcing-paths.js";
-import { DemandFileEventStore, DemandFileEventStoreError, } from "./demand-file-event-store.js";
-import { upcastDemandEventSourcingStoredEvent, DemandEventSourcingUpcasterError, } from "./demand-event-sourcing-upcaster.js";
-import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/ledger-authority-store.js";
+import { DemandEventSourcingUpcasterError, upcastDemandEventSourcingStoredEvent, } from "./demand-event-sourcing-upcaster.js";
+import { DemandFileEventStore, DemandFileEventStoreError } from "./demand-file-event-store.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing：Demand根目录的组合权威加载。
  *
@@ -55,8 +55,7 @@ function sameOptionalNode(left, right) {
         : right !== undefined && sameFileNodeSnapshot(left, right);
 }
 function sameStringArray(left, right) {
-    return (left.length === right.length &&
-        left.every((value, index) => value === right[index]));
+    return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 function sameManagedEvidencePublication(left, right) {
     if (left === null || right === null)
@@ -169,8 +168,7 @@ function assertManagedEvidenceClosure(inventory, identity, authorityDigest, aggr
         return;
     }
     if (targetRecord !== undefined ||
-        (targetSelector !== undefined &&
-            publication.physicalState !== "stage-complete")) {
+        (targetSelector !== undefined && publication.physicalState !== "stage-complete")) {
         fail("closure", "$managed-evidence");
     }
     assertClosedManagedEvidenceRecords(records, targetSelector === undefined
@@ -196,8 +194,7 @@ async function readRecord(root, ref, maximumBytes, expectedNode, signal, owner) 
             }
             fail(owner, `$${owner}`);
         }
-        if (error instanceof StrictTextFileError ||
-            error instanceof DeterministicJsonDocumentError) {
+        if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail(owner, `$${owner}`);
         }
         throw error;
@@ -279,11 +276,9 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
         admittedAuthority = await admitDemandAuthority(identity, authority, ledgerStore, signal === undefined ? undefined : { signal });
     }
     catch (error) {
-        if (error instanceof DemandAuthorityError ||
-            error instanceof LedgerAuthorityStoreError) {
+        if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
             if ((error instanceof DemandAuthorityError && error.reason === "aborted") ||
-                (error instanceof LedgerAuthorityStoreError &&
-                    error.reason === "aborted")) {
+                (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")) {
                 fail("aborted", "$signal");
             }
             fail("ledger", "$authority");
@@ -308,8 +303,7 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
                 fail("stream", "$commits");
             aggregate = loaded.aggregate;
             replayedCommitCount = loaded.replayedCommitCount;
-            loadMode =
-                loaded.snapshotStatus === "used" ? "snapshot-tail" : "full-replay";
+            loadMode = loaded.snapshotStatus === "used" ? "snapshot-tail" : "full-replay";
         }
     }
     catch (error) {

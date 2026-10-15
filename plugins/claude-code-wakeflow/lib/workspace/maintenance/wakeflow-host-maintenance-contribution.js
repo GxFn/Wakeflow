@@ -1,7 +1,7 @@
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { WAKEFLOW_WORKSPACE_HOST_IDS, } from "../workspace-host-resource-profile.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow host maintenance contribution input is invalid.",
@@ -49,19 +49,17 @@ function nullableDigest(value, path) {
     return value === null ? null : digest(value, path);
 }
 function parseIdentity(value, path, pattern) {
-    if (typeof value !== "string"
-        || value.length === 0
-        || value.length > MAXIMUM_IDENTITY_LENGTH
-        || !value.isWellFormed()
-        || !pattern.test(value)) {
+    if (typeof value !== "string" ||
+        value.length === 0 ||
+        value.length > MAXIMUM_IDENTITY_LENGTH ||
+        !value.isWellFormed() ||
+        !pattern.test(value)) {
         fail("identity", path);
     }
     return value;
 }
 function parseTargetKey(value, path) {
-    if (typeof value !== "string"
-        || !value.isWellFormed()
-        || !TARGET_KEY_PATTERN.test(value)) {
+    if (typeof value !== "string" || !value.isWellFormed() || !TARGET_KEY_PATTERN.test(value)) {
         fail("identity", path);
     }
     return value;
@@ -95,8 +93,8 @@ function parseOperation(value, index, requirePayloadDigest, basePath) {
     }
     const payload = parsePayload(record.payload, `${path}.payload`);
     const payloadDigest = computeCanonicalJsonSha256Digest(payload);
-    if (requirePayloadDigest
-        && digest(record.payloadDigest, `${path}.payloadDigest`) !== payloadDigest) {
+    if (requirePayloadDigest &&
+        digest(record.payloadDigest, `${path}.payloadDigest`) !== payloadDigest) {
         fail("digest", `${path}.payloadDigest`);
     }
     const sourceDigest = nullableDigest(record.sourceDigest, `${path}.sourceDigest`);
@@ -127,9 +125,8 @@ function assertOrderedOperations(operations, basePath) {
     for (let index = 0; index < operations.length; index += 1) {
         const current = operations[index];
         const previous = operations[index - 1];
-        if (current === undefined
-            || (previous !== undefined
-                && previous.operationId >= current.operationId)) {
+        if (current === undefined ||
+            (previous !== undefined && previous.operationId >= current.operationId)) {
             fail("order", `${basePath}.operations/${index}.operationId`);
         }
         const target = `${current.ownerId}\u0000${current.targetKey}`;
@@ -140,10 +137,10 @@ function assertOrderedOperations(operations, basePath) {
     }
 }
 function parseBlockerCode(entry, path) {
-    if (typeof entry !== "string"
-        || !BLOCKER_CODE_PATTERN.test(entry)
-        || entry.length > MAXIMUM_IDENTITY_LENGTH
-        || !entry.isWellFormed()) {
+    if (typeof entry !== "string" ||
+        !BLOCKER_CODE_PATTERN.test(entry) ||
+        entry.length > MAXIMUM_IDENTITY_LENGTH ||
+        !entry.isWellFormed()) {
         fail("identity", path);
     }
     return entry;
@@ -176,23 +173,23 @@ export function createWakeflowHostMaintenanceContribution(requestValue) {
             fail("input", error.path);
         throw error;
     }
-    if (Object.keys(record).sort().join("\u0000")
-        !== "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status"
-        || typeof record.hostId !== "string"
-        || !HOST_ID_SET.has(record.hostId)
-        || (record.status !== "ready" && record.status !== "blocked")) {
+    if (Object.keys(record).sort().join("\u0000") !==
+        "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status" ||
+        typeof record.hostId !== "string" ||
+        !HOST_ID_SET.has(record.hostId) ||
+        (record.status !== "ready" && record.status !== "blocked")) {
         fail("input", "$request");
     }
-    const blockerCodes = Object.freeze([...blockerValues].map((entry, index) => (parseBlockerCode(entry, `$request.blockerCodes/${index}`))).sort());
+    const blockerCodes = Object.freeze([...blockerValues]
+        .map((entry, index) => parseBlockerCode(entry, `$request.blockerCodes/${index}`))
+        .sort());
     assertOrderedBlockers(blockerCodes, "$request");
     if ((record.status === "ready") !== (blockerCodes.length === 0)) {
         fail("status", "$request.status");
     }
-    const operations = Object.freeze(operationValues.map((entry, index) => parseOperation(entry, index, false, "$request.operations")).sort((left, right) => (left.operationId < right.operationId
-        ? -1
-        : left.operationId > right.operationId
-            ? 1
-            : 0)));
+    const operations = Object.freeze(operationValues
+        .map((entry, index) => parseOperation(entry, index, false, "$request.operations"))
+        .sort((left, right) => left.operationId < right.operationId ? -1 : left.operationId > right.operationId ? 1 : 0));
     assertOrderedOperations(operations, "$request");
     const basis = Object.freeze({
         kind: "WakeflowHostMaintenanceContribution",
@@ -223,21 +220,21 @@ export function parseWakeflowHostMaintenanceContribution(value) {
             fail("input", error.path);
         throw error;
     }
-    if (Object.keys(record).sort().join("\u0000")
-        !== "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000status"
-        || record.kind !== "WakeflowHostMaintenanceContribution"
-        || record.schemaVersion !== 1
-        || typeof record.hostId !== "string"
-        || !HOST_ID_SET.has(record.hostId)
-        || (record.status !== "ready" && record.status !== "blocked")) {
+    if (Object.keys(record).sort().join("\u0000") !==
+        "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000status" ||
+        record.kind !== "WakeflowHostMaintenanceContribution" ||
+        record.schemaVersion !== 1 ||
+        typeof record.hostId !== "string" ||
+        !HOST_ID_SET.has(record.hostId) ||
+        (record.status !== "ready" && record.status !== "blocked")) {
         fail("input", "$contribution");
     }
-    const blockerCodes = Object.freeze(blockerValues.map((entry, index) => (parseBlockerCode(entry, `$contribution.blockerCodes/${index}`))));
+    const blockerCodes = Object.freeze(blockerValues.map((entry, index) => parseBlockerCode(entry, `$contribution.blockerCodes/${index}`)));
     assertOrderedBlockers(blockerCodes, "$contribution");
     if ((record.status === "ready") !== (blockerCodes.length === 0)) {
         fail("status", "$contribution.status");
     }
-    const operations = Object.freeze(operationValues.map((entry, index) => (parseOperation(entry, index, true, "$contribution.operations"))));
+    const operations = Object.freeze(operationValues.map((entry, index) => parseOperation(entry, index, true, "$contribution.operations")));
     assertOrderedOperations(operations, "$contribution");
     const basis = Object.freeze({
         kind: "WakeflowHostMaintenanceContribution",
@@ -249,8 +246,7 @@ export function parseWakeflowHostMaintenanceContribution(value) {
         operations,
     });
     const contributionDigest = digest(record.contributionDigest, "$contribution.contributionDigest");
-    if (computeWakeflowHostMaintenanceContributionDigest(basis)
-        !== contributionDigest) {
+    if (computeWakeflowHostMaintenanceContributionDigest(basis) !== contributionDigest) {
         fail("digest", "$contribution.contributionDigest");
     }
     return Object.freeze({ ...basis, contributionDigest });

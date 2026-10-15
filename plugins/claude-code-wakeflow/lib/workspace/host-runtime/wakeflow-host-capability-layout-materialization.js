@@ -1,12 +1,12 @@
 import { types } from "node:util";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { createDirectoryAtomically, materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { createDirectoryAtomically, DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
+import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
 import { compileWakeflowHostCapabilityLayoutAuthority, WakeflowHostCapabilityLayoutAuthorityError, } from "./wakeflow-host-capability-layout-authority.js";
 const ERROR_MESSAGES = {
     input: "Host capability layout materialization input is invalid.",
@@ -43,14 +43,14 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (!Object.hasOwn(record, "recoveringFreshLayout")
-        || Object.keys(record).some((key) => (key !== "recoveringFreshLayout" && key !== "signal"))
-        || typeof record.recoveringFreshLayout !== "boolean"
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (!Object.hasOwn(record, "recoveringFreshLayout") ||
+        Object.keys(record).some((key) => key !== "recoveringFreshLayout" && key !== "signal") ||
+        typeof record.recoveringFreshLayout !== "boolean" ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -59,14 +59,12 @@ function parseOptions(value) {
     });
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertPrivateDirectory(node, path) {
-    if (node.kind !== "directory"
-        || node.permissionBits !== 0o700
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== "directory" ||
+        node.permissionBits !== 0o700 ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("prefix-conflict", path);
     }
 }
@@ -105,8 +103,7 @@ async function optionalDirectory(root, resourcePath) {
         return resource.node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found")
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
             return null;
         if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
             throw error;
@@ -141,17 +138,17 @@ async function readDirectory(root, resourcePath, maximumEntries, signal) {
 }
 async function inspectPartialTree(root, expected, signal, requireComplete) {
     for (const [parent, childNames] of expected) {
-        if (await optionalDirectory(root, parent) === null) {
+        if ((await optionalDirectory(root, parent)) === null) {
             if (requireComplete)
                 fail("prefix-conflict", `$layout/${parent}`);
             continue;
         }
         const directory = await readDirectory(root, parent, childNames.size + 1, signal);
-        if (directory.entries.some((entry) => (!childNames.has(entry.name)
-            || entry.node.kind !== "directory"
-            || entry.node.permissionBits !== 0o700
-            || (currentUserId() !== null && entry.node.userId !== currentUserId())))
-            || (requireComplete && directory.entries.length !== childNames.size)) {
+        if (directory.entries.some((entry) => !childNames.has(entry.name) ||
+            entry.node.kind !== "directory" ||
+            entry.node.permissionBits !== 0o700 ||
+            (currentUserId() !== null && entry.node.userId !== currentUserId())) ||
+            (requireComplete && directory.entries.length !== childNames.size)) {
             fail("prefix-conflict", `$layout/${parent}`);
         }
     }
@@ -161,7 +158,7 @@ async function assertTargetsAbsent(root, authority) {
         const resourcePath = declaration.placement.relativePath;
         if (resourcePath === null)
             fail("authority", "$declarations");
-        if (await optionalDirectory(root, resourcePath) !== null) {
+        if ((await optionalDirectory(root, resourcePath)) !== null) {
             fail("strict-absent", `$layout/${resourcePath}`);
         }
     }
@@ -210,15 +207,15 @@ function parseProfileAndAuthority(profileValue) {
         };
     }
     catch (error) {
-        if (error instanceof WakeflowWorkspaceHostResourceProfileError
-            || error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
+        if (error instanceof WakeflowWorkspaceHostResourceProfileError ||
+            error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
             fail("authority", error.path);
         }
         throw error;
     }
 }
 function layoutResult(authority, effects) {
-    const createdDirectoryCount = effects.filter((entry) => (entry.disposition === "created")).length;
+    const createdDirectoryCount = effects.filter((entry) => entry.disposition === "created").length;
     const observationBasis = {
         kind: "WakeflowHostCapabilityLayoutObservation",
         authorityDigest: authority.authorityDigest,
@@ -236,9 +233,9 @@ function layoutResult(authority, effects) {
     });
 }
 async function prerequisitesPresent(root, profile) {
-    return await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile)) !== null
-        && await optionalDirectory(root, wakeflowHostIdentityRootRef(profile)) !== null
-        && await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile)) !== null;
+    return ((await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile))) !== null &&
+        (await optionalDirectory(root, wakeflowHostIdentityRootRef(profile))) !== null &&
+        (await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile))) !== null);
 }
 function declarationPath(declaration) {
     const resourcePath = declaration.placement.relativePath;
@@ -248,10 +245,10 @@ function declarationPath(declaration) {
 }
 /** 零写入检查当前 Host Profile 的 capability 目录是否齐全且各自是当前用户的 0700 目录。 */
 export async function inspectWakeflowHostCapabilityLayout(rootValue, profileValue, optionsValue = {}) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     if (optionsValue.signal?.aborted === true)
@@ -265,7 +262,7 @@ export async function inspectWakeflowHostCapabilityLayout(rootValue, profileValu
         }
         else {
             for (const declaration of authority.declarations) {
-                if (await optionalDirectory(rootValue, declarationPath(declaration)) === null) {
+                if ((await optionalDirectory(rootValue, declarationPath(declaration))) === null) {
                     missingDirectoryCount += 1;
                 }
             }
@@ -274,8 +271,8 @@ export async function inspectWakeflowHostCapabilityLayout(rootValue, profileValu
         }
     }
     catch (error) {
-        if (error instanceof WakeflowHostCapabilityLayoutMaterializationError
-            && error.reason === "prefix-conflict") {
+        if (error instanceof WakeflowHostCapabilityLayoutMaterializationError &&
+            error.reason === "prefix-conflict") {
             status = "conflict";
         }
         else {
@@ -298,10 +295,10 @@ export async function inspectWakeflowHostCapabilityLayout(rootValue, profileValu
  * 已有目录只核对节点政策、不枚举内容；缺失的中间段与目标以 0700 创建。
  */
 export async function ensureWakeflowHostCapabilityLayout(rootValue, profileValue, optionsValue = {}) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const signal = optionsValue.signal;
@@ -347,10 +344,10 @@ export async function ensureWakeflowHostCapabilityLayout(rootValue, profileValue
 }
 /** 按当前 Host Profile 物化空 capability 父目录，或恢复同一 exact 前缀。 */
 export async function materializeWakeflowHostCapabilityLayout(rootValue, profileValue, optionsValue) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const options = parseOptions(optionsValue);
@@ -358,12 +355,11 @@ export async function materializeWakeflowHostCapabilityLayout(rootValue, profile
         fail("aborted", "$signal");
     const { profile, authority } = parseProfileAndAuthority(profileValue);
     const hostRoot = wakeflowHostRuntimeRootRef(profile);
-    if (await optionalDirectory(rootValue, hostRoot) === null) {
+    if ((await optionalDirectory(rootValue, hostRoot)) === null) {
         fail("prerequisite", "$hostRoot");
     }
-    if (await optionalDirectory(rootValue, wakeflowHostIdentityRootRef(profile))
-        === null
-        || await optionalDirectory(rootValue, wakeflowHostProjectionsRootRef(profile)) === null) {
+    if ((await optionalDirectory(rootValue, wakeflowHostIdentityRootRef(profile))) === null ||
+        (await optionalDirectory(rootValue, wakeflowHostProjectionsRootRef(profile))) === null) {
         fail("prerequisite", "$hostLayout");
     }
     const expected = expectedChildren(authority, hostRoot);

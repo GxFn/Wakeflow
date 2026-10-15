@@ -1,4 +1,4 @@
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { createWakeflowWorkspaceHostResourceCatalog, hostProfileHasOperationSurface, } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 const ERROR_MESSAGES = {
@@ -46,8 +46,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     if (profile.surfaces.windowLocator) {
         declarationIds.push(`${prefix}.window-locators-root`);
     }
-    if (profile.surfaces.statuslineAsset !== null
-        || profile.surfaces.tmuxAsset !== null) {
+    if (profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null) {
         declarationIds.push(`${prefix}.statusline-assets-root`);
     }
     if (profile.surfaces.activityMonitor) {
@@ -58,10 +57,10 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     }
     const catalog = createWakeflowWorkspaceHostResourceCatalog(profile);
     const declarations = Object.freeze(declarationIds.map((declarationId) => {
-        const declaration = catalog.find((entry) => (entry.declarationId === declarationId));
-        if (declaration === undefined
-            || declaration.nodePolicy.kind !== "directory"
-            || declaration.processing.kind !== "directory-container") {
+        const declaration = catalog.find((entry) => entry.declarationId === declarationId);
+        if (declaration === undefined ||
+            declaration.nodePolicy.kind !== "directory" ||
+            declaration.processing.kind !== "directory-container") {
             fail("catalog", "$declarations");
         }
         return declaration;

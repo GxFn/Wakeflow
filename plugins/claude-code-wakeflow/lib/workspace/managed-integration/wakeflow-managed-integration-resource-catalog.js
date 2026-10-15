@@ -1,4 +1,4 @@
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
 /**
  * Wakeflow Workspace / Managed Integration：宿主无关的混合所有权资源目录。
@@ -60,10 +60,7 @@ export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION = parseW
     processing: {
         kind: "resource",
         role: "transaction-artifact",
-        allowedMutationRecipes: [
-            "exclusive-create",
-            "exact-retire",
-        ],
+        allowedMutationRecipes: ["exclusive-create", "exact-retire"],
         recoveryStrategy: "owner-transaction-recovery",
     },
 });

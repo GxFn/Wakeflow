@@ -2,10 +2,10 @@ import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { materializeDirectoryPath, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile, } from "../../foundation/filesystem/deterministic-json-file.js";
+import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
@@ -15,7 +15,7 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { createDemandEventSourcingResourceCatalog, createTaskPackageProjectionResourceDeclaration, } from "../demand/demand-resource-catalog.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import { computeTaskPackageDigest, parseTaskPackageDocument, renderTaskPackage, TaskPackageError, } from "./task-package.js";
-import { taskPackageProjectionRef, TASK_PACKAGE_PROJECTIONS_ROOT_REF, } from "./task-package-projection-paths.js";
+import { TASK_PACKAGE_PROJECTIONS_ROOT_REF, taskPackageProjectionRef, } from "./task-package-projection-paths.js";
 /**
  * Wakeflow Governance / Tasking：事件权威 TaskPackage 的根作用域文件投影存储。
  *
@@ -44,19 +44,17 @@ const ERROR_MESSAGES = {
     "operation-failure": "TaskPackage projection operation failed.",
 };
 /** 并发 create 的胜者在 stage 退休前让目标短暂拥有两个硬链接；败者有界重读而不是失败。 */
-const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([
-    1, 2, 4, 8, 16, 32, 64, 128, 256,
-]);
+const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128, 256]);
 async function loadCurrentProjection(root, taskPackageId, taskPackageDigest, disposition, signal) {
     for (const [attempt, delay] of CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.entries()) {
         try {
             return await loadProjection(root, taskPackageId, taskPackageDigest, signal);
         }
         catch (error) {
-            if (disposition !== "current"
-                || !(error instanceof TaskPackageProjectionStoreError)
-                || error.reason !== "recovery-required"
-                || attempt === CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.length - 1) {
+            if (disposition !== "current" ||
+                !(error instanceof TaskPackageProjectionStoreError) ||
+                error.reason !== "recovery-required" ||
+                attempt === CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.length - 1) {
                 throw error;
             }
             await new Promise((resolve) => setTimeout(resolve, delay));
@@ -99,12 +97,12 @@ function parseSignal(value, allowed) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => !allowed.has(key))
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (Object.keys(record).some((key) => !allowed.has(key)) ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -137,26 +135,25 @@ function parseMaterializeOptions(value) {
     return Object.freeze({ signal: parsed.signal });
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertPrivateNode(node, kind, path) {
-    if (kind === "file"
-        && node.kind === "file"
-        && node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE
-        && node.linkCount === 2n
-        && (currentUserId() === null || node.userId === currentUserId())) {
+    if (kind === "file" &&
+        node.kind === "file" &&
+        node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE &&
+        node.linkCount === 2n &&
+        (currentUserId() === null || node.userId === currentUserId())) {
         // 原子 create 的已发布目标在 stage 退休前短暂拥有两个硬链接；调用方必须重试，
         // 不能在提交者尚未完成耐久结算时把它宣布为 current。
         fail("recovery-required", path);
     }
-    if (node.kind !== kind
-        || node.permissionBits !== (kind === "file"
-            ? TASK_PACKAGE_PROJECTION_FILE_MODE
-            : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE)
-        || (kind === "file" && node.linkCount !== 1n)
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== kind ||
+        node.permissionBits !==
+            (kind === "file"
+                ? TASK_PACKAGE_PROJECTION_FILE_MODE
+                : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE) ||
+        (kind === "file" && node.linkCount !== 1n) ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("node-policy", path);
     }
 }
@@ -165,14 +162,13 @@ async function projectionNodeOrNull(root, taskPackageId) {
         return (await root.inspectExistingResource(taskPackageProjectionRef(taskPackageId))).node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found") {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
             return null;
         }
         if (error instanceof RootedDirectoryError) {
-            if (error.reason === "ancestor-symlink"
-                || error.reason === "ancestor-type"
-                || error.reason === "resource-alias") {
+            if (error.reason === "ancestor-symlink" ||
+                error.reason === "ancestor-type" ||
+                error.reason === "resource-alias") {
                 fail("node-policy", "$projection");
             }
             // 并发发布者退休 stage 时目标的链接数在观察中途变化；这是要重试的瞬态，不是根失效。
@@ -191,12 +187,10 @@ function mapProjectionReadError(error) {
         if (error.reason === "not-found") {
             fail("projection-not-found", "$projection");
         }
-        if (error.reason === "root-scope"
-            || error.reason === "unsupported-platform") {
+        if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
             fail("root-scope", "$root");
         }
-        if (error.reason === "expectation-changed"
-            || error.reason === "source-changed") {
+        if (error.reason === "expectation-changed" || error.reason === "source-changed") {
             fail("conflict", "$projection");
         }
         if (error.reason === "too-large")
@@ -206,9 +200,9 @@ function mapProjectionReadError(error) {
         }
         fail("operation-failure", "$projection");
     }
-    if (error instanceof StrictTextFileError
-        || error instanceof DeterministicJsonDocumentError
-        || error instanceof TaskPackageError) {
+    if (error instanceof StrictTextFileError ||
+        error instanceof DeterministicJsonDocumentError ||
+        error instanceof TaskPackageError) {
         fail("conflict", "$projection");
     }
     throw error;
@@ -238,8 +232,8 @@ async function loadProjection(root, taskPackageId, expectedTaskPackageDigest, si
         mapProjectionReadError(error);
     }
     const taskPackageDigest = computeTaskPackageDigest(taskPackage);
-    if (taskPackage.taskPackageId !== taskPackageId
-        || taskPackageDigest !== expectedTaskPackageDigest) {
+    if (taskPackage.taskPackageId !== taskPackageId ||
+        taskPackageDigest !== expectedTaskPackageDigest) {
         fail("conflict", "$projection");
     }
     return Object.freeze({ taskPackage, taskPackageDigest, source });
@@ -253,8 +247,7 @@ function mapRepositoryError(error) {
 }
 function admitProjectionOperations(taskPackage) {
     try {
-        const rootDeclaration = createDemandEventSourcingResourceCatalog(taskPackage.demandId).find((entry) => (entry.declarationId
-            === `demand.event-sourcing.${taskPackage.demandId}.task-packages-root`));
+        const rootDeclaration = createDemandEventSourcingResourceCatalog(taskPackage.demandId).find((entry) => entry.declarationId === `demand.event-sourcing.${taskPackage.demandId}.task-packages-root`);
         if (rootDeclaration === undefined)
             fail("operation-failure", "$catalog");
         admitWakeflowResourceOperation(rootDeclaration.processing, "materialize-directory");
@@ -272,18 +265,17 @@ function admitProjectionOperations(taskPackage) {
 function mapDirectoryError(error) {
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed"
-        || error.reason === "path-changed") {
+    if (error.reason === "root-scope" ||
+        error.reason === "parent-changed" ||
+        error.reason === "path-changed") {
         fail("root-scope", "$root");
     }
-    if (error.reason === "target-symlink"
-        || error.reason === "target-not-directory") {
+    if (error.reason === "target-symlink" || error.reason === "target-not-directory") {
         fail("node-policy", "$projectionRoot");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$projectionRoot");
     }
     fail("operation-failure", "$projectionRoot");
@@ -291,8 +283,7 @@ function mapDirectoryError(error) {
 function mapAtomicWriteError(error) {
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed") {
+    if (error.reason === "root-scope" || error.reason === "parent-changed") {
         fail("root-scope", "$root");
     }
     if (error.reason === "capacity")
@@ -300,10 +291,10 @@ function mapAtomicWriteError(error) {
     if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$projection");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$projection");
     }
     fail("operation-failure", "$projection");
@@ -312,10 +303,10 @@ export class TaskPackageProjectionStore {
     #root;
     #repository;
     constructor(root) {
-        if (typeof root !== "object"
-            || root === null
-            || types.isProxy(root)
-            || !(root instanceof RootedDirectory)) {
+        if (typeof root !== "object" ||
+            root === null ||
+            types.isProxy(root) ||
+            !(root instanceof RootedDirectory)) {
             fail("input", "$root");
         }
         this.#root = root;
@@ -376,8 +367,7 @@ export class TaskPackageProjectionStore {
             });
         }
         catch (error) {
-            if (error instanceof DurableAtomicFileWriteError
-                && error.reason === "target-exists") {
+            if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
                 disposition = "current";
             }
             else if (error instanceof DurableAtomicFileWriteError) {
@@ -392,8 +382,7 @@ export class TaskPackageProjectionStore {
             projection = await loadCurrentProjection(this.#root, taskPackageId, taskPackageDigest, disposition, signal);
         }
         catch (error) {
-            if (disposition === "created"
-                && error instanceof TaskPackageProjectionStoreError) {
+            if (disposition === "created" && error instanceof TaskPackageProjectionStoreError) {
                 fail("commit-uncertain", "$projection");
             }
             throw error;

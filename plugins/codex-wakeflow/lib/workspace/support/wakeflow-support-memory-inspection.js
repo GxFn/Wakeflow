@@ -1,20 +1,20 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
+import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { parsePlainRecord, PassiveOwnDataError, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { planWholeFileContentTransition, WholeFileContentTransitionError, } from "../../foundation/filesystem/whole-file-content-transition.js";
-import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { historicalWakeflowManagedTextBodies, WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY, } from "../managed-integration/wakeflow-managed-text-history.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
+import { WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE } from "./wakeflow-managed-support-root-materialization.js";
 import { createWakeflowSupportMemoryAuthority, WakeflowSupportMemoryAuthorityError, } from "./wakeflow-support-memory-authority.js";
-import { WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE, } from "./wakeflow-managed-support-root-materialization.js";
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
  *
@@ -57,10 +57,10 @@ function fail(reason, path) {
     throw new WakeflowSupportMemoryInspectionError(reason, path);
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseDigest(value, path) {
     try {
@@ -102,13 +102,11 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
         "profile",
         "surfaceId",
     ];
-    const expected = record.signal === undefined
-        ? required
-        : [...required, "signal"].sort();
+    const expected = record.signal === undefined ? required : [...required, "signal"].sort();
     const keys = Object.keys(record).sort();
-    if (keys.length !== expected.length
-        || keys.some((key, index) => key !== expected[index])
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (keys.length !== expected.length ||
+        keys.some((key, index) => key !== expected[index]) ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$request");
     }
     const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
@@ -160,7 +158,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
     if (catalog.catalogDigest !== expectedCatalogDigest) {
         fail("catalog", "$request.expectedCatalogDigest");
     }
-    if (!catalog.declarations.some((entry) => (entry.declarationId === `support.${surfaceId}.root`))) {
+    if (!catalog.declarations.some((entry) => entry.declarationId === `support.${surfaceId}.root`)) {
         fail("surface", "$request.surfaceId");
     }
     return Object.freeze({
@@ -175,10 +173,10 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
     });
 }
 function assertRoot(value, path) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", path);
     }
 }
@@ -199,9 +197,8 @@ async function admitRoots(workspaceRoot, supportRoot, request) {
         }
         throw error;
     }
-    const placement = report.roots.find((entry) => (entry.key === `support.${request.surfaceId}.root`));
-    if (placement?.state !== "present"
-        || placement.realPath !== supportRoot.absolutePath) {
+    const placement = report.roots.find((entry) => entry.key === `support.${request.surfaceId}.root`);
+    if (placement?.state !== "present" || placement.realPath !== supportRoot.absolutePath) {
         fail("placement", "$supportRoot");
     }
     let node;
@@ -213,9 +210,9 @@ async function admitRoots(workspaceRoot, supportRoot, request) {
             fail("placement", "$supportRoot");
         throw error;
     }
-    if (node.kind !== "directory"
-        || node.permissionBits !== WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE
-        || node.userId !== currentUserId()) {
+    if (node.kind !== "directory" ||
+        node.permissionBits !== WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE ||
+        node.userId !== currentUserId()) {
         fail("root-policy", "$supportRoot");
     }
 }
@@ -226,8 +223,7 @@ function currentAuthority(request) {
         return createWakeflowSupportMemoryAuthority(request.currentConfig, request.profile, request.surfaceId);
     }
     catch (error) {
-        if (error instanceof WakeflowSupportMemoryAuthorityError
-            && error.reason === "surface") {
+        if (error instanceof WakeflowSupportMemoryAuthorityError && error.reason === "surface") {
             return null;
         }
         if (error instanceof WakeflowSupportMemoryAuthorityError) {
@@ -253,10 +249,10 @@ async function readSource(supportRoot, request) {
             maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (read.node.kind !== "file"
-            || read.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE
-            || read.node.linkCount !== 1n
-            || read.node.userId !== currentUserId()) {
+        if (read.node.kind !== "file" ||
+            read.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
+            read.node.linkCount !== 1n ||
+            read.node.userId !== currentUserId()) {
             fail("source-policy", "$source");
         }
         return Object.freeze({
@@ -294,9 +290,9 @@ async function revalidateSource(supportRoot, request, initial) {
             ...(initial === null ? {} : { expectedNode: initial.facts.node }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (initial === null
-            || current.digest !== initial.facts.digest
-            || current.byteCount !== initial.facts.byteCount) {
+        if (initial === null ||
+            current.digest !== initial.facts.digest ||
+            current.byteCount !== initial.facts.byteCount) {
             fail("source", "$source");
         }
     }
@@ -321,8 +317,7 @@ export async function inspectWakeflowSupportMemory(workspaceRootValue, supportRo
     if (request.signal?.aborted === true)
         fail("aborted", "$signal");
     await admitRoots(workspaceRootValue, supportRootValue, request);
-    const declaration = request.catalog.declarations.find((entry) => (entry.declarationId
-        === `support.${request.surfaceId}.instruction.${request.profile.hostId}`));
+    const declaration = request.catalog.declarations.find((entry) => entry.declarationId === `support.${request.surfaceId}.instruction.${request.profile.hostId}`);
     if (declaration === undefined)
         fail("surface", "$request.surfaceId");
     let operation;
@@ -360,16 +355,14 @@ export async function inspectWakeflowSupportMemory(workspaceRootValue, supportRo
         }
         throw error;
     }
-    if (transition.desiredByteCount > WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES
-        || transition.desiredDigest !== desired.bodyDigest) {
+    if (transition.desiredByteCount > WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES ||
+        transition.desiredDigest !== desired.bodyDigest) {
         fail("capacity", "$target");
     }
     await revalidateSource(supportRootValue, request, source);
     return Object.freeze({
         kind: "WakeflowSupportMemoryInspection",
-        status: transition.disposition === "current"
-            ? "current"
-            : "publication-required",
+        status: transition.disposition === "current" ? "current" : "publication-required",
         currentConfigDigest: request.currentConfigDigest,
         desiredConfigDigest: request.desiredConfigDigest,
         catalogDigest: request.catalog.catalogDigest,

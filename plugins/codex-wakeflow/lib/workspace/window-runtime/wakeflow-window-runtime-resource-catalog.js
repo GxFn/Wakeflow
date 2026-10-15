@@ -1,5 +1,5 @@
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
-import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "./wakeflow-window-runtime-unregistered-projection.js";
+import { compileWakeflowWindowRuntimeUnregisteredProjectionSet } from "./wakeflow-window-runtime-unregistered-projection.js";
 /**
  * Wakeflow Workspace / Window Runtime：Config 中每个静态窗口的动态投影资源目录。
  *
@@ -8,7 +8,7 @@ import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "./wakefl
  */
 export function createWakeflowWindowRuntimeProjectionResourceCatalog(configValue, profileValue) {
     const set = compileWakeflowWindowRuntimeUnregisteredProjectionSet(configValue, profileValue);
-    return Object.freeze(set.entries.map((entry) => (parseWakeflowWorkspaceResourceDeclaration({
+    return Object.freeze(set.entries.map((entry) => parseWakeflowWorkspaceResourceDeclaration({
         kind: "WakeflowWorkspaceResourceDeclaration",
         declarationId: `host-runtime.${set.hostId}.window-runtime.${entry.windowId}`,
         family: "host-runtime",
@@ -31,5 +31,5 @@ export function createWakeflowWindowRuntimeProjectionResourceCatalog(configValue
             allowedMutationRecipes: ["deterministic-rewrite"],
             recoveryStrategy: "rebuild-from-authority",
         },
-    }))));
+    })));
 }

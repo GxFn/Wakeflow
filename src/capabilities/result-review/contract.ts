@@ -31,9 +31,9 @@ import {
   type WakeflowTestReviewDecisionResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-test-review-decision-result.generated.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
@@ -204,7 +204,7 @@ export const TARGET_RESULT_REVIEW_INSPECTION_TOOL_REGISTRATION = Object.freeze({
   executor: "inspectTargetResultReview",
   title: "Inspect Wakeflow Target Result Review",
   description:
-    "Read the current review unit of one reported, review-blocked, or escalated target: the complete task package and authority-enriched TargetResult, prior decisions, the callback landing status derived from the Controller session's hook records, the target session's completion evidence, the decisions the rules allow, and for test results the per-step record with approved baselines and the attempt scope. Reads only: it runs no checks and records nothing.",
+    "Read the current review unit of one reported, review-blocked, or escalated target: the complete task package and authority-enriched TargetResult, prior decisions, the callback landing status derived from the Controller session's hook records, the target session's completion evidence, the decisions the rules allow, and for test results the per-step record with approved baselines and the attempt scope. detail: summary replaces the task package with its identity, objective, acceptance anchors (id and claim) and test step ids; the default full embeds the complete package. Reads only: it runs no checks and records nothing.",
   requestSchema: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_RESULT_SCHEMA,
   annotations: READ_ONLY_ANNOTATIONS,

@@ -196,11 +196,18 @@ interface ImportResult {
 }
 
 interface ReviewInspection {
+  readonly detail: string;
   readonly snapshotDigest: string;
   readonly reviewUnit: {
     readonly status: string;
     readonly workType: string;
     readonly reviewUnitDigest: string;
+    readonly taskPackage: {
+      readonly detail?: string;
+      readonly taskPackageId: string;
+      readonly acceptanceAnchors: readonly { readonly anchorId: string }[];
+      readonly testStepIds?: readonly string[] | null;
+    };
     readonly targetResult: {
       readonly targetResultId: string;
       readonly delivery: { readonly generation: number; readonly evidenceKind: string };
@@ -1702,11 +1709,13 @@ function importRequest(
 async function inspectReview(
   context: ScenarioContext,
   targetTaskId: string,
+  detail?: "full" | "summary",
 ): Promise<ReviewInspection> {
   const inspected = await call(context, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, {
     root: context.workspace.workspacePath,
     demandId: context.demandId,
     targetTaskId,
+    ...(detail === undefined ? {} : { detail }),
   });
   assertNoPrivatePath(context, inspected);
   const inspectedText = JSON.stringify(inspected.structuredContent);
@@ -1978,13 +1987,32 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   const confirmed = await inspectReview(context, context.targetTaskId);
   equal(confirmed.reviewUnit.targetCompletion.status, "confirmed");
   equal(confirmed.reviewUnit.allowedDecisions.includes("accept"), true);
+  // K5：summary 档只换任务包；两份 digest、允许集合照旧，决策请求可以直接引用它。
+  const summary = await inspectReview(context, context.targetTaskId, "summary");
+  equal(confirmed.detail, "full");
+  equal(summary.detail, "summary");
+  equal(confirmed.reviewUnit.taskPackage.detail, undefined);
+  equal(summary.reviewUnit.taskPackage.detail, "summary");
+  equal(
+    summary.reviewUnit.taskPackage.taskPackageId,
+    confirmed.reviewUnit.taskPackage.taskPackageId,
+  );
+  equal(summary.reviewUnit.taskPackage.testStepIds, null);
+  deepEqual(
+    summary.reviewUnit.taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
+    confirmed.reviewUnit.taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
+  );
+  equal(summary.snapshotDigest, confirmed.snapshotDigest);
+  equal(summary.reviewUnit.reviewUnitDigest, confirmed.reviewUnit.reviewUnitDigest);
+  deepEqual(summary.reviewUnit.allowedDecisions, confirmed.reviewUnit.allowedDecisions);
+  equal(JSON.stringify(summary).length < JSON.stringify(confirmed).length, true);
   context.callback = {
     callbackId: importResult.callback.callbackId,
     prompt: importResult.callback.permit.prompt,
     generation: importResult.callback.permit.generation,
     issuedAt: importResult.callback.permit.issuedAt,
   };
-  return `wrong-digest=rejected; private-path=rejected; kind-mismatch=${context.documentEvidence === undefined ? "skipped" : "rejected"}; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}`;
+  return `wrong-digest=rejected; private-path=rejected; kind-mismatch=${context.documentEvidence === undefined ? "skipped" : "rejected"}; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}; summary=${summary.detail}/${summary.reviewUnit.taskPackage.acceptanceAnchors.length}-anchors/same-digests`;
 }
 
 /**

@@ -5,6 +5,7 @@ import type {
   ImplementationReviewDecisionRequest,
   ImplementationReviewDecisionResult,
   TargetResultImportResult,
+  TargetResultReviewInspectionRequest,
   TargetResultReviewInspectionResult,
 } from "../../../src/capabilities/result-review/contract.js";
 import {
@@ -261,10 +262,11 @@ export async function inspectFixtureReview(
   fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string }>,
   targetTaskId: string,
   options: ExecuteResultReviewOptions = { clock: () => REVIEW_INSPECTED_AT },
+  request: Partial<Pick<TargetResultReviewInspectionRequest, "detail">> = {},
 ): Promise<Readonly<TargetResultReviewInspectionResult>> {
   return executeTargetResultReviewInspectionRequest(
     CODEX_REVIEW_FACADE,
-    { root: fixture.workspacePath, demandId: fixture.demandId, targetTaskId },
+    { root: fixture.workspacePath, demandId: fixture.demandId, targetTaskId, ...request },
     { durability: DISPOSABLE_WORKSPACE_DURABILITY, ...options },
   );
 }

@@ -16,6 +16,10 @@
     },
     "targetTaskId": {
       "$ref": "#/$defs/targetTaskId"
+    },
+    "detail": {
+      "description": "How much of the task package to return (open-items K5). full (default) embeds the complete task package; summary embeds only its identity, objective, acceptance anchors (id and claim) and, for a test package, the step ids. Everything else in the result is identical.",
+      "enum": ["full", "summary"]
     }
   },
   "$defs": {

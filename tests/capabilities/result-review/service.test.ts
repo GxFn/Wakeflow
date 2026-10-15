@@ -1,13 +1,16 @@
-import { deepEqual, equal, rejects } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { test } from "node:test";
 
 import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
 import { executeDemandContinuationRequest } from "../../../src/capabilities/demand/lifecycle.js";
-import type { TestReviewDecisionRequest } from "../../../src/capabilities/result-review/contract.js";
+import type {
+  TargetResultReviewInspectionResult,
+  TestReviewDecisionRequest,
+} from "../../../src/capabilities/result-review/contract.js";
 import {
+  type ExecuteResultReviewOptions,
   executeImplementationReviewDecisionRequest,
   executeTestReviewDecisionRequest,
-  type ExecuteResultReviewOptions,
 } from "../../../src/capabilities/result-review/service.js";
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -38,6 +41,8 @@ import {
   deliverFixtureTestTarget,
   type TestDeliveryWorkspaceFixture,
 } from "../../governance/delivery/test-delivery-workspace.fixture.js";
+import { createImplementationTargetResultReportContentFixture } from "../../governance/result/implementation-target-result-report.fixture.js";
+import { implementationReviewJudgmentWire } from "../../governance/review/controller-implementation-review-decision.fixture.js";
 import {
   CODEX_REVIEW_FACADE,
   cleanupControllerImplementationReviewDecisionServiceFixture,
@@ -50,12 +55,11 @@ import {
   landFixtureCallback,
   landFixtureTargetCompletion,
   loadFixtureTaskPackage,
+  REVIEW_INSPECTED_AT,
   readControllerImplementationReviewDecisionServiceSnapshot,
   recordFixtureEvidence,
   registerFixtureControllerWindow,
 } from "../../governance/review/controller-implementation-review-decision-service.fixture.js";
-import { implementationReviewJudgmentWire } from "../../governance/review/controller-implementation-review-decision.fixture.js";
-import { createImplementationTargetResultReportContentFixture } from "../../governance/result/implementation-target-result-report.fixture.js";
 import {
   cleanupControllerTestReviewDecisionServiceFixture,
   createControllerTestReviewDecisionServiceFixture,
@@ -1194,5 +1198,92 @@ test("测试合同步骤的 given/when/then 超过 8192 字符（至 16384）时
     equal(step?.expected, long("t"));
   } finally {
     await cleanupTestTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+/** summary 档的任务包；拿到 full 档说明服务没有按 `detail` 换包。 */
+function summaryTaskPackage(result: Readonly<TargetResultReviewInspectionResult>) {
+  const taskPackage = result.reviewUnit.taskPackage;
+  if (!("detail" in taskPackage)) {
+    throw new Error("expected a summary task package");
+  }
+  return taskPackage;
+}
+
+/** full 档测试任务包的合同步骤 id；summary 的 `testStepIds` 必须与之一致。 */
+function fullTestStepIds(result: Readonly<TargetResultReviewInspectionResult>): readonly string[] {
+  const taskPackage = result.reviewUnit.taskPackage;
+  if (!("testContract" in taskPackage)) {
+    throw new Error("expected a full test task package");
+  }
+  return taskPackage.testContract.steps.map((step) => step.stepId);
+}
+
+/** 去掉随 `detail` 变化的两处（顶层 `detail` 与任务包）后的结果，用来证明其余字段逐字相同。 */
+function detailInvariantPart(result: Readonly<TargetResultReviewInspectionResult>) {
+  const { detail: _detail, reviewUnit, ...rest } = result;
+  const { taskPackage: _taskPackage, ...unit } = reviewUnit;
+  return plain({ ...rest, reviewUnit: unit });
+}
+
+test("inspect detail=summary：实现目标的任务包收成身份、目标与锚点，digest 与其余字段同 full，体积更小", async () => {
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
+  try {
+    const full = fixture.inspection;
+    equal(full.detail, "full");
+    equal("detail" in full.reviewUnit.taskPackage, false);
+    const summary = await inspectFixtureReview(
+      fixture,
+      fixture.targetTaskId,
+      { clock: () => REVIEW_INSPECTED_AT },
+      { detail: "summary" },
+    );
+    equal(summary.detail, "summary");
+    const fullPackage = full.reviewUnit.taskPackage;
+    deepEqual(plain(summaryTaskPackage(summary)), {
+      detail: "summary",
+      taskPackageId: fullPackage.taskPackageId,
+      workType: "implementation",
+      objective: fullPackage.objective,
+      acceptanceAnchors: fullPackage.acceptanceAnchors.map(({ anchorId, claim }) => ({
+        anchorId,
+        claim,
+      })),
+      testStepIds: null,
+    });
+    equal(summary.snapshotDigest, full.snapshotDigest);
+    equal(summary.reviewUnit.reviewUnitDigest, full.reviewUnit.reviewUnitDigest);
+    deepEqual(detailInvariantPart(summary), detailInvariantPart(full));
+    ok(JSON.stringify(summary).length < JSON.stringify(full).length);
+    const explicitFull = await inspectFixtureReview(
+      fixture,
+      fixture.targetTaskId,
+      { clock: () => REVIEW_INSPECTED_AT },
+      { detail: "full" },
+    );
+    deepEqual(plain(explicitFull), plain(full));
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("inspect detail=summary：测试目标的任务包带合同步骤 id，逐步表与允许集合不变", async () => {
+  const fixture = await createControllerTestReviewDecisionServiceFixture();
+  try {
+    const full = fixture.testInspection;
+    const summary = await inspectFixtureReview(
+      fixture,
+      fixture.testTargetTaskId,
+      { clock: () => TEST_REVIEW_INSPECTED_AT },
+      { detail: "summary" },
+    );
+    const taskPackage = summaryTaskPackage(summary);
+    equal(taskPackage.workType, "test");
+    deepEqual(taskPackage.testStepIds, fullTestStepIds(full));
+    ok(taskPackage.testStepIds !== null && taskPackage.testStepIds.length > 0);
+    deepEqual(detailInvariantPart(summary), detailInvariantPart(full));
+    ok(JSON.stringify(summary).length < JSON.stringify(full).length);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });

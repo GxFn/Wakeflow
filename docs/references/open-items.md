@@ -616,7 +616,8 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 建议：先确认宿主提供的可信会话/角色事实，再按角色注册目录并在执行端重复授权检查；未知或未绑定角色应有明确的 bootstrap 能力。按角色测量目录，真实 token、费用和时延另测；不能用目录隐藏冒充权限隔离。
   - 2026-10-02 复验（§13.140）：实际 tools/list 响应 92691 UTF-8 字节，tools 数组 92681 字节。按当前工具字节组合，Design 三工具数组为 10035 字节，Product/Test 三工具数组为 16878 字节；子集只是设计估算，不等于真实宿主的 token、费用或时延。
 
-- **K5** [中 / 缺口] 精简结果（response_format）计划了三次都没实现；每次 review inspection 都重发整个任务包（计划阶段 8；状态：开放）
+- **K5** [中 / 缺口] 精简结果（response_format）计划了三次都没实现；每次 review inspection 都重发整个任务包（计划阶段 8；状态：部分关闭——inspect 的 `detail: summary` 已落地 2026-10-14，status 的窗口摘要与默认档待裁决）
+  - 2026-10-14 进展（§13.176）：`wakeflow_inspect_target_result_review` 请求加可选 `detail ∈ full | summary`，summary 把 `reviewUnit.taskPackage` 换成 `{detail, taskPackageId, workType, objective, acceptanceAnchors[]{anchorId, claim}, testStepIds}`，结果加顶层 `detail`，`snapshotDigest`/`reviewUnitDigest` 与其余字段不变，决策请求照常引用；Controller 技能第 10 步说明何时传 summary。默认保持 full：现场测试前改 Controller 的默认返回是产品决定，不在技术债务批次里悄悄做。未做：status 的 windows 只给计数与待处理窗口；场景测试里的结果大小断言。
   - 说明：单个结果不算大，但反复出现：status 是每次 /next 的第一步，inspect 每次决策约跑两遍，而且每次都重发 Controller 早已写过的约 15 KB。累计约 27 万 token 进入 Controller 的历史，是上下文增长的一大块来源。
   - 证据：docs/reviews/2026-09-04-flow-optimization-analysis.md:96、architecture-and-slice-design.md:58/72/133、gate-log L2405 都列了 response_format；L2462 推迟到 L1 之后就没再提；src 和 tests 中找不到；inspect_target_result_review 的请求只有 root、demandId、targetTaskId；inspect 21 次，平均 21.7 KB（最大 27.5 KB，其中 taskPackage 15.2 KB，是 Controller 自己在 plan 时写的）；status 55 次，平均 9.1 KB，其中 windows 占 7.1 KB
   - 建议：给 inspect_target_result_review 和 status 加 `detail: summary|full` 参数，默认 summary：任务包只给 id 和摘要，外加决策必须引用的 anchor；status 的 windows 只给计数和需要处理的窗口。在场景测试中为每个工具的结果大小加断言（例如 8 个窗口时 status 小于 4 KB）。

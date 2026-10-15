@@ -4790,3 +4790,28 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话（真实测试窗口的失败步骤、真实修复投递都未在现场发生）、lab/live、远端 CI；图谱指纹漂移未刷新。
 
 本批改动 tests/scenarios（链与清单夹具）、docs/（gate-log、scenario-acceptance、登记 D4、docs README、plan §13 E3 的计数）、仓库 README 与 CLAUDE.md/AGENTS.md 的场景计数、耗时表；未提交，main 领先 origin/main 26 个提交。
+
+### 13.176 技术债务批次 8 首项：评审投影的 summary 档（K5，inspect 部分）（2026-10-14）
+
+登记 K5 说每次 review inspection 都重发 Controller 自己规划时写过的整个任务包（约 15 KB）。本节只做 inspect 一侧、opt-in；status 的窗口摘要与"默认改 summary"留给裁决——现场测试前改 Controller 的默认返回是产品决定，不在技术债务批次里悄悄做。
+
+- **合同。** `wakeflow_inspect_target_result_review` 请求加可选 `detail ∈ full | summary`（缺省 full）；结果加必填顶层 `detail`，`reviewUnit.taskPackage` 变为 `oneOf[reviewTaskPackage, reviewTaskPackageSummary]`，summary 为 `{detail:"summary", taskPackageId, workType, objective, acceptanceAnchors[]{anchorId, claim}, testStepIds | null}`。根级 `if detail=summary then taskPackage $ref summary else $ref full` 把两者钉死；`reviewUnit` 原有的 workType 分支不再内嵌完整任务包的 `$ref`，只钉 `workType` 与 `testStepIds`（implementation 为 null、test 为数组），与 `testSteps` 同形。
+- **服务。** `inspectReview` 读 `request.detail ?? "full"`，summary 时用 `summarizeReviewTaskPackage` 换包。`snapshotDigest` 与 `reviewUnitDigest` 来自治理层的 `computeReportedReviewUnitDigest`（以完整任务包为基），所以 summary 投影的两份 digest 与 full 相同，决策请求可以直接引用。工具描述加一句 `detail: summary` 的含义。
+- **技能文本。** Controller SKILL 第 10 步与 delivery-and-review 的"Inspecting the review unit"说明何时传 summary（自己写过任务包、只需锚点时），默认仍返回完整包。
+- **测试。** 服务测试两条——实现目标：摘要形状逐字、两份 digest 相同、去掉 `detail` 与任务包后其余字段 deepEqual、JSON 更小、显式 `detail: full` 与缺省逐字相同；测试目标：`testStepIds` 等于合同步骤 id、逐步表与允许集合不变。夹具 `inspectFixtureReview` 加请求覆盖参数；`card-07/import-and-review` 场景在完成证据确认后多读一次 summary，核对 digest、允许集合与体积。
+- **两条教训。** 运行时与 codegen 的 Ajv 都是 `strict: true`，等于全部 strict 选项：根级 then/else 里新建的 `reviewUnit` 子 Schema 一开始没写 `type: object`，被 `strictTypes` 以"catalog 不是严格 2020-12"拒绝。第二轮我把 `schema:build` 接在 `| tail -1` 后面，zsh 取管道末尾的退出码，`&&` 照常放行，测试跑在旧生成物上还报同一个 `$result/reviewUnit/taskPackage`——写 `.build/` 或生成物的命令不要接管道，退出码紧跟着读。
+- **D7 预算。** 第 10 步多出的两行把 Controller 的 `SKILL.md` 推到 202 行，第一次完整门（run-N0DIxi，1513 测试只败这一条：`skills/wakeflow-controller/SKILL.md has 202 lines`，上限 200 行、12 KiB）把它抓住；把第 10 步压回六行（200 行、10992 字节），技能层只留一句"`detail: "summary"` 只留锚点"，解释留在 reference 与工具描述里。I4 的技能瘦身仍然待做：预算已经顶满。
+- **没做的（待裁决）：** 默认改为 summary；`wakeflow_status` 的 windows 只给计数与待处理窗口；场景里的结果大小断言（登记 K5 的建议）。
+
+文档：需求卡 7 的 7.2 行、capability-map 第 10 行、登记 K5（部分关闭）、技术债务复审第 8 行、scenario-acceptance 的 card-07 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：result-review + governance/review + codegen + MCP 目录 63/63（前两轮失败见教训）；Codex 场景链 25/25（含新增的 summary 核对）。
+- 制品重建（`build:artifacts:committed`）与 `smoke:artifacts` 均 exit 0。
+- 完整门两次。第一次 run-N0DIxi（04:22–04:45 UTC，22.6 分钟）1513 测试只败一条——Controller `SKILL.md` 202 行超 D7 预算（见上）；压回 200 行并重建制品、重跑 smoke 后 run-D1BmbN（04:48–05:13 UTC，25.5 分钟）1513/1513 全通过、317 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过；stderr 只有 tooling/lab 两条既有的 Biome `useTemplate` 警告（上一次绿门相同，非失败）。
+- `wf timings apply --receipt .build/verification/run-D1BmbN/receipt.json`：317 份文件、并发 2（耗时表随本批提交；与此前各批一样不为它再跑一次门）。
+- `wf handoff`（含真实 build:check，run-19hDUD）：七项通过（whitespace、private-content、artifacts、docs-pointers、test-durations、instructions-parity、git）；`git diff --check` 干净。
+- 未运行：原生宿主会话（Controller 真实传 `detail: summary`）、lab/live、远端 CI；图谱指纹漂移未刷新。
+
+本批改动 src/capabilities/result-review（contract、service）、src/contracts/schemas 与 generated（inspection request/result）、assets/agent-text（SKILL 第 10 步、delivery-and-review）、tests（result-review 服务测试、review 夹具、场景链）、plugins/（重建）、docs/；未提交，main 领先 origin/main 27 个提交。

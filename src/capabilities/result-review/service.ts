@@ -1,17 +1,17 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
   PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type {
   RootedDirectory,
@@ -30,33 +30,33 @@ import { buildDemandControllerRoute } from "../../governance/controller/demand-c
 import type { DeliveryEnvelope } from "../../governance/delivery/delivery-envelope.js";
 import {
   closeDemandOperationAuthorityContext,
+  type DemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
   openDemandOperationAuthorityContext,
   openDemandReadAuthorityContext,
-  type DemandOperationAuthorityContext,
 } from "../../governance/demand/demand-operation-authority-context.js";
 import {
   DemandEventSourcingCommandHandlerError,
-  executeDemandEventSourcingCommand,
   type DemandEventSourcingCommandResult,
+  executeDemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import {
-  parseDemandEventSourcingCommand,
   type DemandEventSourcingCommand,
+  parseDemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   type AuditedDemandTargetResultHistory,
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import type { DemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
+import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { parseDemandEventStreamRevision } from "../../governance/demand/event-sourcing/demand-event-stream-position.js";
-import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import type { DemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
 import {
   computeDemandAggregateStateDigest,
-  decideTargetResultReviewInDemandAggregateState,
   type DemandTargetTaskState,
+  decideTargetResultReviewInDemandAggregateState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
@@ -68,6 +68,7 @@ import {
   readManagedEvidencePayloadMember,
 } from "../../governance/evidence/managed-evidence-record-reader.js";
 import { managedEvidenceRecordAddress } from "../../governance/evidence/managed-evidence-resource-paths.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   createImplementationTargetResult,
   ImplementationTargetResultError,
@@ -76,6 +77,7 @@ import {
   createImplementationTargetResultReport,
   ImplementationTargetResultReportError,
 } from "../../governance/result/implementation-target-result-report.js";
+import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   computeTargetResultCallbackPromptDigest,
   deriveTargetResultCallbackId,
@@ -86,7 +88,6 @@ import {
   type TargetResultCallbackRecord,
   type TargetResultEvidenceResolution,
 } from "../../governance/result/target-result-callback.js";
-import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   createTestTargetResult,
   TestTargetResultError,
@@ -96,41 +97,40 @@ import {
   TestTargetResultReportError,
 } from "../../governance/result/test-target-result-report.js";
 import {
-  createControllerImplementationReviewDecision,
-  type CreateControllerImplementationReviewDecisionInput,
-  ControllerImplementationReviewDecisionError,
   type ControllerImplementationReviewDecision,
+  ControllerImplementationReviewDecisionError,
+  type CreateControllerImplementationReviewDecisionInput,
+  createControllerImplementationReviewDecision,
 } from "../../governance/review/controller-implementation-review-decision.js";
 import {
-  createControllerProductDefectRemediationAuthorization,
-  ControllerProductDefectRemediationAuthorizationError,
   type ControllerProductDefectRemediationAuthorization,
+  ControllerProductDefectRemediationAuthorizationError,
+  createControllerProductDefectRemediationAuthorization,
 } from "../../governance/review/controller-product-defect-remediation-authorization.js";
 import type { ControllerReviewDecision } from "../../governance/review/controller-review-decision.js";
 import {
+  type ControllerReviewSharedErrorReason,
   normalizeControllerReviewEscalation,
   normalizeControllerReviewResumption,
   normalizeControllerTestReviewEscalation,
-  type ControllerReviewSharedErrorReason,
 } from "../../governance/review/controller-review-decision-contract.js";
 import {
-  createControllerTestReviewDecision,
-  ControllerTestReviewDecisionError,
   type ControllerTestReviewDecision,
+  ControllerTestReviewDecisionError,
+  createControllerTestReviewDecision,
 } from "../../governance/review/controller-test-review-decision.js";
 import {
   buildDemandResultReviewSnapshotFromHistory,
   computeReportedReviewUnitDigest,
-  readDemandResultReviewSnapshot,
   type DemandResultReviewTarget,
   type DemandTargetReviewHistoryEntry,
+  readDemandResultReviewSnapshot,
 } from "../../governance/review/demand-result-review-snapshot.js";
 import type { TaskPackage, TestTaskPackage } from "../../governance/tasking/task-package.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
-  runAppendCommand,
   type AppendCommandBinding,
   type AppendCommandEnvelope,
+  runAppendCommand,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
@@ -141,12 +141,12 @@ import {
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
+import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
   WakeflowWindowHostBindingStoreError,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
-import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
@@ -155,29 +155,28 @@ import {
   admitTargetResultImportResult,
   admitTargetResultReviewInspectionResult,
   admitTestReviewDecisionResult,
+  type ImplementationReviewDecisionRequest,
+  type ImplementationReviewDecisionResult,
   parseImplementationReviewDecisionRequest,
   parseTargetResultImportRequest,
   parseTargetResultReviewInspectionRequest,
   parseTestReviewDecisionRequest,
-  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,
-  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
-  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
-  type ImplementationReviewDecisionRequest,
-  type ImplementationReviewDecisionResult,
   type TargetResultImportRequest,
   type TargetResultImportResult,
   type TargetResultReviewInspectionRequest,
   type TargetResultReviewInspectionResult,
   type TestReviewDecisionRequest,
   type TestReviewDecisionResult,
+  WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,
+  WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+  WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
 } from "./contract.js";
 import {
   collectEvidenceReferences,
   deriveCallbackLanding,
   deriveImplementationAllowedDecisions,
-  type ImplementationAdmissionView,
   deriveImplementationDecisionBlockers,
   derivePrivacyRules,
   deriveResumptionBlockers,
@@ -185,22 +184,23 @@ import {
   deriveTargetCompletion,
   deriveTestAllowedDecisions,
   deriveTestDecisionBlockers,
+  type EvidenceReference,
   findReviewEscalationEventId,
+  type ImplementationAdmissionView,
   implementationPhaseForDecision,
   locateEvidenceReference,
-  planEvidenceLocator,
-  reportTexts,
-  summarizeResultForCallback,
-  testPhaseForDecision,
-  type EvidenceReference,
   type PriorTestResultView,
+  planEvidenceLocator,
   type ReportEvidenceView,
   type ResumptionSourceView,
   type ReviewUnitStatus,
+  reportTexts,
   type SessionRecordView,
   type StepView,
+  summarizeResultForCallback,
   type TargetCompletionView,
   type TestAdmissionView,
+  testPhaseForDecision,
 } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 
@@ -1428,11 +1428,14 @@ async function inspectReview(
   });
   const testView = testUnitView(history, unit, evidence.targetCompletion);
   const resumptionBasis = resumptionBasisView(unit);
+  // K5：Controller 规划时自己写过任务包，复审时常常只需要锚点；summary 把整个包换成身份、目标与锚点。
+  const detail = request.detail ?? "full";
   return admitTargetResultReviewInspectionResult({
     kind: "WakeflowTargetResultReviewInspectionResult",
     schemaVersion: WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION,
     tool: WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
     status: "current",
+    detail,
     demand: snapshot.demand,
     eventStream: snapshot.eventStream,
     snapshotDigest: snapshot.snapshotDigest,
@@ -1442,7 +1445,10 @@ async function inspectReview(
       targetTaskId: unit.target.targetTaskId,
       outcome: unit.target.outcome,
       taskPackageSourceEvent: unit.target.taskPackageSourceEvent,
-      taskPackage: unit.target.taskPackage,
+      taskPackage:
+        detail === "summary"
+          ? summarizeReviewTaskPackage(unit.target.taskPackage)
+          : unit.target.taskPackage,
       targetResultSourceEvent: unit.target.targetResultSourceEvent,
       // ADR-0020 决定 2：评审者要看见落地证据是宿主观察还是 Agent 自述。持久化的 TargetResult 不带它，
       // 证据等级来自事件流派生的结局摘要。
@@ -1483,6 +1489,23 @@ async function inspectReview(
       testSteps: testView === null ? null : testView.steps,
       attemptScope: testView === null ? null : testView.attemptScope,
     },
+  });
+}
+
+/** summary 档的任务包：身份、目标、锚点（id 与 claim）与测试合同的步骤 id；复审所需的引用都在，正文不重发。 */
+function summarizeReviewTaskPackage(taskPackage: Readonly<TaskPackage>) {
+  return Object.freeze({
+    detail: "summary" as const,
+    taskPackageId: taskPackage.taskPackageId,
+    workType: taskPackage.workType,
+    objective: taskPackage.objective,
+    acceptanceAnchors: taskPackage.acceptanceAnchors.map((anchor) =>
+      Object.freeze({ anchorId: anchor.anchorId, claim: anchor.claim }),
+    ),
+    testStepIds:
+      taskPackage.workType === "test"
+        ? taskPackage.testContract.steps.map((step) => step.stepId)
+        : null,
   });
 }
 

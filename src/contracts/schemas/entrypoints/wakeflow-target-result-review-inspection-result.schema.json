@@ -15,7 +15,8 @@
     "demand",
     "eventStream",
     "snapshotDigest",
-    "reviewUnit"
+    "reviewUnit",
+    "detail"
   ],
   "properties": {
     "kind": {
@@ -51,8 +52,48 @@
     },
     "reviewUnit": {
       "$ref": "#/$defs/reviewUnit"
+    },
+    "detail": {
+      "description": "The detail level the request asked for; summary replaces reviewUnit.taskPackage with its summary.",
+      "enum": ["full", "summary"]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "detail": {
+            "const": "summary"
+          }
+        },
+        "required": ["detail"]
+      },
+      "then": {
+        "properties": {
+          "reviewUnit": {
+            "type": "object",
+            "properties": {
+              "taskPackage": {
+                "$ref": "#/$defs/reviewTaskPackageSummary"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reviewUnit": {
+            "type": "object",
+            "properties": {
+              "taskPackage": {
+                "$ref": "#/$defs/reviewTaskPackage"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "targetResult": {
       "type": "object",
@@ -1390,7 +1431,14 @@
           "$ref": "#/$defs/sourceEvent"
         },
         "taskPackage": {
-          "$ref": "#/$defs/reviewTaskPackage"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/reviewTaskPackage"
+            },
+            {
+              "$ref": "#/$defs/reviewTaskPackageSummary"
+            }
+          ]
         },
         "targetResultSourceEvent": {
           "$ref": "#/$defs/sourceEvent"
@@ -1499,19 +1547,15 @@
           "then": {
             "properties": {
               "taskPackage": {
-                "allOf": [
-                  {
-                    "$ref": "#/$defs/reviewTaskPackage"
+                "type": "object",
+                "properties": {
+                  "workType": {
+                    "const": "implementation"
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "workType": {
-                        "const": "implementation"
-                      }
-                    }
+                  "testStepIds": {
+                    "type": "null"
                   }
-                ]
+                }
               },
               "targetResult": {
                 "allOf": [
@@ -1539,19 +1583,15 @@
           "else": {
             "properties": {
               "taskPackage": {
-                "allOf": [
-                  {
-                    "$ref": "#/$defs/reviewTaskPackage"
+                "type": "object",
+                "properties": {
+                  "workType": {
+                    "const": "test"
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "workType": {
-                        "const": "test"
-                      }
-                    }
+                  "testStepIds": {
+                    "type": "array"
                   }
-                ]
+                }
               },
               "targetResult": {
                 "allOf": [
@@ -2444,6 +2484,63 @@
                 "evidence": {
                   "$ref": "#/$defs/evidenceRef"
                 }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "reviewTaskPackageSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "detail",
+        "taskPackageId",
+        "workType",
+        "objective",
+        "acceptanceAnchors",
+        "testStepIds"
+      ],
+      "properties": {
+        "detail": {
+          "const": "summary"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/reviewTaskPackageTaskPackageId"
+        },
+        "workType": {
+          "enum": ["implementation", "test"]
+        },
+        "objective": {
+          "$ref": "#/$defs/reviewTaskPackageHumanText"
+        },
+        "acceptanceAnchors": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["anchorId", "claim"],
+            "properties": {
+              "anchorId": {
+                "$ref": "#/$defs/reviewTaskPackageAnchorId"
+              },
+              "claim": {
+                "$ref": "#/$defs/reviewTaskPackageHumanText"
+              }
+            }
+          }
+        },
+        "testStepIds": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/reviewTaskPackageStepId"
               }
             }
           ]

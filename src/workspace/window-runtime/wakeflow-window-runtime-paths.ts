@@ -1,10 +1,8 @@
+import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  parseWakeflowDurableIdOfKind,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
@@ -17,23 +15,15 @@ import {
  * 或文件系统，也不接受 display name、绝对路径或任意文件名。
  */
 
-export function wakeflowWindowHostBindingRootRef(
-  profileValue: unknown,
-): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${wakeflowHostIdentityRootRef(profileValue)}/window-bindings`,
-  );
+export function wakeflowWindowHostBindingRootRef(profileValue: unknown): PortableResourcePath {
+  return parsePortableResourcePath(`${wakeflowHostIdentityRootRef(profileValue)}/window-bindings`);
 }
 
 export function wakeflowWindowHostBindingRef(
   profileValue: unknown,
   windowIdValue: unknown,
 ): PortableResourcePath {
-  const windowId = parseWakeflowDurableIdOfKind(
-    windowIdValue,
-    "window",
-    "$windowId",
-  );
+  const windowId = parseWakeflowDurableIdOfKind(windowIdValue, "window", "$windowId");
   return parsePortableResourcePath(
     `${wakeflowWindowHostBindingRootRef(profileValue)}/${windowId}.json`,
   );
@@ -60,11 +50,7 @@ export function wakeflowWindowRuntimeProjectionRef(
   profileValue: unknown,
   windowIdValue: unknown,
 ): PortableResourcePath {
-  const windowId = parseWakeflowDurableIdOfKind(
-    windowIdValue,
-    "window",
-    "$windowId",
-  );
+  const windowId = parseWakeflowDurableIdOfKind(windowIdValue, "window", "$windowId");
   return parsePortableResourcePath(
     `${wakeflowWindowRuntimeProjectionRootRef(profileValue)}/${windowId}.json`,
   );

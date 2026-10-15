@@ -11,8 +11,8 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import {
   computeDemandAggregateStateDigest,
   currentTestTargetsOf,
-  parseDemandAggregateState,
   type DemandAggregateState,
+  parseDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {

@@ -2,8 +2,8 @@ import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   realpathSync,
   rmSync,
   statSync,
@@ -11,36 +11,29 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowManagedSupportResourceCatalog,
-} from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import {
   inspectWakeflowManagedSupportRoot,
   materializeWakeflowManagedSupportRoot,
   WakeflowManagedSupportRootMaterializationError,
   type WakeflowManagedSupportRootMaterializationErrorReason,
 } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
 async function fixture(t: TestContext) {
-  const container = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-managed-support-root-",
-  )));
+  const container = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-managed-support-root-")),
+  );
   const workspacePath = path.join(container, "Workspace");
   mkdirSync(workspacePath, { mode: 0o755 });
   const root = await RootedDirectory.open(workspacePath);
@@ -88,14 +81,15 @@ async function expectRootError(
 test("managed Support root materializes child and sibling Config placements", async (t) => {
   const childFixture = await fixture(t);
   const childConfig = createMinimalWakeflowConfig();
-  const absent = await inspectWakeflowManagedSupportRoot(
-    childFixture.root,
-    request(childConfig),
-  );
+  const absent = await inspectWakeflowManagedSupportRoot(childFixture.root, request(childConfig));
   equal(absent.status, "absent");
   equal(absent.placementState, "missing");
   deepEqual(absent.scaffold, [{ relativePath: "drafts", status: "absent" }]);
-  equal(existsSync(path.join(childFixture.workspacePath, "Design")), false, "inspection must not write");
+  equal(
+    existsSync(path.join(childFixture.workspacePath, "Design")),
+    false,
+    "inspection must not write",
+  );
 
   const created = await materializeWakeflowManagedSupportRoot(
     childFixture.root,
@@ -165,9 +159,11 @@ test("managed Support root materializes child and sibling Config placements", as
 
   const siblingFixture = await fixture(t);
   const siblingConfig = createMinimalWakeflowConfig();
-  const surfaces = (siblingConfig.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces;
+  const surfaces = (
+    siblingConfig.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces;
   const design = surfaces[0];
   if (design === undefined) throw new Error("Expected Design surface.");
   design.path = "../Design";
@@ -182,9 +178,11 @@ test("managed Support root materializes child and sibling Config placements", as
 test("managed Support root rejects external ownership and existing mode drift", async (t) => {
   const externalFixture = await fixture(t);
   const external = createMinimalWakeflowConfig();
-  const externalSurface = (external.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces[0];
+  const externalSurface = (
+    external.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces[0];
   if (externalSurface === undefined) throw new Error("Expected surface.");
   externalSurface.ownership = "external-owned";
   externalSurface.instructionManagement = "managed-block";
@@ -194,13 +192,14 @@ test("managed Support root rejects external ownership and existing mode drift", 
     codexWorkspaceHostResourceProfile,
   );
   await expectRootError(
-    () => materializeWakeflowManagedSupportRoot(externalFixture.root, {
-      config: externalModel,
-      expectedConfigDigest: computeWakeflowConfigDigest(externalModel),
-      profile: codexWorkspaceHostResourceProfile,
-      expectedCatalogDigest: emptyCatalog.catalogDigest,
-      surfaceId: DESIGN_ID,
-    }),
+    () =>
+      materializeWakeflowManagedSupportRoot(externalFixture.root, {
+        config: externalModel,
+        expectedConfigDigest: computeWakeflowConfigDigest(externalModel),
+        profile: codexWorkspaceHostResourceProfile,
+        expectedCatalogDigest: emptyCatalog.catalogDigest,
+        surfaceId: DESIGN_ID,
+      }),
     "surface",
     "$request.surfaceId",
   );
@@ -209,10 +208,11 @@ test("managed Support root rejects external ownership and existing mode drift", 
   mkdirSync(path.join(driftFixture.workspacePath, "Design"), { mode: 0o755 });
   chmodSync(path.join(driftFixture.workspacePath, "Design"), 0o700);
   await expectRootError(
-    () => materializeWakeflowManagedSupportRoot(
-      driftFixture.root,
-      request(createMinimalWakeflowConfig()),
-    ),
+    () =>
+      materializeWakeflowManagedSupportRoot(
+        driftFixture.root,
+        request(createMinimalWakeflowConfig()),
+      ),
     "root-policy",
     "$root",
   );

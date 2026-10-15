@@ -6,19 +6,19 @@ import {
   type WakeflowWorkspaceResourceDeclaration,
 } from "../../workspace/workspace-resource-declaration.js";
 import {
-  parseLedgerAuthorityRecord,
-  type LedgerAuthorityRecord,
-} from "./ledger-authority-record.js";
-import {
+  LEDGER_ARCHIVES_ROOT_REF,
+  LEDGER_REQUIREMENTS_ROOT_REF,
+  LEDGER_TRANSACTIONS_ROOT_REF,
   ledgerAuthorityMemberRef,
   ledgerAuthorityRecordRef,
   ledgerAuthorityRootRef,
   ledgerRecordPublicationIntentRef,
   ledgerRecordPublicationLockRef,
-  LEDGER_ARCHIVES_ROOT_REF,
-  LEDGER_REQUIREMENTS_ROOT_REF,
-  LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
+import {
+  type LedgerAuthorityRecord,
+  parseLedgerAuthorityRecord,
+} from "./ledger-authority-record.js";
 
 /**
  * Wakeflow Governance / Ledger：需求包记录职责所有者的资源目录。
@@ -126,30 +126,25 @@ function transactionDeclaration(
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-retire",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });
 }
 
-const LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION =
-  directoryDeclaration(
-    "ledger.requirements-root",
-    "ledger-layout",
-    LEDGER_REQUIREMENTS_ROOT_REF,
-    true,
-  );
+const LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
+  "ledger.requirements-root",
+  "ledger-layout",
+  LEDGER_REQUIREMENTS_ROOT_REF,
+  true,
+);
 
-const LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
-  directoryDeclaration(
-    "ledger.transactions-root",
-    "ledger-record-publication",
-    LEDGER_TRANSACTIONS_ROOT_REF,
-    false,
-  );
+const LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
+  "ledger.transactions-root",
+  "ledger-record-publication",
+  LEDGER_TRANSACTIONS_ROOT_REF,
+  false,
+);
 
 const LEDGER_ARCHIVES_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
   "ledger.archives-root",
@@ -169,9 +164,7 @@ function memberDeclarationId(
   record: Readonly<LedgerAuthorityRecord>,
   memberPath: PortableResourcePath,
 ): string {
-  const digest = computeSha256Digest(encodeUtf8(
-    `${record.requirementId}\u0000${memberPath}`,
-  ));
+  const digest = computeSha256Digest(encodeUtf8(`${record.requirementId}\u0000${memberPath}`));
   return `member-${digest.slice("sha256:".length)}`;
 }
 
@@ -213,27 +206,17 @@ export function createLedgerAuthorityResourceCatalog(
       recoveryStrategy: "owner-forward-recovery",
     },
   });
-  const manifest = durableFactDeclaration(
-    `${prefix}.record`,
-    ledgerAuthorityRecordRef(record),
+  const manifest = durableFactDeclaration(`${prefix}.record`, ledgerAuthorityRecordRef(record));
+  const members = record.documents.map((document) =>
+    durableFactDeclaration(
+      `${prefix}.${memberDeclarationId(record, document.path)}`,
+      ledgerAuthorityMemberRef(record, document.path),
+    ),
   );
-  const members = record.documents.map((document) => durableFactDeclaration(
-    `${prefix}.${memberDeclarationId(record, document.path)}`,
-    ledgerAuthorityMemberRef(record, document.path),
-  ));
   const intent = transactionDeclaration(
     `${prefix}.intent`,
     ledgerRecordPublicationIntentRef(record),
   );
-  const lock = transactionDeclaration(
-    `${prefix}.lock`,
-    ledgerRecordPublicationLockRef(record),
-  );
-  return Object.freeze([
-    root,
-    manifest,
-    ...members,
-    intent,
-    lock,
-  ]);
+  const lock = transactionDeclaration(`${prefix}.lock`, ledgerRecordPublicationLockRef(record));
+  return Object.freeze([root, manifest, ...members, intent, lock]);
 }

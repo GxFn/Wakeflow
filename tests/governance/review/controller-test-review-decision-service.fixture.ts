@@ -5,13 +5,13 @@ import type {
   TestReviewDecisionResult,
 } from "../../../src/capabilities/result-review/contract.js";
 import {
+  type ExecuteResultReviewOptions,
   executeTargetResultImportRequest,
   executeTestReviewDecisionRequest,
-  type ExecuteResultReviewOptions,
 } from "../../../src/capabilities/result-review/service.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
+import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import type { DeliveredTarget } from "../delivery/delivery-workspace.fixture.js";
 import {
   cleanupTestDeliveryWorkspaceFixture,
@@ -23,9 +23,9 @@ import type { TestTaskPlanningWorkspaceFixtureOptions } from "../tasking/test-ta
 import {
   CODEX_REVIEW_FACADE,
   currentFixtureStreamRevision,
+  type FixtureEvidence,
   inspectFixtureReview,
   landFixtureTargetCompletion,
-  type FixtureEvidence,
 } from "./controller-implementation-review-decision-service.fixture.js";
 
 /**

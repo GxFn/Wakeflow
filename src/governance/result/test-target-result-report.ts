@@ -1,41 +1,8 @@
-import type { WakeflowTestTargetResultReport as ReportWire } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
-import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
-import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
-  JsonValueError,
-  parseJsonValue,
-  type JsonObject,
-  type JsonValue,
-} from "../../foundation/data/json-value.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  type PortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
-import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import {
-  parseUtcInstant,
-  UtcInstantError,
-  type UtcInstant,
-} from "../../foundation/time/utc-instant.js";
-import {
-  readUtcWallClock,
-  UtcWallClockError,
-  type UtcWallClock,
-} from "../../foundation/time/wall-clock.js";
+import type { WakeflowTestTargetResultReport as ReportWire } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   isTestFailureClassification,
@@ -45,6 +12,39 @@ import {
   type TestFailureOwner,
   type TestStepVerdict,
 } from "../../contracts/vocabulary/test-step-vocabulary.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
+import {
+  DeterministicJsonDocumentError,
+  parseDeterministicJsonDocument,
+  renderDeterministicJsonDocument,
+} from "../../foundation/data/deterministic-json-document.js";
+import {
+  type JsonObject,
+  type JsonValue,
+  JsonValueError,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
+import {
+  type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+} from "../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
+import {
+  readUtcWallClock,
+  type UtcWallClock,
+  UtcWallClockError,
+} from "../../foundation/time/wall-clock.js";
 import type {
   TargetResultEvidenceLocator,
   TargetResultOutcome,
@@ -61,8 +61,7 @@ import type {
 
 const REPORT_KIND = "WakeflowTestTargetResultReport" as const;
 const REPORT_SCHEMA_VERSION = 1 as const;
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
 const MAXIMUM_CONTRACT_STEPS = 20;
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
@@ -120,16 +119,13 @@ export type TestTargetResultReportErrorReason =
 const ERROR_MESSAGES = {
   input: "Test Target Result Report is not passive closed JSON data.",
   schema: "Test Target Result Report does not satisfy its Schema.",
-  digest:
-    "Test Target Result Report contains an invalid or inconsistent digest.",
+  digest: "Test Target Result Report contains an invalid or inconsistent digest.",
   path: "Test Target Result Report contains an invalid portable resource path.",
   text: "Test Target Result Report contains invalid human text or token text.",
   time: "Test Target Result Report contains an invalid time.",
   relation: "Test Target Result Report facts are inconsistent.",
   representation: "Test Target Result Report bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<TestTargetResultReportErrorReason, string>
->;
+} as const satisfies Readonly<Record<TestTargetResultReportErrorReason, string>>;
 
 /** Test Report输入、关系或确定性表示失败时的稳定错误。 */
 export class TestTargetResultReportError extends Error {
@@ -175,10 +171,7 @@ function exactRecord(
   }
   const keys = Object.keys(json).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     fail("input", path);
   }
   return json as JsonObject;
@@ -228,16 +221,12 @@ function instant(value: unknown, path: string): UtcInstant {
 
 function textList(value: unknown, path: string): readonly string[] {
   if (!Array.isArray(value) || value.length > 64) fail("input", path);
-  const values = value.map((entry, index) =>
-    humanText(entry, `${path}/${index}`),
-  );
+  const values = value.map((entry, index) => humanText(entry, `${path}/${index}`));
   if (new Set(values).size !== values.length) fail("relation", path);
   return Object.freeze(values);
 }
 
-function evidenceLocators(
-  value: unknown,
-): readonly Readonly<TargetResultEvidenceLocator>[] {
+function evidenceLocators(value: unknown): readonly Readonly<TargetResultEvidenceLocator>[] {
   if (!Array.isArray(value) || value.length > MAXIMUM_EVIDENCE_LOCATORS) {
     fail("input", "$/evidenceLocators");
   }
@@ -270,11 +259,7 @@ export function deriveTestVerdict(
 }
 
 function stepFailure(value: unknown, path: string): Readonly<TestTargetResultStepFailure> {
-  const record = exactRecord(
-    value,
-    ["classification", "likelyOwner", "recommendedAction"],
-    path,
-  );
+  const record = exactRecord(value, ["classification", "likelyOwner", "recommendedAction"], path);
   if (!isTestFailureClassification(record.classification)) {
     fail("input", `${path}/classification`);
   }
@@ -293,9 +278,7 @@ function parseSteps(
   if (!Array.isArray(value) || value.length > MAXIMUM_CONTRACT_STEPS) {
     fail("input", "$/steps");
   }
-  const locatorTuples = new Set(
-    locators.map((entry) => `${entry.ref}\0${entry.digest}`),
-  );
+  const locatorTuples = new Set(locators.map((entry) => `${entry.ref}\0${entry.digest}`));
   const steps = value.map((entry, index) => {
     const path = `$/steps/${index}`;
     const hasFailure =
@@ -312,18 +295,12 @@ function parseSteps(
     }
     if (!isTestStepVerdict(record.verdict)) fail("input", `${path}/verdict`);
     if ((record.verdict === "pass") === hasFailure) fail("relation", `${path}/failure`);
-    const evidence = exactRecord(
-      record.evidence,
-      ["digest", "ref"],
-      `${path}/evidence`,
-    );
+    const evidence = exactRecord(record.evidence, ["digest", "ref"], `${path}/evidence`);
     const admittedEvidence = Object.freeze({
       ref: resourcePath(evidence.ref, `${path}/evidence/ref`),
       digest: digest(evidence.digest, `${path}/evidence/digest`),
     });
-    if (
-      !locatorTuples.has(`${admittedEvidence.ref}\0${admittedEvidence.digest}`)
-    ) {
+    if (!locatorTuples.has(`${admittedEvidence.ref}\0${admittedEvidence.digest}`)) {
       fail("relation", `${path}/evidence`);
     }
     return Object.freeze({
@@ -346,14 +323,7 @@ export function parseTestTargetResultReportContent(
 ): Readonly<TestTargetResultReportContent> {
   const record = exactRecord(
     value,
-    [
-      "evidenceLocators",
-      "outcome",
-      "risks",
-      "steps",
-      "summary",
-      "verification",
-    ],
+    ["evidenceLocators", "outcome", "risks", "steps", "summary", "verification"],
     "$content",
   );
   if (
@@ -400,9 +370,7 @@ function reportBasis(
 }
 
 /** 严格解析并复验self-excluding digest的Test Report。 */
-export function parseTestTargetResultReport(
-  value: unknown,
-): Readonly<TestTargetResultReport> {
+export function parseTestTargetResultReport(value: unknown): Readonly<TestTargetResultReport> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$report");
@@ -462,19 +430,12 @@ export function createTestTargetResultReport(
   });
 }
 
-export function testTargetResultReportContentDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseTestTargetResultReportContent(value),
-  );
+export function testTargetResultReportContentDigest(value: unknown): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(parseTestTargetResultReportContent(value));
 }
 
 export function renderTestTargetResultReport(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseTestTargetResultReport(value),
-    "$report",
-  );
+  return renderDeterministicJsonDocument(parseTestTargetResultReport(value), "$report");
 }
 
 export function parseTestTargetResultReportDocument(

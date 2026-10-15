@@ -1,19 +1,13 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   createWakeflowManagedSupportResourceCatalog,
   WakeflowManagedSupportResourceCatalogError,
 } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -21,20 +15,17 @@ function assertDeepFrozen(value: unknown): void {
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
-function summary(catalog: ReturnType<
-  typeof createWakeflowManagedSupportResourceCatalog
->) {
+function summary(catalog: ReturnType<typeof createWakeflowManagedSupportResourceCatalog>) {
   return catalog.declarations.map((entry) => ({
     declarationId: entry.declarationId,
     ownerId: entry.ownerId,
     scope: entry.scope,
     placement: entry.placement,
-    mode: entry.nodePolicy.kind === "tree"
-      ? entry.nodePolicy.rootMode
-      : entry.nodePolicy.mode,
-    processing: entry.processing.kind === "directory-container"
-      ? entry.processing.materializationRecipe
-      : `${entry.processing.role}:${entry.processing.allowedMutationRecipes.join("+")}`,
+    mode: entry.nodePolicy.kind === "tree" ? entry.nodePolicy.rootMode : entry.nodePolicy.mode,
+    processing:
+      entry.processing.kind === "directory-container"
+        ? entry.processing.materializationRecipe
+        : `${entry.processing.role}:${entry.processing.allowedMutationRecipes.join("+")}`,
   }));
 }
 
@@ -46,8 +37,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
   );
   deepEqual(summary(codex), [
     {
-      declarationId:
-        "support.surface_33333333-3333-4333-8333-333333333333.drafts",
+      declarationId: "support.surface_33333333-3333-4333-8333-333333333333.drafts",
       ownerId: "support-surface-layout",
       scope: "host-neutral",
       placement: {
@@ -61,8 +51,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "materialize-directory",
     },
     {
-      declarationId:
-        "support.surface_33333333-3333-4333-8333-333333333333.instruction.codex",
+      declarationId: "support.surface_33333333-3333-4333-8333-333333333333.instruction.codex",
       ownerId: "support-memory",
       scope: "current-host",
       placement: {
@@ -76,8 +65,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "derived-projection:deterministic-rewrite",
     },
     {
-      declarationId:
-        "support.surface_33333333-3333-4333-8333-333333333333.root",
+      declarationId: "support.surface_33333333-3333-4333-8333-333333333333.root",
       ownerId: "support-surface-layout",
       scope: "host-neutral",
       placement: {
@@ -91,8 +79,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "materialize-directory",
     },
     {
-      declarationId:
-        "support.surface_44444444-4444-4444-8444-444444444444.fixtures",
+      declarationId: "support.surface_44444444-4444-4444-8444-444444444444.fixtures",
       ownerId: "support-surface-layout",
       scope: "host-neutral",
       placement: {
@@ -106,8 +93,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "materialize-directory",
     },
     {
-      declarationId:
-        "support.surface_44444444-4444-4444-8444-444444444444.harnesses",
+      declarationId: "support.surface_44444444-4444-4444-8444-444444444444.harnesses",
       ownerId: "support-surface-layout",
       scope: "host-neutral",
       placement: {
@@ -121,8 +107,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "materialize-directory",
     },
     {
-      declarationId:
-        "support.surface_44444444-4444-4444-8444-444444444444.instruction.codex",
+      declarationId: "support.surface_44444444-4444-4444-8444-444444444444.instruction.codex",
       ownerId: "support-memory",
       scope: "current-host",
       placement: {
@@ -136,8 +121,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
       processing: "derived-projection:deterministic-rewrite",
     },
     {
-      declarationId:
-        "support.surface_44444444-4444-4444-8444-444444444444.root",
+      declarationId: "support.surface_44444444-4444-4444-8444-444444444444.root",
       ownerId: "support-surface-layout",
       scope: "host-neutral",
       placement: {
@@ -154,10 +138,7 @@ test("managed Support catalog binds two topology surfaces to the current host", 
   equal(/^sha256:[0-9a-f]{64}$/u.test(codex.catalogDigest), true);
   assertDeepFrozen(codex);
   deepEqual(
-    createWakeflowManagedSupportResourceCatalog(
-      config,
-      codexWorkspaceHostResourceProfile,
-    ),
+    createWakeflowManagedSupportResourceCatalog(config, codexWorkspaceHostResourceProfile),
     codex,
   );
 
@@ -166,9 +147,9 @@ test("managed Support catalog binds two topology surfaces to the current host", 
     claudeCodeWorkspaceHostResourceProfile,
   );
   equal(
-    claude.declarations.filter((entry) => (
-      entry.ownerId === "support-memory"
-    )).every((entry) => entry.placement.relativePath === "CLAUDE.md"),
+    claude.declarations
+      .filter((entry) => entry.ownerId === "support-memory")
+      .every((entry) => entry.placement.relativePath === "CLAUDE.md"),
     true,
   );
   equal(claude.configDigest, codex.configDigest);
@@ -177,14 +158,14 @@ test("managed Support catalog binds two topology surfaces to the current host", 
 
 test("managed Support catalog excludes every external-owned surface", () => {
   const config = createMinimalWakeflowConfig();
-  const surfaces = (config.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces;
+  const surfaces = (
+    config.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces;
   for (const [index, surface] of surfaces.entries()) {
     surface.ownership = "external-owned";
-    surface.instructionManagement = index === 0
-      ? "managed-block"
-      : "owner-managed";
+    surface.instructionManagement = index === 0 ? "managed-block" : "owner-managed";
   }
   const catalog = createWakeflowManagedSupportResourceCatalog(
     config,
@@ -202,10 +183,7 @@ test("managed Support catalog excludes every external-owned surface", () => {
   });
   let caught: unknown;
   try {
-    createWakeflowManagedSupportResourceCatalog(
-      proxy,
-      codexWorkspaceHostResourceProfile,
-    );
+    createWakeflowManagedSupportResourceCatalog(proxy, codexWorkspaceHostResourceProfile);
   } catch (error: unknown) {
     caught = error;
   }

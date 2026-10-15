@@ -1,9 +1,6 @@
 import { types } from "node:util";
 
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   deriveWakeflowExternalInstructionAuthorities,
@@ -43,8 +40,7 @@ export interface WakeflowExternalInstructionRecompositionOptions {
   readonly signal?: AbortSignal;
 }
 
-export type WakeflowExternalInstructionRecompositionEffect =
-  WakeflowManagedBlockFileEffect;
+export type WakeflowExternalInstructionRecompositionEffect = WakeflowManagedBlockFileEffect;
 
 export interface WakeflowExternalInstructionRecompositionReceipt {
   readonly disposition: "current" | "created" | "replaced";
@@ -69,25 +65,17 @@ const ERROR_MESSAGES = {
   input: "Wakeflow external instruction recomposition input is invalid.",
   "unsupported-platform":
     "Wakeflow external instruction recomposition requires POSIX ownership facts.",
-  "root-scope":
-    "Wakeflow external instruction recomposition lost its root scope.",
-  "root-policy":
-    "Wakeflow external instruction recomposition requires a current-user root.",
-  "source-invalid":
-    "Wakeflow external instruction source cannot be recomposed safely.",
+  "root-scope": "Wakeflow external instruction recomposition lost its root scope.",
+  "root-policy": "Wakeflow external instruction recomposition requires a current-user root.",
+  "source-invalid": "Wakeflow external instruction source cannot be recomposed safely.",
   capacity: "Wakeflow external instruction recomposition exceeds its byte budget.",
-  conflict:
-    "Wakeflow external instruction source changed before atomic publication.",
+  conflict: "Wakeflow external instruction source changed before atomic publication.",
   "recovery-required":
     "Wakeflow external instruction target has stage residue that requires explicit recovery.",
   aborted: "Wakeflow external instruction recomposition was aborted.",
   "effect-failure": "Wakeflow external instruction recomposition effect failed.",
-  "commit-uncertain":
-    "Wakeflow external instruction recomposition commit outcome is uncertain.",
-} as const satisfies Readonly<Record<
-  WakeflowExternalInstructionRecompositionErrorReason,
-  string
->>;
+  "commit-uncertain": "Wakeflow external instruction recomposition commit outcome is uncertain.",
+} as const satisfies Readonly<Record<WakeflowExternalInstructionRecompositionErrorReason, string>>;
 
 /** 外部指令重组失败的稳定、脱敏错误。 */
 export class WakeflowExternalInstructionRecompositionError extends Error {
@@ -96,29 +84,23 @@ export class WakeflowExternalInstructionRecompositionError extends Error {
   readonly reason: WakeflowExternalInstructionRecompositionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowExternalInstructionRecompositionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowExternalInstructionRecompositionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowExternalInstructionRecompositionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowExternalInstructionRecompositionErrorReason, path: string): never {
   throw new WakeflowExternalInstructionRecompositionError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -138,10 +120,10 @@ function parseOptions(value: unknown): AbortSignal | undefined {
   }
   if (record.signal === undefined) return undefined;
   if (
-    typeof record.signal !== "object"
-    || record.signal === null
-    || types.isProxy(record.signal)
-    || !(record.signal instanceof AbortSignal)
+    typeof record.signal !== "object" ||
+    record.signal === null ||
+    types.isProxy(record.signal) ||
+    !(record.signal instanceof AbortSignal)
   ) {
     fail("input", "$options.signal");
   }
@@ -157,10 +139,10 @@ function parseRequest(
   signal: AbortSignal | undefined,
 ): Readonly<ParsedWakeflowExternalInstructionInspectionRequest> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || Object.hasOwn(value, "signal")
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    Object.hasOwn(value, "signal")
   ) {
     fail("input", "$request");
   }
@@ -240,10 +222,6 @@ export async function recomposeWakeflowExternalInstruction(
   return Object.freeze({
     disposition: receipt.disposition,
     effect: receipt.effect,
-    inspection: wakeflowExternalInstructionInspectionOf(
-      request,
-      authorities,
-      receipt.inspection,
-    ),
+    inspection: wakeflowExternalInstructionInspectionOf(request, authorities, receipt.inspection),
   });
 }

@@ -12,10 +12,10 @@ import {
   computeRequirementClaimStateDigest,
   createRequirementClaimState,
   createRequirementClaimStateFile,
+  type RequirementClaimState,
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
-  type RequirementClaimState,
 } from "../../../src/kernel/requirement-board.js";
 
 /**

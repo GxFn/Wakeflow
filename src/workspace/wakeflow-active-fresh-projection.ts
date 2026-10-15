@@ -4,10 +4,10 @@ import {
 } from "../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
+  type ActiveProjectionFile,
   computeActiveProjectionSetDigest,
   freshActiveProjectionFacts,
   renderActiveProjectionFiles,
-  type ActiveProjectionFile,
 } from "../kernel/active-projection.js";
 
 /**

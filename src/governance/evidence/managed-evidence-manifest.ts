@@ -1,63 +1,60 @@
-import type { WakeflowManagedEvidenceManifest as ManagedEvidenceManifestWire } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowManagedEvidenceManifest as ManagedEvidenceManifestWire } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { type EvidenceKind, isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
+import {
+  LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
+  LoadedArtifactTreeIdentityError,
+  type LoadedArtifactTreeManifest,
+  validateLoadedArtifactTreeManifest,
+} from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-  validateLoadedArtifactTreeManifest,
-  LoadedArtifactTreeIdentityError,
-  type LoadedArtifactTreeManifest,
-} from "../../foundation/artifact/loaded-artifact-tree-identity.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
-import { isEvidenceKind, type EvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   assertManagedEvidenceKindMatchesSource,
-  parseManagedEvidenceSourceDescriptor,
-  ManagedEvidenceSourceSelectionError,
   type ManagedEvidenceSource,
+  ManagedEvidenceSourceSelectionError,
+  parseManagedEvidenceSourceDescriptor,
 } from "./managed-evidence-source-selection.js";
 
 /**
@@ -73,8 +70,7 @@ import {
  * 是来源投影文档。
  */
 
-export const MANAGED_EVIDENCE_MANIFEST_KIND =
-  "wakeflow-managed-evidence-manifest" as const;
+export const MANAGED_EVIDENCE_MANIFEST_KIND = "wakeflow-managed-evidence-manifest" as const;
 export const MANAGED_EVIDENCE_MANIFEST_VERSION = 1 as const;
 export const MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES = 1024 * 1024;
 
@@ -90,12 +86,10 @@ export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
   maxFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles - 1,
   maxRefBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxRefBytes - 8,
   maxTotalBytes:
-    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes -
-    MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
 } as const);
 
-export type ManagedEvidenceContentReviewDisposition =
-  "controller-confirmed" | "not-required";
+export type ManagedEvidenceContentReviewDisposition = "controller-confirmed" | "not-required";
 export type ManagedEvidencePrivacyFindingKind = "unlisted-absolute-path" | "bare-uuid";
 
 export interface ManagedEvidencePrivacyFinding {
@@ -182,11 +176,8 @@ const ERROR_MESSAGES = {
   payload: "Managed evidence manifest payload identity is inconsistent.",
   "content-review": "Managed evidence manifest content review is inconsistent.",
   ordering: "Managed evidence manifest paths are not in canonical order.",
-  representation:
-    "Managed evidence manifest bytes are not its deterministic representation.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceManifestErrorReason, string>
->;
+  representation: "Managed evidence manifest bytes are not its deterministic representation.",
+} as const satisfies Readonly<Record<ManagedEvidenceManifestErrorReason, string>>;
 
 export class ManagedEvidenceManifestError extends Error {
   override readonly name = "ManagedEvidenceManifestError";
@@ -216,16 +207,15 @@ const DRAFT_FIELDS = Object.freeze([
   "source",
 ] as const);
 
-const validateWire =
-  createRuntimeJsonSchemaValidator<ManagedEvidenceManifestWire>(
-    WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA,
-    [
-      WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
-  );
+const validateWire = createRuntimeJsonSchemaValidator<ManagedEvidenceManifestWire>(
+  WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA,
+  [
+    WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+  ],
+);
 
 function fail(reason: ManagedEvidenceManifestErrorReason, path: string): never {
   throw new ManagedEvidenceManifestError(reason, path);
@@ -235,10 +225,11 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function parseId<
-  K extends
-    "demand" | "evidence" | "program" | "repository" | "surface" | "window",
->(value: unknown, kind: K, path: string): WakeflowDurableId<K> {
+function parseId<K extends "demand" | "evidence" | "program" | "repository" | "surface" | "window">(
+  value: unknown,
+  kind: K,
+  path: string,
+): WakeflowDurableId<K> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
@@ -330,14 +321,8 @@ function parsePayload(
     }
     throw error;
   }
-  const artifactDigest = parseDigest(
-    value.artifactDigest,
-    "$/payload/artifactDigest",
-  );
-  if (
-    computeCanonicalJsonSha256Digest(treeManifest, "$/payload/treeManifest") !==
-    artifactDigest
-  ) {
+  const artifactDigest = parseDigest(value.artifactDigest, "$/payload/artifactDigest");
+  if (computeCanonicalJsonSha256Digest(treeManifest, "$/payload/treeManifest") !== artifactDigest) {
     fail("payload", "$/payload/artifactDigest");
   }
   return Object.freeze({ artifactDigest, treeManifest });
@@ -347,16 +332,11 @@ function parseContentReview(
   value: ManagedEvidenceManifestWire["contentReview"],
   payload: Readonly<ManagedEvidencePayload>,
 ): Readonly<ManagedEvidenceContentReview> {
-  const payloadRefs = new Set(
-    payload.treeManifest.files.map((file) => file.ref),
-  );
+  const payloadRefs = new Set(payload.treeManifest.files.map((file) => file.ref));
   const opaqueFileRefs = value.opaqueFileRefs.map((entry, index) => {
     let ref: PortableResourcePath;
     try {
-      ref = parsePortableResourcePath(
-        entry,
-        `$/contentReview/opaqueFileRefs/${index}`,
-      );
+      ref = parsePortableResourcePath(entry, `$/contentReview/opaqueFileRefs/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
         fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
@@ -366,10 +346,7 @@ function parseContentReview(
     if (!payloadRefs.has(ref)) {
       fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
     }
-    if (
-      index > 0 &&
-      compareText(value.opaqueFileRefs[index - 1] ?? "", ref) >= 0
-    ) {
+    if (index > 0 && compareText(value.opaqueFileRefs[index - 1] ?? "", ref) >= 0) {
       fail("ordering", `$/contentReview/opaqueFileRefs/${index}`);
     }
     return ref;
@@ -388,9 +365,7 @@ function parseContentReview(
   });
 }
 
-function manifestBasis(
-  wire: Readonly<ManagedEvidenceManifestWire>,
-): Readonly<ManifestBasis> {
+function manifestBasis(wire: Readonly<ManagedEvidenceManifestWire>): Readonly<ManifestBasis> {
   const payload = parsePayload(wire.payload);
   let source: ManagedEvidenceSource;
   try {
@@ -412,8 +387,7 @@ function manifestBasis(
   const singleContent = source.kind !== "managed-path" || source.resourceType === "file";
   if (
     singleContent &&
-    (payload.treeManifest.fileCount !== 1 ||
-      payload.treeManifest.files[0]?.ref !== "content")
+    (payload.treeManifest.fileCount !== 1 || payload.treeManifest.files[0]?.ref !== "content")
   ) {
     fail("payload", "$/payload/treeManifest/files");
   }
@@ -423,22 +397,12 @@ function manifestBasis(
     evidenceId: parseId(wire.evidenceId, "evidence", "$/evidenceId"),
     programId: parseId(wire.programId, "program", "$/programId"),
     demandId: parseId(wire.demandId, "demand", "$/demandId"),
-    demandAuthorityDigest: parseDigest(
-      wire.demandAuthorityDigest,
-      "$/demandAuthorityDigest",
-    ),
+    demandAuthorityDigest: parseDigest(wire.demandAuthorityDigest, "$/demandAuthorityDigest"),
     kind,
     capturedAt: parseTime(wire.capturedAt, "$/capturedAt"),
     recordedBy: Object.freeze({
-      windowId: parseId(
-        wire.recordedBy.windowId,
-        "window",
-        "$/recordedBy/windowId",
-      ),
-      configDigest: parseDigest(
-        wire.recordedBy.configDigest,
-        "$/recordedBy/configDigest",
-      ),
+      windowId: parseId(wire.recordedBy.windowId, "window", "$/recordedBy/windowId"),
+      configDigest: parseDigest(wire.recordedBy.configDigest, "$/recordedBy/configDigest"),
     }),
     source,
     payload,
@@ -447,9 +411,7 @@ function manifestBasis(
 }
 
 /** 解析并递归冻结一份关系闭合的managed evidence manifest。 */
-export function parseManagedEvidenceManifest(
-  value: unknown,
-): Readonly<ManagedEvidenceManifest> {
+export function parseManagedEvidenceManifest(value: unknown): Readonly<ManagedEvidenceManifest> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$manifest");
@@ -459,18 +421,15 @@ export function parseManagedEvidenceManifest(
   }
   if (
     // 容量按实际写入的确定性文档（缩进渲染加换行）计量，而不是紧凑规范形式。
-    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest")
-      .byteLength > MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES
+    encodeUtf8(renderDeterministicJsonDocument(json, "$manifest"), "$manifest").byteLength >
+    MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES
   ) {
     fail("capacity", "$manifest");
   }
   const result = validateWire(json);
   if (!result.ok) fail("schema", result.path);
   const basis = manifestBasis(result.value);
-  const manifestDigest = parseDigest(
-    result.value.manifestDigest,
-    "$/manifestDigest",
-  );
+  const manifestDigest = parseDigest(result.value.manifestDigest, "$/manifestDigest");
   if (computeCanonicalJsonSha256Digest(basis, "$manifest") !== manifestDigest) {
     fail("digest", "$/manifestDigest");
   }
@@ -529,9 +488,7 @@ function candidateManifest(
   });
 }
 
-function readCaptureTime(
-  options: CreateManagedEvidenceManifestOptions,
-): UtcInstant {
+function readCaptureTime(options: CreateManagedEvidenceManifestOptions): UtcInstant {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(options, "$options");
@@ -556,20 +513,13 @@ export function createManagedEvidenceManifest(
   options: CreateManagedEvidenceManifestOptions = {},
 ): Readonly<ManagedEvidenceManifest> {
   const record = exactDraftRecord(draft);
-  parseManagedEvidenceManifest(
-    candidateManifest(record, DRAFT_VALIDATION_INSTANT),
-  );
-  return parseManagedEvidenceManifest(
-    candidateManifest(record, readCaptureTime(options)),
-  );
+  parseManagedEvidenceManifest(candidateManifest(record, DRAFT_VALIDATION_INSTANT));
+  return parseManagedEvidenceManifest(candidateManifest(record, readCaptureTime(options)));
 }
 
 /** 渲染managed evidence manifest的唯一确定性JSON文件表示。 */
 export function renderManagedEvidenceManifest(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseManagedEvidenceManifest(value),
-    "$manifest",
-  );
+  return renderDeterministicJsonDocument(parseManagedEvidenceManifest(value), "$manifest");
 }
 
 /** 只接受与领域确定性表示逐字节相同的Manifest文档。 */
@@ -593,8 +543,6 @@ export function parseManagedEvidenceManifestDocument(
 }
 
 /** 返回已经由codec验证并绑定完整Manifest basis的领域摘要。 */
-export function computeManagedEvidenceManifestDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeManagedEvidenceManifestDigest(value: unknown): Sha256Digest {
   return parseManagedEvidenceManifest(value).manifestDigest;
 }

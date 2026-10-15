@@ -1,24 +1,23 @@
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import {
+  DeterministicJsonDocumentError,
+  parseDeterministicJsonDocument,
+} from "../../foundation/data/deterministic-json-document.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  DurableAtomicFileStageRecoveryError,
+  type DurableAtomicFileStageRecoveryReceipt,
+  recoverDurableAtomicFileStagesForTargets,
+} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   type DurableAtomicFileWriteResult,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  recoverDurableAtomicFileStagesForTargets,
-  DurableAtomicFileStageRecoveryError,
-  type DurableAtomicFileStageRecoveryReceipt,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
-  readDeterministicJsonFile,
-} from "../../foundation/filesystem/deterministic-json-file.js";
-import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
-  unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
   type ExactRegularFileUnlinkReceipt,
+  unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
@@ -30,45 +29,35 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import {
-  StableFileReadError,
-} from "../../foundation/filesystem/stable-file-read.js";
-import {
-  StrictTextFileError,
-} from "../../foundation/filesystem/strict-text-file.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parseByteCount,
-  type ByteCount,
-} from "../../foundation/numeric/byte-count.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { type ByteCount, parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
-  assertWakeflowMaintenanceGateContext,
-  WakeflowMaintenanceGateError,
-  type WakeflowMaintenanceGateContext,
-} from "./wakeflow-maintenance-gate.js";
-import {
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceIntentResourceDeclaration,
   parseWakeflowMaintenanceExecutionIntent,
   renderWakeflowMaintenanceExecutionIntent,
-  WakeflowMaintenanceExecutionIntentError,
   type WakeflowMaintenanceExecutionIntent,
+  WakeflowMaintenanceExecutionIntentError,
 } from "./wakeflow-maintenance-execution-intent.js";
 import {
+  assertWakeflowMaintenanceGateContext,
+  type WakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
+} from "./wakeflow-maintenance-gate.js";
+import {
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
   wakeflowMaintenanceJournalRef,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
-import {
-  WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-} from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 
 /**
  * Wakeflow Workspace / Maintenance：immutable execution intent 的私有物理 store。
@@ -77,8 +66,10 @@ import {
  * 每次目录形状检查都只接受同operation的 intent 或 intent+journal；它不是第二状态机。
  */
 
-export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES =
-  parseByteCount(2 * 1024 * 1024, "$maintenanceIntent.maximumBytes");
+export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(
+  2 * 1024 * 1024,
+  "$maintenanceIntent.maximumBytes",
+);
 
 export interface WakeflowMaintenanceExecutionIntentSource {
   readonly operationId: WakeflowMaintenanceOperationId;
@@ -121,10 +112,7 @@ const ERROR_MESSAGES = {
   "recovery-required": "Wakeflow maintenance execution intent requires explicit recovery.",
   "effect-failure": "Wakeflow maintenance execution intent effect failed safely.",
   "commit-uncertain": "Wakeflow maintenance execution intent commit could not be proven.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceExecutionIntentStoreErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionIntentStoreErrorReason, string>>;
 
 /** Maintenance execution intent store 失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionIntentStoreError extends Error {
@@ -133,10 +121,7 @@ export class WakeflowMaintenanceExecutionIntentStoreError extends Error {
   readonly reason: WakeflowMaintenanceExecutionIntentStoreErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowMaintenanceExecutionIntentStoreErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowMaintenanceExecutionIntentStoreErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -145,10 +130,7 @@ export class WakeflowMaintenanceExecutionIntentStoreError extends Error {
 
 const ISSUED_SOURCES = new WeakSet<object>();
 
-function fail(
-  reason: WakeflowMaintenanceExecutionIntentStoreErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowMaintenanceExecutionIntentStoreErrorReason, path: string): never {
   throw new WakeflowMaintenanceExecutionIntentStoreError(reason, path);
 }
 
@@ -171,9 +153,7 @@ function admittedByteCount(bytes: Uint8Array): ByteCount {
 }
 
 /** 在任何bootstrap/gate效果前验证intent的确定性持久表示容量。 */
-export function assertWakeflowMaintenanceExecutionIntentCapacity(
-  value: unknown,
-): ByteCount {
+export function assertWakeflowMaintenanceExecutionIntentCapacity(value: unknown): ByteCount {
   let bytes;
   try {
     bytes = encodeUtf8(renderWakeflowMaintenanceExecutionIntent(value));
@@ -193,14 +173,8 @@ function currentUserId(): bigint {
   return BigInt(process.geteuid());
 }
 
-function assertSource(
-  value: Readonly<WakeflowMaintenanceExecutionIntentSource>,
-): void {
-  if (
-    typeof value !== "object"
-    || value === null
-    || !ISSUED_SOURCES.has(value)
-  ) {
+function assertSource(value: Readonly<WakeflowMaintenanceExecutionIntentSource>): void {
+  if (typeof value !== "object" || value === null || !ISSUED_SOURCES.has(value)) {
     fail("input", "$intentSource");
   }
 }
@@ -228,11 +202,9 @@ async function assertTransactionEntries(
 ): Promise<void> {
   let read;
   try {
-    read = await readStableResourceDirectory(
-      root,
-      WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-      { maximumEntries: expected.length },
-    );
+    read = await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+      maximumEntries: expected.length,
+    });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       fail("transactions-shape", "$transactions");
@@ -242,17 +214,15 @@ async function assertTransactionEntries(
   const actual = read.entries.map((entry) => entry.resourcePath).sort();
   const sortedExpected = [...expected].sort();
   if (
-    actual.length !== sortedExpected.length
-    || actual.some((entry, index) => entry !== sortedExpected[index])
+    actual.length !== sortedExpected.length ||
+    actual.some((entry, index) => entry !== sortedExpected[index])
   ) {
     fail("transactions-shape", "$transactions");
   }
 }
 
 /** 证明transactions目录精确为空。 */
-async function assertWakeflowMaintenanceTransactionsEmpty(
-  root: RootedDirectory,
-): Promise<void> {
+async function assertWakeflowMaintenanceTransactionsEmpty(root: RootedDirectory): Promise<void> {
   return assertTransactionEntries(root, []);
 }
 
@@ -283,15 +253,12 @@ async function assertIntentSourceCurrent(
   root: RootedDirectory,
   source: Readonly<WakeflowMaintenanceExecutionIntentSource>,
 ): Promise<void> {
-  const current = await readWakeflowMaintenanceExecutionIntent(
-    root,
-    source.operationId,
-  );
+  const current = await readWakeflowMaintenanceExecutionIntent(root, source.operationId);
   if (
-    current.digest !== source.digest
-    || current.intentDigest !== source.intentDigest
-    || current.node.deviceId !== source.node.deviceId
-    || current.node.inodeId !== source.node.inodeId
+    current.digest !== source.digest ||
+    current.intentDigest !== source.intentDigest ||
+    current.node.deviceId !== source.node.deviceId ||
+    current.node.inodeId !== source.node.inodeId
   ) {
     fail("conflict", "$intent");
   }
@@ -304,10 +271,7 @@ async function resourceNodeOrNull(
   try {
     return (await root.inspectExistingResource(resourcePath)).node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) fail("source", "$intent");
@@ -347,10 +311,10 @@ async function readIntentAtNode(
   node: Readonly<FileNodeSnapshot>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
   if (
-    node.kind !== "file"
-    || node.permissionBits !== 0o600
-    || node.linkCount !== 1n
-    || node.userId !== currentUserId()
+    node.kind !== "file" ||
+    node.permissionBits !== 0o600 ||
+    node.linkCount !== 1n ||
+    node.userId !== currentUserId()
   ) {
     fail("source-policy", "$intent");
   }
@@ -366,10 +330,7 @@ async function readIntentAtNode(
       if (error.reason === "too-large") fail("capacity", "$intent");
       fail("source", "$intent");
     }
-    if (
-      error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
-    ) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("intent", "$intent");
     }
     throw error;
@@ -406,10 +367,7 @@ export async function readWakeflowMaintenanceExecutionIntent(
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
   const operationId = admittedOperationId(operationIdValue);
-  const node = await resourceNodeOrNull(
-    root,
-    wakeflowMaintenanceIntentRef(operationId),
-  );
+  const node = await resourceNodeOrNull(root, wakeflowMaintenanceIntentRef(operationId));
   if (node === null) fail("source", "$intent");
   return readIntentAtNode(root, operationId, node);
 }
@@ -420,10 +378,7 @@ export async function readWakeflowMaintenanceExecutionIntentOrNull(
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource> | null> {
   const operationId = admittedOperationId(operationIdValue);
-  const node = await resourceNodeOrNull(
-    root,
-    wakeflowMaintenanceIntentRef(operationId),
-  );
+  const node = await resourceNodeOrNull(root, wakeflowMaintenanceIntentRef(operationId));
   return node === null ? null : readIntentAtNode(root, operationId, node);
 }
 
@@ -477,10 +432,10 @@ export async function publishWakeflowMaintenanceExecutionIntent(
         fail("recovery-required", "$intent");
       }
       if (
-        error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure"
+        error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure"
       ) {
         fail("commit-uncertain", "$intent");
       }
@@ -490,20 +445,17 @@ export async function publishWakeflowMaintenanceExecutionIntent(
   }
   let source: Readonly<WakeflowMaintenanceExecutionIntentSource>;
   try {
-    source = await readWakeflowMaintenanceExecutionIntent(
-      root,
-      context.operationId,
-    );
+    source = await readWakeflowMaintenanceExecutionIntent(root, context.operationId);
   } catch {
     fail("commit-uncertain", "$intent");
   }
   if (
-    publication.resourcePath !== source.resourcePath
-    || publication.digest !== source.digest
-    || publication.byteCount !== source.node.byteCount
-    || publication.node.deviceId !== source.node.deviceId
-    || publication.node.inodeId !== source.node.inodeId
-    || source.intentDigest !== intendedDigest
+    publication.resourcePath !== source.resourcePath ||
+    publication.digest !== source.digest ||
+    publication.byteCount !== source.node.byteCount ||
+    publication.node.deviceId !== source.node.deviceId ||
+    publication.node.inodeId !== source.node.inodeId ||
+    source.intentDigest !== intendedDigest
   ) {
     fail("commit-uncertain", "$intent");
   }
@@ -529,29 +481,21 @@ export async function retireWakeflowMaintenanceExecutionIntent(
     fail("input", "$intentSource");
   }
   admitOperation(context.operationId, "exact-retire");
-  await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(
-    root,
-    source,
-  );
+  await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, source);
   let retirement: Readonly<ExactRegularFileUnlinkReceipt>;
   try {
-    retirement = await unlinkRegularFileExactly(
-      root,
-      source.resourcePath,
-      { expectedNode: source.node },
-    );
+    retirement = await unlinkRegularFileExactly(root, source.resourcePath, {
+      expectedNode: source.node,
+    });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (
-        error.reason === "source-changed"
-        || error.reason === "source-not-found"
-      ) {
+      if (error.reason === "source-changed" || error.reason === "source-not-found") {
         fail("conflict", "$intent");
       }
       if (
-        error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "close-failure"
+        error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "close-failure"
       ) {
         fail("commit-uncertain", "$intent");
       }
@@ -560,9 +504,7 @@ export async function retireWakeflowMaintenanceExecutionIntent(
     throw error;
   }
   try {
-    await assertTransactionEntries(root, [
-      wakeflowMaintenanceJournalRef(context.operationId),
-    ]);
+    await assertTransactionEntries(root, [wakeflowMaintenanceJournalRef(context.operationId)]);
   } catch {
     fail("commit-uncertain", "$intent");
   }

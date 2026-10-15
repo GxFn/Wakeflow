@@ -1,58 +1,40 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  RootedDirectory,
-} from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import {
-  recomposeWakeflowManagedTextEnvelope,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
-import {
-  createWakeflowProgramInstructionBodyAuthority,
-} from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
+import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
 import {
   inspectWakeflowProgramInstruction,
   WakeflowProgramInstructionInspectionError,
   type WakeflowProgramInstructionInspectionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-inspection.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(
   t: TestContext,
   source?: string | Uint8Array,
-): Promise<Readonly<{
-  readonly absolutePath: string;
-  readonly instructionPath: string;
-  readonly root: RootedDirectory;
-}>> {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-program-instruction-inspection-",
-  ));
+): Promise<
+  Readonly<{
+    readonly absolutePath: string;
+    readonly instructionPath: string;
+    readonly root: RootedDirectory;
+  }>
+> {
+  const absolutePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-program-instruction-inspection-"),
+  );
   const instructionPath = path.join(absolutePath, "AGENTS.md");
   if (source !== undefined) {
     writeFileSync(instructionPath, source, { mode: 0o644 });
@@ -75,17 +57,14 @@ function request(
   currentConfig: ReturnType<typeof config> | null,
   desiredConfig: ReturnType<typeof config>,
 ) {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   return Object.freeze({
     matrix,
     expectedMatrixDigest: matrix.matrixDigest,
     profile: codexWorkspaceHostResourceProfile,
     currentConfig,
-    expectedCurrentConfigDigest: currentConfig === null
-      ? null
-      : computeWakeflowConfigDigest(currentConfig),
+    expectedCurrentConfigDigest:
+      currentConfig === null ? null : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
   });
@@ -153,10 +132,7 @@ test("Program Instruction inspection admits an exact language transition and ret
   const workspace = await fixture(t, source);
   const transitionRequest = request(current, desired);
 
-  const inspected = await inspectWakeflowProgramInstruction(
-    workspace.root,
-    transitionRequest,
-  );
+  const inspected = await inspectWakeflowProgramInstruction(workspace.root, transitionRequest);
   equal(inspected.status, "recompose-required");
   equal(inspected.transition.sourceAuthority, "admitted-current");
   equal(inspected.transition.target?.disposition, "updated");
@@ -166,10 +142,7 @@ test("Program Instruction inspection admits an exact language transition and ret
   equal(Buffer.from(desiredBytes).includes(Buffer.from("Wakeflow 程序指令")), true);
 
   writeFileSync(workspace.instructionPath, desiredBytes, { mode: 0o644 });
-  const retried = await inspectWakeflowProgramInstruction(
-    workspace.root,
-    transitionRequest,
-  );
+  const retried = await inspectWakeflowProgramInstruction(workspace.root, transitionRequest);
   equal(retried.status, "managed-current");
   equal(retried.transition.sourceAuthority, "desired");
   equal(retried.transition.target, null);
@@ -181,19 +154,13 @@ test("Program Instruction inspection rejects unknown managed text and source-pol
     desired,
     codexWorkspaceHostResourceProfile,
   );
-  const unknown = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    {
-      ...authority.envelopeTarget,
-      body: "## Unknown but marker-consistent body\n",
-    },
-  ).bytes;
+  const unknown = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), {
+    ...authority.envelopeTarget,
+    body: "## Unknown but marker-consistent body\n",
+  }).bytes;
   const workspace = await fixture(t, unknown);
   await expectInspectionError(
-    () => inspectWakeflowProgramInstruction(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => inspectWakeflowProgramInstruction(workspace.root, request(desired, desired)),
     "unknown-managed-body",
     "$source",
   );
@@ -201,10 +168,7 @@ test("Program Instruction inspection rejects unknown managed text and source-pol
   writeFileSync(workspace.instructionPath, authority.body, { mode: 0o644 });
   chmodSync(workspace.instructionPath, 0o600);
   await expectInspectionError(
-    () => inspectWakeflowProgramInstruction(
-      workspace.root,
-      request(null, desired),
-    ),
+    () => inspectWakeflowProgramInstruction(workspace.root, request(null, desired)),
     "source-policy",
     "$source",
   );
@@ -216,10 +180,7 @@ test("Program Instruction inspection rejects unknown managed text and source-pol
     ),
   };
   await expectInspectionError(
-    () => inspectWakeflowProgramInstruction(
-      workspace.root,
-      invalidDigestRequest,
-    ),
+    () => inspectWakeflowProgramInstruction(workspace.root, invalidDigestRequest),
     "input",
     "$request.expectedDesiredConfigDigest",
   );

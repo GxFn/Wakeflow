@@ -131,7 +131,10 @@ function publication(record: Readonly<RequirementRecord>) {
   return { record, files, intent: createLedgerRecordPublicationIntent(record, plan) };
 }
 
-function writeIntentFile(rootPath: string, intent: Readonly<LedgerRecordPublicationIntent>): string {
+function writeIntentFile(
+  rootPath: string,
+  intent: Readonly<LedgerRecordPublicationIntent>,
+): string {
   const file = writeTextFile(
     rootPath,
     intent.intentRef,
@@ -162,33 +165,56 @@ test("publishes one requirement tree and idempotently reuses the exact committed
   for (const name of readdirSync(finalPath)) {
     equal(statSync(path.join(finalPath, name)).mode & 0o777, LEDGER_DURABLE_FILE_MODE);
   }
-  equal(readFileSync(path.join(finalPath, "record.json"), "utf8"), renderLedgerAuthorityRecord(record));
+  equal(
+    readFileSync(path.join(finalPath, "record.json"), "utf8"),
+    renderLedgerAuthorityRecord(record),
+  );
   equal(readFileSync(path.join(finalPath, "landing.md"), "utf8"), FIXTURE_LANDING_MARKDOWN);
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
 
   const reused = await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined);
   equal(reused.wroteAuthority, false);
   equal(reused.loaded.recordDigest, created.loaded.recordDigest);
-  deepEqual((await loadLedgerAuthorityRecord(root, record.requirementId, undefined)).record, record);
+  deepEqual(
+    (await loadLedgerAuthorityRecord(root, record.requirementId, undefined)).record,
+    record,
+  );
 
   const results = await Promise.all([
-    publishLedgerAuthorityRecord(root, requirementRecord("Concurrent", OTHER_REQUIREMENT_ID), MEMBERS, undefined),
-    publishLedgerAuthorityRecord(root, requirementRecord("Concurrent", OTHER_REQUIREMENT_ID), MEMBERS, undefined),
+    publishLedgerAuthorityRecord(
+      root,
+      requirementRecord("Concurrent", OTHER_REQUIREMENT_ID),
+      MEMBERS,
+      undefined,
+    ),
+    publishLedgerAuthorityRecord(
+      root,
+      requirementRecord("Concurrent", OTHER_REQUIREMENT_ID),
+      MEMBERS,
+      undefined,
+    ),
   ]);
   deepEqual(results.map((result) => result.wroteAuthority).sort(), [false, true]);
 
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, requirementRecord("Conflicting title"), MEMBERS, undefined),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        requirementRecord("Conflicting title"),
+        MEMBERS,
+        undefined,
+      ),
     "conflict",
     "$record",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(
-      root,
-      record,
-      requirementMembers(fixtureDocuments({ landing: "# 改动\n" })),
-      undefined,
-    ),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        requirementMembers(fixtureDocuments({ landing: "# 改动\n" })),
+        undefined,
+      ),
     "member",
     "$members/0",
   );
@@ -224,42 +250,63 @@ test("rejects malformed records and members before touching the ledger", async (
     "$members/0",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, [{ ...landing, extra: 1 } as never, requirement], undefined),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        [{ ...landing, extra: 1 } as never, requirement],
+        undefined,
+      ),
     "input",
     "$members/0",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(
-      root,
-      record,
-      [landing, { path: requirement.path, bytes: new Proxy(requirement.bytes, {}) }],
-      undefined,
-    ),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        [landing, { path: requirement.path, bytes: new Proxy(requirement.bytes, {}) }],
+        undefined,
+      ),
     "input",
     "$members/1",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(
-      root,
-      record,
-      [landing, { path: requirement.path, bytes: new Uint8Array(LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES + 1) }],
-      undefined,
-    ),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        [
+          landing,
+          {
+            path: requirement.path,
+            bytes: new Uint8Array(LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES + 1),
+          },
+        ],
+        undefined,
+      ),
     "capacity",
     "$members/1",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(
-      root,
-      record,
-      [landing, { path: requirement.path, bytes: encodeUtf8("# other\n") }],
-      undefined,
-    ),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        [landing, { path: requirement.path, bytes: encodeUtf8("# other\n") }],
+        undefined,
+      ),
     "member",
     "$members/1",
   );
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, [landing, { path: "other.md", bytes: requirement.bytes }], undefined),
+    () =>
+      publishLedgerAuthorityRecord(
+        root,
+        record,
+        [landing, { path: "other.md", bytes: requirement.bytes }],
+        undefined,
+      ),
     "member",
     "$members/1",
   );
@@ -271,7 +318,9 @@ test("settles a pending intent against an incomplete stage or a committed final"
   const { rootPath, root } = await ledgerRoot(t);
   const partial = publication(requirementRecord("Resume staged authority"));
   writeIntentFile(rootPath, partial.intent);
-  await createDirectoryAtomically(root, partial.intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
+  await createDirectoryAtomically(root, partial.intent.stageRef, {
+    mode: LEDGER_DURABLE_DIRECTORY_MODE,
+  });
   await createFileCandidateDurably(
     root,
     parsePortableResourcePath(`${partial.intent.stageRef}/record.json`),
@@ -340,7 +389,11 @@ test("fails closed on residues it cannot own and on a drifted pending intent", a
     encodeUtf8(renderLedgerAuthorityRecord(requirementRecord("Drifted title"))),
     { mode: LEDGER_DURABLE_FILE_MODE },
   );
-  await expectStoreError(() => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined), "conflict", "$stage");
+  await expectStoreError(
+    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
+    "conflict",
+    "$stage",
+  );
   equal(existsSync(intentPath), true);
   rmSync(stagePath, { recursive: true });
   rmSync(intentPath);
@@ -353,7 +406,10 @@ test("fails closed on residues it cannot own and on a drifted pending intent", a
   );
   rmSync(intentPath);
 
-  equal((await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority, true);
+  equal(
+    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
+    true,
+  );
   await createDirectoryAtomically(root, intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
   await expectStoreError(
     () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
@@ -361,7 +417,10 @@ test("fails closed on residues it cannot own and on a drifted pending intent", a
     "$stage",
   );
   rmSync(stagePath, { recursive: true });
-  equal((await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority, false);
+  equal(
+    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
+    false,
+  );
 });
 
 test("the record lock gates publication and inactive lock residues are retired first", async (t) => {
@@ -381,10 +440,17 @@ test("the record lock gates publication and inactive lock residues are retired f
   equal(existsSync(physical(rootPath, intent.intentRef)), false);
   equal(existsSync(physical(rootPath, intent.finalRootRef)), false);
 
-  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "99999999-9999-4999-8999-999999999999",
-  }), { mode: 0o600 });
-  equal((await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority, true);
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "99999999-9999-4999-8999-999999999999",
+    }),
+    { mode: 0o600 },
+  );
+  equal(
+    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
+    true,
+  );
   equal(existsSync(lockPath), false);
 
   symlinkSync("missing", lockPath);

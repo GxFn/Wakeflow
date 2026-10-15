@@ -1,17 +1,10 @@
 import { equal, rejects } from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
@@ -19,18 +12,18 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { ManagedEvidencePublicationApplicationService } from "../../../src/governance/evidence/managed-evidence-publication-application-service.js";
 import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
-import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
-import {
-  completeManagedEvidencePublicationTransaction,
-  retireStaleManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionSettlementError,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-settlement.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+import {
+  completeManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionSettlementError,
+  retireStaleManagedEvidencePublicationTransaction,
+} from "../../../src/governance/evidence/managed-evidence-publication-transaction-settlement.js";
+import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,
@@ -40,8 +33,8 @@ import {
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
   fileSelection,
-  readyCapturePlan,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
+  readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 
 const EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -65,9 +58,7 @@ function physical(root: string, ref: string): string {
   return path.join(root, ...ref.split("/"));
 }
 
-function demandRootPath(
-  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
-): string {
+function demandRootPath(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>): string {
   return path.join(
     fixture.publication.workspacePath,
     ".wakeflow-active",
@@ -76,29 +67,15 @@ function demandRootPath(
   );
 }
 
-function sourceFilePath(
-  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
-): string {
-  return path.join(
-    fixture.repositoryRoot,
-    "artifacts",
-    "test-run",
-    "logs",
-    "report.txt",
-  );
+function sourceFilePath(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>): string {
+  return path.join(fixture.repositoryRoot, "artifacts", "test-run", "logs", "report.txt");
 }
 
 function changePresentationLanguage(
   fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
 ): void {
-  const configPath = path.join(
-    fixture.publication.workspacePath,
-    "wakeflow.config.json",
-  );
-  const current = JSON.parse(readFileSync(configPath, "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const configPath = path.join(fixture.publication.workspacePath, "wakeflow.config.json");
+  const current = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
   const changed = parseWakeflowConfig({
     ...current,
     presentation: { language: "zh-Hans" },
@@ -124,8 +101,7 @@ async function createTransaction(
   return Object.freeze({
     capturePlan,
     transaction,
-    transactionDigest:
-      computeManagedEvidencePublicationTransactionDigest(transaction),
+    transactionDigest: computeManagedEvidencePublicationTransactionDigest(transaction),
   });
 }
 
@@ -136,13 +112,8 @@ test("Application按journal、stage、Event、final和健康闭包完成发布",
     const service = new ManagedEvidencePublicationApplicationService(
       fixture.publication.workspaceRoot,
     );
-    const result = await service.apply(
-      prepared.transaction,
-      prepared.transactionDigest,
-    );
-    const plan = deriveManagedEvidencePublicationRecordTreePlan(
-      prepared.transaction,
-    );
+    const result = await service.apply(prepared.transaction, prepared.transactionDigest);
+    const plan = deriveManagedEvidencePublicationRecordTreePlan(prepared.transaction);
     equal(result.disposition, "completed");
     equal(result.eventDisposition, "committed");
     equal(result.record.disposition, "published");
@@ -150,14 +121,9 @@ test("Application按journal、stage、Event、final和健康闭包完成发布",
       result.loaded.aggregate.state.managedEvidence?.[0]?.evidenceId,
       prepared.capturePlan.manifest.evidenceId,
     );
+    equal(existsSync(physical(demandRootPath(fixture), plan.destinationRootPath)), true);
     equal(
-      existsSync(physical(demandRootPath(fixture), plan.destinationRootPath)),
-      true,
-    );
-    equal(
-      existsSync(
-        physical(demandRootPath(fixture), MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF),
-      ),
+      existsSync(physical(demandRootPath(fixture), MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF)),
       false,
     );
     const alreadySettled = await service.recover(fixture.demandId);
@@ -184,11 +150,7 @@ test("Recovery从Event前完整stage继续且不受后续Config/source变化影�
       demandRoot,
       prepared.transaction,
     );
-    await materializeManagedEvidencePublicationStage(
-      sourceRoot,
-      demandRoot,
-      prepared.transaction,
-    );
+    await materializeManagedEvidencePublicationStage(sourceRoot, demandRoot, prepared.transaction);
     ledgerRoot = await RootedDirectory.open(
       path.join(fixture.publication.fixtureRoot, "wakeflow-ledger"),
     );
@@ -201,8 +163,7 @@ test("Recovery从Event前完整stage继续且不受后续Config/source变化影�
         undefined,
       ),
       (error: unknown) =>
-        error instanceof
-          ManagedEvidencePublicationTransactionSettlementError &&
+        error instanceof ManagedEvidencePublicationTransactionSettlementError &&
         error.reason === "recovery-required",
     );
     await ledgerRoot.close();
@@ -244,36 +205,23 @@ test("Recovery在Event已提交后不重读source并前向发布final", async ()
       demandRoot,
       prepared.transaction,
     );
-    await materializeManagedEvidencePublicationStage(
-      sourceRoot,
-      demandRoot,
-      prepared.transaction,
-    );
+    await materializeManagedEvidencePublicationStage(sourceRoot, demandRoot, prepared.transaction);
     await executeDemandEventSourcingCommand(
       new DemandEventSourcingRepository(demandRoot),
-      deriveManagedEvidencePublicationEventSourcingCommand(
-        prepared.transaction,
-      ),
+      deriveManagedEvidencePublicationEventSourcingCommand(prepared.transaction),
       {
         commitId: prepared.transaction.demandEventSourcingAppend.commitId,
         expectedStreamRevision:
-          prepared.transaction.demandEventSourcingAppend
-            .expectedStreamRevision,
+          prepared.transaction.demandEventSourcingAppend.expectedStreamRevision,
       },
     );
     ledgerRoot = await RootedDirectory.open(
       path.join(fixture.publication.fixtureRoot, "wakeflow-ledger"),
     );
     await rejects(
-      retireStaleManagedEvidencePublicationTransaction(
-        demandRoot,
-        ledgerRoot,
-        stored,
-        undefined,
-      ),
+      retireStaleManagedEvidencePublicationTransaction(demandRoot, ledgerRoot, stored, undefined),
       (error: unknown) =>
-        error instanceof
-          ManagedEvidencePublicationTransactionSettlementError &&
+        error instanceof ManagedEvidencePublicationTransactionSettlementError &&
         error.reason === "recovery-required",
     );
     await ledgerRoot.close();
@@ -309,13 +257,8 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
     const prepared = await createTransaction(fixture);
     const rootPath = demandRootPath(fixture);
     demandRoot = await RootedDirectory.open(rootPath);
-    await createManagedEvidencePublicationTransactionJournal(
-      demandRoot,
-      prepared.transaction,
-    );
-    const plan = deriveManagedEvidencePublicationRecordTreePlan(
-      prepared.transaction,
-    );
+    await createManagedEvidencePublicationTransactionJournal(demandRoot, prepared.transaction);
+    const plan = deriveManagedEvidencePublicationRecordTreePlan(prepared.transaction);
     mkdirSync(physical(rootPath, MANAGED_EVIDENCE_ROOT_REF), { mode: 0o700 });
     mkdirSync(physical(rootPath, plan.candidateRootPath), { mode: 0o700 });
     await executeDemandEventSourcingCommand(
@@ -331,8 +274,7 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
       {
         commitId: CANCELLATION_COMMIT_ID,
         expectedStreamRevision:
-          prepared.transaction.demandEventSourcingAppend
-            .expectedStreamRevision,
+          prepared.transaction.demandEventSourcingAppend.expectedStreamRevision,
       },
     );
     await demandRoot.close();
@@ -348,12 +290,7 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
     equal(recovered.candidateRetirement.disposition, "retired");
     equal(recovered.loaded.aggregate.state.lifecycle, "cancelled");
     equal(existsSync(physical(rootPath, plan.candidateRootPath)), false);
-    equal(
-      existsSync(
-        physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF),
-      ),
-      false,
-    );
+    equal(existsSync(physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF)), false);
   } finally {
     if (demandRoot !== undefined) await demandRoot.close();
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);

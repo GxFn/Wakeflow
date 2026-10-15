@@ -8,9 +8,16 @@ import { createWakeflowWindowHostBindingId } from "../../src/workspace/window-ru
 test("每个带前缀身份的生产者都登记在 contracts 的前缀清单里，隐私扫描放行它们的输出（§13.161 B9-1）", () => {
   equal(DEFAULT_ALLOWED_ID_PREFIXES, WAKEFLOW_TYPED_ID_PREFIXES);
   for (const id of [createWakeflowWindowHostBindingId(), createWakeflowMaintenanceOperationId()]) {
-    equal(WAKEFLOW_TYPED_ID_PREFIXES.some((prefix) => id.startsWith(prefix)), true, id);
     equal(
-      scanPrivacy(`id ${id}`, { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES }).length,
+      WAKEFLOW_TYPED_ID_PREFIXES.some((prefix) => id.startsWith(prefix)),
+      true,
+      id,
+    );
+    equal(
+      scanPrivacy(`id ${id}`, {
+        allowedPathRoots: [],
+        allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
+      }).length,
       0,
       id,
     );

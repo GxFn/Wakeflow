@@ -2,8 +2,8 @@ import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
@@ -19,34 +19,23 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowManagedSupportResourceCatalog,
-} from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
-import {
-  materializeWakeflowManagedSupportRoot,
-} from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
-import {
-  createWakeflowSupportMemoryAuthority,
-} from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
+import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
+import { createWakeflowSupportMemoryAuthority } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
 import {
   inspectWakeflowSupportMemory,
   WakeflowSupportMemoryInspectionError,
   type WakeflowSupportMemoryInspectionErrorReason,
 } from "../../../src/workspace/support/wakeflow-support-memory-inspection.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
 async function fixture(t: TestContext) {
-  const container = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-support-memory-inspection-",
-  )));
+  const container = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-support-memory-inspection-")),
+  );
   const workspacePath = path.join(container, "Workspace");
   mkdirSync(workspacePath, { mode: 0o755 });
   const workspaceRoot = await RootedDirectory.open(workspacePath);
@@ -94,9 +83,8 @@ function request(
   );
   return Object.freeze({
     currentConfig,
-    expectedCurrentConfigDigest: currentConfig === null
-      ? null
-      : computeWakeflowConfigDigest(currentConfig),
+    expectedCurrentConfigDigest:
+      currentConfig === null ? null : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
     profile: codexWorkspaceHostResourceProfile,
@@ -160,15 +148,12 @@ test("Support memory inspection admits exact language evolution and desired retr
   equal(changing.status, "publication-required");
   equal(changing.transition.disposition, "replace-required");
   equal(changing.transition.sourceAuthority, "admitted-current");
-  equal(Buffer.from(changing.transition.desiredBytes).includes(
-    Buffer.from("Wakeflow Design 支持窗口"),
-  ), true);
-
-  writeFileSync(
-    workspace.memoryPath,
-    changing.transition.desiredBytes,
-    { mode: 0o644 },
+  equal(
+    Buffer.from(changing.transition.desiredBytes).includes(Buffer.from("Wakeflow Design 支持窗口")),
+    true,
   );
+
+  writeFileSync(workspace.memoryPath, changing.transition.desiredBytes, { mode: 0o644 });
   const currentInspection = await inspectWakeflowSupportMemory(
     workspace.workspaceRoot,
     workspace.supportRoot,
@@ -186,11 +171,12 @@ test("Support memory inspection rejects unknown bytes and node-policy drift", as
   });
   const before = readFileSync(workspace.memoryPath);
   await expectInspectionError(
-    () => inspectWakeflowSupportMemory(
-      workspace.workspaceRoot,
-      workspace.supportRoot,
-      request(desired, desired),
-    ),
+    () =>
+      inspectWakeflowSupportMemory(
+        workspace.workspaceRoot,
+        workspace.supportRoot,
+        request(desired, desired),
+      ),
     "unadmitted-source",
     "$source",
   );
@@ -206,11 +192,12 @@ test("Support memory inspection rejects unknown bytes and node-policy drift", as
   });
   chmodSync(workspace.memoryPath, 0o600);
   await expectInspectionError(
-    () => inspectWakeflowSupportMemory(
-      workspace.workspaceRoot,
-      workspace.supportRoot,
-      request(desired, desired),
-    ),
+    () =>
+      inspectWakeflowSupportMemory(
+        workspace.workspaceRoot,
+        workspace.supportRoot,
+        request(desired, desired),
+      ),
     "source-policy",
     "$source",
   );

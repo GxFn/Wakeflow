@@ -7,32 +7,28 @@ import {
 import type { JsonValue } from "../../../foundation/data/json-value.js";
 import {
   computeDemandAggregateStateDigest,
-  parseDemandAggregateState,
-  DemandAggregateStateError,
   type DemandAggregateState,
+  DemandAggregateStateError,
+  parseDemandAggregateState,
 } from "../model/demand-aggregate-state.js";
 import {
-  parseDemandUncommittedEvent,
   DemandEventSourcingEventError,
   type DemandUncommittedEvent,
+  parseDemandUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
-import {
-  encodeCurrentDemandEventVersion,
-} from "./demand-event-sourcing-event-version-codec.js";
+import { encodeCurrentDemandEventVersion } from "./demand-event-sourcing-event-version-codec.js";
 import {
   computeDemandEventSourcingPersistedEventEnvelopeDigest,
-  parseDemandEventSourcingPersistedEventEnvelope,
-  DemandEventSourcingPersistedEventEnvelopeError,
   DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
   DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION,
   type DemandEventSourcingPersistedEventEnvelope,
+  DemandEventSourcingPersistedEventEnvelopeError,
+  parseDemandEventSourcingPersistedEventEnvelope,
 } from "./demand-event-sourcing-persisted-event-envelope.js";
+import { DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION } from "./demand-event-sourcing-state-version.js";
 import {
-  DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
-} from "./demand-event-sourcing-state-version.js";
-import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
+  parseDemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 
 /**
@@ -48,8 +44,7 @@ const DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND =
 const DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA_VERSION =
   DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION;
 
-export type DemandEventSourcingStoredEvent =
-  DemandEventSourcingPersistedEventEnvelope;
+export type DemandEventSourcingStoredEvent = DemandEventSourcingPersistedEventEnvelope;
 
 export type DemandEventSourcingStoredEventErrorReason =
   | "json"
@@ -62,18 +57,15 @@ export type DemandEventSourcingStoredEventErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "json": "Demand Event Sourcing stored event is not passive JSON data.",
-  "schema": "Demand Event Sourcing stored event envelope is invalid.",
-  "event": "Demand Event Sourcing current event is invalid.",
-  "revision": "Demand Event Sourcing stored event revision is invalid.",
-  "digest": "Demand Event Sourcing stored event digest is invalid.",
+  json: "Demand Event Sourcing stored event is not passive JSON data.",
+  schema: "Demand Event Sourcing stored event envelope is invalid.",
+  event: "Demand Event Sourcing current event is invalid.",
+  revision: "Demand Event Sourcing stored event revision is invalid.",
+  digest: "Demand Event Sourcing stored event digest is invalid.",
   "state-version": "Demand Event Sourcing stored event state-model version is invalid.",
-  "state": "Demand Event Sourcing stored event requires a valid resulting state.",
-  "representation": "Demand Event Sourcing stored event bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingStoredEventErrorReason,
-  string
->>;
+  state: "Demand Event Sourcing stored event requires a valid resulting state.",
+  representation: "Demand Event Sourcing stored event bytes are not deterministic.",
+} as const satisfies Readonly<Record<DemandEventSourcingStoredEventErrorReason, string>>;
 
 export class DemandEventSourcingStoredEventError extends Error {
   override readonly name = "DemandEventSourcingStoredEventError";
@@ -88,16 +80,11 @@ export class DemandEventSourcingStoredEventError extends Error {
   }
 }
 
-function fail(
-  reason: DemandEventSourcingStoredEventErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingStoredEventErrorReason, path: string): never {
   throw new DemandEventSourcingStoredEventError(reason, path);
 }
 
-function mapEnvelopeError(
-  error: DemandEventSourcingPersistedEventEnvelopeError,
-): never {
+function mapEnvelopeError(error: DemandEventSourcingPersistedEventEnvelopeError): never {
   if (error.reason === "json") fail("json", error.path);
   if (error.reason === "revision") fail("revision", error.path);
   if (error.reason === "digest") fail("digest", error.path);
@@ -161,17 +148,13 @@ export function createDemandEventSourcingStoredEvent(
     eventType: encoded.eventType,
     eventVersion: encoded.eventVersion,
     data: encoded.data,
-    resultingStateModelVersion:
-      DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
+    resultingStateModelVersion: DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
     resultingStateDigest: computeDemandAggregateStateDigest(state),
   });
 }
 
 export function renderDemandEventSourcingStoredEvent(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandEventSourcingStoredEvent(value),
-    "$event",
-  );
+  return renderDeterministicJsonDocument(parseDemandEventSourcingStoredEvent(value), "$event");
 }
 
 export function parseDemandEventSourcingStoredEventDocument(
@@ -193,9 +176,7 @@ export function parseDemandEventSourcingStoredEventDocument(
   return event;
 }
 
-export function computeDemandEventSourcingStoredEventDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeDemandEventSourcingStoredEventDigest(value: unknown): Sha256Digest {
   // 门面先维持自己的稳定错误合同，再委托事件封装摘要计算。
   const event = parseDemandEventSourcingStoredEvent(value);
   return computeDemandEventSourcingPersistedEventEnvelopeDigest(event);

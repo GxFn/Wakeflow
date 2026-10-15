@@ -1,20 +1,18 @@
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
   WAKEFLOW_WORKSPACE_HOST_IDS,
@@ -47,8 +45,7 @@ export interface WakeflowHostMaintenanceContribution {
   readonly capabilityId: string;
   readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
-  readonly operations:
-    readonly Readonly<WakeflowHostMaintenanceOperation>[];
+  readonly operations: readonly Readonly<WakeflowHostMaintenanceOperation>[];
   readonly contributionDigest: Sha256Digest;
 }
 
@@ -87,10 +84,7 @@ const ERROR_MESSAGES = {
   payload: "Wakeflow host maintenance operation payload is invalid.",
   order: "Wakeflow host maintenance operations are not uniquely ordered.",
   status: "Wakeflow host maintenance contribution status is inconsistent.",
-} as const satisfies Readonly<Record<
-  WakeflowHostMaintenanceContributionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowHostMaintenanceContributionErrorReason, string>>;
 
 /** 宿主维护 contribution 准入失败的稳定、脱敏错误。 */
 export class WakeflowHostMaintenanceContributionError extends Error {
@@ -99,10 +93,7 @@ export class WakeflowHostMaintenanceContributionError extends Error {
   readonly reason: WakeflowHostMaintenanceContributionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowHostMaintenanceContributionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowHostMaintenanceContributionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -118,10 +109,7 @@ const MAXIMUM_OPERATIONS = 128;
 const MAXIMUM_BLOCKERS = 128;
 const MAXIMUM_IDENTITY_LENGTH = 256;
 
-function fail(
-  reason: WakeflowHostMaintenanceContributionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowHostMaintenanceContributionErrorReason, path: string): never {
   throw new WakeflowHostMaintenanceContributionError(reason, path);
 }
 
@@ -138,17 +126,13 @@ function nullableDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null ? null : digest(value, path);
 }
 
-function parseIdentity(
-  value: unknown,
-  path: string,
-  pattern: RegExp,
-): string {
+function parseIdentity(value: unknown, path: string, pattern: RegExp): string {
   if (
-    typeof value !== "string"
-    || value.length === 0
-    || value.length > MAXIMUM_IDENTITY_LENGTH
-    || !value.isWellFormed()
-    || !pattern.test(value)
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAXIMUM_IDENTITY_LENGTH ||
+    !value.isWellFormed() ||
+    !pattern.test(value)
   ) {
     fail("identity", path);
   }
@@ -156,11 +140,7 @@ function parseIdentity(
 }
 
 function parseTargetKey(value: unknown, path: string): string {
-  if (
-    typeof value !== "string"
-    || !value.isWellFormed()
-    || !TARGET_KEY_PATTERN.test(value)
-  ) {
+  if (typeof value !== "string" || !value.isWellFormed() || !TARGET_KEY_PATTERN.test(value)) {
     fail("identity", path);
   }
   return value;
@@ -198,32 +178,21 @@ function parseOperation(
   const payload = parsePayload(record.payload, `${path}.payload`);
   const payloadDigest = computeCanonicalJsonSha256Digest(payload);
   if (
-    requirePayloadDigest
-    && digest(record.payloadDigest, `${path}.payloadDigest`) !== payloadDigest
+    requirePayloadDigest &&
+    digest(record.payloadDigest, `${path}.payloadDigest`) !== payloadDigest
   ) {
     fail("digest", `${path}.payloadDigest`);
   }
-  const sourceDigest = nullableDigest(
-    record.sourceDigest,
-    `${path}.sourceDigest`,
-  );
+  const sourceDigest = nullableDigest(record.sourceDigest, `${path}.sourceDigest`);
   const targetDigest = digest(record.targetDigest, `${path}.targetDigest`);
   return Object.freeze({
-    operationId: parseIdentity(
-      record.operationId,
-      `${path}.operationId`,
-      OPERATION_ID_PATTERN,
-    ),
+    operationId: parseIdentity(record.operationId, `${path}.operationId`, OPERATION_ID_PATTERN),
     operationKind: parseIdentity(
       record.operationKind,
       `${path}.operationKind`,
       COMPONENT_ID_PATTERN,
     ),
-    ownerId: parseIdentity(
-      record.ownerId,
-      `${path}.ownerId`,
-      COMPONENT_ID_PATTERN,
-    ),
+    ownerId: parseIdentity(record.ownerId, `${path}.ownerId`, COMPONENT_ID_PATTERN),
     targetKey: parseTargetKey(record.targetKey, `${path}.targetKey`),
     sourceDigest,
     targetDigest,
@@ -257,11 +226,8 @@ function assertOrderedOperations(
     const current = operations[index];
     const previous = operations[index - 1];
     if (
-      current === undefined
-      || (
-        previous !== undefined
-        && previous.operationId >= current.operationId
-      )
+      current === undefined ||
+      (previous !== undefined && previous.operationId >= current.operationId)
     ) {
       fail("order", `${basePath}.operations/${index}.operationId`);
     }
@@ -275,10 +241,10 @@ function assertOrderedOperations(
 
 function parseBlockerCode(entry: unknown, path: string): string {
   if (
-    typeof entry !== "string"
-    || !BLOCKER_CODE_PATTERN.test(entry)
-    || entry.length > MAXIMUM_IDENTITY_LENGTH
-    || !entry.isWellFormed()
+    typeof entry !== "string" ||
+    !BLOCKER_CODE_PATTERN.test(entry) ||
+    entry.length > MAXIMUM_IDENTITY_LENGTH ||
+    !entry.isWellFormed()
   ) {
     fail("identity", path);
   }
@@ -311,67 +277,47 @@ export function createWakeflowHostMaintenanceContribution(
   let operationValues: readonly unknown[];
   try {
     record = parsePlainRecord(requestValue, "$request");
-    blockerValues = parseDenseArray(
-      record.blockerCodes,
-      MAXIMUM_BLOCKERS,
-      "$request.blockerCodes",
-    );
-    operationValues = parseDenseArray(
-      record.operations,
-      MAXIMUM_OPERATIONS,
-      "$request.operations",
-    );
+    blockerValues = parseDenseArray(record.blockerCodes, MAXIMUM_BLOCKERS, "$request.blockerCodes");
+    operationValues = parseDenseArray(record.operations, MAXIMUM_OPERATIONS, "$request.operations");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", error.path);
     throw error;
   }
   if (
-    Object.keys(record).sort().join("\u0000")
-      !== "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status"
-    || typeof record.hostId !== "string"
-    || !HOST_ID_SET.has(record.hostId)
-    || (record.status !== "ready" && record.status !== "blocked")
+    Object.keys(record).sort().join("\u0000") !==
+      "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status" ||
+    typeof record.hostId !== "string" ||
+    !HOST_ID_SET.has(record.hostId) ||
+    (record.status !== "ready" && record.status !== "blocked")
   ) {
     fail("input", "$request");
   }
   const blockerCodes = Object.freeze(
-    [...blockerValues].map((entry, index) => (
-      parseBlockerCode(entry, `$request.blockerCodes/${index}`)
-    )).sort(),
+    [...blockerValues]
+      .map((entry, index) => parseBlockerCode(entry, `$request.blockerCodes/${index}`))
+      .sort(),
   );
   assertOrderedBlockers(blockerCodes, "$request");
   if ((record.status === "ready") !== (blockerCodes.length === 0)) {
     fail("status", "$request.status");
   }
   const operations = Object.freeze(
-    operationValues.map((entry, index) => parseOperation(
-      entry,
-      index,
-      false,
-      "$request.operations",
-    )).sort((left, right) => (
-      left.operationId < right.operationId
-        ? -1
-        : left.operationId > right.operationId
-          ? 1
-          : 0
-    )),
+    operationValues
+      .map((entry, index) => parseOperation(entry, index, false, "$request.operations"))
+      .sort((left, right) =>
+        left.operationId < right.operationId ? -1 : left.operationId > right.operationId ? 1 : 0,
+      ),
   );
   assertOrderedOperations(operations, "$request");
-  const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> =
-    Object.freeze({
-      kind: "WakeflowHostMaintenanceContribution",
-      schemaVersion: 1,
-      hostId: record.hostId as WakeflowWorkspaceHostId,
-      capabilityId: parseIdentity(
-        record.capabilityId,
-        "$request.capabilityId",
-        COMPONENT_ID_PATTERN,
-      ),
-      status: record.status,
-      blockerCodes,
-      operations,
-    });
+  const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> = Object.freeze({
+    kind: "WakeflowHostMaintenanceContribution",
+    schemaVersion: 1,
+    hostId: record.hostId as WakeflowWorkspaceHostId,
+    capabilityId: parseIdentity(record.capabilityId, "$request.capabilityId", COMPONENT_ID_PATTERN),
+    status: record.status,
+    blockerCodes,
+    operations,
+  });
   return Object.freeze({
     ...basis,
     contributionDigest: computeWakeflowHostMaintenanceContributionDigest(basis),
@@ -402,49 +348,46 @@ export function parseWakeflowHostMaintenanceContribution(
     throw error;
   }
   if (
-    Object.keys(record).sort().join("\u0000")
-      !== "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000status"
-    || record.kind !== "WakeflowHostMaintenanceContribution"
-    || record.schemaVersion !== 1
-    || typeof record.hostId !== "string"
-    || !HOST_ID_SET.has(record.hostId)
-    || (record.status !== "ready" && record.status !== "blocked")
+    Object.keys(record).sort().join("\u0000") !==
+      "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000status" ||
+    record.kind !== "WakeflowHostMaintenanceContribution" ||
+    record.schemaVersion !== 1 ||
+    typeof record.hostId !== "string" ||
+    !HOST_ID_SET.has(record.hostId) ||
+    (record.status !== "ready" && record.status !== "blocked")
   ) {
     fail("input", "$contribution");
   }
-  const blockerCodes = Object.freeze(blockerValues.map((entry, index) => (
-    parseBlockerCode(entry, `$contribution.blockerCodes/${index}`)
-  )));
+  const blockerCodes = Object.freeze(
+    blockerValues.map((entry, index) =>
+      parseBlockerCode(entry, `$contribution.blockerCodes/${index}`),
+    ),
+  );
   assertOrderedBlockers(blockerCodes, "$contribution");
   if ((record.status === "ready") !== (blockerCodes.length === 0)) {
     fail("status", "$contribution.status");
   }
-  const operations = Object.freeze(operationValues.map((entry, index) => (
-    parseOperation(entry, index, true, "$contribution.operations")
-  )));
-  assertOrderedOperations(operations, "$contribution");
-  const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> =
-    Object.freeze({
-      kind: "WakeflowHostMaintenanceContribution",
-      schemaVersion: 1,
-      hostId: record.hostId as WakeflowWorkspaceHostId,
-      capabilityId: parseIdentity(
-        record.capabilityId,
-        "$contribution.capabilityId",
-        COMPONENT_ID_PATTERN,
-      ),
-      status: record.status,
-      blockerCodes,
-      operations,
-    });
-  const contributionDigest = digest(
-    record.contributionDigest,
-    "$contribution.contributionDigest",
+  const operations = Object.freeze(
+    operationValues.map((entry, index) =>
+      parseOperation(entry, index, true, "$contribution.operations"),
+    ),
   );
-  if (
-    computeWakeflowHostMaintenanceContributionDigest(basis)
-      !== contributionDigest
-  ) {
+  assertOrderedOperations(operations, "$contribution");
+  const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> = Object.freeze({
+    kind: "WakeflowHostMaintenanceContribution",
+    schemaVersion: 1,
+    hostId: record.hostId as WakeflowWorkspaceHostId,
+    capabilityId: parseIdentity(
+      record.capabilityId,
+      "$contribution.capabilityId",
+      COMPONENT_ID_PATTERN,
+    ),
+    status: record.status,
+    blockerCodes,
+    operations,
+  });
+  const contributionDigest = digest(record.contributionDigest, "$contribution.contributionDigest");
+  if (computeWakeflowHostMaintenanceContributionDigest(basis) !== contributionDigest) {
     fail("digest", "$contribution.contributionDigest");
   }
   return Object.freeze({ ...basis, contributionDigest });

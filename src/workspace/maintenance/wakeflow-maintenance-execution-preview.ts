@@ -1,19 +1,16 @@
 import { types } from "node:util";
-
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  RootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   assertWakeflowHostMaintenanceCapability,
   assertWakeflowHostMaintenanceContributionCapability,
-  WakeflowHostMaintenanceCapabilityError,
   type WakeflowHostMaintenanceCapability,
+  WakeflowHostMaintenanceCapabilityError,
 } from "./wakeflow-host-maintenance-capability.js";
 import {
   parseWakeflowHostMaintenanceContribution,
@@ -23,12 +20,8 @@ import {
   createWakeflowMaintenanceExecutionPlan,
   type WakeflowMaintenanceExecutionPlan,
 } from "./wakeflow-maintenance-execution-plan.js";
-import type {
-  WakeflowMaintenanceGateContext,
-} from "./wakeflow-maintenance-gate.js";
-import {
-  previewWakeflowStaticMaterialization,
-} from "./wakeflow-static-materialization-preview.js";
+import type { WakeflowMaintenanceGateContext } from "./wakeflow-maintenance-gate.js";
+import { previewWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
 import {
   parseWakeflowStaticMaterializationPreviewRequest,
   WakeflowStaticMaterializationPreviewError,
@@ -57,10 +50,7 @@ const ERROR_MESSAGES = {
   capability: "Wakeflow maintenance execution preview host capability is invalid.",
   contribution: "Wakeflow maintenance execution preview host contribution is invalid.",
   aborted: "Wakeflow maintenance execution preview was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceExecutionPreviewErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionPreviewErrorReason, string>>;
 
 /** 聚合维护 preview 失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionPreviewError extends Error {
@@ -69,20 +59,14 @@ export class WakeflowMaintenanceExecutionPreviewError extends Error {
   readonly reason: WakeflowMaintenanceExecutionPreviewErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowMaintenanceExecutionPreviewErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowMaintenanceExecutionPreviewErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowMaintenanceExecutionPreviewErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowMaintenanceExecutionPreviewErrorReason, path: string): never {
   throw new WakeflowMaintenanceExecutionPreviewError(reason, path);
 }
 
@@ -126,10 +110,10 @@ export async function previewWakeflowMaintenanceExecution(
   gateContextValue?: Readonly<WakeflowMaintenanceGateContext>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -146,10 +130,7 @@ export async function previewWakeflowMaintenanceExecution(
   let capability: Readonly<WakeflowHostMaintenanceCapability> | undefined;
   if (capabilityValue !== undefined) {
     try {
-      assertWakeflowHostMaintenanceCapability(
-        capabilityValue,
-        request.currentHostProfile.hostId,
-      );
+      assertWakeflowHostMaintenanceCapability(capabilityValue, request.currentHostProfile.hostId);
       capability = capabilityValue;
     } catch (error: unknown) {
       if (error instanceof WakeflowHostMaintenanceCapabilityError) {
@@ -158,16 +139,12 @@ export async function previewWakeflowMaintenanceExecution(
       throw error;
     }
   }
-  let sharedPreview: Awaited<ReturnType<
-    typeof previewWakeflowStaticMaterialization
-  >>;
+  let sharedPreview: Awaited<ReturnType<typeof previewWakeflowStaticMaterialization>>;
   try {
     sharedPreview = await previewWakeflowStaticMaterialization(
       rootValue,
       requestValue,
-      gateContextValue === undefined
-        ? {}
-        : { gateContext: gateContextValue },
+      gateContextValue === undefined ? {} : { gateContext: gateContextValue },
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
@@ -197,15 +174,12 @@ export async function previewWakeflowMaintenanceExecution(
           ...(request.signal === undefined ? {} : { signal: request.signal }),
         }),
       );
-      assertWakeflowHostMaintenanceContributionCapability(
-        capability,
-        contribution,
-      );
+      assertWakeflowHostMaintenanceContributionCapability(capability, contribution);
     } catch (error: unknown) {
       assertNotAborted(request.signal);
       if (
-        error instanceof WakeflowHostMaintenanceContributionError
-        || error instanceof WakeflowHostMaintenanceCapabilityError
+        error instanceof WakeflowHostMaintenanceContributionError ||
+        error instanceof WakeflowHostMaintenanceCapabilityError
       ) {
         fail("contribution", error.path);
       }

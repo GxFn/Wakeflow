@@ -5,21 +5,17 @@ import {
   WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION,
   WAKEFLOW_CONFIG_RESOURCE_CATALOG,
 } from "../../src/configuration/wakeflow-config-resource-catalog.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../../src/governance/demand/demand-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../../src/governance/ledger/ledger-resource-catalog.js";
-import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "../../src/workspace/wakeflow-shared-coordination-layout.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import {
   WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
 } from "../../src/workspace/wakeflow-active-static-resource-catalog.js";
-import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
-import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
-import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
-import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "../../src/workspace/workspace-host-runtime-resource-catalog.js";
-import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "../../src/workspace/workspace-shared-runtime-resource-catalog.js";
-import { parseWakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
+import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "../../src/workspace/wakeflow-shared-coordination-layout.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
   findWakeflowWorkspaceStaticResourceByDeclarationId,
@@ -28,6 +24,10 @@ import {
   selectWakeflowWorkspaceStaticResourcesByOwner,
   WakeflowWorkspaceStaticResourceMatrixError,
 } from "../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
+import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "../../src/workspace/workspace-host-runtime-resource-catalog.js";
+import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "../../src/workspace/workspace-shared-runtime-resource-catalog.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -40,9 +40,7 @@ function sorted(values: readonly string[]): readonly string[] {
 }
 
 test("Static Resource Matrix explicitly composes and deterministically sorts catalogs", () => {
-  const codex = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const codex = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const claude = createWakeflowWorkspaceStaticResourceMatrix(
     claudeCodeWorkspaceHostResourceProfile,
   );
@@ -74,9 +72,7 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
     deepEqual(ids, sorted(ids));
     equal(new Set(ids).size, ids.length);
     equal(
-      new Set(
-        matrix.declarations.map((entry) => JSON.stringify(entry.placement)),
-      ).size,
+      new Set(matrix.declarations.map((entry) => JSON.stringify(entry.placement))).size,
       matrix.declarations.length,
     );
     deepEqual(
@@ -88,15 +84,12 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
     equal(
       matrix.declarations.some(
         (entry) =>
-          entry.declarationId.includes("demand_") ||
-          entry.declarationId.includes("requirement_"),
+          entry.declarationId.includes("demand_") || entry.declarationId.includes("requirement_"),
       ),
       false,
     );
     equal(
-      matrix.declarations.some(
-        (entry) => entry.placement.relativePath?.includes("{") === true,
-      ),
+      matrix.declarations.some((entry) => entry.placement.relativePath?.includes("{") === true),
       false,
     );
     assertDeepFrozen(matrix);
@@ -107,9 +100,9 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
       .filter((entry) => entry.scope === "current-host")
       .map((entry) => entry.declarationId),
     sorted(
-      createWakeflowWorkspaceHostResourceCatalog(
-        codexWorkspaceHostResourceProfile,
-      ).map((entry) => entry.declarationId),
+      createWakeflowWorkspaceHostResourceCatalog(codexWorkspaceHostResourceProfile).map(
+        (entry) => entry.declarationId,
+      ),
     ),
   );
   deepEqual(
@@ -117,21 +110,16 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
       .filter((entry) => entry.scope === "current-host")
       .map((entry) => entry.declarationId),
     sorted(
-      createWakeflowWorkspaceHostResourceCatalog(
-        claudeCodeWorkspaceHostResourceProfile,
-      ).map((entry) => entry.declarationId),
+      createWakeflowWorkspaceHostResourceCatalog(claudeCodeWorkspaceHostResourceProfile).map(
+        (entry) => entry.declarationId,
+      ),
     ),
   );
   equal(codex.sharedDigest, claude.sharedDigest);
   notEqual(codex.matrixDigest, claude.matrixDigest);
   equal(/^sha256:[0-9a-f]{64}$/u.test(codex.sharedDigest), true);
   equal(/^sha256:[0-9a-f]{64}$/u.test(codex.matrixDigest), true);
-  deepEqual(
-    createWakeflowWorkspaceStaticResourceMatrix(
-      codexWorkspaceHostResourceProfile,
-    ),
-    codex,
-  );
+  deepEqual(createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile), codex);
   const reparsed = parseWakeflowWorkspaceStaticResourceMatrix(codex);
   deepEqual(reparsed, codex);
   notEqual(reparsed.declarations, codex.declarations);
@@ -222,9 +210,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
     }
   }
 
-  const valid = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const valid = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const forged = Object.freeze({
     ...valid,
     declarations: Object.freeze(valid.declarations.slice(1)),
@@ -235,10 +221,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
   } catch (error: unknown) {
     forgedError = error;
   }
-  equal(
-    forgedError instanceof WakeflowWorkspaceStaticResourceMatrixError,
-    true,
-  );
+  equal(forgedError instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
   if (forgedError instanceof WakeflowWorkspaceStaticResourceMatrixError) {
     equal(forgedError.reason, "digest");
     equal(forgedError.path, "$matrix");
@@ -246,42 +229,21 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
 });
 
 test("Static Resource Matrix exposes only narrow frozen queries", () => {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   deepEqual(
-    findWakeflowWorkspaceStaticResourceByDeclarationId(
-      matrix,
-      "workspace.config-authority",
-    ),
+    findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "workspace.config-authority"),
     WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION,
   );
-  equal(
-    findWakeflowWorkspaceStaticResourceByDeclarationId(
-      matrix,
-      "workspace.missing",
-    ),
-    null,
-  );
+  equal(findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "workspace.missing"), null);
 
-  const demand = selectWakeflowWorkspaceStaticResourcesByFamily(
-    matrix,
-    "demand",
-  );
+  const demand = selectWakeflowWorkspaceStaticResourcesByFamily(matrix, "demand");
   deepEqual(
     demand.map((entry) => entry.declarationId),
-    sorted(
-      WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.map(
-        (entry) => entry.declarationId,
-      ),
-    ),
+    sorted(WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.map((entry) => entry.declarationId)),
   );
   equal(Object.isFrozen(demand), true);
 
-  const configOwner = selectWakeflowWorkspaceStaticResourcesByOwner(
-    matrix,
-    "config-authority",
-  );
+  const configOwner = selectWakeflowWorkspaceStaticResourcesByOwner(matrix, "config-authority");
   deepEqual(
     configOwner.map((entry) => entry.declarationId),
     ["workspace.config-authority", "workspace.config-authority-lock"],
@@ -294,10 +256,7 @@ test("Static Resource Matrix exposes only narrow frozen queries", () => {
   } catch (error: unknown) {
     invalidQuery = error;
   }
-  equal(
-    invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError,
-    true,
-  );
+  equal(invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
   if (invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError) {
     equal(invalidQuery.reason, "query");
     equal(invalidQuery.path, "$/family");

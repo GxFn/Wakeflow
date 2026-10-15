@@ -2,29 +2,27 @@ import { types } from "node:util";
 
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  inspectDirectoryTreeCandidate,
-  DurableDirectoryTreeCandidateError,
-} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  sameFileNodeSnapshot,
-  FileNodeSnapshotError,
+  DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidate,
+} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import {
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
+  sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   joinPortableResourcePath,
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -38,30 +36,29 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import {
+  type ByteCount,
   ByteCountError,
   parseByteCount,
-  type ByteCount,
 } from "../../foundation/numeric/byte-count.js";
-import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
-  parseManagedEvidenceManifestDocument,
-  ManagedEvidenceManifestError,
   type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifestDocument,
 } from "./managed-evidence-manifest.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
-  planManagedEvidenceRecordTree,
-  ManagedEvidenceRecordTreePlanError,
   type ManagedEvidenceRecordTreePlan,
+  ManagedEvidenceRecordTreePlanError,
+  planManagedEvidenceRecordTree,
 } from "./managed-evidence-record-tree-plan.js";
 import {
-  managedEvidenceRecordAddress,
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME,
   ManagedEvidenceResourcePathError,
+  managedEvidenceRecordAddress,
 } from "./managed-evidence-resource-paths.js";
 
 /**
@@ -77,9 +74,7 @@ import {
  * capability。
  */
 
-const MANIFEST_MAXIMUM_BYTES = parseByteCount(
-  MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
-);
+const MANIFEST_MAXIMUM_BYTES = parseByteCount(MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES);
 
 export interface LoadedManagedEvidenceRecord {
   readonly manifest: Readonly<ManagedEvidenceManifest>;
@@ -144,9 +139,7 @@ const ERROR_MESSAGES = {
   "source-changed": "Managed evidence final record changed during reading.",
   aborted: "Managed evidence record reading was aborted.",
   "operation-failure": "Managed evidence final record could not be read safely.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceRecordReaderErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceRecordReaderErrorReason, string>>;
 
 /** 单记录Manifest、成员或整树读取无法稳定证明时的脱敏错误。 */
 export class ManagedEvidenceRecordReaderError extends Error {
@@ -174,10 +167,7 @@ interface ParsedMemberOptions {
 
 const ISSUED_RECORDS = new WeakSet<object>();
 
-function fail(
-  reason: ManagedEvidenceRecordReaderErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidenceRecordReaderErrorReason, path: string): never {
   throw new ManagedEvidenceRecordReaderError(reason, path);
 }
 
@@ -205,9 +195,7 @@ function parseSignal(value: unknown, path: string): AbortSignal | undefined {
   return value as AbortSignal | undefined;
 }
 
-function parseExpectedNode(
-  value: unknown,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
     typeof value !== "object" ||
@@ -218,10 +206,7 @@ function parseExpectedNode(
     fail("input", "$/expectedRootNode");
   }
   try {
-    sameFileNodeSnapshot(
-      value as Readonly<FileNodeSnapshot>,
-      value as Readonly<FileNodeSnapshot>,
-    );
+    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
       fail("input", "$/expectedRootNode");
@@ -239,11 +224,7 @@ function parseLoadOptions(value: unknown): Readonly<ParsedLoadOptions> {
     if (error instanceof PassiveOwnDataError) fail("input", "$options");
     throw error;
   }
-  if (
-    Object.keys(record).some(
-      (key) => key !== "expectedRootNode" && key !== "signal",
-    )
-  ) {
+  if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "signal")) {
     fail("input", "$options");
   }
   return Object.freeze({
@@ -262,9 +243,7 @@ function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
   }
   if (
     !Object.hasOwn(record, "maximumBytes") ||
-    Object.keys(record).some(
-      (key) => key !== "maximumBytes" && key !== "signal",
-    )
+    Object.keys(record).some((key) => key !== "maximumBytes" && key !== "signal")
   ) {
     fail("input", "$options");
   }
@@ -328,10 +307,7 @@ function currentUserId(): bigint | null {
   }
 }
 
-function assertPrivateDirectory(
-  node: Readonly<FileNodeSnapshot>,
-  path: string,
-): void {
+function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   const userId = currentUserId();
   if (
     node.kind !== "directory" ||
@@ -342,11 +318,7 @@ function assertPrivateDirectory(
   }
 }
 
-function assertPrivateFile(
-  node: Readonly<FileNodeSnapshot>,
-  mode: number,
-  path: string,
-): void {
+function assertPrivateFile(node: Readonly<FileNodeSnapshot>, mode: number, path: string): void {
   const userId = currentUserId();
   if (
     node.kind !== "file" ||
@@ -362,10 +334,7 @@ function mapDirectoryError(error: StableDirectoryReadError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "not-found") fail("not-found", "$record");
-  if (
-    error.reason === "source-changed" ||
-    error.reason === "expectation-changed"
-  ) {
+  if (error.reason === "source-changed" || error.reason === "expectation-changed") {
     fail("source-changed", "$record");
   }
   if (
@@ -412,11 +381,7 @@ function exactRecordRoot(
     fail("record", "$record");
   }
   assertPrivateDirectory(read.directoryNode, "$record");
-  assertPrivateFile(
-    manifest.node,
-    MANAGED_EVIDENCE_RECORD_FILE_MODE,
-    "$record/manifest",
-  );
+  assertPrivateFile(manifest.node, MANAGED_EVIDENCE_RECORD_FILE_MODE, "$record/manifest");
   assertPrivateDirectory(payload.node, "$record/payload");
   return Object.freeze({
     manifestNode: manifest.node,
@@ -446,26 +411,18 @@ function mapManifestReadError(error: unknown): never {
   if (error instanceof StableFileReadError) {
     if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "root-scope") fail("root-scope", "$root");
-    if (
-      error.reason === "source-changed" ||
-      error.reason === "expectation-changed"
-    ) {
+    if (error.reason === "source-changed" || error.reason === "expectation-changed") {
       fail("source-changed", "$record/manifest");
     }
     fail("manifest", "$record/manifest");
   }
-  if (
-    error instanceof StrictTextFileError ||
-    error instanceof DeterministicJsonDocumentError
-  ) {
+  if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
     fail("manifest", "$record/manifest");
   }
   throw error;
 }
 
-function issueRecord(
-  value: LoadedManagedEvidenceRecord,
-): Readonly<LoadedManagedEvidenceRecord> {
+function issueRecord(value: LoadedManagedEvidenceRecord): Readonly<LoadedManagedEvidenceRecord> {
   const record = Object.freeze(value);
   ISSUED_RECORDS.add(record);
   return record;
@@ -582,14 +539,10 @@ async function requireCurrentRecord(
   record: Readonly<LoadedManagedEvidenceRecord>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LoadedManagedEvidenceRecord>> {
-  const current = await loadManagedEvidenceRecord(
-    root,
-    record.manifest.evidenceId,
-    {
-      expectedRootNode: record.rootNode,
-      ...(signal === undefined ? {} : { signal }),
-    },
-  );
+  const current = await loadManagedEvidenceRecord(root, record.manifest.evidenceId, {
+    expectedRootNode: record.rootNode,
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (!sameRecord(record, current)) fail("source-changed", "$record");
   return current;
 }
@@ -609,17 +562,10 @@ function mapMemberReadError(error: StableFileReadError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "too-large") fail("capacity", "$member");
-  if (
-    error.reason === "source-changed" ||
-    error.reason === "expectation-changed"
-  ) {
+  if (error.reason === "source-changed" || error.reason === "expectation-changed") {
     fail("source-changed", "$member");
   }
-  if (
-    error.reason === "not-found" ||
-    error.reason === "symlink" ||
-    error.reason === "not-file"
-  ) {
+  if (error.reason === "not-found" || error.reason === "symlink" || error.reason === "not-file") {
     fail("content-mismatch", "$member");
   }
   fail("operation-failure", "$member");
@@ -637,11 +583,7 @@ export async function readManagedEvidencePayloadMember(
   const memberRef = parseMemberRef(memberRefValue);
   const options = parseMemberOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const before = await requireCurrentRecord(
-    rootValue,
-    recordValue,
-    options.signal,
-  );
+  const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
   const member = memberDescriptor(before, memberRef);
   if (member.bytes > options.maximumBytes) fail("capacity", "$member");
   const memberPath = joinPortableResourcePath(
@@ -676,9 +618,7 @@ export async function readManagedEvidencePayloadMember(
   });
 }
 
-function mapTreeVerificationError(
-  error: DurableDirectoryTreeCandidateError,
-): never {
+function mapTreeVerificationError(error: DurableDirectoryTreeCandidateError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
     fail("source-changed", "$record");
@@ -696,11 +636,7 @@ export async function verifyManagedEvidenceRecord(
   assertRecordCapability(recordValue);
   const options = parseVerifyOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const before = await requireCurrentRecord(
-    rootValue,
-    recordValue,
-    options.signal,
-  );
+  const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
   try {
     await inspectDirectoryTreeCandidate(
       rootValue,

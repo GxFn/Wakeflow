@@ -1,14 +1,14 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandTargetTaskState } from "../demand/model/demand-aggregate-state.js";
-import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import {
   buildDemandPostAcceptanceRoute,
-  DemandPostAcceptanceRouteError,
   type DemandPostAcceptanceNextStage,
   type DemandPostAcceptanceRoute,
+  DemandPostAcceptanceRouteError,
 } from "../review/demand-post-acceptance-route.js";
 import type { DemandResultReviewSnapshot } from "../review/demand-result-review-snapshot.js";
 
@@ -23,25 +23,18 @@ import type { DemandResultReviewSnapshot } from "../review/demand-result-review-
 const DEMAND_CONTROLLER_ROUTE_KIND = "WakeflowDemandControllerRoute" as const;
 const DEMAND_CONTROLLER_ROUTE_SCHEMA_VERSION = 1 as const;
 
-type ImplementationTargetState = Exclude<
-  DemandTargetTaskState,
-  { readonly workType: "test" }
->;
-type TestTargetState = Extract<
-  DemandTargetTaskState,
-  { readonly workType: "test" }
->;
+type ImplementationTargetState = Exclude<DemandTargetTaskState, { readonly workType: "test" }>;
+type TestTargetState = Extract<DemandTargetTaskState, { readonly workType: "test" }>;
 
 export type DemandControllerDemandFrontierCondition =
-  "implementation-planning-required" | "research-completion-required";
-export type DemandControllerImplementationTargetPhase =
-  ImplementationTargetState["phase"];
+  | "implementation-planning-required"
+  | "research-completion-required";
+export type DemandControllerImplementationTargetPhase = ImplementationTargetState["phase"];
 type ReadyPostAcceptanceStage = Exclude<
   DemandPostAcceptanceNextStage,
   { readonly status: "not-ready" }
 >;
-export type DemandControllerPostAcceptanceStageStatus =
-  ReadyPostAcceptanceStage["status"];
+export type DemandControllerPostAcceptanceStageStatus = ReadyPostAcceptanceStage["status"];
 
 export interface DemandControllerImplementationTargetReference {
   readonly workType: "implementation";
@@ -147,9 +140,7 @@ type ScopedDemandFrontierDescriptor = Readonly<
 type ScopedImplementationFrontierDescriptor = Readonly<
   { readonly scope: "target" } & ImplementationFrontierDescriptor
 >;
-type ScopedTestFrontierDescriptor = Readonly<
-  { readonly scope: "target" } & TestFrontierDescriptor
->;
+type ScopedTestFrontierDescriptor = Readonly<{ readonly scope: "target" } & TestFrontierDescriptor>;
 
 export type DemandControllerRouteFrontier =
   | Readonly<{ readonly scope: "demand" } & DemandFrontierDescriptor>
@@ -197,22 +188,16 @@ export interface DemandControllerRoute {
   readonly observedEventStream: DemandPostAcceptanceRoute["observedEventStream"];
   readonly reviewSnapshotDigest: Sha256Digest;
   readonly postAcceptanceRouteDigest?: Sha256Digest;
-  readonly disposition:
-    | "work-available"
-    | "blocked"
-    | "terminal"
-    | "awaiting-decision";
+  readonly disposition: "work-available" | "blocked" | "terminal" | "awaiting-decision";
   readonly frontiers: readonly Readonly<DemandControllerRouteFrontier>[];
   readonly blockers: readonly Readonly<DemandControllerRouteBlocker>[];
   readonly routeDigest: Sha256Digest;
 }
 
-export type DemandControllerRouteErrorReason =
-  "post-acceptance-route" | "relation";
+export type DemandControllerRouteErrorReason = "post-acceptance-route" | "relation";
 
 const ERROR_MESSAGES = {
-  "post-acceptance-route":
-    "Demand Controller Route could not rebuild its Post-Acceptance source.",
+  "post-acceptance-route": "Demand Controller Route could not rebuild its Post-Acceptance source.",
   relation: "Demand Controller Route sources are inconsistent.",
 } as const satisfies Readonly<Record<DemandControllerRouteErrorReason, string>>;
 
@@ -399,9 +384,7 @@ function testTargetReference(
   });
 }
 
-function implementationFrontier(
-  target: Readonly<ImplementationTargetState>,
-): Readonly<{
+function implementationFrontier(target: Readonly<ImplementationTargetState>): Readonly<{
   readonly frontier: Readonly<DemandControllerRouteFrontier> | null;
   readonly blocker: Readonly<DemandControllerRouteBlocker> | null;
 }> {
@@ -421,8 +404,7 @@ function implementationFrontier(
           kind: "external-condition" as const,
           owner: "controller-implementation-review" as const,
           targetTaskId: target.targetTaskId,
-          targetReviewDecisionId:
-            target.currentDelivery.reviewDecision.targetReviewDecisionId,
+          targetReviewDecisionId: target.currentDelivery.reviewDecision.targetReviewDecisionId,
           decisionDigest: target.currentDelivery.reviewDecision.decisionDigest,
         })
       : null;
@@ -478,8 +460,7 @@ function postAcceptanceFrontier(
     targetTaskId === null
       ? undefined
       : loaded.aggregate.state.targetTasks.find(
-          (entry) =>
-            entry.workType === "test" && entry.targetTaskId === targetTaskId,
+          (entry) => entry.workType === "test" && entry.targetTaskId === targetTaskId,
         );
   if (target === undefined || target.workType !== "test") fail("relation");
   return Object.freeze({
@@ -503,9 +484,7 @@ function postAcceptanceBlocker(
   });
 }
 
-function frontierSortKey(
-  frontier: Readonly<DemandControllerRouteFrontier>,
-): string {
+function frontierSortKey(frontier: Readonly<DemandControllerRouteFrontier>): string {
   return frontier.scope === "demand"
     ? `0\u0000${frontier.kind}`
     : `1\u0000${frontier.target.targetTaskId}\u0000${frontier.kind}`;
@@ -582,24 +561,23 @@ function routeBasis(
       ...common,
       disposition: "work-available",
       frontiers: Object.freeze([
-        resolveDemandControllerDemandFrontierDescriptor(
-          "implementation-planning-required",
-        ),
+        resolveDemandControllerDemandFrontierDescriptor("implementation-planning-required"),
       ]),
       blockers: Object.freeze([]),
     };
   }
 
-  const implementationTargets = loaded.aggregate.state.targetTasks.filter(
-    isImplementationTarget,
-  );
+  const implementationTargets = loaded.aggregate.state.targetTasks.filter(isImplementationTarget);
   if (implementationTargets.length === 0) {
     if (loaded.identity.demandType === "research") {
       const stage = postAcceptanceRoute.nextStage;
       const frontiers = Object.freeze([
         resolveDemandControllerDemandFrontierDescriptor("research-completion-required"),
       ]);
-      if (stage.status === "completion-preflight" && stage.testingClosure.mode === "not-applicable") {
+      if (
+        stage.status === "completion-preflight" &&
+        stage.testingClosure.mode === "not-applicable"
+      ) {
         return { ...common, disposition: "work-available", frontiers, blockers: Object.freeze([]) };
       }
       if (stage.status !== "not-ready" || stage.reason !== "research-evidence-missing") {
@@ -627,9 +605,7 @@ function routeBasis(
       ...common,
       disposition: "work-available",
       frontiers: Object.freeze([
-        resolveDemandControllerDemandFrontierDescriptor(
-          "implementation-planning-required",
-        ),
+        resolveDemandControllerDemandFrontierDescriptor("implementation-planning-required"),
       ]),
       blockers: Object.freeze([]),
     };
@@ -657,18 +633,14 @@ function routeBasis(
     }
     return {
       ...common,
-      disposition:
-        blockers.length === frontiers.length ? "blocked" : "work-available",
+      disposition: blockers.length === frontiers.length ? "blocked" : "work-available",
       frontiers: sortedFrontiers(frontiers),
       blockers: Object.freeze(blockers),
     };
   }
 
   if (postAcceptanceRoute.nextStage.status === "not-ready") fail("relation");
-  const postAcceptanceFrontierValue = postAcceptanceFrontier(
-    loaded,
-    postAcceptanceRoute,
-  );
+  const postAcceptanceFrontierValue = postAcceptanceFrontier(loaded, postAcceptanceRoute);
   const blocker = postAcceptanceBlocker(postAcceptanceRoute);
   return {
     ...common,

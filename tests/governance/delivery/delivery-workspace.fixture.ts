@@ -1,16 +1,14 @@
-import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
-
 import type {
   PrepareDeliveryResult,
   RecordDeliveryOutcomeResult,
 } from "../../../src/capabilities/delivery/contract.js";
 import {
-  executePrepareDeliveryRequest,
-  executeRecordDeliveryOutcomeRequest,
   type DeliveryHostFacade,
   type ExecuteDeliveryOptions,
+  executePrepareDeliveryRequest,
+  executeRecordDeliveryOutcomeRequest,
 } from "../../../src/capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
@@ -24,10 +22,11 @@ import type { DeliveryOutcome } from "../../../src/governance/delivery/delivery-
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
-  writeHostHookObservation,
   type WriteHostHookObservationReceipt,
+  writeHostHookObservation,
 } from "../../../src/kernel/hook-observations.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
@@ -43,10 +42,10 @@ import {
   materializeTargetTaskPlanningWorkspaceFixture,
   openTargetTaskPlanningWorkspaceFixture,
   planFixtureTargetTask,
-  targetTaskPlanningWorkspaceBaselineKey,
   type TargetTaskPlanningWorkspaceFacts,
   type TargetTaskPlanningWorkspaceFixture,
   type TargetTaskPlanningWorkspaceFixtureOptions,
+  targetTaskPlanningWorkspaceBaselineKey,
 } from "../tasking/target-task-planning-service.fixture.js";
 
 /**
@@ -55,7 +54,9 @@ import {
  * `test-delivery-workspace.fixture.ts`，避免与评审链夹具互相引用。
  */
 
-export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & { readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions } = Object.freeze({
+export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & {
+  readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions;
+} = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
@@ -119,7 +120,9 @@ export async function loadFixtureDeliveryOutcome(
   deliveryId: string,
 ): Promise<Readonly<DeliveryOutcome>> {
   return withFixtureDemandRoot(fixture, async (root) => {
-    const located = await new DemandEventSourcingRepository(root).findDeliveryOutcomeRecordedEvents(deliveryId);
+    const located = await new DemandEventSourcingRepository(root).findDeliveryOutcomeRecordedEvents(
+      deliveryId,
+    );
     const last = located.at(-1);
     if (last === undefined) throw new Error("Expected a recorded delivery outcome fixture.");
     return last.event.data.outcome;
@@ -132,16 +135,26 @@ export async function loadFixtureDeliveryEnvelope(
   deliveryId: string,
 ): Promise<Readonly<DeliveryEnvelope>> {
   return withFixtureDemandRoot(fixture, async (root) => {
-    const located = await new DemandEventSourcingRepository(root).findDeliveryPreparedEvent(deliveryId);
+    const located = await new DemandEventSourcingRepository(root).findDeliveryPreparedEvent(
+      deliveryId,
+    );
     if (located === null) throw new Error("Expected a prepared delivery envelope fixture.");
     return located.event.data.envelope;
   });
 }
 
 export async function registerFixtureWindowRoute(
-  fixture: Readonly<{ readonly workspacePath: string; readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"] }>,
+  fixture: Readonly<{
+    readonly workspacePath: string;
+    readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"];
+  }>,
   windowId: string,
-  handle: Readonly<{ readonly value: string; readonly uuid: string; readonly observedAt: UtcInstant; readonly registeredAt: UtcInstant }>,
+  handle: Readonly<{
+    readonly value: string;
+    readonly uuid: string;
+    readonly observedAt: UtcInstant;
+    readonly registeredAt: UtcInstant;
+  }>,
 ): Promise<Readonly<DeliveryWindowRoute>> {
   const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const launchIntent = compileWakeflowWindowLaunchIntents(
@@ -208,7 +221,10 @@ async function buildDeliveryWorkspace(
     if (planned.targetTask.workType !== "implementation") {
       throw new Error("Expected an implementation TaskPackage fixture.");
     }
-    mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), { recursive: true, mode: 0o700 });
+    mkdirSync(path.join(fixture.workspacePath, ".wakeflow-local", "runtime"), {
+      recursive: true,
+      mode: 0o700,
+    });
     await publishFreshWakeflowWindowRuntime(
       fixture.workspaceRoot,
       parseWakeflowConfig(createMinimalWakeflowConfig()),
@@ -297,7 +313,11 @@ export interface PrepareFixtureDeliveryOverrides {
 
 /** 经切片准备一次投递；实现目标缺省期望修订 2（发布 1、规划 2）。 */
 export async function prepareFixtureDelivery(
-  fixture: Readonly<{ readonly workspacePath: string; readonly demandId: string; readonly targetTaskId: string }>,
+  fixture: Readonly<{
+    readonly workspacePath: string;
+    readonly demandId: string;
+    readonly targetTaskId: string;
+  }>,
   overrides: PrepareFixtureDeliveryOverrides = {},
   options: ExecuteDeliveryOptions = { clock: () => DELIVERY_PREPARED_AT },
 ): Promise<PrepareDeliveryResult> {
@@ -320,12 +340,16 @@ export async function prepareFixtureDelivery(
 export function fixtureLandingInstant(attempt: number): UtcInstant {
   return attempt === 1
     ? DELIVERY_LANDED_AT
-    : parseUtcInstant(new Date(Date.parse(DELIVERY_LANDED_AT) + (attempt - 1) * 1000).toISOString());
+    : parseUtcInstant(
+        new Date(Date.parse(DELIVERY_LANDED_AT) + (attempt - 1) * 1000).toISOString(),
+      );
 }
 
 /** 在目标会话里落地一条与许可 prompt 摘要一致的 `user-prompt-submit` 记录。 */
 export async function landFixturePrompt(
-  fixture: Readonly<{ readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"] }>,
+  fixture: Readonly<{
+    readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"];
+  }>,
   route: Readonly<DeliveryWindowRoute>,
   prompt: string,
   recordedAt: UtcInstant = DELIVERY_LANDED_AT,
@@ -349,8 +373,15 @@ export interface RecordFixtureOutcomeOverrides {
     /** E2（ADR-0020）：宿主发送调用的原样返回值，Wakeflow 只记它的摘要。 */
     readonly sendReturn?: Readonly<Record<string, unknown>>;
   }>;
-  readonly readback?: Readonly<{ readonly status: "confirmed" | "pending" | "unavailable"; readonly evidenceDigest?: string }>;
-  readonly resolution?: Readonly<{ readonly disposition: "accepted" | "rejected-before-send"; readonly hookRecordId?: string; readonly rationale: string }>;
+  readonly readback?: Readonly<{
+    readonly status: "confirmed" | "pending" | "unavailable";
+    readonly evidenceDigest?: string;
+  }>;
+  readonly resolution?: Readonly<{
+    readonly disposition: "accepted" | "rejected-before-send";
+    readonly hookRecordId?: string;
+    readonly rationale: string;
+  }>;
   readonly observedAt?: UtcInstant;
 }
 

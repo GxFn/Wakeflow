@@ -1,9 +1,7 @@
+import { WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
 import {
-  WAKEFLOW_LOCAL_ROOT,
-} from "../../configuration/wakeflow-config.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -20,18 +18,16 @@ import {
  * 分类、journal 准入和物理效果由相邻 inspection/owner 负责。
  */
 
-export const WAKEFLOW_LOCAL_ROOT_REF =
-  parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
+export const WAKEFLOW_LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 export const WAKEFLOW_RUNTIME_ROOT_REF = parsePortableResourcePath(
   `${WAKEFLOW_LOCAL_ROOT}/runtime`,
 );
 export const WAKEFLOW_MAINTENANCE_ROOT_REF = parsePortableResourcePath(
   `${WAKEFLOW_RUNTIME_ROOT_REF}/maintenance`,
 );
-export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF =
-  parsePortableResourcePath(
-    `${WAKEFLOW_MAINTENANCE_ROOT_REF}/transactions`,
-  );
+export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF = parsePortableResourcePath(
+  `${WAKEFLOW_MAINTENANCE_ROOT_REF}/transactions`,
+);
 export const WAKEFLOW_MAINTENANCE_GATE_REF = parsePortableResourcePath(
   `${WAKEFLOW_RUNTIME_ROOT_REF}/maintenance.lock`,
 );
@@ -84,21 +80,19 @@ export const WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
   WAKEFLOW_RUNTIME_ROOT_REF,
 );
 
-export const WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION =
-  directoryDeclaration(
-    "maintenance.root",
-    "maintenance",
-    "workspace-maintenance",
-    WAKEFLOW_MAINTENANCE_ROOT_REF,
-  );
+export const WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
+  "maintenance.root",
+  "maintenance",
+  "workspace-maintenance",
+  WAKEFLOW_MAINTENANCE_ROOT_REF,
+);
 
-export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
-  directoryDeclaration(
-    "maintenance.transactions-root",
-    "maintenance",
-    "workspace-maintenance",
-    WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-  );
+export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = directoryDeclaration(
+  "maintenance.transactions-root",
+  "maintenance",
+  "workspace-maintenance",
+  WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
+);
 
 export const WAKEFLOW_MAINTENANCE_GATE_RESOURCE_DECLARATION =
   parseWakeflowWorkspaceResourceDeclaration({

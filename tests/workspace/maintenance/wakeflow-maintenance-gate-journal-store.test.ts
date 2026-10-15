@@ -1,83 +1,56 @@
 import { equal } from "node:assert/strict";
-import {
-  existsSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { type TestContext, test } from "node:test";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { inspectRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+  publishWakeflowMaintenanceExecutionIntent,
+  retireWakeflowMaintenanceExecutionIntent,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  inspectRootedExclusiveFileLock,
-} from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  withWakeflowMaintenanceGate,
-  WakeflowMaintenanceGateError,
   type WakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
+  withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournal,
-  retirePreparedWakeflowMaintenanceJournal,
-  retireTerminalWakeflowMaintenanceJournal,
-  WakeflowMaintenanceJournalStoreError,
-  type WakeflowMaintenanceJournalSource,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import {
   beginWakeflowMaintenanceJournalStep,
   completeWakeflowMaintenanceJournalStep,
   terminalizeWakeflowMaintenanceJournal,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
 import {
-  createWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import {
-  publishWakeflowMaintenanceExecutionIntent,
-  retireWakeflowMaintenanceExecutionIntent,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  wakeflowMaintenanceIntentRef,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import {
-  WAKEFLOW_MAINTENANCE_GATE_REF,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+  checkpointWakeflowMaintenanceJournal,
+  publishPreparedWakeflowMaintenanceJournal,
+  readWakeflowMaintenanceJournal,
+  retirePreparedWakeflowMaintenanceJournal,
+  retireTerminalWakeflowMaintenanceJournal,
+  type WakeflowMaintenanceJournalSource,
+  WakeflowMaintenanceJournalStoreError,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
+import { wakeflowMaintenanceIntentRef } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   recoverPreparedWakeflowMaintenanceTransaction,
   WakeflowPreparedMaintenanceRecoveryError,
 } from "../../../src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.js";
 import {
-  createWakeflowMaintenanceExecutionPlan,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
-import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import {
-  inspectWakeflowWorkspaceCoreLayout,
-} from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = `maintenance_operation_${UUID}`;
@@ -90,10 +63,9 @@ const PROFILES = Object.freeze([
 ]);
 
 async function fixture(t: TestContext) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-maintenance-gate-journal-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-maintenance-gate-journal-")),
+  );
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -103,9 +75,7 @@ async function fixture(t: TestContext) {
 }
 
 function preview(coreLayoutInspectionDigest: typeof DIGEST) {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const plan = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
@@ -117,15 +87,17 @@ function preview(coreLayoutInspectionDigest: typeof DIGEST) {
     matrixDigest: matrix.matrixDigest,
     coreLayoutInspectionDigest,
     blockerCodes: Object.freeze([]),
-    steps: Object.freeze([Object.freeze({
-      stepId: "authority:config",
-      kind: "publish-config" as const,
-      ownerId: "config-authority",
-      targetKey: "workspace.config-authority",
-      sourceDigest: null,
-      targetDigest: DESIRED_CONFIG_DIGEST,
-      dependsOn: Object.freeze([]),
-    })]),
+    steps: Object.freeze([
+      Object.freeze({
+        stepId: "authority:config",
+        kind: "publish-config" as const,
+        ownerId: "config-authority",
+        targetKey: "workspace.config-authority",
+        sourceDigest: null,
+        targetDigest: DESIRED_CONFIG_DIGEST,
+        dependsOn: Object.freeze([]),
+      }),
+    ]),
   };
   const sharedPreview = parseWakeflowStaticMaterializationPreview({
     ...plan,
@@ -156,11 +128,7 @@ async function publishPreparedTransaction(
     REQUEST,
     DESIRED_CONFIG,
   );
-  const intentSource = await publishWakeflowMaintenanceExecutionIntent(
-    root,
-    context,
-    intent,
-  );
+  const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
   const journalSource = await publishPreparedWakeflowMaintenanceJournal(
     root,
     context,
@@ -194,19 +162,12 @@ test("maintenance gate bootstraps, correlates operation and retires prepared jou
       if (lock.status === "held") {
         equal(lock.record.token.endsWith(`-${UUID}`), true);
       }
-      const transaction = await publishPreparedTransaction(
-        workspace.root,
-        context,
-        plan,
-      );
+      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
       const prepared = transaction.journalSource;
       retiredSource = prepared;
       equal(prepared.journal.operationId, OPERATION_ID);
       equal(prepared.journal.planDigest, plan.planDigest);
-      const reread = await readWakeflowMaintenanceJournal(
-        workspace.root,
-        context.operationId,
-      );
+      const reread = await readWakeflowMaintenanceJournal(workspace.root, context.operationId);
       equal(reread.digest, prepared.digest);
       await retireWakeflowMaintenanceExecutionIntent(
         workspace.root,
@@ -225,21 +186,17 @@ test("maintenance gate bootstraps, correlates operation and retires prepared jou
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), true);
   const after = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(after.local.status, "idle");
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"),
-  )), false);
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"))),
+    false,
+  );
 
   let outsideError: unknown;
   try {
     if (expiredContext === undefined || retiredSource === undefined) {
       throw new Error("Expected issued scope.");
     }
-    await retirePreparedWakeflowMaintenanceJournal(
-      workspace.root,
-      expiredContext,
-      retiredSource,
-    );
+    await retirePreparedWakeflowMaintenanceJournal(workspace.root, expiredContext, retiredSource);
   } catch (error: unknown) {
     outsideError = error;
   }
@@ -263,11 +220,7 @@ test("prepared journal survives operation failure while gate releases", async (t
         uuidFactory: () => UUID,
       },
       async (context) => {
-        await publishPreparedTransaction(
-          workspace.root,
-          context,
-          plan,
-        );
+        await publishPreparedTransaction(workspace.root, context, plan);
         throw privateError;
       },
     );
@@ -275,17 +228,14 @@ test("prepared journal survives operation failure while gate releases", async (t
     caught = error;
   }
   equal(caught, privateError);
-  const journal = await readWakeflowMaintenanceJournal(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const journal = await readWakeflowMaintenanceJournal(workspace.root, OPERATION_ID);
   equal(journal.journal.state, "prepared");
   const after = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(after.local.status, "recovery-required");
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"),
-  )), false);
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"))),
+    false,
+  );
   const recovered = await recoverPreparedWakeflowMaintenanceTransaction(
     workspace.root,
     OPERATION_ID,
@@ -308,11 +258,7 @@ test("journal store CAS advances affected, checkpoint and terminal states", asyn
       uuidFactory: () => UUID,
     },
     async (context) => {
-      const transaction = await publishPreparedTransaction(
-        workspace.root,
-        context,
-        plan,
-      );
+      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
       let source = transaction.journalSource;
       source = await checkpointWakeflowMaintenanceJournal(
         workspace.root,
@@ -343,11 +289,7 @@ test("journal store CAS advances affected, checkpoint and terminal states", asyn
         context,
         transaction.intentSource,
       );
-      await retireTerminalWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        source,
-      );
+      await retireTerminalWakeflowMaintenanceJournal(workspace.root, context, source);
     },
   );
   const idle = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
@@ -365,15 +307,12 @@ test("journal checkpoint rejects immutable intent drift", async (t) => {
       uuidFactory: () => UUID,
     },
     async (context) => {
-      const transaction = await publishPreparedTransaction(
-        workspace.root,
-        context,
-        plan,
+      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
+      writeFileSync(
+        path.join(workspace.absolutePath, ...wakeflowMaintenanceIntentRef(OPERATION_ID).split("/")),
+        "{}\n",
+        { mode: 0o600 },
       );
-      writeFileSync(path.join(
-        workspace.absolutePath,
-        ...wakeflowMaintenanceIntentRef(OPERATION_ID).split("/"),
-      ), "{}\n", { mode: 0o600 });
       let caught: unknown;
       try {
         await checkpointWakeflowMaintenanceJournal(
@@ -381,9 +320,7 @@ test("journal checkpoint rejects immutable intent drift", async (t) => {
           context,
           transaction.intentSource,
           transaction.journalSource,
-          beginWakeflowMaintenanceJournalStep(
-            transaction.journalSource.journal,
-          ),
+          beginWakeflowMaintenanceJournalStep(transaction.journalSource.journal),
         );
       } catch (error: unknown) {
         caught = error;
@@ -409,24 +346,21 @@ test("prepared recovery retires a correlated inactive gate before journal", asyn
         uuidFactory: () => UUID,
       },
       async (context) => {
-        await publishPreparedTransaction(
-          workspace.root,
-          context,
-          plan,
-        );
+        await publishPreparedTransaction(workspace.root, context, plan);
         throw privateError;
       },
     );
   } catch (error: unknown) {
     equal(error, privateError);
   }
-  const gatePath = path.join(
-    workspace.absolutePath,
-    ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"),
+  const gatePath = path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"));
+  writeFileSync(
+    gatePath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: UUID,
+    }),
+    { mode: 0o600 },
   );
-  writeFileSync(gatePath, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: UUID,
-  }), { mode: 0o600 });
 
   const recovered = await recoverPreparedWakeflowMaintenanceTransaction(
     workspace.root,
@@ -450,11 +384,7 @@ test("prepared recovery proves intent and journal are the only transaction", asy
         uuidFactory: () => UUID,
       },
       async (context) => {
-        await publishPreparedTransaction(
-          workspace.root,
-          context,
-          plan,
-        );
+        await publishPreparedTransaction(workspace.root, context, plan);
         throw new Error("leave prepared");
       },
     );
@@ -469,10 +399,7 @@ test("prepared recovery proves intent and journal are the only transaction", asy
   writeFileSync(foreign, "{}\n", { mode: 0o600 });
   let caught: unknown;
   try {
-    await recoverPreparedWakeflowMaintenanceTransaction(
-      workspace.root,
-      OPERATION_ID,
-    );
+    await recoverPreparedWakeflowMaintenanceTransaction(workspace.root, OPERATION_ID);
   } catch (error: unknown) {
     caught = error;
   }
@@ -481,14 +408,8 @@ test("prepared recovery proves intent and journal are the only transaction", asy
     equal(caught.reason, "transaction");
   }
   equal(existsSync(foreign), true);
-  equal(existsSync(path.join(
-    transactions,
-    `${OPERATION_ID}.journal.json`,
-  )), true);
-  equal(existsSync(path.join(
-    transactions,
-    `${OPERATION_ID}.intent.json`,
-  )), true);
+  equal(existsSync(path.join(transactions, `${OPERATION_ID}.journal.json`)), true);
+  equal(existsSync(path.join(transactions, `${OPERATION_ID}.intent.json`)), true);
 });
 
 test("prepared cancellation validates options before recovery observation", async (t) => {
@@ -497,11 +418,9 @@ test("prepared cancellation validates options before recovery observation", asyn
   controller.abort();
   let caught: unknown;
   try {
-    await recoverPreparedWakeflowMaintenanceTransaction(
-      workspace.root,
-      OPERATION_ID,
-      { signal: controller.signal },
-    );
+    await recoverPreparedWakeflowMaintenanceTransaction(workspace.root, OPERATION_ID, {
+      signal: controller.signal,
+    });
   } catch (error: unknown) {
     caught = error;
   }

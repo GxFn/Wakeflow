@@ -1,15 +1,11 @@
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
-import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 import type { TaskPackage } from "../../../src/governance/tasking/task-package.js";
+import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 
-export const TARGET_RESULT_REPORTED_AT = parseUtcInstant(
-  "2026-08-29T09:55:00.000Z",
-);
-export const TARGET_RESULT_EVIDENCE_DIGEST = parseSha256Digest(
-  `sha256:${"b".repeat(64)}`,
-);
+export const TARGET_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T09:55:00.000Z");
+export const TARGET_RESULT_EVIDENCE_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 
 /** 纯记录测试用的定位符只查形状；导入切片解析真实受管证据时由调用方传入真实定位符。 */
 export const TARGET_RESULT_EVIDENCE_REF = {
@@ -19,7 +15,10 @@ export const TARGET_RESULT_EVIDENCE_REF = {
 
 export function createImplementationTargetResultReportContentFixture(
   taskPackage: Readonly<TaskPackage> = createTaskPackageFixture(),
-  evidence: Readonly<{ readonly ref: string; readonly digest: string }> = TARGET_RESULT_EVIDENCE_REF,
+  evidence: Readonly<{
+    readonly ref: string;
+    readonly digest: string;
+  }> = TARGET_RESULT_EVIDENCE_REF,
 ) {
   if (taskPackage.workType !== "implementation") {
     throw new Error("Expected implementation TaskPackage fixture.");

@@ -2,42 +2,32 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-
-import {
-  createPreparedWakeflowMaintenanceJournal,
-  createWakeflowMaintenanceJournalResourceDeclaration,
-  parseWakeflowMaintenanceJournal,
-  renderWakeflowMaintenanceJournal,
-  computeWakeflowMaintenanceJournalDigest,
   beginWakeflowMaintenanceJournalStep,
   completeWakeflowMaintenanceJournalStep,
+  computeWakeflowMaintenanceJournalDigest,
+  createPreparedWakeflowMaintenanceJournal,
+  createWakeflowMaintenanceJournalResourceDeclaration,
   isWakeflowMaintenanceJournalSuccessor,
+  parseWakeflowMaintenanceJournal,
+  renderWakeflowMaintenanceJournal,
   terminalizeWakeflowMaintenanceJournal,
   WakeflowMaintenanceJournalError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
 import {
-  createWakeflowMaintenanceExecutionPlan,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
-import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
-const OPERATION_ID =
-  "maintenance_operation_11111111-1111-4111-8111-111111111111";
+const OPERATION_ID = "maintenance_operation_11111111-1111-4111-8111-111111111111";
 
 function plan() {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const withoutDigest = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
@@ -49,25 +39,23 @@ function plan() {
     matrixDigest: matrix.matrixDigest,
     coreLayoutInspectionDigest: DIGEST,
     blockerCodes: Object.freeze([]),
-    steps: Object.freeze([Object.freeze({
-      stepId: "authority:config",
-      kind: "publish-config" as const,
-      ownerId: "config-authority",
-      targetKey: "workspace.config-authority",
-      sourceDigest: null,
-      targetDigest: DIGEST,
-      dependsOn: Object.freeze([]),
-    })]),
+    steps: Object.freeze([
+      Object.freeze({
+        stepId: "authority:config",
+        kind: "publish-config" as const,
+        ownerId: "config-authority",
+        targetKey: "workspace.config-authority",
+        sourceDigest: null,
+        targetDigest: DIGEST,
+        dependsOn: Object.freeze([]),
+      }),
+    ]),
   };
   const preview = parseWakeflowStaticMaterializationPreview({
     ...withoutDigest,
     planDigest: computeWakeflowStaticMaterializationPreviewDigest(withoutDigest),
   });
-  return createWakeflowMaintenanceExecutionPlan(
-    preview,
-    codexWorkspaceHostResourceProfile,
-    null,
-  );
+  return createWakeflowMaintenanceExecutionPlan(preview, codexWorkspaceHostResourceProfile, null);
 }
 
 test("prepared maintenance journal binds only operation and exact plan facts", () => {
@@ -94,9 +82,7 @@ test("prepared maintenance journal binds only operation and exact plan facts", (
   });
   const text = renderWakeflowMaintenanceJournal(journal);
   deepEqual(parseWakeflowMaintenanceJournal(JSON.parse(text)), journal);
-  equal(/^sha256:[0-9a-f]{64}$/u.test(
-    computeWakeflowMaintenanceJournalDigest(journal),
-  ), true);
+  equal(/^sha256:[0-9a-f]{64}$/u.test(computeWakeflowMaintenanceJournalDigest(journal)), true);
   deepEqual(createWakeflowMaintenanceJournalResourceDeclaration(OPERATION_ID), {
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: `maintenance.transaction.${OPERATION_ID}`,
@@ -105,8 +91,7 @@ test("prepared maintenance journal binds only operation and exact plan facts", (
     scope: "host-neutral",
     placement: {
       root: { kind: "workspace" },
-      relativePath:
-        `.wakeflow-local/runtime/maintenance/transactions/${OPERATION_ID}.journal.json`,
+      relativePath: `.wakeflow-local/runtime/maintenance/transactions/${OPERATION_ID}.journal.json`,
     },
     tracking: { disposition: "ignored", privacy: "runtime-private" },
     nodePolicy: {
@@ -118,22 +103,14 @@ test("prepared maintenance journal binds only operation and exact plan facts", (
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-source-replace",
-        "exact-retire",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });
 });
 
 test("journal advances only through affected, checkpoint and terminal successors", () => {
-  const prepared = createPreparedWakeflowMaintenanceJournal(
-    OPERATION_ID,
-    OTHER_DIGEST,
-    plan(),
-  );
+  const prepared = createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, plan());
   const affected = beginWakeflowMaintenanceJournalStep(prepared);
   equal(affected.state, "executing");
   equal(affected.checkpoint, 0);
@@ -152,11 +129,7 @@ test("journal advances only through affected, checkpoint and terminal successors
 });
 
 test("journal rejects impossible checkpoints and unbounded step identities", () => {
-  const prepared = createPreparedWakeflowMaintenanceJournal(
-    OPERATION_ID,
-    OTHER_DIGEST,
-    plan(),
-  );
+  const prepared = createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, plan());
   for (const candidate of [
     { ...prepared, state: "prepared", checkpoint: 1 },
     { ...prepared, state: "executing", affectedStepId: "core:unknown" },
@@ -185,11 +158,7 @@ test("prepared journal rejects blocked, empty or forged plans", () => {
   ]) {
     let caught: unknown;
     try {
-      createPreparedWakeflowMaintenanceJournal(
-        OPERATION_ID,
-        OTHER_DIGEST,
-        candidate,
-      );
+      createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, candidate);
     } catch (error: unknown) {
       caught = error;
     }
@@ -201,11 +170,7 @@ test("prepared journal rejects blocked, empty or forged plans", () => {
 });
 
 test("journal parser rejects a null desired config digest", () => {
-  const prepared = createPreparedWakeflowMaintenanceJournal(
-    OPERATION_ID,
-    OTHER_DIGEST,
-    plan(),
-  );
+  const prepared = createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, plan());
   let caught: unknown;
   try {
     parseWakeflowMaintenanceJournal({ ...prepared, desiredConfigDigest: null });

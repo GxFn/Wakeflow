@@ -73,9 +73,6 @@
         "tests/workspace/**",
         "tests/governance/**"
       ],
-      "formatter": {
-        "enabled": false
-      },
       "linter": {
         "rules": {
           "complexity": {

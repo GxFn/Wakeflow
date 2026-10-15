@@ -10,9 +10,9 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
+  DemandResultReviewSnapshotError,
   readArchivedDemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
-  DemandResultReviewSnapshotError,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
 import {
@@ -27,13 +27,8 @@ import {
 
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
 
-async function openDemandRoot(
-  workspacePath: string,
-  demandId: string,
-): Promise<RootedDirectory> {
-  return RootedDirectory.open(
-    path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")),
-  );
+async function openDemandRoot(workspacePath: string, demandId: string): Promise<RootedDirectory> {
+  return RootedDirectory.open(path.join(workspacePath, ...demandFinalRootRef(demandId).split("/")));
 }
 
 async function withDemandRoot<Result>(
@@ -63,20 +58,18 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
         if (awaitingTarget?.status !== "awaiting-result") {
           throw new Error("Expected awaiting-result review target.");
         }
-        const loadedTaskPackage = await new TaskPackageProjectionStore(
-          demandRoot,
-        ).load(awaitingTarget.taskPackage.taskPackageId, {
-          expectedTaskPackageDigest: awaitingTarget.taskPackage.digest,
-        });
+        const loadedTaskPackage = await new TaskPackageProjectionStore(demandRoot).load(
+          awaitingTarget.taskPackage.taskPackageId,
+          {
+            expectedTaskPackageDigest: awaitingTarget.taskPackage.digest,
+          },
+        );
         return { awaitingTarget, loadedTaskPackage };
       },
     );
     equal(prepared.awaitingTarget.phase, "host-effect-accepted");
     equal(Object.hasOwn(prepared.awaitingTarget, "targetResult"), false);
-    equal(
-      Object.hasOwn(prepared.awaitingTarget.taskPackage, "objective"),
-      false,
-    );
+    equal(Object.hasOwn(prepared.awaitingTarget.taskPackage, "objective"), false);
 
     await importFixtureImplementationResult(fixture, delivered, { reportedAt: REPORTED_AT });
 
@@ -84,8 +77,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
       fixture.workspacePath,
       fixture.demandId,
       async (demandRoot) => {
-        const before =
-          await inspectDemandEventSourcingRootInventory(demandRoot);
+        const before = await inspectDemandEventSourcingRootInventory(demandRoot);
         const first = await readDemandResultReviewSnapshot(demandRoot);
         const second = await readDemandResultReviewSnapshot(demandRoot);
         const after = await inspectDemandEventSourcingRootInventory(demandRoot);
@@ -107,8 +99,7 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
     equal(target.taskPackage.taskPackageId, fixture.taskPackageId);
     equal(target.targetResult.targetTaskId, fixture.targetTaskId);
     equal(
-      target.taskPackageSourceEvent.streamRevision <
-        target.targetResultSourceEvent.streamRevision,
+      target.taskPackageSourceEvent.streamRevision < target.targetResultSourceEvent.streamRevision,
       true,
     );
     const { reviewUnitDigest, ...unitBasis } = target;
@@ -128,19 +119,15 @@ test("Demand Result Review Snapshot拒绝非RootedDirectory和额外选项", asy
   await rejects(
     readDemandResultReviewSnapshot({}),
     (error: unknown) =>
-      error instanceof DemandResultReviewSnapshotError &&
-      error.reason === "input",
+      error instanceof DemandResultReviewSnapshotError && error.reason === "input",
   );
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-result-review-input-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-result-review-input-"));
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     await rejects(
       readDemandResultReviewSnapshot(root, { extra: true } as never),
       (error: unknown) =>
-        error instanceof DemandResultReviewSnapshotError &&
-        error.reason === "input",
+        error instanceof DemandResultReviewSnapshotError && error.reason === "input",
     );
   } finally {
     await root.close();
@@ -149,17 +136,14 @@ test("Demand Result Review Snapshot拒绝非RootedDirectory和额外选项", asy
 });
 
 test("归档评审快照把未初始化的事件存储归为operation-failure而不是stream", async () => {
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-archived-review-empty-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archived-review-empty-"));
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     // 空的归档 payload 没有提交目录：存储报 not-initialized，不是事件流本身损坏。
     await rejects(
       readArchivedDemandResultReviewSnapshot(root),
       (error: unknown) =>
-        error instanceof DemandResultReviewSnapshotError &&
-        error.reason === "operation-failure",
+        error instanceof DemandResultReviewSnapshotError && error.reason === "operation-failure",
     );
   } finally {
     await root.close();

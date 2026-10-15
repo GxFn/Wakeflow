@@ -34,14 +34,11 @@ export const LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES = parseByteCount(
 
 /** 与需求包记录 Schema 的 `documents.maxItems` 一致：两份主文档加至多十六份附件。 */
 export const LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS = 18;
-export const LEDGER_AUTHORITY_MAXIMUM_TREE_FILES =
-  LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS + 1;
+export const LEDGER_AUTHORITY_MAXIMUM_TREE_FILES = LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS + 1;
 export const LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES = 256;
 export const LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH = 64;
 
 /** 当前进程的有效用户；无 geteuid 的平台（Windows）返回 null，属主检查随之放行。 */
 export function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }

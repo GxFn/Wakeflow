@@ -2,14 +2,14 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
-  renderDemandEventStreamCommit,
   type DemandEventStreamCommit,
+  renderDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import type {
   DemandEventCommitSequence,
@@ -81,21 +81,25 @@ export type DemandFileEventStoreErrorReason =
   | "operation-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Demand File Event Store input is invalid.",
+  input: "Demand File Event Store input is invalid.",
   "root-scope": "Demand File Event Store root changed during the operation.",
   "not-initialized": "Demand File Event Store directories are not initialized.",
   "node-policy": "Demand File Event Store resource violates its private node policy.",
-  "capacity": "Demand File Event Store exceeds its bounded capacity.",
+  capacity: "Demand File Event Store exceeds its bounded capacity.",
   "stream-invalid": "Demand File Event Store commit stream is invalid.",
   "stream-changed": "Demand File Event Store commit stream changed during observation.",
-  "candidate-conflict": "Demand File Event Store append candidate differs from the requested commit.",
+  "candidate-conflict":
+    "Demand File Event Store append candidate differs from the requested commit.",
   "candidate-busy": "Demand File Event Store append candidate is already in progress.",
   "concurrency-conflict": "Demand File Event Store expected stream cursor is stale.",
-  "append-identity-conflict": "Demand File Event Store append reuses an immutable commit or event identity.",
-  "append-provenance-conflict": "Demand File Event Store prepared aggregate does not match the persisted stream tail.",
+  "append-identity-conflict":
+    "Demand File Event Store append reuses an immutable commit or event identity.",
+  "append-provenance-conflict":
+    "Demand File Event Store prepared aggregate does not match the persisted stream tail.",
   "commit-uncertain": "Demand File Event Store commit point cannot be proven exact.",
-  "cleanup-required": "Demand File Event Store committed but candidate retirement requires recovery.",
-  "aborted": "Demand File Event Store operation was aborted before its next commit point.",
+  "cleanup-required":
+    "Demand File Event Store committed but candidate retirement requires recovery.",
+  aborted: "Demand File Event Store operation was aborted before its next commit point.",
   "operation-failure": "Demand File Event Store operation failed.",
 } as const satisfies Readonly<Record<DemandFileEventStoreErrorReason, string>>;
 
@@ -117,9 +121,7 @@ interface DemandFileEventStoreOptions {
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 export function failDemandFileEventStore(
@@ -142,16 +144,12 @@ export function parseDemandFileEventStoreOptions(
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     failDemandFileEventStore("input", "$options");
   }
@@ -163,9 +161,9 @@ export function assertDemandFileEventStoreDirectory(
   path: string,
 ): void {
   if (
-    node.kind !== "directory"
-    || node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== "directory" ||
+    node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     failDemandFileEventStore("node-policy", path);
   }
@@ -177,10 +175,10 @@ export function assertDemandFileEventStoreFile(
   admittedLinkCounts: readonly bigint[] = [1n],
 ): void {
   if (
-    node.kind !== "file"
-    || node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE
-    || !admittedLinkCounts.includes(node.linkCount)
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== "file" ||
+    node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
+    !admittedLinkCounts.includes(node.linkCount) ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     failDemandFileEventStore("node-policy", path);
   }
@@ -190,6 +188,5 @@ export function sameDemandEventStreamCommit(
   left: Readonly<DemandEventStreamCommit>,
   right: Readonly<DemandEventStreamCommit>,
 ): boolean {
-  return renderDemandEventStreamCommit(left)
-    === renderDemandEventStreamCommit(right);
+  return renderDemandEventStreamCommit(left) === renderDemandEventStreamCommit(right);
 }

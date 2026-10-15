@@ -1,55 +1,34 @@
 import { equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  linkSync,
-  mkdtempSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, linkSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import {
-  parsePortableResourcePath,
-} from "../../../src/foundation/filesystem/portable-resource-path.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  inspectWakeflowWorkspaceGitignore,
-} from "../../../src/workspace/managed-integration/wakeflow-gitignore-inspection.js";
-import {
-  recoverWakeflowWorkspaceGitignoreRecomposition,
-} from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { inspectWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-inspection.js";
 import {
   WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
+import { recoverWakeflowWorkspaceGitignoreRecomposition } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.js";
 import {
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
   WAKEFLOW_GITIGNORE_REF,
 } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -67,10 +46,7 @@ async function fixture(
   t: TestContext,
   source?: string | Uint8Array,
 ): Promise<Readonly<GitFixture>> {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-gitignore-recovery-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-gitignore-recovery-"));
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
     encoding: "utf8",
@@ -92,18 +68,13 @@ async function fixture(
   return Object.freeze({
     absolutePath,
     gitignorePath,
-    lockPath: path.join(
-      absolutePath,
-      WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-    ),
+    lockPath: path.join(absolutePath, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF),
     root,
   });
 }
 
 function request() {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   return Object.freeze({
     matrix,
     expectedMatrixDigest: matrix.matrixDigest,
@@ -112,9 +83,13 @@ function request() {
 }
 
 function writeInactiveLock(lockPath: string): void {
-  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "11111111-1111-4111-8111-111111111111",
-  }), { mode: 0o600 });
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }),
+    { mode: 0o600 },
+  );
 }
 
 async function expectRecoveryError(
@@ -139,10 +114,7 @@ test("Gitignore recovery retires an inactive lock and re-enters normal creation"
   const current = await fixture(t);
   writeInactiveLock(current.lockPath);
 
-  const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(
-    current.root,
-    request(),
-  );
+  const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request());
   equal(recovered.disposition, "recovered");
   equal(/^sha256:[0-9a-f]{64}$/u.test(recovered.retiredLockDigest), true);
   equal(recovered.stageRecovery.observedStageCount, 0);
@@ -171,10 +143,7 @@ test("Gitignore recovery rolls back an inactive single-link replace stage", asyn
     released = true;
     writeInactiveLock(current.lockPath);
 
-    const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(
-      current.root,
-      request(),
-    );
+    const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request());
     equal(recovered.stageRecovery.retiredStageCount, 1);
     equal(recovered.stageRecovery.settledTargetCount, 0);
     equal(recovered.recomposition.disposition, "replaced");
@@ -187,10 +156,7 @@ test("Gitignore recovery rolls back an inactive single-link replace stage", asyn
 
 test("Gitignore recovery forward-settles an exact two-link create publication", async (t) => {
   const current = await fixture(t);
-  const inspected = await inspectWakeflowWorkspaceGitignore(
-    current.root,
-    request(),
-  );
+  const inspected = await inspectWakeflowWorkspaceGitignore(current.root, request());
   if (inspected.target === null) throw new Error("Expected Gitignore target.");
   const target = inspected.target;
   const address = issueDurableAtomicFileStageAddress(
@@ -205,18 +171,12 @@ test("Gitignore recovery forward-settles an exact two-link create publication", 
     await createFileCandidateDurably(current.root, stageRef, target.bytes, {
       mode: 0o644,
     });
-    linkSync(
-      path.join(current.absolutePath, stageRef),
-      current.gitignorePath,
-    );
+    linkSync(path.join(current.absolutePath, stageRef), current.gitignorePath);
     releaseDurableAtomicFileStageAddress(address);
     released = true;
     writeInactiveLock(current.lockPath);
 
-    const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(
-      current.root,
-      request(),
-    );
+    const recovered = await recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request());
     equal(recovered.stageRecovery.retiredStageCount, 1);
     equal(recovered.stageRecovery.settledTargetCount, 1);
     equal(recovered.recomposition.disposition, "current");
@@ -251,10 +211,7 @@ test("Gitignore recovery preserves foreign stage and distinguishes absent or act
       writeInactiveLock(current.lockPath);
 
       await expectRecoveryError(
-        () => recoverWakeflowWorkspaceGitignoreRecomposition(
-          current.root,
-          request(),
-        ),
+        () => recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request()),
         "recovery-required",
         "$stages",
       );
@@ -269,10 +226,7 @@ test("Gitignore recovery preserves foreign stage and distinguishes absent or act
   await t.test("absent lock", async (subtest) => {
     const current = await fixture(subtest);
     await expectRecoveryError(
-      () => recoverWakeflowWorkspaceGitignoreRecomposition(
-        current.root,
-        request(),
-      ),
+      () => recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request()),
       "recovery-not-required",
       "$lock",
     );
@@ -282,8 +236,12 @@ test("Gitignore recovery preserves foreign stage and distinguishes absent or act
     const current = await fixture(subtest);
     let enter: (() => void) | undefined;
     let release: (() => void) | undefined;
-    const entered = new Promise<void>((resolve) => { enter = resolve; });
-    const released = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const holder = withRootedExclusiveFileLock(
       current.root,
       WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
@@ -295,10 +253,7 @@ test("Gitignore recovery preserves foreign stage and distinguishes absent or act
     await entered;
     try {
       await expectRecoveryError(
-        () => recoverWakeflowWorkspaceGitignoreRecomposition(
-          current.root,
-          request(),
-        ),
+        () => recoverWakeflowWorkspaceGitignoreRecomposition(current.root, request()),
         "recovery-required",
         "$lock",
       );

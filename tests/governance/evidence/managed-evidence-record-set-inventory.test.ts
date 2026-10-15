@@ -1,30 +1,24 @@
 import { equal, rejects } from "node:assert/strict";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
+  DemandEventSourcingRootAuthorityError,
   loadDemandEventSourcingRootAuthority,
   loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication,
-  DemandEventSourcingRootAuthorityError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import {
-  inspectDemandEventSourcingRootInventory,
   DemandEventSourcingRootInventoryError,
+  inspectDemandEventSourcingRootInventory,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
+import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import {
   createManagedEvidenceManifest,
   renderManagedEvidenceManifest,
@@ -39,12 +33,11 @@ import {
   retireManagedEvidencePublicationTransactionJournal,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import {
-  managedEvidencePublicationStageRef,
-  managedEvidenceRecordRootRef,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,
+  managedEvidencePublicationStageRef,
+  managedEvidenceRecordRootRef,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
-import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -55,8 +48,8 @@ import {
   readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 import {
-  createManagedEvidencePublicationTransactionFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT as CONTENT,
+  createManagedEvidencePublicationTransactionFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS as IDS,
 } from "./managed-evidence-publication.fixture.js";
 
@@ -107,15 +100,12 @@ async function expectInventoryFailure(
   await rejects(
     inspectDemandEventSourcingRootInventory(root, { phase }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingRootInventoryError &&
-      error.reason === "tree-shape",
+      error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
   );
 }
 
 test("Managed Evidence Root Inventory分类journal、stage、final并关闭健康Manifest顶层", async () => {
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-managed-evidence-inventory-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-managed-evidence-inventory-"));
   createDemandRoot(fixtureRoot);
   const root = await RootedDirectory.open(fixtureRoot);
   try {
@@ -145,10 +135,7 @@ test("Managed Evidence Root Inventory分类journal、stage、final并关闭健�
     inventory = await inspectDemandEventSourcingRootInventory(root, {
       phase: "managed-evidence-publication",
     });
-    equal(
-      inventory.managedEvidence.publication?.physicalState,
-      "stage-incomplete",
-    );
+    equal(inventory.managedEvidence.publication?.physicalState, "stage-incomplete");
 
     const unknown = path.join(physical(fixtureRoot, stageRef), "foreign.txt");
     writeFileSync(unknown, "foreign\n", { mode: 0o600 });
@@ -156,35 +143,20 @@ test("Managed Evidence Root Inventory分类journal、stage、final并关闭健�
     rmSync(unknown);
 
     rmSync(physical(fixtureRoot, stageRef), { recursive: true });
-    materializeRecordTree(
-      fixtureRoot,
-      stageRef,
-      renderManagedEvidenceManifest(manifest),
-      CONTENT,
-    );
+    materializeRecordTree(fixtureRoot, stageRef, renderManagedEvidenceManifest(manifest), CONTENT);
     inventory = await inspectDemandEventSourcingRootInventory(root, {
       phase: "managed-evidence-publication",
     });
-    equal(
-      inventory.managedEvidence.publication?.physicalState,
-      "stage-complete",
-    );
+    equal(inventory.managedEvidence.publication?.physicalState, "stage-complete");
 
     const finalRef = managedEvidenceRecordRootRef(IDS.evidence);
-    renameSync(
-      physical(fixtureRoot, stageRef),
-      physical(fixtureRoot, finalRef),
-    );
+    renameSync(physical(fixtureRoot, stageRef), physical(fixtureRoot, finalRef));
     inventory = await inspectDemandEventSourcingRootInventory(root, {
       phase: "managed-evidence-publication",
     });
     equal(inventory.managedEvidence.publication?.physicalState, "final");
     equal(inventory.managedEvidence.recordCount, 1);
-    const payload = path.join(
-      physical(fixtureRoot, finalRef),
-      "payload",
-      "content",
-    );
+    const payload = path.join(physical(fixtureRoot, finalRef), "payload", "content");
     writeFileSync(payload, "changed evidence\n");
     await expectInventoryFailure(root, "managed-evidence-publication");
     writeFileSync(payload, CONTENT);
@@ -195,22 +167,13 @@ test("Managed Evidence Root Inventory分类journal、stage、final并关闭健�
     equal(inventory.transactionCount, 0);
     equal(inventory.managedEvidence.recordCount, 1);
     equal(inventory.artifactCount, 1);
-    equal(
-      inventory.managedEvidence.records[0]?.manifestDigest,
-      manifest.manifestDigest,
-    );
-    equal(
-      inventory.managedEvidence.records[0]?.payloadVerification,
-      "deferred",
-    );
+    equal(inventory.managedEvidence.records[0]?.manifestDigest, manifest.manifestDigest);
+    equal(inventory.managedEvidence.records[0]?.payloadVerification, "deferred");
 
     writeFileSync(payload, "changed evidence\n");
     inventory = await inspectDemandEventSourcingRootInventory(root);
     equal(inventory.managedEvidence.recordCount, 1);
-    equal(
-      inventory.managedEvidence.records[0]?.payloadVerification,
-      "deferred",
-    );
+    equal(inventory.managedEvidence.records[0]?.payloadVerification, "deferred");
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -247,9 +210,7 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
     mkdirSync(physical(demandRootPath, MANAGED_EVIDENCE_ROOT_REF), {
       mode: 0o700,
     });
-    const finalRef = managedEvidenceRecordRootRef(
-      capturePlan.manifest.evidenceId,
-    );
+    const finalRef = managedEvidenceRecordRootRef(capturePlan.manifest.evidenceId);
     materializeRecordTree(
       demandRootPath,
       finalRef,
@@ -266,11 +227,10 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         error.path === "$managed-evidence",
     );
 
-    const stored =
-      await createManagedEvidencePublicationTransactionJournal(
-        demandRoot,
-        transaction,
-      );
+    const stored = await createManagedEvidencePublicationTransactionJournal(
+      demandRoot,
+      transaction,
+    );
     await rejects(
       loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication(
         demandRoot,
@@ -283,9 +243,7 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         error.path === "$managed-evidence",
     );
     rmSync(physical(demandRootPath, finalRef), { recursive: true });
-    const stageRef = managedEvidencePublicationStageRef(
-      capturePlan.manifest.evidenceId,
-    );
+    const stageRef = managedEvidencePublicationStageRef(capturePlan.manifest.evidenceId);
     materializeRecordTree(
       demandRootPath,
       stageRef,
@@ -299,22 +257,17 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         { audit: true },
       );
     equal(
-      transactionAuthority.inventory.managedEvidence.publication
-        ?.physicalState,
+      transactionAuthority.inventory.managedEvidence.publication?.physicalState,
       "stage-complete",
     );
-    equal(
-      transactionAuthority.aggregate.state.managedEvidence,
-      undefined,
-    );
+    equal(transactionAuthority.aggregate.state.managedEvidence, undefined);
 
     await executeDemandEventSourcingCommand(
       new DemandEventSourcingRepository(demandRoot),
       deriveManagedEvidencePublicationEventSourcingCommand(transaction),
       {
         commitId: transaction.demandEventSourcingAppend.commitId,
-        expectedStreamRevision:
-          transaction.demandEventSourcingAppend.expectedStreamRevision,
+        expectedStreamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
       },
     );
     transactionAuthority =
@@ -324,40 +277,26 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         { audit: true },
       );
     equal(
-      transactionAuthority.aggregate.state.managedEvidence?.[0]
-        ?.manifestDigest,
+      transactionAuthority.aggregate.state.managedEvidence?.[0]?.manifestDigest,
       capturePlan.manifest.manifestDigest,
     );
-    renameSync(
-      physical(demandRootPath, stageRef),
-      physical(demandRootPath, finalRef),
-    );
+    renameSync(physical(demandRootPath, stageRef), physical(demandRootPath, finalRef));
     transactionAuthority =
       await loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication(
         demandRoot,
         ledgerStore,
         { audit: true },
       );
-    equal(
-      transactionAuthority.inventory.managedEvidence.publication
-        ?.physicalState,
-      "final",
-    );
+    equal(transactionAuthority.inventory.managedEvidence.publication?.physicalState, "final");
     await rejects(
       loadDemandEventSourcingRootAuthority(demandRoot, ledgerStore),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootAuthorityError &&
-        error.reason === "inventory",
+        error instanceof DemandEventSourcingRootAuthorityError && error.reason === "inventory",
     );
-    await retireManagedEvidencePublicationTransactionJournal(
-      demandRoot,
-      stored,
-    );
-    const loaded = await loadDemandEventSourcingRootAuthority(
-      demandRoot,
-      ledgerStore,
-      { audit: true },
-    );
+    await retireManagedEvidencePublicationTransactionJournal(demandRoot, stored);
+    const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, ledgerStore, {
+      audit: true,
+    });
     equal(loaded.inventory.managedEvidence.recordCount, 1);
     equal(
       loaded.aggregate.state.managedEvidence?.[0]?.manifestDigest,
@@ -377,10 +316,7 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
       },
       { clock: () => capturePlan.manifest.capturedAt },
     );
-    const manifestPath = path.join(
-      physical(demandRootPath, finalRef),
-      "manifest.json",
-    );
+    const manifestPath = path.join(physical(demandRootPath, finalRef), "manifest.json");
     writeFileSync(manifestPath, renderManagedEvidenceManifest(foreignManifest));
     await rejects(
       loadDemandEventSourcingRootAuthority(demandRoot, ledgerStore),
@@ -389,23 +325,15 @@ test("健康Root Authority要求final记录与Managed Evidence Event selector精
         error.reason === "closure" &&
         error.path === "$managed-evidence",
     );
-    writeFileSync(
-      manifestPath,
-      renderManagedEvidenceManifest(capturePlan.manifest),
-    );
+    writeFileSync(manifestPath, renderManagedEvidenceManifest(capturePlan.manifest));
     writeFileSync(
       path.join(physical(demandRootPath, finalRef), "payload", "content"),
       "changed after publication\n",
     );
-    const deferred = await loadDemandEventSourcingRootAuthority(
-      demandRoot,
-      ledgerStore,
-      { audit: true },
-    );
-    equal(
-      deferred.inventory.managedEvidence.records[0]?.payloadVerification,
-      "deferred",
-    );
+    const deferred = await loadDemandEventSourcingRootAuthority(demandRoot, ledgerStore, {
+      audit: true,
+    });
+    equal(deferred.inventory.managedEvidence.records[0]?.payloadVerification, "deferred");
   } finally {
     if (demandRoot !== undefined) await demandRoot.close();
     if (ledgerRoot !== undefined) await ledgerRoot.close();

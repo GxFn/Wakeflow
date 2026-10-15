@@ -1,18 +1,18 @@
-import type { WakeflowControllerProductDefectRemediationAuthorization as AuthorizationWire } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
-import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowControllerProductDefectRemediationAuthorization as AuthorizationWire } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
+import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -20,9 +20,9 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createUuidV4,
@@ -33,24 +33,24 @@ import {
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
+  parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
 import type { TestImplementationBaseline } from "../tasking/task-package.js";
 import {
-  parseControllerTestReviewDecision,
-  ControllerTestReviewDecisionError,
   type ControllerTestReviewDecision,
+  ControllerTestReviewDecisionError,
+  parseControllerTestReviewDecision,
 } from "./controller-test-review-decision.js";
 
 /**
@@ -61,12 +61,10 @@ import {
  * 也不允许Test窗口修复产品；它由决定器在同一提交随决定事件派生（§13.87 D5）。
  */
 
-const AUTHORIZATION_KIND =
-  "WakeflowControllerProductDefectRemediationAuthorization" as const;
+const AUTHORIZATION_KIND = "WakeflowControllerProductDefectRemediationAuthorization" as const;
 const AUTHORIZATION_SCHEMA_VERSION = 1 as const;
 const AUTHORIZATION_ID_PREFIX = "product-defect-remediation_";
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const STEP_ID_PATTERN = /^ts-[1-9][0-9]?$/u;
 
 export interface ProductDefectRemediationRouteSource {
@@ -162,10 +160,8 @@ export type ControllerProductDefectRemediationAuthorizationErrorReason =
 
 const ERROR_MESSAGES = {
   json: "Controller Product Defect Remediation Authorization is not passive JSON data.",
-  schema:
-    "Controller Product Defect Remediation Authorization does not satisfy its Schema.",
-  identifier:
-    "Controller Product Defect Remediation Authorization contains an invalid identity.",
+  schema: "Controller Product Defect Remediation Authorization does not satisfy its Schema.",
+  identifier: "Controller Product Defect Remediation Authorization contains an invalid identity.",
   digest:
     "Controller Product Defect Remediation Authorization contains an invalid or inconsistent digest.",
   position:
@@ -174,8 +170,7 @@ const ERROR_MESSAGES = {
   text: "Controller Product Defect Remediation Authorization contains invalid text.",
   decision:
     "Controller Product Defect Remediation Authorization requires an exact escalate{product-defect} Test Decision.",
-  relation:
-    "Controller Product Defect Remediation Authorization sources are inconsistent.",
+  relation: "Controller Product Defect Remediation Authorization sources are inconsistent.",
   representation:
     "Controller Product Defect Remediation Authorization bytes are not deterministic.",
 } as const satisfies Readonly<
@@ -184,17 +179,12 @@ const ERROR_MESSAGES = {
 
 /** 产品缺陷修复授权无法形成严格领域值时的稳定错误。 */
 export class ControllerProductDefectRemediationAuthorizationError extends Error {
-  override readonly name =
-    "ControllerProductDefectRemediationAuthorizationError";
-  readonly code =
-    "wakeflow-controller-product-defect-remediation-authorization" as const;
+  override readonly name = "ControllerProductDefectRemediationAuthorizationError";
+  readonly code = "wakeflow-controller-product-defect-remediation-authorization" as const;
   readonly reason: ControllerProductDefectRemediationAuthorizationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ControllerProductDefectRemediationAuthorizationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ControllerProductDefectRemediationAuthorizationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -252,10 +242,7 @@ function instant(value: unknown, path: string): UtcInstant {
   }
 }
 
-function streamRevision(
-  value: unknown,
-  path: string,
-): DemandEventStreamRevision {
+function streamRevision(value: unknown, path: string): DemandEventStreamRevision {
   try {
     return parseDemandEventStreamRevision(value, path);
   } catch (error: unknown) {
@@ -318,22 +305,11 @@ function parseBaseline(
 ): Readonly<TestImplementationBaseline> {
   return Object.freeze({
     targetTaskId: id(value.targetTaskId, "target-task", `${path}/targetTaskId`),
-    taskPackageId: id(
-      value.taskPackageId,
-      "task-package",
-      `${path}/taskPackageId`,
-    ),
-    taskPackageDigest: digest(
-      value.taskPackageDigest,
-      `${path}/taskPackageDigest`,
-    ),
+    taskPackageId: id(value.taskPackageId, "task-package", `${path}/taskPackageId`),
+    taskPackageDigest: digest(value.taskPackageDigest, `${path}/taskPackageDigest`),
     repositoryId: id(value.repositoryId, "repository", `${path}/repositoryId`),
     windowId: id(value.windowId, "window", `${path}/windowId`),
-    targetResultId: id(
-      value.targetResultId,
-      "target-result",
-      `${path}/targetResultId`,
-    ),
+    targetResultId: id(value.targetResultId, "target-result", `${path}/targetResultId`),
     resultDigest: digest(value.resultDigest, `${path}/resultDigest`),
     targetReviewDecisionId: id(
       value.targetReviewDecisionId,
@@ -351,10 +327,7 @@ function parseAffectedTarget(
   return Object.freeze({
     baseline: parseBaseline(value.baseline, `${path}/baseline`),
     failedStepIds: admitStepIds(value.failedStepIds, `${path}/failedStepIds`),
-    correctionObjective: text(
-      value.correctionObjective,
-      `${path}/correctionObjective`,
-    ),
+    correctionObjective: text(value.correctionObjective, `${path}/correctionObjective`),
   });
 }
 
@@ -382,20 +355,10 @@ function parseSource(
   value: Readonly<AuthorizationWire["source"]>,
 ): Readonly<ControllerProductDefectRemediationAuthorization["source"]> {
   return Object.freeze({
-    reviewSnapshotDigest: digest(
-      value.reviewSnapshotDigest,
-      "$/source/reviewSnapshotDigest",
-    ),
+    reviewSnapshotDigest: digest(value.reviewSnapshotDigest, "$/source/reviewSnapshotDigest"),
     stateDigest: digest(value.stateDigest, "$/source/stateDigest"),
-    streamRevision: streamRevision(
-      value.streamRevision,
-      "$/source/streamRevision",
-    ),
-    testTargetTaskId: id(
-      value.testTargetTaskId,
-      "target-task",
-      "$/source/testTargetTaskId",
-    ),
+    streamRevision: streamRevision(value.streamRevision, "$/source/streamRevision"),
+    testTargetTaskId: id(value.testTargetTaskId, "target-task", "$/source/testTargetTaskId"),
     testTaskPackage: Object.freeze({
       taskPackageId: id(
         value.testTaskPackage.taskPackageId,
@@ -407,21 +370,14 @@ function parseSource(
         "$/source/testTaskPackage/taskPackageDigest",
       ),
     }),
-    testAttemptId: id(
-      value.testAttemptId,
-      "test-attempt",
-      "$/source/testAttemptId",
-    ),
+    testAttemptId: id(value.testAttemptId, "test-attempt", "$/source/testAttemptId"),
     targetResult: Object.freeze({
       targetResultId: id(
         value.targetResult.targetResultId,
         "target-result",
         "$/source/targetResult/targetResultId",
       ),
-      resultDigest: digest(
-        value.targetResult.resultDigest,
-        "$/source/targetResult/resultDigest",
-      ),
+      resultDigest: digest(value.targetResult.resultDigest, "$/source/targetResult/resultDigest"),
     }),
     testReviewDecision: Object.freeze({
       targetReviewDecisionId: id(
@@ -458,10 +414,8 @@ function assertRelations(
     const baseline = target.baseline;
     if (
       (index > 0 &&
-        compareText(
-          affectedTargets[index - 1]!.baseline.targetTaskId,
-          baseline.targetTaskId,
-        ) >= 0) ||
+        compareText(affectedTargets[index - 1]!.baseline.targetTaskId, baseline.targetTaskId) >=
+          0) ||
       targetTaskIds.has(baseline.targetTaskId) ||
       taskPackageIds.has(baseline.taskPackageId) ||
       repositoryIds.has(baseline.repositoryId) ||
@@ -470,8 +424,7 @@ function assertRelations(
       baseline.targetTaskId === source.testTargetTaskId ||
       baseline.taskPackageId === source.testTaskPackage.taskPackageId ||
       baseline.targetResultId === source.targetResult.targetResultId ||
-      baseline.targetReviewDecisionId ===
-        source.testReviewDecision.targetReviewDecisionId
+      baseline.targetReviewDecisionId === source.testReviewDecision.targetReviewDecisionId
     ) {
       fail("relation", `${path}/baseline`);
     }
@@ -491,14 +444,8 @@ function assertRelations(
 }
 
 function authorizationBasis(
-  value: Omit<
-    ControllerProductDefectRemediationAuthorization,
-    "authorizationDigest"
-  >,
-): Omit<
-  ControllerProductDefectRemediationAuthorization,
-  "authorizationDigest"
-> {
+  value: Omit<ControllerProductDefectRemediationAuthorization, "authorizationDigest">,
+): Omit<ControllerProductDefectRemediationAuthorization, "authorizationDigest"> {
   return {
     kind: AUTHORIZATION_KIND,
     schemaVersion: AUTHORIZATION_SCHEMA_VERSION,
@@ -550,25 +497,15 @@ export function parseControllerProductDefectRemediationAuthorization(
     ),
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
-    controllerWindowId: id(
-      wire.controllerWindowId,
-      "window",
-      "$/controllerWindowId",
-    ),
+    controllerWindowId: id(wire.controllerWindowId, "window", "$/controllerWindowId"),
     source,
     failedSteps,
     affectedTargets: admittedTargets,
     boundary: "existing-task-packages-only",
-    authorizationRationale: text(
-      wire.authorizationRationale,
-      "$/authorizationRationale",
-    ),
+    authorizationRationale: text(wire.authorizationRationale, "$/authorizationRationale"),
     authorizedAt,
   });
-  const authorizationDigest = digest(
-    wire.authorizationDigest,
-    "$/authorizationDigest",
-  );
+  const authorizationDigest = digest(wire.authorizationDigest, "$/authorizationDigest");
   if (computeCanonicalJsonSha256Digest(basis) !== authorizationDigest) {
     fail("digest", "$/authorizationDigest");
   }
@@ -584,10 +521,7 @@ function normalizeRouteSource(
       "$input/routeSource/reviewSnapshotDigest",
     ),
     stateDigest: digest(value.stateDigest, "$input/routeSource/stateDigest"),
-    streamRevision: streamRevision(
-      value.streamRevision,
-      "$input/routeSource/streamRevision",
-    ),
+    streamRevision: streamRevision(value.streamRevision, "$input/routeSource/streamRevision"),
   });
 }
 
@@ -616,21 +550,19 @@ function deriveAffectedTargets(
   if (decision.escalation?.classification !== "product-defect") {
     fail("decision", "$input/decision/escalation");
   }
-  const targets = decision.escalation.remediation.affectedTargets.map(
-    (target, index) => {
-      const path = `$input/decision/escalation/remediation/affectedTargets/${index}`;
-      const baseline = baselines.get(target.targetTaskId);
-      if (baseline === undefined) fail("relation", `${path}/targetTaskId`);
-      return Object.freeze({
-        baseline,
-        failedStepIds: admitStepIds(
-          [...target.failedStepIds].sort(compareStepId),
-          `${path}/failedStepIds`,
-        ),
-        correctionObjective: target.correctionObjective,
-      });
-    },
-  );
+  const targets = decision.escalation.remediation.affectedTargets.map((target, index) => {
+    const path = `$input/decision/escalation/remediation/affectedTargets/${index}`;
+    const baseline = baselines.get(target.targetTaskId);
+    if (baseline === undefined) fail("relation", `${path}/targetTaskId`);
+    return Object.freeze({
+      baseline,
+      failedStepIds: admitStepIds(
+        [...target.failedStepIds].sort(compareStepId),
+        `${path}/failedStepIds`,
+      ),
+      correctionObjective: target.correctionObjective,
+    });
+  });
   const sorted = [...targets].sort((left, right) =>
     compareText(left.baseline.targetTaskId, right.baseline.targetTaskId),
   );
@@ -676,10 +608,7 @@ export function createControllerProductDefectRemediationAuthorization(
     ),
     "$input/failedSteps",
   );
-  const admittedTargets = deriveAffectedTargets(
-    decision,
-    normalizeBaselines(input.baselines),
-  );
+  const admittedTargets = deriveAffectedTargets(decision, normalizeBaselines(input.baselines));
   const source = Object.freeze({
     ...routeSource,
     testTargetTaskId: decision.targetTaskId,
@@ -706,8 +635,7 @@ export function createControllerProductDefectRemediationAuthorization(
     }),
   });
   assertRelations(source, failedSteps, admittedTargets);
-  const authorizationRationale =
-    decision.escalation.remediation.authorizationRationale;
+  const authorizationRationale = decision.escalation.remediation.authorizationRationale;
 
   let productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
   try {
@@ -716,10 +644,7 @@ export function createControllerProductDefectRemediationAuthorization(
       createUuidV4(options.uuidFactory),
     );
   } catch (error: unknown) {
-    if (
-      error instanceof UuidV4Error ||
-      error instanceof WakeflowDurableIdError
-    ) {
+    if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
       fail("identifier", "$uuidFactory");
     }
     throw error;
@@ -727,9 +652,7 @@ export function createControllerProductDefectRemediationAuthorization(
   let authorizedAt: UtcInstant;
   try {
     authorizedAt =
-      options.clock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(options.clock);
+      options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;
@@ -762,8 +685,7 @@ function uuidFromAuthorizationId(value: string) {
 export function productDefectRemediationAuthorizedEventId(
   value: unknown,
 ): WakeflowDurableId<"demand-event"> {
-  const authorization =
-    parseControllerProductDefectRemediationAuthorization(value);
+  const authorization = parseControllerProductDefectRemediationAuthorization(value);
   return createWakeflowDurableId(
     "demand-event",
     uuidFromAuthorizationId(authorization.productDefectRemediationId),
@@ -774,17 +696,14 @@ export function productDefectRemediationAuthorizedEventId(
 export function productDefectRemediationAuthorizedCommitId(
   value: unknown,
 ): WakeflowDurableId<"demand-event-commit"> {
-  const authorization =
-    parseControllerProductDefectRemediationAuthorization(value);
+  const authorization = parseControllerProductDefectRemediationAuthorization(value);
   return createWakeflowDurableId(
     "demand-event-commit",
     uuidFromAuthorizationId(authorization.productDefectRemediationId),
   );
 }
 
-export function renderControllerProductDefectRemediationAuthorization(
-  value: unknown,
-): string {
+export function renderControllerProductDefectRemediationAuthorization(value: unknown): string {
   return renderDeterministicJsonDocument(
     parseControllerProductDefectRemediationAuthorization(value),
     "$authorization",
@@ -803,12 +722,8 @@ export function parseControllerProductDefectRemediationAuthorizationDocument(
     }
     throw error;
   }
-  const authorization =
-    parseControllerProductDefectRemediationAuthorization(json);
-  if (
-    renderControllerProductDefectRemediationAuthorization(authorization) !==
-    textValue
-  ) {
+  const authorization = parseControllerProductDefectRemediationAuthorization(json);
+  if (renderControllerProductDefectRemediationAuthorization(authorization) !== textValue) {
     fail("representation", "$authorization");
   }
   return authorization;

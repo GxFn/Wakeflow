@@ -1,29 +1,24 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  DeterministicJsonDocumentError,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+  type DeterministicJsonFileResult,
+  readDeterministicJsonFile,
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  readDeterministicJsonFile,
-  type DeterministicJsonFileResult,
-} from "../../foundation/filesystem/deterministic-json-file.js";
-import {
-  unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
   type ExactRegularFileUnlinkReceipt,
+  unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  sameFileNodeSnapshot,
   type FileNodeSnapshot,
+  sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   RootedDirectory,
@@ -38,20 +33,16 @@ import {
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
-  createManagedEvidencePublicationTransactionResourceDeclaration,
-} from "./managed-evidence-resource-catalog.js";
-import {
   computeManagedEvidencePublicationTransactionDigest,
+  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
+  type ManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionError,
   parseManagedEvidencePublicationTransaction,
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
-  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
-  ManagedEvidencePublicationTransactionError,
-  type ManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
-import {
-  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-} from "./managed-evidence-resource-paths.js";
+import { createManagedEvidencePublicationTransactionResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "./managed-evidence-resource-paths.js";
 
 /**
  * Wakeflow Governance / Evidence：固定Publication Transaction journal的耐久Store。
@@ -99,7 +90,8 @@ const ERROR_MESSAGES = {
   conflict: "Managed evidence publication transaction journal is invalid or changed.",
   capacity: "Managed evidence publication transaction journal exceeds its capacity.",
   aborted: "Managed evidence publication transaction store operation was aborted.",
-  "recovery-required": "Managed evidence publication transaction journal requires explicit recovery.",
+  "recovery-required":
+    "Managed evidence publication transaction journal requires explicit recovery.",
   "operation-failure": "Managed evidence publication transaction store operation failed.",
 } as const satisfies Readonly<
   Record<ManagedEvidencePublicationTransactionStoreErrorReason, string>
@@ -108,15 +100,11 @@ const ERROR_MESSAGES = {
 /** Journal生命周期无法安全证明时的稳定、脱敏错误。 */
 export class ManagedEvidencePublicationTransactionStoreError extends Error {
   override readonly name = "ManagedEvidencePublicationTransactionStoreError";
-  readonly code =
-    "wakeflow-managed-evidence-publication-transaction-store" as const;
+  readonly code = "wakeflow-managed-evidence-publication-transaction-store" as const;
   readonly reason: ManagedEvidencePublicationTransactionStoreErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ManagedEvidencePublicationTransactionStoreErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ManagedEvidencePublicationTransactionStoreErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -132,10 +120,7 @@ const TRANSACTION_MAXIMUM_BYTES = parseByteCount(
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
 );
 
-function fail(
-  reason: ManagedEvidencePublicationTransactionStoreErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidencePublicationTransactionStoreErrorReason, path: string): never {
   throw new ManagedEvidencePublicationTransactionStoreError(reason, path);
 }
 
@@ -178,9 +163,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 function assertJournalNode(node: Readonly<FileNodeSnapshot>): void {
@@ -195,9 +178,7 @@ function assertJournalNode(node: Readonly<FileNodeSnapshot>): void {
   }
 }
 
-function parseExpectedNode(
-  value: unknown,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
     typeof value !== "object" ||
@@ -208,10 +189,7 @@ function parseExpectedNode(
     fail("input", "$expectedNode");
   }
   try {
-    sameFileNodeSnapshot(
-      value as Readonly<FileNodeSnapshot>,
-      value as Readonly<FileNodeSnapshot>,
-    );
+    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
   } catch {
     fail("input", "$expectedNode");
   }
@@ -222,10 +200,9 @@ function admitMutation(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
   recipe: "exclusive-create" | "exact-retire",
 ): void {
-  const declaration =
-    createManagedEvidencePublicationTransactionResourceDeclaration(
-      transaction.manifest.demandId,
-    );
+  const declaration = createManagedEvidencePublicationTransactionResourceDeclaration(
+    transaction.manifest.demandId,
+  );
   try {
     admitWakeflowResourceOperation(declaration.processing, recipe);
   } catch (error: unknown) {
@@ -247,10 +224,7 @@ async function journalNodeOrNull(
       )
     ).node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -261,19 +235,13 @@ async function journalNodeOrNull(
 function mapReadError(error: unknown): never {
   if (error instanceof StableFileReadError) {
     if (error.reason === "aborted") fail("aborted", "$signal");
-    if (
-      error.reason === "root-scope" ||
-      error.reason === "unsupported-platform"
-    ) {
+    if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
       fail("root-scope", "$root");
     }
     if (error.reason === "too-large") fail("capacity", "$transaction");
     fail("conflict", "$transaction");
   }
-  if (
-    error instanceof StrictTextFileError ||
-    error instanceof DeterministicJsonDocumentError
-  ) {
+  if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
     fail("conflict", "$transaction");
   }
   throw error;
@@ -287,23 +255,17 @@ async function readStoredAtNode(
   assertJournalNode(expectedNode);
   let source;
   try {
-    source = await readDeterministicJsonFile(
-      root,
-      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-      {
-        maximumBytes: TRANSACTION_MAXIMUM_BYTES,
-        expectedNode,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    source = await readDeterministicJsonFile(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {
+      maximumBytes: TRANSACTION_MAXIMUM_BYTES,
+      expectedNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     mapReadError(error);
   }
   let transaction: Readonly<ManagedEvidencePublicationTransaction>;
   try {
-    transaction = parseManagedEvidencePublicationTransactionDocument(
-      source.text,
-    );
+    transaction = parseManagedEvidencePublicationTransactionDocument(source.text);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionError) {
       fail("conflict", "$transaction");
@@ -312,8 +274,7 @@ async function readStoredAtNode(
   }
   const stored = Object.freeze({
     transaction,
-    transactionDigest:
-      computeManagedEvidencePublicationTransactionDigest(transaction),
+    transactionDigest: computeManagedEvidencePublicationTransactionDigest(transaction),
     source,
   });
   ISSUED_STORED_TRANSACTIONS.add(stored);
@@ -324,8 +285,10 @@ function sameTransaction(
   left: Readonly<ManagedEvidencePublicationTransaction>,
   right: Readonly<ManagedEvidencePublicationTransaction>,
 ): boolean {
-  return renderManagedEvidencePublicationTransaction(left) ===
-    renderManagedEvidencePublicationTransaction(right);
+  return (
+    renderManagedEvidencePublicationTransaction(left) ===
+    renderManagedEvidencePublicationTransaction(right)
+  );
 }
 
 /** 读取当前固定journal；严格absent返回null，非法或漂移资源失败关闭。 */
@@ -337,9 +300,7 @@ export async function loadManagedEvidencePublicationTransaction(
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
   const node = await journalNodeOrNull(root);
-  return node === null
-    ? null
-    : readStoredAtNode(root, node, options.signal);
+  return node === null ? null : readStoredAtNode(root, node, options.signal);
 }
 
 /** 读取并证明固定journal仍绑定exact Transaction与可选原始node。 */
@@ -368,11 +329,9 @@ export async function requireCurrentManagedEvidencePublicationTransaction(
   );
   if (
     stored === null ||
-    stored.transactionDigest !==
-      computeManagedEvidencePublicationTransactionDigest(transaction) ||
+    stored.transactionDigest !== computeManagedEvidencePublicationTransactionDigest(transaction) ||
     !sameTransaction(stored.transaction, transaction) ||
-    (expectedNode !== undefined &&
-      !sameFileNodeSnapshot(stored.source.node, expectedNode))
+    (expectedNode !== undefined && !sameFileNodeSnapshot(stored.source.node, expectedNode))
   ) {
     fail("conflict", "$transaction");
   }
@@ -419,10 +378,7 @@ export async function createManagedEvidencePublicationTransactionJournal(
   admitMutation(transaction, "exclusive-create");
   const text = renderManagedEvidencePublicationTransaction(transaction);
   const bytes = encodeUtf8(text, "$transaction");
-  if (
-    bytes.byteLength >
-      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES
-  ) {
+  if (bytes.byteLength > MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES) {
     fail("capacity", "$transaction");
   }
   let publication;
@@ -483,11 +439,7 @@ export async function retireManagedEvidencePublicationTransactionJournal(
   admitMutation(storedValue.transaction, "exact-retire");
   let current: Readonly<StoredManagedEvidencePublicationTransaction>;
   try {
-    current = await readStoredAtNode(
-      root,
-      storedValue.source.node,
-      options.signal,
-    );
+    current = await readStoredAtNode(root, storedValue.source.node, options.signal);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
       if (error.reason === "aborted") throw error;

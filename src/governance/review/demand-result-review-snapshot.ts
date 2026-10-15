@@ -1,33 +1,30 @@
 import { types } from "node:util";
 
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import type { TaskPackage } from "../tasking/task-package.js";
-import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
-import type { TargetResult } from "../result/target-result.js";
-import type { ControllerReviewDecision } from "./controller-review-decision.js";
-import type {
-  DemandLifecycle,
-  DemandTargetTaskState,
-} from "../demand/model/demand-aggregate-state.js";
+import {
+  type AuditedDemandTargetResultHistory,
+  DemandEventSourcingRepository,
+  DemandEventSourcingRepositoryError,
+  type DemandTargetResultSourceEvent,
+} from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import type {
   DemandEventCommitSequence,
   DemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
-import {
-  DemandEventSourcingRepository,
-  DemandEventSourcingRepositoryError,
-  type AuditedDemandTargetResultHistory,
-  type DemandTargetResultSourceEvent,
-} from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStoreError } from "../demand/event-sourcing/demand-file-event-store-contract.js";
 import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-file-event-store-reader.js";
+import type {
+  DemandLifecycle,
+  DemandTargetTaskState,
+} from "../demand/model/demand-aggregate-state.js";
+import type { TargetResult } from "../result/target-result.js";
+import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
+import type { TaskPackage } from "../tasking/task-package.js";
+import type { ControllerReviewDecision } from "./controller-review-decision.js";
 
 /**
  * Wakeflow Governance / Review：从Demand Event Stream即时重建的结果审查读模型。
@@ -40,8 +37,7 @@ import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-f
 
 const SNAPSHOT_KIND = "WakeflowDemandResultReviewSnapshot" as const;
 const SNAPSHOT_SCHEMA_VERSION = 1 as const;
-const IMPLEMENTATION_DECISION_KIND =
-  "WakeflowControllerImplementationReviewDecision" as const;
+const IMPLEMENTATION_DECISION_KIND = "WakeflowControllerImplementationReviewDecision" as const;
 
 type AwaitingResultPhase = Exclude<
   DemandTargetTaskState["phase"],
@@ -143,7 +139,11 @@ export interface DemandResultReviewSnapshot {
 }
 
 export type DemandResultReviewSnapshotErrorReason =
-  "input" | "stream" | "relation" | "aborted" | "operation-failure";
+  | "input"
+  | "stream"
+  | "relation"
+  | "aborted"
+  | "operation-failure";
 
 const ERROR_MESSAGES = {
   input: "Demand Result Review Snapshot input is invalid.",
@@ -151,9 +151,7 @@ const ERROR_MESSAGES = {
   relation: "Demand Result Review Snapshot sources are inconsistent.",
   aborted: "Demand Result Review Snapshot was aborted.",
   "operation-failure": "Demand Result Review Snapshot failed.",
-} as const satisfies Readonly<
-  Record<DemandResultReviewSnapshotErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandResultReviewSnapshotErrorReason, string>>;
 
 /** 结果审查读模型无法由当前Event Stream安全重建时的稳定错误。 */
 export class DemandResultReviewSnapshotError extends Error {
@@ -279,9 +277,7 @@ function reproduceDecidedReviewUnitDigest(
       decision:
         entry.decision.kind === IMPLEMENTATION_DECISION_KIND
           ? Object.fromEntries(
-              Object.entries(entry.decision).filter(
-                ([key]) => key !== "anchorEvidence",
-              ),
+              Object.entries(entry.decision).filter(([key]) => key !== "anchorEvidence"),
             )
           : entry.decision,
     })),
@@ -301,8 +297,7 @@ function priorReviewHistory(
     .filter(
       (entry) =>
         entry.decision.targetTaskId === targetTaskId &&
-        (beforeStreamRevision === null ||
-          entry.sourceEvent.streamRevision < beforeStreamRevision),
+        (beforeStreamRevision === null || entry.sourceEvent.streamRevision < beforeStreamRevision),
     )
     .map((entry) =>
       Object.freeze({
@@ -312,8 +307,7 @@ function priorReviewHistory(
     );
   return Object.freeze(
     decisions.sort(
-      (left, right) =>
-        left.sourceEvent.streamRevision - right.sourceEvent.streamRevision,
+      (left, right) => left.sourceEvent.streamRevision - right.sourceEvent.streamRevision,
     ),
   );
 }
@@ -321,8 +315,7 @@ function priorReviewHistory(
 type ResultBearingTarget = Extract<
   DemandTargetTaskState,
   {
-    readonly phase:
-      "result-reported" | "test-result-reported" | ReviewDecidedPhase;
+    readonly phase: "result-reported" | "test-result-reported" | ReviewDecidedPhase;
   }
 >;
 
@@ -349,14 +342,10 @@ function buildTargets(
   sources: Readonly<AuditedDemandTargetResultHistory>,
 ): readonly Readonly<DemandResultReviewTarget>[] {
   const taskPackageById = new Map(
-    sources.taskPackages.map(
-      (source) => [source.taskPackage.taskPackageId, source] as const,
-    ),
+    sources.taskPackages.map((source) => [source.taskPackage.taskPackageId, source] as const),
   );
   const targetResultById = new Map(
-    sources.targetResults.map(
-      (source) => [source.result.targetResultId, source] as const,
-    ),
+    sources.targetResults.map((source) => [source.result.targetResultId, source] as const),
   );
   const reviewDecisionById = new Map(
     sources.targetReviewDecisions.map(
@@ -368,13 +357,11 @@ function buildTargets(
     if (
       taskPackageSource === undefined ||
       taskPackageSource.taskPackage.targetTaskId !== target.targetTaskId ||
-      (taskPackageSource.taskPackage.workType === "test") !==
-        (target.workType === "test") ||
+      (taskPackageSource.taskPackage.workType === "test") !== (target.workType === "test") ||
       taskPackageSource.taskPackage.assignment.windowId !== target.windowId ||
       (taskPackageSource.taskPackage.workType === "implementation" &&
         (target.workType === "test" ||
-          taskPackageSource.taskPackage.assignment.repositoryId !==
-            target.repositoryId)) ||
+          taskPackageSource.taskPackage.assignment.repositoryId !== target.repositoryId)) ||
       (taskPackageSource.taskPackage.workType === "test" && target.workType !== "test")
     ) {
       fail("relation");
@@ -397,22 +384,16 @@ function buildTargets(
     );
     if (
       targetResultSource === undefined ||
-      (targetResultSource.result.workType === "test") !==
-        (target.workType === "test") ||
+      (targetResultSource.result.workType === "test") !== (target.workType === "test") ||
       targetResultSource.result.targetTaskId !== target.targetTaskId ||
       targetResultSource.result.taskPackage.taskPackageId !==
         taskPackageSource.taskPackage.taskPackageId ||
-      targetResultSource.result.taskPackage.digest !==
-        target.taskPackageDigest ||
-      targetResultSource.result.resultDigest !==
-        target.currentDelivery.targetResult.resultDigest
+      targetResultSource.result.taskPackage.digest !== target.taskPackageDigest ||
+      targetResultSource.result.resultDigest !== target.currentDelivery.targetResult.resultDigest
     ) {
       fail("relation");
     }
-    if (
-      target.phase === "result-reported" ||
-      target.phase === "test-result-reported"
-    ) {
+    if (target.phase === "result-reported" || target.phase === "test-result-reported") {
       const reportedBasis = reportedTargetBasis(
         target.targetTaskId,
         taskPackageSource.sourceEvent,
@@ -431,8 +412,7 @@ function buildTargets(
     );
     if (
       decisionSource === undefined ||
-      (decisionSource.decision.kind ===
-        "WakeflowControllerTestReviewDecision") !==
+      (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision") !==
         (target.workType === "test") ||
       decisionSource.decision.targetTaskId !== target.targetTaskId ||
       decisionSource.decision.reviewed.targetResultId !==
@@ -448,11 +428,7 @@ function buildTargets(
       taskPackageSource.taskPackage,
       targetResultSource.sourceEvent,
       targetResultSource.result,
-      priorReviewHistory(
-        sources,
-        target.targetTaskId,
-        decisionSource.sourceEvent.streamRevision,
-      ),
+      priorReviewHistory(sources, target.targetTaskId, decisionSource.sourceEvent.streamRevision),
     );
     const reviewUnitDigest = reproduceDecidedReviewUnitDigest(
       reportedBasis,
@@ -467,9 +443,7 @@ function buildTargets(
       reviewDecision: decisionSource.decision,
     });
   });
-  targets.sort((left, right) =>
-    lexicalCompare(left.targetTaskId, right.targetTaskId),
-  );
+  targets.sort((left, right) => lexicalCompare(left.targetTaskId, right.targetTaskId));
   return Object.freeze(targets);
 }
 
@@ -518,9 +492,9 @@ export async function readDemandResultReviewSnapshot(
   const signal = parseSignal(options);
   let sources: Readonly<AuditedDemandTargetResultHistory>;
   try {
-    sources = await new DemandEventSourcingRepository(
-      rootValue,
-    ).auditTargetResultHistory(signal === undefined ? undefined : { signal });
+    sources = await new DemandEventSourcingRepository(rootValue).auditTargetResultHistory(
+      signal === undefined ? undefined : { signal },
+    );
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRepositoryError) {
       if (error.reason === "input") fail("input");

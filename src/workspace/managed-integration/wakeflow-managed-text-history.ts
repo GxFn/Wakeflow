@@ -45,29 +45,24 @@ export type WakeflowSupportMemoryHistoryInputs = readonly [
 ];
 
 /** 程序指令块（工作区根的 CLAUDE.md / AGENTS.md）：输入同 `createWakeflowProgramInstructionBodyAuthority`。 */
-export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<
-  WakeflowProgramInstructionHistoryInputs
->[] = Object.freeze([]);
+export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowProgramInstructionHistoryInputs>[] =
+  Object.freeze([]);
 
 /** 外部指令块（managed-block 仓库与外部支撑面的指令文件）：输入同 `createWakeflowExternalInstructionBodyAuthority`。 */
-export const WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<
-  WakeflowExternalInstructionHistoryInputs
->[] = Object.freeze([]);
+export const WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowExternalInstructionHistoryInputs>[] =
+  Object.freeze([]);
 
 /** 仓库 `.gitignore` 托管块：输入同 `createWakeflowGitignoreBodyAuthority`。 */
-export const WAKEFLOW_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<
-  WakeflowHostProfilesHistoryInputs
->[] = Object.freeze([]);
+export const WAKEFLOW_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowHostProfilesHistoryInputs>[] =
+  Object.freeze([]);
 
 /** 支撑面 `.gitignore` 托管块：输入同 `createWakeflowSupportGitignoreBodyAuthority`。 */
-export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<
-  WakeflowHostProfilesHistoryInputs
->[] = Object.freeze([]);
+export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowHostProfilesHistoryInputs>[] =
+  Object.freeze([]);
 
 /** 支撑面整文件记忆：输入同 `createWakeflowSupportMemoryAuthority`。 */
-export const WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<
-  WakeflowSupportMemoryHistoryInputs
->[] = Object.freeze([]);
+export const WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowSupportMemoryHistoryInputs>[] =
+  Object.freeze([]);
 
 /**
  * 用相同输入重算历史正文：算不出的（抛错或 null）、与当前渲染相同的、彼此重复的都去掉，按表序返回。

@@ -1,20 +1,20 @@
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
 import type { DeliveryOutcome } from "../../../src/governance/delivery/delivery-outcome.js";
 import {
-  createImplementationTargetResult,
   type CreateImplementationTargetResultInput,
+  createImplementationTargetResult,
 } from "../../../src/governance/result/implementation-target-result.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import type {
+  TargetResult,
+  TargetResultDeliveryBinding,
+} from "../../../src/governance/result/target-result.js";
 import {
   computeTargetResultCallbackPromptDigest,
   deriveTargetResultCallbackId,
   parseTargetResultCallbackRecord,
   type TargetResultCallbackRecord,
 } from "../../../src/governance/result/target-result-callback.js";
-import type {
-  TargetResult,
-  TargetResultDeliveryBinding,
-} from "../../../src/governance/result/target-result.js";
 import type { WorkClaim } from "../../../src/kernel/work-claims.js";
 import {
   createDeliveryEnvelopeFixture,
@@ -35,7 +35,10 @@ export function deliveryBindingFromOutcome(
   }
   return Object.freeze({
     generation: outcome.generation,
-    fence: Object.freeze({ claimId: outcome.fence.claimId, claimDigest: outcome.fence.claimDigest }),
+    fence: Object.freeze({
+      claimId: outcome.fence.claimId,
+      claimDigest: outcome.fence.claimDigest,
+    }),
     outcomeDigest: outcome.outcomeDigest,
     disposition: outcome.disposition,
     readbackStatus: outcome.readback.status,

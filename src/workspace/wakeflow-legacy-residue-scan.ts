@@ -19,7 +19,10 @@ import {
  */
 
 export const WAKEFLOW_LEGACY_SCOPE_MARKER = "<!-- wakeflow:scope:start -->";
-export const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze(["CLAUDE.md", "AGENTS.md"] as const);
+export const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze([
+  "CLAUDE.md",
+  "AGENTS.md",
+] as const);
 export const WAKEFLOW_LEGACY_SETTINGS_FILE_PATHS = Object.freeze([
   ".claude/settings.json",
   ".claude/settings.local.json",
@@ -112,13 +115,22 @@ async function readText(collector: Collector, absolutePath: string): Promise<str
   }
 }
 
-async function scanInstructionFiles(collector: Collector, root: WakeflowLegacyResidueRoot): Promise<void> {
+async function scanInstructionFiles(
+  collector: Collector,
+  root: WakeflowLegacyResidueRoot,
+): Promise<void> {
   for (const name of WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES) {
     const text = await readText(collector, nodePath.join(root.absolutePath, name));
     if (text === null) continue;
     const line = lineOf(text, WAKEFLOW_LEGACY_SCOPE_MARKER);
     if (line === null) continue;
-    push(collector, { root: root.key, kind: "scope-block", path: name, line, detail: WAKEFLOW_LEGACY_SCOPE_MARKER });
+    push(collector, {
+      root: root.key,
+      kind: "scope-block",
+      path: name,
+      line,
+      detail: WAKEFLOW_LEGACY_SCOPE_MARKER,
+    });
   }
 }
 
@@ -128,9 +140,15 @@ function stringArray(value: unknown): readonly string[] | null {
     : null;
 }
 
-async function scanSettingsFiles(collector: Collector, root: WakeflowLegacyResidueRoot): Promise<void> {
+async function scanSettingsFiles(
+  collector: Collector,
+  root: WakeflowLegacyResidueRoot,
+): Promise<void> {
   for (const relative of WAKEFLOW_LEGACY_SETTINGS_FILE_PATHS) {
-    const text = await readText(collector, nodePath.join(root.absolutePath, ...relative.split("/")));
+    const text = await readText(
+      collector,
+      nodePath.join(root.absolutePath, ...relative.split("/")),
+    );
     if (text === null) continue;
     let document: unknown;
     try {
@@ -141,7 +159,8 @@ async function scanSettingsFiles(collector: Collector, root: WakeflowLegacyResid
     }
     if (typeof document !== "object" || document === null || Array.isArray(document)) continue;
     const permissions = (document as Record<string, unknown>).permissions;
-    if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions)) continue;
+    if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions))
+      continue;
     const allow = stringArray((permissions as Record<string, unknown>).allow) ?? [];
     for (const rule of WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES) {
       if (!allow.includes(rule)) continue;
@@ -153,7 +172,8 @@ async function scanSettingsFiles(collector: Collector, root: WakeflowLegacyResid
         detail: rule,
       });
     }
-    const additional = stringArray((permissions as Record<string, unknown>).additionalDirectories) ?? [];
+    const additional =
+      stringArray((permissions as Record<string, unknown>).additionalDirectories) ?? [];
     if (additional.includes(WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY)) {
       push(collector, {
         root: root.key,
@@ -166,10 +186,17 @@ async function scanSettingsFiles(collector: Collector, root: WakeflowLegacyResid
   }
 }
 
-async function scanRootMarkers(collector: Collector, root: WakeflowLegacyResidueRoot): Promise<void> {
+async function scanRootMarkers(
+  collector: Collector,
+  root: WakeflowLegacyResidueRoot,
+): Promise<void> {
   let listing: Awaited<ReturnType<typeof listAbsoluteDirectoryEntryNames>>;
   try {
-    listing = await listAbsoluteDirectoryEntryNames(root.absolutePath, DIRECTORY_MAXIMUM_ENTRIES, "$residue");
+    listing = await listAbsoluteDirectoryEntryNames(
+      root.absolutePath,
+      DIRECTORY_MAXIMUM_ENTRIES,
+      "$residue",
+    );
   } catch (error: unknown) {
     if (error instanceof AbsoluteNodeObservationError) {
       collector.unreadable += 1;
@@ -190,8 +217,14 @@ async function scanRootMarkers(collector: Collector, root: WakeflowLegacyResidue
   if (listing.truncated > 0) collector.unreadable += 1;
 }
 
-async function scanLedgerSibling(collector: Collector, root: WakeflowLegacyResidueRoot): Promise<void> {
-  const sibling = nodePath.join(nodePath.dirname(root.absolutePath), WAKEFLOW_LEGACY_LEDGER_DIRECTORY_NAME);
+async function scanLedgerSibling(
+  collector: Collector,
+  root: WakeflowLegacyResidueRoot,
+): Promise<void> {
+  const sibling = nodePath.join(
+    nodePath.dirname(root.absolutePath),
+    WAKEFLOW_LEGACY_LEDGER_DIRECTORY_NAME,
+  );
   if (collector.seenAbsolute.has(sibling)) return;
   collector.seenAbsolute.add(sibling);
   try {

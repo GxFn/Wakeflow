@@ -1,56 +1,52 @@
 import { types } from "node:util";
-
-import { WakeflowError } from "../../kernel/error.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import type { DirectoryTreeCandidateRetirementReceipt } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { WakeflowError } from "../../kernel/error.js";
 import {
   assertDemandOperationConfigCurrent,
   closeDemandOperationAuthorityContext,
+  type DemandOperationAuthorityContext,
+  DemandOperationAuthorityContextError,
   openDemandOperationAuthorityContext,
   openDemandOperationRoot,
-  DemandOperationAuthorityContextError,
-  type DemandOperationAuthorityContext,
 } from "../demand/demand-operation-authority-context.js";
 import { type DemandEventSourcingAggregate } from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import {
-  openConfiguredManagedEvidenceSourceRoot,
   ManagedEvidenceConfiguredSourceRootError,
+  openConfiguredManagedEvidenceSourceRoot,
 } from "./managed-evidence-configured-source-root.js";
 import type { ManagedEvidencePublicationRecordResult } from "./managed-evidence-publication-record-publisher.js";
 import {
-  materializeManagedEvidencePublicationStage,
   ManagedEvidencePublicationStageMaterializationError,
+  materializeManagedEvidencePublicationStage,
 } from "./managed-evidence-publication-stage-materializer.js";
 import {
-  createManagedEvidencePublicationTransactionJournal,
-  loadManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionStoreError,
-  type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
+  computeManagedEvidencePublicationTransactionDigest,
+  type ManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionError,
+  parseManagedEvidencePublicationTransaction,
+} from "./managed-evidence-publication-transaction.js";
 import {
   appendManagedEvidencePublicationEvent,
   completeManagedEvidencePublicationTransaction,
@@ -58,15 +54,15 @@ import {
   loadCurrentManagedEvidencePublicationTransaction,
   loadManagedEvidencePublicationHealthyAuthority,
   loadManagedEvidencePublicationTransactionAuthority,
-  retireStaleManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionSettlementError,
+  retireStaleManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-settlement.js";
 import {
-  computeManagedEvidencePublicationTransactionDigest,
-  parseManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  type ManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+  createManagedEvidencePublicationTransactionJournal,
+  loadManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionStoreError,
+  type StoredManagedEvidencePublicationTransaction,
+} from "./managed-evidence-publication-transaction-store.js";
 
 /**
  * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的Application/Recovery。
@@ -240,10 +236,7 @@ function parseApplyInput(
   let transactionDigest;
   try {
     transaction = parseManagedEvidencePublicationTransaction(transactionValue);
-    transactionDigest = parseSha256Digest(
-      transactionDigestValue,
-      "$transactionDigest",
-    );
+    transactionDigest = parseSha256Digest(transactionDigestValue, "$transactionDigest");
   } catch (error: unknown) {
     if (
       error instanceof ManagedEvidencePublicationTransactionError ||
@@ -253,10 +246,7 @@ function parseApplyInput(
     }
     throw error;
   }
-  if (
-    computeManagedEvidencePublicationTransactionDigest(transaction) !==
-    transactionDigest
-  ) {
+  if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
     fail("transaction");
   }
   return Object.freeze({ transaction, transactionDigest });
@@ -328,9 +318,7 @@ function mapContextError(error: DemandOperationAuthorityContextError): never {
   fail("demand", error);
 }
 
-function mapStoreError(
-  error: ManagedEvidencePublicationTransactionStoreError,
-): never {
+function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
   if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "transaction-exists") fail("recovery-required", error);
   if (error.reason === "recovery-required") {
@@ -499,9 +487,7 @@ async function openRecoveryRoots(
   }
 }
 
-async function closeRecoveryRoots(
-  roots: Readonly<RecoveryRoots>,
-): Promise<void> {
+async function closeRecoveryRoots(roots: Readonly<RecoveryRoots>): Promise<void> {
   let failure: unknown;
   try {
     await roots.demandRoot.close();
@@ -546,8 +532,7 @@ export class ManagedEvidencePublicationApplicationService {
     let context: Readonly<DemandOperationAuthorityContext> | undefined;
     let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationCompletionResult> | undefined;
-    let publicationAuthority: ManagedEvidencePublicationEffectAuthority =
-      "unchanged";
+    let publicationAuthority: ManagedEvidencePublicationEffectAuthority = "unchanged";
     let failure: unknown;
     try {
       try {
@@ -569,14 +554,13 @@ export class ManagedEvidencePublicationApplicationService {
           error instanceof ManagedEvidencePublicationApplicationServiceError &&
           (error.reason === "config" || error.reason === "demand")
         ) {
-          const completion =
-            await loadCurrentManagedEvidencePublicationTransaction(
-              context.demandRoot,
-              context.ledgerRoot,
-              transaction,
-              transactionDigest,
-              options.signal,
-            );
+          const completion = await loadCurrentManagedEvidencePublicationTransaction(
+            context.demandRoot,
+            context.ledgerRoot,
+            transaction,
+            transactionDigest,
+            options.signal,
+          );
           result = Object.freeze({
             disposition: "completed" as const,
             transaction,
@@ -589,11 +573,7 @@ export class ManagedEvidencePublicationApplicationService {
         }
       }
       if (result === undefined) {
-        await assertConfigCurrent(
-          this.#workspaceRoot,
-          context.config,
-          options.signal,
-        );
+        await assertConfigCurrent(this.#workspaceRoot, context.config, options.signal);
         sourceRoot = await openSourceRoot(
           this.#workspaceRoot,
           context.config,
@@ -605,9 +585,7 @@ export class ManagedEvidencePublicationApplicationService {
           stored = await createManagedEvidencePublicationTransactionJournal(
             context.demandRoot,
             transaction,
-            options.signal === undefined
-              ? undefined
-              : { signal: options.signal },
+            options.signal === undefined ? undefined : { signal: options.signal },
           );
         } catch (error: unknown) {
           if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
@@ -617,12 +595,7 @@ export class ManagedEvidencePublicationApplicationService {
         }
         publicationAuthority = "recoverable";
         if (stored.transactionDigest !== transactionDigest) fail("transaction");
-        await materializeStage(
-          sourceRoot,
-          context.demandRoot,
-          transaction,
-          options.signal,
-        );
+        await materializeStage(sourceRoot, context.demandRoot, transaction, options.signal);
         if (sourceRoot !== null) await closeSourceRoot(sourceRoot);
         sourceRoot = undefined;
         const event = await appendManagedEvidencePublicationEvent(
@@ -630,14 +603,13 @@ export class ManagedEvidencePublicationApplicationService {
           transaction,
           options.signal,
         );
-        const completion =
-          await completeManagedEvidencePublicationTransaction(
-            context.demandRoot,
-            context.ledgerRoot,
-            stored,
-            event.disposition,
-            options.signal,
-          );
+        const completion = await completeManagedEvidencePublicationTransaction(
+          context.demandRoot,
+          context.ledgerRoot,
+          stored,
+          event.disposition,
+          options.signal,
+        );
         result = Object.freeze({
           disposition: "completed" as const,
           transaction: stored.transaction,
@@ -663,14 +635,15 @@ export class ManagedEvidencePublicationApplicationService {
         await closeDemandOperationAuthorityContext(context);
       } catch (error: unknown) {
         if (failure === undefined) {
-          failure = error instanceof DemandOperationAuthorityContextError
-            ? new ManagedEvidencePublicationApplicationServiceError(
-                error.reason === "aborted" ? "aborted" : "demand",
-                error.code,
-                error.reason,
-                publicationAuthority,
-              )
-            : error;
+          failure =
+            error instanceof DemandOperationAuthorityContextError
+              ? new ManagedEvidencePublicationApplicationServiceError(
+                  error.reason === "aborted" ? "aborted" : "demand",
+                  error.code,
+                  error.reason,
+                  publicationAuthority,
+                )
+              : error;
         }
       }
     }
@@ -692,15 +665,10 @@ export class ManagedEvidencePublicationApplicationService {
     let roots: Readonly<RecoveryRoots> | undefined;
     let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationRecoveryResult> | undefined;
-    let publicationAuthority: ManagedEvidencePublicationEffectAuthority =
-      "unknown";
+    let publicationAuthority: ManagedEvidencePublicationEffectAuthority = "unknown";
     let failure: unknown;
     try {
-      roots = await openRecoveryRoots(
-        this.#workspaceRoot,
-        demandId,
-        options.signal,
-      );
+      roots = await openRecoveryRoots(this.#workspaceRoot, demandId, options.signal);
       let stored: Readonly<StoredManagedEvidencePublicationTransaction> | null;
       try {
         stored = await loadManagedEvidencePublicationTransaction(
@@ -714,17 +682,12 @@ export class ManagedEvidencePublicationApplicationService {
         throw error;
       }
       if (stored === null) {
-        await assertConfigCurrent(
-          this.#workspaceRoot,
-          roots.config,
+        await assertConfigCurrent(this.#workspaceRoot, roots.config, options.signal);
+        const loaded = await loadManagedEvidencePublicationHealthyAuthority(
+          roots.demandRoot,
+          roots.ledgerRoot,
           options.signal,
         );
-        const loaded =
-          await loadManagedEvidencePublicationHealthyAuthority(
-            roots.demandRoot,
-            roots.ledgerRoot,
-            options.signal,
-          );
         result = Object.freeze({
           disposition: "healthy" as const,
           loaded,
@@ -733,41 +696,33 @@ export class ManagedEvidencePublicationApplicationService {
       } else {
         publicationAuthority = "recoverable";
         if (stored.transaction.manifest.demandId !== demandId) fail("journal");
-        const authority =
-          await loadManagedEvidencePublicationTransactionAuthority(
+        const authority = await loadManagedEvidencePublicationTransactionAuthority(
           roots.demandRoot,
           roots.ledgerRoot,
           options.signal,
         );
         if (
-          authority.inventory.managedEvidence.publication
-            ?.transactionDigest !== stored.transactionDigest
+          authority.inventory.managedEvidence.publication?.transactionDigest !==
+          stored.transactionDigest
         ) {
           fail("closure");
         }
-        await assertConfigCurrent(
-          this.#workspaceRoot,
-          roots.config,
-          options.signal,
-        );
+        await assertConfigCurrent(this.#workspaceRoot, roots.config, options.signal);
         const existing = await findManagedEvidencePublicationCommit(
           roots.demandRoot,
           stored.transaction,
           options.signal,
         );
         const targetSelector = authority.aggregate.state.managedEvidence?.find(
-          (selector) =>
-            selector.evidenceId === stored.transaction.manifest.evidenceId,
+          (selector) => selector.evidenceId === stored.transaction.manifest.evidenceId,
         );
-        const physicalState =
-          authority.inventory.managedEvidence.publication?.physicalState;
+        const physicalState = authority.inventory.managedEvidence.publication?.physicalState;
         if (existing === null && targetSelector !== undefined) {
           // Event selector存在却找不到Transaction绑定的Commit，不能把stage当作可回滚事实。
           fail("recovery-required");
         }
         if (existing !== null) {
-          const completion =
-            await completeManagedEvidencePublicationTransaction(
+          const completion = await completeManagedEvidencePublicationTransaction(
             roots.demandRoot,
             roots.ledgerRoot,
             stored,
@@ -786,13 +741,12 @@ export class ManagedEvidencePublicationApplicationService {
           (physicalState !== "stage-complete" &&
             !sameConfigRelation(roots.config, stored.transaction))
         ) {
-          const retirement =
-            await retireStaleManagedEvidencePublicationTransaction(
-              roots.demandRoot,
-              roots.ledgerRoot,
-              stored,
-              options.signal,
-            );
+          const retirement = await retireStaleManagedEvidencePublicationTransaction(
+            roots.demandRoot,
+            roots.ledgerRoot,
+            stored,
+            options.signal,
+          );
           result = Object.freeze({
             disposition: "retired-stale" as const,
             transaction: stored.transaction,
@@ -822,14 +776,13 @@ export class ManagedEvidencePublicationApplicationService {
             stored.transaction,
             options.signal,
           );
-          const completion =
-            await completeManagedEvidencePublicationTransaction(
-              roots.demandRoot,
-              roots.ledgerRoot,
-              stored,
-              event.disposition,
-              options.signal,
-            );
+          const completion = await completeManagedEvidencePublicationTransaction(
+            roots.demandRoot,
+            roots.ledgerRoot,
+            stored,
+            event.disposition,
+            options.signal,
+          );
           result = Object.freeze({
             disposition: "completed" as const,
             transaction: stored.transaction,

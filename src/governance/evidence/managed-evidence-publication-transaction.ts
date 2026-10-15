@@ -1,20 +1,20 @@
-import type { WakeflowManagedEvidencePublicationTransaction as TransactionWire } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import type { WakeflowManagedEvidencePublicationTransaction as TransactionWire } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -22,41 +22,38 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandEventSourcingCommandDigest,
-  parseDemandEventSourcingCommand,
   DemandEventSourcingDecisionError,
+  parseDemandEventSourcingCommand,
   type RecordManagedEvidenceCommand,
 } from "../demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
+  parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
 import {
   createManagedEvidenceCapturePlan,
-  parseManagedEvidenceCapturePlan,
-  ManagedEvidenceCapturePlanError,
   type ManagedEvidenceCapturePlan,
+  ManagedEvidenceCapturePlanError,
+  parseManagedEvidenceCapturePlan,
 } from "./managed-evidence-capture-plan.js";
 import {
-  parseManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
   type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifest,
 } from "./managed-evidence-manifest.js";
 import {
-  planManagedEvidenceRecordTree,
-  ManagedEvidenceRecordTreePlanError,
   type ManagedEvidenceRecordTreePlan,
+  ManagedEvidenceRecordTreePlanError,
+  planManagedEvidenceRecordTree,
 } from "./managed-evidence-record-tree-plan.js";
 
 /**
@@ -74,8 +71,7 @@ const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_KIND =
   "wakeflow-managed-evidence-publication-transaction" as const;
 const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_VERSION = 1 as const;
 /** Manifest上限之外为CAS、摘要、typed ID和确定性文档格式保留固定余量。 */
-export const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES =
-  2 * 1024 * 1024;
+export const MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES = 2 * 1024 * 1024;
 
 export interface ManagedEvidencePublicationDemandEventSourcingAppend {
   readonly expectedStreamRevision: DemandEventStreamRevision;
@@ -93,8 +89,7 @@ export interface ManagedEvidencePublicationTransaction {
   readonly capturePlanDigest: Sha256Digest;
   readonly manifest: Readonly<ManagedEvidenceManifest>;
   readonly recordTreePlanDigest: Sha256Digest;
-  readonly demandEventSourcingAppend:
-    Readonly<ManagedEvidencePublicationDemandEventSourcingAppend>;
+  readonly demandEventSourcingAppend: Readonly<ManagedEvidencePublicationDemandEventSourcingAppend>;
 }
 
 export type ManagedEvidencePublicationTransactionErrorReason =
@@ -121,12 +116,11 @@ const ERROR_MESSAGES = {
   "capture-plan": "Managed evidence publication transaction contains an invalid capture plan.",
   manifest: "Managed evidence publication transaction contains an invalid Manifest.",
   "record-plan": "Managed evidence publication transaction cannot derive its record tree plan.",
-  "event-sourcing": "Managed evidence publication transaction contains an invalid Event Sourcing append.",
+  "event-sourcing":
+    "Managed evidence publication transaction contains an invalid Event Sourcing append.",
   relation: "Managed evidence publication transaction fields do not describe one publication.",
   representation: "Managed evidence publication transaction bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<ManagedEvidencePublicationTransactionErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidencePublicationTransactionErrorReason, string>>;
 
 /** Publication transaction准入或关系重建失败时的稳定、脱敏错误。 */
 export class ManagedEvidencePublicationTransactionError extends Error {
@@ -135,37 +129,26 @@ export class ManagedEvidencePublicationTransactionError extends Error {
   readonly reason: ManagedEvidencePublicationTransactionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ManagedEvidencePublicationTransactionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ManagedEvidencePublicationTransactionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-const validateWire =
-  createRuntimeJsonSchemaValidator<TransactionWire>(
-    WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA,
-    [
-      WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA,
-      WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
-  );
-const CREATE_FIELDS = Object.freeze([
-  "capturePlan",
-  "commitId",
-  "eventId",
-] as const);
+const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
+  WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA,
+  [
+    WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA,
+    WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+  ],
+);
+const CREATE_FIELDS = Object.freeze(["capturePlan", "commitId", "eventId"] as const);
 
-function fail(
-  reason: ManagedEvidencePublicationTransactionErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidencePublicationTransactionErrorReason, path: string): never {
   throw new ManagedEvidencePublicationTransactionError(reason, path);
 }
 
@@ -211,10 +194,7 @@ function parseStreamRevision(value: unknown): DemandEventStreamRevision {
     );
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail(
-        "position",
-        "$/demandEventSourcingAppend/expectedStreamRevision",
-      );
+      fail("position", "$/demandEventSourcingAppend/expectedStreamRevision");
     }
     throw error;
   }
@@ -267,13 +247,10 @@ function capturePlanFromTransaction(
     return createManagedEvidenceCapturePlan({
       configDigest: transaction.manifest.recordedBy.configDigest,
       expectedDemand: {
-        streamRevision:
-          transaction.demandEventSourcingAppend.expectedStreamRevision,
+        streamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
         stateDigest: transaction.demandEventSourcingAppend.expectedStateDigest,
-        lastEventId:
-          transaction.demandEventSourcingAppend.expectedLastEventId,
-        lastEventDigest:
-          transaction.demandEventSourcingAppend.expectedLastEventDigest,
+        lastEventId: transaction.demandEventSourcingAppend.expectedLastEventId,
+        lastEventDigest: transaction.demandEventSourcingAppend.expectedLastEventDigest,
       },
       manifest: transaction.manifest,
     });
@@ -303,26 +280,13 @@ function normalizeAppend(
       wire.expectedLastEventDigest,
       "$/demandEventSourcingAppend/expectedLastEventDigest",
     ),
-    eventId: parseId(
-      wire.eventId,
-      "demand-event",
-      "$/demandEventSourcingAppend/eventId",
-    ),
-    commandDigest: parseDigest(
-      wire.commandDigest,
-      "$/demandEventSourcingAppend/commandDigest",
-    ),
-    commitId: parseId(
-      wire.commitId,
-      "demand-event-commit",
-      "$/demandEventSourcingAppend/commitId",
-    ),
+    eventId: parseId(wire.eventId, "demand-event", "$/demandEventSourcingAppend/eventId"),
+    commandDigest: parseDigest(wire.commandDigest, "$/demandEventSourcingAppend/commandDigest"),
+    commitId: parseId(wire.commitId, "demand-event-commit", "$/demandEventSourcingAppend/commitId"),
   });
 }
 
-function assertRelations(
-  transaction: Readonly<ManagedEvidencePublicationTransaction>,
-): void {
+function assertRelations(transaction: Readonly<ManagedEvidencePublicationTransaction>): void {
   const append = transaction.demandEventSourcingAppend;
   const command = buildEventSourcingCommand(transaction.manifest, append.eventId);
   const recordTreePlan = deriveRecordTreePlan(transaction.manifest);
@@ -354,18 +318,10 @@ export function parseManagedEvidencePublicationTransaction(
   const transaction = Object.freeze({
     artifactKind: MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_KIND,
     schemaVersion: MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_VERSION,
-    capturePlanDigest: parseDigest(
-      wire.capturePlanDigest,
-      "$/capturePlanDigest",
-    ),
+    capturePlanDigest: parseDigest(wire.capturePlanDigest, "$/capturePlanDigest"),
     manifest: parseManifest(wire.manifest),
-    recordTreePlanDigest: parseDigest(
-      wire.recordTreePlanDigest,
-      "$/recordTreePlanDigest",
-    ),
-    demandEventSourcingAppend: normalizeAppend(
-      wire.demandEventSourcingAppend,
-    ),
+    recordTreePlanDigest: parseDigest(wire.recordTreePlanDigest, "$/recordTreePlanDigest"),
+    demandEventSourcingAppend: normalizeAppend(wire.demandEventSourcingAppend),
   });
   assertRelations(transaction);
   return transaction;
@@ -399,11 +355,7 @@ export function createManagedEvidencePublicationTransaction(
     throw error;
   }
   const eventId = parseId(input.eventId, "demand-event", "$/eventId");
-  const commitId = parseId(
-    input.commitId,
-    "demand-event-commit",
-    "$/commitId",
-  );
+  const commitId = parseId(input.commitId, "demand-event-commit", "$/commitId");
   const command = buildEventSourcingCommand(capturePlan.manifest, eventId);
   const recordTreePlan = deriveRecordTreePlan(capturePlan.manifest);
   return parseManagedEvidencePublicationTransaction({
@@ -439,14 +391,10 @@ export function deriveManagedEvidencePublicationEventSourcingCommand(
 export function deriveManagedEvidencePublicationRecordTreePlan(
   value: unknown,
 ): Readonly<ManagedEvidenceRecordTreePlan> {
-  return deriveRecordTreePlan(
-    parseManagedEvidencePublicationTransaction(value).manifest,
-  );
+  return deriveRecordTreePlan(parseManagedEvidencePublicationTransaction(value).manifest);
 }
 
-export function renderManagedEvidencePublicationTransaction(
-  value: unknown,
-): string {
+export function renderManagedEvidencePublicationTransaction(value: unknown): string {
   return renderDeterministicJsonDocument(
     parseManagedEvidencePublicationTransaction(value),
     "$transaction",
@@ -472,9 +420,7 @@ export function parseManagedEvidencePublicationTransactionDocument(
   return transaction;
 }
 
-export function computeManagedEvidencePublicationTransactionDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeManagedEvidencePublicationTransactionDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
     parseManagedEvidencePublicationTransaction(value),
     "$transaction",

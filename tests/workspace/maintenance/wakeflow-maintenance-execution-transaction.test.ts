@@ -4,32 +4,21 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
-  realpathSync,
   readdirSync,
+  readFileSync,
+  realpathSync,
   rmSync,
   statSync,
-  readFileSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-  terminalizeWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
   publishWakeflowMaintenanceExecutionIntent,
@@ -42,6 +31,17 @@ import {
   WakeflowMaintenanceExecutionTransactionError,
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
+import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
+import {
+  beginWakeflowMaintenanceJournalStep,
+  completeWakeflowMaintenanceJournalStep,
+  terminalizeWakeflowMaintenanceJournal,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
+import {
+  checkpointWakeflowMaintenanceJournal,
+  publishPreparedWakeflowMaintenanceJournal,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
+import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
@@ -54,15 +54,11 @@ const PROFILES = Object.freeze([
 const UUID = "11111111-1111-4111-8111-111111111111";
 const OTHER_UUID = "22222222-2222-4222-8222-222222222222";
 const THIRD_UUID = "33333333-3333-4333-8333-333333333333";
-const OPERATION_ID = parseWakeflowMaintenanceOperationId(
-  `maintenance_operation_${UUID}`,
-);
+const OPERATION_ID = parseWakeflowMaintenanceOperationId(`maintenance_operation_${UUID}`);
 
 async function fixture(t: TestContext) {
   const absolutePath = realpathSync(
-    mkdtempSync(
-      path.join(os.tmpdir(), "wakeflow-maintenance-execution-transaction-"),
-    ),
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-maintenance-execution-transaction-")),
   );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
@@ -70,8 +66,7 @@ async function fixture(t: TestContext) {
     shell: false,
     windowsHide: true,
   });
-  if (initialized.status !== 0)
-    throw new Error("Cannot initialize fixture Git.");
+  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -134,17 +129,9 @@ async function executeSharedMaintenanceTransaction(
 async function recoverSharedMaintenanceTransaction(
   root: RootedDirectory,
   operationId: unknown,
-  options: Omit<
-    WakeflowMaintenanceExecutionTransactionOptions,
-    "uuidFactory"
-  > = {},
+  options: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ) {
-  return recoverWakeflowMaintenanceExecutionTransaction(
-    root,
-    operationId,
-    undefined,
-    options,
-  );
+  return recoverWakeflowMaintenanceExecutionTransaction(root, operationId, undefined, options);
 }
 
 async function publishPreparedSharedTransaction(
@@ -161,11 +148,7 @@ async function publishPreparedSharedTransaction(
     input,
     desired,
   );
-  const intentSource = await publishWakeflowMaintenanceExecutionIntent(
-    root,
-    context,
-    intent,
-  );
+  const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
   const journalSource = await publishPreparedWakeflowMaintenanceJournal(
     root,
     context,
@@ -179,52 +162,25 @@ test("shared maintenance transaction executes all steps and retires terminal jou
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
-  const completed = await executeSharedMaintenanceTransaction(
-    workspace.root,
-    preview,
-    input,
-    { uuidFactory: () => UUID },
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
+  const completed = await executeSharedMaintenanceTransaction(workspace.root, preview, input, {
+    uuidFactory: () => UUID,
+  });
   equal(completed.status, "completed");
   equal(completed.operationId, OPERATION_ID);
   equal(completed.stepReceipts.length, preview.steps.length);
   equal(completed.stepReceipts.at(-1)?.stepId, "authority:config");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")),
-    false,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")), false);
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")), true);
   equal(
     existsSync(
-      path.join(
-        workspace.absolutePath,
-        ".wakeflow-active",
-        "current",
-        "board",
-        "index.md",
-      ),
+      path.join(workspace.absolutePath, ".wakeflow-active", "current", "board", "index.md"),
     ),
     true,
   );
-  const activeIndexPath = path.join(
-    workspace.absolutePath,
-    ".wakeflow-active/index.md",
-  );
+  const activeIndexPath = path.join(workspace.absolutePath, ".wakeflow-active/index.md");
   const activeStatusPath = path.join(
     workspace.absolutePath,
     ".wakeflow-active/current/workspace-current-status.md",
@@ -233,16 +189,8 @@ test("shared maintenance transaction executes all steps and retires terminal jou
   equal(existsSync(activeStatusPath), true);
   equal(statSync(activeIndexPath).mode & 0o777, 0o600);
   equal(statSync(activeStatusPath).mode & 0o777, 0o600);
-  equal(
-    readFileSync(activeIndexPath, "utf8").includes(
-      "current/board/index.md",
-    ),
-    true,
-  );
-  equal(
-    readFileSync(activeIndexPath, "utf8").includes("workspace-record-map.md"),
-    false,
-  );
+  equal(readFileSync(activeIndexPath, "utf8").includes("current/board/index.md"), true);
+  equal(readFileSync(activeIndexPath, "utf8").includes("workspace-record-map.md"), false);
   equal(
     existsSync(
       path.join(
@@ -295,10 +243,7 @@ test("gate-bound preview rejects drift introduced after the pre-gate preview", a
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   let caught: unknown;
   try {
     await executeSharedMaintenanceTransaction(workspace.root, preview, input, {
@@ -319,10 +264,7 @@ test("gate-bound preview rejects drift introduced after the pre-gate preview", a
     equal(caught.reason, "plan-stale");
     equal(caught.operationId, null);
   }
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    false,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
   deepEqual(
     readdirSync(
       path.join(
@@ -341,10 +283,7 @@ test("maintenance transaction preserves cancellation before durable work", async
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const controller = new AbortController();
   controller.abort();
   let caught: unknown;
@@ -360,10 +299,7 @@ test("maintenance transaction preserves cancellation before durable work", async
     equal(caught.reason, "aborted");
     equal(caught.operationId, null);
   }
-  equal(
-    existsSync(path.join(workspace.absolutePath, ".wakeflow-local")),
-    false,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
 
   caught = undefined;
   try {
@@ -384,16 +320,10 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
   const workspace = await fixture(t);
   const current = desiredConfig();
   const freshInput = request(current);
-  const freshPreview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    freshInput,
-  );
-  await executeSharedMaintenanceTransaction(
-    workspace.root,
-    freshPreview,
-    freshInput,
-    { uuidFactory: () => UUID },
-  );
+  const freshPreview = await previewWakeflowStaticMaterialization(workspace.root, freshInput);
+  await executeSharedMaintenanceTransaction(workspace.root, freshPreview, freshInput, {
+    uuidFactory: () => UUID,
+  });
 
   const changed = configValue();
   (changed.presentation as Record<string, unknown>).language = "zh-Hans";
@@ -403,10 +333,9 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
     workspace.root,
     reconfigureInput,
   );
-  const beforeConfig = statSync(
-    path.join(workspace.absolutePath, "wakeflow.config.json"),
-    { bigint: true },
-  );
+  const beforeConfig = statSync(path.join(workspace.absolutePath, "wakeflow.config.json"), {
+    bigint: true,
+  });
   const reconfigured = await executeSharedMaintenanceTransaction(
     workspace.root,
     reconfigurePreview,
@@ -418,17 +347,15 @@ test("placement-stable reconfigure updates derived memories before Config", asyn
   equal(reconfigured.stepReceipts.length, 4);
   equal(reconfigured.stepReceipts.at(-1)?.stepId, "authority:config");
   equal(
-    readFileSync(
-      path.join(workspace.absolutePath, "AGENTS.md"),
-      "utf8",
-    ).includes("Wakeflow 程序指令"),
+    readFileSync(path.join(workspace.absolutePath, "AGENTS.md"), "utf8").includes(
+      "Wakeflow 程序指令",
+    ),
     true,
   );
   equal(
-    readFileSync(
-      path.join(workspace.absolutePath, "Design", "AGENTS.md"),
-      "utf8",
-    ).includes("Wakeflow Design 支持窗口"),
+    readFileSync(path.join(workspace.absolutePath, "Design", "AGENTS.md"), "utf8").includes(
+      "Wakeflow Design 支持窗口",
+    ),
     true,
   );
   equal(
@@ -522,10 +449,7 @@ test("recovery replays an affected whole-owned root after effect-before-checkpoi
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const plan = sharedExecutionPlan(preview);
   const privateError = new Error("interrupt after Active effect");
   try {
@@ -576,21 +500,12 @@ test("recovery replays an affected whole-owned root after effect-before-checkpoi
   } catch (error: unknown) {
     equal(error, privateError);
   }
-  equal(
-    existsSync(path.join(workspace.absolutePath, ".wakeflow-active")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-active")), true);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.operationId, OPERATION_ID);
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(core.local.status, "idle");
   equal(core.active.status, "present");
@@ -600,10 +515,7 @@ test("recovery creates the journal from an intent-only durable prefix", async (t
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const plan = sharedExecutionPlan(preview);
   const privateError = new Error("interrupt after intent publication");
   try {
@@ -617,12 +529,7 @@ test("recovery creates the journal from an intent-only durable prefix", async (t
         await publishWakeflowMaintenanceExecutionIntent(
           workspace.root,
           context,
-          createWakeflowMaintenanceExecutionIntent(
-            context.operationId,
-            plan,
-            input,
-            desired,
-          ),
+          createWakeflowMaintenanceExecutionIntent(context.operationId, plan, input, desired),
         );
         throw privateError;
       },
@@ -634,39 +541,21 @@ test("recovery creates the journal from an intent-only durable prefix", async (t
     workspace.absolutePath,
     ".wakeflow-local/runtime/maintenance/transactions",
   );
-  equal(
-    existsSync(path.join(transactionRoot, `${OPERATION_ID}.intent.json`)),
-    true,
-  );
-  equal(
-    existsSync(path.join(transactionRoot, `${OPERATION_ID}.journal.json`)),
-    false,
-  );
+  equal(existsSync(path.join(transactionRoot, `${OPERATION_ID}.intent.json`)), true);
+  equal(existsSync(path.join(transactionRoot, `${OPERATION_ID}.journal.json`)), false);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts.length, plan.steps.length);
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
-  equal(
-    (await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status,
-    "idle",
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
+  equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
 });
 
 test("recovery reuses the exact empty requirement board after effect-before-checkpoint", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after requirement board initialization effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -724,27 +613,18 @@ test("recovery reuses the exact empty requirement board after effect-before-chec
   );
   equal(readFileSync(boardPath, "utf8").startsWith("# Requirement Board\n"), true);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.stepId, "active:requirement-board");
   equal(recovered.stepReceipts[0]?.disposition, "current");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("recovery reuses published Active workspace projection without replacement", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after Active projection effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -795,45 +675,29 @@ test("recovery reuses published Active workspace projection without replacement"
   } catch (error: unknown) {
     equal(error, privateError);
   }
-  const indexPath = path.join(
-    workspace.absolutePath,
-    ".wakeflow-active/index.md",
-  );
+  const indexPath = path.join(workspace.absolutePath, ".wakeflow-active/index.md");
   const statusPath = path.join(
     workspace.absolutePath,
     ".wakeflow-active/current/workspace-current-status.md",
   );
-  const before = [indexPath, statusPath].map(
-    (entry) => statSync(entry, { bigint: true }).ino,
-  );
+  const before = [indexPath, statusPath].map((entry) => statSync(entry, { bigint: true }).ino);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.stepId, "active:workspace-projection");
   equal(recovered.stepReceipts[0]?.disposition, "current");
   deepEqual(
-    [indexPath, statusPath].map(
-      (entry) => statSync(entry, { bigint: true }).ino,
-    ),
+    [indexPath, statusPath].map((entry) => statSync(entry, { bigint: true }).ino),
     before,
   );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("recovery reuses the exact Ledger layout after effect-before-checkpoint", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after Ledger layout effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -882,38 +746,21 @@ test("recovery reuses the exact Ledger layout after effect-before-checkpoint", a
   } catch (error: unknown) {
     equal(error, privateError);
   }
-  equal(
-    statSync(path.join(workspace.absolutePath, "Ledger", "requirements")).mode &
-      0o777,
-    0o755,
-  );
-  equal(
-    statSync(path.join(workspace.absolutePath, "Ledger", "transactions")).mode &
-      0o777,
-    0o700,
-  );
+  equal(statSync(path.join(workspace.absolutePath, "Ledger", "requirements")).mode & 0o777, 0o755);
+  equal(statSync(path.join(workspace.absolutePath, "Ledger", "transactions")).mode & 0o777, 0o700);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.stepId, "ledger:layout");
   equal(recovered.stepReceipts[0]?.disposition, "current");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("recovery reuses unregistered Window Runtime after effect-before-checkpoint", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after Window Runtime effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -971,36 +818,24 @@ test("recovery reuses unregistered Window Runtime after effect-before-checkpoint
     "hosts",
     "codex",
   );
-  equal(
-    readdirSync(path.join(hostRoot, "identity", "window-bindings")).length,
-    0,
-  );
+  equal(readdirSync(path.join(hostRoot, "identity", "window-bindings")).length, 0);
   equal(
     readdirSync(path.join(hostRoot, "projections", "window-runtime")).length,
     desired.topology.windows.length,
   );
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.stepId, "host:window-runtime");
   equal(recovered.stepReceipts[0]?.disposition, "current");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("recovery reuses exact Host capability layout after effect-before-checkpoint", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after Host capability effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -1059,33 +894,20 @@ test("recovery reuses exact Host capability layout after effect-before-checkpoin
     "codex",
   );
   equal(readdirSync(path.join(hostRoot, "pods")).length, 0);
-  equal(
-    readdirSync(path.join(hostRoot, "operations", "keep-live", "leases"))
-      .length,
-    0,
-  );
+  equal(readdirSync(path.join(hostRoot, "operations", "keep-live", "leases")).length, 0);
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts[0]?.stepId, "host:capability-layout");
   equal(recovered.stepReceipts[0]?.disposition, "current");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
 test("recovery checkpoints an already-published Config without replacing it", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after Config effect");
   try {
     await withWakeflowMaintenanceGate(
@@ -1136,10 +958,7 @@ test("recovery checkpoints an already-published Config without replacing it", as
   }
   const configPath = path.join(workspace.absolutePath, "wakeflow.config.json");
   const publishedNode = statSync(configPath, { bigint: true });
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts.length, 1);
   equal(recovered.stepReceipts[0]?.stepId, "authority:config");
@@ -1153,10 +972,7 @@ test("recovery retires a terminal journal after intent retirement", async (t) =>
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const privateError = new Error("interrupt after intent retirement");
   try {
     await withWakeflowMaintenanceGate(
@@ -1218,14 +1034,8 @@ test("recovery retires a terminal journal after intent retirement", async (t) =>
     equal(error, privateError);
   }
 
-  const recovered = await recoverSharedMaintenanceTransaction(
-    workspace.root,
-    OPERATION_ID,
-  );
+  const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts.length, 0);
-  equal(
-    (await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status,
-    "idle",
-  );
+  equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
 });

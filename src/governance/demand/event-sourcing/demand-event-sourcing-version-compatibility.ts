@@ -1,6 +1,4 @@
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
   DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS,
@@ -23,8 +21,7 @@ export function computeDemandEventSourcingVersionCompatibilityDigest(): Sha256Di
     eventFamilies: DEMAND_EVENT_SOURCING_EVENT_TYPES.map((eventType) => ({
       eventType,
       currentVersion: DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[eventType],
-      supportedVersions:
-        DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS[eventType],
+      supportedVersions: DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS[eventType],
     })),
     stateModel: {
       currentVersion: DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,

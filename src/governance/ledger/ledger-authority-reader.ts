@@ -1,32 +1,33 @@
-import type {
-  WakeflowLedgerAuthorityMemberReference as MemberReferenceWire,
-} from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import {
-  WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-} from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import type { WakeflowLedgerAuthorityMemberReference as MemberReferenceWire } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
-  readDeterministicJsonFile,
   type DeterministicJsonFileResult,
+  readDeterministicJsonFile,
 } from "../../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -39,18 +40,7 @@ import {
   StableResourceTreeReadError,
 } from "../../foundation/filesystem/stable-resource-tree-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import {
-  computeLedgerAuthorityRecordDigest,
-  parseLedgerAuthorityRecordDocument,
-  LedgerAuthorityRecordError,
-  type LedgerAuthorityRecord,
-} from "./ledger-authority-record.js";
 import {
   LEDGER_AUTHORITY_FAMILY,
   ledgerAuthorityMemberRef,
@@ -59,13 +49,11 @@ import {
   requirementRootRef,
 } from "./ledger-authority-paths.js";
 import {
-  assertLedgerAuthorityNode,
-  throwLedgerAuthorityStoreError as fail,
-  type LedgerAuthorityFileSource,
-  type LedgerAuthorityMemberReference,
-  type LoadedLedgerAuthorityRecord,
-  type ResolvedLedgerAuthorityMember,
-} from "./ledger-authority-store-contract.js";
+  computeLedgerAuthorityRecordDigest,
+  type LedgerAuthorityRecord,
+  LedgerAuthorityRecordError,
+  parseLedgerAuthorityRecordDocument,
+} from "./ledger-authority-record.js";
 import {
   LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
   LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
@@ -74,6 +62,14 @@ import {
   LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES,
   LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
 } from "./ledger-authority-storage-policy.js";
+import {
+  assertLedgerAuthorityNode,
+  throwLedgerAuthorityStoreError as fail,
+  type LedgerAuthorityFileSource,
+  type LedgerAuthorityMemberReference,
+  type LoadedLedgerAuthorityRecord,
+  type ResolvedLedgerAuthorityMember,
+} from "./ledger-authority-store-contract.js";
 
 /**
  * Wakeflow Governance / Ledger：不可变权威目录树读取器与成员引用编解码器。
@@ -83,15 +79,13 @@ import {
  * 摘要和清单闭合关系。
  */
 
-const MEMBER_REFERENCE_ARTIFACT_KIND =
-  "wakeflow-ledger-authority-member-reference" as const;
+const MEMBER_REFERENCE_ARTIFACT_KIND = "wakeflow-ledger-authority-member-reference" as const;
 const MEMBER_REFERENCE_SCHEMA_VERSION = 1 as const;
 
-const validateMemberReference =
-  createRuntimeJsonSchemaValidator<MemberReferenceWire>(
-    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-    [WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
-  );
+const validateMemberReference = createRuntimeJsonSchemaValidator<MemberReferenceWire>(
+  WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+  [WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
+);
 
 function fileSource(
   source: Readonly<StableFileSource>,
@@ -116,9 +110,7 @@ function expectedResourcePaths(
     const segments = splitPortableResourcePath(document.path);
     for (let index = 1; index < segments.length; index += 1) {
       expected.set(
-        parsePortableResourcePath(
-          `${rootRef}/${segments.slice(0, index).join("/")}`,
-        ),
+        parsePortableResourcePath(`${rootRef}/${segments.slice(0, index).join("/")}`),
         "directory",
       );
     }
@@ -130,11 +122,11 @@ function expectedResourcePaths(
 function mapTreeError(error: StableResourceTreeReadError): never {
   if (error.reason === "not-found") fail("not-found", "$record");
   if (
-    error.reason === "entry-limit"
-    || error.reason === "depth-limit"
-    || error.reason === "file-count"
-    || error.reason === "file-bytes"
-    || error.reason === "total-bytes"
+    error.reason === "entry-limit" ||
+    error.reason === "depth-limit" ||
+    error.reason === "file-count" ||
+    error.reason === "file-bytes" ||
+    error.reason === "total-bytes"
   ) {
     fail("capacity", "$record");
   }
@@ -162,10 +154,7 @@ async function readRecordDocument(
       if (error.reason === "too-large") fail("capacity", "$record");
       fail("conflict", "$record");
     }
-    if (
-      error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
-    ) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("record", "$record");
     }
     throw error;
@@ -194,18 +183,11 @@ export async function loadLedgerAuthorityRecord(
     throw error;
   }
   assertLedgerAuthorityNode(tree.treeRootNode, "directory", "$recordRoot");
-  const recordEntry = tree.entries.find(
-    (entry) => entry.resourcePath === `${rootRef}/record.json`,
-  );
+  const recordEntry = tree.entries.find((entry) => entry.resourcePath === `${rootRef}/record.json`);
   if (recordEntry === undefined || recordEntry.node.kind !== "file") {
     fail("conflict", "$record/record.json");
   }
-  const read = await readRecordDocument(
-    root,
-    recordEntry.resourcePath,
-    recordEntry.node,
-    signal,
-  );
+  const read = await readRecordDocument(root, recordEntry.resourcePath, recordEntry.node, signal);
   let record: Readonly<LedgerAuthorityRecord>;
   try {
     record = parseLedgerAuthorityRecordDocument(read.text);
@@ -216,8 +198,8 @@ export async function loadLedgerAuthorityRecord(
   if (record.requirementId !== requirementId) fail("conflict", "$record");
   const expected = expectedResourcePaths(record);
   if (
-    tree.entries.length !== expected.size
-    || tree.entries.some((entry) => {
+    tree.entries.length !== expected.size ||
+    tree.entries.some((entry) => {
       const kind = expected.get(entry.resourcePath);
       return kind === undefined || entry.node.kind !== kind;
     })
@@ -288,40 +270,27 @@ export function parseLedgerAuthorityMemberReference(
   const result = validateMemberReference(json);
   if (!result.ok) fail("input", result.path);
   const recordRef = parseReferencePath(result.value.recordRef, "$/recordRef");
-  const recordDigest = parseReferenceDigest(
-    result.value.recordDigest,
-    "$/recordDigest",
-  );
-  const memberPath = parseReferencePath(
-    result.value.memberPath,
-    "$/memberPath",
-  );
+  const recordDigest = parseReferenceDigest(result.value.recordDigest, "$/recordDigest");
+  const memberPath = parseReferencePath(result.value.memberPath, "$/memberPath");
   if (
-    memberPath.toLowerCase() === "record.json"
-    || memberPath.toLowerCase().startsWith("record.json/")
+    memberPath.toLowerCase() === "record.json" ||
+    memberPath.toLowerCase().startsWith("record.json/")
   ) {
     fail("input", "$/memberPath");
   }
   const memberRef = parseReferencePath(result.value.memberRef, "$/memberRef");
-  const memberDigest = parseReferenceDigest(
-    result.value.memberDigest,
-    "$/memberDigest",
-  );
+  const memberDigest = parseReferenceDigest(result.value.memberDigest, "$/memberDigest");
   let recordId: WakeflowDurableId<"requirement">;
   try {
-    recordId = parseWakeflowDurableIdOfKind(
-      result.value.recordId,
-      "requirement",
-      "$/recordId",
-    );
+    recordId = parseWakeflowDurableIdOfKind(result.value.recordId, "requirement", "$/recordId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("input", "$/recordId");
     throw error;
   }
   const expectedRoot = requirementRootRef(recordId);
   if (
-    recordRef !== `${expectedRoot}/record.json`
-    || memberRef !== `${expectedRoot}/${memberPath}`
+    recordRef !== `${expectedRoot}/record.json` ||
+    memberRef !== `${expectedRoot}/${memberPath}`
   ) {
     fail("input", "$reference");
   }
@@ -370,17 +339,15 @@ export async function resolveLoadedLedgerAuthorityMemberReference(
   reference: Readonly<LedgerAuthorityMemberReference>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ResolvedLedgerAuthorityMember>> {
-  const document = loaded.documents.find(
-    (candidate) => candidate.path === reference.memberPath,
-  );
+  const document = loaded.documents.find((candidate) => candidate.path === reference.memberPath);
   if (
-    loaded.recordRef !== reference.recordRef
-    || loaded.recordDigest !== reference.recordDigest
-    || document === undefined
-    || document.memberRef !== reference.memberRef
-    || document.digest !== reference.memberDigest
-    || document.role !== reference.role
-    || document.mediaType !== reference.mediaType
+    loaded.recordRef !== reference.recordRef ||
+    loaded.recordDigest !== reference.recordDigest ||
+    document === undefined ||
+    document.memberRef !== reference.memberRef ||
+    document.digest !== reference.memberDigest ||
+    document.role !== reference.role ||
+    document.mediaType !== reference.mediaType
   ) {
     fail("conflict", "$reference");
   }

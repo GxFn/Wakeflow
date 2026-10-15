@@ -1,59 +1,52 @@
 import { types } from "node:util";
 
 import {
-  materializeLoadedArtifactTreeTransferCandidate,
   LoadedArtifactTreeTransferCandidateError,
+  materializeLoadedArtifactTreeTransferCandidate,
 } from "../../foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
 import {
-  planLoadedArtifactTreeTransfer,
   LoadedArtifactTreeTransferPlanError,
+  planLoadedArtifactTreeTransfer,
 } from "../../foundation/artifact/loaded-artifact-tree-transfer-plan.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
+import {
+  createFileAtomically,
+  DurableAtomicFileWriteError,
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
+import type { DirectoryTreeCandidateProgress } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
   copyFileToCandidateDurably,
   DurableFileCopyCandidateError,
 } from "../../foundation/filesystem/durable-file-copy-candidate.js";
 import { sameFileNodeIdentity } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  joinDirectoryTreeCandidatePath,
-} from "../../foundation/filesystem/directory-tree-candidate-plan.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import type { DirectoryTreeCandidateProgress } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import {
-  parseManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
   type ManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionError,
+  parseManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
-import {
-  createFileAtomically,
-  DurableAtomicFileWriteError,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
-import {
-  MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME,
-} from "./managed-evidence-resource-paths.js";
-import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
-  parseManagedEvidenceRecordTreePlan,
-  ManagedEvidenceRecordTreePlanError,
   type ManagedEvidenceRecordTreePlan,
+  ManagedEvidenceRecordTreePlanError,
+  parseManagedEvidenceRecordTreePlan,
 } from "./managed-evidence-record-tree-plan.js";
+import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME } from "./managed-evidence-resource-paths.js";
+import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 
 /**
  * Wakeflow Governance / Evidence：Managed Evidence payload的source-specific物化。
@@ -87,25 +80,20 @@ const ERROR_MESSAGES = {
   "stage-conflict": "Managed evidence publication payload conflicts with its stage plan.",
   capacity: "Managed evidence publication payload exceeds its admitted capacity.",
   aborted: "Managed evidence publication payload materialization was aborted.",
-  "recovery-required": "Managed evidence publication payload materialization requires explicit recovery.",
+  "recovery-required":
+    "Managed evidence publication payload materialization requires explicit recovery.",
   "operation-failure": "Managed evidence publication payload could not be materialized safely.",
 } as const satisfies Readonly<
   Record<ManagedEvidencePublicationPayloadMaterializationErrorReason, string>
 >;
 
-export class ManagedEvidencePublicationPayloadMaterializationError
-  extends Error {
-  override readonly name =
-    "ManagedEvidencePublicationPayloadMaterializationError";
-  readonly code =
-    "wakeflow-managed-evidence-publication-payload-materialization" as const;
+export class ManagedEvidencePublicationPayloadMaterializationError extends Error {
+  override readonly name = "ManagedEvidencePublicationPayloadMaterializationError";
+  readonly code = "wakeflow-managed-evidence-publication-payload-materialization" as const;
   readonly reason: ManagedEvidencePublicationPayloadMaterializationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ManagedEvidencePublicationPayloadMaterializationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ManagedEvidencePublicationPayloadMaterializationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -116,9 +104,7 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-const PAYLOAD_REF = parsePortableResourcePath(
-  MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME,
-);
+const PAYLOAD_REF = parsePortableResourcePath(MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME);
 const CONTENT_REF = parsePortableResourcePath("content");
 const PAYLOAD_CONTENT_REF = parsePortableResourcePath(
   `${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/content`,
@@ -166,9 +152,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
-function parseTransaction(
-  value: unknown,
-): Readonly<ManagedEvidencePublicationTransaction> {
+function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
   try {
     return parseManagedEvidencePublicationTransaction(value);
   } catch (error: unknown) {
@@ -179,9 +163,7 @@ function parseTransaction(
   }
 }
 
-function parseRecordPlan(
-  value: unknown,
-): Readonly<ManagedEvidenceRecordTreePlan> {
+function parseRecordPlan(value: unknown): Readonly<ManagedEvidenceRecordTreePlan> {
   try {
     return parseManagedEvidenceRecordTreePlan(value);
   } catch (error: unknown) {
@@ -226,8 +208,7 @@ function assertProgressRelation(
     progress.missingDirectories.some((entry) => !directories.has(entry)) ||
     progress.missingFiles.some((entry) => !files.has(entry)) ||
     (progress.status === "complete" &&
-      (progress.missingDirectories.length !== 0 ||
-        progress.missingFiles.length !== 0)) ||
+      (progress.missingDirectories.length !== 0 || progress.missingFiles.length !== 0)) ||
     (progress.status === "incomplete" &&
       progress.missingDirectories.length === 0 &&
       progress.missingFiles.length === 0)
@@ -266,10 +247,7 @@ async function ensurePayloadRoot(
   progress: Readonly<DirectoryTreeCandidateProgress>,
   signal: AbortSignal | undefined,
 ): Promise<PortableResourcePath> {
-  const payloadRoot = joinDirectoryTreeCandidatePath(
-    plan.candidateRootPath,
-    PAYLOAD_REF,
-  );
+  const payloadRoot = joinDirectoryTreeCandidatePath(plan.candidateRootPath, PAYLOAD_REF);
   if (!progress.missingDirectories.includes(PAYLOAD_REF)) return payloadRoot;
   try {
     await createDirectoryAtomically(demandRoot, payloadRoot, {
@@ -322,12 +300,7 @@ async function materializeFilePayload(
   progress: Readonly<DirectoryTreeCandidateProgress>,
   signal: AbortSignal | undefined,
 ): Promise<readonly PortableResourcePath[]> {
-  const payloadRoot = await ensurePayloadRoot(
-    demandRoot,
-    plan,
-    progress,
-    signal,
-  );
+  const payloadRoot = await ensurePayloadRoot(demandRoot, plan, progress, signal);
   const manifestFile = transaction.manifest.payload.treeManifest.files[0];
   if (
     manifestFile === undefined ||
@@ -477,9 +450,7 @@ async function openTreeSource(
   }
 }
 
-function mapTransferError(
-  error: LoadedArtifactTreeTransferCandidateError,
-): never {
+function mapTransferError(error: LoadedArtifactTreeTransferCandidateError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
@@ -593,11 +564,5 @@ export async function materializeManagedEvidencePublicationPayload(
         progress,
         options.signal,
       )
-    : materializeTreePayload(
-        sourceRootValue,
-        demandRootValue,
-        transaction,
-        plan,
-        options.signal,
-      );
+    : materializeTreePayload(sourceRootValue, demandRootValue, transaction, plan, options.signal);
 }

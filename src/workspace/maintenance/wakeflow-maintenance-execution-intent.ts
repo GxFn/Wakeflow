@@ -1,25 +1,17 @@
 import {
-  WAKEFLOW_CONFIG_SCHEMA,
-} from "../../contracts/generated/configuration/wakeflow-config.generated.js";
-import {
-  WAKEFLOW_SHA256_DIGEST_SCHEMA,
-} from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import {
-  WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
-  type WakeflowMaintenanceExecutionIntent as WakeflowMaintenanceExecutionIntentWire,
-} from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
-import {
-  createWakeflowConfigDocumentValue,
-} from "../../configuration/wakeflow-config-document.js";
-import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
   WakeflowConfigError,
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
+import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
+import { WAKEFLOW_CONFIG_SCHEMA } from "../../contracts/generated/configuration/wakeflow-config.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+  WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
+  type WakeflowMaintenanceExecutionIntent as WakeflowMaintenanceExecutionIntentWire,
+} from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -27,42 +19,38 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../workspace-resource-declaration.js";
-import type {
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowHostMaintenanceContribution,
-  WakeflowHostMaintenanceContributionError,
   type WakeflowHostMaintenanceContribution,
+  WakeflowHostMaintenanceContributionError,
 } from "./wakeflow-host-maintenance-contribution.js";
 import {
   createWakeflowMaintenanceExecutionPlan,
   parseWakeflowMaintenanceExecutionPlan,
-  WakeflowMaintenanceExecutionPlanError,
   type WakeflowMaintenanceExecutionPlan,
+  WakeflowMaintenanceExecutionPlanError,
 } from "./wakeflow-maintenance-execution-plan.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
 import {
   parseWakeflowStaticMaterializationPreview,
   parseWakeflowStaticMaterializationPreviewRequest,
-  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreview,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
 
@@ -79,21 +67,17 @@ export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND =
 export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION = 1 as const;
 
 export interface WakeflowMaintenanceExecutionIntent {
-  readonly artifactKind:
-    typeof WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND;
-  readonly schemaVersion:
-    typeof WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION;
+  readonly artifactKind: typeof WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND;
+  readonly schemaVersion: typeof WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION;
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly desiredConfig: WakeflowConfigModel;
-  readonly currentHostProfile:
-    Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly hostProfiles: readonly [
     Readonly<WakeflowWorkspaceHostResourceProfile>,
     Readonly<WakeflowWorkspaceHostResourceProfile>,
   ];
   readonly sharedPreview: Readonly<WakeflowStaticMaterializationPreview>;
-  readonly hostContribution:
-    Readonly<WakeflowHostMaintenanceContribution> | null;
+  readonly hostContribution: Readonly<WakeflowHostMaintenanceContribution> | null;
   readonly planDigest: Sha256Digest;
 }
 
@@ -118,10 +102,7 @@ const ERROR_MESSAGES = {
   plan: "Wakeflow maintenance execution intent plan sources are invalid.",
   relation: "Wakeflow maintenance execution intent fields are inconsistent.",
   representation: "Wakeflow maintenance execution intent representation is invalid.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceExecutionIntentErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionIntentErrorReason, string>>;
 
 /** Maintenance execution intent 准入失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionIntentError extends Error {
@@ -130,26 +111,19 @@ export class WakeflowMaintenanceExecutionIntentError extends Error {
   readonly reason: WakeflowMaintenanceExecutionIntentErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowMaintenanceExecutionIntentErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowMaintenanceExecutionIntentErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-const validateWire =
-  createRuntimeJsonSchemaValidator<WakeflowMaintenanceExecutionIntentWire>(
-    WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
-    [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
-  );
+const validateWire = createRuntimeJsonSchemaValidator<WakeflowMaintenanceExecutionIntentWire>(
+  WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
+  [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
+);
 
-function fail(
-  reason: WakeflowMaintenanceExecutionIntentErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowMaintenanceExecutionIntentErrorReason, path: string): never {
   throw new WakeflowMaintenanceExecutionIntentError(reason, path);
 }
 
@@ -173,9 +147,7 @@ function normalizeOperationId(value: unknown): WakeflowMaintenanceOperationId {
   }
 }
 
-function normalizePreview(
-  value: unknown,
-): Readonly<WakeflowStaticMaterializationPreview> {
+function normalizePreview(value: unknown): Readonly<WakeflowStaticMaterializationPreview> {
   try {
     return parseWakeflowStaticMaterializationPreview(value);
   } catch (error: unknown) {
@@ -228,9 +200,9 @@ function sortedProfiles(
   Readonly<WakeflowWorkspaceHostResourceProfile>,
 ] {
   // Intent v1把当时完整的两宿主集合写入恢复格式；扩展集合必须新建版本并迁移。
-  const sorted = [...values].sort((left, right) => (
-    left.hostId < right.hostId ? -1 : left.hostId > right.hostId ? 1 : 0
-  ));
+  const sorted = [...values].sort((left, right) =>
+    left.hostId < right.hostId ? -1 : left.hostId > right.hostId ? 1 : 0,
+  );
   if (sorted.length !== 2 || sorted[0] === undefined || sorted[1] === undefined) {
     fail("request", "$/hostProfiles");
   }
@@ -271,11 +243,10 @@ function normalize(
     throw error;
   }
   if (
-    plan.status !== "ready"
-    || plan.steps.length === 0
-    || plan.planDigest !== wire.planDigest
-    || sharedPreview.desiredConfigDigest
-      !== computeWakeflowConfigDigest(desiredConfig)
+    plan.status !== "ready" ||
+    plan.steps.length === 0 ||
+    plan.planDigest !== wire.planDigest ||
+    sharedPreview.desiredConfigDigest !== computeWakeflowConfigDigest(desiredConfig)
   ) {
     fail("relation", "$intent");
   }
@@ -293,20 +264,21 @@ function normalize(
   return Object.freeze({ intent, plan });
 }
 
-function intentRepresentation(
-  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
-): JsonValue {
-  return parseJsonValue({
-    artifactKind: intent.artifactKind,
-    schemaVersion: intent.schemaVersion,
-    operationId: intent.operationId,
-    desiredConfig: createWakeflowConfigDocumentValue(intent.desiredConfig),
-    currentHostProfile: intent.currentHostProfile,
-    hostProfiles: intent.hostProfiles,
-    sharedPreview: intent.sharedPreview,
-    hostContribution: intent.hostContribution,
-    planDigest: intent.planDigest,
-  }, "$intent");
+function intentRepresentation(intent: Readonly<WakeflowMaintenanceExecutionIntent>): JsonValue {
+  return parseJsonValue(
+    {
+      artifactKind: intent.artifactKind,
+      schemaVersion: intent.schemaVersion,
+      operationId: intent.operationId,
+      desiredConfig: createWakeflowConfigDocumentValue(intent.desiredConfig),
+      currentHostProfile: intent.currentHostProfile,
+      hostProfiles: intent.hostProfiles,
+      sharedPreview: intent.sharedPreview,
+      hostContribution: intent.hostContribution,
+      planDigest: intent.planDigest,
+    },
+    "$intent",
+  );
 }
 
 function parseWakeflowMaintenanceExecutionIntentWithPlan(
@@ -360,14 +332,12 @@ export function createWakeflowMaintenanceExecutionIntent(
   }
   const desiredConfig = normalizeConfig(desiredConfigValue);
   if (
-    request.action !== plan.sharedPreview.action
-    || request.currentHostProfile.hostId !== plan.hostId
-    || (
-      request.action !== "reconcile"
-      && request.desiredConfig !== null
-      && computeWakeflowConfigDigest(request.desiredConfig)
-        !== computeWakeflowConfigDigest(desiredConfig)
-    )
+    request.action !== plan.sharedPreview.action ||
+    request.currentHostProfile.hostId !== plan.hostId ||
+    (request.action !== "reconcile" &&
+      request.desiredConfig !== null &&
+      computeWakeflowConfigDigest(request.desiredConfig) !==
+        computeWakeflowConfigDigest(desiredConfig))
   ) {
     fail("relation", "$request");
   }
@@ -385,9 +355,7 @@ export function createWakeflowMaintenanceExecutionIntent(
 }
 
 /** 一次准入并重建恢复执行所需的exact plan与无signal request。 */
-export function reconstructWakeflowMaintenanceExecutionFromIntent(
-  value: unknown,
-): Readonly<{
+export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown): Readonly<{
   readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
   readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
 }> {
@@ -397,9 +365,7 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(
     plan: normalized.plan,
     request: Object.freeze({
       action: intent.sharedPreview.action,
-      desiredConfig: intent.sharedPreview.action === "reconcile"
-        ? null
-        : intent.desiredConfig,
+      desiredConfig: intent.sharedPreview.action === "reconcile" ? null : intent.desiredConfig,
       currentHostProfile: intent.currentHostProfile,
       hostProfiles: intent.hostProfiles,
     }),
@@ -407,18 +373,14 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(
 }
 
 /** 计算immutable intent的语义摘要，供mutable journal绑定。 */
-export function computeWakeflowMaintenanceExecutionIntentDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeWakeflowMaintenanceExecutionIntentDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
     intentRepresentation(parseWakeflowMaintenanceExecutionIntent(value)),
   );
 }
 
 /** 渲染唯一确定性格式化JSON表示。 */
-export function renderWakeflowMaintenanceExecutionIntent(
-  value: unknown,
-): string {
+export function renderWakeflowMaintenanceExecutionIntent(value: unknown): string {
   return renderDeterministicJsonDocument(
     intentRepresentation(parseWakeflowMaintenanceExecutionIntent(value)),
     "$intent",

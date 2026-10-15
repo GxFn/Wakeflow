@@ -1,15 +1,10 @@
 import { types } from "node:util";
-
-import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
-import {
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
@@ -20,26 +15,26 @@ import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../foundation/resource/resource-processing-contract.js";
-import {
-  WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
-  WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
-} from "./workspace-shared-runtime-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
+import {
+  WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
+  WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
+} from "./workspace-shared-runtime-resource-catalog.js";
 
 /** Wakeflow Workspace：shared/coordination/工作声明静态目录链的唯一物化 owner。 */
 
 /** 窗口工作声明目录：路径由内核 `layout.ts` 定义，物化与静态矩阵由本模块声明。 */
-export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION =
-  privateWorkspaceDirectoryDeclaration({
-    declarationId: "coordination.window-work-claims-root",
-    family: "coordination",
-    ownerId: "shared-runtime-layout",
-    scope: "host-neutral",
-    relativePath: WORK_CLAIMS_ROOT_REF,
-  });
+export const WORK_CLAIMS_ROOT_RESOURCE_DECLARATION = privateWorkspaceDirectoryDeclaration({
+  declarationId: "coordination.window-work-claims-root",
+  family: "coordination",
+  ownerId: "shared-runtime-layout",
+  scope: "host-neutral",
+  relativePath: WORK_CLAIMS_ROOT_REF,
+});
 
 export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS = Object.freeze([
   WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,
@@ -54,8 +49,7 @@ export const WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST: Sha256Digest 
     declarations: WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS,
   });
 
-export type WakeflowSharedCoordinationLayoutStatus =
-  "missing" | "partial" | "current";
+export type WakeflowSharedCoordinationLayoutStatus = "missing" | "partial" | "current";
 
 export interface WakeflowSharedCoordinationLayoutInspection {
   readonly status: WakeflowSharedCoordinationLayoutStatus;
@@ -93,9 +87,7 @@ const ERROR_MESSAGES = {
   "root-scope": "Shared Coordination Layout lost workspace scope.",
   aborted: "Shared Coordination Layout operation was aborted.",
   "operation-failure": "Shared Coordination Layout materialization failed.",
-} as const satisfies Readonly<
-  Record<WakeflowSharedCoordinationLayoutErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowSharedCoordinationLayoutErrorReason, string>>;
 
 /** Shared Coordination Layout检查或物化失败时的稳定错误。 */
 export class WakeflowSharedCoordinationLayoutError extends Error {
@@ -104,27 +96,19 @@ export class WakeflowSharedCoordinationLayoutError extends Error {
   readonly reason: WakeflowSharedCoordinationLayoutErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowSharedCoordinationLayoutErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowSharedCoordinationLayoutErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowSharedCoordinationLayoutErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowSharedCoordinationLayoutErrorReason, path: string): never {
   throw new WakeflowSharedCoordinationLayoutError(reason, path);
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
@@ -175,9 +159,7 @@ function parseOptions(
   }
   return Object.freeze({
     mode: record.mode as "fresh" | "recover" | "ensure",
-    ...(record.signal === undefined
-      ? {}
-      : { signal: record.signal as AbortSignal }),
+    ...(record.signal === undefined ? {} : { signal: record.signal as AbortSignal }),
   });
 }
 
@@ -192,10 +174,7 @@ async function optionalDirectory(
     assertDirectory(observation.node, `$layout/${ref}`);
     return true;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
     if (error instanceof WakeflowSharedCoordinationLayoutError) throw error;
@@ -216,8 +195,7 @@ export async function inspectWakeflowSharedCoordinationLayout(
   const status =
     existingDirectoryCount === 0
       ? "missing"
-      : existingDirectoryCount ===
-          WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS.length
+      : existingDirectoryCount === WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS.length
         ? "current"
         : "partial";
   const basis = {
@@ -250,17 +228,12 @@ export async function materializeWakeflowSharedCoordinationLayout(
     const ref = declaration.placement.relativePath;
     if (ref === null) fail("authority", "$declarations");
     try {
-      admitWakeflowResourceOperation(
-        declaration.processing,
-        "materialize-directory",
-      );
+      admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
       const result = await materializeDirectoryPath(root, ref, {
         mode: 0o700,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
-      const target = result.segments.find(
-        (entry) => entry.resourcePath === ref,
-      );
+      const target = result.segments.find((entry) => entry.resourcePath === ref);
       if (target?.disposition === "created") createdDirectoryCount += 1;
     } catch (error: unknown) {
       if (error instanceof WakeflowResourceProcessingContractError) {

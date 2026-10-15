@@ -1,8 +1,4 @@
-import {
-  deepEqual,
-  equal,
-  rejects,
-} from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   lstatSync,
@@ -22,18 +18,18 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { renderManagedEvidenceManifest } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 import {
-  materializeManagedEvidencePublicationStage,
   ManagedEvidencePublicationStageMaterializationError,
   type ManagedEvidencePublicationStageMaterializationErrorReason,
+  materializeManagedEvidencePublicationStage,
 } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
-import {
-  createManagedEvidencePublicationTransactionJournal,
-  loadManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import {
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationRecordTreePlan,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+import {
+  createManagedEvidencePublicationTransactionJournal,
+  loadManagedEvidencePublicationTransaction,
+} from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import { inspectManagedEvidenceRecordSetInventory } from "../../../src/governance/evidence/managed-evidence-record-set-inventory.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
@@ -55,9 +51,7 @@ interface MaterializerFixture {
 }
 
 async function createMaterializerFixture(): Promise<MaterializerFixture> {
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-evidence-stage-materializer-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-evidence-stage-materializer-"));
   const sourcePath = path.join(fixtureRoot, "source");
   const demandPath = path.join(fixtureRoot, "demand");
   mkdirSync(sourcePath, { mode: 0o700 });
@@ -73,9 +67,7 @@ async function createMaterializerFixture(): Promise<MaterializerFixture> {
   });
 }
 
-async function cleanupMaterializerFixture(
-  fixture: MaterializerFixture,
-): Promise<void> {
+async function cleanupMaterializerFixture(fixture: MaterializerFixture): Promise<void> {
   await fixture.sourceRoot.close();
   await fixture.demandRoot.close();
   rmSync(fixture.fixtureRoot, { recursive: true, force: true });
@@ -110,8 +102,7 @@ test("file source先物化payload、最后发布Manifest并可脱离source重用
   const fixture = await createMaterializerFixture();
   try {
     const sourceFile = createFileSource(fixture);
-    const { transaction } =
-      createManagedEvidencePublicationTransactionFixture();
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
     const stored = await createManagedEvidencePublicationTransactionJournal(
       fixture.demandRoot,
       transaction,
@@ -127,11 +118,7 @@ test("file source先物化payload、最后发布Manifest并可脱离source重用
     deepEqual(result.copiedPayloadFiles, ["content"]);
     equal(
       readFileSync(
-        path.join(
-          physical(fixture.demandPath, plan.candidateRootPath),
-          "payload",
-          "content",
-        ),
+        path.join(physical(fixture.demandPath, plan.candidateRootPath), "payload", "content"),
       ).toString("utf8"),
       "managed evidence\n",
     );
@@ -155,8 +142,7 @@ test("file source先物化payload、最后发布Manifest并可脱离source重用
     equal(reused.manifestPublication, "existing");
     deepEqual(reused.copiedPayloadFiles, []);
     equal(
-      (await loadManagedEvidencePublicationTransaction(fixture.demandRoot))
-        ?.transactionDigest,
+      (await loadManagedEvidencePublicationTransaction(fixture.demandRoot))?.transactionDigest,
       stored.transactionDigest,
     );
   } finally {
@@ -168,12 +154,8 @@ test("payload已关闭而Manifest缺失时无需重读已变化source即可前�
   const fixture = await createMaterializerFixture();
   try {
     const sourceFile = createFileSource(fixture);
-    const { transaction } =
-      createManagedEvidencePublicationTransactionFixture();
-    await createManagedEvidencePublicationTransactionJournal(
-      fixture.demandRoot,
-      transaction,
-    );
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
+    await createManagedEvidencePublicationTransactionJournal(fixture.demandRoot, transaction);
     const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
     const stage = physical(fixture.demandPath, plan.candidateRootPath);
     mkdirSync(physical(fixture.demandPath, MANAGED_EVIDENCE_ROOT_REF), {
@@ -248,10 +230,7 @@ test("tree source复用整树identity与streaming copy并保留Manifest executab
   const fixture = await createMaterializerFixture();
   try {
     const transaction = createTreeTransaction(fixture);
-    await createManagedEvidencePublicationTransactionJournal(
-      fixture.demandRoot,
-      transaction,
-    );
+    await createManagedEvidencePublicationTransactionJournal(fixture.demandRoot, transaction);
     const result = await materializeManagedEvidencePublicationStage(
       fixture.sourceRoot,
       fixture.demandRoot,
@@ -263,21 +242,14 @@ test("tree source复用整树identity与streaming copy并保留Manifest executab
     equal(lstatSync(path.join(stage, "payload", "README.md")).mode & 0o777, 0o600);
     equal(lstatSync(path.join(stage, "payload", "bin", "run.sh")).mode & 0o777, 0o700);
     const managedRootNode = (
-      await fixture.demandRoot.inspectExistingResource(
-        MANAGED_EVIDENCE_ROOT_REF,
-      )
+      await fixture.demandRoot.inspectExistingResource(MANAGED_EVIDENCE_ROOT_REF)
     ).node;
-    const journal = await loadManagedEvidencePublicationTransaction(
-      fixture.demandRoot,
-    );
+    const journal = await loadManagedEvidencePublicationTransaction(fixture.demandRoot);
     if (journal === null) throw new Error("Expected journal.");
-    const inventory = await inspectManagedEvidenceRecordSetInventory(
-      fixture.demandRoot,
-      {
-        expectedRootNode: managedRootNode,
-        expectedTransactionNode: journal.source.node,
-      },
-    );
+    const inventory = await inspectManagedEvidenceRecordSetInventory(fixture.demandRoot, {
+      expectedRootNode: managedRootNode,
+      expectedTransactionNode: journal.source.node,
+    });
     equal(inventory.publication?.physicalState, "stage-complete");
   } finally {
     await cleanupMaterializerFixture(fixture);
@@ -288,12 +260,8 @@ test("Manifest marker提前出现的partial stage失败关闭且不会补写payl
   const fixture = await createMaterializerFixture();
   try {
     createFileSource(fixture);
-    const { transaction } =
-      createManagedEvidencePublicationTransactionFixture();
-    await createManagedEvidencePublicationTransactionJournal(
-      fixture.demandRoot,
-      transaction,
-    );
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
+    await createManagedEvidencePublicationTransactionJournal(fixture.demandRoot, transaction);
     const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
     const stage = physical(fixture.demandPath, plan.candidateRootPath);
     mkdirSync(physical(fixture.demandPath, MANAGED_EVIDENCE_ROOT_REF), {
@@ -335,10 +303,7 @@ test("缺失journal或source漂移时不会发布Manifest", async () => {
     );
     equal(existsSync(physical(fixture.demandPath, MANAGED_EVIDENCE_ROOT_REF)), false);
 
-    await createManagedEvidencePublicationTransactionJournal(
-      fixture.demandRoot,
-      transaction,
-    );
+    await createManagedEvidencePublicationTransactionJournal(fixture.demandRoot, transaction);
     writeFileSync(sourceFile, "drifted\n");
     await expectMaterializationError(
       materializeManagedEvidencePublicationStage(

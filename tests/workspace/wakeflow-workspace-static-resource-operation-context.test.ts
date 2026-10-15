@@ -1,12 +1,8 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
   findWakeflowWorkspaceStaticResourceByDeclarationId,
@@ -34,15 +30,9 @@ function expectContextError(
   } catch (error: unknown) {
     caught = error;
   }
-  equal(
-    caught instanceof WakeflowWorkspaceStaticResourceOperationContextError,
-    true,
-  );
+  equal(caught instanceof WakeflowWorkspaceStaticResourceOperationContextError, true);
   if (caught instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-    equal(
-      caught.code,
-      "wakeflow-workspace-static-resource-operation-context",
-    );
+    equal(caught.code, "wakeflow-workspace-static-resource-operation-context");
     equal(caught.reason, reason);
     equal(caught.path, path);
   }
@@ -55,21 +45,15 @@ test("Static Resource Operation Context binds one real Host Instruction recipe",
   ] as const) {
     const matrix = createWakeflowWorkspaceStaticResourceMatrix(profile);
     const declarationId = `host-runtime.${hostId}.instruction`;
-    const declaration = findWakeflowWorkspaceStaticResourceByDeclarationId(
-      matrix,
-      declarationId,
-    );
+    const declaration = findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, declarationId);
     if (declaration === null) {
       throw new Error("Host instruction declaration is unavailable.");
     }
-    const context = createWakeflowWorkspaceStaticResourceOperationContext(
-      matrix,
-      {
-        expectedMatrixDigest: matrix.matrixDigest,
-        declarationId,
-        recipe: "exact-source-recompose",
-      },
-    );
+    const context = createWakeflowWorkspaceStaticResourceOperationContext(matrix, {
+      expectedMatrixDigest: matrix.matrixDigest,
+      declarationId,
+      recipe: "exact-source-recompose",
+    });
     deepEqual(context, {
       kind: "WakeflowWorkspaceStaticResourceOperationContext",
       hostId,
@@ -84,14 +68,11 @@ test("Static Resource Operation Context binds one real Host Instruction recipe",
     notEqual(context.declaration, declaration);
     assertDeepFrozen(context);
     deepEqual(
-      createWakeflowWorkspaceStaticResourceOperationContext(
-        matrix,
-        {
-          expectedMatrixDigest: matrix.matrixDigest,
-          declarationId,
-          recipe: "exact-source-recompose",
-        },
-      ),
+      createWakeflowWorkspaceStaticResourceOperationContext(matrix, {
+        expectedMatrixDigest: matrix.matrixDigest,
+        declarationId,
+        recipe: "exact-source-recompose",
+      }),
       context,
     );
     deepEqual(Object.keys(context).sort(), [
@@ -105,9 +86,7 @@ test("Static Resource Operation Context binds one real Host Instruction recipe",
 });
 
 test("Static Resource Operation Context rejects stale, forged, or illegal admission", () => {
-  const codex = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const codex = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const claude = createWakeflowWorkspaceStaticResourceMatrix(
     claudeCodeWorkspaceHostResourceProfile,
   );
@@ -118,18 +97,20 @@ test("Static Resource Operation Context rejects stale, forged, or illegal admiss
   } as const;
 
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(codex, {
-      ...instructionRequest,
-      expectedMatrixDigest: claude.matrixDigest,
-    }),
+    () =>
+      createWakeflowWorkspaceStaticResourceOperationContext(codex, {
+        ...instructionRequest,
+        expectedMatrixDigest: claude.matrixDigest,
+      }),
     "matrix-changed",
     "$request.expectedMatrixDigest",
   );
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(codex, {
-      ...instructionRequest,
-      declarationId: "host-runtime.claude-code.instruction",
-    }),
+    () =>
+      createWakeflowWorkspaceStaticResourceOperationContext(codex, {
+        ...instructionRequest,
+        declarationId: "host-runtime.claude-code.instruction",
+      }),
     "declaration-not-found",
     "$request.declarationId",
   );
@@ -138,35 +119,34 @@ test("Static Resource Operation Context rejects stale, forged, or illegal admiss
     ["exact-source-recompose", "exact-source-replace"],
   ]) {
     expectContextError(
-      () => createWakeflowWorkspaceStaticResourceOperationContext(codex, {
-        ...instructionRequest,
-        recipe,
-      }),
+      () =>
+        createWakeflowWorkspaceStaticResourceOperationContext(codex, {
+          ...instructionRequest,
+          recipe,
+        }),
       "operation",
       "$request.recipe",
     );
   }
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(claude, {
-      expectedMatrixDigest: claude.matrixDigest,
-      declarationId: "host-runtime.claude-code.statusline-asset",
-      recipe: "exact-source-recompose",
-    }),
+    () =>
+      createWakeflowWorkspaceStaticResourceOperationContext(claude, {
+        expectedMatrixDigest: claude.matrixDigest,
+        declarationId: "host-runtime.claude-code.statusline-asset",
+        recipe: "exact-source-recompose",
+      }),
     "operation",
     "$request.recipe",
   );
 
   const forgedMatrix = Object.freeze({
     ...codex,
-    declarations: Object.freeze(codex.declarations.filter((entry) => (
-      entry.declarationId !== "workspace.config-authority"
-    ))),
+    declarations: Object.freeze(
+      codex.declarations.filter((entry) => entry.declarationId !== "workspace.config-authority"),
+    ),
   });
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(
-      forgedMatrix,
-      instructionRequest,
-    ),
+    () => createWakeflowWorkspaceStaticResourceOperationContext(forgedMatrix, instructionRequest),
     "matrix",
     "$matrix",
   );
@@ -179,24 +159,21 @@ test("Static Resource Operation Context rejects stale, forged, or illegal admiss
     },
   });
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(
-      matrixProxy,
-      instructionRequest,
-    ),
+    () => createWakeflowWorkspaceStaticResourceOperationContext(matrixProxy, instructionRequest),
     "matrix",
     "$matrix",
   );
-  const requestProxy = new Proxy({ ...instructionRequest }, {
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
+  const requestProxy = new Proxy(
+    { ...instructionRequest },
+    {
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
     },
-  });
+  );
   expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(
-      codex,
-      requestProxy,
-    ),
+    () => createWakeflowWorkspaceStaticResourceOperationContext(codex, requestProxy),
     "input",
     "$request",
   );
@@ -209,14 +186,11 @@ test("Static Resource Operation Context binds the shared .gitignore consumer", (
     claudeCodeWorkspaceHostResourceProfile,
   ]) {
     const matrix = createWakeflowWorkspaceStaticResourceMatrix(profile);
-    const context = createWakeflowWorkspaceStaticResourceOperationContext(
-      matrix,
-      {
-        expectedMatrixDigest: matrix.matrixDigest,
-        declarationId: "workspace.ignore-integration",
-        recipe: "exact-source-recompose",
-      },
-    );
+    const context = createWakeflowWorkspaceStaticResourceOperationContext(matrix, {
+      expectedMatrixDigest: matrix.matrixDigest,
+      declarationId: "workspace.ignore-integration",
+      recipe: "exact-source-recompose",
+    });
     equal(context.declaration.family, "workspace");
     equal(context.declaration.ownerId, "workspace-ignore-integration");
     equal(context.declaration.scope, "host-neutral");

@@ -1,13 +1,12 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
+import { DEMAND_EVENT_SOURCING_EVENT_TYPES } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
 import {
   assertSupportedDemandEventSourcingStateModelVersion,
-  parseDemandEventSourcingStateModelVersion,
-  DemandEventSourcingStateVersionError,
   DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
+  DemandEventSourcingStateVersionError,
+  parseDemandEventSourcingStateModelVersion,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-state-version.js";
-import { DEMAND_EVENT_SOURCING_EVENT_TYPES } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
 
 test("Demand Event Sourcing state-model version 独立于 event version", () => {
   equal(
@@ -40,8 +39,5 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
       error instanceof DemandEventSourcingStateVersionError &&
       error.reason === "unsupported-version",
   );
-  throws(
-    () => parseDemandEventSourcingStateModelVersion(0),
-    DemandEventSourcingStateVersionError,
-  );
+  throws(() => parseDemandEventSourcingStateModelVersion(0), DemandEventSourcingStateVersionError);
 });

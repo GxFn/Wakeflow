@@ -1,12 +1,7 @@
-import {
-  deepEqual,
-  equal,
-} from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  createRequirementRecord,
-} from "../../../src/governance/ledger/ledger-authority-record.js";
+import { createRequirementRecord } from "../../../src/governance/ledger/ledger-authority-record.js";
 import {
   createLedgerAuthorityResourceCatalog,
   WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
@@ -18,13 +13,10 @@ import {
 } from "./requirement-package.fixture.js";
 
 test("Ledger static catalog separates the durable requirements root from private transactions", () => {
-  deepEqual(WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG.map((entry) => (
-    entry.declarationId
-  )), [
-    "ledger.requirements-root",
-    "ledger.transactions-root",
-    "ledger.archives-root",
-  ]);
+  deepEqual(
+    WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG.map((entry) => entry.declarationId),
+    ["ledger.requirements-root", "ledger.transactions-root", "ledger.archives-root"],
+  );
   for (const entry of WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG) {
     equal(entry.family, "ledger");
     equal(entry.scope, "host-neutral");
@@ -63,12 +55,12 @@ test("concrete Ledger record catalog binds aggregate, facts, intent, and lock", 
   equal(catalog.length, 6);
   const [root, manifest, landing, requirement, intent, lock] = catalog;
   if (
-    root === undefined
-    || manifest === undefined
-    || landing === undefined
-    || requirement === undefined
-    || intent === undefined
-    || lock === undefined
+    root === undefined ||
+    manifest === undefined ||
+    landing === undefined ||
+    requirement === undefined ||
+    intent === undefined ||
+    lock === undefined
   ) {
     throw new Error("Ledger catalog is incomplete.");
   }
@@ -96,7 +88,10 @@ test("concrete Ledger record catalog binds aggregate, facts, intent, and lock", 
     equal(fact.processing.role, "immutable-fact");
   }
   equal(landing.placement.relativePath, `requirements/${FIXTURE_REQUIREMENT_ID}/landing.md`);
-  equal(requirement.placement.relativePath, `requirements/${FIXTURE_REQUIREMENT_ID}/requirement.md`);
+  equal(
+    requirement.placement.relativePath,
+    `requirements/${FIXTURE_REQUIREMENT_ID}/requirement.md`,
+  );
   equal(intent.placement.relativePath, `transactions/${FIXTURE_REQUIREMENT_ID}.intent.json`);
   equal(lock.placement.relativePath, `transactions/${FIXTURE_REQUIREMENT_ID}.lock`);
   for (const transaction of [intent, lock]) {
@@ -111,7 +106,8 @@ test("concrete Ledger record catalog binds aggregate, facts, intent, and lock", 
     }
     equal(transaction.processing.role, "transaction-artifact");
   }
-  equal(catalog.some((entry) => (
-    entry.placement.relativePath?.endsWith(".stage") === true
-  )), false);
+  equal(
+    catalog.some((entry) => entry.placement.relativePath?.endsWith(".stage") === true),
+    false,
+  );
 });

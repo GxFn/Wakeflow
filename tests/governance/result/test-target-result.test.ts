@@ -3,13 +3,13 @@ import { test } from "node:test";
 
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
-  createTestTargetResult,
-  TestTargetResultError,
-} from "../../../src/governance/result/test-target-result.js";
-import {
   parseTargetResultDocument,
   renderTargetResult,
 } from "../../../src/governance/result/target-result.js";
+import {
+  createTestTargetResult,
+  TestTargetResultError,
+} from "../../../src/governance/result/test-target-result.js";
 import { createTestTargetResultReport } from "../../../src/governance/result/test-target-result-report.js";
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";

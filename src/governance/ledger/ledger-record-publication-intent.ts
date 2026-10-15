@@ -1,13 +1,9 @@
-import type {
-  WakeflowLedgerRecordPublicationIntent as LedgerRecordPublicationIntentWire,
-} from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
-import {
-  WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA,
-} from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
 import { WAKEFLOW_DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA } from "../../contracts/generated/foundation/directory-tree-candidate-plan.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowLedgerRecordPublicationIntent as LedgerRecordPublicationIntentWire } from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
+import { WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js";
 import { WAKEFLOW_REQUIREMENT_RECORD_SCHEMA } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import {
@@ -16,14 +12,14 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
-  parseDirectoryTreeCandidatePlan,
-  DurableDirectoryTreeCandidateError,
   type DirectoryTreeCandidatePlan,
+  DurableDirectoryTreeCandidateError,
+  parseDirectoryTreeCandidatePlan,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -34,10 +30,10 @@ import {
   ledgerRecordPublicationStageRef,
 } from "./ledger-authority-paths.js";
 import {
-  parseLedgerAuthorityRecord,
-  renderLedgerAuthorityRecord,
   LedgerAuthorityRecordError,
+  parseLedgerAuthorityRecord,
   type RequirementRecord,
+  renderLedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
 import {
   LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
@@ -90,10 +86,7 @@ const ERROR_MESSAGES = {
   "tree-plan": "Ledger record publication intent contains an invalid closed tree plan.",
   relation: "Ledger record publication intent does not describe one exact record tree.",
   representation: "Ledger record publication intent bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  LedgerRecordPublicationIntentErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<LedgerRecordPublicationIntentErrorReason, string>>;
 
 /** Ledger 发布意图记录准入失败时返回的稳定、脱敏错误。 */
 export class LedgerRecordPublicationIntentError extends Error {
@@ -102,10 +95,7 @@ export class LedgerRecordPublicationIntentError extends Error {
   readonly reason: LedgerRecordPublicationIntentErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: LedgerRecordPublicationIntentErrorReason,
-    path: string,
-  ) {
+  constructor(reason: LedgerRecordPublicationIntentErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -123,10 +113,7 @@ const validateWire = createRuntimeJsonSchemaValidator<LedgerRecordPublicationInt
   ],
 );
 
-function fail(
-  reason: LedgerRecordPublicationIntentErrorReason,
-  path: string,
-): never {
+function fail(reason: LedgerRecordPublicationIntentErrorReason, path: string): never {
   throw new LedgerRecordPublicationIntentError(reason, path);
 }
 
@@ -158,19 +145,22 @@ function normalizeTreePlan(value: unknown): Readonly<DirectoryTreeCandidatePlan>
 
 function expectedPlanFiles(record: Readonly<RequirementRecord>) {
   const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
-  return Object.freeze([{
-    path: "record.json",
-    digest: computeSha256Digest(recordBytes),
-    mode: LEDGER_DURABLE_FILE_MODE,
-    byteCount: recordBytes.byteLength,
-  }, ...record.documents.map((document) => ({
-    path: document.path,
-    digest: document.digest,
-    mode: LEDGER_DURABLE_FILE_MODE,
-    byteCount: null,
-  }))].sort((left, right) => (
-    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
-  )));
+  return Object.freeze(
+    [
+      {
+        path: "record.json",
+        digest: computeSha256Digest(recordBytes),
+        mode: LEDGER_DURABLE_FILE_MODE,
+        byteCount: recordBytes.byteLength,
+      },
+      ...record.documents.map((document) => ({
+        path: document.path,
+        digest: document.digest,
+        mode: LEDGER_DURABLE_FILE_MODE,
+        byteCount: null,
+      })),
+    ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)),
+  );
 }
 
 function assertTreePlanMatchesRecord(
@@ -179,19 +169,19 @@ function assertTreePlanMatchesRecord(
 ): void {
   const expected = expectedPlanFiles(record);
   if (
-    plan.directoryMode !== LEDGER_DURABLE_DIRECTORY_MODE
-    || plan.files.length !== expected.length
+    plan.directoryMode !== LEDGER_DURABLE_DIRECTORY_MODE ||
+    plan.files.length !== expected.length
   ) {
     fail("relation", "$/treePlan");
   }
   for (const [index, file] of plan.files.entries()) {
     const target = expected[index];
     if (
-      target === undefined
-      || file.path !== target.path
-      || file.digest !== target.digest
-      || file.mode !== target.mode
-      || (target.byteCount !== null && file.byteCount !== target.byteCount)
+      target === undefined ||
+      file.path !== target.path ||
+      file.digest !== target.digest ||
+      file.mode !== target.mode ||
+      (target.byteCount !== null && file.byteCount !== target.byteCount)
     ) {
       fail("relation", `$/treePlan/files/${index}`);
     }
@@ -209,10 +199,10 @@ function normalize(
   const lockRef = ledgerRecordPublicationLockRef(record);
   const stageRef = ledgerRecordPublicationStageRef(record);
   if (
-    wire.finalRootRef !== finalRootRef
-    || wire.intentRef !== intentRef
-    || wire.lockRef !== lockRef
-    || wire.stageRef !== stageRef
+    wire.finalRootRef !== finalRootRef ||
+    wire.intentRef !== intentRef ||
+    wire.lockRef !== lockRef ||
+    wire.stageRef !== stageRef
   ) {
     fail("relation", "$intent");
   }
@@ -265,10 +255,7 @@ export function createLedgerRecordPublicationIntent(
 
 /** 渲染唯一的确定性格式化 JSON 表示。 */
 export function renderLedgerRecordPublicationIntent(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseLedgerRecordPublicationIntent(value),
-    "$intent",
-  );
+  return renderDeterministicJsonDocument(parseLedgerRecordPublicationIntent(value), "$intent");
 }
 
 /** 解析磁盘中的发布意图记录，并拒绝任何持久化表示漂移。 */
@@ -296,6 +283,8 @@ export function sameLedgerRecordPublicationIntent(
   leftValue: unknown,
   rightValue: unknown,
 ): boolean {
-  return renderLedgerRecordPublicationIntent(leftValue)
-    === renderLedgerRecordPublicationIntent(rightValue);
+  return (
+    renderLedgerRecordPublicationIntent(leftValue) ===
+    renderLedgerRecordPublicationIntent(rightValue)
+  );
 }

@@ -9,20 +9,20 @@ import {
   type WakeflowDurableId,
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  computeDemandEventSourcingCommandDigest,
-  decideDemandEventSourcingCommand,
-  type DemandEventSourcingCommand,
-  DemandEventSourcingDecisionError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandEventSourcingAggregate } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import {
+  computeDemandEventSourcingCommandDigest,
+  type DemandEventSourcingCommand,
+  DemandEventSourcingDecisionError,
+  decideDemandEventSourcingCommand,
+} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import {
   applyDemandEventStreamCommit,
-  prepareDemandEventStreamCommit,
   DemandEventStreamCommitError,
   type PreparedDemandEventStreamCommit,
+  prepareDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import {
@@ -45,8 +45,8 @@ import {
   TASKING_DEMAND_ID,
 } from "../tasking/task-package.fixture.js";
 import {
-  createControllerImplementationReviewDecisionForState,
   createControllerImplementationReviewDecisionForSnapshot,
+  createControllerImplementationReviewDecisionForState,
 } from "./controller-implementation-review-decision.fixture.js";
 
 const PUBLICATION_EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -132,7 +132,12 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
   const taskPackage = createTaskPackageFixture();
   aggregate = appendCommand(
     aggregate,
-    { commandType: "tasking.plan-target-task", commandVersion: 1, eventId: PLANNING_EVENT_ID, taskPackage },
+    {
+      commandType: "tasking.plan-target-task",
+      commandVersion: 1,
+      eventId: PLANNING_EVENT_ID,
+      taskPackage,
+    },
     PLANNING_COMMIT_ID,
     preparedCommits,
   );
@@ -156,7 +161,12 @@ test("Controller Review Event使用精确Snapshot revision提交并可完整重�
   const outcome = createDeliveryOutcomeFixture({ claim, envelope });
   aggregate = appendCommand(
     aggregate,
-    { commandType: "delivery.record-delivery-outcome", commandVersion: 1, eventId: OUTCOME_EVENT_ID, outcome },
+    {
+      commandType: "delivery.record-delivery-outcome",
+      commandVersion: 1,
+      eventId: OUTCOME_EVENT_ID,
+      outcome,
+    },
     OUTCOME_COMMIT_ID,
     preparedCommits,
   );
@@ -259,20 +269,39 @@ test("escalate 决定在同一提交附带升级事件；blocked 之后带 resum
   const taskPackage = createTaskPackageFixture();
   aggregate = appendCommand(
     aggregate,
-    { commandType: "tasking.plan-target-task", commandVersion: 1, eventId: PLANNING_EVENT_ID, taskPackage },
+    {
+      commandType: "tasking.plan-target-task",
+      commandVersion: 1,
+      eventId: PLANNING_EVENT_ID,
+      taskPackage,
+    },
     PLANNING_COMMIT_ID,
   );
   const claim = createWorkClaimFixture();
-  const envelope = createDeliveryEnvelopeFixture({ claim, expectedStreamRevision: aggregate.streamRevision });
+  const envelope = createDeliveryEnvelopeFixture({
+    claim,
+    expectedStreamRevision: aggregate.streamRevision,
+  });
   aggregate = appendCommand(
     aggregate,
-    { commandType: "delivery.prepare-delivery", commandVersion: 1, eventId: DELIVERY_EVENT_ID, envelope, taskPackage },
+    {
+      commandType: "delivery.prepare-delivery",
+      commandVersion: 1,
+      eventId: DELIVERY_EVENT_ID,
+      envelope,
+      taskPackage,
+    },
     DELIVERY_COMMIT_ID,
   );
   const outcome = createDeliveryOutcomeFixture({ claim, envelope });
   aggregate = appendCommand(
     aggregate,
-    { commandType: "delivery.record-delivery-outcome", commandVersion: 1, eventId: OUTCOME_EVENT_ID, outcome },
+    {
+      commandType: "delivery.record-delivery-outcome",
+      commandVersion: 1,
+      eventId: OUTCOME_EVENT_ID,
+      outcome,
+    },
     OUTCOME_COMMIT_ID,
   );
   const result = createTargetResultFixture({ claim, envelope, outcome });
@@ -307,7 +336,10 @@ test("escalate 决定在同一提交附带升级事件；blocked 之后带 resum
     events: escalatedEvents,
   });
   equal(escalatedCommit.aggregate.state.targetTasks[0]?.phase, "escalated");
-  equal(escalatedCommit.aggregate.state.awaitingDecision?.escalationEventId, escalatedEvents[1]?.eventId);
+  equal(
+    escalatedCommit.aggregate.state.awaitingDecision?.escalationEventId,
+    escalatedEvents[1]?.eventId,
+  );
 
   const blocked = createControllerImplementationReviewDecisionForState(
     aggregate.stateDigest,
@@ -360,23 +392,24 @@ test("escalate 决定在同一提交附带升级事件；blocked 之后带 resum
   );
   // 与已记录的 blocked 决定使用不同的 id，才能越过重复决定检查，真正命中 resumption 规则。
   throws(
-    () => decideTargetResultReviewInDemandAggregateState(
-      blockedCommit.aggregate.state,
-      withoutResumption,
-    ),
+    () =>
+      decideTargetResultReviewInDemandAggregateState(
+        blockedCommit.aggregate.state,
+        withoutResumption,
+      ),
     (error: unknown) =>
-      error instanceof DemandAggregateStateError
-      && error.reason === "transition"
-      && error.path === "$/targetTasks/resumption",
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition" &&
+      error.path === "$/targetTasks/resumption",
   );
   throws(
-    () => decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
-      commandType: "review.decide-target-result",
-      commandVersion: 1,
-      decision: withoutResumption,
-    }),
+    () =>
+      decideDemandEventSourcingCommand(blockedCommit.aggregate.state, {
+        commandType: "review.decide-target-result",
+        commandVersion: 1,
+        decision: withoutResumption,
+      }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingDecisionError
-      && error.reason === "transition",
+      error instanceof DemandEventSourcingDecisionError && error.reason === "transition",
   );
 });

@@ -120,8 +120,11 @@ test("加锁形式的越界截断：两处路径同一个截断结果，整条�
 
 test("宿主备选由宿主 Profile 的 worktree 启动方式选出，文本逐字不变", () => {
   equal(
-    worktreeDisposalGuidance(claudeCodeWorkspaceHostResourceProfile.surfaces.worktree.launch, "w", false)
-      .alternative,
+    worktreeDisposalGuidance(
+      claudeCodeWorkspaceHostResourceProfile.surfaces.worktree.launch,
+      "w",
+      false,
+    ).alternative,
     "End the Claude Code worktree session; Claude Code removes a worktree it created when the session ends, then run git worktree prune in the repository.",
   );
   equal(

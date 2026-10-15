@@ -4,15 +4,15 @@ import {
 } from "../../foundation/resource/resource-processing-contract.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import { createWakeflowWindowHostBindingResourceCatalog } from "./wakeflow-window-host-binding-resource-catalog.js";
 import type { WakeflowWindowHostBindingStoreAuthority } from "./wakeflow-window-host-binding-store.js";
 import {
   parseWakeflowWindowHostIdentityProfile,
-  WakeflowWindowHostIdentityProfileError,
   type WakeflowWindowHostIdentityProfile,
+  WakeflowWindowHostIdentityProfileError,
 } from "./wakeflow-window-host-identity-profile.js";
 import {
   compileWakeflowWindowRuntimeDesiredTopology,
@@ -30,16 +30,13 @@ import {
  * 接受handle或Agent observation，也不授权创建、替换、恢复或删除Binding。
  */
 
-type WakeflowWindowHostBindingStoreAuthorityErrorReason =
-  "profile" | "topology" | "resource";
+type WakeflowWindowHostBindingStoreAuthorityErrorReason = "profile" | "topology" | "resource";
 
 const ERROR_MESSAGES = {
   profile: "Window Host Binding Store authority profiles are inconsistent.",
   topology: "Window Host Binding Store authority topology is invalid.",
   resource: "Window Host Binding Store authority resource catalog is invalid.",
-} as const satisfies Readonly<
-  Record<WakeflowWindowHostBindingStoreAuthorityErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowWindowHostBindingStoreAuthorityErrorReason, string>>;
 
 /** Binding Store读取权威无法从当前静态来源闭合时的稳定错误。 */
 export class WakeflowWindowHostBindingStoreAuthorityError extends Error {
@@ -48,20 +45,14 @@ export class WakeflowWindowHostBindingStoreAuthorityError extends Error {
   readonly reason: WakeflowWindowHostBindingStoreAuthorityErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWindowHostBindingStoreAuthorityErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowHostBindingStoreAuthorityErrorReason, path: string): never {
   throw new WakeflowWindowHostBindingStoreAuthorityError(reason, path);
 }
 
@@ -74,10 +65,8 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   let resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   let identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   try {
-    resourceProfile =
-      parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
-    identityProfile =
-      parseWakeflowWindowHostIdentityProfile(identityProfileValue);
+    resourceProfile = parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
+    identityProfile = parseWakeflowWindowHostIdentityProfile(identityProfileValue);
   } catch (error: unknown) {
     if (
       error instanceof WakeflowWorkspaceHostResourceProfileError ||
@@ -95,10 +84,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   }
   let topology;
   try {
-    topology = compileWakeflowWindowRuntimeDesiredTopology(
-      configValue,
-      resourceProfile,
-    );
+    topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
       fail("topology", error.path);
@@ -108,18 +94,14 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   let bindingRefs;
   try {
     bindingRefs = Object.freeze(
-      createWakeflowWindowHostBindingResourceCatalog(
-        configValue,
-        resourceProfile,
-      ).map((declaration) => {
-        admitWakeflowResourceOperation(
-          declaration.processing,
-          "exclusive-create",
-        );
-        const ref = declaration.placement.relativePath;
-        if (ref === null) fail("resource", "$bindingCatalog");
-        return ref;
-      }),
+      createWakeflowWindowHostBindingResourceCatalog(configValue, resourceProfile).map(
+        (declaration) => {
+          admitWakeflowResourceOperation(declaration.processing, "exclusive-create");
+          const ref = declaration.placement.relativePath;
+          if (ref === null) fail("resource", "$bindingCatalog");
+          return ref;
+        },
+      ),
     );
   } catch (error: unknown) {
     if (

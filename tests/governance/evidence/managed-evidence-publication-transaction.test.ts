@@ -7,19 +7,19 @@ import {
   parseDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
-  parseManagedEvidenceCapturePlan,
   ManagedEvidenceCapturePlanError,
+  parseManagedEvidenceCapturePlan,
 } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
+  ManagedEvidencePublicationTransactionError,
+  type ManagedEvidencePublicationTransactionErrorReason,
   parseManagedEvidencePublicationTransaction,
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  type ManagedEvidencePublicationTransactionErrorReason,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
 import {
   createManagedEvidenceCapturePlanFixture,
@@ -36,8 +36,7 @@ function expectTransactionError(
   throws(
     action,
     (error: unknown) =>
-      error instanceof ManagedEvidencePublicationTransactionError &&
-      error.reason === reason,
+      error instanceof ManagedEvidencePublicationTransactionError && error.reason === reason,
   );
 }
 
@@ -72,10 +71,7 @@ test("Publication transaction只持久化Manifest、计划摘要与明确Event S
     commitId: IDS.commit,
   });
 
-  equal(
-    transaction.artifactKind,
-    "wakeflow-managed-evidence-publication-transaction",
-  );
+  equal(transaction.artifactKind, "wakeflow-managed-evidence-publication-transaction");
   equal(transaction.capturePlanDigest, plan.planDigest);
   equal(
     transaction.demandEventSourcingAppend.expectedStreamRevision,
@@ -89,27 +85,17 @@ test("Publication transaction只持久化Manifest、计划摘要与明确Event S
   equal(Object.hasOwn(transaction, "demandId"), false);
   equal(Object.hasOwn(transaction, "evidenceId"), false);
 
-  const command = deriveManagedEvidencePublicationEventSourcingCommand(
-    transaction,
-  );
+  const command = deriveManagedEvidencePublicationEventSourcingCommand(transaction);
   equal(command.commandType, "evidence.record-managed-evidence");
   equal(command.eventId, IDS.event);
   equal(command.manifest.manifestDigest, plan.manifest.manifestDigest);
-  const recordPlan = deriveManagedEvidencePublicationRecordTreePlan(
-    transaction,
-  );
+  const recordPlan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   equal(recordPlan.planDigest, transaction.recordTreePlanDigest);
   deepEqual(recordPlan.manifest, transaction.manifest);
 
   const text = renderManagedEvidencePublicationTransaction(transaction);
-  deepEqual(
-    parseManagedEvidencePublicationTransactionDocument(text),
-    transaction,
-  );
-  deepEqual(
-    parseManagedEvidencePublicationTransaction(structuredClone(transaction)),
-    transaction,
-  );
+  deepEqual(parseManagedEvidencePublicationTransactionDocument(text), transaction);
+  deepEqual(parseManagedEvidencePublicationTransaction(structuredClone(transaction)), transaction);
   equal(
     computeManagedEvidencePublicationTransactionDigest(transaction),
     computeCanonicalJsonSha256Digest(transaction),
@@ -198,10 +184,7 @@ test("Publication transaction文档拒绝非确定性JSON表示", () => {
     commitId: IDS.commit,
   });
   expectTransactionError(
-    () =>
-      parseManagedEvidencePublicationTransactionDocument(
-        JSON.stringify(transaction),
-      ),
+    () => parseManagedEvidencePublicationTransactionDocument(JSON.stringify(transaction)),
     "representation",
   );
 });

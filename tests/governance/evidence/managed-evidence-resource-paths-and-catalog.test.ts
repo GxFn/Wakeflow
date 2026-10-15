@@ -12,17 +12,17 @@ import {
   MANAGED_EVIDENCE_RESOURCE_OWNER_ID,
 } from "../../../src/governance/evidence/managed-evidence-resource-catalog.js";
 import {
+  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
+  MANAGED_EVIDENCE_ROOT_REF,
+  ManagedEvidenceResourcePathError,
+  type ManagedEvidenceResourcePathErrorReason,
   managedEvidenceManifestRef,
   managedEvidencePayloadRootRef,
   managedEvidencePublicationStageRef,
   managedEvidenceRecordAddress,
   managedEvidenceRecordRootRef,
-  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-  MANAGED_EVIDENCE_ROOT_REF,
   parseManagedEvidenceRecordDirectoryName,
   parseManagedEvidenceStageDirectoryName,
-  ManagedEvidenceResourcePathError,
-  type ManagedEvidenceResourcePathErrorReason,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
@@ -45,8 +45,7 @@ function expectPathError(
   throws(
     action,
     (error: unknown) =>
-      error instanceof ManagedEvidenceResourcePathError &&
-      error.reason === reason,
+      error instanceof ManagedEvidenceResourcePathError && error.reason === reason,
   );
 }
 
@@ -78,32 +77,23 @@ test("Managed Evidence路径把final、payload、stage与Demand级journal明确�
     "transactions/managed-evidence-publication.json",
   );
   deepEqual(parseManagedEvidenceRecordDirectoryName(EVIDENCE_ID), address);
-  deepEqual(
-    parseManagedEvidenceStageDirectoryName(`.${EVIDENCE_ID}.wakeflow-stage`),
-    {
-      evidenceId: EVIDENCE_ID,
-      directoryName: `.${EVIDENCE_ID}.wakeflow-stage`,
-      stageRootRef: managedEvidencePublicationStageRef(EVIDENCE_ID),
-    },
-  );
+  deepEqual(parseManagedEvidenceStageDirectoryName(`.${EVIDENCE_ID}.wakeflow-stage`), {
+    evidenceId: EVIDENCE_ID,
+    directoryName: `.${EVIDENCE_ID}.wakeflow-stage`,
+    stageRootRef: managedEvidencePublicationStageRef(EVIDENCE_ID),
+  });
   assertDeepFrozen(address);
 });
 
 test("Managed Evidence路径拒绝别名、其他ID类型和宽松stage后缀", () => {
-  expectPathError(
-    () => managedEvidenceRecordAddress("evidence-not-a-uuid"),
-    "identifier",
-  );
+  expectPathError(() => managedEvidenceRecordAddress("evidence-not-a-uuid"), "identifier");
   for (const value of [
     `${EVIDENCE_ID}.json`,
     `.${EVIDENCE_ID}.wakeflow-stage`,
     DEMAND_ID,
     EVIDENCE_ID.toUpperCase(),
   ]) {
-    expectPathError(
-      () => parseManagedEvidenceRecordDirectoryName(value),
-      "record-directory-name",
-    );
+    expectPathError(() => parseManagedEvidenceRecordDirectoryName(value), "record-directory-name");
   }
   for (const value of [
     EVIDENCE_ID,
@@ -111,10 +101,7 @@ test("Managed Evidence路径拒绝别名、其他ID类型和宽松stage后缀", 
     `${EVIDENCE_ID}.wakeflow-stage`,
     `.${DEMAND_ID}.wakeflow-stage`,
   ]) {
-    expectPathError(
-      () => parseManagedEvidenceStageDirectoryName(value),
-      "stage-directory-name",
-    );
+    expectPathError(() => parseManagedEvidenceStageDirectoryName(value), "stage-directory-name");
   }
 });
 
@@ -196,48 +183,30 @@ test("Managed Evidence资源目录区分容器、Manifest闭合final tree与事�
     true,
   );
   equal(
-    catalog.some(
-      (entry) =>
-        entry.placement.relativePath?.includes(".wakeflow-stage") === true,
-    ),
+    catalog.some((entry) => entry.placement.relativePath?.includes(".wakeflow-stage") === true),
     false,
   );
   assertDeepFrozen(catalog);
 
-  deepEqual(
-    admitWakeflowResourceOperation(
-      catalog[0].processing,
-      "materialize-directory",
-    ),
-    { kind: "directory-materialization", recipe: "materialize-directory" },
-  );
-  deepEqual(
-    admitWakeflowResourceOperation(
-      catalog[1].processing,
-      "tree-publish-or-move",
-    ),
-    {
-      kind: "resource-mutation",
-      role: "manifested-tree",
-      recipe: "tree-publish-or-move",
-    },
-  );
-  deepEqual(
-    admitWakeflowResourceOperation(catalog[2].processing, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "transaction-artifact",
-      recipe: "exclusive-create",
-    },
-  );
-  deepEqual(
-    admitWakeflowResourceOperation(catalog[2].processing, "exact-retire"),
-    {
-      kind: "resource-mutation",
-      role: "transaction-artifact",
-      recipe: "exact-retire",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(catalog[0].processing, "materialize-directory"), {
+    kind: "directory-materialization",
+    recipe: "materialize-directory",
+  });
+  deepEqual(admitWakeflowResourceOperation(catalog[1].processing, "tree-publish-or-move"), {
+    kind: "resource-mutation",
+    role: "manifested-tree",
+    recipe: "tree-publish-or-move",
+  });
+  deepEqual(admitWakeflowResourceOperation(catalog[2].processing, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "transaction-artifact",
+    recipe: "exclusive-create",
+  });
+  deepEqual(admitWakeflowResourceOperation(catalog[2].processing, "exact-retire"), {
+    kind: "resource-mutation",
+    role: "transaction-artifact",
+    recipe: "exact-retire",
+  });
   throws(
     () => admitWakeflowResourceOperation(catalog[1].processing, "exact-retire"),
     WakeflowResourceProcessingContractError,
@@ -246,17 +215,11 @@ test("Managed Evidence资源目录区分容器、Manifest闭合final tree与事�
 
 test("不同Evidence拥有不同final/stage，但共享一个Demand事务槽位", () => {
   const first = createManagedEvidenceResourceCatalog(DEMAND_ID, EVIDENCE_ID);
-  const second = createManagedEvidenceResourceCatalog(
-    DEMAND_ID,
-    ANOTHER_EVIDENCE_ID,
-  );
+  const second = createManagedEvidenceResourceCatalog(DEMAND_ID, ANOTHER_EVIDENCE_ID);
   equal(first[0].placement.relativePath, second[0].placement.relativePath);
   equal(first[2].declarationId, second[2].declarationId);
   equal(first[2].placement.relativePath, second[2].placement.relativePath);
-  equal(
-    first[1].placement.relativePath === second[1].placement.relativePath,
-    false,
-  );
+  equal(first[1].placement.relativePath === second[1].placement.relativePath, false);
   equal(
     managedEvidencePublicationStageRef(EVIDENCE_ID) ===
       managedEvidencePublicationStageRef(ANOTHER_EVIDENCE_ID),

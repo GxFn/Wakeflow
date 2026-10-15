@@ -1,19 +1,12 @@
 import { types } from "node:util";
-
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import type {
-  LedgerAuthorityDocument,
-  LedgerAuthorityRecord,
-} from "./ledger-authority-record.js";
 import type { LedgerAuthorityFamily } from "./ledger-authority-paths.js";
+import type { LedgerAuthorityDocument, LedgerAuthorityRecord } from "./ledger-authority-record.js";
 import {
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_DURABLE_FILE_MODE,
@@ -105,7 +98,8 @@ const ERROR_MESSAGES = {
   "root-scope": "Ledger authority root changed during the operation.",
   "not-found": "Ledger authority record does not exist.",
   "recovery-required": "Ledger authority record has an unresolved publication residue.",
-  "recovery-input-required": "Ledger publication stage is incomplete and requires exact caller bytes.",
+  "recovery-input-required":
+    "Ledger publication stage is incomplete and requires exact caller bytes.",
   conflict: "Ledger authority bytes conflict with an immutable identity.",
   record: "Ledger authority record is invalid.",
   member: "Ledger authority member inventory or bytes are invalid.",
@@ -143,10 +137,12 @@ export function throwLedgerAuthorityStoreError(
 }
 
 export function isLedgerAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 export function parseLedgerAuthorityStoreOptions(
@@ -177,13 +173,10 @@ export function assertLedgerAuthorityNode(
   path: string,
 ): void {
   if (
-    node.kind !== kind
-    || node.permissionBits !== (
-      kind === "file"
-        ? LEDGER_DURABLE_FILE_MODE
-        : LEDGER_DURABLE_DIRECTORY_MODE
-    )
-    || (kind === "file" && node.linkCount !== 1n)
+    node.kind !== kind ||
+    node.permissionBits !==
+      (kind === "file" ? LEDGER_DURABLE_FILE_MODE : LEDGER_DURABLE_DIRECTORY_MODE) ||
+    (kind === "file" && node.linkCount !== 1n)
   ) {
     throwLedgerAuthorityStoreError("node-policy", path);
   }

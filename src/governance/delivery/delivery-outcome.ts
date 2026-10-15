@@ -1,22 +1,34 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
-  type WakeflowDeliveryOutcome as DeliveryOutcomeWire,
-} from "../../contracts/generated/governance/delivery/delivery-outcome.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import {
+  type WakeflowDeliveryOutcome as DeliveryOutcomeWire,
+  WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
+} from "../../contracts/generated/governance/delivery/delivery-outcome.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error, type Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { parseJsonValue, JsonValueError, type JsonValue } from "../../foundation/data/json-value.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
+import {
+  type JsonValue,
+  JsonValueError,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { parseUtcInstant, UtcInstantError, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
 import type { DeliveryFenceReference } from "./delivery-envelope.js";
 
 /**
@@ -153,7 +165,9 @@ export function deliveryClaimHandling(
   return disposition === "rejected-before-send" ? "release-authorized" : "retain";
 }
 
-function outcomeBasis(value: Omit<DeliveryOutcome, "outcomeDigest">): Omit<DeliveryOutcome, "outcomeDigest"> {
+function outcomeBasis(
+  value: Omit<DeliveryOutcome, "outcomeDigest">,
+): Omit<DeliveryOutcome, "outcomeDigest"> {
   return Object.freeze({
     kind: OUTCOME_KIND,
     schemaVersion: OUTCOME_SCHEMA_VERSION,
@@ -222,7 +236,9 @@ export function parseDeliveryOutcome(value: unknown): Readonly<DeliveryOutcome> 
 }
 
 /** 从草稿封一份处置记录；声明处理由处置派生。 */
-export function createDeliveryOutcome(draft: Readonly<DeliveryOutcomeDraft>): Readonly<DeliveryOutcome> {
+export function createDeliveryOutcome(
+  draft: Readonly<DeliveryOutcomeDraft>,
+): Readonly<DeliveryOutcome> {
   const basis = outcomeBasis({
     ...draft,
     kind: OUTCOME_KIND,

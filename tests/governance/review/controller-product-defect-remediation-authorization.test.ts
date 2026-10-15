@@ -9,17 +9,17 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { parseDemandEventStreamRevision } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
+  ControllerProductDefectRemediationAuthorizationError,
+  type CreateControllerProductDefectRemediationAuthorizationInput,
   createControllerProductDefectRemediationAuthorization,
   parseControllerProductDefectRemediationAuthorization,
   parseControllerProductDefectRemediationAuthorizationDocument,
   productDefectRemediationAuthorizedEventId,
   renderControllerProductDefectRemediationAuthorization,
-  ControllerProductDefectRemediationAuthorizationError,
-  type CreateControllerProductDefectRemediationAuthorizationInput,
 } from "../../../src/governance/review/controller-product-defect-remediation-authorization.js";
 import {
-  createControllerTestReviewDecision,
   type ControllerTestReviewDecision,
+  createControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import type { TestImplementationBaseline } from "../../../src/governance/tasking/task-package.js";
 import { testReviewDecisionBaseInput } from "./controller-test-review-decision.fixture.js";
@@ -140,7 +140,9 @@ function input(): CreateControllerProductDefectRemediationAuthorizationInput {
   };
 }
 
-function createAuthorization(value: CreateControllerProductDefectRemediationAuthorizationInput = input()) {
+function createAuthorization(
+  value: CreateControllerProductDefectRemediationAuthorizationInput = input(),
+) {
   return createControllerProductDefectRemediationAuthorization(value, {
     clock: () => AUTHORIZED_AT,
     uuidFactory: () => AUTHORIZATION_UUID,
@@ -150,12 +152,18 @@ function createAuthorization(value: CreateControllerProductDefectRemediationAuth
 test("产品缺陷修复授权从决定的 remediation 与读侧基线派生失败步骤映射", () => {
   const authorization = createAuthorization();
   equal(authorization.kind, "WakeflowControllerProductDefectRemediationAuthorization");
-  equal(authorization.productDefectRemediationId, `product-defect-remediation_${AUTHORIZATION_UUID}`);
+  equal(
+    authorization.productDefectRemediationId,
+    `product-defect-remediation_${AUTHORIZATION_UUID}`,
+  );
   equal(
     parseWakeflowDurableId(authorization.productDefectRemediationId).kind,
     "product-defect-remediation",
   );
-  equal(productDefectRemediationAuthorizedEventId(authorization), `demand-event_${AUTHORIZATION_UUID}`);
+  equal(
+    productDefectRemediationAuthorizedEventId(authorization),
+    `demand-event_${AUTHORIZATION_UUID}`,
+  );
   equal(authorization.boundary, "existing-task-packages-only");
   equal(authorization.source.streamRevision, 13);
   equal(authorization.source.reviewSnapshotDigest, input().decision.reviewed.snapshotDigest);
@@ -169,10 +177,7 @@ test("产品缺陷修复授权从决定的 remediation 与读侧基线派生失�
     [baseline("a").targetTaskId, baseline("b").targetTaskId],
   );
   deepEqual(authorization.affectedTargets[0]?.failedStepIds, ["ts-1"]);
-  equal(
-    authorization.authorizationRationale,
-    "两个产品Target分别拥有可定位且不跨包的修复责任。",
-  );
+  equal(authorization.authorizationRationale, "两个产品Target分别拥有可定位且不跨包的修复责任。");
   equal(Object.isFrozen(authorization), true);
   equal(Object.isFrozen(authorization.source), true);
   equal(Object.isFrozen(authorization.affectedTargets[0]?.baseline), true);
@@ -198,10 +203,10 @@ test("修复授权在分配身份与时间前拒绝错误Decision、缺失基线
     },
   };
   const valid = input();
-  const acceptDecision = createControllerTestReviewDecision(
-    testReviewDecisionBaseInput(),
-    { clock: () => DECIDED_AT, uuidFactory: () => DECISION_UUID },
-  );
+  const acceptDecision = createControllerTestReviewDecision(testReviewDecisionBaseInput(), {
+    clock: () => DECIDED_AT,
+    uuidFactory: () => DECISION_UUID,
+  });
   throws(
     () =>
       createControllerProductDefectRemediationAuthorization(

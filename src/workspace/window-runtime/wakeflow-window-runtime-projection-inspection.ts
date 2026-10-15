@@ -32,12 +32,12 @@ import {
   type WakeflowWindowHostIdentityProfile,
   WakeflowWindowHostIdentityProfileError,
 } from "./wakeflow-window-host-identity-profile.js";
+import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import {
   inspectWakeflowWindowRuntimeProjectionDocument,
   type WakeflowWindowRuntimeProjectionDocumentTarget,
 } from "./wakeflow-window-runtime-projection-document.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "./wakeflow-window-runtime-registered-projection.js";
-import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
   WakeflowWindowRuntimeUnregisteredProjectionError,
@@ -144,10 +144,10 @@ export type WakeflowWindowRuntimeProjectionSetInspection =
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     failWindowRuntimeProjection("input", "$root");
   }
@@ -177,8 +177,8 @@ export function admitWakeflowWindowRuntimeProjectionInputs(
     return Object.freeze({ config, resourceProfile, identityProfile });
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError
-      || error instanceof WakeflowWindowHostIdentityProfileError
+      error instanceof WakeflowWorkspaceHostResourceProfileError ||
+      error instanceof WakeflowWindowHostIdentityProfileError
     ) {
       failWindowRuntimeProjection("profile", error.path);
     }
@@ -228,16 +228,20 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
     );
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowWindowRuntimeUnregisteredProjectionError
-      || error instanceof WakeflowWindowHostBindingStoreAuthorityError
+      error instanceof WakeflowWindowRuntimeUnregisteredProjectionError ||
+      error instanceof WakeflowWindowHostBindingStoreAuthorityError
     ) {
       failWindowRuntimeProjection("topology", error.path);
     }
     throw error;
   }
   if (
-    options.projectionRootRequired !== false
-    && !(await resourcePresent(root, wakeflowWindowRuntimeProjectionRootRef(resourceProfile), "$projectionRoot"))
+    options.projectionRootRequired !== false &&
+    !(await resourcePresent(
+      root,
+      wakeflowWindowRuntimeProjectionRootRef(resourceProfile),
+      "$projectionRoot",
+    ))
   ) {
     return Object.freeze({ kind: "runtime-missing" as const });
   }
@@ -278,27 +282,30 @@ export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
     }
     throw error;
   }
-  return Object.freeze(unregistered.entries.map((entry) => {
-    const binding = inventory.bindings.find((candidate) => candidate.windowId === entry.windowId);
-    const compiled = binding === undefined
-      ? entry
-      : compileWakeflowWindowRuntimeRegisteredProjectionEntry(
-          resourceProfile,
-          identityProfile,
-          entry.projection,
-          binding,
-        );
-    return Object.freeze({
-      windowId: entry.windowId,
-      registered: binding !== undefined,
-      target: Object.freeze({
-        resourceRef: compiled.resourceRef,
-        document: compiled.document,
-        documentDigest: compiled.documentDigest,
-        projectionDigest: compiled.projection.projectionDigest,
-      }),
-    });
-  }));
+  return Object.freeze(
+    unregistered.entries.map((entry) => {
+      const binding = inventory.bindings.find((candidate) => candidate.windowId === entry.windowId);
+      const compiled =
+        binding === undefined
+          ? entry
+          : compileWakeflowWindowRuntimeRegisteredProjectionEntry(
+              resourceProfile,
+              identityProfile,
+              entry.projection,
+              binding,
+            );
+      return Object.freeze({
+        windowId: entry.windowId,
+        registered: binding !== undefined,
+        target: Object.freeze({
+          resourceRef: compiled.resourceRef,
+          document: compiled.document,
+          documentDigest: compiled.documentDigest,
+          projectionDigest: compiled.projection.projectionDigest,
+        }),
+      });
+    }),
+  );
 }
 
 /** 逐窗口比对磁盘文档与期望：current / stale / missing / unsafe，并带回当前文档摘要。 */

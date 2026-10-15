@@ -1,39 +1,32 @@
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parseJsonValue,
-  JsonValueError,
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../wakeflow-workspace-static-resource-matrix.js";
-import {
   parseWakeflowHostMaintenanceContribution,
-  WakeflowHostMaintenanceContributionError,
   type WakeflowHostMaintenanceContribution,
+  WakeflowHostMaintenanceContributionError,
   type WakeflowHostMaintenanceOperation,
 } from "./wakeflow-host-maintenance-contribution.js";
 import {
   parseWakeflowStaticMaterializationPreview,
-  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreview,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationStep,
   type WakeflowStaticMaterializationStepKind,
 } from "./wakeflow-static-materialization-preview-contract.js";
@@ -84,8 +77,7 @@ export interface WakeflowMaintenanceExecutionPlan {
   readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
   readonly sharedPreview: Readonly<WakeflowStaticMaterializationPreview>;
-  readonly hostContribution:
-    Readonly<WakeflowHostMaintenanceContribution> | null;
+  readonly hostContribution: Readonly<WakeflowHostMaintenanceContribution> | null;
   readonly steps: readonly Readonly<WakeflowMaintenanceExecutionStep>[];
   readonly planDigest: Sha256Digest;
 }
@@ -107,10 +99,7 @@ const ERROR_MESSAGES = {
   matrix: "Wakeflow maintenance execution plan host profile does not match its matrix.",
   order: "Wakeflow maintenance execution plan step order is invalid.",
   digest: "Wakeflow maintenance execution plan digest is invalid.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceExecutionPlanErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionPlanErrorReason, string>>;
 
 /** 聚合维护执行计划准入失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionPlanError extends Error {
@@ -119,10 +108,7 @@ export class WakeflowMaintenanceExecutionPlanError extends Error {
   readonly reason: WakeflowMaintenanceExecutionPlanErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowMaintenanceExecutionPlanErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowMaintenanceExecutionPlanErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -132,10 +118,7 @@ export class WakeflowMaintenanceExecutionPlanError extends Error {
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const JOURNAL_MAXIMUM_STEPS = 256;
 
-function fail(
-  reason: WakeflowMaintenanceExecutionPlanErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowMaintenanceExecutionPlanErrorReason, path: string): never {
   throw new WakeflowMaintenanceExecutionPlanError(reason, path);
 }
 
@@ -146,9 +129,7 @@ function parseHostId(value: unknown, path: string): WakeflowWorkspaceHostId {
   return value as WakeflowWorkspaceHostId;
 }
 
-function parseSharedPreview(
-  value: unknown,
-): Readonly<WakeflowStaticMaterializationPreview> {
+function parseSharedPreview(value: unknown): Readonly<WakeflowStaticMaterializationPreview> {
   try {
     return parseWakeflowStaticMaterializationPreview(value);
   } catch (error: unknown) {
@@ -159,9 +140,7 @@ function parseSharedPreview(
   }
 }
 
-function parseContribution(
-  value: unknown,
-): Readonly<WakeflowHostMaintenanceContribution> | null {
+function parseContribution(value: unknown): Readonly<WakeflowHostMaintenanceContribution> | null {
   if (value === null) return null;
   try {
     return parseWakeflowHostMaintenanceContribution(value);
@@ -222,19 +201,17 @@ function orderedSteps(
   if (contribution !== null) {
     for (const operation of contribution.operations) {
       const predecessor = steps.at(-1);
-      const dependencies = predecessor === undefined
-        ? []
-        : [predecessor.stepId];
-      steps.push(hostStep(
-        contribution.hostId,
-        contribution.capabilityId,
-        operation,
-        dependencies,
-      ));
+      const dependencies = predecessor === undefined ? [] : [predecessor.stepId];
+      steps.push(hostStep(contribution.hostId, contribution.capabilityId, operation, dependencies));
     }
   }
   if (config !== undefined) {
-    steps.push(sharedStep(config, steps.map((entry) => entry.stepId)));
+    steps.push(
+      sharedStep(
+        config,
+        steps.map((entry) => entry.stepId),
+      ),
+    );
   }
   return Object.freeze(steps);
 }
@@ -247,9 +224,7 @@ function combinedBlockers(
   const blockers = new Set<string>(preview.blockerCodes);
   if (contribution !== null) {
     for (const code of contribution.blockerCodes) {
-      blockers.add(
-        `host:${contribution.hostId}:${contribution.capabilityId}:${code}`,
-      );
+      blockers.add(`host:${contribution.hostId}:${contribution.capabilityId}:${code}`);
     }
   }
   if (stepCount > JOURNAL_MAXIMUM_STEPS) {
@@ -258,9 +233,7 @@ function combinedBlockers(
   return Object.freeze([...blockers].sort());
 }
 
-function planDigestBasis(
-  value: Omit<WakeflowMaintenanceExecutionPlan, "planDigest">,
-) {
+function planDigestBasis(value: Omit<WakeflowMaintenanceExecutionPlan, "planDigest">) {
   return {
     ...value,
     kind: "WakeflowMaintenanceExecutionPlanDigestBasis" as const,
@@ -287,18 +260,17 @@ function buildPlan(
     fail("order", "$plan.steps");
   }
   const blockerCodes = combinedBlockers(preview, contribution, steps.length);
-  const basis: Omit<WakeflowMaintenanceExecutionPlan, "planDigest"> =
-    Object.freeze({
-      kind: "WakeflowMaintenanceExecutionPlan",
-      schemaVersion: 1,
-      executionBoundary: "preview-only",
-      hostId,
-      status: blockerCodes.length === 0 ? "ready" : "blocked",
-      blockerCodes,
-      sharedPreview: preview,
-      hostContribution: contribution,
-      steps,
-    });
+  const basis: Omit<WakeflowMaintenanceExecutionPlan, "planDigest"> = Object.freeze({
+    kind: "WakeflowMaintenanceExecutionPlan",
+    schemaVersion: 1,
+    executionBoundary: "preview-only",
+    hostId,
+    status: blockerCodes.length === 0 ? "ready" : "blocked",
+    blockerCodes,
+    sharedPreview: preview,
+    hostContribution: contribution,
+    steps,
+  });
   return Object.freeze({
     ...basis,
     planDigest: computeWakeflowMaintenanceExecutionPlanDigest(basis),
@@ -316,19 +288,14 @@ export function createWakeflowMaintenanceExecutionPlan(
   const preview = parseSharedPreview(previewValue);
   let profile;
   try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(
-      currentHostProfileValue,
-    );
+    profile = parseWakeflowWorkspaceHostResourceProfile(currentHostProfileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
       fail("host", error.path);
     }
     throw error;
   }
-  if (
-    createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest
-      !== preview.matrixDigest
-  ) {
+  if (createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== preview.matrixDigest) {
     fail("matrix", "$profile");
   }
   return buildPlan(profile.hostId, preview, parseContribution(contributionValue));
@@ -351,8 +318,7 @@ function equivalentJson(left: unknown, right: unknown, path: string): boolean {
     if (error instanceof JsonValueError) fail("input", error.path);
     throw error;
   }
-  return computeCanonicalJsonSha256Digest(leftJson)
-    === computeCanonicalJsonSha256Digest(right);
+  return computeCanonicalJsonSha256Digest(leftJson) === computeCanonicalJsonSha256Digest(right);
 }
 
 /** 把任意输入重验为可由两类已知来源唯一推导的聚合执行计划。 */
@@ -367,12 +333,12 @@ export function parseWakeflowMaintenanceExecutionPlan(
     throw error;
   }
   if (
-    Object.keys(record).sort().join("\u0000")
-      !== "blockerCodes\u0000executionBoundary\u0000hostContribution\u0000hostId\u0000kind\u0000planDigest\u0000schemaVersion\u0000sharedPreview\u0000status\u0000steps"
-    || record.kind !== "WakeflowMaintenanceExecutionPlan"
-    || record.schemaVersion !== 1
-    || record.executionBoundary !== "preview-only"
-    || (record.status !== "ready" && record.status !== "blocked")
+    Object.keys(record).sort().join("\u0000") !==
+      "blockerCodes\u0000executionBoundary\u0000hostContribution\u0000hostId\u0000kind\u0000planDigest\u0000schemaVersion\u0000sharedPreview\u0000status\u0000steps" ||
+    record.kind !== "WakeflowMaintenanceExecutionPlan" ||
+    record.schemaVersion !== 1 ||
+    record.executionBoundary !== "preview-only" ||
+    (record.status !== "ready" && record.status !== "blocked")
   ) {
     fail("input", "$plan");
   }
@@ -382,13 +348,9 @@ export function parseWakeflowMaintenanceExecutionPlan(
     parseContribution(record.hostContribution),
   );
   if (
-    record.status !== expected.status
-    || !equivalentJson(
-      record.blockerCodes,
-      expected.blockerCodes,
-      "$plan.blockerCodes",
-    )
-    || !equivalentJson(record.steps, expected.steps, "$plan.steps")
+    record.status !== expected.status ||
+    !equivalentJson(record.blockerCodes, expected.blockerCodes, "$plan.blockerCodes") ||
+    !equivalentJson(record.steps, expected.steps, "$plan.steps")
   ) {
     fail("order", "$plan");
   }

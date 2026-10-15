@@ -1,16 +1,11 @@
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
-import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
-
 import {
   parseSha256Digest,
   type Sha256Digest,
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
@@ -22,6 +17,7 @@ import {
   withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
@@ -95,10 +91,7 @@ const ERROR_MESSAGES = {
   "recovery-required": "Wakeflow maintenance gate requires explicit recovery.",
   aborted: "Wakeflow maintenance gate acquisition was aborted.",
   "effect-failure": "Wakeflow maintenance gate could not be established safely.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceGateErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceGateErrorReason, string>>;
 
 /** Maintenance gate/bootstrap 失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceGateError extends Error {
@@ -135,10 +128,7 @@ function fail(reason: WakeflowMaintenanceGateErrorReason, path: string): never {
   throw new WakeflowMaintenanceGateError(reason, path);
 }
 
-function admittedOperationId(
-  value: unknown,
-  path: string,
-): WakeflowMaintenanceOperationId {
+function admittedOperationId(value: unknown, path: string): WakeflowMaintenanceOperationId {
   try {
     return parseWakeflowMaintenanceOperationId(value, path);
   } catch (error: unknown) {
@@ -149,9 +139,7 @@ function admittedOperationId(
   }
 }
 
-function createOperationId(
-  factory: UuidV4Factory | undefined,
-): WakeflowMaintenanceOperationId {
+function createOperationId(factory: UuidV4Factory | undefined): WakeflowMaintenanceOperationId {
   try {
     return factory === undefined
       ? createWakeflowMaintenanceOperationId()
@@ -166,12 +154,7 @@ function createOperationId(
 
 function positiveMilliseconds(value: unknown, path: string): number | undefined {
   if (value === undefined) return undefined;
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value <= 0
-    || value > 300_000
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
     fail("input", path);
   }
   return value;
@@ -195,32 +178,23 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     "uuidFactory",
   ]);
   if (
-    !Object.hasOwn(record, "expectedCoreLayoutInspectionDigest")
-    || Object.keys(record).some((key) => !allowed.has(key))
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
-    || (
-      record.uuidFactory !== undefined
-      && (
-        typeof record.uuidFactory !== "function"
-        || types.isProxy(record.uuidFactory)
-      )
-    )
-    || (record.operationId !== undefined && record.uuidFactory !== undefined)
+    !Object.hasOwn(record, "expectedCoreLayoutInspectionDigest") ||
+    Object.keys(record).some((key) => !allowed.has(key)) ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal))) ||
+    (record.uuidFactory !== undefined &&
+      (typeof record.uuidFactory !== "function" || types.isProxy(record.uuidFactory))) ||
+    (record.operationId !== undefined && record.uuidFactory !== undefined)
   ) {
     fail("input", "$options");
   }
   if (
-    record.bootstrap !== undefined
-    && record.bootstrap !== "fresh"
-    && record.bootstrap !== "repair"
+    record.bootstrap !== undefined &&
+    record.bootstrap !== "fresh" &&
+    record.bootstrap !== "repair"
   ) {
     fail("input", "$options.bootstrap");
   }
@@ -249,18 +223,19 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     ),
     signal: record.signal as AbortSignal | undefined,
     uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
-    operationId: record.operationId === undefined
-      ? undefined
-      : admittedOperationId(record.operationId, "$options.operationId"),
+    operationId:
+      record.operationId === undefined
+        ? undefined
+        : admittedOperationId(record.operationId, "$options.operationId"),
   });
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -299,9 +274,9 @@ function mapLockError(error: RootedExclusiveFileLockError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "timeout") fail("busy", "$gate");
   if (
-    error.reason === "owner-active"
-    || error.reason === "residue-changed"
-    || error.reason === "release-failure"
+    error.reason === "owner-active" ||
+    error.reason === "residue-changed" ||
+    error.reason === "release-failure"
   ) {
     fail("recovery-required", "$gate");
   }
@@ -317,11 +292,11 @@ export function assertWakeflowMaintenanceGateContext(
   root: RootedDirectory,
 ): asserts value is Readonly<WakeflowMaintenanceGateContext> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ACTIVE_CONTEXTS.has(value)
-    || CONTEXT_ROOTS.get(value) !== root
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ACTIVE_CONTEXTS.has(value) ||
+    CONTEXT_ROOTS.get(value) !== root
   ) {
     fail("input", "$context");
   }
@@ -346,9 +321,7 @@ async function runCorrelatedGate<Result>(
     readonly retryDelayMilliseconds: number | undefined;
     readonly signal: AbortSignal | undefined;
   }>,
-  operation: (
-    context: Readonly<WakeflowMaintenanceGateContext>,
-  ) => Result | Promise<Result>,
+  operation: (context: Readonly<WakeflowMaintenanceGateContext>) => Result | Promise<Result>,
   prepare?: (
     expectedLockToken: string,
   ) => Promise<Readonly<WakeflowWorkspaceCoreLayoutInspection> | undefined>,
@@ -370,15 +343,27 @@ async function runCorrelatedGate<Result>(
           CONTEXT_CORE_INSPECTIONS.set(context, admittedCoreInspection);
         }
         try {
-          return await withWorkspaceOperationScope(root, "exclusive", async () => operation(context), {
-            ...(options.signal === undefined ? {} : { signal: options.signal }),
-            maintenanceGuard: async () => {
-              assertWakeflowMaintenanceGateContext(context, root);
-              const current = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-              if (current.status !== "held" || current.ownerState !== "active" || current.record.token !== expectedLockToken)
-                fail("recovery-required", "$gate");
+          return await withWorkspaceOperationScope(
+            root,
+            "exclusive",
+            async () => operation(context),
+            {
+              ...(options.signal === undefined ? {} : { signal: options.signal }),
+              maintenanceGuard: async () => {
+                assertWakeflowMaintenanceGateContext(context, root);
+                const current = await inspectRootedExclusiveFileLock(
+                  root,
+                  WAKEFLOW_MAINTENANCE_GATE_REF,
+                );
+                if (
+                  current.status !== "held" ||
+                  current.ownerState !== "active" ||
+                  current.record.token !== expectedLockToken
+                )
+                  fail("recovery-required", "$gate");
+              },
             },
-          });
+          );
         } finally {
           ACTIVE_CONTEXTS.delete(context);
           CONTEXT_ROOTS.delete(context);
@@ -416,22 +401,23 @@ export function parseWakeflowExistingMaintenanceGateOptions(
     if (error instanceof PassiveOwnDataError) fail("input", "$options");
     throw error;
   }
-  if (Object.keys(record).some((key) => (
-    key !== "acquireTimeoutMilliseconds"
-    && key !== "retryDelayMilliseconds"
-    && key !== "signal"
-  ))) {
+  if (
+    Object.keys(record).some(
+      (key) =>
+        key !== "acquireTimeoutMilliseconds" &&
+        key !== "retryDelayMilliseconds" &&
+        key !== "signal",
+    )
+  ) {
     fail("input", "$options");
   }
   const signal = record.signal;
   if (
-    signal !== undefined
-    && (
-      typeof signal !== "object"
-      || signal === null
-      || types.isProxy(signal)
-      || !(signal instanceof AbortSignal)
-    )
+    signal !== undefined &&
+    (typeof signal !== "object" ||
+      signal === null ||
+      types.isProxy(signal) ||
+      !(signal instanceof AbortSignal))
   ) {
     fail("input", "$options.signal");
   }
@@ -444,12 +430,8 @@ export function parseWakeflowExistingMaintenanceGateOptions(
     "$options.retryDelayMilliseconds",
   );
   return Object.freeze({
-    ...(acquireTimeoutMilliseconds === undefined
-      ? {}
-      : { acquireTimeoutMilliseconds }),
-    ...(retryDelayMilliseconds === undefined
-      ? {}
-      : { retryDelayMilliseconds }),
+    ...(acquireTimeoutMilliseconds === undefined ? {} : { acquireTimeoutMilliseconds }),
+    ...(retryDelayMilliseconds === undefined ? {} : { retryDelayMilliseconds }),
     ...(signal === undefined ? {} : { signal: signal as AbortSignal }),
   });
 }
@@ -457,9 +439,7 @@ export function parseWakeflowExistingMaintenanceGateOptions(
 export async function withExistingWakeflowMaintenanceGate<Result>(
   rootValue: RootedDirectory,
   operationIdValue: unknown,
-  operationValue: (
-    context: Readonly<WakeflowMaintenanceGateContext>,
-  ) => Result | Promise<Result>,
+  operationValue: (context: Readonly<WakeflowMaintenanceGateContext>) => Result | Promise<Result>,
   optionsValue: WakeflowExistingMaintenanceGateOptions = {},
 ): Promise<Result> {
   assertRoot(rootValue);
@@ -486,27 +466,21 @@ async function admitLockedCoreInspection(
 ): Promise<Readonly<WakeflowWorkspaceCoreLayoutInspection>> {
   let lock: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
   try {
-    lock = await inspectRootedExclusiveFileLock(
-      root,
-      WAKEFLOW_MAINTENANCE_GATE_REF,
-    );
+    lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
     throw error;
   }
   if (
-    lock.status !== "held"
-    || lock.ownerState !== "active"
-    || lock.record.token !== expectedLockToken
+    lock.status !== "held" ||
+    lock.ownerState !== "active" ||
+    lock.record.token !== expectedLockToken
   ) {
     fail("recovery-required", "$gate");
   }
   let after: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
-    after = await inspectWakeflowWorkspaceCoreLayout(
-      root,
-      signal === undefined ? {} : { signal },
-    );
+    after = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -515,21 +489,21 @@ async function admitLockedCoreInspection(
     throw error;
   }
   if (
-    after.active.status !== before.active.status
-    || after.active.nodeDigest !== before.active.nodeDigest
+    after.active.status !== before.active.status ||
+    after.active.nodeDigest !== before.active.nodeDigest
   ) {
     fail("stale-preview", "$activeLayout");
   }
   if (
-    after.local.status !== "busy"
-    || !after.local.protocolComplete
-    || after.issueCodes.length !== 0
+    after.local.status !== "busy" ||
+    !after.local.protocolComplete ||
+    after.issueCodes.length !== 0
   ) {
     fail(
-      after.issueCodes.some((code) => (
-        code === "maintenance-transaction-residue"
-        || code === "maintenance-gate-stage-residue"
-      ))
+      after.issueCodes.some(
+        (code) =>
+          code === "maintenance-transaction-residue" || code === "maintenance-gate-stage-residue",
+      )
         ? "recovery-required"
         : "bootstrap-conflict",
       "$bootstrap",
@@ -542,16 +516,13 @@ async function admitLockedCoreInspection(
 export async function withWakeflowMaintenanceGate<Result>(
   rootValue: RootedDirectory,
   optionsValue: WakeflowMaintenanceGateOptions,
-  operationValue: (
-    context: Readonly<WakeflowMaintenanceGateContext>,
-  ) => Result | Promise<Result>,
+  operationValue: (context: Readonly<WakeflowMaintenanceGateContext>) => Result | Promise<Result>,
 ): Promise<Result> {
   assertRoot(rootValue);
   assertOperation<Result>(operationValue);
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const operationId = options.operationId
-    ?? createOperationId(options.uuidFactory);
+  const operationId = options.operationId ?? createOperationId(options.uuidFactory);
   let inspection: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
     inspection = await inspectWakeflowWorkspaceCoreLayout(
@@ -569,9 +540,9 @@ export async function withWakeflowMaintenanceGate<Result>(
     fail("stale-preview", "$options.expectedCoreLayoutInspectionDigest");
   }
   if (
-    inspection.local.status !== "absent"
-    && inspection.local.status !== "bootstrap-prefix"
-    && inspection.local.status !== "idle"
+    inspection.local.status !== "absent" &&
+    inspection.local.status !== "bootstrap-prefix" &&
+    inspection.local.status !== "idle"
   ) {
     fail(
       inspection.local.status === "busy"
@@ -583,34 +554,21 @@ export async function withWakeflowMaintenanceGate<Result>(
     );
   }
   if (
-    inspection.local.status !== "idle"
-    && !inspection.local.freshCompatible
-    && options.bootstrap !== "repair"
+    inspection.local.status !== "idle" &&
+    !inspection.local.freshCompatible &&
+    options.bootstrap !== "repair"
   ) {
     fail("bootstrap-conflict", "$bootstrap");
   }
-  await materialize(
-    rootValue,
-    WAKEFLOW_RUNTIME_ROOT_REF,
-    options.signal,
-  );
+  await materialize(rootValue, WAKEFLOW_RUNTIME_ROOT_REF, options.signal);
   return runCorrelatedGate(
     rootValue,
     operationId,
     options,
     operationValue,
     async (expectedLockToken) => {
-      await materialize(
-        rootValue,
-        WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-        options.signal,
-      );
-      return admitLockedCoreInspection(
-        rootValue,
-        inspection,
-        expectedLockToken,
-        options.signal,
-      );
+      await materialize(rootValue, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, options.signal);
+      return admitLockedCoreInspection(rootValue, inspection, expectedLockToken, options.signal);
     },
   );
 }

@@ -1,11 +1,11 @@
 import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../../../foundation/filesystem/portable-resource-path.js";
-import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../../foundation/filesystem/portable-resource-path.js";
 import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../../kernel/layout.js";
 
 /**
@@ -19,10 +19,9 @@ export const DEMAND_PUBLICATION_ROOT_REF = parsePortableResourcePath(
 export const DEMAND_PUBLICATION_STAGES_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-active/current/demand-publication/stages",
 );
-export const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF =
-  parsePortableResourcePath(
-    ".wakeflow-active/current/demand-publication/transactions",
-  );
+export const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF = parsePortableResourcePath(
+  ".wakeflow-active/current/demand-publication/transactions",
+);
 export const DEMAND_PUBLICATION_LOCKS_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-active/current/demand-publication/locks",
 );
@@ -32,20 +31,14 @@ function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
 }
 
 export function demandFinalRootRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(value)}`,
-  );
+  return parsePortableResourcePath(`${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(value)}`);
 }
 
 export function demandPublicationStageRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${DEMAND_PUBLICATION_STAGES_ROOT_REF}/${parseDemandId(value)}`,
-  );
+  return parsePortableResourcePath(`${DEMAND_PUBLICATION_STAGES_ROOT_REF}/${parseDemandId(value)}`);
 }
 
-export function demandPublicationTransactionRef(
-  value: unknown,
-): PortableResourcePath {
+export function demandPublicationTransactionRef(value: unknown): PortableResourcePath {
   return parsePortableResourcePath(
     `${DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF}/${parseDemandId(value)}.json`,
   );
@@ -62,10 +55,6 @@ export const DEMAND_PUBLICATION_MARKER_REF = parsePortableResourcePath(
   "transactions/publication.json",
 );
 
-export function demandFinalPublicationMarkerRef(
-  value: unknown,
-): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${demandFinalRootRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`,
-  );
+export function demandFinalPublicationMarkerRef(value: unknown): PortableResourcePath {
+  return parsePortableResourcePath(`${demandFinalRootRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`);
 }

@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
@@ -19,36 +19,20 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import {
-  withRootedExclusiveFileLock,
-} from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  recomposeWakeflowManagedTextEnvelope,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
-import {
-  createWakeflowProgramInstructionBodyAuthority,
-} from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
-import {
-  recoverWakeflowProgramInstructionRecomposition,
-} from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.js";
+import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
+import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
 import {
   recomposeWakeflowProgramInstruction,
   WakeflowProgramInstructionRecompositionError,
   type WakeflowProgramInstructionRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import {
-  wakeflowProgramInstructionRecompositionLockRef,
-} from "../../../src/workspace/workspace-host-resource-catalog.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { recoverWakeflowProgramInstructionRecomposition } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { wakeflowProgramInstructionRecompositionLockRef } from "../../../src/workspace/workspace-host-resource-catalog.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 interface Fixture {
   readonly absolutePath: string;
@@ -57,22 +41,16 @@ interface Fixture {
   readonly root: RootedDirectory;
 }
 
-async function fixture(
-  t: TestContext,
-  source?: string | Uint8Array,
-): Promise<Readonly<Fixture>> {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-program-instruction-recomposition-",
-  ));
+async function fixture(t: TestContext, source?: string | Uint8Array): Promise<Readonly<Fixture>> {
+  const absolutePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-program-instruction-recomposition-"),
+  );
   mkdirSync(path.join(absolutePath, ".wakeflow-local"), { mode: 0o700 });
   const instructionPath = path.join(absolutePath, "AGENTS.md");
   if (source !== undefined) {
     writeFileSync(instructionPath, source, { mode: 0o644 });
   }
-  const lockRef = wakeflowProgramInstructionRecompositionLockRef(
-    codexWorkspaceHostResourceProfile,
-  );
+  const lockRef = wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile);
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -96,26 +74,27 @@ function request(
   currentConfig: ReturnType<typeof config> | null,
   desiredConfig: ReturnType<typeof config>,
 ) {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   return Object.freeze({
     matrix,
     expectedMatrixDigest: matrix.matrixDigest,
     profile: codexWorkspaceHostResourceProfile,
     currentConfig,
-    expectedCurrentConfigDigest: currentConfig === null
-      ? null
-      : computeWakeflowConfigDigest(currentConfig),
+    expectedCurrentConfigDigest:
+      currentConfig === null ? null : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
   });
 }
 
 function writeInactiveLock(lockPath: string): void {
-  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "11111111-1111-4111-8111-111111111111",
-  }), { mode: 0o600 });
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }),
+    { mode: 0o600 },
+  );
 }
 
 async function expectRecompositionError(
@@ -141,10 +120,7 @@ test("Program Instruction recomposition atomically creates once and stays curren
   const workspace = await fixture(t);
   const desired = config("en");
   const operation = request(null, desired);
-  const created = await recomposeWakeflowProgramInstruction(
-    workspace.root,
-    operation,
-  );
+  const created = await recomposeWakeflowProgramInstruction(workspace.root, operation);
 
   equal(created.disposition, "created");
   equal(created.effect?.publication, "created");
@@ -155,10 +131,7 @@ test("Program Instruction recomposition atomically creates once and stays curren
   const bytes = readFileSync(workspace.instructionPath);
   const node = statSync(workspace.instructionPath, { bigint: true });
 
-  const current = await recomposeWakeflowProgramInstruction(
-    workspace.root,
-    operation,
-  );
+  const current = await recomposeWakeflowProgramInstruction(workspace.root, operation);
   equal(current.disposition, "current");
   equal(current.effect, null);
   deepEqual(readFileSync(workspace.instructionPath), bytes);
@@ -202,10 +175,7 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
   const unsafe = await fixture(t, "# User section\n");
   chmodSync(unsafe.instructionPath, 0o600);
   await expectRecompositionError(
-    () => recomposeWakeflowProgramInstruction(
-      unsafe.root,
-      request(null, desired),
-    ),
+    () => recomposeWakeflowProgramInstruction(unsafe.root, request(null, desired)),
     "source-invalid",
     "$source",
   );
@@ -214,13 +184,15 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
   const contended = await fixture(t);
   let enter: (() => void) | undefined;
   let release: (() => void) | undefined;
-  const entered = new Promise<void>((resolve) => { enter = resolve; });
-  const released = new Promise<void>((resolve) => { release = resolve; });
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const holder = withRootedExclusiveFileLock(
     contended.root,
-    wakeflowProgramInstructionRecompositionLockRef(
-      codexWorkspaceHostResourceProfile,
-    ),
+    wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile),
     async () => {
       enter?.();
       await released;
@@ -229,14 +201,11 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
   await entered;
   try {
     await expectRecompositionError(
-      () => recomposeWakeflowProgramInstruction(
-        contended.root,
-        request(null, desired),
-        {
+      () =>
+        recomposeWakeflowProgramInstruction(contended.root, request(null, desired), {
           acquireTimeoutMilliseconds: 30,
           retryDelayMilliseconds: 5,
-        },
-      ),
+        }),
       "lock-timeout",
       "$lock",
     );
@@ -253,10 +222,7 @@ test("Program Instruction recovery retires only an inactive safe lock", async (t
   const workspace = await fixture(t);
   writeInactiveLock(workspace.lockPath);
 
-  const recovered = await recoverWakeflowProgramInstructionRecomposition(
-    workspace.root,
-    operation,
-  );
+  const recovered = await recoverWakeflowProgramInstructionRecomposition(workspace.root, operation);
   equal(recovered.disposition, "recovered");
   equal(/^sha256:[0-9a-f]{64}$/u.test(recovered.retiredLockDigest), true);
   equal(recovered.stageRecovery.observedStageCount, 0);
@@ -266,10 +232,7 @@ test("Program Instruction recovery retires only an inactive safe lock", async (t
 
   const absent = await fixture(t);
   await expectRecompositionError(
-    () => recoverWakeflowProgramInstructionRecomposition(
-      absent.root,
-      operation,
-    ),
+    () => recoverWakeflowProgramInstructionRecomposition(absent.root, operation),
     "recovery-not-required",
     "$lock",
   );
@@ -278,13 +241,15 @@ test("Program Instruction recovery retires only an inactive safe lock", async (t
   const active = await fixture(t);
   let enter: (() => void) | undefined;
   let release: (() => void) | undefined;
-  const entered = new Promise<void>((resolve) => { enter = resolve; });
-  const released = new Promise<void>((resolve) => { release = resolve; });
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const holder = withRootedExclusiveFileLock(
     active.root,
-    wakeflowProgramInstructionRecompositionLockRef(
-      codexWorkspaceHostResourceProfile,
-    ),
+    wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile),
     async () => {
       enter?.();
       await released;
@@ -293,10 +258,7 @@ test("Program Instruction recovery retires only an inactive safe lock", async (t
   await entered;
   try {
     await expectRecompositionError(
-      () => recoverWakeflowProgramInstructionRecomposition(
-        active.root,
-        operation,
-      ),
+      () => recoverWakeflowProgramInstructionRecomposition(active.root, operation),
       "recovery-required",
       "$lock",
     );
@@ -314,21 +276,15 @@ test("Program Instruction recovery preserves unknown managed content", async (t)
     desired,
     codexWorkspaceHostResourceProfile,
   );
-  const unknown = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    {
-      ...authority.envelopeTarget,
-      body: "## Unknown marker-consistent content\n",
-    },
-  ).bytes;
+  const unknown = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), {
+    ...authority.envelopeTarget,
+    body: "## Unknown marker-consistent content\n",
+  }).bytes;
   const workspace = await fixture(t, unknown);
   writeInactiveLock(workspace.lockPath);
 
   await expectRecompositionError(
-    () => recoverWakeflowProgramInstructionRecomposition(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => recoverWakeflowProgramInstructionRecomposition(workspace.root, request(desired, desired)),
     "recovery-required",
     "$source",
   );

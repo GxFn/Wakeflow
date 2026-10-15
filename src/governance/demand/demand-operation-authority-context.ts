@@ -1,7 +1,7 @@
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
@@ -12,18 +12,18 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  loadDemandEventSourcingRootAuthority,
-  DemandEventSourcingRootAuthorityError,
-  type LoadedDemandEventSourcingRootAuthority,
-} from "./event-sourcing/demand-event-sourcing-root-authority.js";
-import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
-import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
 import { fail as failWakeflow } from "../../kernel/error.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../ledger/ledger-authority-store.js";
+import {
+  DemandEventSourcingRootAuthorityError,
+  type LoadedDemandEventSourcingRootAuthority,
+  loadDemandEventSourcingRootAuthority,
+} from "./event-sourcing/demand-event-sourcing-root-authority.js";
+import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
+import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
 
 /**
  * Wakeflow Governance / Demand：一次业务操作共享的只读组合权威上下文。
@@ -42,7 +42,11 @@ export interface DemandOperationAuthorityContext {
 }
 
 export type DemandOperationAuthorityContextErrorReason =
-  "root" | "config" | "demand-authority" | "stale-config" | "aborted";
+  | "root"
+  | "config"
+  | "demand-authority"
+  | "stale-config"
+  | "aborted";
 
 const ERROR_MESSAGES = {
   root: "Demand operation root could not be held safely.",
@@ -50,9 +54,7 @@ const ERROR_MESSAGES = {
   "demand-authority": "Demand operation authority is invalid.",
   "stale-config": "Demand operation Config authority changed.",
   aborted: "Demand operation authority loading was aborted.",
-} as const satisfies Readonly<
-  Record<DemandOperationAuthorityContextErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandOperationAuthorityContextErrorReason, string>>;
 
 /** 通用Demand操作上下文无法安全打开、保持或关闭时的稳定错误。 */
 export class DemandOperationAuthorityContextError extends Error {
@@ -84,10 +86,7 @@ function ownString(value: unknown, key: string): string | null {
     : null;
 }
 
-function fail(
-  reason: DemandOperationAuthorityContextErrorReason,
-  cause?: unknown,
-): never {
+function fail(reason: DemandOperationAuthorityContextErrorReason, cause?: unknown): never {
   throw new DemandOperationAuthorityContextError(
     reason,
     ownString(cause, "code"),
@@ -96,9 +95,7 @@ function fail(
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 /** 从Workspace root安全打开一个已发布Demand的私有根目录。 */
@@ -118,8 +115,7 @@ export async function openDemandOperationRoot(
   }
   if (
     observation.node.kind !== "directory" ||
-    observation.node.permissionBits !==
-      DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
+    observation.node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
     (currentUserId() !== null && observation.node.userId !== currentUserId())
   ) {
     fail("root");
@@ -150,9 +146,7 @@ export async function openDemandOperationRoot(
 }
 
 /** 关闭一个Demand操作持有的RootedDirectory。 */
-export async function closeDemandOperationRoot(
-  root: RootedDirectory,
-): Promise<void> {
+export async function closeDemandOperationRoot(root: RootedDirectory): Promise<void> {
   try {
     await root.close();
   } catch (error: unknown) {

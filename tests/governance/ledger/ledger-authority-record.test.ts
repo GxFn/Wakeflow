@@ -1,25 +1,20 @@
-import {
-  deepEqual,
-  equal,
-} from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
+  type CreateRequirementRecordInput,
   createRequirementRecord,
+  type LedgerAuthorityDocument,
+  LedgerAuthorityRecordError,
+  type LedgerAuthorityRecordErrorReason,
   parseLedgerAuthorityRecord,
   parseLedgerAuthorityRecordDocument,
-  renderLedgerAuthorityRecord,
-  LedgerAuthorityRecordError,
-  type CreateRequirementRecordInput,
-  type LedgerAuthorityDocument,
-  type LedgerAuthorityRecordErrorReason,
   type RequirementDocumentRole,
+  renderLedgerAuthorityRecord,
 } from "../../../src/governance/ledger/ledger-authority-record.js";
 import {
   FIXTURE_ORIGIN_WINDOW_ID,
@@ -32,10 +27,7 @@ import {
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const CLOCK = { clock: () => FIXTURE_RECORDED_AT } as const;
 
-function expectRecordError(
-  action: () => unknown,
-  reason: LedgerAuthorityRecordErrorReason,
-): void {
+function expectRecordError(action: () => unknown, reason: LedgerAuthorityRecordErrorReason): void {
   let caught: unknown;
   try {
     action();
@@ -83,20 +75,26 @@ test("requirement package record carries header, members and sections through th
   equal(record.supersedes, null);
   deepEqual(record.testingDecision, draft.testingDecision);
   deepEqual(record.confirmation, draft.confirmation);
-  deepEqual(record.documents.map((document) => [document.role, document.path]), [
-    ["landing", "landing.md"],
-    ["requirement", "requirement.md"],
-  ]);
-  deepEqual(record.sections.map((section) => [section.path, section.anchor]), [
-    ["requirement.md", "goal"],
-    ["requirement.md", "completion-definition"],
-    ["requirement.md", "non-goals"],
-    ["requirement.md", "acceptance-criteria"],
-    ["requirement.md", "user-confirmation"],
-    ["landing.md", "code-facts"],
-    ["landing.md", "landing-plan"],
-    ["landing.md", "testing-decision"],
-  ]);
+  deepEqual(
+    record.documents.map((document) => [document.role, document.path]),
+    [
+      ["landing", "landing.md"],
+      ["requirement", "requirement.md"],
+    ],
+  );
+  deepEqual(
+    record.sections.map((section) => [section.path, section.anchor]),
+    [
+      ["requirement.md", "goal"],
+      ["requirement.md", "completion-definition"],
+      ["requirement.md", "non-goals"],
+      ["requirement.md", "acceptance-criteria"],
+      ["requirement.md", "user-confirmation"],
+      ["landing.md", "code-facts"],
+      ["landing.md", "landing-plan"],
+      ["landing.md", "testing-decision"],
+    ],
+  );
   equal(Object.isFrozen(record), true);
   equal(Object.isFrozen(record.documents), true);
   equal(Object.isFrozen(record.sections[0]), true);
@@ -110,10 +108,7 @@ test("requirement package record carries header, members and sections through th
     computeCanonicalJsonSha256Digest(parseLedgerAuthorityRecord(record)),
     computeCanonicalJsonSha256Digest(record),
   );
-  expectRecordError(
-    () => parseLedgerAuthorityRecord({ ...record, status: "confirmed" }),
-    "schema",
-  );
+  expectRecordError(() => parseLedgerAuthorityRecord({ ...record, status: "confirmed" }), "schema");
   expectRecordError(
     () => parseLedgerAuthorityRecord({ ...record, artifactKind: "wakeflow-todo-record" }),
     "schema",
@@ -128,12 +123,8 @@ test("record codec closes member roles and paths before accepting a package", ()
   const draft = requirementRecordDraft();
   const requirement = documentOf(draft, "requirement");
   const landing = documentOf(draft, "landing");
-  const withDocuments = (
-    documents: readonly Readonly<LedgerAuthorityDocument>[],
-  ) => createRequirementRecord(
-    requirementRecordDraft({ documents, sections: [] }),
-    CLOCK,
-  );
+  const withDocuments = (documents: readonly Readonly<LedgerAuthorityDocument>[]) =>
+    createRequirementRecord(requirementRecordDraft({ documents, sections: [] }), CLOCK);
 
   // 缺少 landing.md：即使成员数量满足 Schema，角色关系也不闭合。
   expectRecordError(
@@ -151,21 +142,23 @@ test("record codec closes member roles and paths before accepting a package", ()
   );
   // 角色与固定路径互换。
   expectRecordError(
-    () => withDocuments([
-      { ...landing, role: "requirement" },
-      { ...requirement, role: "landing" },
-    ]),
+    () =>
+      withDocuments([
+        { ...landing, role: "requirement" },
+        { ...requirement, role: "landing" },
+      ]),
     "document",
   );
   // 成员必须按路径严格升序，且不允许大小写冲突。
   expectRecordError(() => withDocuments([requirement, landing]), "document");
   expectRecordError(
-    () => withDocuments([
-      member("attachment", "attachments/A.md"),
-      member("attachment", "attachments/a.md"),
-      landing,
-      requirement,
-    ]),
+    () =>
+      withDocuments([
+        member("attachment", "attachments/A.md"),
+        member("attachment", "attachments/a.md"),
+        landing,
+        requirement,
+      ]),
     "document",
   );
 
@@ -174,39 +167,50 @@ test("record codec closes member roles and paths before accepting a package", ()
     landing,
     requirement,
   ]);
-  deepEqual(withAttachment.documents.map((document) => document.path), [
-    "attachments/trace.md",
-    "landing.md",
-    "requirement.md",
-  ]);
+  deepEqual(
+    withAttachment.documents.map((document) => document.path),
+    ["attachments/trace.md", "landing.md", "requirement.md"],
+  );
 });
 
 test("record codec relates demand type, testing decision and supersedes", () => {
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft({
-      demandType: "research",
-      testingDecision: { mode: "controller-only", summary: "聚焦测试。" },
-    }), CLOCK),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({
+          demandType: "research",
+          testingDecision: { mode: "controller-only", summary: "聚焦测试。" },
+        }),
+        CLOCK,
+      ),
     "relation",
   );
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft({
-      demandType: "requirement",
-      testingDecision: { mode: "not-applicable", summary: "研究不测。" },
-    }), CLOCK),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({
+          demandType: "requirement",
+          testingDecision: { mode: "not-applicable", summary: "研究不测。" },
+        }),
+        CLOCK,
+      ),
     "relation",
   );
-  const research = createRequirementRecord(requirementRecordDraft({
-    demandType: "research",
-    testingDecision: { mode: "not-applicable", summary: "研究不测。" },
-  }), CLOCK);
+  const research = createRequirementRecord(
+    requirementRecordDraft({
+      demandType: "research",
+      testingDecision: { mode: "not-applicable", summary: "研究不测。" },
+    }),
+    CLOCK,
+  );
   equal(research.testingDecision.mode, "not-applicable");
 
   expectRecordError(
-    () => createRequirementRecord(
-      requirementRecordDraft({ supersedes: FIXTURE_REQUIREMENT_ID }),
-      CLOCK,
-    ),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({ supersedes: FIXTURE_REQUIREMENT_ID }),
+        CLOCK,
+      ),
     "relation",
   );
   const superseding = createRequirementRecord(
@@ -222,28 +226,46 @@ test("record codec keeps sections bound to members without judging the required 
   if (first === undefined) throw new Error("Fixture lacks sections.");
 
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft({
-      sections: [{ ...first, path: parsePortableResourcePath("notes.md") }],
-    }), CLOCK),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({
+          sections: [{ ...first, path: parsePortableResourcePath("notes.md") }],
+        }),
+        CLOCK,
+      ),
     "section",
   );
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft({
-      sections: [first, { ...first, line: first.line + 10 }],
-    }), CLOCK),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({
+          sections: [first, { ...first, line: first.line + 10 }],
+        }),
+        CLOCK,
+      ),
     "section",
   );
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft({
-      sections: [{ ...first, line: 0 }],
-    }), CLOCK),
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({
+          sections: [{ ...first, line: 0 }],
+        }),
+        CLOCK,
+      ),
     "schema",
   );
 
-  const custom = createRequirementRecord(requirementRecordDraft({
-    sections: [{ ...first, anchor: "custom-notes", heading: "自定义章节" }],
-  }), CLOCK);
-  deepEqual(custom.sections.map((section) => section.anchor), ["custom-notes"]);
+  const custom = createRequirementRecord(
+    requirementRecordDraft({
+      sections: [{ ...first, anchor: "custom-notes", heading: "自定义章节" }],
+    }),
+    CLOCK,
+  );
+  deepEqual(
+    custom.sections.map((section) => section.anchor),
+    ["custom-notes"],
+  );
   const empty = createRequirementRecord(requirementRecordDraft({ sections: [] }), CLOCK);
   deepEqual(empty.sections, []);
 });
@@ -251,32 +273,35 @@ test("record codec keeps sections bound to members without judging the required 
 test("record drafts close their relations before reading the wall clock", () => {
   let clockCalls = 0;
   expectRecordError(
-    () => createRequirementRecord(
-      requirementRecordDraft({ supersedes: FIXTURE_REQUIREMENT_ID }),
-      {
+    () =>
+      createRequirementRecord(requirementRecordDraft({ supersedes: FIXTURE_REQUIREMENT_ID }), {
         clock: () => {
           clockCalls += 1;
           return FIXTURE_RECORDED_AT;
         },
-      },
-    ),
+      }),
     "relation",
   );
   equal(clockCalls, 0);
 
   expectRecordError(
-    () => createRequirementRecord(requirementRecordDraft(), {
-      clock: () => {
-        throw new Error("private clock failure");
-      },
-    }),
+    () =>
+      createRequirementRecord(requirementRecordDraft(), {
+        clock: () => {
+          throw new Error("private clock failure");
+        },
+      }),
     "time",
   );
   expectRecordError(
-    () => createRequirementRecord(
-      { ...requirementRecordDraft(), recordedAt: FIXTURE_RECORDED_AT } as CreateRequirementRecordInput,
-      CLOCK,
-    ),
+    () =>
+      createRequirementRecord(
+        {
+          ...requirementRecordDraft(),
+          recordedAt: FIXTURE_RECORDED_AT,
+        } as CreateRequirementRecordInput,
+        CLOCK,
+      ),
     "input",
   );
 });

@@ -189,7 +189,11 @@ async function directoryEntries(
     });
     return Object.freeze({
       entries: listing.entries.map((entry) =>
-        Object.freeze({ name: entry.name, resourcePath: entry.resourcePath, kind: entry.node.kind }),
+        Object.freeze({
+          name: entry.name,
+          resourcePath: entry.resourcePath,
+          kind: entry.node.kind,
+        }),
       ),
       unreadable: false,
     });
@@ -272,7 +276,11 @@ async function collectPackedBranches(
 function resolveHead(
   text: string,
   branches: ReadonlyMap<string, string>,
-): Readonly<{ readonly head: string | null; readonly branch: string | null; readonly detached: boolean }> {
+): Readonly<{
+  readonly head: string | null;
+  readonly branch: string | null;
+  readonly detached: boolean;
+}> {
   const symbolic = SYMBOLIC_HEAD_PATTERN.exec(text);
   if (symbolic?.[1] !== undefined) {
     return Object.freeze({
@@ -297,7 +305,9 @@ async function observeCheckout(
   gitdirText: string | null,
 ): Promise<"present" | "absent" | "unknown"> {
   if (gitdirText === null) return "absent";
-  const gitdirPath = path.isAbsolute(gitdirText) ? gitdirText : path.resolve(entryDirectory, gitdirText);
+  const gitdirPath = path.isAbsolute(gitdirText)
+    ? gitdirText
+    : path.resolve(entryDirectory, gitdirText);
   try {
     const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
     if (observed.state === "missing") return "absent";
@@ -335,7 +345,9 @@ async function collectWorktrees(
         name: entry.name,
         head: resolved?.head ?? null,
         branch: resolved?.branch ?? null,
-        prunable: (await observeCheckout(path.join(root.absolutePath, entry.resourcePath), gitdir)) === "absent",
+        prunable:
+          (await observeCheckout(path.join(root.absolutePath, entry.resourcePath), gitdir)) ===
+          "absent",
       }),
     );
   }
@@ -351,7 +363,8 @@ async function observeOpened(
     const git = await root.inspectExistingResource(GIT_DIRECTORY_REF, "$repository");
     if (git.node.kind !== "directory") return unavailable(repositoryId, "root-is-worktree");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) return unavailable(repositoryId, "git-directory-missing");
+    if (error instanceof RootedDirectoryError)
+      return unavailable(repositoryId, "git-directory-missing");
     throw error;
   }
   const headText = await pointerText(root, HEAD_REF, POINTER_MAXIMUM_BYTES, signal);

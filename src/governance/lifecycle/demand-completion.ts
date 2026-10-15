@@ -1,35 +1,35 @@
-import type { WakeflowDemandCompletion as DemandCompletionWire } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
-import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowDemandCompletion as DemandCompletionWire } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
+import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 import {
   parseRequirementLineageReference,
@@ -48,8 +48,7 @@ const COMPLETION_KIND = "WakeflowDemandCompletion" as const;
 const COMPLETION_SCHEMA_VERSION = 1 as const;
 
 /** `not-applicable` 只属于 research Demand：完成物是 document 类受管证据（§13.94 D8）。 */
-export type DemandCompletionTestingMode =
-  "controller-only" | "real-environment" | "not-applicable";
+export type DemandCompletionTestingMode = "controller-only" | "real-environment" | "not-applicable";
 
 /** 完成时看板上需求包的认领状态与其 Ledger 记录谱系。 */
 export interface DemandCompletionPackageSource {
@@ -197,9 +196,7 @@ function completionBasis(
 }
 
 /** 严格解析并复验self-excluding digest的Demand Completion。 */
-export function parseDemandCompletion(
-  value: unknown,
-): Readonly<DemandCompletion> {
+export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$completion");
@@ -221,10 +218,7 @@ export function parseDemandCompletion(
     });
   } catch (error: unknown) {
     if (error instanceof RequirementLineageError) {
-      fail(
-        error.reason === "path" ? "path" : "package",
-        `$/packageSource${error.path.slice(1)}`,
-      );
+      fail(error.reason === "path" ? "path" : "package", `$/packageSource${error.path.slice(1)}`);
     }
     throw error;
   }
@@ -248,27 +242,17 @@ export function parseDemandCompletion(
     schemaVersion: COMPLETION_SCHEMA_VERSION,
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
-    controllerWindowId: id(
-      wire.controllerWindowId,
-      "window",
-      "$/controllerWindowId",
-    ),
+    controllerWindowId: id(wire.controllerWindowId, "window", "$/controllerWindowId"),
     authorityDigest: digest(wire.authorityDigest, "$/authorityDigest"),
     testingMode: wire.testingMode,
     postAcceptanceRouteDigest: digest(
       wire.postAcceptanceRouteDigest,
       "$/postAcceptanceRouteDigest",
     ),
-    reviewSnapshotDigest: digest(
-      wire.reviewSnapshotDigest,
-      "$/reviewSnapshotDigest",
-    ),
+    reviewSnapshotDigest: digest(wire.reviewSnapshotDigest, "$/reviewSnapshotDigest"),
     observedState: Object.freeze({
       streamRevision: wire.observedState.streamRevision,
-      stateDigest: digest(
-        wire.observedState.stateDigest,
-        "$/observedState/stateDigest",
-      ),
+      stateDigest: digest(wire.observedState.stateDigest, "$/observedState/stateDigest"),
       lastEventId: id(
         wire.observedState.lastEventId,
         "demand-event",
@@ -309,9 +293,7 @@ export function createDemandCompletion(
   let completedAt: UtcInstant;
   try {
     completedAt =
-      options.clock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(options.clock);
+      options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;

@@ -1,47 +1,47 @@
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import {
   WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
   type WakeflowWindowHostBinding as WindowHostBindingWire,
 } from "../../contracts/generated/workspace/window-host-binding.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
-import {
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-  DeterministicJsonDocumentError,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
-  parseJsonValue,
-  JsonValueError,
-  type JsonValue,
-} from "../../foundation/data/json-value.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
+import {
+  DeterministicJsonDocumentError,
+  parseDeterministicJsonDocument,
+  renderDeterministicJsonDocument,
+} from "../../foundation/data/deterministic-json-document.js";
+import {
+  type JsonValue,
+  JsonValueError,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWindowHostBindingId,
-  WakeflowWindowHostBindingIdError,
   type WakeflowWindowHostBindingId,
+  WakeflowWindowHostBindingIdError,
 } from "./wakeflow-window-host-binding-id.js";
 import {
   parseWakeflowWindowHostHandle,
   parseWakeflowWindowHostIdentityProfile,
-  WakeflowWindowHostIdentityProfileError,
   type WakeflowWindowHostHandle,
   type WakeflowWindowHostIdentityProfile,
+  WakeflowWindowHostIdentityProfileError,
 } from "./wakeflow-window-host-identity-profile.js";
 
 /**
@@ -85,19 +85,21 @@ interface CreateWakeflowWindowHostBindingInput {
 }
 
 type WakeflowWindowHostBindingErrorReason =
-  "input" | "schema" | "profile" | "handle" | "time" | "representation";
+  | "input"
+  | "schema"
+  | "profile"
+  | "handle"
+  | "time"
+  | "representation";
 
 const ERROR_MESSAGES = {
   input: "Window Host Binding is not passive JSON data.",
   schema: "Window Host Binding does not satisfy its portable Schema.",
-  profile:
-    "Window Host Binding does not belong to the supplied Host Identity Profile.",
+  profile: "Window Host Binding does not belong to the supplied Host Identity Profile.",
   handle: "Window Host Binding contains an invalid current-host handle.",
   time: "Window Host Binding contains an invalid UTC instant.",
   representation: "Window Host Binding bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<WakeflowWindowHostBindingErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowWindowHostBindingErrorReason, string>>;
 
 /** Window Host Binding 准入失败的稳定、脱敏错误。 */
 export class WakeflowWindowHostBindingError extends Error {
@@ -118,10 +120,7 @@ const validateWire = createRuntimeJsonSchemaValidator<WindowHostBindingWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
 
-function fail(
-  reason: WakeflowWindowHostBindingErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowHostBindingErrorReason, path: string): never {
   throw new WakeflowWindowHostBindingError(reason, path);
 }
 
@@ -169,9 +168,7 @@ function instant(value: unknown, path: string): UtcInstant {
   }
 }
 
-function identityProfile(
-  value: unknown,
-): Readonly<WakeflowWindowHostIdentityProfile> {
+function identityProfile(value: unknown): Readonly<WakeflowWindowHostIdentityProfile> {
   try {
     return parseWakeflowWindowHostIdentityProfile(value);
   } catch (error: unknown) {

@@ -1,25 +1,16 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   createWakeflowSupportMemoryAuthority,
   parseWakeflowSupportMemoryAuthority,
   WakeflowSupportMemoryAuthorityError,
 } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 const TEST_ID = "surface_44444444-4444-4444-8444-444444444444";
@@ -32,9 +23,11 @@ function assertDeepFrozen(value: unknown): void {
 
 test("Design whole-file memory is a thin English identity and role contract", () => {
   const config = createMinimalWakeflowConfig();
-  const surface = (config.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces[0];
+  const surface = (
+    config.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces[0];
   if (surface === undefined) throw new Error("Expected Design surface.");
   surface.description = "Clarifies product requirements.";
   const authority = createWakeflowSupportMemoryAuthority(
@@ -54,7 +47,7 @@ test("Design whole-file memory is a thin English identity and role contract", ()
     "## Design role",
     "## Safety boundary",
     "`wakeflow-design` Skill",
-    "`\"Clarifies product requirements.\"`",
+    '`"Clarifies product requirements."`',
   ]) {
     equal(authority.body.includes(expected), true);
   }
@@ -119,9 +112,11 @@ test("Test whole-file memory uses persisted Simplified Chinese and Test boundari
 
 test("whole-file memory encodes user text and rejects external or forged authority", () => {
   const config = createMinimalWakeflowConfig();
-  const surface = (config.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces[0];
+  const surface = (
+    config.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces[0];
   if (surface === undefined) throw new Error("Expected Design surface.");
   surface.displayName = "Design\n## forged <!-- marker --> `";
   const authority = createWakeflowSupportMemoryAuthority(
@@ -134,19 +129,17 @@ test("whole-file memory encodes user text and rejects external or forged authori
   equal(authority.body.includes("\\u003c!-- marker --\\u003e"), true);
 
   const external = createMinimalWakeflowConfig();
-  const externalSurface = (external.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces[0];
+  const externalSurface = (
+    external.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces[0];
   if (externalSurface === undefined) throw new Error("Expected surface.");
   externalSurface.ownership = "external-owned";
   externalSurface.instructionManagement = "managed-block";
   let externalError: unknown;
   try {
-    createWakeflowSupportMemoryAuthority(
-      external,
-      codexWorkspaceHostResourceProfile,
-      DESIGN_ID,
-    );
+    createWakeflowSupportMemoryAuthority(external, codexWorkspaceHostResourceProfile, DESIGN_ID);
   } catch (error: unknown) {
     externalError = error;
   }

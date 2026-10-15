@@ -15,17 +15,12 @@ export type DemandEventCommitSequence = number & {
   readonly [DEMAND_EVENT_COMMIT_SEQUENCE_BRAND]: "DemandEventCommitSequence";
 };
 
-export type DemandEventStreamPositionErrorReason =
-  | "stream-revision"
-  | "commit-sequence";
+export type DemandEventStreamPositionErrorReason = "stream-revision" | "commit-sequence";
 
 const ERROR_MESSAGES = {
   "stream-revision": "Demand event stream revision must be a positive safe integer.",
   "commit-sequence": "Demand event commit sequence must be a positive safe integer.",
-} as const satisfies Readonly<Record<
-  DemandEventStreamPositionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DemandEventStreamPositionErrorReason, string>>;
 
 export class DemandEventStreamPositionError extends Error {
   override readonly name = "DemandEventStreamPositionError";
@@ -55,20 +50,12 @@ export function parseDemandEventStreamRevision(
   value: unknown,
   path = "$streamRevision",
 ): DemandEventStreamRevision {
-  return parsePositivePosition(
-    value,
-    "stream-revision",
-    path,
-  ) as DemandEventStreamRevision;
+  return parsePositivePosition(value, "stream-revision", path) as DemandEventStreamRevision;
 }
 
 export function parseDemandEventCommitSequence(
   value: unknown,
   path = "$commitSequence",
 ): DemandEventCommitSequence {
-  return parsePositivePosition(
-    value,
-    "commit-sequence",
-    path,
-  ) as DemandEventCommitSequence;
+  return parsePositivePosition(value, "commit-sequence", path) as DemandEventCommitSequence;
 }

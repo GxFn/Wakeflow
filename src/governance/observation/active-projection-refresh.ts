@@ -104,20 +104,30 @@ export async function refreshActiveProjection(
   root: RootedDirectory,
   options: RefreshActiveProjectionOptions = {},
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
-  return withWorkspaceOperationScope(root, "shared", () => publishActiveProjection(root, async () => {
-    const snapshot = await readSnapshot(root, options.signal);
-    const ledgerRoot = await openLedgerRoot(root, snapshot);
-    try {
-      return await renderRound(root, snapshot, ledgerRoot, options.signal);
-    } finally {
-      await ledgerRoot.close();
-    }
-  }, {
-      ...signalOptions(options.signal),
-      ...(options.acquireTimeoutMilliseconds === undefined
-        ? {}
-        : { acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds }),
-  }), signalOptions(options.signal));
+  return withWorkspaceOperationScope(
+    root,
+    "shared",
+    () =>
+      publishActiveProjection(
+        root,
+        async () => {
+          const snapshot = await readSnapshot(root, options.signal);
+          const ledgerRoot = await openLedgerRoot(root, snapshot);
+          try {
+            return await renderRound(root, snapshot, ledgerRoot, options.signal);
+          } finally {
+            await ledgerRoot.close();
+          }
+        },
+        {
+          ...signalOptions(options.signal),
+          ...(options.acquireTimeoutMilliseconds === undefined
+            ? {}
+            : { acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds }),
+        },
+      ),
+    signalOptions(options.signal),
+  );
 }
 
 /**
@@ -133,7 +143,11 @@ export async function refreshActiveProjectionQuietly(
   try {
     await refreshActiveProjection(root, signalOptions(signal));
   } catch (error: unknown) {
-    if (!(error instanceof WakeflowError) || error.reason === "aborted" || error.code === "unexpected") {
+    if (
+      !(error instanceof WakeflowError) ||
+      error.reason === "aborted" ||
+      error.code === "unexpected"
+    ) {
       throw error;
     }
   }

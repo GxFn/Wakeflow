@@ -4,11 +4,11 @@ import { test } from "node:test";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import {
+  ControllerTestReviewDecisionError,
+  type CreateControllerTestReviewDecisionInput,
   createControllerTestReviewDecision,
   parseControllerTestReviewDecisionDocument,
   renderControllerTestReviewDecision,
-  ControllerTestReviewDecisionError,
-  type CreateControllerTestReviewDecisionInput,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import {
   productDefectEscalation,

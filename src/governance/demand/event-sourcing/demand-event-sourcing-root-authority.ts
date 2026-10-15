@@ -1,62 +1,59 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
-import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import type { ByteCount } from "../../../foundation/numeric/byte-count.js";
+import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
+  LedgerAuthorityStore,
+  LedgerAuthorityStoreError,
+} from "../../ledger/ledger-authority-store.js";
+import {
+  type AdmittedDemandAuthority,
   admitDemandAuthority,
   computeDemandAuthorityDigest,
-  parseDemandAuthorityDocument,
-  DemandAuthorityError,
-  type AdmittedDemandAuthority,
   type DemandAuthority,
+  DemandAuthorityError,
+  parseDemandAuthorityDocument,
 } from "../model/demand-authority.js";
 import {
   computeDemandIdentityDigest,
-  parseDemandIdentityDocument,
-  DemandIdentityError,
   type DemandIdentity,
+  DemandIdentityError,
+  parseDemandIdentityDocument,
 } from "../model/demand-identity.js";
-import {
-  DemandEventSourcingRepository,
-  DemandEventSourcingRepositoryError,
-} from "./demand-event-sourcing-repository.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
-import {
-  DemandEventSourcingRootInventoryError,
-  inspectDemandEventSourcingRootInventory,
-  type DemandEventSourcingRootInventory,
-  type DemandEventSourcingRootInventoryPhase,
-} from "./demand-event-sourcing-root-inventory.js";
 import {
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
   DEMAND_EVENT_SOURCING_IDENTITY_REF,
 } from "./demand-event-sourcing-paths.js";
 import {
-  DemandFileEventStore,
-  DemandFileEventStoreError,
-} from "./demand-file-event-store.js";
-import type { DemandEventStreamCommit } from "./demand-event-stream-commit.js";
+  DemandEventSourcingRepository,
+  DemandEventSourcingRepositoryError,
+} from "./demand-event-sourcing-repository.js";
 import {
-  upcastDemandEventSourcingStoredEvent,
+  type DemandEventSourcingRootInventory,
+  DemandEventSourcingRootInventoryError,
+  type DemandEventSourcingRootInventoryPhase,
+  inspectDemandEventSourcingRootInventory,
+} from "./demand-event-sourcing-root-inventory.js";
+import {
   DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
 } from "./demand-event-sourcing-upcaster.js";
-import {
-  LedgerAuthorityStore,
-  LedgerAuthorityStoreError,
-} from "../../ledger/ledger-authority-store.js";
+import type { DemandEventStreamCommit } from "./demand-event-stream-commit.js";
+import { DemandFileEventStore, DemandFileEventStoreError } from "./demand-file-event-store.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：Demand根目录的组合权威加载。
@@ -98,14 +95,11 @@ const ERROR_MESSAGES = {
   inventory: "Demand Event Sourcing root inventory does not satisfy its requested phase.",
   identity: "Demand Event Sourcing root identity is invalid.",
   authority: "Demand Event Sourcing root authority record is invalid.",
-  ledger:
-    "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
+  ledger: "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
   stream: "Demand Event Sourcing root event stream is invalid.",
   closure: "Demand Event Sourcing root records do not form one aggregate.",
   aborted: "Demand Event Sourcing root authority load was aborted.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingRootAuthorityErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingRootAuthorityErrorReason, string>>;
 
 export class DemandEventSourcingRootAuthorityError extends Error {
   override readonly name = "DemandEventSourcingRootAuthorityError";
@@ -113,20 +107,14 @@ export class DemandEventSourcingRootAuthorityError extends Error {
   readonly reason: DemandEventSourcingRootAuthorityErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DemandEventSourcingRootAuthorityErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DemandEventSourcingRootAuthorityErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: DemandEventSourcingRootAuthorityErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingRootAuthorityErrorReason, path: string): never {
   throw new DemandEventSourcingRootAuthorityError(reason, path);
 }
 
@@ -139,23 +127,13 @@ function sameOptionalNode(
     : right !== undefined && sameFileNodeSnapshot(left, right);
 }
 
-function sameStringArray(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function sameManagedEvidencePublication(
-  left: Readonly<
-    DemandEventSourcingRootInventory["managedEvidence"]["publication"]
-  >,
-  right: Readonly<
-    DemandEventSourcingRootInventory["managedEvidence"]["publication"]
-  >,
+  left: Readonly<DemandEventSourcingRootInventory["managedEvidence"]["publication"]>,
+  right: Readonly<DemandEventSourcingRootInventory["managedEvidence"]["publication"]>,
 ): boolean {
   if (left === null || right === null) return left === right;
   const leftProgress = left.stageProgress;
@@ -171,10 +149,7 @@ function sameManagedEvidencePublication(
         leftProgress.plan.treeDigest === rightProgress.plan.treeDigest &&
         leftProgress.status === rightProgress.status &&
         sameFileNodeSnapshot(leftProgress.rootNode, rightProgress.rootNode) &&
-        sameStringArray(
-          leftProgress.missingDirectories,
-          rightProgress.missingDirectories,
-        ) &&
+        sameStringArray(leftProgress.missingDirectories, rightProgress.missingDirectories) &&
         sameStringArray(leftProgress.missingFiles, rightProgress.missingFiles))
   );
 }
@@ -218,20 +193,14 @@ function sameInventory(
     left.artifactCount === right.artifactCount &&
     left.transactionCount === right.transactionCount &&
     left.appendCandidateCount === right.appendCandidateCount &&
-    sameManagedEvidenceInventory(
-      left.managedEvidence,
-      right.managedEvidence,
-    ) &&
+    sameManagedEvidenceInventory(left.managedEvidence, right.managedEvidence) &&
     sameFileNodeSnapshot(left.nodes.root, right.nodes.root) &&
     sameFileNodeSnapshot(left.nodes.identity, right.nodes.identity) &&
     sameFileNodeSnapshot(left.nodes.authority, right.nodes.authority) &&
     sameFileNodeSnapshot(left.nodes.eventSourcing, right.nodes.eventSourcing) &&
     sameFileNodeSnapshot(left.nodes.commits, right.nodes.commits) &&
     sameFileNodeSnapshot(left.nodes.snapshots, right.nodes.snapshots) &&
-    sameFileNodeSnapshot(
-      left.nodes.appendCandidates,
-      right.nodes.appendCandidates,
-    ) &&
+    sameFileNodeSnapshot(left.nodes.appendCandidates, right.nodes.appendCandidates) &&
     sameFileNodeSnapshot(left.nodes.artifacts, right.nodes.artifacts) &&
     sameFileNodeSnapshot(left.nodes.taskPackages, right.nodes.taskPackages) &&
     sameFileNodeSnapshot(left.nodes.transactions, right.nodes.transactions)
@@ -239,12 +208,8 @@ function sameInventory(
 }
 
 function sameManagedEvidenceSelector(
-  record: Readonly<
-    DemandEventSourcingRootInventory["managedEvidence"]["records"][number]
-  >,
-  selector: NonNullable<
-    DemandEventSourcingAggregate["state"]["managedEvidence"]
-  >[number],
+  record: Readonly<DemandEventSourcingRootInventory["managedEvidence"]["records"][number]>,
+  selector: NonNullable<DemandEventSourcingAggregate["state"]["managedEvidence"]>[number],
 ): boolean {
   return (
     record.evidenceId === selector.evidenceId &&
@@ -254,12 +219,8 @@ function sameManagedEvidenceSelector(
 }
 
 function assertClosedManagedEvidenceRecords(
-  records: Readonly<
-    DemandEventSourcingRootInventory["managedEvidence"]["records"]
-  >,
-  selectors: NonNullable<
-    DemandEventSourcingAggregate["state"]["managedEvidence"]
-  >,
+  records: Readonly<DemandEventSourcingRootInventory["managedEvidence"]["records"]>,
+  selectors: NonNullable<DemandEventSourcingAggregate["state"]["managedEvidence"]>,
   identity: Readonly<DemandIdentity>,
   authorityDigest: Sha256Digest,
 ): void {
@@ -285,22 +246,14 @@ function assertManagedEvidenceClosure(
   identity: Readonly<DemandIdentity>,
   authorityDigest: Sha256Digest,
   aggregate: Readonly<DemandEventSourcingAggregate>,
-  phase: Extract<
-    DemandEventSourcingRootInventoryPhase,
-    "healthy" | "managed-evidence-publication"
-  >,
+  phase: Extract<DemandEventSourcingRootInventoryPhase, "healthy" | "managed-evidence-publication">,
 ): void {
   const records = inventory.managedEvidence.records;
   const selectors = aggregate.state.managedEvidence ?? [];
   const publication = inventory.managedEvidence.publication;
   if (phase === "healthy") {
     if (publication !== null) fail("closure", "$managed-evidence");
-    assertClosedManagedEvidenceRecords(
-      records,
-      selectors,
-      identity,
-      authorityDigest,
-    );
+    assertClosedManagedEvidenceRecords(records, selectors, identity, authorityDigest);
     return;
   }
 
@@ -314,12 +267,8 @@ function assertManagedEvidenceClosure(
   ) {
     fail("closure", "$managed-evidence");
   }
-  const targetSelector = selectors.find(
-    (selector) => selector.evidenceId === manifest.evidenceId,
-  );
-  const targetRecord = records.find(
-    (record) => record.evidenceId === manifest.evidenceId,
-  );
+  const targetSelector = selectors.find((selector) => selector.evidenceId === manifest.evidenceId);
+  const targetRecord = records.find((record) => record.evidenceId === manifest.evidenceId);
   if (
     targetSelector !== undefined &&
     (targetSelector.manifestDigest !== manifest.manifestDigest ||
@@ -335,18 +284,12 @@ function assertManagedEvidenceClosure(
     ) {
       fail("closure", "$managed-evidence");
     }
-    assertClosedManagedEvidenceRecords(
-      records,
-      selectors,
-      identity,
-      authorityDigest,
-    );
+    assertClosedManagedEvidenceRecords(records, selectors, identity, authorityDigest);
     return;
   }
   if (
     targetRecord !== undefined ||
-    (targetSelector !== undefined &&
-      publication.physicalState !== "stage-complete")
+    (targetSelector !== undefined && publication.physicalState !== "stage-complete")
   ) {
     fail("closure", "$managed-evidence");
   }
@@ -354,9 +297,7 @@ function assertManagedEvidenceClosure(
     records,
     targetSelector === undefined
       ? selectors
-      : selectors.filter(
-          (selector) => selector.evidenceId !== manifest.evidenceId,
-        ),
+      : selectors.filter((selector) => selector.evidenceId !== manifest.evidenceId),
     identity,
     authorityDigest,
   );
@@ -388,10 +329,7 @@ async function readRecord(
       }
       fail(owner, `$${owner}`);
     }
-    if (
-      error instanceof StrictTextFileError ||
-      error instanceof DeterministicJsonDocumentError
-    ) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail(owner, `$${owner}`);
     }
     throw error;
@@ -452,13 +390,10 @@ async function loadRootAuthority(
   const { audit, signal } = parseOptions(options);
   let inventory: Readonly<DemandEventSourcingRootInventory>;
   try {
-    inventory = await inspectDemandEventSourcingRootInventory(
-      root,
-      {
-        phase,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    inventory = await inspectDemandEventSourcingRootInventory(root, {
+      phase,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -506,14 +441,10 @@ async function loadRootAuthority(
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
-    if (
-      error instanceof DemandAuthorityError ||
-      error instanceof LedgerAuthorityStoreError
-    ) {
+    if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
       if (
         (error instanceof DemandAuthorityError && error.reason === "aborted") ||
-        (error instanceof LedgerAuthorityStoreError &&
-          error.reason === "aborted")
+        (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
       ) {
         fail("aborted", "$signal");
       }
@@ -529,21 +460,16 @@ async function loadRootAuthority(
   let replayedCommitCount: number;
   try {
     if (audit) {
-      const audited = await repository.audit(
-        signal === undefined ? undefined : { signal },
-      );
+      const audited = await repository.audit(signal === undefined ? undefined : { signal });
       aggregate = audited.aggregate;
       replayedCommitCount = audited.replayedCommitCount;
       loadMode = "audit";
     } else {
-      const loaded = await repository.load(
-        signal === undefined ? undefined : { signal },
-      );
+      const loaded = await repository.load(signal === undefined ? undefined : { signal });
       if (loaded === null) fail("stream", "$commits");
       aggregate = loaded.aggregate;
       replayedCommitCount = loaded.replayedCommitCount;
-      loadMode =
-        loaded.snapshotStatus === "used" ? "snapshot-tail" : "full-replay";
+      loadMode = loaded.snapshotStatus === "used" ? "snapshot-tail" : "full-replay";
     }
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootAuthorityError) throw error;
@@ -558,10 +484,7 @@ async function loadRootAuthority(
   }
   let firstCommit;
   try {
-    firstCommit = await eventStore.readCommitAt(
-      1,
-      signal === undefined ? undefined : { signal },
-    );
+    firstCommit = await eventStore.readCommitAt(1, signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -599,22 +522,13 @@ async function loadRootAuthority(
   ) {
     fail("closure", "$root");
   }
-  assertManagedEvidenceClosure(
-    inventory,
-    identity,
-    authorityDigest,
-    aggregate,
-    phase,
-  );
+  assertManagedEvidenceClosure(inventory, identity, authorityDigest, aggregate, phase);
   let finalInventory: Readonly<DemandEventSourcingRootInventory>;
   try {
-    finalInventory = await inspectDemandEventSourcingRootInventory(
-      root,
-      {
-        phase,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    finalInventory = await inspectDemandEventSourcingRootInventory(root, {
+      phase,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -658,10 +572,5 @@ export async function loadDemandEventSourcingRootAuthorityDuringManagedEvidenceP
   ledgerStore: LedgerAuthorityStore,
   options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
 ): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
-  return loadRootAuthority(
-    root,
-    ledgerStore,
-    options,
-    "managed-evidence-publication",
-  );
+  return loadRootAuthority(root, ledgerStore, options, "managed-evidence-publication");
 }

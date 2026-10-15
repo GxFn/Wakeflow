@@ -1,51 +1,47 @@
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  parseWakeflowExistingMaintenanceGateOptions,
-  withExistingWakeflowMaintenanceGate,
-  WakeflowMaintenanceGateError,
-  type WakeflowExistingMaintenanceGateOptions,
-} from "./wakeflow-maintenance-gate.js";
-import {
-  assertWakeflowMaintenanceJournalIsOnlyTransaction,
-  publishPreparedWakeflowMaintenanceJournal,
-  recoverWakeflowMaintenanceJournalStages,
-  readWakeflowMaintenanceJournalOrNull,
-  retirePreparedWakeflowMaintenanceJournal,
-  WakeflowMaintenanceJournalStoreError,
-  type WakeflowPreparedMaintenanceJournalRetirementReceipt,
-} from "./wakeflow-maintenance-journal-store.js";
-import {
-  reconstructWakeflowMaintenanceExecutionFromIntent,
-} from "./wakeflow-maintenance-execution-intent.js";
+import { reconstructWakeflowMaintenanceExecutionFromIntent } from "./wakeflow-maintenance-execution-intent.js";
 import {
   assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction,
   assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix,
   readWakeflowMaintenanceExecutionIntentOrNull,
   recoverWakeflowMaintenanceExecutionIntentStages,
   retireWakeflowMaintenanceExecutionIntent,
-  WakeflowMaintenanceExecutionIntentStoreError,
   type WakeflowMaintenanceExecutionIntentRetirementReceipt,
+  WakeflowMaintenanceExecutionIntentStoreError,
 } from "./wakeflow-maintenance-execution-intent-store.js";
 import {
+  parseWakeflowExistingMaintenanceGateOptions,
+  type WakeflowExistingMaintenanceGateOptions,
+  WakeflowMaintenanceGateError,
+  withExistingWakeflowMaintenanceGate,
+} from "./wakeflow-maintenance-gate.js";
+import {
+  assertWakeflowMaintenanceJournalIsOnlyTransaction,
+  publishPreparedWakeflowMaintenanceJournal,
+  readWakeflowMaintenanceJournalOrNull,
+  recoverWakeflowMaintenanceJournalStages,
+  retirePreparedWakeflowMaintenanceJournal,
+  WakeflowMaintenanceJournalStoreError,
+  type WakeflowPreparedMaintenanceJournalRetirementReceipt,
+} from "./wakeflow-maintenance-journal-store.js";
+import {
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceOperationUuid,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
-import {
-  WAKEFLOW_MAINTENANCE_GATE_REF,
-} from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
   type WakeflowWorkspaceCoreLayoutInspection,
   WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 
 /**
  * Wakeflow Workspace / Maintenance：checkpoint 0 prepared transaction 的取消恢复。
@@ -58,10 +54,8 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 export interface WakeflowPreparedMaintenanceRecoveryReceipt {
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly retiredPreviousGateDigest: Sha256Digest | null;
-  readonly intentRetirement:
-    Readonly<WakeflowMaintenanceExecutionIntentRetirementReceipt> | null;
-  readonly journalRetirement:
-    Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>;
+  readonly intentRetirement: Readonly<WakeflowMaintenanceExecutionIntentRetirementReceipt> | null;
+  readonly journalRetirement: Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>;
   readonly coreLayoutInspectionDigest: Sha256Digest;
 }
 
@@ -83,16 +77,12 @@ const ERROR_MESSAGES = {
   transaction: "Wakeflow prepared maintenance transaction resources have an invalid shape.",
   "plan-mismatch": "Wakeflow prepared journal differs from the confirmed execution plan.",
   "operation-mismatch": "Wakeflow prepared gate belongs to another operation.",
-  "owner-active-or-unknown":
-    "Wakeflow prepared gate owner is active or cannot be proven inactive.",
+  "owner-active-or-unknown": "Wakeflow prepared gate owner is active or cannot be proven inactive.",
   gate: "Wakeflow prepared recovery could not acquire its gate.",
   journal: "Wakeflow prepared journal is unavailable or unsafe.",
   aborted: "Wakeflow prepared maintenance cancellation was aborted.",
   "recovery-required": "Wakeflow prepared maintenance recovery remains incomplete.",
-} as const satisfies Readonly<Record<
-  WakeflowPreparedMaintenanceRecoveryErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowPreparedMaintenanceRecoveryErrorReason, string>>;
 
 /** Prepared maintenance 取消恢复失败的稳定、脱敏错误。 */
 export class WakeflowPreparedMaintenanceRecoveryError extends Error {
@@ -101,20 +91,14 @@ export class WakeflowPreparedMaintenanceRecoveryError extends Error {
   readonly reason: WakeflowPreparedMaintenanceRecoveryErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowPreparedMaintenanceRecoveryErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowPreparedMaintenanceRecoveryErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowPreparedMaintenanceRecoveryErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowPreparedMaintenanceRecoveryErrorReason, path: string): never {
   throw new WakeflowPreparedMaintenanceRecoveryError(reason, path);
 }
 
@@ -122,31 +106,21 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function mapIntentStoreError(
-  error: WakeflowMaintenanceExecutionIntentStoreError,
-): never {
+function mapIntentStoreError(error: WakeflowMaintenanceExecutionIntentStoreError): never {
   if (error.reason === "transactions-shape") {
     fail("transaction", "$transactions");
   }
-  if (
-    error.reason === "commit-uncertain"
-    || error.reason === "recovery-required"
-  ) {
+  if (error.reason === "commit-uncertain" || error.reason === "recovery-required") {
     fail("recovery-required", "$intent");
   }
   fail("intent", "$intent");
 }
 
-function mapJournalStoreError(
-  error: WakeflowMaintenanceJournalStoreError,
-): never {
+function mapJournalStoreError(error: WakeflowMaintenanceJournalStoreError): never {
   if (error.reason === "transactions-shape") {
     fail("transaction", "$transactions");
   }
-  if (
-    error.reason === "commit-uncertain"
-    || error.reason === "recovery-required"
-  ) {
+  if (error.reason === "commit-uncertain" || error.reason === "recovery-required") {
     fail("recovery-required", "$journal");
   }
   fail("journal", "$journal");
@@ -181,10 +155,7 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     await recoverWakeflowMaintenanceExecutionIntentStages(root, operationId);
     await recoverWakeflowMaintenanceJournalStages(root, operationId);
     assertNotAborted(parsedOptions.signal);
-    intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(
-      root,
-      operationId,
-    );
+    intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
     source = await readWakeflowMaintenanceJournalOrNull(root, operationId);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
@@ -197,40 +168,31 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
   }
   assertNotAborted(parsedOptions.signal);
   if (intentSource === null && source === null) fail("journal", "$journal");
-  const reconstructed = intentSource === null
-    ? null
-    : reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
+  const reconstructed =
+    intentSource === null
+      ? null
+      : reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
   const plan = reconstructed?.plan ?? null;
   if (source !== null && intentSource !== null) {
     if (plan === null) fail("plan-mismatch", "$intent");
     if (
-      source.journal.intentDigest !== intentSource.intentDigest
-      || source.journal.planDigest !== plan.planDigest
-      || source.journal.action !== plan.sharedPreview.action
-      || source.journal.matrixDigest !== plan.sharedPreview.matrixDigest
-      || source.journal.currentConfigDigest
-        !== plan.sharedPreview.currentConfigDigest
-      || source.journal.desiredConfigDigest
-        !== plan.sharedPreview.desiredConfigDigest
-      || source.journal.stepIds.length !== plan.steps.length
-      || source.journal.stepIds.some((stepId, index) => (
-        stepId !== plan.steps[index]?.stepId
-      ))
+      source.journal.intentDigest !== intentSource.intentDigest ||
+      source.journal.planDigest !== plan.planDigest ||
+      source.journal.action !== plan.sharedPreview.action ||
+      source.journal.matrixDigest !== plan.sharedPreview.matrixDigest ||
+      source.journal.currentConfigDigest !== plan.sharedPreview.currentConfigDigest ||
+      source.journal.desiredConfigDigest !== plan.sharedPreview.desiredConfigDigest ||
+      source.journal.stepIds.length !== plan.steps.length ||
+      source.journal.stepIds.some((stepId, index) => stepId !== plan.steps[index]?.stepId)
     ) {
       fail("plan-mismatch", "$intent");
     }
   }
   try {
     if (intentSource !== null && source !== null) {
-      await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(
-        root,
-        intentSource,
-      );
+      await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, intentSource);
     } else if (intentSource !== null) {
-      await assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix(
-        root,
-        intentSource,
-      );
+      await assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix(root, intentSource);
     } else if (source !== null) {
       await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, source);
     }
@@ -247,21 +209,16 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
   // Only a prepared checkpoint-0 journal may be cancelled; refuse any other
   // before the old gate residue is touched.
   if (
-    source !== null
-    && (
-      source.journal.state !== "prepared"
-      || source.journal.checkpoint !== 0
-      || source.journal.affectedStepId !== null
-    )
+    source !== null &&
+    (source.journal.state !== "prepared" ||
+      source.journal.checkpoint !== 0 ||
+      source.journal.affectedStepId !== null)
   ) {
     fail("journal", "$journal");
   }
   let oldGate;
   try {
-    oldGate = await inspectRootedExclusiveFileLock(
-      root,
-      WAKEFLOW_MAINTENANCE_GATE_REF,
-    );
+    oldGate = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) fail("gate", "$gate");
     throw error;
@@ -276,11 +233,7 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
       fail("operation-mismatch", "$operationId");
     }
     try {
-      await retireRootedExclusiveFileLockResidue(
-        root,
-        WAKEFLOW_MAINTENANCE_GATE_REF,
-        oldGate,
-      );
+      await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_MAINTENANCE_GATE_REF, oldGate);
       retiredPreviousGateDigest = oldGate.digest;
     } catch (error: unknown) {
       if (error instanceof RootedExclusiveFileLockError) {
@@ -289,38 +242,26 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
       throw error;
     }
   }
-  let intentRetirement:
-    Readonly<WakeflowMaintenanceExecutionIntentRetirementReceipt> | null = null;
-  let journalRetirement:
-    Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>;
+  let intentRetirement: Readonly<WakeflowMaintenanceExecutionIntentRetirementReceipt> | null = null;
+  let journalRetirement: Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>;
   try {
     journalRetirement = await withExistingWakeflowMaintenanceGate(
       root,
       operationId,
       async (context) => {
-        const currentIntent = await readWakeflowMaintenanceExecutionIntentOrNull(
-          root,
-          operationId,
-        );
+        const currentIntent = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
         if (
-          (intentSource === null) !== (currentIntent === null)
-          || (
-            intentSource !== null
-            && currentIntent !== null
-            && (
-              currentIntent.intentDigest !== intentSource.intentDigest
-              || currentIntent.digest !== intentSource.digest
-              || currentIntent.node.deviceId !== intentSource.node.deviceId
-              || currentIntent.node.inodeId !== intentSource.node.inodeId
-            )
-          )
+          (intentSource === null) !== (currentIntent === null) ||
+          (intentSource !== null &&
+            currentIntent !== null &&
+            (currentIntent.intentDigest !== intentSource.intentDigest ||
+              currentIntent.digest !== intentSource.digest ||
+              currentIntent.node.deviceId !== intentSource.node.deviceId ||
+              currentIntent.node.inodeId !== intentSource.node.inodeId))
         ) {
           fail("intent", "$intent");
         }
-        let current = await readWakeflowMaintenanceJournalOrNull(
-          root,
-          operationId,
-        );
+        let current = await readWakeflowMaintenanceJournalOrNull(root, operationId);
         if (current === null) {
           if (currentIntent === null || plan === null) {
             fail("journal", "$journal");
@@ -332,20 +273,18 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
             plan,
           );
         } else if (
-          source !== null
-          && (
-            current.digest !== source.digest
-            || current.journalDigest !== source.journalDigest
-            || current.node.deviceId !== source.node.deviceId
-            || current.node.inodeId !== source.node.inodeId
-          )
+          source !== null &&
+          (current.digest !== source.digest ||
+            current.journalDigest !== source.journalDigest ||
+            current.node.deviceId !== source.node.deviceId ||
+            current.node.inodeId !== source.node.inodeId)
         ) {
           fail("journal", "$journal");
         }
         if (
-          current.journal.state !== "prepared"
-          || current.journal.checkpoint !== 0
-          || current.journal.affectedStepId !== null
+          current.journal.state !== "prepared" ||
+          current.journal.checkpoint !== 0 ||
+          current.journal.affectedStepId !== null
         ) {
           fail("journal", "$journal");
         }
@@ -356,11 +295,7 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
             currentIntent,
           );
         }
-        return retirePreparedWakeflowMaintenanceJournal(
-          root,
-          context,
-          current,
-        );
+        return retirePreparedWakeflowMaintenanceJournal(root, context, current);
       },
       parsedOptions,
     );

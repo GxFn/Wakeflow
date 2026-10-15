@@ -1,34 +1,28 @@
-import type {
-  WakeflowRequirementLineageReference as RequirementLineageWire,
-} from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
-import {
-  WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA,
-} from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import type { WakeflowRequirementLineageReference as RequirementLineageWire } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import { requirementRootRef } from "../../ledger/ledger-authority-paths.js";
 
 /**
@@ -39,8 +33,7 @@ import { requirementRootRef } from "../../ledger/ledger-authority-paths.js";
  * 与看板职责所有者验证当前记录、认领状态和 CAS 预期（ADR-0011 D7）。
  */
 
-const REQUIREMENT_LINEAGE_ARTIFACT_KIND =
-  "wakeflow-requirement-lineage" as const;
+const REQUIREMENT_LINEAGE_ARTIFACT_KIND = "wakeflow-requirement-lineage" as const;
 const REQUIREMENT_LINEAGE_SCHEMA_VERSION = 1 as const;
 
 export interface RequirementLineageReference {
@@ -51,19 +44,14 @@ export interface RequirementLineageReference {
   readonly recordDigest: Sha256Digest;
 }
 
-type RequirementLineageErrorReason =
-  | "json"
-  | "schema"
-  | "identifier"
-  | "path"
-  | "digest";
+type RequirementLineageErrorReason = "json" | "schema" | "identifier" | "path" | "digest";
 
 const ERROR_MESSAGES = {
-  "json": "Requirement lineage is not passive JSON data.",
-  "schema": "Requirement lineage does not satisfy its portable Schema.",
-  "identifier": "Requirement lineage contains an invalid requirement identity.",
-  "path": "Requirement lineage contains an invalid record reference.",
-  "digest": "Requirement lineage contains an invalid digest.",
+  json: "Requirement lineage is not passive JSON data.",
+  schema: "Requirement lineage does not satisfy its portable Schema.",
+  identifier: "Requirement lineage contains an invalid requirement identity.",
+  path: "Requirement lineage contains an invalid record reference.",
+  digest: "Requirement lineage contains an invalid digest.",
 } as const satisfies Readonly<Record<RequirementLineageErrorReason, string>>;
 
 export class RequirementLineageError extends Error {

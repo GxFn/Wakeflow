@@ -1,13 +1,12 @@
 import { types } from "node:util";
-
 import {
-  sameFileNodeSnapshot,
-  type FileNodeSnapshot,
-} from "../../../foundation/filesystem/file-node-snapshot.js";
-import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import {
+  type FileNodeSnapshot,
+  sameFileNodeSnapshot,
+} from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import {
@@ -17,34 +16,32 @@ import {
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import {
+  inspectManagedEvidenceRecordSetInventory,
+  type ManagedEvidenceRecordSetInventory,
+  ManagedEvidenceRecordSetInventoryError,
+} from "../../evidence/managed-evidence-record-set-inventory.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME } from "../../evidence/managed-evidence-resource-paths.js";
+import {
+  parseTaskPackageProjectionFileName,
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+  TaskPackageProjectionPathError,
+} from "../../tasking/task-package-projection-paths.js";
+import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
-  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
-  parseDemandEventStreamCommitFileName,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DemandEventSourcingPathError,
+  parseDemandEventStreamCommitFileName,
 } from "./demand-event-sourcing-paths.js";
 import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
 } from "./demand-file-event-store.js";
-import {
-  parseTaskPackageProjectionFileName,
-  TaskPackageProjectionPathError,
-  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
-} from "../../tasking/task-package-projection-paths.js";
-import {
-  inspectManagedEvidenceRecordSetInventory,
-  ManagedEvidenceRecordSetInventoryError,
-  type ManagedEvidenceRecordSetInventory,
-} from "../../evidence/managed-evidence-record-set-inventory.js";
-import {
-  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME,
-} from "../../evidence/managed-evidence-resource-paths.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的排他资源清单。
@@ -98,18 +95,13 @@ export type DemandEventSourcingRootInventoryErrorReason =
 const ERROR_MESSAGES = {
   input: "Demand Event Sourcing root inventory input is invalid.",
   "root-scope": "Demand Event Sourcing root changed during inventory.",
-  "tree-shape":
-    "Demand Event Sourcing root contains a missing or unknown resource.",
-  "node-policy":
-    "Demand Event Sourcing root resource violates private node policy.",
+  "tree-shape": "Demand Event Sourcing root contains a missing or unknown resource.",
+  "node-policy": "Demand Event Sourcing root resource violates private node policy.",
   capacity: "Demand Event Sourcing root inventory exceeds its capacity.",
-  "source-changed":
-    "Demand Event Sourcing root inventory changed during observation.",
+  "source-changed": "Demand Event Sourcing root inventory changed during observation.",
   aborted: "Demand Event Sourcing root inventory was aborted.",
   "operation-failure": "Demand Event Sourcing root inventory failed.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingRootInventoryErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingRootInventoryErrorReason, string>>;
 
 export class DemandEventSourcingRootInventoryError extends Error {
   override readonly name = "DemandEventSourcingRootInventoryError";
@@ -117,10 +109,7 @@ export class DemandEventSourcingRootInventoryError extends Error {
   readonly reason: DemandEventSourcingRootInventoryErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DemandEventSourcingRootInventoryErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DemandEventSourcingRootInventoryErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -140,15 +129,9 @@ const EVENT_SOURCING_NAMES = Object.freeze([
   "index",
   "snapshots",
 ] as const);
-const ARTIFACT_NAMES = new Set([
-  "managed-evidence",
-  "task-packages",
-]);
+const ARTIFACT_NAMES = new Set(["managed-evidence", "task-packages"]);
 
-function fail(
-  reason: DemandEventSourcingRootInventoryErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingRootInventoryErrorReason, path: string): never {
   throw new DemandEventSourcingRootInventoryError(reason, path);
 }
 
@@ -180,8 +163,7 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (typeof process.geteuid === "function" &&
-      node.userId !== BigInt(process.geteuid()))
+    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
   ) {
     fail("node-policy", path);
   }
@@ -192,8 +174,7 @@ function assertFile(node: Readonly<FileNodeSnapshot>, path: string): void {
     node.kind !== "file" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
     node.linkCount !== 1n ||
-    (typeof process.geteuid === "function" &&
-      node.userId !== BigInt(process.geteuid()))
+    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
   ) {
     fail("node-policy", path);
   }
@@ -214,9 +195,7 @@ function mapReadError(error: StableDirectoryReadError, path: string): never {
   fail("operation-failure", path);
 }
 
-function mapManagedEvidenceError(
-  error: ManagedEvidenceRecordSetInventoryError,
-): never {
+function mapManagedEvidenceError(error: ManagedEvidenceRecordSetInventoryError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$managed-evidence");
@@ -250,8 +229,7 @@ async function readResource(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError)
-      mapReadError(error, `$${ref}`);
+    if (error instanceof StableDirectoryReadError) mapReadError(error, `$${ref}`);
     throw error;
   }
 }
@@ -282,10 +260,10 @@ function parseOptions(value: unknown): Readonly<{
     fail("input", "$options");
   }
   return Object.freeze({
-    phase: record.phase === "demand-publication" ||
-        record.phase === "managed-evidence-publication"
-      ? record.phase
-      : "healthy",
+    phase:
+      record.phase === "demand-publication" || record.phase === "managed-evidence-publication"
+        ? record.phase
+        : "healthy",
     signal: record.signal as AbortSignal | undefined,
   });
 }
@@ -402,11 +380,7 @@ export async function inspectDemandEventSourcingRootInventory(
   );
   assertDirectory(artifacts.directoryNode, "$artifacts");
   assertArtifactNames(artifacts);
-  const taskPackagesNode = requiredEntryNode(
-    artifacts,
-    "task-packages",
-    "$task-packages",
-  );
+  const taskPackagesNode = requiredEntryNode(artifacts, "task-packages", "$task-packages");
   assertDirectory(taskPackagesNode, "$task-packages");
   const taskPackages = await readResource(
     root,
@@ -441,10 +415,7 @@ export async function inspectDemandEventSourcingRootInventory(
   if (phase === "healthy") {
     if (transactions.entries.length !== 0) fail("tree-shape", "$transactions");
   } else if (phase === "demand-publication") {
-    if (
-      transactions.entries.length !== 1 ||
-      transactions.entries[0]?.name !== "publication.json"
-    ) {
+    if (transactions.entries.length !== 1 || transactions.entries[0]?.name !== "publication.json") {
       fail("tree-shape", "$transactions");
     }
     assertFile(transactions.entries[0].node, "$transactions/publication.json");
@@ -454,23 +425,17 @@ export async function inspectDemandEventSourcingRootInventory(
   } else {
     if (
       transactions.entries.length !== 1 ||
-      transactions.entries[0]?.name !==
-        MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME
+      transactions.entries[0]?.name !== MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME
     ) {
       fail("tree-shape", "$transactions");
     }
     managedEvidenceTransactionNode = transactions.entries[0].node;
-    assertFile(
-      managedEvidenceTransactionNode,
-      "$transactions/managed-evidence-publication.json",
-    );
+    assertFile(managedEvidenceTransactionNode, "$transactions/managed-evidence-publication.json");
   }
   let managedEvidence: Readonly<ManagedEvidenceRecordSetInventory>;
   try {
     managedEvidence = await inspectManagedEvidenceRecordSetInventory(root, {
-      ...(managedEvidenceNode === undefined
-        ? {}
-        : { expectedRootNode: managedEvidenceNode }),
+      ...(managedEvidenceNode === undefined ? {} : { expectedRootNode: managedEvidenceNode }),
       ...(managedEvidenceTransactionNode === undefined
         ? {}
         : { expectedTransactionNode: managedEvidenceTransactionNode }),
@@ -554,9 +519,7 @@ export async function inspectDemandEventSourcingRootInventory(
   return Object.freeze({
     commitCount: commits.entries.length,
     snapshotCount: snapshots.entries.length,
-    artifactCount:
-      taskPackages.entries.length +
-      managedEvidence.recordCount,
+    artifactCount: taskPackages.entries.length + managedEvidence.recordCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
     managedEvidence,
@@ -564,11 +527,7 @@ export async function inspectDemandEventSourcingRootInventory(
       root: after.directoryNode,
       identity: requiredEntryNode(after, "identity.json", "$identity"),
       authority: requiredEntryNode(after, "authority.json", "$authority"),
-      eventSourcing: requiredEntryNode(
-        after,
-        "event-sourcing",
-        "$event-sourcing",
-      ),
+      eventSourcing: requiredEntryNode(after, "event-sourcing", "$event-sourcing"),
       commits: commits.directoryNode,
       snapshots: snapshots.directoryNode,
       index: indexes.directoryNode,

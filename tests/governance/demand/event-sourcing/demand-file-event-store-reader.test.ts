@@ -42,13 +42,34 @@ import { disposableRoot } from "../../../support/temp-root.js";
 
 /** 直接覆盖读取边界：与 demand-file-event-store.test.ts 同一套 prepared commit 夹具。 */
 
-const DEMAND_ID = parseWakeflowDurableIdOfKind("demand_11111111-1111-4111-8111-111111111111", "demand");
-const EVENT_ID = parseWakeflowDurableIdOfKind("demand-event_22222222-2222-4222-8222-222222222222", "demand-event");
-const OTHER_EVENT_ID = parseWakeflowDurableIdOfKind("demand-event_33333333-3333-4333-8333-333333333333", "demand-event");
-const THIRD_EVENT_ID = parseWakeflowDurableIdOfKind("demand-event_66666666-6666-4666-8666-666666666666", "demand-event");
-const COMMIT_ID = parseWakeflowDurableIdOfKind("demand-event-commit_44444444-4444-4444-8444-444444444444", "demand-event-commit");
-const OTHER_COMMIT_ID = parseWakeflowDurableIdOfKind("demand-event-commit_55555555-5555-4555-8555-555555555555", "demand-event-commit");
-const THIRD_COMMIT_ID = parseWakeflowDurableIdOfKind("demand-event-commit_77777777-7777-4777-8777-777777777777", "demand-event-commit");
+const DEMAND_ID = parseWakeflowDurableIdOfKind(
+  "demand_11111111-1111-4111-8111-111111111111",
+  "demand",
+);
+const EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_22222222-2222-4222-8222-222222222222",
+  "demand-event",
+);
+const OTHER_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_33333333-3333-4333-8333-333333333333",
+  "demand-event",
+);
+const THIRD_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_66666666-6666-4666-8666-666666666666",
+  "demand-event",
+);
+const COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_44444444-4444-4444-8444-444444444444",
+  "demand-event-commit",
+);
+const OTHER_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_55555555-5555-4555-8555-555555555555",
+  "demand-event-commit",
+);
+const THIRD_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_77777777-7777-4777-8777-777777777777",
+  "demand-event-commit",
+);
 const RECORDED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const CANCELLED_AT = parseUtcInstant("2026-08-26T11:00:00.000Z");
 const IDENTITY_DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
@@ -123,8 +144,15 @@ async function openStore(t: TestContext, prefix: string) {
   t.after(() => root.close());
   const store = new DemandFileEventStore(root);
   await store.initialize();
-  const nodeAt = async (ref: PortableResourcePath) => (await root.inspectExistingResource(ref)).node;
-  return { fixtureRoot, root, store, nodeAt, commitsPath: path.join(fixtureRoot, "event-sourcing", "commits") };
+  const nodeAt = async (ref: PortableResourcePath) =>
+    (await root.inspectExistingResource(ref)).node;
+  return {
+    fixtureRoot,
+    root,
+    store,
+    nodeAt,
+    commitsPath: path.join(fixtureRoot, "event-sourcing", "commits"),
+  };
 }
 
 function commitFile(commitsPath: string, sequence: number): string {
@@ -139,9 +167,9 @@ function abortedSignal(): AbortSignal {
 
 function isStoreError(reason: DemandFileEventStoreError["reason"], errorPath?: string) {
   return (error: unknown): boolean =>
-    error instanceof DemandFileEventStoreError
-    && error.reason === reason
-    && (errorPath === undefined || error.path === errorPath);
+    error instanceof DemandFileEventStoreError &&
+    error.reason === reason &&
+    (errorPath === undefined || error.path === errorPath);
 }
 
 const aborted = isStoreError("aborted", "$signal");
@@ -155,30 +183,59 @@ test("readDemandFileEventDirectory 读取稳定清单并按政策判定目录节
   const read = await readDirectory(root, COMMITS_REF, 16, undefined);
   equal(read.directoryNode.kind, "directory");
   equal(read.directoryNode.permissionBits, 0o700);
-  deepEqual(read.entries.map((entry) => entry.name), ["0000000000000001.json", "0000000000000002.json"]);
+  deepEqual(
+    read.entries.map((entry) => entry.name),
+    ["0000000000000001.json", "0000000000000002.json"],
+  );
   equal(read.entries[0]?.resourcePath, FIRST_REF);
-  equal((await readDirectory(root, COMMITS_REF, 16, undefined, read.directoryNode)).entries.length, 2);
+  equal(
+    (await readDirectory(root, COMMITS_REF, 16, undefined, read.directoryNode)).entries.length,
+    2,
+  );
 
-  await rejects(readDirectory(root, COMMITS_REF, 1, undefined), isStoreError("capacity", `$${COMMITS_REF}`));
+  await rejects(
+    readDirectory(root, COMMITS_REF, 1, undefined),
+    isStoreError("capacity", `$${COMMITS_REF}`),
+  );
   const missing = parsePortableResourcePath("event-sourcing/missing");
-  await rejects(readDirectory(root, missing, 16, undefined), isStoreError("not-initialized", `$${missing}`));
+  await rejects(
+    readDirectory(root, missing, 16, undefined),
+    isStoreError("not-initialized", `$${missing}`),
+  );
   await rejects(readDirectory(root, COMMITS_REF, 16, abortedSignal()), aborted);
   // 预期节点是另一个目录：清单读取报告预期变化，读取方归为 stream-changed。
-  const snapshots = await readDirectory(root, parsePortableResourcePath("event-sourcing/snapshots"), 16, undefined);
+  const snapshots = await readDirectory(
+    root,
+    parsePortableResourcePath("event-sourcing/snapshots"),
+    16,
+    undefined,
+  );
   const changed = isStoreError("stream-changed", `$${COMMITS_REF}`);
   await rejects(readDirectory(root, COMMITS_REF, 16, undefined, snapshots.directoryNode), changed);
-  await rejects(readDirectory(root, FIRST_REF, 16, undefined), isStoreError("stream-changed", `$${FIRST_REF}`));
+  await rejects(
+    readDirectory(root, FIRST_REF, 16, undefined),
+    isStoreError("stream-changed", `$${FIRST_REF}`),
+  );
 
   chmodSync(commitsPath, 0o755);
-  await rejects(readDirectory(root, COMMITS_REF, 16, undefined), isStoreError("node-policy", `$${COMMITS_REF}`));
-  equal((await readDirectory(root, COMMITS_REF, 16, undefined, undefined, "archived")).entries.length, 2);
+  await rejects(
+    readDirectory(root, COMMITS_REF, 16, undefined),
+    isStoreError("node-policy", `$${COMMITS_REF}`),
+  );
+  equal(
+    (await readDirectory(root, COMMITS_REF, 16, undefined, undefined, "archived")).entries.length,
+    2,
+  );
   rmSync(commitsPath, { recursive: true });
   writeFileSync(commitsPath, "", { mode: 0o600 });
   await rejects(readDirectory(root, COMMITS_REF, 16, undefined, undefined, "archived"), changed);
 });
 
 test("readDemandFileEventCommit 区分私有与归档节点政策并分类内容失败", async (t) => {
-  const { fixtureRoot, root, store, nodeAt, commitsPath } = await openStore(t, "wakeflow-reader-commit-");
+  const { fixtureRoot, root, store, nodeAt, commitsPath } = await openStore(
+    t,
+    "wakeflow-reader-commit-",
+  );
   const first = prepared();
   await store.append(first);
   await store.append(preparedCancellation(first.aggregate));
@@ -196,29 +253,47 @@ test("readDemandFileEventCommit 区分私有与归档节点政策并分类内容
   equal(linked.linkCount, 2n);
   await rejects(readCommit(root, FIRST_REF, linked, undefined, "$commit"), policy);
   // 归档政策放宽模式与属主，但提交文件仍必须是单链接普通文件。
-  await rejects(readCommit(root, FIRST_REF, linked, undefined, "$commit", [1n], "archived"), policy);
-  deepEqual((await readCommit(root, FIRST_REF, linked, undefined, "$commit", [1n, 2n])).commit, first.commit);
+  await rejects(
+    readCommit(root, FIRST_REF, linked, undefined, "$commit", [1n], "archived"),
+    policy,
+  );
+  deepEqual(
+    (await readCommit(root, FIRST_REF, linked, undefined, "$commit", [1n, 2n])).commit,
+    first.commit,
+  );
   rmSync(linkPath);
 
   chmodSync(file, 0o644);
   const relaxed = await nodeAt(FIRST_REF);
   await rejects(readCommit(root, FIRST_REF, relaxed, undefined, "$commit"), policy);
-  deepEqual((await readCommit(root, FIRST_REF, relaxed, undefined, "$commit", [1n], "archived")).commit, first.commit);
+  deepEqual(
+    (await readCommit(root, FIRST_REF, relaxed, undefined, "$commit", [1n], "archived")).commit,
+    first.commit,
+  );
   chmodSync(file, 0o600);
 
   const secondNode = await nodeAt(SECOND_REF);
   const changed = isStoreError("stream-changed", "$commit");
   await rejects(readCommit(root, FIRST_REF, secondNode, undefined, "$commit"), changed);
-  await rejects(readCommit(root, FIRST_REF, secondNode, undefined, "$commit", [1n], "archived"), changed);
+  await rejects(
+    readCommit(root, FIRST_REF, secondNode, undefined, "$commit", [1n], "archived"),
+    changed,
+  );
 
   for (const text of ["{not json\n", '{\n  "artifactKind": "other"\n}\n']) {
     writeFileSync(file, text);
     const broken = await nodeAt(FIRST_REF);
-    await rejects(readCommit(root, FIRST_REF, broken, undefined, "$commit"), isStoreError("stream-invalid", "$commit"));
+    await rejects(
+      readCommit(root, FIRST_REF, broken, undefined, "$commit"),
+      isStoreError("stream-invalid", "$commit"),
+    );
   }
   truncateSync(file, 17 * 1024 * 1024);
   const oversized = await nodeAt(FIRST_REF);
-  await rejects(readCommit(root, FIRST_REF, oversized, undefined, "$commit"), isStoreError("capacity", "$commit"));
+  await rejects(
+    readCommit(root, FIRST_REF, oversized, undefined, "$commit"),
+    isStoreError("capacity", "$commit"),
+  );
   await rejects(readCommit(root, FIRST_REF, oversized, abortedSignal(), "$commit"), aborted);
 });
 
@@ -234,7 +309,11 @@ test("readAllDemandFileEventCommits 校验清单名称、摘要链与两种节�
   await store.append(second);
   const all = await readAll(root, undefined);
   deepEqual(all.commits, [first.commit, second.commit]);
-  deepEqual(all.cursor, { commitSequence: 2, streamRevision: 2, lastCommitDigest: digestOf(second.commit) });
+  deepEqual(all.cursor, {
+    commitSequence: 2,
+    streamRevision: 2,
+    lastCommitDigest: digestOf(second.commit),
+  });
   await rejects(readAll(root, abortedSignal()), aborted);
 
   const stray = path.join(commitsPath, "0000000000000002.json.bak");
@@ -275,7 +354,11 @@ test("readDemandFileEventCommitsAfter 从精确锚点逐槽位读取尾部", asy
   const tail = await readAfter(root, anchor, undefined);
   deepEqual(tail.anchorCommit, first.commit);
   deepEqual(tail.commits, [second.commit]);
-  deepEqual(tail.cursor, { commitSequence: 2, streamRevision: 2, lastCommitDigest: digestOf(second.commit) });
+  deepEqual(tail.cursor, {
+    commitSequence: 2,
+    streamRevision: 2,
+    lastCommitDigest: digestOf(second.commit),
+  });
   const atTail = await readAfter(root, tail.cursor, undefined);
   deepEqual(atTail.anchorCommit, second.commit);
   deepEqual(atTail.commits, []);
@@ -284,16 +367,34 @@ test("readDemandFileEventCommitsAfter 从精确锚点逐槽位读取尾部", asy
   const input = (errorPath: string) => isStoreError("input", errorPath);
   await rejects(readAfter(root, null, undefined), input("$cursor"));
   await rejects(readAfter(root, { ...anchor, extra: 1 }, undefined), input("$cursor"));
-  await rejects(readAfter(root, { ...anchor, lastCommitDigest: "sha256:zz" }, undefined), input("$/lastCommitDigest"));
-  await rejects(readAfter(root, { ...anchor, commitSequence: 0 }, undefined), input("$/commitSequence"));
-  await rejects(readAfter(root, { ...anchor, streamRevision: 0 }, undefined), input("$/streamRevision"));
+  await rejects(
+    readAfter(root, { ...anchor, lastCommitDigest: "sha256:zz" }, undefined),
+    input("$/lastCommitDigest"),
+  );
+  await rejects(
+    readAfter(root, { ...anchor, commitSequence: 0 }, undefined),
+    input("$/commitSequence"),
+  );
+  await rejects(
+    readAfter(root, { ...anchor, streamRevision: 0 }, undefined),
+    input("$/streamRevision"),
+  );
   const stale = isStoreError("stream-invalid", "$cursor");
   await rejects(readAfter(root, { ...anchor, streamRevision: 2 }, undefined), stale);
-  await rejects(readAfter(root, { ...anchor, lastCommitDigest: AUTHORITY_DIGEST }, undefined), stale);
-  await rejects(readAfter(root, { ...anchor, commitSequence: 3, streamRevision: 3 }, undefined), stale);
+  await rejects(
+    readAfter(root, { ...anchor, lastCommitDigest: AUTHORITY_DIGEST }, undefined),
+    stale,
+  );
+  await rejects(
+    readAfter(root, { ...anchor, commitSequence: 3, streamRevision: 3 }, undefined),
+    stale,
+  );
   await rejects(readAfter(root, anchor, abortedSignal()), aborted);
 
-  writeFileSync(commitFile(commitsPath, 2), render({ ...second.commit, previousCommitDigest: IDENTITY_DIGEST }));
+  writeFileSync(
+    commitFile(commitsPath, 2),
+    render({ ...second.commit, previousCommitDigest: IDENTITY_DIGEST }),
+  );
   await rejects(readAfter(root, anchor, undefined), isStoreError("stream-invalid", "$tail/0"));
 });
 
@@ -321,7 +422,10 @@ test("readDemandFileEventCommitOrNull 与 readDemandFileEventCommitAt 定位单�
   await rejects(readAt(root, 1, abortedSignal()), aborted);
   // 槽位 2 里放着提交 1 的内容：文件名与内容序号不一致。
   writeFileSync(commitFile(commitsPath, 2), render(first.commit), { mode: 0o600 });
-  await rejects(readAt(root, 2, undefined), isStoreError("stream-invalid", "$commit/commitSequence"));
+  await rejects(
+    readAt(root, 2, undefined),
+    isStoreError("stream-invalid", "$commit/commitSequence"),
+  );
 });
 
 test("assertDemandFileEventAppendAdmissionAgainstPrefix 对已读前缀执行全部追加准入", () => {
@@ -329,8 +433,14 @@ test("assertDemandFileEventAppendAdmissionAgainstPrefix 对已读前缀执行全
   const second = preparedCancellation(first.aggregate);
   admit([], first);
   admit([first.commit], second);
-  const provenance = isStoreError("append-provenance-conflict", "$preparedCommit/sourceExpectation");
-  throws(() => admit([first.commit], first), isStoreError("concurrency-conflict", "$commit/commitSequence"));
+  const provenance = isStoreError(
+    "append-provenance-conflict",
+    "$preparedCommit/sourceExpectation",
+  );
+  throws(
+    () => admit([first.commit], first),
+    isStoreError("concurrency-conflict", "$commit/commitSequence"),
+  );
   throws(() => admit([], second), isStoreError("concurrency-conflict", "$commit/commitSequence"));
   // 提交 1 的 expectedStreamRevision/previousCommitDigest 由提交解析器与序号绑定，首提交的
   // concurrency-conflict 分支对可解析的提交不可达；这里只覆盖来源预期分支。
@@ -350,7 +460,12 @@ test("assertDemandFileEventAppendAdmissionAgainstPrefix 对已读前缀执行全
     state: first.aggregate.state,
     stateDigest: first.aggregate.stateDigest,
   });
-  const forged = preparedCancellation(forgedAggregate, THIRD_COMMIT_ID, THIRD_EVENT_ID, THIRD_COMMAND_DIGEST);
+  const forged = preparedCancellation(
+    forgedAggregate,
+    THIRD_COMMIT_ID,
+    THIRD_EVENT_ID,
+    THIRD_COMMAND_DIGEST,
+  );
   throws(() => admit([first.commit, second.commit], forged), provenance);
 
   const identity = (errorPath: string) => isStoreError("append-identity-conflict", errorPath);
@@ -360,10 +475,19 @@ test("assertDemandFileEventAppendAdmissionAgainstPrefix 对已读前缀执行全
   throws(() => admit([first.commit], reusedEventId), identity("$commit/events/0/eventId"));
   const key = { key: "client-request-1", requestDigest: COMMAND_DIGEST };
   const keyedFirst = prepared(COMMIT_ID, EVENT_ID, COMMAND_DIGEST, key);
-  const keyedSecond = preparedCancellation(keyedFirst.aggregate, OTHER_COMMIT_ID, OTHER_EVENT_ID, OTHER_COMMAND_DIGEST, key);
+  const keyedSecond = preparedCancellation(
+    keyedFirst.aggregate,
+    OTHER_COMMIT_ID,
+    OTHER_EVENT_ID,
+    OTHER_COMMAND_DIGEST,
+    key,
+  );
   throws(() => admit([keyedFirst.commit], keyedSecond), identity("$commit/idempotency/key"));
 
   const fullPrefix = Array.from({ length: 10_000 }, () => first.commit);
-  const overflow = { ...second, commit: { ...second.commit, commitSequence: parseDemandEventCommitSequence(10_001) } };
+  const overflow = {
+    ...second,
+    commit: { ...second.commit, commitSequence: parseDemandEventCommitSequence(10_001) },
+  };
   throws(() => admit(fullPrefix, overflow), isStoreError("capacity", "$commit"));
 });

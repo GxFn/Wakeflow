@@ -1,21 +1,20 @@
 import { deepEqual, equal } from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
-
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   buildDemandControllerRoute,
   type DemandControllerRoute,
 } from "../../../src/governance/controller/demand-controller-route.js";
-import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
-import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
   closeDemandOperationAuthorityContext,
   openDemandOperationAuthorityContext,
 } from "../../../src/governance/demand/demand-operation-authority-context.js";
+import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import {
@@ -25,12 +24,12 @@ import {
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
 } from "../delivery/delivery-workspace.fixture.js";
+import { implementationReviewJudgmentWire } from "../review/controller-implementation-review-decision.fixture.js";
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
   decideFixtureImplementation,
 } from "../review/controller-implementation-review-decision-service.fixture.js";
-import { implementationReviewJudgmentWire } from "../review/controller-implementation-review-decision.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
@@ -62,10 +61,7 @@ async function readControllerRoute(
 test("Controller Route从空Demand进入Task Planning并跟随planned Target", async () => {
   const fixture = await createTargetTaskPlanningWorkspaceFixture();
   try {
-    const initial = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.request.demandId,
-    );
+    const initial = await readControllerRoute(fixture.workspaceRoot, fixture.request.demandId);
     equal(initial.disposition, "work-available");
     equal(initial.frontiers[0]?.kind, "implementation-task-planning");
     equal(initial.frontiers[0]?.owner, "target-task-planning");
@@ -77,10 +73,7 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
     equal(routeDigest, computeCanonicalJsonSha256Digest(basis));
 
     const plannedTask = await planFixtureTargetTask(fixture);
-    const planned = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.request.demandId,
-    );
+    const planned = await readControllerRoute(fixture.workspaceRoot, fixture.request.demandId);
     equal(planned.frontiers[0]?.kind, "implementation-delivery-planning");
     const plannedFrontier = planned.frontiers[0];
     if (plannedFrontier?.scope !== "target") {
@@ -91,10 +84,7 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
     equal(plannedFrontier.target.targetTaskId, plannedTask.targetTask.targetTaskId);
 
     const demandRoot = await RootedDirectory.open(
-      path.join(
-        fixture.workspacePath,
-        ...demandFinalRootRef(fixture.request.demandId).split("/"),
-      ),
+      path.join(fixture.workspacePath, ...demandFinalRootRef(fixture.request.demandId).split("/")),
     );
     try {
       const repository = new DemandEventSourcingRepository(demandRoot);
@@ -123,10 +113,7 @@ test("Controller Route从空Demand进入Task Planning并跟随planned Target", a
     } finally {
       await demandRoot.close();
     }
-    const terminal = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.request.demandId,
-    );
+    const terminal = await readControllerRoute(fixture.workspaceRoot, fixture.request.demandId);
     equal(terminal.disposition, "terminal");
     deepEqual(terminal.frontiers, []);
     deepEqual(terminal.blockers, []);
@@ -159,22 +146,15 @@ test("Controller Route保持投递准备、Agent宿主效果与Result Import边�
 });
 
 test("Controller Route组合Review Snapshot并在accept后委托Completion Route", async () => {
-  const fixture =
-    await createControllerImplementationReviewDecisionServiceFixture();
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
   try {
-    const review = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
+    const review = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
     equal(review.frontiers[0]?.kind, "implementation-result-review");
     equal(review.frontiers[0]?.owner, "controller-implementation-review");
     equal(Object.hasOwn(review, "postAcceptanceRouteDigest"), false);
 
     await decideFixtureImplementation(fixture);
-    const completion = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
+    const completion = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
     equal(completion.frontiers[0]?.kind, "demand-completion-preflight");
     equal(completion.frontiers[0]?.owner, "demand-completion");
     equal(Object.hasOwn(completion, "postAcceptanceRouteDigest"), true);
@@ -185,12 +165,14 @@ test("Controller Route组合Review Snapshot并在accept后委托Completion Route
 });
 
 test("Controller Route把blocked评审暴露为外部条件阻塞，把escalate交给Demand的awaiting-decision前沿", async () => {
-  const fixture =
-    await createControllerImplementationReviewDecisionServiceFixture();
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
   try {
     const blocked = await decideFixtureImplementation(
       fixture,
-      { ...implementationReviewJudgmentWire("blocked"), idempotencyKey: "fixture-decision-blocked" },
+      {
+        ...implementationReviewJudgmentWire("blocked"),
+        idempotencyKey: "fixture-decision-blocked",
+      },
       {
         clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
         uuidFactory: () => "34343434-3434-4434-8434-343434343434",
@@ -206,12 +188,14 @@ test("Controller Route把blocked评审暴露为外部条件阻塞，把escalate�
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
   }
-  const escalating =
-    await createControllerImplementationReviewDecisionServiceFixture();
+  const escalating = await createControllerImplementationReviewDecisionServiceFixture();
   try {
     const escalated = await decideFixtureImplementation(
       escalating,
-      { ...implementationReviewJudgmentWire("escalate"), idempotencyKey: "fixture-decision-escalate" },
+      {
+        ...implementationReviewJudgmentWire("escalate"),
+        idempotencyKey: "fixture-decision-escalate",
+      },
       {
         clock: () => parseUtcInstant("2026-08-29T12:16:00.000Z"),
         uuidFactory: () => "35353535-3535-4535-8535-353535353535",
@@ -231,10 +215,7 @@ test("Controller Route把blocked评审暴露为外部条件阻塞，把escalate�
 test("Controller Route只映射Post-Acceptance Test责任而不复制其领域来源", async () => {
   const fixture = await createTestTaskPlanningWorkspaceFixture();
   try {
-    const testTaskPlanning = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
+    const testTaskPlanning = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
     equal(testTaskPlanning.frontiers[0]?.kind, "test-task-planning");
     equal(testTaskPlanning.frontiers[0]?.owner, "test-task-planning");
     equal(Object.hasOwn(testTaskPlanning.frontiers[0] ?? {}, "source"), false);
@@ -246,10 +227,7 @@ test("Controller Route只映射Post-Acceptance Test责任而不复制其领域�
       throw new Error("Expected a Test target task.");
     }
     equal(planned.targetTask.testContract.environmentMemberRef.endsWith("landing.md"), true);
-    const testDeliveryPlanning = await readControllerRoute(
-      fixture.workspaceRoot,
-      fixture.demandId,
-    );
+    const testDeliveryPlanning = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
     equal(testDeliveryPlanning.frontiers[0]?.kind, "test-delivery-planning");
     equal(testDeliveryPlanning.frontiers[0]?.owner, "test-delivery-preparation");
     equal(JSON.stringify(testDeliveryPlanning).includes("landing.md"), false);

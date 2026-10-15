@@ -65,9 +65,11 @@ function progressOf(state: Readonly<DemandAggregateState>): ActiveProjectionProg
     implementationTargets: implementation.length,
     implementationAccepted: implementation.filter((target) => target.phase === "accepted").length,
     deliveriesInFlight: targets.filter(
-      (target) => target.phase.includes("delivery-prepared") || target.phase.includes("host-effect-"),
+      (target) =>
+        target.phase.includes("delivery-prepared") || target.phase.includes("host-effect-"),
     ).length,
-    resultsAwaitingReview: targets.filter((target) => target.phase.endsWith("result-reported")).length,
+    resultsAwaitingReview: targets.filter((target) => target.phase.endsWith("result-reported"))
+      .length,
     testTargets: tests.length,
     testAccepted: tests.filter((target) => target.phase === "test-accepted").length,
   });
@@ -189,7 +191,8 @@ function demandFacts(
   demand: Readonly<ObservedDemand>,
   podName: string,
 ): Readonly<ActiveProjectionDemandFacts> | null {
-  if (demand.loaded === null || demand.route === null || demand.reviewSnapshot === null) return null;
+  if (demand.loaded === null || demand.route === null || demand.reviewSnapshot === null)
+    return null;
   const state = demand.loaded.aggregate.state;
   const next = deriveNextProjection(demand.route);
   return Object.freeze({
@@ -296,9 +299,9 @@ function demandEvidenceOf(
   const demands = observation.demands.value;
   return Object.freeze({
     observed:
-      observation.demands.status === "observed"
-      && demands !== null
-      && demands.every((demand) => demand.status === "observed"),
+      observation.demands.status === "observed" &&
+      demands !== null &&
+      demands.every((demand) => demand.status === "observed"),
     activeDemandIds: Object.freeze((demands ?? []).map((demand) => demand.demandId).sort()),
   });
 }
@@ -362,7 +365,9 @@ export function buildActiveProjectionFacts(
     ),
     demands: Object.freeze(
       (observation.demands.value ?? [])
-        .map((demand) => demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?"))
+        .map((demand) =>
+          demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?"),
+        )
         .filter((facts): facts is Readonly<ActiveProjectionDemandFacts> => facts !== null)
         .sort((left, right) => left.demandId.localeCompare(right.demandId)),
     ),

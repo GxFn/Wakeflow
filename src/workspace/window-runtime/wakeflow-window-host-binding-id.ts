@@ -25,10 +25,7 @@ type WakeflowWindowHostBindingIdErrorReason = "format" | "factory";
 const ERROR_MESSAGES = {
   format: "Wakeflow Window Host Binding ID is invalid.",
   factory: "Wakeflow Window Host Binding ID could not be generated.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowHostBindingIdErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWindowHostBindingIdErrorReason, string>>;
 
 /** Binding ID 解析或创建失败的稳定、脱敏错误。 */
 export class WakeflowWindowHostBindingIdError extends Error {
@@ -44,10 +41,7 @@ export class WakeflowWindowHostBindingIdError extends Error {
   }
 }
 
-function fail(
-  reason: WakeflowWindowHostBindingIdErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowHostBindingIdErrorReason, path: string): never {
   throw new WakeflowWindowHostBindingIdError(reason, path);
 }
 
@@ -56,17 +50,11 @@ export function parseWakeflowWindowHostBindingId(
   value: unknown,
   path = "$bindingId",
 ): WakeflowWindowHostBindingId {
-  if (
-    typeof value !== "string"
-    || !value.startsWith(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX)
-  ) {
+  if (typeof value !== "string" || !value.startsWith(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX)) {
     fail("format", path);
   }
   try {
-    parseUuidV4(
-      value.slice(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX.length),
-      path,
-    );
+    parseUuidV4(value.slice(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX.length), path);
   } catch (error: unknown) {
     if (error instanceof UuidV4Error) fail("format", path);
     throw error;
@@ -79,17 +67,10 @@ export function createWakeflowWindowHostBindingId(
   uuidFactory?: UuidV4Factory,
 ): WakeflowWindowHostBindingId {
   try {
-    const uuid = uuidFactory === undefined
-      ? createUuidV4()
-      : createUuidV4(uuidFactory);
-    return parseWakeflowWindowHostBindingId(
-      `${WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX}${uuid}`,
-    );
+    const uuid = uuidFactory === undefined ? createUuidV4() : createUuidV4(uuidFactory);
+    return parseWakeflowWindowHostBindingId(`${WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX}${uuid}`);
   } catch (error: unknown) {
-    if (
-      error instanceof UuidV4Error
-      || error instanceof WakeflowWindowHostBindingIdError
-    ) {
+    if (error instanceof UuidV4Error || error instanceof WakeflowWindowHostBindingIdError) {
       fail("factory", "$uuidFactory");
     }
     throw error;

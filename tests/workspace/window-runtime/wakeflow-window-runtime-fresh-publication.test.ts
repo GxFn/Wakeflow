@@ -1,38 +1,29 @@
 import { equal } from "node:assert/strict";
 import {
   chmodSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   publishFreshWakeflowWindowRuntime,
   WakeflowFreshWindowRuntimePublicationError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import {
-  parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
-} from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { parseWakeflowWindowRuntimeUnregisteredProjectionDocument } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 async function fixture(t: TestContext) {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-window-runtime-publication-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-window-runtime-publication-"));
   mkdirSync(path.join(absolutePath, ".wakeflow-local", "runtime"), {
     mode: 0o700,
     recursive: true,
@@ -76,13 +67,7 @@ test("Fresh Window Runtime publishes exact empty identity and unregistered proje
   equal(created.createdDirectoryCount, 6);
   equal(created.createdProjectionCount, 4);
 
-  const hostRoot = path.join(
-    value.absolutePath,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-  );
+  const hostRoot = path.join(value.absolutePath, ".wakeflow-local", "runtime", "hosts", "codex");
   const bindings = path.join(hostRoot, "identity", "window-bindings");
   const projections = path.join(hostRoot, "projections", "window-runtime");
   equal(readdirSync(bindings).length, 0);
@@ -98,12 +83,10 @@ test("Fresh Window Runtime publishes exact empty identity and unregistered proje
   }
 
   await expectPublicationError(
-    () => publishFreshWakeflowWindowRuntime(
-      value.root,
-      config,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshPublication: false },
-    ),
+    () =>
+      publishFreshWakeflowWindowRuntime(value.root, config, codexWorkspaceHostResourceProfile, {
+        recoveringFreshPublication: false,
+      }),
     "strict-absent",
   );
   const recovered = await publishFreshWakeflowWindowRuntime(
@@ -120,19 +103,10 @@ test("Fresh Window Runtime publishes exact empty identity and unregistered proje
 test("Fresh Window Runtime recovery fills missing exact files and rejects foreign identity", async (t) => {
   const value = await fixture(t);
   const config = createMinimalWakeflowConfig();
-  await publishFreshWakeflowWindowRuntime(
-    value.root,
-    config,
-    codexWorkspaceHostResourceProfile,
-    { recoveringFreshPublication: false },
-  );
-  const hostRoot = path.join(
-    value.absolutePath,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-  );
+  await publishFreshWakeflowWindowRuntime(value.root, config, codexWorkspaceHostResourceProfile, {
+    recoveringFreshPublication: false,
+  });
+  const hostRoot = path.join(value.absolutePath, ".wakeflow-local", "runtime", "hosts", "codex");
   const projections = path.join(hostRoot, "projections", "window-runtime");
   const removed = readdirSync(projections)[0];
   if (removed === undefined) throw new Error("Expected one projection.");
@@ -151,12 +125,10 @@ test("Fresh Window Runtime recovery fills missing exact files and rejects foreig
     mode: 0o600,
   });
   await expectPublicationError(
-    () => publishFreshWakeflowWindowRuntime(
-      value.root,
-      config,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshPublication: true },
-    ),
+    () =>
+      publishFreshWakeflowWindowRuntime(value.root, config, codexWorkspaceHostResourceProfile, {
+        recoveringFreshPublication: true,
+      }),
     "prefix-conflict",
   );
   equal(readdirSync(projections).length, 4);
@@ -166,12 +138,10 @@ test("Fresh Window Runtime recovery fills missing exact files and rejects foreig
     mode: 0o600,
   });
   await expectPublicationError(
-    () => publishFreshWakeflowWindowRuntime(
-      value.root,
-      config,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshPublication: true },
-    ),
+    () =>
+      publishFreshWakeflowWindowRuntime(value.root, config, codexWorkspaceHostResourceProfile, {
+        recoveringFreshPublication: true,
+      }),
     "prefix-conflict",
   );
   equal(readdirSync(projections).includes("foreign.json"), true);

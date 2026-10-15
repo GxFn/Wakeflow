@@ -1,7 +1,4 @@
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -23,13 +20,9 @@ import {
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND =
   "WakeflowWorkspaceHostResourceProfile" as const;
 
-export const WAKEFLOW_WORKSPACE_HOST_IDS = Object.freeze([
-  "codex",
-  "claude-code",
-] as const);
+export const WAKEFLOW_WORKSPACE_HOST_IDS = Object.freeze(["codex", "claude-code"] as const);
 
-export type WakeflowWorkspaceHostId =
-  (typeof WAKEFLOW_WORKSPACE_HOST_IDS)[number];
+export type WakeflowWorkspaceHostId = (typeof WAKEFLOW_WORKSPACE_HOST_IDS)[number];
 
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowIdentity",
@@ -53,8 +46,7 @@ declare const HOST_RESOURCE_COMPONENT_BRAND: unique symbol;
 
 /** 已验证为单个可移植路径分段的宿主资源名称。 */
 export type WakeflowWorkspaceHostResourceComponent = PortableResourcePath & {
-  readonly [HOST_RESOURCE_COMPONENT_BRAND]:
-    "WakeflowWorkspaceHostResourceComponent";
+  readonly [HOST_RESOURCE_COMPONENT_BRAND]: "WakeflowWorkspaceHostResourceComponent";
 };
 
 export interface WakeflowWorkspaceHostSettingsIntegration {
@@ -101,10 +93,8 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
   readonly worktree: Readonly<WakeflowWorkspaceHostWorktreeTemplate>;
   readonly keepLive: boolean;
   readonly windowLocator: boolean;
-  readonly settingsIntegration:
-    Readonly<WakeflowWorkspaceHostSettingsIntegration> | null;
-  readonly statuslineAsset:
-    Readonly<WakeflowWorkspaceHostStatuslineAsset> | null;
+  readonly settingsIntegration: Readonly<WakeflowWorkspaceHostSettingsIntegration> | null;
+  readonly statuslineAsset: Readonly<WakeflowWorkspaceHostStatuslineAsset> | null;
   readonly tmuxAsset: Readonly<WakeflowWorkspaceHostTmuxAsset> | null;
   readonly activityMonitor: boolean;
   readonly temporaryPrompts: boolean;
@@ -129,12 +119,12 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
  */
 export type WakeflowWorkspaceHostLaunchTemplate =
   | {
-    readonly kind: "tmux-session";
-    readonly controllerEffort: string;
-    readonly defaultEffort: string;
-    readonly permissionMode: string;
-    readonly sessionName: string;
-  }
+      readonly kind: "tmux-session";
+      readonly controllerEffort: string;
+      readonly defaultEffort: string;
+      readonly permissionMode: string;
+      readonly sessionName: string;
+    }
   | { readonly kind: "project-thread" };
 
 export interface WakeflowWorkspaceHostResourceProfile {
@@ -163,10 +153,7 @@ const ERROR_MESSAGES = {
   path: "Wakeflow workspace host resource path is invalid.",
   surface: "Wakeflow workspace host resource surface is invalid.",
   contradiction: "Wakeflow workspace host resource facts conflict.",
-} as const satisfies Readonly<Record<
-  WakeflowWorkspaceHostResourceProfileErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWorkspaceHostResourceProfileErrorReason, string>>;
 
 /** Host Resource Profile 准入失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceHostResourceProfileError extends Error {
@@ -175,10 +162,7 @@ export class WakeflowWorkspaceHostResourceProfileError extends Error {
   readonly reason: WakeflowWorkspaceHostResourceProfileErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWorkspaceHostResourceProfileErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWorkspaceHostResourceProfileErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -203,9 +187,7 @@ const TMUX_LAUNCH_FIELDS = new Set([
 ]);
 const THREAD_LAUNCH_FIELDS = new Set(["kind"]);
 const LAUNCH_VALUE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
-const SURFACE_FIELDS = new Set<string>(
-  WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES,
-);
+const SURFACE_FIELDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES);
 const SETTINGS_INTEGRATION_FIELDS = new Set(["portablePath", "localPath"]);
 const WORKTREE_FIELDS = new Set(["launch", "attachedDirectories"]);
 const WORKTREE_LAUNCH_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES);
@@ -214,10 +196,7 @@ const ATTACHED_DIRECTORY_MODE_SET = new Set<string>(
 );
 const STATUSLINE_ASSET_FIELDS = new Set(["fileName"]);
 
-function fail(
-  reason: WakeflowWorkspaceHostResourceProfileErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWorkspaceHostResourceProfileErrorReason, path: string): never {
   throw new WakeflowWorkspaceHostResourceProfileError(reason, path);
 }
 
@@ -231,14 +210,13 @@ function assertExactFields(
   allowed: ReadonlySet<string>,
   path: string,
 ): void {
-  const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+  const unknown = Object.keys(record)
+    .sort()
+    .find((key) => !allowed.has(key));
   if (unknown !== undefined) fail("shape", propertyPath(path, unknown));
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -254,10 +232,7 @@ function parseHostId(value: unknown): WakeflowWorkspaceHostId {
   return value as WakeflowWorkspaceHostId;
 }
 
-function parseComponent(
-  value: unknown,
-  path: string,
-): WakeflowWorkspaceHostResourceComponent {
+function parseComponent(value: unknown, path: string): WakeflowWorkspaceHostResourceComponent {
   try {
     const resourcePath = parsePortableResourcePath(value, path);
     if (splitPortableResourcePath(resourcePath, path).length !== 1) {
@@ -284,20 +259,13 @@ function parseSettingsIntegration(
 ): Readonly<WakeflowWorkspaceHostSettingsIntegration> | null {
   if (value === null) return null;
   const record = plainRecord(value, "$/surfaces/settingsIntegration");
-  assertExactFields(
-    record,
-    SETTINGS_INTEGRATION_FIELDS,
-    "$/surfaces/settingsIntegration",
-  );
+  assertExactFields(record, SETTINGS_INTEGRATION_FIELDS, "$/surfaces/settingsIntegration");
   return Object.freeze({
     portablePath: parseResourcePath(
       record.portablePath,
       "$/surfaces/settingsIntegration/portablePath",
     ),
-    localPath: parseResourcePath(
-      record.localPath,
-      "$/surfaces/settingsIntegration/localPath",
-    ),
+    localPath: parseResourcePath(record.localPath, "$/surfaces/settingsIntegration/localPath"),
   });
 }
 
@@ -306,22 +274,13 @@ function parseStatuslineAsset(
 ): Readonly<WakeflowWorkspaceHostStatuslineAsset> | null {
   if (value === null) return null;
   const record = plainRecord(value, "$/surfaces/statuslineAsset");
-  assertExactFields(
-    record,
-    STATUSLINE_ASSET_FIELDS,
-    "$/surfaces/statuslineAsset",
-  );
+  assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/statuslineAsset");
   return Object.freeze({
-    fileName: parseComponent(
-      record.fileName,
-      "$/surfaces/statuslineAsset/fileName",
-    ),
+    fileName: parseComponent(record.fileName, "$/surfaces/statuslineAsset/fileName"),
   });
 }
 
-function parseTmuxAsset(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostTmuxAsset> | null {
+function parseTmuxAsset(value: unknown): Readonly<WakeflowWorkspaceHostTmuxAsset> | null {
   if (value === null) return null;
   const record = plainRecord(value, "$/surfaces/tmuxAsset");
   assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/tmuxAsset");
@@ -330,9 +289,7 @@ function parseTmuxAsset(
   });
 }
 
-function parseWorktreeTemplate(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostWorktreeTemplate> {
+function parseWorktreeTemplate(value: unknown): Readonly<WakeflowWorkspaceHostWorktreeTemplate> {
   const record = plainRecord(value, "$/surfaces/worktree");
   assertExactFields(record, WORKTREE_FIELDS, "$/surfaces/worktree");
   const { launch, attachedDirectories } = record;
@@ -340,8 +297,8 @@ function parseWorktreeTemplate(
     fail("surface", "$/surfaces/worktree/launch");
   }
   if (
-    typeof attachedDirectories !== "string"
-    || !ATTACHED_DIRECTORY_MODE_SET.has(attachedDirectories)
+    typeof attachedDirectories !== "string" ||
+    !ATTACHED_DIRECTORY_MODE_SET.has(attachedDirectories)
   ) {
     fail("surface", "$/surfaces/worktree/attachedDirectories");
   }
@@ -351,26 +308,19 @@ function parseWorktreeTemplate(
   });
 }
 
-function surfaceBoolean(
-  value: unknown,
-  name: WakeflowWorkspaceHostResourceSurfaceName,
-): boolean {
+function surfaceBoolean(value: unknown, name: WakeflowWorkspaceHostResourceSurfaceName): boolean {
   if (typeof value !== "boolean") fail("surface", `$/surfaces/${name}`);
   return value;
 }
 
-function parseSurfaces(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostResourceSurfaces> {
+function parseSurfaces(value: unknown): Readonly<WakeflowWorkspaceHostResourceSurfaces> {
   const record = plainRecord(value, "$/surfaces");
   assertExactFields(record, SURFACE_FIELDS, "$/surfaces");
-  const settingsIntegration = parseSettingsIntegration(
-    record.settingsIntegration,
-  );
+  const settingsIntegration = parseSettingsIntegration(record.settingsIntegration);
   const statuslineAsset = parseStatuslineAsset(record.statuslineAsset);
   if (
-    settingsIntegration !== null
-    && settingsIntegration.portablePath === settingsIntegration.localPath
+    settingsIntegration !== null &&
+    settingsIntegration.portablePath === settingsIntegration.localPath
   ) {
     fail("contradiction", "$/surfaces/settingsIntegration/localPath");
   }
@@ -414,9 +364,7 @@ function launchValue(value: unknown, path: string): string {
   return value;
 }
 
-function parseLaunchTemplate(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostLaunchTemplate> {
+function parseLaunchTemplate(value: unknown): Readonly<WakeflowWorkspaceHostLaunchTemplate> {
   const record = plainRecord(value, "$/launch");
   if (record.kind === "project-thread") {
     assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
@@ -459,10 +407,7 @@ export function parseWakeflowWorkspaceHostResourceProfile(
     kind: WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND,
     hostId,
     runtimeDirectoryName,
-    instructionFileName: parseComponent(
-      record.instructionFileName,
-      "$/instructionFileName",
-    ),
+    instructionFileName: parseComponent(record.instructionFileName, "$/instructionFileName"),
     surfaces,
     launch,
   });

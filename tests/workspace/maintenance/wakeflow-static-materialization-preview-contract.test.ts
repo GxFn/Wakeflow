@@ -5,8 +5,8 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
-  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreview,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationStep,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 
@@ -63,52 +63,62 @@ function expectInvalid(value: unknown): void {
 
 test("Static materialization preview contract admits one canonical plan", () => {
   const value = preview();
-  equal(parseWakeflowStaticMaterializationPreview(value).planDigest,
-    value.planDigest);
+  equal(parseWakeflowStaticMaterializationPreview(value).planDigest, value.planDigest);
   const realisticTarget = preview({
-    steps: Object.freeze([step(
-      "support-memory:surface_33333333-3333-4333-8333-333333333333",
-      [],
-      "surface_33333333-3333-4333-8333-333333333333:claude-code",
-    )]),
+    steps: Object.freeze([
+      step(
+        "support-memory:surface_33333333-3333-4333-8333-333333333333",
+        [],
+        "surface_33333333-3333-4333-8333-333333333333:claude-code",
+      ),
+    ]),
   });
-  equal(
-    parseWakeflowStaticMaterializationPreview(realisticTarget).steps.length,
-    1,
-  );
+  equal(parseWakeflowStaticMaterializationPreview(realisticTarget).steps.length, 1);
 });
 
 test("Static materialization preview closes target and dependency order", () => {
-  expectInvalid(preview({
-    steps: Object.freeze([step("core:first", [], " invalid")]),
-  }));
-  expectInvalid(preview({
-    steps: Object.freeze([
-      step("core:first"),
-      step("core:second"),
-      step("core:third", ["core:second", "core:first"]),
-    ]),
-  }));
+  expectInvalid(
+    preview({
+      steps: Object.freeze([step("core:first", [], " invalid")]),
+    }),
+  );
+  expectInvalid(
+    preview({
+      steps: Object.freeze([
+        step("core:first"),
+        step("core:second"),
+        step("core:third", ["core:second", "core:first"]),
+      ]),
+    }),
+  );
 });
 
 test("Static materialization preview closes action-specific Config facts", () => {
-  expectInvalid(preview({
-    action: "fresh-initialize",
-    currentConfigDigest: null,
-    desiredConfigDigest: null,
-  }));
-  expectInvalid(preview({
-    action: "fresh-initialize",
-    currentConfigDigest: null,
-  }));
-  expectInvalid(preview({
-    action: "reconcile",
-    currentConfigDigest: DIGEST,
-    desiredConfigDigest: null,
-  }));
-  expectInvalid(preview({
-    action: "reconcile",
-    currentConfigDigest: null,
-    desiredConfigDigest: DIGEST,
-  }));
+  expectInvalid(
+    preview({
+      action: "fresh-initialize",
+      currentConfigDigest: null,
+      desiredConfigDigest: null,
+    }),
+  );
+  expectInvalid(
+    preview({
+      action: "fresh-initialize",
+      currentConfigDigest: null,
+    }),
+  );
+  expectInvalid(
+    preview({
+      action: "reconcile",
+      currentConfigDigest: DIGEST,
+      desiredConfigDigest: null,
+    }),
+  );
+  expectInvalid(
+    preview({
+      action: "reconcile",
+      currentConfigDigest: null,
+      desiredConfigDigest: DIGEST,
+    }),
+  );
 });

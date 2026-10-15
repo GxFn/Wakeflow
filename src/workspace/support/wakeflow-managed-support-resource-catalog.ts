@@ -6,20 +6,18 @@ import {
   type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
 } from "../../configuration/wakeflow-config.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
-  WakeflowWorkspaceResourceDeclarationError,
   type WakeflowWorkspaceResourceDeclaration,
+  WakeflowWorkspaceResourceDeclarationError,
 } from "../workspace-resource-declaration.js";
 
 /**
@@ -44,8 +42,7 @@ export interface WakeflowManagedSupportResourceCatalog {
   readonly configDigest: Sha256Digest;
   readonly hostId: WakeflowWorkspaceHostId;
   readonly catalogDigest: Sha256Digest;
-  readonly declarations:
-    readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
+  readonly declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 }
 
 export type WakeflowManagedSupportResourceCatalogErrorReason =
@@ -59,10 +56,7 @@ const ERROR_MESSAGES = {
   profile: "Wakeflow managed support resource catalog host profile is invalid.",
   topology: "Wakeflow managed support resource catalog topology is inconsistent.",
   declaration: "Wakeflow managed support resource declaration is invalid.",
-} as const satisfies Readonly<Record<
-  WakeflowManagedSupportResourceCatalogErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowManagedSupportResourceCatalogErrorReason, string>>;
 
 /** 受管 Support 动态资源目录构建失败的稳定、脱敏错误。 */
 export class WakeflowManagedSupportResourceCatalogError extends Error {
@@ -71,20 +65,14 @@ export class WakeflowManagedSupportResourceCatalogError extends Error {
   readonly reason: WakeflowManagedSupportResourceCatalogErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowManagedSupportResourceCatalogErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowManagedSupportResourceCatalogErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowManagedSupportResourceCatalogErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowManagedSupportResourceCatalogErrorReason, path: string): never {
   throw new WakeflowManagedSupportResourceCatalogError(reason, path);
 }
 
@@ -97,9 +85,7 @@ function parseConfig(value: unknown): WakeflowConfigModel {
   }
 }
 
-function parseProfile(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostResourceProfile> {
+function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
   try {
     return parseWakeflowWorkspaceHostResourceProfile(value);
   } catch (error: unknown) {
@@ -110,9 +96,7 @@ function parseProfile(
   }
 }
 
-function declaration(
-  value: unknown,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
+function declaration(value: unknown): Readonly<WakeflowWorkspaceResourceDeclaration> {
   try {
     return parseWakeflowWorkspaceResourceDeclaration(value);
   } catch (error: unknown) {
@@ -168,8 +152,7 @@ function memoryDeclaration(
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   return declaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId:
-      `support.${surface.surfaceId}.instruction.${profile.hostId}`,
+    declarationId: `support.${surface.surfaceId}.instruction.${profile.hostId}`,
     family: "support",
     ownerId: "support-memory",
     scope: "current-host",
@@ -215,17 +198,15 @@ export function createWakeflowManagedSupportResourceCatalog(
   const declarations: Readonly<WakeflowWorkspaceResourceDeclaration>[] = [];
   for (const surface of config.topology.supportSurfaces) {
     if (surface.ownership !== "wakeflow-managed") continue;
-    const window = surface.capability === "design"
-      ? indexes.designWindow
-      : indexes.testWindow;
+    const window = surface.capability === "design" ? indexes.designWindow : indexes.testWindow;
     if (window.root.surfaceId !== surface.surfaceId) {
       fail("topology", `$/topology/supportSurfaces/${surface.surfaceId}`);
     }
     declarations.push(
       directoryDeclaration(surface, null),
       memoryDeclaration(surface, profile),
-      ...WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES[surface.capability].map(
-        (relativePath) => directoryDeclaration(surface, relativePath),
+      ...WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES[surface.capability].map((relativePath) =>
+        directoryDeclaration(surface, relativePath),
       ),
     );
   }

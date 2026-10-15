@@ -4,10 +4,10 @@ import { test } from "node:test";
 import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
   wakeflowMaintenanceJournalRef,
   wakeflowMaintenanceOperationUuid,
-  WakeflowMaintenanceOperationIdError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
@@ -30,9 +30,10 @@ test("maintenance operation ID is domain-local UUID identity", () => {
 test("maintenance operation ID rejects aliases and invalid factories", () => {
   for (const action of [
     () => parseWakeflowMaintenanceOperationId(UUID),
-    () => parseWakeflowMaintenanceOperationId(
-      "maintenance_operation_11111111-1111-5111-8111-111111111111",
-    ),
+    () =>
+      parseWakeflowMaintenanceOperationId(
+        "maintenance_operation_11111111-1111-5111-8111-111111111111",
+      ),
     () => createWakeflowMaintenanceOperationId(() => "invalid"),
   ]) {
     let caught: unknown;

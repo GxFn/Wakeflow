@@ -4,10 +4,10 @@ import { parseSha256Digest, type Sha256Digest } from "../../../src/foundation/cr
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { parseDemandEventStreamRevision } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
-  createControllerImplementationReviewDecision,
   type ControllerImplementationReviewDecisionType,
   type ControllerImplementationReviewJudgment,
   type CreateControllerImplementationReviewDecisionInput,
+  createControllerImplementationReviewDecision,
 } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import type {
   ControllerReviewEscalation,
@@ -119,7 +119,10 @@ export function implementationReviewJudgment(
       ? { requirementAlignment: "aligned" as const, implementationQuality: "satisfactory" as const }
       : decision === "rework"
         ? { requirementAlignment: "aligned" as const, implementationQuality: "defective" as const }
-        : { requirementAlignment: "unresolved" as const, implementationQuality: "unverified" as const };
+        : {
+            requirementAlignment: "unresolved" as const,
+            implementationQuality: "unverified" as const,
+          };
   const outcome =
     decision === "accept"
       ? ("passed" as const)

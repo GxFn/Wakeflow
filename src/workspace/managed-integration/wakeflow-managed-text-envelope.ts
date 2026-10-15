@@ -3,31 +3,18 @@ import { types } from "node:util";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  Sha256Hasher,
-  Sha256HasherError,
-} from "../../foundation/crypto/sha256-hasher.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { Sha256Hasher, Sha256HasherError } from "../../foundation/crypto/sha256-hasher.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   createFileByteRange,
-  parseFileByteOffset,
   type FileByteRange,
+  parseFileByteOffset,
 } from "../../foundation/filesystem/file-byte-range.js";
-import {
-  parseByteCount,
-  type ByteCount,
-} from "../../foundation/numeric/byte-count.js";
-import {
-  decodeUtf8,
-  encodeUtf8,
-  Utf8Error,
-} from "../../foundation/text/utf8.js";
+import { type ByteCount, parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：混合所有权文本的 v1 envelope 协议。
@@ -41,13 +28,9 @@ import {
  * 对该 component 的修改权限。
  */
 
-export const WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX =
-  "<!-- wakeflow:managed-content:v1:" as const;
+export const WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX = "<!-- wakeflow:managed-content:v1:" as const;
 
-const MARKER_NAMESPACE_PREFIX_BYTES = Buffer.from(
-  "<!-- wakeflow:managed-content:",
-  "ascii",
-);
+const MARKER_NAMESPACE_PREFIX_BYTES = Buffer.from("<!-- wakeflow:managed-content:", "ascii");
 const LF = 0x0a;
 const COMPONENT_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const OWNER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/u;
@@ -77,10 +60,7 @@ const ERROR_MESSAGES = {
   "marker-pair": "Wakeflow managed text marker pair does not close.",
   "body-digest": "Wakeflow managed text body differs from its marker digest.",
   relation: "Wakeflow managed text envelope belongs to another component.",
-} as const satisfies Readonly<Record<
-  WakeflowManagedTextEnvelopeErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowManagedTextEnvelopeErrorReason, string>>;
 
 /** Managed Text envelope 解析或重组失败的稳定、脱敏错误。 */
 export class WakeflowManagedTextEnvelopeError extends Error {
@@ -102,13 +82,11 @@ interface WakeflowManagedTextEnvelopeFacts {
   readonly outsideDigest: Sha256Digest;
 }
 
-export interface WakeflowUnmanagedTextEnvelopeInspection
-  extends WakeflowManagedTextEnvelopeFacts {
+export interface WakeflowUnmanagedTextEnvelopeInspection extends WakeflowManagedTextEnvelopeFacts {
   readonly kind: "unmanaged";
 }
 
-export interface WakeflowOwnedTextEnvelopeInspection
-  extends WakeflowManagedTextEnvelopeFacts {
+export interface WakeflowOwnedTextEnvelopeInspection extends WakeflowManagedTextEnvelopeFacts {
   readonly kind: "managed";
   readonly component: string;
   readonly owner: string;
@@ -163,10 +141,7 @@ interface ParsedMarker {
   readonly lineEnd: number;
 }
 
-function fail(
-  reason: WakeflowManagedTextEnvelopeErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowManagedTextEnvelopeErrorReason, path: string): never {
   throw new WakeflowManagedTextEnvelopeError(reason, path);
 }
 
@@ -179,10 +154,7 @@ function digestBytes(bytes: Uint8Array, path: string): Sha256Digest {
   }
 }
 
-function digestParts(
-  parts: readonly Uint8Array[],
-  path: string,
-): Sha256Digest {
+function digestParts(parts: readonly Uint8Array[], path: string): Sha256Digest {
   let hasher: Sha256Hasher;
   try {
     hasher = new Sha256Hasher();
@@ -204,12 +176,12 @@ function concatenate(parts: readonly Uint8Array[], path: string): Buffer {
 
 function snapshotBytes(value: unknown): Buffer {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ArrayBuffer.isView(value)
-    || !(value instanceof Uint8Array)
-    || value.buffer instanceof SharedArrayBuffer
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ArrayBuffer.isView(value) ||
+    !(value instanceof Uint8Array) ||
+    value.buffer instanceof SharedArrayBuffer
   ) {
     fail("input", "$source");
   }
@@ -240,9 +212,7 @@ function range(start: number, endExclusive: number, path: string) {
 function markerOffsets(source: Buffer): readonly number[] {
   const offsets: number[] = [];
   let offset = 0;
-  while (
-    offset <= source.byteLength - MARKER_NAMESPACE_PREFIX_BYTES.byteLength
-  ) {
+  while (offset <= source.byteLength - MARKER_NAMESPACE_PREFIX_BYTES.byteLength) {
     const found = source.indexOf(MARKER_NAMESPACE_PREFIX_BYTES, offset);
     if (found === -1) break;
     offsets.push(found);
@@ -264,11 +234,11 @@ function parseMarker(source: Buffer, start: number): Readonly<ParsedMarker> {
   const digest = match[4];
   const separator = match[5];
   if (
-    (side !== "begin" && side !== "end")
-    || component === undefined
-    || owner === undefined
-    || digest === undefined
-    || (separator !== "0" && separator !== "1")
+    (side !== "begin" && side !== "end") ||
+    component === undefined ||
+    owner === undefined ||
+    digest === undefined ||
+    (separator !== "0" && separator !== "1")
   ) {
     fail("marker", "$marker");
   }
@@ -285,12 +255,12 @@ function parseMarker(source: Buffer, start: number): Readonly<ParsedMarker> {
 
 function assertBodyProfile(body: string, path: string): void {
   if (
-    body.length <= 1
-    || body.startsWith("\ufeff")
-    || body.includes("\r")
-    || !body.endsWith("\n")
-    || body.endsWith("\n\n")
-    || body.normalize("NFC") !== body
+    body.length <= 1 ||
+    body.startsWith("\ufeff") ||
+    body.includes("\r") ||
+    !body.endsWith("\n") ||
+    body.endsWith("\n\n") ||
+    body.normalize("NFC") !== body
   ) {
     fail("body-profile", path);
   }
@@ -310,8 +280,8 @@ function inputRecord(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== expectedKeys.length
-    || keys.some((key, index) => key !== expectedKeys[index])
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
   ) {
     fail("input", path);
   }
@@ -323,10 +293,7 @@ function parseIdentityRecord(
   path: string,
 ): Readonly<WakeflowManagedTextEnvelopeIdentity> {
   const record = inputRecord(value, path, ["component", "owner"]);
-  if (
-    typeof record.component !== "string"
-    || !COMPONENT_PATTERN.test(record.component)
-  ) {
+  if (typeof record.component !== "string" || !COMPONENT_PATTERN.test(record.component)) {
     fail("identity", `${path}.component`);
   }
   if (typeof record.owner !== "string" || !OWNER_PATTERN.test(record.owner)) {
@@ -342,15 +309,14 @@ function parseIdentityRecord(
 export function parseWakeflowManagedTextEnvelopeTarget(
   value: unknown,
 ): Readonly<WakeflowManagedTextEnvelopeTarget> {
-  const record = inputRecord(value, "$target", [
-    "body",
-    "component",
-    "owner",
-  ]);
-  const identity = parseIdentityRecord({
-    component: record.component,
-    owner: record.owner,
-  }, "$target");
+  const record = inputRecord(value, "$target", ["body", "component", "owner"]);
+  const identity = parseIdentityRecord(
+    {
+      component: record.component,
+      owner: record.owner,
+    },
+    "$target",
+  );
   if (typeof record.body !== "string" || !record.body.isWellFormed()) {
     fail("body-profile", "$target.body");
   }
@@ -361,9 +327,7 @@ export function parseWakeflowManagedTextEnvelopeTarget(
   });
 }
 
-function inspectSnapshot(
-  source: Buffer,
-): Readonly<WakeflowManagedTextEnvelopeInspection> {
+function inspectSnapshot(source: Buffer): Readonly<WakeflowManagedTextEnvelopeInspection> {
   decodeSource(source);
   const sourceByteCount = parseByteCount(source.byteLength, "$source");
   const sourceDigest = digestBytes(source, "$source");
@@ -385,13 +349,13 @@ function inspectSnapshot(
   const begin = parseMarker(source, firstOffset);
   const end = parseMarker(source, secondOffset);
   if (
-    begin.side !== "begin"
-    || end.side !== "end"
-    || begin.component !== end.component
-    || begin.owner !== end.owner
-    || begin.bodyDigest !== end.bodyDigest
-    || begin.separator !== end.separator
-    || begin.start >= end.start
+    begin.side !== "begin" ||
+    end.side !== "end" ||
+    begin.component !== end.component ||
+    begin.owner !== end.owner ||
+    begin.bodyDigest !== end.bodyDigest ||
+    begin.separator !== end.separator ||
+    begin.start >= end.start
   ) {
     fail("marker-pair", "$marker");
   }
@@ -409,10 +373,7 @@ function inspectSnapshot(
   const blockEnd = end.lineEnd + 1;
   const ownsSeparator = begin.separator === "1";
   const ownedStart = begin.start - (ownsSeparator ? 1 : 0);
-  if (
-    ownedStart < 0
-    || (ownsSeparator && source[ownedStart] !== LF)
-  ) {
+  if (ownedStart < 0 || (ownsSeparator && source[ownedStart] !== LF)) {
     fail("marker-pair", "$marker.separator");
   }
   const prefix = source.subarray(0, ownedStart);
@@ -430,11 +391,7 @@ function inspectSnapshot(
     prefixOutsideRange: range(0, ownedStart, "$prefixOutsideRange"),
     ownedRange: range(ownedStart, blockEnd, "$ownedRange"),
     bodyRange: range(bodyStart, bodyEnd, "$bodyRange"),
-    suffixOutsideRange: range(
-      blockEnd,
-      source.byteLength,
-      "$suffixOutsideRange",
-    ),
+    suffixOutsideRange: range(blockEnd, source.byteLength, "$suffixOutsideRange"),
   });
 }
 
@@ -458,9 +415,8 @@ function renderOwnedBlock(
   }
   const digest = digestBytes(bodyBytes, "$target.body");
   const separator = ownsSeparator ? "1" : "0";
-  const marker = (side: "begin" | "end") => (
-    `${WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX}${side} component=${target.component} owner=${target.owner} digest=${digest} sep=${separator} -->`
-  );
+  const marker = (side: "begin" | "end") =>
+    `${WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX}${side} component=${target.component} owner=${target.owner} digest=${digest} sep=${separator} -->`;
   try {
     return Buffer.from(
       `${ownsSeparator ? "\n" : ""}${marker("begin")}\n${target.body}${marker("end")}\n`,
@@ -473,10 +429,7 @@ function renderOwnedBlock(
 
 function resultBytes(
   bytes: Buffer,
-): Readonly<Pick<
-  WakeflowManagedTextRecompositionResult,
-  "bytes" | "byteCount" | "digest"
->> {
+): Readonly<Pick<WakeflowManagedTextRecompositionResult, "bytes" | "byteCount" | "digest">> {
   return Object.freeze({
     bytes,
     byteCount: parseByteCount(bytes.byteLength, "$result"),
@@ -495,25 +448,26 @@ export function recomposeWakeflowManagedTextEnvelope(
   const target = parseWakeflowManagedTextEnvelopeTarget(targetValue);
   const current = inspectSnapshot(source);
   if (
-    current.kind === "managed"
-    && (current.component !== target.component || current.owner !== target.owner)
+    current.kind === "managed" &&
+    (current.component !== target.component || current.owner !== target.owner)
   ) {
     fail("relation", "$target");
   }
-  const prefixEnd = current.kind === "managed"
-    ? current.ownedRange.offset
-    : source.byteLength;
-  const suffixStart = current.kind === "managed"
-    ? current.ownedRange.endExclusive
-    : source.byteLength;
-  const ownsSeparator = current.kind === "managed"
-    ? current.separator === "owned-leading-lf"
-    : source.byteLength > 0 && source[source.byteLength - 1] !== LF;
-  const output = concatenate([
-    source.subarray(0, prefixEnd),
-    renderOwnedBlock(target, ownsSeparator),
-    source.subarray(suffixStart),
-  ], "$result");
+  const prefixEnd = current.kind === "managed" ? current.ownedRange.offset : source.byteLength;
+  const suffixStart =
+    current.kind === "managed" ? current.ownedRange.endExclusive : source.byteLength;
+  const ownsSeparator =
+    current.kind === "managed"
+      ? current.separator === "owned-leading-lf"
+      : source.byteLength > 0 && source[source.byteLength - 1] !== LF;
+  const output = concatenate(
+    [
+      source.subarray(0, prefixEnd),
+      renderOwnedBlock(target, ownsSeparator),
+      source.subarray(suffixStart),
+    ],
+    "$result",
+  );
   const facts = resultBytes(output);
   const envelope = inspectSnapshot(output);
   if (envelope.kind !== "managed") fail("relation", "$result");
@@ -540,16 +494,19 @@ export function removeWakeflowManagedTextEnvelope(
   const identity = parseIdentityRecord(identityValue, "$identity");
   const current = inspectSnapshot(source);
   if (
-    current.kind !== "managed"
-    || current.component !== identity.component
-    || current.owner !== identity.owner
+    current.kind !== "managed" ||
+    current.component !== identity.component ||
+    current.owner !== identity.owner
   ) {
     fail("relation", "$identity");
   }
-  const output = concatenate([
-    source.subarray(0, current.ownedRange.offset),
-    source.subarray(current.ownedRange.endExclusive),
-  ], "$result");
+  const output = concatenate(
+    [
+      source.subarray(0, current.ownedRange.offset),
+      source.subarray(current.ownedRange.endExclusive),
+    ],
+    "$result",
+  );
   return Object.freeze({
     disposition: "removed",
     ...resultBytes(output),

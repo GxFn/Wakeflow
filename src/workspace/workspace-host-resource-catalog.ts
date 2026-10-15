@@ -1,27 +1,27 @@
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import { hostPodReceiptsRootRef } from "../kernel/layout.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "./workspace-host-resource-profile.js";
-import {
-  parseWakeflowWorkspaceResourceDeclaration,
-  privateWorkspaceDirectoryDeclaration,
-  type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
 import {
   wakeflowWindowHostBindingMutationLockRef,
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./window-runtime/wakeflow-window-runtime-paths.js";
 import {
+  parseWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostResourceProfile,
+} from "./workspace-host-resource-profile.js";
+import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
   wakeflowHostRuntimeRootRef,
 } from "./workspace-host-runtime-paths.js";
+import {
+  parseWakeflowWorkspaceResourceDeclaration,
+  privateWorkspaceDirectoryDeclaration,
+  type WakeflowWorkspaceResourceDeclaration,
+} from "./workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace：由宿主静态画像编译资源声明。
@@ -135,9 +135,7 @@ export function wakeflowProgramInstructionRecompositionLockRef(
   profileValue: unknown,
 ): PortableResourcePath {
   const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-  return parsePortableResourcePath(
-    `.wakeflow-program-instruction-${profile.hostId}.lock`,
-  );
+  return parsePortableResourcePath(`.wakeflow-program-instruction-${profile.hostId}.lock`);
 }
 
 function privateProjectionFileDeclaration(
@@ -178,12 +176,14 @@ function privateProjectionFileDeclaration(
 export function hostProfileHasOperationSurface(
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): boolean {
-  return profile.surfaces.keepLive
-    || profile.surfaces.windowLocator
-    || profile.surfaces.statuslineAsset !== null
-    || profile.surfaces.tmuxAsset !== null
-    || profile.surfaces.activityMonitor
-    || profile.surfaces.temporaryPrompts;
+  return (
+    profile.surfaces.keepLive ||
+    profile.surfaces.windowLocator ||
+    profile.surfaces.statuslineAsset !== null ||
+    profile.surfaces.tmuxAsset !== null ||
+    profile.surfaces.activityMonitor ||
+    profile.surfaces.temporaryPrompts
+  );
 }
 
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
@@ -193,11 +193,7 @@ export function createWakeflowWorkspaceHostResourceCatalog(
   const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   const prefix = `host-runtime.${profile.hostId}`;
   const declarations: Readonly<WakeflowWorkspaceResourceDeclaration>[] = [
-    privateDirectoryDeclaration(
-      `${prefix}.root`,
-      "host-runtime-layout",
-      hostRuntimeRef(profile),
-    ),
+    privateDirectoryDeclaration(`${prefix}.root`, "host-runtime-layout", hostRuntimeRef(profile)),
     privateDirectoryDeclaration(
       `${prefix}.identity-root`,
       "host-runtime-layout",
@@ -250,11 +246,13 @@ export function createWakeflowWorkspaceHostResourceCatalog(
     );
   }
   if (hostProfileHasOperationSurface(profile)) {
-    declarations.push(privateDirectoryDeclaration(
-      `${prefix}.operations-root`,
-      "host-runtime-layout",
-      hostRuntimeRef(profile, "operations"),
-    ));
+    declarations.push(
+      privateDirectoryDeclaration(
+        `${prefix}.operations-root`,
+        "host-runtime-layout",
+        hostRuntimeRef(profile, "operations"),
+      ),
+    );
   }
   if (profile.surfaces.keepLive) {
     declarations.push(
@@ -271,11 +269,13 @@ export function createWakeflowWorkspaceHostResourceCatalog(
     );
   }
   if (profile.surfaces.windowLocator) {
-    declarations.push(privateDirectoryDeclaration(
-      `${prefix}.window-locators-root`,
-      "window-locator",
-      hostRuntimeRef(profile, "operations/window-locators"),
-    ));
+    declarations.push(
+      privateDirectoryDeclaration(
+        `${prefix}.window-locators-root`,
+        "window-locator",
+        hostRuntimeRef(profile, "operations/window-locators"),
+      ),
+    );
   }
   if (profile.surfaces.settingsIntegration !== null) {
     declarations.push(
@@ -295,37 +295,40 @@ export function createWakeflowWorkspaceHostResourceCatalog(
   }
   const { statuslineAsset, tmuxAsset } = profile.surfaces;
   if (statuslineAsset !== null || tmuxAsset !== null) {
-    declarations.push(privateDirectoryDeclaration(
-      `${prefix}.statusline-assets-root`,
-      "host-statusline",
-      hostRuntimeRef(profile, "operations/assets"),
-    ));
+    declarations.push(
+      privateDirectoryDeclaration(
+        `${prefix}.statusline-assets-root`,
+        "host-statusline",
+        hostRuntimeRef(profile, "operations/assets"),
+      ),
+    );
   }
   if (statuslineAsset !== null) {
     declarations.push(
       privateProjectionFileDeclaration(
         `${prefix}.statusline-asset`,
         "host-statusline",
-        hostRuntimeRef(
-          profile,
-          `operations/assets/${statuslineAsset.fileName}`,
-        ),
+        hostRuntimeRef(profile, `operations/assets/${statuslineAsset.fileName}`),
       ),
     );
   }
   if (tmuxAsset !== null) {
-    declarations.push(privateProjectionFileDeclaration(
-      `${prefix}.tmux-asset`,
-      "host-tmux",
-      hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`),
-    ));
+    declarations.push(
+      privateProjectionFileDeclaration(
+        `${prefix}.tmux-asset`,
+        "host-tmux",
+        hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`),
+      ),
+    );
   }
   if (profile.surfaces.activityMonitor) {
-    declarations.push(privateDirectoryDeclaration(
-      `${prefix}.activity-monitor-root`,
-      "activity-monitor",
-      hostRuntimeRef(profile, "operations/activity-monitor"),
-    ));
+    declarations.push(
+      privateDirectoryDeclaration(
+        `${prefix}.activity-monitor-root`,
+        "activity-monitor",
+        hostRuntimeRef(profile, "operations/activity-monitor"),
+      ),
+    );
   }
   if (profile.surfaces.temporaryPrompts) {
     declarations.push(

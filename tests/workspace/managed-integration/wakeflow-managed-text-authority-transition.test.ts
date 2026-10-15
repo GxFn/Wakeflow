@@ -3,13 +3,11 @@ import { test } from "node:test";
 
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
-  recomposeWakeflowManagedTextEnvelope,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
-import {
   planWakeflowManagedTextAuthorityTransition,
   WakeflowManagedTextAuthorityTransitionError,
   type WakeflowManagedTextAuthorityTransitionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-managed-text-authority-transition.js";
+import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 
 const CURRENT = Object.freeze({
   component: "program-instruction",
@@ -59,7 +57,8 @@ test("Managed Text authority transition inserts into unmanaged outside bytes", (
   equal(transition.sourceAuthority, "unmanaged");
   equal(transition.target?.disposition, "inserted");
   equal(
-    Buffer.from(transition.target?.bytes ?? []).subarray(0, source.byteLength)
+    Buffer.from(transition.target?.bytes ?? [])
+      .subarray(0, source.byteLength)
       .equals(Buffer.from(source)),
     true,
   );
@@ -67,10 +66,7 @@ test("Managed Text authority transition inserts into unmanaged outside bytes", (
 });
 
 test("Managed Text authority transition admits exact current and converges to desired", () => {
-  const currentBytes = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    CURRENT,
-  ).bytes;
+  const currentBytes = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), CURRENT).bytes;
   const update = planWakeflowManagedTextAuthorityTransition(currentBytes, {
     currentTargets: [CURRENT],
     desiredTarget: DESIRED,
@@ -91,41 +87,41 @@ test("Managed Text authority transition admits exact current and converges to de
 });
 
 test("Managed Text authority transition rejects marker-only ownership claims", () => {
-  const unknownBytes = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    { ...CURRENT, body: "## User changed managed content\n" },
-  ).bytes;
+  const unknownBytes = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), {
+    ...CURRENT,
+    body: "## User changed managed content\n",
+  }).bytes;
   expectTransitionError(
-    () => planWakeflowManagedTextAuthorityTransition(unknownBytes, {
-      currentTargets: [CURRENT],
-      desiredTarget: DESIRED,
-    }),
+    () =>
+      planWakeflowManagedTextAuthorityTransition(unknownBytes, {
+        currentTargets: [CURRENT],
+        desiredTarget: DESIRED,
+      }),
     "unadmitted-source",
     "$source",
   );
 
-  const foreignBytes = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    {
-      component: "foreign-component",
-      owner: "foreign-owner",
-      body: "## Foreign\n",
-    },
-  ).bytes;
+  const foreignBytes = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), {
+    component: "foreign-component",
+    owner: "foreign-owner",
+    body: "## Foreign\n",
+  }).bytes;
   expectTransitionError(
-    () => planWakeflowManagedTextAuthorityTransition(foreignBytes, {
-      currentTargets: [CURRENT],
-      desiredTarget: DESIRED,
-    }),
+    () =>
+      planWakeflowManagedTextAuthorityTransition(foreignBytes, {
+        currentTargets: [CURRENT],
+        desiredTarget: DESIRED,
+      }),
     "relation",
     "$source",
   );
 
   expectTransitionError(
-    () => planWakeflowManagedTextAuthorityTransition(new Uint8Array(), {
-      currentTargets: [CURRENT, CURRENT],
-      desiredTarget: DESIRED,
-    }),
+    () =>
+      planWakeflowManagedTextAuthorityTransition(new Uint8Array(), {
+        currentTargets: [CURRENT, CURRENT],
+        desiredTarget: DESIRED,
+      }),
     "input",
     "$request.currentTargets/1",
   );

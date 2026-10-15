@@ -3,16 +3,16 @@ import { WakeflowError } from "../../../kernel/error.js";
 import {
   claimRequirementPackage,
   computeRequirementClaimStateDigest,
+  type RequirementClaimStateSource,
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
-  type RequirementClaimStateSource,
 } from "../../../kernel/requirement-board.js";
-import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 import {
-  failDemandEventSourcingPublication as fail,
   type DemandEventSourcingPublicationClaimResult,
+  failDemandEventSourcingPublication as fail,
 } from "./demand-event-sourcing-publication-contract.js";
+import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 
 /**
  * Demand 发布与需求包看板认领状态之间的精确前序状态和认领关系验证（ADR-0011 D7）。
@@ -50,10 +50,12 @@ function sameLineage(
   source: Readonly<RequirementClaimStateSource>,
   transaction: Readonly<DemandEventSourcingPublicationTransaction>,
 ): boolean {
-  return source.state.requirementId === transaction.requirementId
-    && source.state.requirementId === transaction.identity.source.requirementId
-    && source.state.recordDigest === transaction.identity.source.recordDigest
-    && source.state.programId === transaction.identity.programId;
+  return (
+    source.state.requirementId === transaction.requirementId &&
+    source.state.requirementId === transaction.identity.source.requirementId &&
+    source.state.recordDigest === transaction.identity.source.recordDigest &&
+    source.state.programId === transaction.identity.programId
+  );
 }
 
 /** 状态已经由同一 Demand 从计划里的前序认领时返回它，否则返回 `null`。 */
@@ -62,12 +64,12 @@ export function exactClaimedPackage(
   transaction: Readonly<DemandEventSourcingPublicationTransaction>,
 ): Readonly<DemandEventSourcingPublicationClaimResult> | null {
   if (
-    source === null
-    || !sameLineage(source, transaction)
-    || source.state.status !== "claimed"
-    || source.state.claim === null
-    || source.state.claim.demandId !== transaction.demandId
-    || source.state.previousStateDigest !== transaction.expectedClaimStateDigest
+    source === null ||
+    !sameLineage(source, transaction) ||
+    source.state.status !== "claimed" ||
+    source.state.claim === null ||
+    source.state.claim.demandId !== transaction.demandId ||
+    source.state.previousStateDigest !== transaction.expectedClaimStateDigest
   ) {
     return null;
   }
@@ -81,9 +83,9 @@ export function assertPendingPackage(
 ): Readonly<RequirementClaimStateSource> {
   if (source === null) fail("package-not-found", "$board");
   if (
-    !sameLineage(source, transaction)
-    || source.state.status !== "pending"
-    || source.digest !== transaction.expectedClaimStateDigest
+    !sameLineage(source, transaction) ||
+    source.state.status !== "pending" ||
+    source.digest !== transaction.expectedClaimStateDigest
   ) {
     fail("cas-mismatch", "$board");
   }

@@ -6,9 +6,9 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
 import {
-  WAKEFLOW_GITIGNORE_REF,
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
+  WAKEFLOW_GITIGNORE_REF,
   WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
 } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";

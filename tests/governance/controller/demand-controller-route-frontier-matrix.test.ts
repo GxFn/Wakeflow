@@ -2,12 +2,12 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  resolveDemandControllerDemandFrontierDescriptor,
-  resolveDemandControllerImplementationFrontierDescriptor,
-  resolveDemandControllerPostAcceptanceFrontierDescriptor,
   type DemandControllerDemandFrontierCondition,
   type DemandControllerImplementationTargetPhase,
   type DemandControllerPostAcceptanceStageStatus,
+  resolveDemandControllerDemandFrontierDescriptor,
+  resolveDemandControllerImplementationFrontierDescriptor,
+  resolveDemandControllerPostAcceptanceFrontierDescriptor,
 } from "../../../src/governance/controller/demand-controller-route.js";
 
 type ExpectedFrontier = Exclude<
@@ -75,11 +75,7 @@ const FRONTIER_MATRIX = [
   {
     source: {
       kind: "implementation",
-      phases: [
-        "planned",
-        "rework-requested",
-        "product-defect-rework-requested",
-      ],
+      phases: ["planned", "rework-requested", "product-defect-rework-requested"],
     },
     expected: {
       scope: "target",
@@ -284,24 +280,21 @@ test("Controller Route以十七项轻量矩阵完整映射frontier、owner与pha
     switch (row.source.kind) {
       case "demand":
         for (const condition of row.source.conditions) {
-          const actual =
-            resolveDemandControllerDemandFrontierDescriptor(condition);
+          const actual = resolveDemandControllerDemandFrontierDescriptor(condition);
           deepEqual(actual, row.expected);
           equal(Object.isFrozen(actual), true);
         }
         break;
       case "implementation":
         for (const phase of row.source.phases) {
-          const actual =
-            resolveDemandControllerImplementationFrontierDescriptor(phase);
+          const actual = resolveDemandControllerImplementationFrontierDescriptor(phase);
           deepEqual(actual, row.expected);
           equal(Object.isFrozen(actual), true);
         }
         break;
       case "post-acceptance":
         for (const status of row.source.statuses) {
-          const actual =
-            resolveDemandControllerPostAcceptanceFrontierDescriptor(status);
+          const actual = resolveDemandControllerPostAcceptanceFrontierDescriptor(status);
           deepEqual(actual, row.expected);
           equal(Object.isFrozen(actual), true);
         }
@@ -310,12 +303,6 @@ test("Controller Route以十七项轻量矩阵完整映射frontier、owner与pha
   }
 
   equal(frontierKinds.size, 17);
-  equal(
-    resolveDemandControllerImplementationFrontierDescriptor("accepted"),
-    null,
-  );
-  equal(
-    resolveDemandControllerImplementationFrontierDescriptor("superseded"),
-    null,
-  );
+  equal(resolveDemandControllerImplementationFrontierDescriptor("accepted"), null);
+  equal(resolveDemandControllerImplementationFrontierDescriptor("superseded"), null);
 });

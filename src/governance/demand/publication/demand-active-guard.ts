@@ -1,14 +1,9 @@
+import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../../../foundation/filesystem/rooted-directory.js";
-import { readStrictTextFile, StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import {
   type DurableAtomicFileStageAddress,
   DurableAtomicFileStageAddressError,
@@ -16,31 +11,44 @@ import {
   parseDurableAtomicFileStageFileName,
   readDurableAtomicFileStageOwnerState,
 } from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { parsePortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import {
+  RootedDirectory,
+  RootedDirectoryError,
+} from "../../../foundation/filesystem/rooted-directory.js";
+import {
+  readStableResourceDirectory,
+  StableDirectoryReadError,
+} from "../../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import {
+  readStrictTextFile,
+  StrictTextFileError,
+} from "../../../foundation/filesystem/strict-text-file.js";
 import { fail } from "../../../kernel/error.js";
+import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
 } from "../../../kernel/requirement-board.js";
-import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
-import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
-import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
+import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
 import {
   closeDemandOperationRoot,
   DemandOperationAuthorityContextError,
   openDemandOperationRoot,
 } from "../demand-operation-authority-context.js";
-import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
-import { parsePortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import { readStableResourceDirectory, StableDirectoryReadError } from "../../../foundation/filesystem/stable-directory-read.js";
-import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
-import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
-import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
-import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "./demand-publication-paths.js";
+import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "./demand-publication-paths.js";
+import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
+import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
+import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
+import {
+  DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  demandFinalRootRef,
+} from "./demand-publication-paths.js";
 
 /**
  * Wakeflow Governance / Demand：活动 Demand 守卫（ADR-0011 D7，按 ADR-0010 D3 收窄到 pod）。
@@ -58,10 +66,7 @@ async function resourceExists(
     await root.inspectExistingResource(ref);
     return true;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
     if (error instanceof RootedDirectoryError) {
@@ -188,25 +193,40 @@ export async function assertNoActiveDemand(
 }
 
 /** 活动根或最近归档中的 pod 身份；旧或损坏数据无法定位时返回 null，守卫保持保守。 */
-export async function readDemandPodId(root: RootedDirectory, demandId: string, signal?: AbortSignal): Promise<string | null> {
+export async function readDemandPodId(
+  root: RootedDirectory,
+  demandId: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   const id = parseWakeflowDurableIdOfKind(demandId, "demand");
   if (await resourceExists(root, demandFinalRootRef(id))) {
     const demandRoot = await openDemandOperationRoot(root, id);
-    try { return await identityPodId(demandRoot, signal); }
-    finally { await closeDemandOperationRoot(demandRoot); }
+    try {
+      return await identityPodId(demandRoot, signal);
+    } finally {
+      await closeDemandOperationRoot(demandRoot);
+    }
   }
   const options = signal === undefined ? {} : { signal };
   const config = await readWakeflowConfigAuthoritySnapshot(root, options);
-  const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", { durability: root.durability });
-  try { return (await locateLatestDemandArchive(ledger, demandId, signal))?.podId ?? null; }
-  finally { await ledger.close(); }
+  const ledger = await RootedDirectory.open(config.ledgerRoot, "$ledgerRoot", {
+    durability: root.durability,
+  });
+  try {
+    return (await locateLatestDemandArchive(ledger, demandId, signal))?.podId ?? null;
+  } finally {
+    await ledger.close();
+  }
 }
 
 async function pendingEntries(root: RootedDirectory, ref: string, signal: AbortSignal | undefined) {
   try {
-    return (await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
-      maximumEntries: 4096, ...(signal === undefined ? {} : { signal }),
-    })).entries;
+    return (
+      await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
+        maximumEntries: 4096,
+        ...(signal === undefined ? {} : { signal }),
+      })
+    ).entries;
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
     throw error;
@@ -235,8 +255,17 @@ function isDeadWriterStage(name: string, scope: "pod-publication" | "pod-lifecyc
 }
 
 /** 崩溃释放进程锁不代表业务已结清：已有发布意图和生命周期日志继续保留 pod 占用。 */
-async function assertNoPendingPodMutation(root: RootedDirectory, signal: AbortSignal | undefined, excluding: string | null, podId: string | null) {
-  for (const entry of await pendingEntries(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, signal)) {
+async function assertNoPendingPodMutation(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+  excluding: string | null,
+  podId: string | null,
+) {
+  for (const entry of await pendingEntries(
+    root,
+    DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+    signal,
+  )) {
     if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
       if (isDeadWriterStage(entry.name, "pod-publication")) continue;
       fail("precondition-failed", "pod-publication-residue", "$pod");
@@ -244,7 +273,8 @@ async function assertNoPendingPodMutation(root: RootedDirectory, signal: AbortSi
     const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
     if (id === excluding) continue;
     const stored = await readPublicationTransactionAt(root, entry.resourcePath, entry.node, signal);
-    if (stored.transaction.demandId !== id) fail("precondition-failed", "pod-publication-residue", "$pod");
+    if (stored.transaction.demandId !== id)
+      fail("precondition-failed", "pod-publication-residue", "$pod");
     if (podId === null || stored.transaction.identity.podId === podId) {
       fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
     }

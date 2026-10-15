@@ -2,16 +2,16 @@ import { types } from "node:util";
 
 import {
   createFileAtomically,
-  replaceFileAtomically,
-  DurableAtomicFileWriteError,
   type DurableAtomicFileReplaceResult,
+  DurableAtomicFileWriteError,
   type DurableAtomicFileWriteResult,
+  replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -23,14 +23,14 @@ import {
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
 import {
+  type ByteCount,
   ByteCountError,
   parseByteCount,
-  type ByteCount,
 } from "../../foundation/numeric/byte-count.js";
 import {
   planWakeflowManagedTextAuthorityTransition,
-  WakeflowManagedTextAuthorityTransitionError,
   type WakeflowManagedTextAuthorityTransition,
+  WakeflowManagedTextAuthorityTransitionError,
 } from "./wakeflow-managed-text-authority-transition.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
@@ -92,25 +92,21 @@ export type WakeflowManagedBlockFileErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Wakeflow managed block file input is invalid.",
-  "unsupported-platform":
-    "Wakeflow managed block file requires POSIX ownership facts.",
+  "unsupported-platform": "Wakeflow managed block file requires POSIX ownership facts.",
   "root-scope": "Wakeflow managed block file lost its root scope.",
   "root-policy": "Wakeflow managed block file requires a current-user root.",
   source: "Wakeflow managed block file source cannot be read stably.",
   "source-capacity": "Wakeflow managed block file source exceeds its byte budget.",
   "source-policy": "Wakeflow managed block file source violates its node policy.",
   envelope: "Wakeflow managed block file envelope is invalid.",
-  "unknown-managed-body":
-    "Wakeflow managed block file body is not an admitted render.",
-  "target-capacity":
-    "Wakeflow managed block file candidate exceeds its byte budget.",
+  "unknown-managed-body": "Wakeflow managed block file body is not an admitted render.",
+  "target-capacity": "Wakeflow managed block file candidate exceeds its byte budget.",
   conflict: "Wakeflow managed block file source changed before atomic publication.",
   "recovery-required":
     "Wakeflow managed block file target has stage residue that requires explicit recovery.",
   aborted: "Wakeflow managed block file operation was aborted.",
   "effect-failure": "Wakeflow managed block file effect failed.",
-  "commit-uncertain":
-    "Wakeflow managed block file commit outcome is uncertain.",
+  "commit-uncertain": "Wakeflow managed block file commit outcome is uncertain.",
 } as const satisfies Readonly<Record<WakeflowManagedBlockFileErrorReason, string>>;
 
 /** 托管块文件检查或重组失败的稳定、脱敏错误。 */
@@ -127,10 +123,7 @@ export class WakeflowManagedBlockFileError extends Error {
   }
 }
 
-const DEFAULT_MAXIMUM_BYTES = parseByteCount(
-  1024 * 1024,
-  "$managedBlockFile.maximumBytes",
-);
+const DEFAULT_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$managedBlockFile.maximumBytes");
 
 interface ParsedRequest {
   readonly resourcePath: PortableResourcePath;
@@ -146,20 +139,22 @@ function fail(reason: WakeflowManagedBlockFileErrorReason, path: string): never 
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRequest> {
@@ -200,9 +195,9 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
   }
   return Object.freeze({
     resourcePath,
-    currentTargets: Object.freeze(
-      [...value.currentTargets] as Readonly<WakeflowManagedTextEnvelopeTarget>[],
-    ),
+    currentTargets: Object.freeze([
+      ...value.currentTargets,
+    ] as Readonly<WakeflowManagedTextEnvelopeTarget>[]),
     desiredTarget: value.desiredTarget as Readonly<WakeflowManagedTextEnvelopeTarget>,
     maximumBytes,
     signal: value.signal,
@@ -220,10 +215,7 @@ function currentUserId(): bigint {
   return BigInt(process.geteuid());
 }
 
-async function assertCurrentUserRoot(
-  root: RootedDirectory,
-  expectedUserId: bigint,
-): Promise<void> {
+async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {
   let userId: bigint;
   try {
     userId = (await root.assertCurrent("$root")).userId;
@@ -248,9 +240,9 @@ async function readSource(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
     if (
-      read.node.kind !== "file"
-      || read.node.linkCount !== 1n
-      || read.node.userId !== expectedUserId
+      read.node.kind !== "file" ||
+      read.node.linkCount !== 1n ||
+      read.node.userId !== expectedUserId
     ) {
       fail("source-policy", "$source");
     }
@@ -290,9 +282,9 @@ async function revalidateSource(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
     if (
-      initial === null
-      || current.digest !== initial.facts.digest
-      || current.byteCount !== initial.facts.byteCount
+      initial === null ||
+      current.digest !== initial.facts.digest ||
+      current.byteCount !== initial.facts.byteCount
     ) {
       fail("source", "$source");
     }
@@ -316,13 +308,10 @@ async function inspectParsed(
   const read = await readSource(root, request, expectedUserId);
   let transition: Readonly<WakeflowManagedTextAuthorityTransition>;
   try {
-    transition = planWakeflowManagedTextAuthorityTransition(
-      read?.bytes ?? new Uint8Array(),
-      {
-        currentTargets: request.currentTargets,
-        desiredTarget: request.desiredTarget,
-      },
-    );
+    transition = planWakeflowManagedTextAuthorityTransition(read?.bytes ?? new Uint8Array(), {
+      currentTargets: request.currentTargets,
+      desiredTarget: request.desiredTarget,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
       if (error.reason === "unadmitted-source") fail("unknown-managed-body", "$source");
@@ -338,9 +327,7 @@ async function inspectParsed(
   }
   await revalidateSource(root, request, read);
   return Object.freeze({
-    status: transition.disposition === "current"
-      ? "managed-current"
-      : "recompose-required",
+    status: transition.disposition === "current" ? "managed-current" : "recompose-required",
     resourcePath: request.resourcePath,
     source: read?.facts ?? null,
     transition,
@@ -362,9 +349,9 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("target-capacity", "$target");
   if (
-    error.reason === "target-exists"
-    || error.reason === "expectation-changed"
-    || error.reason === "expectation-read-failure"
+    error.reason === "target-exists" ||
+    error.reason === "expectation-changed" ||
+    error.reason === "expectation-read-failure"
   ) {
     fail("conflict", "$source");
   }
@@ -375,10 +362,10 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
     fail("recovery-required", "$resourcePath");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "stage-cleanup-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "stage-cleanup-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
@@ -413,14 +400,13 @@ async function publishTarget(
   }
 }
 
-function sameSource(
-  left: Readonly<StableFileSource>,
-  right: Readonly<StableFileSource>,
-): boolean {
-  return left.resourcePath === right.resourcePath
-    && left.byteCount === right.byteCount
-    && left.digest === right.digest
-    && sameFileNodeSnapshot(left.node, right.node);
+function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFileSource>): boolean {
+  return (
+    left.resourcePath === right.resourcePath &&
+    left.byteCount === right.byteCount &&
+    left.digest === right.digest &&
+    sameFileNodeSnapshot(left.node, right.node)
+  );
 }
 
 function assertReadback(
@@ -433,26 +419,24 @@ function assertReadback(
 ): void {
   const target = before.transition.target;
   const source = after.source;
-  const expectedMode = before.source === null
-    ? createMode
-    : before.source.node.permissionBits;
+  const expectedMode = before.source === null ? createMode : before.source.node.permissionBits;
   if (
-    target === null
-    || source === null
-    || after.status !== "managed-current"
-    || after.transition.sourceAuthority !== "desired"
-    || after.transition.target !== null
-    || effect.resourcePath !== request.resourcePath
-    || effect.digest !== target.digest
-    || effect.byteCount !== target.byteCount
-    || effect.node.kind !== "file"
-    || effect.node.permissionBits !== expectedMode
-    || effect.node.linkCount !== 1n
-    || effect.node.userId !== expectedUserId
-    || source.resourcePath !== effect.resourcePath
-    || source.digest !== effect.digest
-    || source.byteCount !== effect.byteCount
-    || !sameFileNodeSnapshot(source.node, effect.node)
+    target === null ||
+    source === null ||
+    after.status !== "managed-current" ||
+    after.transition.sourceAuthority !== "desired" ||
+    after.transition.target !== null ||
+    effect.resourcePath !== request.resourcePath ||
+    effect.digest !== target.digest ||
+    effect.byteCount !== target.byteCount ||
+    effect.node.kind !== "file" ||
+    effect.node.permissionBits !== expectedMode ||
+    effect.node.linkCount !== 1n ||
+    effect.node.userId !== expectedUserId ||
+    source.resourcePath !== effect.resourcePath ||
+    source.digest !== effect.digest ||
+    source.byteCount !== effect.byteCount ||
+    !sameFileNodeSnapshot(source.node, effect.node)
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
@@ -465,19 +449,19 @@ function assertReadback(
 
 function parseOptions(value: unknown): number {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || Object.keys(value).some((key) => key !== "createMode")
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    Object.keys(value).some((key) => key !== "createMode")
   ) {
     fail("input", "$options");
   }
   const createMode = (value as { readonly createMode?: unknown }).createMode;
   if (
-    typeof createMode !== "number"
-    || !Number.isInteger(createMode)
-    || createMode < 0
-    || createMode > 0o777
+    typeof createMode !== "number" ||
+    !Number.isInteger(createMode) ||
+    createMode < 0 ||
+    createMode > 0o777
   ) {
     fail("input", "$options.createMode");
   }

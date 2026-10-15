@@ -1,70 +1,65 @@
 import { types } from "node:util";
-
-import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import {
-  computeTaskPackageDigest,
-  type TaskPackage,
-} from "../../tasking/task-package.js";
+import { computeTaskPackageDigest, type TaskPackage } from "../../tasking/task-package.js";
 import type { DemandTargetTaskState } from "../model/demand-aggregate-state.js";
-
-import {
-  applyDemandEventStreamCommit,
-  DemandEventStreamCommitError,
-  type DemandEventStreamCommit,
-  type PreparedDemandEventStreamCommit,
-} from "./demand-event-stream-commit.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
 import type {
-  TargetTaskPlannedUncommittedEvent,
-  DeliveryPreparedUncommittedEvent,
-  DeliveryOutcomeRecordedUncommittedEvent,
-  DeliveryRearmedUncommittedEvent,
-  TargetResultRecordedUncommittedEvent,
   ControllerTargetReviewDecidedUncommittedEvent,
-  ProductDefectRemediationAuthorizedUncommittedEvent,
-  DemandEscalatedUncommittedEvent,
   DecisionRecordedUncommittedEvent,
+  DeliveryOutcomeRecordedUncommittedEvent,
+  DeliveryPreparedUncommittedEvent,
+  DeliveryRearmedUncommittedEvent,
+  DemandEscalatedUncommittedEvent,
+  DemandUncommittedEvent,
+  ProductDefectRemediationAuthorizedUncommittedEvent,
+  TargetResultRecordedUncommittedEvent,
+  TargetTaskPlannedUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
-import type {
-  DemandEventCommitSequence,
-  DemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
 import {
   createDemandEventSourcingSnapshot,
-  restoreDemandEventSourcingSnapshot,
   DemandEventSourcingSnapshotError,
+  restoreDemandEventSourcingSnapshot,
 } from "./demand-event-sourcing-snapshot.js";
-import {
-  DemandFileEventStore,
-  DemandFileEventStoreError,
-  type DemandFileEventStoreAppendReceipt,
-} from "./demand-file-event-store.js";
-import {
-  DemandFileEventSnapshotStore,
-  DemandFileEventSnapshotStoreError,
-  type DemandFileEventSnapshotPublishReceipt,
-  type DemandFileEventSnapshotReadResult,
-} from "./demand-file-event-snapshot-store.js";
 import {
   computeDemandEventSourcingStoredEventDigest,
   type DemandEventSourcingStoredEvent,
 } from "./demand-event-sourcing-stored-event.js";
 import {
-  upcastDemandEventSourcingStoredEvent,
   DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
 } from "./demand-event-sourcing-upcaster.js";
-import type { DemandUncommittedEvent } from "./demand-event-sourcing-event.js";
-import { computeDemandEventStreamCommitDigest } from "./demand-event-stream-commit.js";
+import {
+  applyDemandEventStreamCommit,
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommit,
+  DemandEventStreamCommitError,
+  type PreparedDemandEventStreamCommit,
+} from "./demand-event-stream-commit.js";
+import type {
+  DemandEventCommitSequence,
+  DemandEventStreamRevision,
+} from "./demand-event-stream-position.js";
+import {
+  type DemandFileEventSnapshotPublishReceipt,
+  type DemandFileEventSnapshotReadResult,
+  DemandFileEventSnapshotStore,
+  DemandFileEventSnapshotStoreError,
+} from "./demand-file-event-snapshot-store.js";
+import {
+  DemandFileEventStore,
+  type DemandFileEventStoreAppendReceipt,
+  DemandFileEventStoreError,
+} from "./demand-file-event-store.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：聚合仓储。
@@ -100,30 +95,21 @@ export interface DemandTargetResultSourceEvent {
 /** 一个Target Task的不可变TaskPackage事件来源。 */
 export interface AuditedTargetTaskPackageSource {
   readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-  readonly taskPackage: Readonly<
-    TargetTaskPlannedUncommittedEvent["data"]["taskPackage"]
-  >;
+  readonly taskPackage: Readonly<TargetTaskPlannedUncommittedEvent["data"]["taskPackage"]>;
 }
 
 /** 一份TargetResult的不可变记录事件来源：结果、导入时签发的回调记录与证据解析收据。 */
 export interface AuditedTargetResultSource {
   readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-  readonly result: Readonly<
-    TargetResultRecordedUncommittedEvent["data"]["result"]
-  >;
-  readonly callback: Readonly<
-    TargetResultRecordedUncommittedEvent["data"]["callback"]
-  >;
+  readonly result: Readonly<TargetResultRecordedUncommittedEvent["data"]["result"]>;
+  readonly callback: Readonly<TargetResultRecordedUncommittedEvent["data"]["callback"]>;
   readonly evidenceResolution: TargetResultRecordedUncommittedEvent["data"]["evidenceResolution"];
 }
-
 
 /** 一份Implementation或Test Controller Review Decision的不可变事件来源。 */
 export interface AuditedControllerReviewDecisionSource {
   readonly sourceEvent: Readonly<DemandTargetResultSourceEvent>;
-  readonly decision: Readonly<
-    ControllerTargetReviewDecidedUncommittedEvent["data"]["decision"]
-  >;
+  readonly decision: Readonly<ControllerTargetReviewDecidedUncommittedEvent["data"]["decision"]>;
 }
 
 /** 一份Controller产品缺陷修复授权的不可变记录事件来源。 */
@@ -161,7 +147,6 @@ export interface LocatedTargetTaskPlannedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
   readonly event: Readonly<TargetTaskPlannedUncommittedEvent>;
 }
-
 
 export interface LocatedDeliveryPreparedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
@@ -201,8 +186,7 @@ function taskPackageMatchesTargetSummary(
     target.workType !== "test" &&
     taskPackage.assignment.repositoryId === target.repositoryId &&
     taskPackage.commitExpectation === target.commitExpectation &&
-    taskPackage.acceptanceAnchors.length ===
-      target.acceptanceAnchorIds.length &&
+    taskPackage.acceptanceAnchors.length === target.acceptanceAnchorIds.length &&
     taskPackage.acceptanceAnchors.every(
       (anchor, index) => anchor.anchorId === target.acceptanceAnchorIds[index],
     )
@@ -224,9 +208,7 @@ const ERROR_MESSAGES = {
   snapshot: "Demand Event Sourcing snapshot cannot be published.",
   aborted: "Demand Event Sourcing Repository operation was aborted.",
   "operation-failure": "Demand Event Sourcing Repository operation failed.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingRepositoryErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingRepositoryErrorReason, string>>;
 
 export class DemandEventSourcingRepositoryError extends Error {
   override readonly name = "DemandEventSourcingRepositoryError";
@@ -241,10 +223,7 @@ export class DemandEventSourcingRepositoryError extends Error {
   }
 }
 
-function fail(
-  reason: DemandEventSourcingRepositoryErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingRepositoryErrorReason, path: string): never {
   throw new DemandEventSourcingRepositoryError(reason, path);
 }
 
@@ -344,8 +323,9 @@ export class DemandEventSourcingRepository {
     // stream-changed，此时立即重读一次；仍失败（含崩溃残留的暂存文件）则视为
     // 本次没有可用快照，退回完整重放并以 `snapshotStatus: "invalid"` 报告。
     // 缓存问题绝不变成加载失败；只有中止照常上抛。
-    let observations: Readonly<DemandFileEventSnapshotReadResult> =
-      Object.freeze({ snapshots: Object.freeze([]) });
+    let observations: Readonly<DemandFileEventSnapshotReadResult> = Object.freeze({
+      snapshots: Object.freeze([]),
+    });
     let snapshotStoreFailed = false;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
@@ -355,10 +335,7 @@ export class DemandEventSourcingRepository {
         snapshotStoreFailed = false;
         break;
       } catch (error: unknown) {
-        if (
-          !(error instanceof DemandFileEventSnapshotStoreError) ||
-          error.reason === "aborted"
-        ) {
+        if (!(error instanceof DemandFileEventSnapshotStoreError) || error.reason === "aborted") {
           mapStoreError(error);
         }
         snapshotStoreFailed = true;
@@ -367,9 +344,7 @@ export class DemandEventSourcingRepository {
     const valid = observations.snapshots
       .filter((entry) => entry.status === "valid")
       .sort((left, right) => right.commitSequence - left.commitSequence);
-    let snapshotAttemptFailed = observations.snapshots.some(
-      (entry) => entry.status === "invalid",
-    );
+    let snapshotAttemptFailed = observations.snapshots.some((entry) => entry.status === "invalid");
     if (snapshotStoreFailed) snapshotAttemptFailed = true;
 
     for (const observation of valid) {
@@ -383,10 +358,7 @@ export class DemandEventSourcingRepository {
           },
           signal === undefined ? undefined : { signal },
         );
-        let aggregate = restoreDemandEventSourcingSnapshot(
-          observation.snapshot,
-          tail.anchorCommit,
-        );
+        let aggregate = restoreDemandEventSourcingSnapshot(observation.snapshot, tail.anchorCommit);
         aggregate = replayCommits(aggregate, tail.commits);
         return Object.freeze({
           aggregate,
@@ -399,10 +371,7 @@ export class DemandEventSourcingRepository {
           snapshotAttemptFailed = true;
           continue;
         }
-        if (
-          error instanceof DemandFileEventStoreError &&
-          error.reason === "stream-invalid"
-        ) {
+        if (error instanceof DemandFileEventStoreError && error.reason === "stream-invalid") {
           snapshotAttemptFailed = true;
           continue;
         }
@@ -413,9 +382,7 @@ export class DemandEventSourcingRepository {
 
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
@@ -426,9 +393,7 @@ export class DemandEventSourcingRepository {
     const aggregate = replayCommits(null, stream.commits);
     return Object.freeze({
       aggregate,
-      snapshotStatus: snapshotAttemptFailed
-        ? ("invalid" as const)
-        : ("missing" as const),
+      snapshotStatus: snapshotAttemptFailed ? ("invalid" as const) : ("missing" as const),
       snapshotCommitSequence: null,
       replayedCommitCount: stream.commits.length,
     });
@@ -441,9 +406,7 @@ export class DemandEventSourcingRepository {
     const signal = parseSignal(options);
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
@@ -466,9 +429,7 @@ export class DemandEventSourcingRepository {
     const signal = parseSignal(options);
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
@@ -486,8 +447,7 @@ export class DemandEventSourcingRepository {
     const aggregate = replayCommits(null, commits);
     const taskPackages: Readonly<AuditedTargetTaskPackageSource>[] = [];
     const targetResults: Readonly<AuditedTargetResultSource>[] = [];
-    const targetReviewDecisions: Readonly<AuditedControllerReviewDecisionSource>[] =
-      [];
+    const targetReviewDecisions: Readonly<AuditedControllerReviewDecisionSource>[] = [];
     const productDefectRemediationAuthorizations: Readonly<AuditedProductDefectRemediationAuthorizationSource>[] =
       [];
     const escalations: Readonly<AuditedDemandEscalationSource>[] = [];
@@ -514,10 +474,7 @@ export class DemandEventSourcingRepository {
     >();
     const productDefectRemediationIds = new Set<string>();
     const remediatedTestDecisionIds = new Set<string>();
-    const storedEventByRevision = new Map<
-      number,
-      Readonly<DemandEventSourcingStoredEvent>
-    >();
+    const storedEventByRevision = new Map<number, Readonly<DemandEventSourcingStoredEvent>>();
 
     for (const commit of commits) {
       for (const storedEvent of commit.events) {
@@ -610,15 +567,12 @@ export class DemandEventSourcingRepository {
           const resumption = decision.resumption;
           if (resumption !== null) {
             const previous = targetReviewDecisions.find(
-              (entry) =>
-                entry.decision.targetReviewDecisionId ===
-                resumption.previousDecisionId,
+              (entry) => entry.decision.targetReviewDecisionId === resumption.previousDecisionId,
             );
             if (
               previous === undefined ||
               previous.decision.targetTaskId !== decision.targetTaskId ||
-              previous.decision.reviewed.targetResultId !==
-                decision.reviewed.targetResultId ||
+              previous.decision.reviewed.targetResultId !== decision.reviewed.targetResultId ||
               resumedDecisionIds.has(resumption.previousDecisionId) ||
               (resumption.basis.kind === "condition-cleared") !==
                 (previous.decision.decision === "blocked") ||
@@ -655,23 +609,17 @@ export class DemandEventSourcingRepository {
           );
           continue;
         }
-        if (
-          event.eventType === "review.product-defect-remediation-authorized"
-        ) {
+        if (event.eventType === "review.product-defect-remediation-authorized") {
           const authorization = event.data.authorization;
           if (
-            productDefectRemediationIds.has(
-              authorization.productDefectRemediationId,
-            ) ||
+            productDefectRemediationIds.has(authorization.productDefectRemediationId) ||
             remediatedTestDecisionIds.has(
               authorization.source.testReviewDecision.targetReviewDecisionId,
             )
           ) {
             fail("stream", "$events");
           }
-          productDefectRemediationIds.add(
-            authorization.productDefectRemediationId,
-          );
+          productDefectRemediationIds.add(authorization.productDefectRemediationId);
           remediatedTestDecisionIds.add(
             authorization.source.testReviewDecision.targetReviewDecisionId,
           );
@@ -686,19 +634,13 @@ export class DemandEventSourcingRepository {
     }
 
     const targetById = new Map(
-      aggregate.state.targetTasks.map(
-        (target) => [target.targetTaskId, target] as const,
-      ),
+      aggregate.state.targetTasks.map((target) => [target.targetTaskId, target] as const),
     );
     const taskPackageById = new Map(
-      taskPackages.map(
-        (source) => [source.taskPackage.taskPackageId, source] as const,
-      ),
+      taskPackages.map((source) => [source.taskPackage.taskPackageId, source] as const),
     );
     const targetResultById = new Map(
-      targetResults.map(
-        (source) => [source.result.targetResultId, source] as const,
-      ),
+      targetResults.map((source) => [source.result.targetResultId, source] as const),
     );
     const reviewDecisionById = new Map(
       targetReviewDecisions.map(
@@ -710,12 +652,8 @@ export class DemandEventSourcingRepository {
       const taskPackageSource = taskPackageById.get(target.taskPackageId);
       if (
         taskPackageSource === undefined ||
-        !taskPackageMatchesTargetSummary(
-          taskPackageSource.taskPackage,
-          target,
-        ) ||
-        computeTaskPackageDigest(taskPackageSource.taskPackage) !==
-          target.taskPackageDigest ||
+        !taskPackageMatchesTargetSummary(taskPackageSource.taskPackage, target) ||
+        computeTaskPackageDigest(taskPackageSource.taskPackage) !== target.taskPackageDigest ||
         taskPackageSource.sourceEvent.streamRevision > aggregate.streamRevision
       ) {
         fail("stream", "$events");
@@ -736,23 +674,16 @@ export class DemandEventSourcingRepository {
       ) {
         continue;
       }
-      const resultSource = targetResultById.get(
-        target.currentDelivery.targetResult.targetResultId,
-      );
+      const resultSource = targetResultById.get(target.currentDelivery.targetResult.targetResultId);
       if (
         resultSource === undefined ||
-        (resultSource.result.workType === "test") !==
-          (target.workType === "test") ||
+        (resultSource.result.workType === "test") !== (target.workType === "test") ||
         resultSource.result.targetTaskId !== target.targetTaskId ||
-        resultSource.result.taskPackage.taskPackageId !==
-          target.taskPackageId ||
+        resultSource.result.taskPackage.taskPackageId !== target.taskPackageId ||
         resultSource.result.taskPackage.digest !== target.taskPackageDigest ||
-        resultSource.result.resultDigest !==
-          target.currentDelivery.targetResult.resultDigest ||
-        resultSource.result.report.outcome !==
-          target.currentDelivery.targetResult.outcome ||
-        resultSource.result.report.reportedAt !==
-          target.currentDelivery.targetResult.reportedAt ||
+        resultSource.result.resultDigest !== target.currentDelivery.targetResult.resultDigest ||
+        resultSource.result.report.outcome !== target.currentDelivery.targetResult.outcome ||
+        resultSource.result.report.reportedAt !== target.currentDelivery.targetResult.reportedAt ||
         resultSource.sourceEvent.streamRevision > aggregate.streamRevision
       ) {
         fail("stream", "$events");
@@ -770,10 +701,7 @@ export class DemandEventSourcingRepository {
       ) {
         fail("stream", "$events");
       }
-      if (
-        target.phase === "result-reported" ||
-        target.phase === "test-result-reported"
-      ) {
+      if (target.phase === "result-reported" || target.phase === "test-result-reported") {
         continue;
       }
       const decisionSource = reviewDecisionById.get(
@@ -781,28 +709,22 @@ export class DemandEventSourcingRepository {
       );
       if (
         decisionSource === undefined ||
-        (decisionSource.decision.kind ===
-          "WakeflowControllerTestReviewDecision") !==
+        (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision") !==
           (target.workType === "test") ||
         decisionSource.decision.targetTaskId !== target.targetTaskId ||
-        decisionSource.decision.reviewed.targetResultId !==
-          resultSource.result.targetResultId ||
-        decisionSource.decision.reviewed.targetResultDigest !==
-          resultSource.result.resultDigest ||
+        decisionSource.decision.reviewed.targetResultId !== resultSource.result.targetResultId ||
+        decisionSource.decision.reviewed.targetResultDigest !== resultSource.result.resultDigest ||
         decisionSource.decision.decisionDigest !==
           target.currentDelivery.reviewDecision.decisionDigest ||
-        decisionSource.decision.decision !==
-          target.currentDelivery.reviewDecision.decision ||
+        decisionSource.decision.decision !== target.currentDelivery.reviewDecision.decision ||
         decisionSource.decision.controllerWindowId !==
           target.currentDelivery.reviewDecision.controllerWindowId ||
-        decisionSource.decision.decidedAt !==
-          target.currentDelivery.reviewDecision.decidedAt ||
+        decisionSource.decision.decidedAt !== target.currentDelivery.reviewDecision.decidedAt ||
         decisionSource.sourceEvent.streamRevision > aggregate.streamRevision ||
         (decisionSource.decision.kind === "WakeflowControllerTestReviewDecision" &&
           decisionSource.decision.decision === "escalate" &&
           (target.phase === "test-product-defect") !==
-            (decisionSource.decision.escalation?.classification ===
-              "product-defect"))
+            (decisionSource.decision.escalation?.classification === "product-defect"))
       ) {
         fail("stream", "$events");
       }
@@ -824,8 +746,7 @@ export class DemandEventSourcingRepository {
     }
     const remediationById = new Map(
       productDefectRemediationAuthorizations.map(
-        (source) =>
-          [source.authorization.productDefectRemediationId, source] as const,
+        (source) => [source.authorization.productDefectRemediationId, source] as const,
       ),
     );
     for (const source of productDefectRemediationAuthorizations) {
@@ -836,9 +757,7 @@ export class DemandEventSourcingRepository {
       const sourceTestPackage = taskPackageById.get(
         authorization.source.testTaskPackage.taskPackageId,
       );
-      const priorStoredEvent = storedEventByRevision.get(
-        authorization.source.streamRevision,
-      );
+      const priorStoredEvent = storedEventByRevision.get(authorization.source.streamRevision);
       const decision = sourceDecision?.decision;
       const escalatedResult = targetResultById.get(
         authorization.source.targetResult.targetResultId,
@@ -851,7 +770,9 @@ export class DemandEventSourcingRepository {
       // Validate the scope the persisted decision actually authorized, not all
       // failures in its report. This also preserves older valid v1 authorizations
       // whose decision explicitly mapped the whole failed set.
-      const authorizedStepIds = new Set(remediation?.affectedTargets.flatMap((target) => target.failedStepIds) ?? []);
+      const authorizedStepIds = new Set(
+        remediation?.affectedTargets.flatMap((target) => target.failedStepIds) ?? [],
+      );
       const expectedFailedSteps =
         escalatedResult?.result.workType === "test"
           ? escalatedResult.result.report.steps
@@ -863,36 +784,25 @@ export class DemandEventSourcingRepository {
         decision.kind !== "WakeflowControllerTestReviewDecision" ||
         decision.decision !== "escalate" ||
         remediation === undefined ||
-        authorization.authorizationRationale !==
-          remediation.authorizationRationale ||
+        authorization.authorizationRationale !== remediation.authorizationRationale ||
         decision.programId !== authorization.programId ||
         decision.demandId !== authorization.demandId ||
         decision.controllerWindowId !== authorization.controllerWindowId ||
         decision.targetTaskId !== authorization.source.testTargetTaskId ||
-        decision.decisionDigest !==
-          authorization.source.testReviewDecision.decisionDigest ||
-        decision.decidedAt !==
-          authorization.source.testReviewDecision.decidedAt ||
-        decision.reviewed.targetResultId !==
-          authorization.source.targetResult.targetResultId ||
-        decision.reviewed.targetResultDigest !==
-          authorization.source.targetResult.resultDigest ||
-        decision.testExecution.testAttemptId !==
-          authorization.source.testAttemptId ||
-        sourceDecision?.sourceEvent.streamRevision !==
-          authorization.source.streamRevision ||
-        source.sourceEvent.streamRevision !==
-          authorization.source.streamRevision + 1 ||
-        priorStoredEvent?.resultingStateDigest !==
-          authorization.source.stateDigest ||
+        decision.decisionDigest !== authorization.source.testReviewDecision.decisionDigest ||
+        decision.decidedAt !== authorization.source.testReviewDecision.decidedAt ||
+        decision.reviewed.targetResultId !== authorization.source.targetResult.targetResultId ||
+        decision.reviewed.targetResultDigest !== authorization.source.targetResult.resultDigest ||
+        decision.testExecution.testAttemptId !== authorization.source.testAttemptId ||
+        sourceDecision?.sourceEvent.streamRevision !== authorization.source.streamRevision ||
+        source.sourceEvent.streamRevision !== authorization.source.streamRevision + 1 ||
+        priorStoredEvent?.resultingStateDigest !== authorization.source.stateDigest ||
         sourceTestPackage === undefined ||
         sourceTestPackage.taskPackage.workType !== "test" ||
         computeTaskPackageDigest(sourceTestPackage.taskPackage) !==
           authorization.source.testTaskPackage.taskPackageDigest ||
-        sourceTestPackage.taskPackage.targetTaskId !==
-          authorization.source.testTargetTaskId ||
-        sourceTestPackage.sourceEvent.streamRevision >=
-          authorization.source.streamRevision ||
+        sourceTestPackage.taskPackage.targetTaskId !== authorization.source.testTargetTaskId ||
+        sourceTestPackage.sourceEvent.streamRevision >= authorization.source.streamRevision ||
         expectedFailedSteps.length !== authorization.failedSteps.length ||
         expectedFailedSteps.some((step, index) => {
           const projected = authorization.failedSteps[index];
@@ -902,8 +812,7 @@ export class DemandEventSourcingRepository {
             projected.observed !== step.observed
           );
         }) ||
-        remediation.affectedTargets.length !==
-          authorization.affectedTargets.length ||
+        remediation.affectedTargets.length !== authorization.affectedTargets.length ||
         remediation.affectedTargets.some((declared) => {
           const affected = authorization.affectedTargets.find(
             (entry) => entry.baseline.targetTaskId === declared.targetTaskId,
@@ -912,9 +821,7 @@ export class DemandEventSourcingRepository {
             affected === undefined ||
             affected.correctionObjective !== declared.correctionObjective ||
             affected.failedStepIds.length !== declared.failedStepIds.length ||
-            declared.failedStepIds.some(
-              (stepId) => !affected.failedStepIds.includes(stepId),
-            )
+            declared.failedStepIds.some((stepId) => !affected.failedStepIds.includes(stepId))
           );
         })
       ) {
@@ -930,9 +837,7 @@ export class DemandEventSourcingRepository {
         const packageBaseline = baselineByTarget.get(baseline.targetTaskId);
         const taskPackageSource = taskPackageById.get(baseline.taskPackageId);
         const resultSource = targetResultById.get(baseline.targetResultId);
-        const reviewSource = reviewDecisionById.get(
-          baseline.targetReviewDecisionId,
-        );
+        const reviewSource = reviewDecisionById.get(baseline.targetReviewDecisionId);
         if (
           packageBaseline === undefined ||
           packageBaseline.taskPackageId !== baseline.taskPackageId ||
@@ -941,24 +846,19 @@ export class DemandEventSourcingRepository {
           packageBaseline.windowId !== baseline.windowId ||
           packageBaseline.targetResultId !== baseline.targetResultId ||
           packageBaseline.resultDigest !== baseline.resultDigest ||
-          packageBaseline.targetReviewDecisionId !==
-            baseline.targetReviewDecisionId ||
+          packageBaseline.targetReviewDecisionId !== baseline.targetReviewDecisionId ||
           packageBaseline.decisionDigest !== baseline.decisionDigest ||
-          taskPackageSource?.taskPackage.targetTaskId !==
-            baseline.targetTaskId ||
+          taskPackageSource?.taskPackage.targetTaskId !== baseline.targetTaskId ||
           taskPackageSource.taskPackage.workType !== "implementation" ||
-          computeTaskPackageDigest(taskPackageSource.taskPackage) !==
-            baseline.taskPackageDigest ||
+          computeTaskPackageDigest(taskPackageSource.taskPackage) !== baseline.taskPackageDigest ||
           resultSource?.result.targetTaskId !== baseline.targetTaskId ||
           resultSource.result.workType !== "implementation" ||
           resultSource.result.resultDigest !== baseline.resultDigest ||
-          reviewSource?.decision.kind !==
-            "WakeflowControllerImplementationReviewDecision" ||
+          reviewSource?.decision.kind !== "WakeflowControllerImplementationReviewDecision" ||
           reviewSource.decision.decision !== "accept" ||
           reviewSource.decision.targetTaskId !== baseline.targetTaskId ||
           reviewSource.decision.decisionDigest !== baseline.decisionDigest ||
-          reviewSource.sourceEvent.streamRevision >=
-            source.sourceEvent.streamRevision
+          reviewSource.sourceEvent.streamRevision >= source.sourceEvent.streamRevision
         ) {
           fail("stream", "$events");
         }
@@ -972,18 +872,13 @@ export class DemandEventSourcingRepository {
         continue;
       }
       const lineage = taskPackage.lineage;
-      const remediationSource = remediationById.get(
-        lineage.productDefectRemediationId,
-      );
+      const remediationSource = remediationById.get(lineage.productDefectRemediationId);
       const previousTestTarget = targetById.get(lineage.retestsTargetTaskId);
       if (
         remediationSource === undefined ||
-        remediationSource.authorization.authorizationDigest !==
-          lineage.authorizationDigest ||
-        remediationSource.authorization.source.testTargetTaskId !==
-          lineage.retestsTargetTaskId ||
-        remediationSource.sourceEvent.streamRevision >=
-          source.sourceEvent.streamRevision ||
+        remediationSource.authorization.authorizationDigest !== lineage.authorizationDigest ||
+        remediationSource.authorization.source.testTargetTaskId !== lineage.retestsTargetTaskId ||
+        remediationSource.sourceEvent.streamRevision >= source.sourceEvent.streamRevision ||
         previousTestTarget?.workType !== "test" ||
         previousTestTarget.phase !== "test-product-defect" ||
         consumedRemediationIds.has(lineage.productDefectRemediationId)
@@ -993,13 +888,9 @@ export class DemandEventSourcingRepository {
       consumedRemediationIds.add(lineage.productDefectRemediationId);
     }
     const pendingTestRetest = aggregate.state.pendingTestRetest;
-    const unconsumedRemediations =
-      productDefectRemediationAuthorizations.filter(
-        (source) =>
-          !consumedRemediationIds.has(
-            source.authorization.productDefectRemediationId,
-          ),
-      );
+    const unconsumedRemediations = productDefectRemediationAuthorizations.filter(
+      (source) => !consumedRemediationIds.has(source.authorization.productDefectRemediationId),
+    );
     if (pendingTestRetest === undefined) {
       if (unconsumedRemediations.length !== 0) fail("stream", "$events");
     } else {
@@ -1008,8 +899,7 @@ export class DemandEventSourcingRepository {
         unconsumedRemediations.length !== 1 ||
         source === undefined ||
         source.authorization.productDefectRemediationId !==
-          pendingTestRetest.productDefectRemediation
-            .productDefectRemediationId ||
+          pendingTestRetest.productDefectRemediation.productDefectRemediationId ||
         source.authorization.authorizationDigest !==
           pendingTestRetest.productDefectRemediation.authorizationDigest ||
         source.authorization.source.testTargetTaskId !==
@@ -1018,8 +908,7 @@ export class DemandEventSourcingRepository {
           pendingTestRetest.previousTestTarget.taskPackageId ||
         source.authorization.source.testTaskPackage.taskPackageDigest !==
           pendingTestRetest.previousTestTarget.taskPackageDigest ||
-        source.authorization.source.testReviewDecision
-          .targetReviewDecisionId !==
+        source.authorization.source.testReviewDecision.targetReviewDecisionId !==
           pendingTestRetest.testReviewDecision.targetReviewDecisionId ||
         source.authorization.source.testReviewDecision.decisionDigest !==
           pendingTestRetest.testReviewDecision.decisionDigest
@@ -1040,20 +929,15 @@ export class DemandEventSourcingRepository {
         affected === undefined ||
         source.authorization.authorizationDigest !==
           target.productDefectRemediation.authorizationDigest ||
-        source.authorization.source.testReviewDecision
-          .targetReviewDecisionId !==
+        source.authorization.source.testReviewDecision.targetReviewDecisionId !==
           target.productDefectRemediation.testReviewDecisionId ||
         source.authorization.source.testReviewDecision.decisionDigest !==
           target.productDefectRemediation.testReviewDecisionDigest ||
-        source.authorization.authorizedAt !==
-          target.productDefectRemediation.authorizedAt ||
-        affected.correctionObjective !==
-          target.productDefectRemediation.correctionObjective ||
-        affected.failedStepIds.length !==
-          target.productDefectRemediation.failedStepIds.length ||
+        source.authorization.authorizedAt !== target.productDefectRemediation.authorizedAt ||
+        affected.correctionObjective !== target.productDefectRemediation.correctionObjective ||
+        affected.failedStepIds.length !== target.productDefectRemediation.failedStepIds.length ||
         affected.failedStepIds.some(
-          (id, index) =>
-            id !== target.productDefectRemediation.failedStepIds[index],
+          (id, index) => id !== target.productDefectRemediation.failedStepIds[index],
         )
       ) {
         fail("stream", "$events");
@@ -1064,9 +948,7 @@ export class DemandEventSourcingRepository {
       taskPackages: Object.freeze(taskPackages),
       targetResults: Object.freeze(targetResults),
       targetReviewDecisions: Object.freeze(targetReviewDecisions),
-      productDefectRemediationAuthorizations: Object.freeze(
-        productDefectRemediationAuthorizations,
-      ),
+      productDefectRemediationAuthorizations: Object.freeze(productDefectRemediationAuthorizations),
       escalations: Object.freeze(escalations),
       decisionRecords: Object.freeze(decisionRecords),
       replayedCommitCount: commits.length,
@@ -1099,7 +981,9 @@ export class DemandEventSourcingRepository {
     }
     const found = await this.#findUniqueEvent(
       "tasking.target-task-planned",
-      (event) => event.eventType === "tasking.target-task-planned" && event.data.taskPackage.taskPackageId === taskPackageId,
+      (event) =>
+        event.eventType === "tasking.target-task-planned" &&
+        event.data.taskPackage.taskPackageId === taskPackageId,
       signal,
     );
     if (found === null) return null;
@@ -1132,18 +1016,16 @@ export class DemandEventSourcingRepository {
     const signal = parseSignal(options);
     let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
-      deliveryId = parseWakeflowDurableIdOfKind(
-        deliveryIdValue,
-        "target-delivery",
-        "$deliveryId",
-      );
+      deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
       throw error;
     }
     const found = await this.#findUniqueEvent(
       "delivery.delivery-prepared",
-      (event) => event.eventType === "delivery.delivery-prepared" && event.data.envelope.deliveryId === deliveryId,
+      (event) =>
+        event.eventType === "delivery.delivery-prepared" &&
+        event.data.envelope.deliveryId === deliveryId,
       signal,
     );
     if (found === null) return null;
@@ -1179,11 +1061,7 @@ export class DemandEventSourcingRepository {
     const signal = parseSignal(options);
     let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
-      deliveryId = parseWakeflowDurableIdOfKind(
-        deliveryIdValue,
-        "target-delivery",
-        "$deliveryId",
-      );
+      deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
       throw error;
@@ -1212,7 +1090,9 @@ export class DemandEventSourcingRepository {
       if (storedEvent.streamRevision > aggregate.streamRevision) fail("stream", "$events");
       located.push(Object.freeze({ storedEvent, event }));
     }
-    located.sort((left, right) => left.storedEvent.streamRevision - right.storedEvent.streamRevision);
+    located.sort(
+      (left, right) => left.storedEvent.streamRevision - right.storedEvent.streamRevision,
+    );
     return Object.freeze(located);
   }
 
@@ -1231,7 +1111,9 @@ export class DemandEventSourcingRepository {
     }
     const found = await this.#findUniqueEvent(
       "result.target-result-recorded",
-      (event) => event.eventType === "result.target-result-recorded" && event.data.result.delivery.fence.claimId === claimId,
+      (event) =>
+        event.eventType === "result.target-result-recorded" &&
+        event.data.result.delivery.fence.claimId === claimId,
       signal,
     );
     if (found === null) return null;
@@ -1306,9 +1188,7 @@ export class DemandEventSourcingRepository {
     }
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
@@ -1327,14 +1207,11 @@ export class DemandEventSourcingRepository {
     eventType: DemandUncommittedEvent["eventType"],
     matches: (event: Readonly<DemandUncommittedEvent>) => boolean,
     signal: AbortSignal | undefined,
-  ): Promise<
-    | Readonly<{
-        readonly aggregate: Readonly<DemandEventSourcingAggregate>;
-        readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-        readonly event: Readonly<DemandUncommittedEvent>;
-      }>
-    | null
-  > {
+  ): Promise<Readonly<{
+    readonly aggregate: Readonly<DemandEventSourcingAggregate>;
+    readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
+    readonly event: Readonly<DemandUncommittedEvent>;
+  }> | null> {
     const aggregate = await this.#currentAggregate(signal);
     if (aggregate === null) return null;
     let located:
@@ -1369,11 +1246,7 @@ export class DemandEventSourcingRepository {
     const signal = parseSignal(options);
     let commitId: WakeflowDurableId<"demand-event-commit">;
     try {
-      commitId = parseWakeflowDurableIdOfKind(
-        commitIdValue,
-        "demand-event-commit",
-        "$commitId",
-      );
+      commitId = parseWakeflowDurableIdOfKind(commitIdValue, "demand-event-commit", "$commitId");
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) fail("input", "$commitId");
       throw error;
@@ -1397,15 +1270,11 @@ export class DemandEventSourcingRepository {
     }
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
-    return (
-      stream.commits.find((commit) => commit.commitId === commitId) ?? null
-    );
+    return stream.commits.find((commit) => commit.commitId === commitId) ?? null;
   }
 
   /** 按客户端幂等键定位提交：索引 O(1)，索引不可用时回退完整读取。 */
@@ -1436,15 +1305,11 @@ export class DemandEventSourcingRepository {
     }
     let stream;
     try {
-      stream = await this.#eventStore.readCommits(
-        signal === undefined ? undefined : { signal },
-      );
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
     } catch (error: unknown) {
       mapStoreError(error);
     }
-    return (
-      stream.commits.find((commit) => commit.idempotency?.key === key) ?? null
-    );
+    return stream.commits.find((commit) => commit.idempotency?.key === key) ?? null;
   }
 
   /** 持久追加一条已经由决策器和状态演进逻辑完整准备的不可变提交记录。 */
@@ -1453,10 +1318,7 @@ export class DemandEventSourcingRepository {
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
     const signal = parseSignal(options);
-    return this.#eventStore.append(
-      prepared,
-      signal === undefined ? undefined : { signal },
-    );
+    return this.#eventStore.append(prepared, signal === undefined ? undefined : { signal });
   }
 
   /** 显式发布当前聚合的不可变检查点；该操作不属于加载副作用。 */

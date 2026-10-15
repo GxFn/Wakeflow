@@ -1,53 +1,53 @@
-import {
-  inspectDirectoryTreeCandidate,
-  DurableDirectoryTreeCandidateError,
-} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import {
-  settleDirectoryTreeCandidateRetirement,
-  DurableDirectoryTreeCandidateRetirementError,
-  type DirectoryTreeCandidateRetirementReceipt,
-} from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  executeDemandEventSourcingCommand,
+  DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidate,
+} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import {
+  type DirectoryTreeCandidateRetirementReceipt,
+  DurableDirectoryTreeCandidateRetirementError,
+  settleDirectoryTreeCandidateRetirement,
+} from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
   DemandEventSourcingCommandHandlerError,
   type DemandEventSourcingCommandResult,
+  executeDemandEventSourcingCommand,
 } from "../demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
-  loadDemandEventSourcingRootAuthority,
-  loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication,
   DemandEventSourcingRootAuthorityError,
   type LoadedDemandEventSourcingRootAuthority,
+  loadDemandEventSourcingRootAuthority,
+  loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication,
 } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import {
-  upcastDemandEventSourcingStoredEvent,
   DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
 } from "../demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import {
-  publishManagedEvidencePublicationRecord,
   ManagedEvidencePublicationRecordPublisherError,
   type ManagedEvidencePublicationRecordResult,
+  publishManagedEvidencePublicationRecord,
 } from "./managed-evidence-publication-record-publisher.js";
-import {
-  requireCurrentManagedEvidencePublicationTransaction,
-  retireManagedEvidencePublicationTransactionJournal,
-  ManagedEvidencePublicationTransactionStoreError,
-  type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
+import {
+  ManagedEvidencePublicationTransactionStoreError,
+  requireCurrentManagedEvidencePublicationTransaction,
+  retireManagedEvidencePublicationTransactionJournal,
+  type StoredManagedEvidencePublicationTransaction,
+} from "./managed-evidence-publication-transaction-store.js";
 
 /**
  * Wakeflow Governance / Evidence：已耐久Publication Transaction的不可逆边界结算。
@@ -90,10 +90,8 @@ const ERROR_MESSAGES = {
 
 /** Event/final/journal结算无法安全确定时的稳定、脱敏错误。 */
 export class ManagedEvidencePublicationTransactionSettlementError extends Error {
-  override readonly name =
-    "ManagedEvidencePublicationTransactionSettlementError";
-  readonly code =
-    "wakeflow-managed-evidence-publication-transaction-settlement" as const;
+  override readonly name = "ManagedEvidencePublicationTransactionSettlementError";
+  readonly code = "wakeflow-managed-evidence-publication-transaction-settlement" as const;
   readonly reason: ManagedEvidencePublicationTransactionSettlementErrorReason;
   readonly causeCode: string | null;
   readonly causeReason: string | null;
@@ -167,16 +165,12 @@ function assertCommitRelation(
   }
 }
 
-function mapRootAuthorityError(
-  error: DemandEventSourcingRootAuthorityError,
-): never {
+function mapRootAuthorityError(error: DemandEventSourcingRootAuthorityError): never {
   if (error.reason === "aborted") fail("aborted", error);
   fail("closure", error);
 }
 
-function mapStoreError(
-  error: ManagedEvidencePublicationTransactionStoreError,
-): never {
+function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
   if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "recovery-required") {
     fail("recovery-required", error);
@@ -242,8 +236,7 @@ export async function appendManagedEvidencePublicationEvent(
       deriveManagedEvidencePublicationEventSourcingCommand(transaction),
       {
         commitId: transaction.demandEventSourcingAppend.commitId,
-        expectedStreamRevision:
-          transaction.demandEventSourcingAppend.expectedStreamRevision,
+        expectedStreamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
         ...(signal === undefined ? {} : { signal }),
       },
     );
@@ -271,11 +264,10 @@ export async function findManagedEvidencePublicationCommit(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventStreamCommit> | null> {
   try {
-    const commit =
-      await new DemandEventSourcingRepository(demandRoot).findCommitById(
-        transaction.demandEventSourcingAppend.commitId,
-        signal === undefined ? undefined : { signal },
-      );
+    const commit = await new DemandEventSourcingRepository(demandRoot).findCommitById(
+      transaction.demandEventSourcingAppend.commitId,
+      signal === undefined ? undefined : { signal },
+    );
     if (commit !== null) assertCommitRelation(commit, transaction);
     return commit;
   } catch (error: unknown) {
@@ -304,10 +296,7 @@ async function publishFinal(
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
       if (error.reason === "aborted") fail("aborted", error);
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure"
-      ) {
+      if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
         fail("recovery-required", error);
       }
       fail("final", error);
@@ -350,11 +339,7 @@ export async function completeManagedEvidencePublicationTransaction(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ManagedEvidencePublicationTransactionCompletion>> {
   const transaction = stored.transaction;
-  const commit = await findManagedEvidencePublicationCommit(
-    demandRoot,
-    transaction,
-    signal,
-  );
+  const commit = await findManagedEvidencePublicationCommit(demandRoot, transaction, signal);
   if (commit === null) fail("recovery-required");
   const beforeFinal = await loadManagedEvidencePublicationTransactionAuthority(
     demandRoot,
@@ -363,20 +348,18 @@ export async function completeManagedEvidencePublicationTransaction(
   );
   if (
     beforeFinal.inventory.managedEvidence.publication?.transactionDigest !==
-      stored.transactionDigest
+    stored.transactionDigest
   ) {
     fail("closure");
   }
   const record = await publishFinal(demandRoot, transaction, signal);
-  const finalAuthority =
-    await loadManagedEvidencePublicationTransactionAuthority(
-      demandRoot,
-      ledgerRoot,
-      signal,
-    );
+  const finalAuthority = await loadManagedEvidencePublicationTransactionAuthority(
+    demandRoot,
+    ledgerRoot,
+    signal,
+  );
   if (
-    finalAuthority.inventory.managedEvidence.publication?.physicalState !==
-      "final" ||
+    finalAuthority.inventory.managedEvidence.publication?.physicalState !== "final" ||
     finalAuthority.inventory.managedEvidence.publication.transactionDigest !==
       stored.transactionDigest
   ) {
@@ -403,32 +386,23 @@ export async function retireStaleManagedEvidencePublicationTransaction(
   stored: Readonly<StoredManagedEvidencePublicationTransaction>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ManagedEvidencePublicationStaleRetirement>> {
-  const beforeRetirement =
-    await loadManagedEvidencePublicationTransactionAuthority(
-      demandRoot,
-      ledgerRoot,
-      signal,
-    );
-  const targetSelector =
-    beforeRetirement.aggregate.state.managedEvidence?.find(
-      (selector) =>
-        selector.evidenceId === stored.transaction.manifest.evidenceId,
-    );
+  const beforeRetirement = await loadManagedEvidencePublicationTransactionAuthority(
+    demandRoot,
+    ledgerRoot,
+    signal,
+  );
+  const targetSelector = beforeRetirement.aggregate.state.managedEvidence?.find(
+    (selector) => selector.evidenceId === stored.transaction.manifest.evidenceId,
+  );
   if (
-    beforeRetirement.inventory.managedEvidence.publication
-      ?.transactionDigest !== stored.transactionDigest ||
+    beforeRetirement.inventory.managedEvidence.publication?.transactionDigest !==
+      stored.transactionDigest ||
     targetSelector !== undefined ||
-    (await findManagedEvidencePublicationCommit(
-      demandRoot,
-      stored.transaction,
-      signal,
-    )) !== null
+    (await findManagedEvidencePublicationCommit(demandRoot, stored.transaction, signal)) !== null
   ) {
     fail("recovery-required");
   }
-  const plan = deriveManagedEvidencePublicationRecordTreePlan(
-    stored.transaction,
-  );
+  const plan = deriveManagedEvidencePublicationRecordTreePlan(stored.transaction);
   let candidateRetirement: Readonly<DirectoryTreeCandidateRetirementReceipt>;
   try {
     candidateRetirement = await settleDirectoryTreeCandidateRetirement(
@@ -449,9 +423,7 @@ export async function retireStaleManagedEvidencePublicationTransaction(
     ledgerRoot,
     signal,
   );
-  if (
-    current.inventory.managedEvidence.publication?.physicalState !== "absent"
-  ) {
+  if (current.inventory.managedEvidence.publication?.physicalState !== "absent") {
     fail("closure");
   }
   await retireJournal(demandRoot, stored, signal);
@@ -473,10 +445,7 @@ export async function loadCurrentManagedEvidencePublicationTransaction(
   transactionDigest: Sha256Digest,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ManagedEvidencePublicationTransactionCompletion>> {
-  if (
-    computeManagedEvidencePublicationTransactionDigest(transaction) !==
-    transactionDigest
-  ) {
+  if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
     fail("event-sourcing");
   }
   const loaded = await loadManagedEvidencePublicationHealthyAuthority(
@@ -484,11 +453,7 @@ export async function loadCurrentManagedEvidencePublicationTransaction(
     ledgerRoot,
     signal,
   );
-  const commit = await findManagedEvidencePublicationCommit(
-    demandRoot,
-    transaction,
-    signal,
-  );
+  const commit = await findManagedEvidencePublicationCommit(demandRoot, transaction, signal);
   const manifest = transaction.manifest;
   const selector = loaded.aggregate.state.managedEvidence?.find(
     (candidate) => candidate.evidenceId === manifest.evidenceId,
@@ -533,9 +498,7 @@ export async function loadCurrentManagedEvidencePublicationTransaction(
     commit,
     record: Object.freeze({
       disposition: "current" as const,
-      transactionDigest: computeManagedEvidencePublicationTransactionDigest(
-        transaction,
-      ),
+      transactionDigest: computeManagedEvidencePublicationTransactionDigest(transaction),
       finalRecord,
       publication: null,
     }),

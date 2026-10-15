@@ -1,18 +1,8 @@
-import {
-  parseWakeflowDurableIdOfKind,
-} from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import {
-  parseSha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
-import {
-  parseUtcInstant,
-} from "../../../src/foundation/time/utc-instant.js";
-import {
-  parseLedgerAuthorityMemberReference,
-} from "../../../src/governance/ledger/ledger-authority-store.js";
-import {
-  createTaskPackage,
-} from "../../../src/governance/tasking/task-package.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { parseLedgerAuthorityMemberReference } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 
 /** Tasking 与 Demand Event Sourcing 聚焦测试共享的一份固定、无文件副作用合同。 */
 
@@ -44,15 +34,9 @@ const REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
   "requirement_77777777-7777-4777-8777-777777777777",
   "requirement",
 );
-export const TASKING_CREATED_AT = parseUtcInstant(
-  "2026-08-29T10:00:00.000Z",
-);
-export const TASKING_AUTHORITY_DIGEST = parseSha256Digest(
-  `sha256:${"a".repeat(64)}`,
-);
-export const TASKING_CONFIG_DIGEST = parseSha256Digest(
-  `sha256:${"f".repeat(64)}`,
-);
+export const TASKING_CREATED_AT = parseUtcInstant("2026-08-29T10:00:00.000Z");
+export const TASKING_AUTHORITY_DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
+export const TASKING_CONFIG_DIGEST = parseSha256Digest(`sha256:${"f".repeat(64)}`);
 const RECORD_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 const MEMBER_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
 const REQUIREMENT_ROOT = `requirements/${REQUIREMENT_ID}`;
@@ -84,32 +68,28 @@ export function taskPackageDraft() {
     },
     workType: "implementation" as const,
     objective: "实现确认后的 Tasking 垂直切片",
-    confirmedContext: [
-      "Demand 已完成权威发布",
-      "本轮不触发宿主发送",
-    ],
+    confirmedContext: ["Demand 已完成权威发布", "本轮不触发宿主发送"],
     selectedAuthorityRefs: [SELECTED_AUTHORITY_REF],
     boundaries: {
       inScope: ["建立最小 TaskPackage 合同"],
       outOfScope: ["Delivery transport"],
       forbidden: ["直接调用宿主发送能力"],
     },
-    completionExpectations: [
-      "合同可确定性渲染并严格回读",
-      "仓库与窗口分配保持类型化",
-    ],
+    completionExpectations: ["合同可确定性渲染并严格回读", "仓库与窗口分配保持类型化"],
     commitExpectation: "leave-uncommitted" as const,
-    acceptanceAnchors: [{
-      anchorId: "task-package-codec",
-      claim: "TaskPackage 具有唯一确定性表示",
-      probe: "渲染后严格回读并重新计算摘要",
-      expected: "领域值和摘要均保持不变",
-      requirementRef: {
-        recordDigest: RECORD_DIGEST,
-        sectionAnchor: "acceptance-criteria",
-        itemId: "ac-1",
+    acceptanceAnchors: [
+      {
+        anchorId: "task-package-codec",
+        claim: "TaskPackage 具有唯一确定性表示",
+        probe: "渲染后严格回读并重新计算摘要",
+        expected: "领域值和摘要均保持不变",
+        requirementRef: {
+          recordDigest: RECORD_DIGEST,
+          sectionAnchor: "acceptance-criteria",
+          itemId: "ac-1",
+        },
       },
-    }],
+    ],
     lineage: null,
     planReview: { reviewer: "controller" as const },
     sectionAnchors: [],

@@ -8,28 +8,28 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
   createWakeflowGitignoreBodyAuthority,
   WakeflowGitignoreBodyAuthorityError,
 } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
-import {
   createWakeflowWorkspaceStaticResourceMatrix,
   WakeflowWorkspaceStaticResourceMatrixError,
 } from "../wakeflow-workspace-static-resource-matrix.js";
+import {
+  parseWakeflowWorkspaceHostResourceProfile,
+  WAKEFLOW_WORKSPACE_HOST_IDS,
+  type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
+} from "../workspace-host-resource-profile.js";
 
 /** 静态物化 preview 的闭合词汇、请求准入与稳定错误合同。 */
 
@@ -95,19 +95,21 @@ export interface WakeflowStaticMaterializationPreviewRequest {
 }
 
 export type WakeflowStaticMaterializationPreviewErrorReason =
-  "input" | "config" | "profile" | "root-scope" | "inspection" | "aborted";
+  | "input"
+  | "config"
+  | "profile"
+  | "root-scope"
+  | "inspection"
+  | "aborted";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow static materialization preview input is invalid.",
   config: "Wakeflow static materialization preview config is invalid.",
   profile: "Wakeflow static materialization preview host profiles are invalid.",
   "root-scope": "Wakeflow static materialization preview lost workspace scope.",
-  inspection:
-    "Wakeflow static materialization preview could not inspect workspace facts.",
+  inspection: "Wakeflow static materialization preview could not inspect workspace facts.",
   aborted: "Wakeflow static materialization preview was aborted.",
-} as const satisfies Readonly<
-  Record<WakeflowStaticMaterializationPreviewErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowStaticMaterializationPreviewErrorReason, string>>;
 
 /** 静态物化 preview 构建失败的稳定、脱敏错误。 */
 export class WakeflowStaticMaterializationPreviewError extends Error {
@@ -116,10 +118,7 @@ export class WakeflowStaticMaterializationPreviewError extends Error {
   readonly reason: WakeflowStaticMaterializationPreviewErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowStaticMaterializationPreviewErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowStaticMaterializationPreviewErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -160,14 +159,8 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     }
     throw error;
   }
-  const required = [
-    "action",
-    "currentHostProfile",
-    "desiredConfig",
-    "hostProfiles",
-  ];
-  const expected =
-    record.signal === undefined ? required : [...required, "signal"].sort();
+  const required = ["action", "currentHostProfile", "desiredConfig", "hostProfiles"];
+  const expected = record.signal === undefined ? required : [...required, "signal"].sort();
   const keys = Object.keys(record).sort();
   if (
     keys.length !== expected.length ||
@@ -204,15 +197,10 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   }
   let currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   try {
-    currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(
-      record.currentHostProfile,
-    );
+    currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(record.currentHostProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWakeflowStaticMaterializationPreview(
-        "profile",
-        "$request.currentHostProfile",
-      );
+      failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
     }
     throw error;
   }
@@ -221,10 +209,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
       return parseWakeflowWorkspaceHostResourceProfile(profile);
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-        failWakeflowStaticMaterializationPreview(
-          "profile",
-          `$request.hostProfiles/${index}`,
-        );
+        failWakeflowStaticMaterializationPreview("profile", `$request.hostProfiles/${index}`);
       }
       throw error;
     }
@@ -236,24 +221,13 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
       error instanceof WakeflowGitignoreBodyAuthorityError ||
       error instanceof WakeflowWorkspaceStaticResourceMatrixError
     ) {
-      failWakeflowStaticMaterializationPreview(
-        "profile",
-        "$request.hostProfiles",
-      );
+      failWakeflowStaticMaterializationPreview("profile", "$request.hostProfiles");
     }
     throw error;
   }
-  const matching = parsedProfiles.find(
-    (profile) => profile.hostId === currentHostProfile.hostId,
-  );
-  if (
-    matching === undefined ||
-    !sameStaticResourceMatrix(matching, currentHostProfile)
-  ) {
-    failWakeflowStaticMaterializationPreview(
-      "profile",
-      "$request.currentHostProfile",
-    );
+  const matching = parsedProfiles.find((profile) => profile.hostId === currentHostProfile.hostId);
+  if (matching === undefined || !sameStaticResourceMatrix(matching, currentHostProfile)) {
+    failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
   }
   return Object.freeze({
     action,
@@ -283,9 +257,7 @@ function sameStaticResourceMatrix(
   }
 }
 
-const STEP_KIND_SET = new Set<string>(
-  WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS,
-);
+const STEP_KIND_SET = new Set<string>(WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS);
 const STEP_ID_PATTERN = /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const BLOCKER_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -309,9 +281,7 @@ function nullableDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null ? null : digest(value, path);
 }
 
-function previewDigestBasis(
-  value: Omit<WakeflowStaticMaterializationPreview, "planDigest">,
-) {
+function previewDigestBasis(value: Omit<WakeflowStaticMaterializationPreview, "planDigest">) {
   return {
     ...value,
     kind: "WakeflowStaticMaterializationPreviewDigestBasis" as const,
@@ -325,20 +295,13 @@ export function computeWakeflowStaticMaterializationPreviewDigest(
   return computeCanonicalJsonSha256Digest(previewDigestBasis(value));
 }
 
-function parseStep(
-  value: unknown,
-  index: number,
-): Readonly<WakeflowStaticMaterializationStep> {
+function parseStep(value: unknown, index: number): Readonly<WakeflowStaticMaterializationStep> {
   let record: Readonly<Record<string, unknown>>;
   let dependencies: readonly unknown[];
   const path = `$preview.steps/${index}`;
   try {
     record = parsePlainRecord(value, path);
-    dependencies = parseDenseArray(
-      record.dependsOn,
-      MAXIMUM_STEPS,
-      `${path}.dependsOn`,
-    );
+    dependencies = parseDenseArray(record.dependsOn, MAXIMUM_STEPS, `${path}.dependsOn`);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
       failWakeflowStaticMaterializationPreview("input", error.path);
@@ -392,11 +355,7 @@ export function parseWakeflowStaticMaterializationPreview(
   let stepValues: readonly unknown[];
   try {
     record = parsePlainRecord(value, "$preview");
-    blockerValues = parseDenseArray(
-      record.blockerCodes,
-      MAXIMUM_BLOCKERS,
-      "$preview.blockerCodes",
-    );
+    blockerValues = parseDenseArray(record.blockerCodes, MAXIMUM_BLOCKERS, "$preview.blockerCodes");
     stepValues = parseDenseArray(record.steps, MAXIMUM_STEPS, "$preview.steps");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
@@ -428,9 +387,7 @@ export function parseWakeflowStaticMaterializationPreview(
   const blockerCodes = Object.freeze(blockerValues as readonly string[]);
   if (
     new Set(blockerCodes).size !== blockerCodes.length ||
-    blockerCodes.some(
-      (entry, index) => index > 0 && (blockerCodes[index - 1] ?? "") >= entry,
-    ) ||
+    blockerCodes.some((entry, index) => index > 0 && (blockerCodes[index - 1] ?? "") >= entry) ||
     (record.status === "ready") !== (blockerCodes.length === 0)
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview.blockerCodes");
@@ -439,19 +396,13 @@ export function parseWakeflowStaticMaterializationPreview(
   const stepPositions = new Map<string, number>();
   for (const [index, entry] of steps.entries()) {
     if (stepPositions.has(entry.stepId)) {
-      failWakeflowStaticMaterializationPreview(
-        "input",
-        `$preview.steps/${index}.stepId`,
-      );
+      failWakeflowStaticMaterializationPreview("input", `$preview.steps/${index}.stepId`);
     }
     let previousPosition = -1;
     for (const dependency of entry.dependsOn) {
       const position = stepPositions.get(dependency);
       if (position === undefined || position <= previousPosition) {
-        failWakeflowStaticMaterializationPreview(
-          "input",
-          `$preview.steps/${index}.dependsOn`,
-        );
+        failWakeflowStaticMaterializationPreview("input", `$preview.steps/${index}.dependsOn`);
       }
       previousPosition = position;
     }
@@ -479,36 +430,33 @@ export function parseWakeflowStaticMaterializationPreview(
     "$preview.desiredConfigDigest",
   );
   if (
-    ((action === "fresh-initialize" || action === "reconfigure") &&
-      desiredConfigDigest === null) ||
+    ((action === "fresh-initialize" || action === "reconfigure") && desiredConfigDigest === null) ||
     (action === "reconcile" && desiredConfigDigest !== currentConfigDigest) ||
     (action === "reconcile" && configIndexes.length !== 0) ||
     (status === "ready" &&
       ((action === "fresh-initialize" && currentConfigDigest !== null) ||
         (action !== "fresh-initialize" && currentConfigDigest === null) ||
         (action !== "reconcile" &&
-          configIndexes.length !==
-            (currentConfigDigest === desiredConfigDigest ? 0 : 1))))
+          configIndexes.length !== (currentConfigDigest === desiredConfigDigest ? 0 : 1))))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview");
   }
-  const plan: Omit<WakeflowStaticMaterializationPreview, "planDigest"> =
-    Object.freeze({
-      kind: "WakeflowStaticMaterializationPreview",
-      schemaVersion: 1,
-      executionBoundary: "preview-only",
-      action,
-      status,
-      currentConfigDigest,
-      desiredConfigDigest,
-      matrixDigest: digest(record.matrixDigest, "$preview.matrixDigest"),
-      coreLayoutInspectionDigest: digest(
-        record.coreLayoutInspectionDigest,
-        "$preview.coreLayoutInspectionDigest",
-      ),
-      blockerCodes,
-      steps,
-    });
+  const plan: Omit<WakeflowStaticMaterializationPreview, "planDigest"> = Object.freeze({
+    kind: "WakeflowStaticMaterializationPreview",
+    schemaVersion: 1,
+    executionBoundary: "preview-only",
+    action,
+    status,
+    currentConfigDigest,
+    desiredConfigDigest,
+    matrixDigest: digest(record.matrixDigest, "$preview.matrixDigest"),
+    coreLayoutInspectionDigest: digest(
+      record.coreLayoutInspectionDigest,
+      "$preview.coreLayoutInspectionDigest",
+    ),
+    blockerCodes,
+    steps,
+  });
   const planDigest = digest(record.planDigest, "$preview.planDigest");
   if (computeWakeflowStaticMaterializationPreviewDigest(plan) !== planDigest) {
     failWakeflowStaticMaterializationPreview("input", "$preview.planDigest");

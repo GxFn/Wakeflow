@@ -19,18 +19,30 @@ export async function readDemandAcceptanceCoverage(
   signal?: AbortSignal,
 ) {
   const options = signal === undefined ? {} : { signal };
-  const record = await new LedgerAuthorityStore(ledgerRoot).loadRequirement(loaded.identity.source.requirementId, options);
-  if (record.recordDigest !== loaded.identity.source.recordDigest) fail("precondition-failed", "requirement-record-drift", "$coverage");
+  const record = await new LedgerAuthorityStore(ledgerRoot).loadRequirement(
+    loaded.identity.source.requirementId,
+    options,
+  );
+  if (record.recordDigest !== loaded.identity.source.recordDigest)
+    fail("precondition-failed", "requirement-record-drift", "$coverage");
   const document = record.documents.find((entry) => entry.role === "requirement");
-  if (document === undefined) fail("precondition-failed", "requirement-member-missing", "$coverage");
-  const text = await readStrictTextFile(ledgerRoot, ledgerAuthorityMemberRef(record.record, document.path), { maximumBytes: MAXIMUM_BYTES, ...options });
-  if (text.digest !== document.digest) fail("precondition-failed", "requirement-member-drift", "$coverage");
+  if (document === undefined)
+    fail("precondition-failed", "requirement-member-missing", "$coverage");
+  const text = await readStrictTextFile(
+    ledgerRoot,
+    ledgerAuthorityMemberRef(record.record, document.path),
+    { maximumBytes: MAXIMUM_BYTES, ...options },
+  );
+  if (text.digest !== document.digest)
+    fail("precondition-failed", "requirement-member-drift", "$coverage");
   const criteria = parseAcceptanceCriteria(text.text);
   const implemented = new Set<string>();
   const tested = new Set<string>();
   const state = loaded.aggregate.state;
   const targets = [
-    ...state.targetTasks.filter((target) => target.workType !== "test" && target.phase === "accepted"),
+    ...state.targetTasks.filter(
+      (target) => target.workType !== "test" && target.phase === "accepted",
+    ),
     ...currentTestTargetsOf(state).filter((target) => target.phase === "test-accepted"),
   ];
   const repository = new DemandEventSourcingRepository(demandRoot);
@@ -40,17 +52,33 @@ export async function readDemandAcceptanceCoverage(
     const task = planned.event.data.taskPackage;
     const references = task.workType === "test" ? task.testContract.steps : task.acceptanceAnchors;
     for (const { requirementRef } of references) {
-      if (requirementRef.recordDigest !== record.recordDigest || requirementRef.sectionAnchor !== "acceptance-criteria") {
+      if (
+        requirementRef.recordDigest !== record.recordDigest ||
+        requirementRef.sectionAnchor !== "acceptance-criteria"
+      ) {
         fail("precondition-failed", "coverage-reference-drift", "$coverage");
       }
       (task.workType === "test" ? tested : implemented).add(requirementRef.itemId);
     }
   }
-  const required = loaded.authority.testingDecision.mode === "real-environment" ? tested : implemented;
+  const required =
+    loaded.authority.testingDecision.mode === "real-environment" ? tested : implemented;
   return Object.freeze({
     total: criteria.length,
-    implementationCovered: Object.freeze(criteria.filter((criterion) => implemented.has(criterion.itemId)).map((criterion) => criterion.itemId)),
-    testCovered: Object.freeze(criteria.filter((criterion) => tested.has(criterion.itemId)).map((criterion) => criterion.itemId)),
-    uncovered: Object.freeze(criteria.filter((criterion) => !required.has(criterion.itemId)).map((criterion) => criterion.itemId)),
+    implementationCovered: Object.freeze(
+      criteria
+        .filter((criterion) => implemented.has(criterion.itemId))
+        .map((criterion) => criterion.itemId),
+    ),
+    testCovered: Object.freeze(
+      criteria
+        .filter((criterion) => tested.has(criterion.itemId))
+        .map((criterion) => criterion.itemId),
+    ),
+    uncovered: Object.freeze(
+      criteria
+        .filter((criterion) => !required.has(criterion.itemId))
+        .map((criterion) => criterion.itemId),
+    ),
   });
 }

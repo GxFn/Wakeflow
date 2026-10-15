@@ -1,13 +1,13 @@
 import {
-  inspectDirectoryTreeCandidateProgress,
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
+import {
   DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidateProgress,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   ledgerRecordPublicationIntentRefForIdentity,
   ledgerRecordPublicationLockRefForIdentity,
@@ -16,6 +16,12 @@ import {
   throwLedgerAuthorityStoreError as fail,
   type LedgerAuthorityPublicationResult,
 } from "./ledger-authority-store-contract.js";
+import {
+  type LedgerRecordPublicationIntent,
+  LedgerRecordPublicationIntentError,
+  parseLedgerRecordPublicationIntent,
+  sameLedgerRecordPublicationIntent,
+} from "./ledger-record-publication-intent.js";
 import {
   existingLedgerRecordPublicationIntentOrNull,
   inspectLedgerRecordPublicationResidues,
@@ -28,18 +34,10 @@ import {
   settleCommittedLedgerIntent,
   withLedgerRecordPublicationLock,
 } from "./ledger-record-publication-storage.js";
-import {
-  parseLedgerRecordPublicationIntent,
-  sameLedgerRecordPublicationIntent,
-  LedgerRecordPublicationIntentError,
-  type LedgerRecordPublicationIntent,
-} from "./ledger-record-publication-intent.js";
 
 /** Wakeflow Governance / Ledger：由精简发布意图记录驱动的单记录前向恢复。 */
 
-function parseRecordIdentity(
-  recordIdValue: unknown,
-): WakeflowDurableId<"requirement"> {
+function parseRecordIdentity(recordIdValue: unknown): WakeflowDurableId<"requirement"> {
   try {
     return parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
   } catch (error: unknown) {
@@ -48,9 +46,7 @@ function parseRecordIdentity(
   }
 }
 
-function parseExpectedIntent(
-  value: unknown,
-): Readonly<LedgerRecordPublicationIntent> {
+function parseExpectedIntent(value: unknown): Readonly<LedgerRecordPublicationIntent> {
   try {
     return parseLedgerRecordPublicationIntent(value);
   } catch (error: unknown) {
@@ -70,52 +66,29 @@ async function recoverPublication(
   const intentRef = ledgerRecordPublicationIntentRefForIdentity(recordId);
   const lockRef = ledgerRecordPublicationLockRefForIdentity(recordId);
   await recoverLedgerIntentAtomicStages(root, intentRef, signal);
-  const observed = await existingLedgerRecordPublicationIntentOrNull(
-    root,
-    intentRef,
-    signal,
-  );
+  const observed = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
   if (observed === null) fail("not-found", "$intent");
   if (
-    observed.intent.record.requirementId !== recordId
-    || observed.intent.lockRef !== lockRef
-    || (expectedIntent !== null
-      && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))
+    observed.intent.record.requirementId !== recordId ||
+    observed.intent.lockRef !== lockRef ||
+    (expectedIntent !== null && !sameLedgerRecordPublicationIntent(observed.intent, expectedIntent))
   ) {
     fail("conflict", "$intent");
   }
   await prepareLedgerRecordPublicationLockRecovery(root, lockRef);
   return withLedgerRecordPublicationLock(root, lockRef, signal, async () => {
     await recoverLedgerIntentAtomicStages(root, intentRef, signal);
-    const stored = await existingLedgerRecordPublicationIntentOrNull(
-      root,
-      intentRef,
-      signal,
-    );
+    const stored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
     if (
-      stored === null
-      || !sameLedgerRecordPublicationIntent(stored.intent, observed.intent)
-      || (expectedIntent !== null
-        && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))
+      stored === null ||
+      !sameLedgerRecordPublicationIntent(stored.intent, observed.intent) ||
+      (expectedIntent !== null && !sameLedgerRecordPublicationIntent(stored.intent, expectedIntent))
     ) {
       fail("conflict", "$intent");
     }
-    const residues = await inspectLedgerRecordPublicationResidues(
-      root,
-      stored.intent,
-    );
-    if (
-      await ledgerPublicationResourceNodeOrNull(
-        root,
-        stored.intent.finalRootRef,
-      ) !== null
-    ) {
-      const loaded = await settleCommittedLedgerIntent(
-        root,
-        stored,
-        residues,
-        signal,
-      );
+    const residues = await inspectLedgerRecordPublicationResidues(root, stored.intent);
+    if ((await ledgerPublicationResourceNodeOrNull(root, stored.intent.finalRootRef)) !== null) {
+      const loaded = await settleCommittedLedgerIntent(root, stored, residues, signal);
       return Object.freeze({ wroteAuthority: false, loaded });
     }
     if (residues.stageNode === null) {
@@ -148,19 +121,11 @@ async function recoverPublication(
       rootNode: progress.rootNode,
     });
     await publishLedgerRecordStage(root, stored.intent, candidate, signal);
-    const loaded = await loadExactPublishedLedgerRecord(
-      root,
-      stored.intent,
-      signal,
-    );
-    const freshStored = await existingLedgerRecordPublicationIntentOrNull(
-      root,
-      intentRef,
-      signal,
-    );
+    const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
+    const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);
     if (
-      freshStored === null
-      || !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)
+      freshStored === null ||
+      !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)
     ) {
       fail("recovery-required", "$intent");
     }
@@ -191,10 +156,5 @@ export async function recoverExactLedgerAuthorityRecordPublication(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
   const expectedIntent = parseExpectedIntent(expectedIntentValue);
-  return recoverPublication(
-    root,
-    expectedIntent.record.requirementId,
-    expectedIntent,
-    signal,
-  );
+  return recoverPublication(root, expectedIntent.record.requirementId, expectedIntent, signal);
 }

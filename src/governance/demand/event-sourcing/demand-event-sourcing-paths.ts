@@ -1,17 +1,17 @@
-import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../../../foundation/filesystem/portable-resource-path.js";
 import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../../foundation/filesystem/portable-resource-path.js";
 import { parseUuidV4, UuidV4Error } from "../../../foundation/identity/uuid-v4.js";
 import {
-  parseDemandEventCommitSequence,
-  DemandEventStreamPositionError,
   type DemandEventCommitSequence,
+  DemandEventStreamPositionError,
+  parseDemandEventCommitSequence,
 } from "./demand-event-stream-position.js";
 
 /**
@@ -21,29 +21,22 @@ import {
  * 检查点；`append-candidates/` 只保存尚未成为权威事实的追加候选资源。
  */
 
-export const DEMAND_EVENT_SOURCING_ROOT_REF = parsePortableResourcePath(
-  "event-sourcing",
-);
-export const DEMAND_EVENT_SOURCING_IDENTITY_REF = parsePortableResourcePath(
-  "identity.json",
-);
-export const DEMAND_EVENT_SOURCING_AUTHORITY_REF = parsePortableResourcePath(
-  "authority.json",
-);
-export const DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF =
-  parsePortableResourcePath("artifacts");
+export const DEMAND_EVENT_SOURCING_ROOT_REF = parsePortableResourcePath("event-sourcing");
+export const DEMAND_EVENT_SOURCING_IDENTITY_REF = parsePortableResourcePath("identity.json");
+export const DEMAND_EVENT_SOURCING_AUTHORITY_REF = parsePortableResourcePath("authority.json");
+export const DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF = parsePortableResourcePath("artifacts");
 export const DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF =
   parsePortableResourcePath("transactions");
-export const DEMAND_EVENT_STREAM_COMMITS_ROOT_REF = parsePortableResourcePath(
-  "event-sourcing/commits",
+export const DEMAND_EVENT_STREAM_COMMITS_ROOT_REF =
+  parsePortableResourcePath("event-sourcing/commits");
+export const DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF = parsePortableResourcePath(
+  "event-sourcing/snapshots",
 );
-export const DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF =
-  parsePortableResourcePath("event-sourcing/snapshots");
-export const DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF =
-  parsePortableResourcePath("event-sourcing/append-candidates");
+export const DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF = parsePortableResourcePath(
+  "event-sourcing/append-candidates",
+);
 /** 可删除、可重建的身份索引检查点目录；文件按提交序号命名，由 kernel 事件流索引拥有。 */
-export const DEMAND_EVENT_STREAM_INDEX_ROOT_REF =
-  parsePortableResourcePath("event-sourcing/index");
+export const DEMAND_EVENT_STREAM_INDEX_ROOT_REF = parsePortableResourcePath("event-sourcing/index");
 
 const APPEND_CANDIDATE_PATTERN =
   /^(?<sequence>[0-9]{16})__(?<commitId>demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<token>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
@@ -62,10 +55,7 @@ const ERROR_MESSAGES = {
   "append-candidate-file-name": "Demand append candidate filename is invalid.",
   "append-owner-token": "Demand append candidate owner token is invalid.",
   "commit-identity": "Demand append candidate commit identity is invalid.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingPathErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DemandEventSourcingPathErrorReason, string>>;
 
 export class DemandEventSourcingPathError extends Error {
   override readonly name = "DemandEventSourcingPathError";
@@ -87,10 +77,7 @@ interface AppendOwnerToken {
   readonly token: string;
 }
 
-function fail(
-  reason: DemandEventSourcingPathErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingPathErrorReason, path: string): never {
   throw new DemandEventSourcingPathError(reason, path);
 }
 
@@ -101,12 +88,12 @@ function parseAppendOwnerToken(value: unknown): Readonly<AppendOwnerToken> {
   const threadId = Number(groups?.threadId);
   const uuid = groups?.token;
   if (
-    groups === undefined
-    || !Number.isSafeInteger(pid)
-    || pid <= 0
-    || !Number.isSafeInteger(threadId)
-    || threadId < 0
-    || uuid === undefined
+    groups === undefined ||
+    !Number.isSafeInteger(pid) ||
+    pid <= 0 ||
+    !Number.isSafeInteger(threadId) ||
+    threadId < 0 ||
+    uuid === undefined
   ) {
     fail("append-owner-token", "$ownerToken");
   }
@@ -137,9 +124,7 @@ export function formatDemandEventStreamCommitFileName(value: unknown): string {
 }
 
 /** 从固定宽度文件名恢复物理提交槽位。 */
-export function parseDemandEventStreamCommitFileName(
-  value: unknown,
-): Readonly<{
+export function parseDemandEventStreamCommitFileName(value: unknown): Readonly<{
   readonly commitSequence: DemandEventCommitSequence;
   readonly fileName: string;
 }> {
@@ -148,10 +133,7 @@ export function parseDemandEventStreamCommitFileName(
   if (sequenceText === undefined) fail("commit-file-name", "$fileName");
   let commitSequence: DemandEventCommitSequence;
   try {
-    commitSequence = parseDemandEventCommitSequence(
-      Number(sequenceText),
-      "$fileName",
-    );
+    commitSequence = parseDemandEventCommitSequence(Number(sequenceText), "$fileName");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
       fail("commit-file-name", "$fileName");
@@ -169,9 +151,7 @@ export function demandEventStreamCommitRef(
   sequence: DemandEventCommitSequence,
 ): PortableResourcePath {
   return parsePortableResourcePath(
-    `${DEMAND_EVENT_STREAM_COMMITS_ROOT_REF}/${formatDemandEventStreamCommitFileName(
-      sequence,
-    )}`,
+    `${DEMAND_EVENT_STREAM_COMMITS_ROOT_REF}/${formatDemandEventStreamCommitFileName(sequence)}`,
   );
 }
 
@@ -184,11 +164,7 @@ export function demandEventAppendCandidateRef(
   const admittedSequence = parseDemandEventCommitSequence(sequence);
   let admittedCommitId: WakeflowDurableId<"demand-event-commit">;
   try {
-    admittedCommitId = parseWakeflowDurableIdOfKind(
-      commitId,
-      "demand-event-commit",
-      "$commitId",
-    );
+    admittedCommitId = parseWakeflowDurableIdOfKind(commitId, "demand-event-commit", "$commitId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("commit-identity", "$commitId");
@@ -217,11 +193,11 @@ export function parseDemandEventAppendCandidateFileName(
     fail("append-candidate-file-name", "$fileName");
   }
   if (
-    groups.sequence === undefined
-    || groups.commitId === undefined
-    || groups.pid === undefined
-    || groups.threadId === undefined
-    || groups.token === undefined
+    groups.sequence === undefined ||
+    groups.commitId === undefined ||
+    groups.pid === undefined ||
+    groups.threadId === undefined ||
+    groups.token === undefined
   ) {
     fail("append-candidate-file-name", "$fileName");
   }
@@ -229,19 +205,14 @@ export function parseDemandEventAppendCandidateFileName(
   let commitSequence: DemandEventCommitSequence;
   let owner: Readonly<AppendOwnerToken>;
   try {
-    commitId = parseWakeflowDurableIdOfKind(
-      groups.commitId,
-      "demand-event-commit",
-    );
+    commitId = parseWakeflowDurableIdOfKind(groups.commitId, "demand-event-commit");
     commitSequence = parseDemandEventCommitSequence(Number(groups.sequence));
-    owner = parseAppendOwnerToken(
-      `${groups.pid}-${groups.threadId}-${groups.token}`,
-    );
+    owner = parseAppendOwnerToken(`${groups.pid}-${groups.threadId}-${groups.token}`);
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowDurableIdError
-      || error instanceof DemandEventStreamPositionError
-      || error instanceof DemandEventSourcingPathError
+      error instanceof WakeflowDurableIdError ||
+      error instanceof DemandEventStreamPositionError ||
+      error instanceof DemandEventSourcingPathError
     ) {
       fail("append-candidate-file-name", "$fileName");
     }

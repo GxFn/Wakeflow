@@ -1,23 +1,20 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-
+import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { ManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
 import type { ManagedEvidenceCapturePreview } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
-import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
+  type DemandEventSourcingPublicationWorkspaceFixture,
   demandEventSourcingPublicationAuthoredDemand,
   PUBLICATION_RECORDED_AT,
   PUBLICATION_REQUIREMENT_ID,
-  type DemandEventSourcingPublicationWorkspaceFixture,
 } from "../demand/demand-event-sourcing-publication-service.fixture.js";
 
-export const EVIDENCE_REPOSITORY_ID =
-  "repository_22222222-2222-4222-8222-222222222222";
-export const EVIDENCE_DESIGN_SURFACE_ID =
-  "surface_33333333-3333-4333-8333-333333333333";
+export const EVIDENCE_REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
+export const EVIDENCE_DESIGN_SURFACE_ID = "surface_33333333-3333-4333-8333-333333333333";
 export const EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-09-01T21:00:00.000Z");
 /**
  * 由需求包与看板认领状态确定性派生的 Demand 标识（demand 切片 `deriveDemandCreationIds`）；
@@ -37,8 +34,7 @@ export interface ManagedEvidenceCapturePlanningWorkspaceFixture {
 export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Promise<
   Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>
 > {
-  const publication =
-    await createDemandEventSourcingPublicationWorkspaceFixture();
+  const publication = await createDemandEventSourcingPublicationWorkspaceFixture();
   try {
     const demandRequest = {
       root: publication.workspacePath,
@@ -101,9 +97,7 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
 export async function cleanupManagedEvidenceCapturePlanningWorkspaceFixture(
   fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
 ): Promise<void> {
-  await cleanupDemandEventSourcingPublicationWorkspaceFixture(
-    fixture.publication,
-  );
+  await cleanupDemandEventSourcingPublicationWorkspaceFixture(fixture.publication);
 }
 
 /** 机制测试只关心就绪计划；阻塞是断言失败而不是分支。 */

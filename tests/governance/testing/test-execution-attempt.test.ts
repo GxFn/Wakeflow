@@ -45,31 +45,35 @@ function testPackage(setupPolicy: TestSetupPolicy): Readonly<TestTaskPackage> {
     testContract: {
       question: "已接受实现能否在真实环境保持目标行为？",
       objectBoundary: "只观察当前 Demand 的产品入口",
-      steps: [{
-        stepId: "ts-1",
-        given: "已确认的真实环境",
-        when: "执行冷启动",
-        // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段
-        then: "入口按需求响应",
-        requirementRef,
-      }],
+      steps: [
+        {
+          stepId: "ts-1",
+          given: "已确认的真实环境",
+          when: "执行冷启动",
+          // biome-ignore lint/suspicious/noThenProperty: Given/When/Then 合同步骤字段
+          then: "入口按需求响应",
+          requirementRef,
+        },
+      ],
       environment: SELECTED_AUTHORITY_REF,
       allowedSkills: ["skills/real-environment-test/SKILL.md"],
       setupPolicy,
       maxAttempts: 2,
       stopConditions: ["需要未批准操作时停止"],
     },
-    implementationBaselines: [{
-      targetTaskId: "target-task_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      taskPackageId: "task-package_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      taskPackageDigest: `sha256:${"d".repeat(64)}`,
-      repositoryId: TASKING_REPOSITORY_ID,
-      windowId: TASKING_WINDOW_ID,
-      targetResultId: "target-result_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-      resultDigest: `sha256:${"e".repeat(64)}`,
-      targetReviewDecisionId: "target-review-decision_ffffffff-ffff-4fff-8fff-ffffffffffff",
-      decisionDigest: `sha256:${"f".repeat(64)}`,
-    }],
+    implementationBaselines: [
+      {
+        targetTaskId: "target-task_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        taskPackageId: "task-package_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        taskPackageDigest: `sha256:${"d".repeat(64)}`,
+        repositoryId: TASKING_REPOSITORY_ID,
+        windowId: TASKING_WINDOW_ID,
+        targetResultId: "target-result_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        resultDigest: `sha256:${"e".repeat(64)}`,
+        targetReviewDecisionId: "target-review-decision_ffffffff-ffff-4fff-8fff-ffffffffffff",
+        decisionDigest: `sha256:${"f".repeat(64)}`,
+      },
+    ],
     lineage: null,
   });
   if (parsed.workType !== "test") throw new Error("Expected Test variant.");
@@ -121,8 +125,7 @@ const EXPECTED_DIRECTIVES: Readonly<Record<TestSetupPolicy, readonly [string, st
 };
 
 function isReason(reason: string) {
-  return (error: unknown) =>
-    error instanceof TestExecutionAttemptError && error.reason === reason;
+  return (error: unknown) => error instanceof TestExecutionAttemptError && error.reason === reason;
 }
 
 test("each setup policy maps initial and rerun attempts to a pinned directive", () => {
@@ -133,9 +136,10 @@ test("each setup policy maps initial and rerun attempts to a pinned directive", 
     equal(rerun.environmentSetup.directive, rerunDirective);
     for (const attempt of [initial, rerun]) {
       assertTestExecutionAttemptMatchesPackage(attempt, taskPackage);
-      const other = attempt.environmentSetup.directive === "prepare-fresh-environment"
-        ? "reuse-confirmed-environment"
-        : "prepare-fresh-environment";
+      const other =
+        attempt.environmentSetup.directive === "prepare-fresh-environment"
+          ? "reuse-confirmed-environment"
+          : "prepare-fresh-environment";
       const tampered = {
         ...attempt,
         environmentSetup: { policy, directive: other },

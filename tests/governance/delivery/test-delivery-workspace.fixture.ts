@@ -7,15 +7,15 @@ import {
   type TestTaskPlanningWorkspaceFixtureOptions,
 } from "../tasking/test-task-planning.fixture.js";
 import {
+  type DeliveredTarget,
+  type DeliveryWindowRoute,
   fixtureLandingInstant,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
+  type PrepareFixtureDeliveryOverrides,
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
   registerFixtureWindowRoute,
-  type DeliveredTarget,
-  type DeliveryWindowRoute,
-  type PrepareFixtureDeliveryOverrides,
 } from "./delivery-workspace.fixture.js";
 
 /**
@@ -79,7 +79,11 @@ export async function deliverFixtureTestTarget(
   attempt = 1,
 ): Promise<Readonly<DeliveredTarget>> {
   const prepared = await prepareFixtureDelivery(
-    { workspacePath: fixture.workspacePath, demandId: fixture.demandId, targetTaskId: fixture.testTargetTaskId },
+    {
+      workspacePath: fixture.workspacePath,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.testTargetTaskId,
+    },
     { expectedStreamRevision: 8, idempotencyKey: `fixture-test-prepare-${attempt}`, ...overrides },
   );
   const landed = await landFixturePrompt(

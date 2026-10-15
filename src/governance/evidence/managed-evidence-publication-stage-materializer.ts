@@ -1,34 +1,31 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
+import {
+  DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesMatchingTargets,
+} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  recoverDurableAtomicFileStagesMatchingTargets,
-  DurableAtomicFileStageRecoveryError,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
-  inspectDirectoryTreeCandidate,
-  inspectDirectoryTreeCandidateProgress,
-  DurableDirectoryTreeCandidateError,
-  type DirectoryTreeCandidateProgress,
-  type DirectoryTreeCandidateResult,
-} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
-import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
-  type FileNodeSnapshot,
-} from "../../foundation/filesystem/file-node-snapshot.js";
+  type DirectoryTreeCandidateProgress,
+  type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidate,
+  inspectDirectoryTreeCandidateProgress,
+} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import { type FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  joinDirectoryTreeCandidatePath,
-} from "../../foundation/filesystem/directory-tree-candidate-plan.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -39,40 +36,32 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  createManagedEvidenceRootResourceDeclaration,
-} from "./managed-evidence-resource-catalog.js";
-import {
-  renderManagedEvidenceManifest,
-} from "./managed-evidence-manifest.js";
-import {
-  materializeManagedEvidencePublicationPayload,
   ManagedEvidencePublicationPayloadMaterializationError,
+  materializeManagedEvidencePublicationPayload,
 } from "./managed-evidence-publication-payload-materializer.js";
 import {
-  requireCurrentManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionStoreError,
-  type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
-import {
   deriveManagedEvidencePublicationRecordTreePlan,
-  parseManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
   type ManagedEvidencePublicationTransaction,
+  ManagedEvidencePublicationTransactionError,
+  parseManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
 import {
-  MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
-  MANAGED_EVIDENCE_ROOT_REF,
-} from "./managed-evidence-resource-paths.js";
+  ManagedEvidencePublicationTransactionStoreError,
+  requireCurrentManagedEvidencePublicationTransaction,
+  type StoredManagedEvidencePublicationTransaction,
+} from "./managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
   type ManagedEvidenceRecordTreePlan,
 } from "./managed-evidence-record-tree-plan.js";
+import { createManagedEvidenceRootResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+import {
+  MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
+  MANAGED_EVIDENCE_ROOT_REF,
+} from "./managed-evidence-resource-paths.js";
 
 /**
  * Wakeflow Governance / Evidence：journal授权的source→stage耐久物化owner。
@@ -119,7 +108,8 @@ const ERROR_MESSAGES = {
   "stage-conflict": "Managed evidence publication stage conflicts with its record plan.",
   capacity: "Managed evidence publication stage exceeds its admitted capacity.",
   aborted: "Managed evidence publication stage materialization was aborted.",
-  "recovery-required": "Managed evidence publication stage materialization requires explicit recovery.",
+  "recovery-required":
+    "Managed evidence publication stage materialization requires explicit recovery.",
   "operation-failure": "Managed evidence publication stage could not be materialized safely.",
 } as const satisfies Readonly<
   Record<ManagedEvidencePublicationStageMaterializationErrorReason, string>
@@ -127,17 +117,12 @@ const ERROR_MESSAGES = {
 
 /** Stage物化无法证明同一journal/source/record plan时的稳定错误。 */
 export class ManagedEvidencePublicationStageMaterializationError extends Error {
-  override readonly name =
-    "ManagedEvidencePublicationStageMaterializationError";
-  readonly code =
-    "wakeflow-managed-evidence-publication-stage-materialization" as const;
+  override readonly name = "ManagedEvidencePublicationStageMaterializationError";
+  readonly code = "wakeflow-managed-evidence-publication-stage-materialization" as const;
   readonly reason: ManagedEvidencePublicationStageMaterializationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ManagedEvidencePublicationStageMaterializationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ManagedEvidencePublicationStageMaterializationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -148,9 +133,7 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-const MANIFEST_REF = parsePortableResourcePath(
-  MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
-);
+const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME);
 
 function fail(
   reason: ManagedEvidencePublicationStageMaterializationErrorReason,
@@ -200,9 +183,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function parseTransaction(
-  value: unknown,
-): Readonly<ManagedEvidencePublicationTransaction> {
+function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
   try {
     return parseManagedEvidencePublicationTransaction(value);
   } catch (error: unknown) {
@@ -213,9 +194,7 @@ function parseTransaction(
   }
 }
 
-function mapStoreError(
-  error: ManagedEvidencePublicationTransactionStoreError,
-): never {
+function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") {
     fail("destination-root-scope", "$demandRoot");
@@ -247,15 +226,11 @@ async function loadExactJournal(
   return stored;
 }
 
-function assertPrivateDirectory(
-  node: Readonly<FileNodeSnapshot>,
-  path: string,
-): void {
+function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-    (typeof process.geteuid === "function" &&
-      node.userId !== BigInt(process.geteuid()))
+    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
   ) {
     fail("stage-conflict", path);
   }
@@ -264,14 +239,9 @@ function assertPrivateDirectory(
 function admitEvidenceRootMaterialization(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): void {
-  const declaration = createManagedEvidenceRootResourceDeclaration(
-    transaction.manifest.demandId,
-  );
+  const declaration = createManagedEvidenceRootResourceDeclaration(transaction.manifest.demandId);
   try {
-    admitWakeflowResourceOperation(
-      declaration.processing,
-      "materialize-directory",
-    );
+    admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
       fail("operation-failure", "$catalog");
@@ -313,12 +283,7 @@ async function ensureEvidenceRoot(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   admitEvidenceRootMaterialization(transaction);
-  await ensureDirectory(
-    demandRoot,
-    MANAGED_EVIDENCE_ROOT_REF,
-    "$managedEvidenceRoot",
-    signal,
-  );
+  await ensureDirectory(demandRoot, MANAGED_EVIDENCE_ROOT_REF, "$managedEvidenceRoot", signal);
   let observation;
   try {
     observation = await demandRoot.inspectExistingResource(
@@ -414,10 +379,7 @@ async function recoverManifestAtomicStages(
   plan: Readonly<ManagedEvidenceRecordTreePlan>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  const manifestRef = joinDirectoryTreeCandidatePath(
-    plan.candidateRootPath,
-    MANIFEST_REF,
-  );
+  const manifestRef = joinDirectoryTreeCandidatePath(plan.candidateRootPath, MANIFEST_REF);
   try {
     const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
       demandRoot,
@@ -439,20 +401,14 @@ async function recoverManifestAtomicStages(
   }
 }
 
-function assertManifestIsLast(
-  progress: Readonly<DirectoryTreeCandidateProgress>,
-): void {
-  const manifestMissing = progress.missingFiles.includes(
-    MANIFEST_REF,
-  );
+function assertManifestIsLast(progress: Readonly<DirectoryTreeCandidateProgress>): void {
+  const manifestMissing = progress.missingFiles.includes(MANIFEST_REF);
   if (progress.status === "incomplete" && !manifestMissing) {
     fail("stage-conflict", "$stage/manifest");
   }
 }
 
-function mapPayloadError(
-  error: ManagedEvidencePublicationPayloadMaterializationError,
-): never {
+function mapPayloadError(error: ManagedEvidencePublicationPayloadMaterializationError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
@@ -474,18 +430,16 @@ function mapPayloadError(
   fail("operation-failure", "$payload");
 }
 
-function onlyManifestMissing(
-  progress: Readonly<DirectoryTreeCandidateProgress>,
-): boolean {
-  return progress.status === "incomplete" &&
+function onlyManifestMissing(progress: Readonly<DirectoryTreeCandidateProgress>): boolean {
+  return (
+    progress.status === "incomplete" &&
     progress.missingDirectories.length === 0 &&
     progress.missingFiles.length === 1 &&
-    progress.missingFiles[0] === MANIFEST_REF;
+    progress.missingFiles[0] === MANIFEST_REF
+  );
 }
 
-function assertOnlyManifestMissing(
-  progress: Readonly<DirectoryTreeCandidateProgress>,
-): void {
+function assertOnlyManifestMissing(progress: Readonly<DirectoryTreeCandidateProgress>): void {
   if (!onlyManifestMissing(progress)) fail("stage-conflict", "$stage");
 }
 
@@ -513,14 +467,8 @@ async function publishManifest(
   plan: Readonly<ManagedEvidenceRecordTreePlan>,
   signal: AbortSignal | undefined,
 ): Promise<"created" | "existing"> {
-  const manifestRef = joinDirectoryTreeCandidatePath(
-    plan.candidateRootPath,
-    MANIFEST_REF,
-  );
-  const bytes = encodeUtf8(
-    renderManagedEvidenceManifest(transaction.manifest),
-    "$manifest",
-  );
+  const manifestRef = joinDirectoryTreeCandidatePath(plan.candidateRootPath, MANIFEST_REF);
+  const bytes = encodeUtf8(renderManagedEvidenceManifest(transaction.manifest), "$manifest");
   try {
     await createFileAtomically(demandRoot, manifestRef, bytes, {
       mode: MANAGED_EVIDENCE_RECORD_FILE_MODE,
@@ -528,10 +476,7 @@ async function publishManifest(
     });
     return "created";
   } catch (error: unknown) {
-    if (
-      error instanceof DurableAtomicFileWriteError &&
-      error.reason === "target-exists"
-    ) {
+    if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
       // 同一journal并发winner可能已经发布Manifest；完整stage复验决定能否接纳。
       await inspectComplete(demandRoot, plan, undefined);
       return "existing";
@@ -555,43 +500,17 @@ export async function materializeManagedEvidencePublicationStage(
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
   const transaction = parseTransaction(transactionValue);
-  const stored = await loadExactJournal(
-    demandRootValue,
-    transaction,
-    options.signal,
-  );
+  const stored = await loadExactJournal(demandRootValue, transaction, options.signal);
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   await ensureEvidenceRoot(demandRootValue, transaction, options.signal);
-  await ensureDirectory(
-    demandRootValue,
-    plan.candidateRootPath,
-    "$stage",
-    options.signal,
-  );
-  await recoverManifestAtomicStages(
-    demandRootValue,
-    plan,
-    options.signal,
-  );
-  let progress = await inspectProgress(
-    demandRootValue,
-    plan,
-    options.signal,
-  );
+  await ensureDirectory(demandRootValue, plan.candidateRootPath, "$stage", options.signal);
+  await recoverManifestAtomicStages(demandRootValue, plan, options.signal);
+  let progress = await inspectProgress(demandRootValue, plan, options.signal);
   if (progress.status === "complete") {
-    await loadExactJournal(
-      demandRootValue,
-      transaction,
-      options.signal,
-      stored.source.node,
-    );
+    await loadExactJournal(demandRootValue, transaction, options.signal, stored.source.node);
     return Object.freeze({
       transactionDigest: stored.transactionDigest,
-      candidate: await inspectComplete(
-        demandRootValue,
-        plan,
-        options.signal,
-      ),
+      candidate: await inspectComplete(demandRootValue, plan, options.signal),
       copiedPayloadFiles: Object.freeze([]),
       manifestPublication: "existing",
     });
@@ -615,19 +534,10 @@ export async function materializeManagedEvidencePublicationStage(
       }
       throw error;
     }
-    progress = await inspectProgress(
-      demandRootValue,
-      plan,
-      options.signal,
-    );
+    progress = await inspectProgress(demandRootValue, plan, options.signal);
   }
   assertOnlyManifestMissing(progress);
-  await loadExactJournal(
-    demandRootValue,
-    transaction,
-    options.signal,
-    stored.source.node,
-  );
+  await loadExactJournal(demandRootValue, transaction, options.signal, stored.source.node);
   const manifestPublication = await publishManifest(
     demandRootValue,
     transaction,
@@ -638,12 +548,7 @@ export async function materializeManagedEvidencePublicationStage(
   let candidate: Readonly<DirectoryTreeCandidateResult>;
   try {
     candidate = await inspectComplete(demandRootValue, plan, undefined);
-    await loadExactJournal(
-      demandRootValue,
-      transaction,
-      undefined,
-      stored.source.node,
-    );
+    await loadExactJournal(demandRootValue, transaction, undefined, stored.source.node);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationStageMaterializationError) {
       fail("recovery-required", "$stage");

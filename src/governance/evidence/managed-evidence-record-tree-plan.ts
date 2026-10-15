@@ -1,45 +1,42 @@
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import { LOADED_ARTIFACT_TREE_IDENTITY_LIMITS } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
-import {
-  parseDirectoryTreeCandidatePlan,
-  planDirectoryTreeCandidateFromFileDescriptors,
-  DurableDirectoryTreeCandidateError,
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidatePlanFile,
+  DurableDirectoryTreeCandidateError,
+  parseDirectoryTreeCandidatePlan,
+  planDirectoryTreeCandidateFromFileDescriptors,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
+  type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
   parseManagedEvidenceManifest,
   renderManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
-  type ManagedEvidenceManifest,
 } from "./managed-evidence-manifest.js";
 import {
-  managedEvidencePublicationStageRef,
-  managedEvidenceRecordRootRef,
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME,
+  managedEvidencePublicationStageRef,
+  managedEvidenceRecordRootRef,
 } from "./managed-evidence-resource-paths.js";
 
 /**
@@ -74,7 +71,12 @@ export interface ManagedEvidenceRecordTreePlan {
 }
 
 export type ManagedEvidenceRecordTreePlanErrorReason =
-  "input" | "identifier" | "manifest" | "capacity" | "path" | "plan";
+  | "input"
+  | "identifier"
+  | "manifest"
+  | "capacity"
+  | "path"
+  | "plan";
 
 const ERROR_MESSAGES = {
   input: "Managed evidence record tree plan input is invalid.",
@@ -83,9 +85,7 @@ const ERROR_MESSAGES = {
   capacity: "Managed evidence record tree exceeds its admitted capacity.",
   path: "Managed evidence record tree paths are invalid.",
   plan: "Managed evidence record tree plan is inconsistent.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceRecordTreePlanErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceRecordTreePlanErrorReason, string>>;
 
 /** Managed Evidence record tree无法形成关闭计划时的稳定错误。 */
 export class ManagedEvidenceRecordTreePlanError extends Error {
@@ -131,10 +131,7 @@ const RECORD_CAPACITY = Object.freeze({
   maximumTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes,
 } as const);
 
-function fail(
-  reason: ManagedEvidenceRecordTreePlanErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidenceRecordTreePlanErrorReason, path: string): never {
   throw new ManagedEvidenceRecordTreePlanError(reason, path);
 }
 
@@ -148,10 +145,7 @@ function exactRecord(value: unknown): Readonly<Record<string, unknown>> {
   }
   const actual = Object.keys(record).sort();
   const expected = [...PLAN_FIELDS].sort();
-  if (
-    actual.length !== expected.length ||
-    actual.some((key, index) => key !== expected[index])
-  ) {
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     fail("input", "$plan");
   }
   return record;
@@ -198,9 +192,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parseDirectoryPlan(
-  value: unknown,
-): Readonly<DirectoryTreeCandidatePlan> {
+function parseDirectoryPlan(value: unknown): Readonly<DirectoryTreeCandidatePlan> {
   try {
     return parseDirectoryTreeCandidatePlan(value, RECORD_CAPACITY);
   } catch (error: unknown) {
@@ -213,9 +205,7 @@ function parseDirectoryPlan(
 }
 
 function payloadPath(ref: PortableResourcePath): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/${ref}`,
-  );
+  return parsePortableResourcePath(`${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/${ref}`);
 }
 
 function planFiles(
@@ -225,10 +215,7 @@ function planFiles(
   return Object.freeze([
     Object.freeze({
       path: parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME),
-      byteCount: parseByteCount(
-        manifestDocument.byteLength,
-        "$manifestDocument",
-      ),
+      byteCount: parseByteCount(manifestDocument.byteLength, "$manifestDocument"),
       digest: computeSha256Digest(manifestDocument, "$manifestDocument"),
       mode: MANAGED_EVIDENCE_RECORD_FILE_MODE,
     }),
@@ -248,10 +235,7 @@ function planFiles(
 function buildBasis(
   manifest: Readonly<ManagedEvidenceManifest>,
 ): Readonly<ManagedEvidenceRecordTreePlanBasis> {
-  const manifestDocument = encodeUtf8(
-    renderManagedEvidenceManifest(manifest),
-    "$manifestDocument",
-  );
+  const manifestDocument = encodeUtf8(renderManagedEvidenceManifest(manifest), "$manifestDocument");
   let directoryPlan: Readonly<DirectoryTreeCandidatePlan>;
   try {
     directoryPlan = planDirectoryTreeCandidateFromFileDescriptors(
@@ -273,10 +257,7 @@ function buildBasis(
     schemaVersion: MANAGED_EVIDENCE_RECORD_TREE_PLAN_VERSION,
     evidenceId: manifest.evidenceId,
     manifest,
-    manifestDocumentDigest: computeSha256Digest(
-      manifestDocument,
-      "$manifestDocument",
-    ),
+    manifestDocumentDigest: computeSha256Digest(manifestDocument, "$manifestDocument"),
     candidateRootPath: managedEvidencePublicationStageRef(manifest.evidenceId),
     destinationRootPath: managedEvidenceRecordRootRef(manifest.evidenceId),
     directoryPlan,
@@ -300,14 +281,8 @@ export function parseManagedEvidenceRecordTreePlan(
     record.manifestDocumentDigest,
     "$/manifestDocumentDigest",
   );
-  const candidateRootPath = parsePath(
-    record.candidateRootPath,
-    "$/candidateRootPath",
-  );
-  const destinationRootPath = parsePath(
-    record.destinationRootPath,
-    "$/destinationRootPath",
-  );
+  const candidateRootPath = parsePath(record.candidateRootPath, "$/candidateRootPath");
+  const destinationRootPath = parsePath(record.destinationRootPath, "$/destinationRootPath");
   const directoryPlan = parseDirectoryPlan(record.directoryPlan);
   const planDigest = parseDigest(record.planDigest, "$/planDigest");
   const expected = buildBasis(manifest);

@@ -1,14 +1,19 @@
-import type { WakeflowDemandEventStreamCommit as CommitWire } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
 import { types } from "node:util";
-import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
+import type { WakeflowDemandEventStreamCommit as CommitWire } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -16,60 +21,55 @@ import {
   renderDeterministicJsonDocument,
 } from "../../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../../foundation/data/json-value.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../../foundation/data/passive-own-data.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandAggregateStateDigest,
   type DemandAggregateState,
 } from "../model/demand-aggregate-state.js";
 import {
-  evolveDemandEventSourcingState,
-  DemandEventSourcingDecisionError,
-} from "./demand-event-sourcing-decider.js";
-import {
-  parseDemandEventSourcingAggregate,
-  DemandEventSourcingAggregateError,
   type DemandEventSourcingAggregate,
+  DemandEventSourcingAggregateError,
+  parseDemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
 import {
-  parseDemandUncommittedEvent,
+  DemandEventSourcingDecisionError,
+  evolveDemandEventSourcingState,
+} from "./demand-event-sourcing-decider.js";
+import {
   DemandEventSourcingEventError,
   type DemandUncommittedEvent,
+  parseDemandUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
-import {
-  computeDemandEventSourcingStoredEventDigest,
-  createDemandEventSourcingStoredEvent,
-  parseDemandEventSourcingStoredEvent,
-  DemandEventSourcingStoredEventError,
-  type DemandEventSourcingStoredEvent,
-} from "./demand-event-sourcing-stored-event.js";
-import {
-  upcastDemandEventSourcingStoredEvent,
-  DemandEventSourcingUpcasterError,
-} from "./demand-event-sourcing-upcaster.js";
 import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
 import {
+  computeDemandEventSourcingStoredEventDigest,
+  createDemandEventSourcingStoredEvent,
+  type DemandEventSourcingStoredEvent,
+  DemandEventSourcingStoredEventError,
+  parseDemandEventSourcingStoredEvent,
+} from "./demand-event-sourcing-stored-event.js";
+import {
+  DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
+} from "./demand-event-sourcing-upcaster.js";
+import {
+  type DemandEventCommitSequence,
+  DemandEventStreamPositionError,
+  type DemandEventStreamRevision,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-  DemandEventStreamPositionError,
-  type DemandEventCommitSequence,
-  type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 
 /**
@@ -79,8 +79,7 @@ import {
  * 一条提交记录可以承载一个命令产生的多个事件，并通过 `previousCommitDigest` 串联历史。
  */
 
-const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND =
-  "wakeflow-demand-event-stream-commit" as const;
+const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND = "wakeflow-demand-event-stream-commit" as const;
 const DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION = 1 as const;
 const DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS = 64;
 
@@ -185,16 +184,11 @@ const ERROR_MESSAGES = {
   event: "Demand Event Stream commit contains an invalid event.",
   aggregate: "Demand Event Stream commit requires a valid current aggregate.",
   relation: "Demand Event Stream commit fields do not form one append batch.",
-  "event-version":
-    "Demand Event Stream commit contains an unsupported event version.",
-  "state-version":
-    "Demand Event Stream commit contains an unsupported state-model version.",
-  transition:
-    "Demand Event Stream commit cannot be evolved from the current state.",
+  "event-version": "Demand Event Stream commit contains an unsupported event version.",
+  "state-version": "Demand Event Stream commit contains an unsupported state-model version.",
+  transition: "Demand Event Stream commit cannot be evolved from the current state.",
   representation: "Demand Event Stream commit bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<DemandEventStreamCommitErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventStreamCommitErrorReason, string>>;
 
 export class DemandEventStreamCommitError extends Error {
   override readonly name = "DemandEventStreamCommitError";
@@ -217,11 +211,7 @@ const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const PREPARE_FIELDS = Object.freeze([
-  "commandDigest",
-  "commitId",
-  "events",
-] as const);
+const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"] as const);
 const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency"] as const);
 const ISSUED_PREPARED_COMMITS = new WeakSet<object>();
 
@@ -245,10 +235,7 @@ function parseExpectedRevision(value: unknown, path: string): number {
   return value as number;
 }
 
-function parseCommitId(
-  value: unknown,
-  path: string,
-): WakeflowDurableId<"demand-event-commit"> {
+function parseCommitId(value: unknown, path: string): WakeflowDurableId<"demand-event-commit"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "demand-event-commit", path);
   } catch (error: unknown) {
@@ -257,10 +244,7 @@ function parseCommitId(
   }
 }
 
-function parseDemandId(
-  value: unknown,
-  path: string,
-): WakeflowDurableId<"demand"> {
+function parseDemandId(value: unknown, path: string): WakeflowDurableId<"demand"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "demand", path);
   } catch (error: unknown) {
@@ -270,9 +254,7 @@ function parseDemandId(
 }
 
 /** 只验证提交记录自身的结构和序列关系，不替代归约器语义验证。 */
-export function parseDemandEventStreamCommit(
-  value: unknown,
-): Readonly<DemandEventStreamCommit> {
+export function parseDemandEventStreamCommit(value: unknown): Readonly<DemandEventStreamCommit> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$commit");
@@ -294,10 +276,7 @@ export function parseDemandEventStreamCommit(
   let firstStreamRevision: DemandEventStreamRevision;
   let lastStreamRevision: DemandEventStreamRevision;
   try {
-    commitSequence = parseDemandEventCommitSequence(
-      wire.commitSequence,
-      "$/commitSequence",
-    );
+    commitSequence = parseDemandEventCommitSequence(wire.commitSequence, "$/commitSequence");
     firstStreamRevision = parseDemandEventStreamRevision(
       wire.firstStreamRevision,
       "$/firstStreamRevision",
@@ -313,10 +292,7 @@ export function parseDemandEventStreamCommit(
     throw error;
   }
   const demandId = parseDemandId(wire.demandId, "$/demandId");
-  const idempotency = parseIdempotency(
-    wire.idempotency,
-    "$/idempotency",
-  );
+  const idempotency = parseIdempotency(wire.idempotency, "$/idempotency");
   const events: DemandEventSourcingStoredEvent[] = [];
   const eventIds = new Set<string>();
   for (const [index, eventValue] of wire.events.entries()) {
@@ -374,10 +350,7 @@ export function parseDemandEventStreamCommit(
 }
 
 export function renderDemandEventStreamCommit(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandEventStreamCommit(value),
-    "$commit",
-  );
+  return renderDeterministicJsonDocument(parseDemandEventStreamCommit(value), "$commit");
 }
 
 export function parseDemandEventStreamCommitDocument(
@@ -399,9 +372,7 @@ export function parseDemandEventStreamCommitDocument(
   return commit;
 }
 
-export function computeDemandEventStreamCommitDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeDemandEventStreamCommitDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(parseDemandEventStreamCommit(value));
 }
 
@@ -430,11 +401,7 @@ function parsePrepareInput(value: unknown): Readonly<{
   const idempotency = parseIdempotency(record.idempotency, "$/idempotency");
   let values: readonly unknown[];
   try {
-    values = parseDenseArray(
-      record.events,
-      DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS,
-      "$/events",
-    );
+    values = parseDenseArray(record.events, DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS, "$/events");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", "$/events");
     throw error;
@@ -561,21 +528,14 @@ export function applyDemandEventStreamCommit(
       currentEvent = upcastDemandEventSourcingStoredEvent(storedEvent);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingUpcasterError) {
-        if (
-          error.reason === "unsupported-version" ||
-          error.reason === "unsupported-event-type"
-        ) {
+        if (error.reason === "unsupported-version" || error.reason === "unsupported-event-type") {
           fail("event-version", `$/events/${index}/eventVersion`);
         }
         fail("event", `$/events/${index}`);
       }
       throw error;
     }
-    assertEventCommitBoundary(
-      currentEvent,
-      commit.expectedStreamRevision,
-      `$/events/${index}`,
-    );
+    assertEventCommitBoundary(currentEvent, commit.expectedStreamRevision, `$/events/${index}`);
     let next: Readonly<DemandAggregateState>;
     try {
       next = evolveDemandEventSourcingState(state, currentEvent);
@@ -587,8 +547,7 @@ export function applyDemandEventStreamCommit(
     }
     if (
       storedEvent.streamRevision !== commit.firstStreamRevision + index ||
-      storedEvent.resultingStateDigest !==
-        computeDemandAggregateStateDigest(next)
+      storedEvent.resultingStateDigest !== computeDemandAggregateStateDigest(next)
     ) {
       fail("transition", `$/events/${index}`);
     }
@@ -667,11 +626,7 @@ function buildDemandEventStreamCommit(
   let state: Readonly<DemandAggregateState> | null = current?.state ?? null;
   const storedEvents: DemandEventSourcingStoredEvent[] = [];
   for (const [index, event] of input.events.entries()) {
-    assertEventCommitBoundary(
-      event,
-      expectedStreamRevision,
-      `$/events/${index}`,
-    );
+    assertEventCommitBoundary(event, expectedStreamRevision, `$/events/${index}`);
     let next: Readonly<DemandAggregateState>;
     try {
       next = evolveDemandEventSourcingState(state, event);
@@ -682,11 +637,7 @@ function buildDemandEventStreamCommit(
       throw error;
     }
     storedEvents.push(
-      createDemandEventSourcingStoredEvent(
-        event,
-        expectedStreamRevision + index + 1,
-        next,
-      ),
+      createDemandEventSourcingStoredEvent(event, expectedStreamRevision + index + 1, next),
     );
     state = next;
   }

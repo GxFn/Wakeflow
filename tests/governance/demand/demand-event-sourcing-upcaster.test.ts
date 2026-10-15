@@ -1,20 +1,17 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  upcastDemandEventSourcingStoredEvent,
-  DemandEventSourcingUpcasterError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { encodeCurrentDemandEventVersion } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
 import { projectTargetDeliveryProductDefectRemediationContext } from "../../../src/governance/delivery/delivery-envelope.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
+import { encodeCurrentDemandEventVersion } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
 import {
-  createTaskPackageFixture,
-  TASKING_DEMAND_ID,
-} from "../tasking/task-package.fixture.js";
+  DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
+} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { targetResultRecordedEventIdFromResult } from "../../../src/governance/result/target-result.js";
+import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -23,13 +20,12 @@ import {
   OTHER_DELIVERY_CLAIM_ID,
   THIRD_DELIVERY_CLAIM_ID,
 } from "../delivery/delivery-records.fixture.js";
-import { targetResultRecordedEventIdFromResult } from "../../../src/governance/result/target-result.js";
 import {
   createTargetResultCallbackFixture,
   createTargetResultFixture,
 } from "../result/target-result.fixture.js";
-import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import { createControllerImplementationReviewDecisionFixture } from "../review/controller-implementation-review-decision.fixture.js";
+import { createTaskPackageFixture, TASKING_DEMAND_ID } from "../tasking/task-package.fixture.js";
 
 const EVENT = Object.freeze({
   artifactKind: "wakeflow-demand-event-sourcing-event" as const,
@@ -38,10 +34,7 @@ const EVENT = Object.freeze({
     "demand-event_11111111-1111-4111-8111-111111111111",
     "demand-event",
   ),
-  demandId: parseWakeflowDurableIdOfKind(
-    "demand_22222222-2222-4222-8222-222222222222",
-    "demand",
-  ),
+  demandId: parseWakeflowDurableIdOfKind("demand_22222222-2222-4222-8222-222222222222", "demand"),
   streamRevision: 1,
   recordedAt: parseUtcInstant("2026-08-26T10:00:00.000Z"),
   eventType: "publication.demand-published" as const,
@@ -93,8 +86,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         data: { taskPackage },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "event",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "event",
   );
 
   const claim = createWorkClaimFixture();
@@ -112,8 +104,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
   }
 
   const previousResult = createTargetResultFixture();
-  const reworkDecision =
-    createControllerImplementationReviewDecisionFixture("rework");
+  const reworkDecision = createControllerImplementationReviewDecisionFixture("rework");
   const reworkDeliveryId = parseWakeflowDurableIdOfKind(
     "target-delivery_89898989-8989-4989-8989-898989898989",
     "target-delivery",
@@ -166,8 +157,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         data: { envelope: reworkEnvelope },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "unsupported-version",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "unsupported-version",
   );
 
   const remediationDeliveryId = parseWakeflowDurableIdOfKind(
@@ -180,30 +170,29 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
       deliveryId: remediationDeliveryId,
     }),
     deliveryId: remediationDeliveryId,
-    productDefectRemediation:
-      projectTargetDeliveryProductDefectRemediationContext({
-        authorization: {
-          productDefectRemediationId: parseWakeflowDurableIdOfKind(
-            "product-defect-remediation_91919191-9191-4191-8191-919191919191",
-            "product-defect-remediation",
-          ),
-          authorizationDigest: parseSha256Digest(`sha256:${"8".repeat(64)}`),
-        },
-        testReviewDecision: {
-          targetReviewDecisionId: parseWakeflowDurableIdOfKind(
-            "target-review-decision_92929292-9292-4292-8292-929292929292",
-            "target-review-decision",
-          ),
-          decisionDigest: parseSha256Digest(`sha256:${"9".repeat(64)}`),
-        },
-        previousResult: {
-          targetResultId: previousResult.targetResultId,
-          resultDigest: previousResult.resultDigest,
-        },
-        authorizationRationale: "真实环境Evidence证明产品缺陷。",
-        correctionObjective: "在原TaskPackage内修复产品行为。",
-        requiredCorrections: [{ stepId: "ts-1", observed: "产品行为不符合冻结目标。" }],
-      }),
+    productDefectRemediation: projectTargetDeliveryProductDefectRemediationContext({
+      authorization: {
+        productDefectRemediationId: parseWakeflowDurableIdOfKind(
+          "product-defect-remediation_91919191-9191-4191-8191-919191919191",
+          "product-defect-remediation",
+        ),
+        authorizationDigest: parseSha256Digest(`sha256:${"8".repeat(64)}`),
+      },
+      testReviewDecision: {
+        targetReviewDecisionId: parseWakeflowDurableIdOfKind(
+          "target-review-decision_92929292-9292-4292-8292-929292929292",
+          "target-review-decision",
+        ),
+        decisionDigest: parseSha256Digest(`sha256:${"9".repeat(64)}`),
+      },
+      previousResult: {
+        targetResultId: previousResult.targetResultId,
+        resultDigest: previousResult.resultDigest,
+      },
+      authorizationRationale: "真实环境Evidence证明产品缺陷。",
+      correctionObjective: "在原TaskPackage内修复产品行为。",
+      requiredCorrections: [{ stepId: "ts-1", observed: "产品行为不符合冻结目标。" }],
+    }),
     preparedAt: parseUtcInstant("2026-08-29T12:17:00.000Z"),
   });
   const preparedRemediation = upcastDemandEventSourcingStoredEvent({
@@ -228,8 +217,7 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "codec",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "codec",
   );
 
   const outcome = createDeliveryOutcomeFixture({ claim, envelope });
@@ -332,21 +320,18 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         data: { decision: reviewDecision },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "event",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "event",
   );
 
   throws(
     () => upcastDemandEventSourcingStoredEvent({ ...EVENT, eventVersion: 2 }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "unsupported-version",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "unsupported-version",
   );
   throws(
     () => upcastDemandEventSourcingStoredEvent({ ...EVENT, streamRevision: 0 }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "input",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "input",
   );
   throws(
     () =>
@@ -365,7 +350,6 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
         data: { ...EVENT.data, extra: true },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingUpcasterError &&
-      error.reason === "codec",
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "codec",
   );
 });

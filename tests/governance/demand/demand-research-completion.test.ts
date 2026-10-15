@@ -10,9 +10,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
-import { executeDemandCompletionRequest, executeDemandCancellationRequest } from "../../../src/capabilities/demand/lifecycle.js";
+import {
+  executeDemandCancellationRequest,
+  executeDemandCompletionRequest,
+} from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
@@ -22,8 +25,8 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { buildDemandControllerRoute } from "../../../src/governance/controller/demand-controller-route.js";
 import {
   closeDemandOperationAuthorityContext,
-  openDemandOperationAuthorityContext,
   type DemandOperationAuthorityContext,
+  openDemandOperationAuthorityContext,
 } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import {
   demandWindowIds,
@@ -36,8 +39,8 @@ import {
   completeDemandAggregateState,
   computeDemandAggregateStateDigest,
   createInitialDemandAggregateState,
-  DemandAggregateStateError,
   type DemandAggregateState,
+  DemandAggregateStateError,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { requirementLineageRecordRef } from "../../../src/governance/demand/model/requirement-lineage.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
@@ -320,7 +323,10 @@ async function withAuthorityContext<Result>(
 
 async function readControllerRoute(workspaceRoot: RootedDirectory, demandId: string) {
   return withAuthorityContext(workspaceRoot, demandId, async (context) =>
-    buildDemandControllerRoute(context.loaded, await readDemandResultReviewSnapshot(context.demandRoot)),
+    buildDemandControllerRoute(
+      context.loaded,
+      await readDemandResultReviewSnapshot(context.demandRoot),
+    ),
   );
 }
 
@@ -419,15 +425,18 @@ test("research Demand 带未接受的实现目标：证据在场也先 targets-n
   // 不变量：路由与聚合完成对"每个未被替代的实现目标都已接受"的要求一致，research 也不例外。
   // tasking 切片拒绝给 research Demand 规划实现包（research-demand-has-no-implementation），
   // 该状态只在治理层可达：经命令处理器直接追加一个 planned 实现目标。
-  const facts = await withAuthorityContext(fixture.workspaceRoot, fixture.demandId, async (context) =>
-    Object.freeze({
-      programId: context.loaded.identity.programId,
-      configDigest: context.config.configDigest,
-      authorityDigest: context.loaded.authorityDigest,
-      authorityRefs: context.loaded.authority.authorityRefs,
-      recordDigest: context.loaded.identity.source.recordDigest,
-      streamRevision: context.loaded.aggregate.streamRevision,
-    }),
+  const facts = await withAuthorityContext(
+    fixture.workspaceRoot,
+    fixture.demandId,
+    async (context) =>
+      Object.freeze({
+        programId: context.loaded.identity.programId,
+        configDigest: context.config.configDigest,
+        authorityDigest: context.loaded.authorityDigest,
+        authorityRefs: context.loaded.authority.authorityRefs,
+        recordDigest: context.loaded.identity.source.recordDigest,
+        streamRevision: context.loaded.aggregate.streamRevision,
+      }),
   );
   const draft = taskPackageDraft();
   const taskPackage = createTaskPackage(
@@ -450,7 +459,12 @@ test("research Demand 带未接受的实现目标：证据在场也先 targets-n
   try {
     await executeDemandEventSourcingCommand(
       new DemandEventSourcingRepository(demandRoot),
-      { commandType: "tasking.plan-target-task", commandVersion: 1, eventId: PLAN_EVENT_ID, taskPackage },
+      {
+        commandType: "tasking.plan-target-task",
+        commandVersion: 1,
+        eventId: PLAN_EVENT_ID,
+        taskPackage,
+      },
       { commitId: PLAN_COMMIT_ID, expectedStreamRevision: facts.streamRevision },
     );
   } finally {
@@ -478,8 +492,15 @@ test("research Demand 带未接受的实现目标：证据在场也先 targets-n
 test("verify 门：research Demand 加 research-evidence（无 document 证据 fail、有则 pass），完成预检随之从 blocked 到 ready", async (t) => {
   const fixture = await createResearchDemandFixture(t);
 
-  const missing = await readVerifyGates(fixture.workspaceRoot, fixture.demandId, RESEARCH_REQUIREMENT_ID);
-  deepEqual(missing.gates.map((gate) => gate.gate), [...BASE_GATES, "research-evidence"]);
+  const missing = await readVerifyGates(
+    fixture.workspaceRoot,
+    fixture.demandId,
+    RESEARCH_REQUIREMENT_ID,
+  );
+  deepEqual(
+    missing.gates.map((gate) => gate.gate),
+    [...BASE_GATES, "research-evidence"],
+  );
   deepEqual(missing.gates.at(-1), {
     gate: "research-evidence",
     status: "fail",
@@ -491,7 +512,11 @@ test("verify 门：research Demand 加 research-evidence（无 document 证据 f
   ok(blocked.blockers.includes("verify:research-evidence:fail"), blocked.blockers.join(","));
 
   await recordDocumentEvidence(fixture);
-  const present = await readVerifyGates(fixture.workspaceRoot, fixture.demandId, RESEARCH_REQUIREMENT_ID);
+  const present = await readVerifyGates(
+    fixture.workspaceRoot,
+    fixture.demandId,
+    RESEARCH_REQUIREMENT_ID,
+  );
   deepEqual(present.gates.at(-1), { gate: "research-evidence", status: "pass", detail: null });
   equal(
     present.gates.every((gate) => gate.status === "pass"),
@@ -514,7 +539,10 @@ test("verify 门：非 research Demand 不设 research-evidence 门", async (t) 
     fixture.request.demandId,
     PLANNING_REQUIREMENT_ID,
   );
-  deepEqual(report.gates.map((gate) => gate.gate), [...BASE_GATES, "requirement-coverage"]);
+  deepEqual(
+    report.gates.map((gate) => gate.gate),
+    [...BASE_GATES, "requirement-coverage"],
+  );
 });
 
 test("research Demand 完成：有 document 证据即完成并归档，终态记 not-applicable，归档 verify 报告带 research-evidence 门", async (t) => {
@@ -528,7 +556,8 @@ test("research Demand 完成：有 document 证据即完成并归档，终态记
     demandId: fixture.demandId,
     planDigest: preview.planDigest,
   });
-  if (completed.kind !== "WakeflowDemandCompletionMutation") throw new Error("Expected a mutation.");
+  if (completed.kind !== "WakeflowDemandCompletionMutation")
+    throw new Error("Expected a mutation.");
   equal(completed.disposition, "completed");
   equal(completed.package.status, "archived");
   equal(completed.releasedClaims, 0);
@@ -542,7 +571,9 @@ test("research Demand 完成：有 document 证据即完成并归档，终态记
     fixture.ledgerPath,
     ...completed.archive.archiveRef.split("/"),
   );
-  const report = JSON.parse(readFileSync(path.join(archiveDirectory, "verify-report.json"), "utf8")) as {
+  const report = JSON.parse(
+    readFileSync(path.join(archiveDirectory, "verify-report.json"), "utf8"),
+  ) as {
     readonly gates: readonly { readonly gate: string; readonly status: string }[];
   };
   ok(
@@ -627,7 +658,10 @@ test("聚合完成：存在 test 目标时 not-applicable 被拒，测试环节�
     try {
       const audited = await new DemandEventSourcingRepository(demandRoot).audit();
       const state = audited.aggregate.state;
-      equal(state.targetTasks.some((target) => target.workType === "test"), true);
+      equal(
+        state.targetTasks.some((target) => target.workType === "test"),
+        true,
+      );
       throws(
         () =>
           completeDemandAggregateState(
@@ -644,25 +678,35 @@ test("聚合完成：存在 test 目标时 not-applicable 被拒，测试环节�
   }
 });
 
-
-test("research 没有 document 证据时完成仍阻塞，取消可归档并撤回，恢复幂等", { timeout: 120_000 }, async (t) => {
+test("research 没有 document 证据时完成仍阻塞，取消可归档并撤回，恢复幂等", {
+  timeout: 120_000,
+}, async (t) => {
   const fixture = await createResearchDemandFixture(t);
   const request = { root: fixture.root, demandId: fixture.demandId };
   const completion = await executeDemandCompletionRequest({ ...request, mode: "preview" }, CLOCK);
-  if (completion.kind !== "WakeflowDemandCompletionPreview") throw new Error("Expected completion preview");
+  if (completion.kind !== "WakeflowDemandCompletionPreview")
+    throw new Error("Expected completion preview");
   equal(completion.status, "blocked");
   equal(completion.blockers.includes("verify:research-evidence:fail"), true);
   const cancel = { ...request, reason: "Stop research before producing an accepted document." };
   const preview = await executeDemandCancellationRequest({ ...cancel, mode: "preview" }, CLOCK);
-  if (preview.kind !== "WakeflowDemandCancellationPreview" || preview.planDigest === null) throw new Error(JSON.stringify(preview));
+  if (preview.kind !== "WakeflowDemandCancellationPreview" || preview.planDigest === null)
+    throw new Error(JSON.stringify(preview));
   equal(preview.status, "ready");
   equal(preview.verify?.gates.find((gate) => gate.gate === "research-evidence")?.status, "fail");
-  const applied = await executeDemandCancellationRequest({ ...cancel, mode: "apply", planDigest: preview.planDigest }, CLOCK);
-  if (applied.kind !== "WakeflowDemandCancellationMutation") throw new Error("Expected cancellation");
+  const applied = await executeDemandCancellationRequest(
+    { ...cancel, mode: "apply", planDigest: preview.planDigest },
+    CLOCK,
+  );
+  if (applied.kind !== "WakeflowDemandCancellationMutation")
+    throw new Error("Expected cancellation");
   equal(applied.disposition, "cancelled");
   equal(applied.package.status, "withdrawn");
   equal(existsSync(path.join(fixture.root, demandFinalRootRef(fixture.demandId))), false);
-  const recovered = await executeDemandCancellationRequest({ root: fixture.root, mode: "recover", operationId: fixture.demandId }, CLOCK);
+  const recovered = await executeDemandCancellationRequest(
+    { root: fixture.root, mode: "recover", operationId: fixture.demandId },
+    CLOCK,
+  );
   if (recovered.kind !== "WakeflowDemandCancellationMutation") throw new Error("Expected recovery");
   equal(recovered.archive.manifestDigest, applied.archive.manifestDigest);
   equal(recovered.package.status, "withdrawn");

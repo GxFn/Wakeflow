@@ -1,20 +1,11 @@
-import {
-  deepEqual,
-  equal,
-  rejects,
-  throws,
-} from "node:assert/strict";
-import {
-  mkdtempSync,
-  rmSync,
-} from "node:fs";
+import { deepEqual, equal, rejects, throws } from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   admitDemandAuthority,
@@ -62,10 +53,7 @@ const REQUIREMENT_LINEAGE = parseRequirementLineageReference({
 
 const POD_ID = "pod_99999999-9999-4999-8999-999999999999";
 
-function identityDraft(
-  podId: unknown = POD_ID,
-  source: unknown = REQUIREMENT_LINEAGE,
-) {
+function identityDraft(podId: unknown = POD_ID, source: unknown = REQUIREMENT_LINEAGE) {
   return {
     programId: PROGRAM_ID,
     demandId: DEMAND_ID,
@@ -86,9 +74,9 @@ async function ledgerFixture() {
   const loaded = await publishFixtureRequirement(store, {
     requirementId: REQUIREMENT_ID,
   });
-  const refs = loaded.documents.map((document) => (
-    createLedgerAuthorityMemberReference(loaded, document.path)
-  ));
+  const refs = loaded.documents.map((document) =>
+    createLedgerAuthorityMemberReference(loaded, document.path),
+  );
   return { rootPath, root, store, loaded, refs };
 }
 
@@ -112,26 +100,30 @@ test("Demand identity binds exact requirement lineage and contains no legacy ent
 test("Demand identity draft is closed before the wall clock is read", () => {
   let clockCalls = 0;
   throws(
-    () => createDemandIdentity(identityDraft(undefined, {
-      ...REQUIREMENT_LINEAGE,
-      recordRef: "requirements/forged/record.json",
-    }), {
-      clock: () => {
-        clockCalls += 1;
-        return CREATED_AT;
-      },
-    }),
-    (error: unknown) =>
-      error instanceof DemandIdentityError && error.reason === "source",
+    () =>
+      createDemandIdentity(
+        identityDraft(undefined, {
+          ...REQUIREMENT_LINEAGE,
+          recordRef: "requirements/forged/record.json",
+        }),
+        {
+          clock: () => {
+            clockCalls += 1;
+            return CREATED_AT;
+          },
+        },
+      ),
+    (error: unknown) => error instanceof DemandIdentityError && error.reason === "source",
   );
   equal(clockCalls, 0);
 
   throws(
-    () => createDemandIdentity(identityDraft(), {
-      clock: () => {
-        throw new Error("private clock failure");
-      },
-    }),
+    () =>
+      createDemandIdentity(identityDraft(), {
+        clock: () => {
+          throw new Error("private clock failure");
+        },
+      }),
     DemandIdentityError,
   );
 });
@@ -139,10 +131,9 @@ test("Demand identity draft is closed before the wall clock is read", () => {
 test("mandatory Demand authority resolves complete package roles and rejects legacy entryMode", async () => {
   const { rootPath, root, store, loaded, refs } = await ledgerFixture();
   try {
-    const identity = createDemandIdentity(
-      identityDraft(undefined, requirementLineageOf(loaded)),
-      { clock: () => CREATED_AT },
-    );
+    const identity = createDemandIdentity(identityDraft(undefined, requirementLineageOf(loaded)), {
+      clock: () => CREATED_AT,
+    });
     const authority = createDemandAuthority(identity, {
       authorityRefs: refs,
       testingDecision: {
@@ -167,26 +158,27 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
       admitDemandAuthority(identity, authority, store, {
         signal: controller.signal,
       }),
-      (error: unknown) => (
-        error instanceof DemandAuthorityError
-        && error.reason === "aborted"
-      ),
+      (error: unknown) => error instanceof DemandAuthorityError && error.reason === "aborted",
     );
 
     throws(
-      () => parseDemandAuthority({
-        ...authority,
-        entryMode: "controller-inline",
-      }, identity),
+      () =>
+        parseDemandAuthority(
+          {
+            ...authority,
+            entryMode: "controller-inline",
+          },
+          identity,
+        ),
       DemandAuthorityError,
     );
     throws(
-      () => createDemandAuthority(identity, {
-        authorityRefs: refs.filter((reference) => reference.role !== "landing"),
-        testingDecision: authority.testingDecision,
-      }),
-      (error: unknown) =>
-        error instanceof DemandAuthorityError && error.reason === "role",
+      () =>
+        createDemandAuthority(identity, {
+          authorityRefs: refs.filter((reference) => reference.role !== "landing"),
+          testingDecision: authority.testingDecision,
+        }),
+      (error: unknown) => error instanceof DemandAuthorityError && error.reason === "role",
     );
     // 同一角色两个成员同样违反“恰好一个”：下游按角色 `.find` 不能在两个成员之间猜。
     const landing = refs.find((reference) => reference.role === "landing");
@@ -197,12 +189,12 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
       memberRef: landing.memberRef.replace(/landing\.md$/u, "landing-copy.md"),
     };
     throws(
-      () => createDemandAuthority(identity, {
-        authorityRefs: [duplicateLanding, ...refs],
-        testingDecision: authority.testingDecision,
-      }),
-      (error: unknown) =>
-        error instanceof DemandAuthorityError && error.reason === "role",
+      () =>
+        createDemandAuthority(identity, {
+          authorityRefs: [duplicateLanding, ...refs],
+          testingDecision: authority.testingDecision,
+        }),
+      (error: unknown) => error instanceof DemandAuthorityError && error.reason === "role",
     );
     // 成员的 recordDigest 与身份记录的需求包记录不一致：必须按身份关系拒绝。
     const [firstRef, ...restRefs] = authority.authorityRefs;
@@ -210,14 +202,18 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
     const lastChar = firstRef.recordDigest.at(-1) === "0" ? "1" : "0";
     const foreignDigest = `${firstRef.recordDigest.slice(0, -1)}${lastChar}`;
     throws(
-      () => parseDemandAuthority({
-        ...authority,
-        authorityRefs: [{ ...firstRef, recordDigest: foreignDigest }, ...restRefs],
-      }, identity),
+      () =>
+        parseDemandAuthority(
+          {
+            ...authority,
+            authorityRefs: [{ ...firstRef, recordDigest: foreignDigest }, ...restRefs],
+          },
+          identity,
+        ),
       (error: unknown) =>
-        error instanceof DemandAuthorityError
-        && error.reason === "identity"
-        && error.path === "$/authorityRefs",
+        error instanceof DemandAuthorityError &&
+        error.reason === "identity" &&
+        error.path === "$/authorityRefs",
     );
   } finally {
     await root.close();
@@ -228,10 +224,9 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
 test("real-environment testing no longer binds a Ledger environment member", async () => {
   const { rootPath, root, loaded, refs } = await ledgerFixture();
   try {
-    const identity = createDemandIdentity(
-      identityDraft(undefined, requirementLineageOf(loaded)),
-      { clock: () => CREATED_AT },
-    );
+    const identity = createDemandIdentity(identityDraft(undefined, requirementLineageOf(loaded)), {
+      clock: () => CREATED_AT,
+    });
     const authority = createDemandAuthority(identity, {
       authorityRefs: refs,
       testingDecision: {
@@ -242,15 +237,15 @@ test("real-environment testing no longer binds a Ledger environment member", asy
     });
     equal(authority.testingDecision.environmentMemberRef, null);
     throws(
-      () => createDemandAuthority(identity, {
-        authorityRefs: refs,
-        testingDecision: {
-          ...authority.testingDecision,
-          environmentMemberRef: refs[0]?.memberRef,
-        },
-      }),
-      (error: unknown) =>
-        error instanceof DemandAuthorityError && error.reason === "testing",
+      () =>
+        createDemandAuthority(identity, {
+          authorityRefs: refs,
+          testingDecision: {
+            ...authority.testingDecision,
+            environmentMemberRef: refs[0]?.memberRef,
+          },
+        }),
+      (error: unknown) => error instanceof DemandAuthorityError && error.reason === "testing",
     );
   } finally {
     await root.close();
@@ -259,24 +254,21 @@ test("real-environment testing no longer binds a Ledger environment member", asy
 });
 
 test("Requirement lineage is a closed JSON reference bound to the Ledger layout", () => {
-  equal(
-    REQUIREMENT_LINEAGE.recordRef,
-    parsePortableResourcePath(REQUIREMENT_LINEAGE.recordRef),
+  equal(REQUIREMENT_LINEAGE.recordRef, parsePortableResourcePath(REQUIREMENT_LINEAGE.recordRef));
+  throws(
+    () =>
+      parseRequirementLineageReference({
+        ...REQUIREMENT_LINEAGE,
+        boardRef: ".wakeflow-active/current/board/index.md",
+      }),
+    (error: unknown) => error instanceof RequirementLineageError && error.reason === "schema",
   );
   throws(
-    () => parseRequirementLineageReference({
-      ...REQUIREMENT_LINEAGE,
-      boardRef: ".wakeflow-active/current/board/index.md",
-    }),
-    (error: unknown) =>
-      error instanceof RequirementLineageError && error.reason === "schema",
-  );
-  throws(
-    () => parseRequirementLineageReference({
-      ...REQUIREMENT_LINEAGE,
-      recordRef: `requirements/${REQUIREMENT_ID}/requirement.md`,
-    }),
-    (error: unknown) =>
-      error instanceof RequirementLineageError && error.reason === "path",
+    () =>
+      parseRequirementLineageReference({
+        ...REQUIREMENT_LINEAGE,
+        recordRef: `requirements/${REQUIREMENT_ID}/requirement.md`,
+      }),
+    (error: unknown) => error instanceof RequirementLineageError && error.reason === "path",
   );
 });

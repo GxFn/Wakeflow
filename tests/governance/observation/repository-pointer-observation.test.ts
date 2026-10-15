@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -55,7 +55,9 @@ async function observe(absolutePath: string, signal?: AbortSignal) {
   });
 }
 
-test("真实仓库：分支上的 HEAD、松散与打包的分支尖端、登记的 worktree 与 prunable、分离 HEAD", { timeout: 60_000 }, async (t) => {
+test("真实仓库：分支上的 HEAD、松散与打包的分支尖端、登记的 worktree 与 prunable、分离 HEAD", {
+  timeout: 60_000,
+}, async (t) => {
   const { base, repository } = fixture(t);
   git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
   const c1 = git(repository, "rev-parse", "HEAD");
@@ -93,7 +95,12 @@ test("真实仓库：分支上的 HEAD、松散与打包的分支尖端、登记
   equal(packed.branch, "main");
   git(repository, "branch", "-f", "feature/z", "main");
   equal(existsSync(path.join(repository, ".git", "refs", "heads", "feature", "z")), true);
-  equal(readFileSync(path.join(repository, ".git", "packed-refs"), "utf8").includes(`${c1} refs/heads/feature/z`), true);
+  equal(
+    readFileSync(path.join(repository, ".git", "packed-refs"), "utf8").includes(
+      `${c1} refs/heads/feature/z`,
+    ),
+    true,
+  );
   const overridden = await observe(repository);
   deepEqual(overridden.branches, [
     { name: "feature/x", tip: c1 },
@@ -109,7 +116,9 @@ test("真实仓库：分支上的 HEAD、松散与打包的分支尖端、登记
   equal(detached.detached, true);
 });
 
-test("gitdir 写相对路径且检出在场：相对该 worktree 管理目录解析，prunable 为 false", { timeout: 60_000 }, async (t) => {
+test("gitdir 写相对路径且检出在场：相对该 worktree 管理目录解析，prunable 为 false", {
+  timeout: 60_000,
+}, async (t) => {
   const { base, repository } = fixture(t);
   git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
   const c1 = git(repository, "rev-parse", "HEAD");
@@ -123,7 +132,9 @@ test("gitdir 写相对路径且检出在场：相对该 worktree 管理目录解
   deepEqual(observed.worktrees, [{ name: "wt-rel", head: c1, branch: null, prunable: false }]);
 });
 
-test("不可用：没有 .git、根是 worktree 检出、HEAD 读不出、根打不开各自带原因；单个指针读不出只让对应项为 null", { timeout: 60_000 }, async (t) => {
+test("不可用：没有 .git、根是 worktree 检出、HEAD 读不出、根打不开各自带原因；单个指针读不出只让对应项为 null", {
+  timeout: 60_000,
+}, async (t) => {
   const { base, repository } = fixture(t);
   git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
   git(repository, "worktree", "add", "--quiet", "--detach", path.join(base, "wt-a"));
@@ -147,7 +158,9 @@ test("不可用：没有 .git、根是 worktree 检出、HEAD 读不出、根打
   deepEqual(headless.branches, []);
 });
 
-test("分支清单：引用来源读不出仍是 observed 但带 branches-incomplete，来源本来就不存在不报", { timeout: 60_000 }, async (t) => {
+test("分支清单：引用来源读不出仍是 observed 但带 branches-incomplete，来源本来就不存在不报", {
+  timeout: 60_000,
+}, async (t) => {
   const { repository } = fixture(t);
   git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
   const c1 = git(repository, "rev-parse", "HEAD");

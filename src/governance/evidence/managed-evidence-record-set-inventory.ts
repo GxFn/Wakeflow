@@ -4,27 +4,24 @@ import pLimit from "p-limit";
 
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
+  type DirectoryTreeCandidateProgress,
+  DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
-  DurableDirectoryTreeCandidateError,
-  type DirectoryTreeCandidateProgress,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
-  sameFileNodeSnapshot,
-  FileNodeSnapshotError,
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
+  sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
-  StableDirectoryReadError,
   type StableDirectoryEntry,
+  StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import {
@@ -41,10 +38,10 @@ import {
   ManagedEvidenceRecordReaderError,
 } from "./managed-evidence-record-reader.js";
 import {
-  parseManagedEvidenceRecordDirectoryName,
-  parseManagedEvidenceStageDirectoryName,
   MANAGED_EVIDENCE_ROOT_REF,
   ManagedEvidenceResourcePathError,
+  parseManagedEvidenceRecordDirectoryName,
+  parseManagedEvidenceStageDirectoryName,
 } from "./managed-evidence-resource-paths.js";
 
 /**
@@ -96,8 +93,7 @@ export interface ManagedEvidenceRecordSetInventory {
   readonly recordCount: number;
   readonly records: readonly Readonly<ManagedEvidenceRecordInventoryEntry>[];
   readonly rootNode?: Readonly<FileNodeSnapshot>;
-  readonly publication:
-    Readonly<ManagedEvidenceRecordSetPublicationInventory> | null;
+  readonly publication: Readonly<ManagedEvidenceRecordSetPublicationInventory> | null;
 }
 
 export interface InspectManagedEvidenceRecordSetInventoryOptions {
@@ -129,9 +125,7 @@ const ERROR_MESSAGES = {
   "source-changed": "Managed evidence record set changed during inventory.",
   aborted: "Managed evidence record-set inventory was aborted.",
   "operation-failure": "Managed evidence record-set inventory failed.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceRecordSetInventoryErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceRecordSetInventoryErrorReason, string>>;
 
 /** Record-set结构、事务或Manifest闭包无法稳定证明时的脱敏错误。 */
 export class ManagedEvidenceRecordSetInventoryError extends Error {
@@ -140,10 +134,7 @@ export class ManagedEvidenceRecordSetInventoryError extends Error {
   readonly reason: ManagedEvidenceRecordSetInventoryErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ManagedEvidenceRecordSetInventoryErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ManagedEvidenceRecordSetInventoryErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -158,17 +149,11 @@ interface ParsedOptions {
 
 const RECORD_INSPECTION_CONCURRENCY = 4;
 
-function fail(
-  reason: ManagedEvidenceRecordSetInventoryErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidenceRecordSetInventoryErrorReason, path: string): never {
   throw new ManagedEvidenceRecordSetInventoryError(reason, path);
 }
 
-function parseExpectedNode(
-  value: unknown,
-  path: string,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown, path: string): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
     typeof value !== "object" ||
@@ -179,10 +164,7 @@ function parseExpectedNode(
     fail("input", path);
   }
   try {
-    sameFileNodeSnapshot(
-      value as Readonly<FileNodeSnapshot>,
-      value as Readonly<FileNodeSnapshot>,
-    );
+    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) fail("input", path);
     throw error;
@@ -200,10 +182,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   if (
     Object.keys(record).some(
-      (key) =>
-        key !== "expectedRootNode" &&
-        key !== "expectedTransactionNode" &&
-        key !== "signal",
+      (key) => key !== "expectedRootNode" && key !== "expectedTransactionNode" && key !== "signal",
     ) ||
     (record.signal !== undefined &&
       (typeof record.signal !== "object" ||
@@ -214,10 +193,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     fail("input", "$options");
   }
   return Object.freeze({
-    expectedRootNode: parseExpectedNode(
-      record.expectedRootNode,
-      "$/expectedRootNode",
-    ),
+    expectedRootNode: parseExpectedNode(record.expectedRootNode, "$/expectedRootNode"),
     expectedTransactionNode: parseExpectedNode(
       record.expectedTransactionNode,
       "$/expectedTransactionNode",
@@ -230,8 +206,7 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== 0o700 ||
-    (typeof process.geteuid === "function" &&
-      node.userId !== BigInt(process.geteuid()))
+    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
   ) {
     fail("node-policy", path);
   }
@@ -243,10 +218,7 @@ function mapDirectoryError(error: StableDirectoryReadError): never {
   if (error.reason === "too-many-entries") {
     fail("capacity", "$managedEvidence");
   }
-  if (
-    error.reason === "source-changed" ||
-    error.reason === "expectation-changed"
-  ) {
+  if (error.reason === "source-changed" || error.reason === "expectation-changed") {
     fail("source-changed", "$managedEvidence");
   }
   if (
@@ -287,9 +259,7 @@ async function readContainer(
   }
 }
 
-function mapTransactionStoreError(
-  error: ManagedEvidencePublicationTransactionStoreError,
-): never {
+function mapTransactionStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$transaction");
@@ -314,10 +284,7 @@ async function readTransaction(
     }
     throw error;
   }
-  if (
-    stored === null ||
-    !sameFileNodeSnapshot(stored.source.node, expectedNode)
-  ) {
+  if (stored === null || !sameFileNodeSnapshot(stored.source.node, expectedNode)) {
     fail("source-changed", "$transaction");
   }
   return stored;
@@ -366,14 +333,10 @@ async function inspectRecord(
   }
   let loaded;
   try {
-    loaded = await loadManagedEvidenceRecord(
-      root,
-      address.evidenceId,
-      {
-        expectedRootNode: entry.node,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    loaded = await loadManagedEvidenceRecord(root, address.evidenceId, {
+      expectedRootNode: entry.node,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceRecordReaderError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -484,15 +447,10 @@ async function inspectCurrentFinal(
 ): Promise<void> {
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   try {
-    await inspectDirectoryTreeCandidate(
-      root,
-      plan.destinationRootPath,
-      plan.directoryPlan,
-      {
-        expectedRootNode,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    await inspectDirectoryTreeCandidate(root, plan.destinationRootPath, plan.directoryPlan, {
+      expectedRootNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       mapCandidateError(error, "transaction");
@@ -516,13 +474,10 @@ export async function inspectManagedEvidenceRecordSetInventory(
   }
   const options = parseOptions(optionsValue);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
-  const readTransactionResult = options.expectedTransactionNode === undefined
-    ? null
-    : await readTransaction(
-        root,
-        options.expectedTransactionNode,
-        options.signal,
-      );
+  const readTransactionResult =
+    options.expectedTransactionNode === undefined
+      ? null
+      : await readTransaction(root, options.expectedTransactionNode, options.signal);
   if (options.expectedRootNode === undefined) {
     if (readTransactionResult !== null) {
       await assertTransactionCurrent(root, readTransactionResult, options.signal);
@@ -530,23 +485,20 @@ export async function inspectManagedEvidenceRecordSetInventory(
     return Object.freeze({
       recordCount: 0,
       records: Object.freeze([]),
-      publication: readTransactionResult === null
-        ? null
-        : Object.freeze({
-            transaction: readTransactionResult.transaction,
-            transactionDigest: readTransactionResult.transactionDigest,
-            transactionNode: readTransactionResult.source.node,
-            evidenceId: readTransactionResult.transaction.manifest.evidenceId,
-            physicalState: "absent" as const,
-          }),
+      publication:
+        readTransactionResult === null
+          ? null
+          : Object.freeze({
+              transaction: readTransactionResult.transaction,
+              transactionDigest: readTransactionResult.transactionDigest,
+              transactionNode: readTransactionResult.source.node,
+              evidenceId: readTransactionResult.transaction.manifest.evidenceId,
+              physicalState: "absent" as const,
+            }),
     });
   }
 
-  const before = await readContainer(
-    root,
-    options.expectedRootNode,
-    options.signal,
-  );
+  const before = await readContainer(root, options.expectedRootNode, options.signal);
   assertDirectory(before.directoryNode, "$managedEvidence");
   const recordEntries: StableDirectoryEntry[] = [];
   let stageEntry: Readonly<StableDirectoryEntry> | undefined;
@@ -577,45 +529,36 @@ export async function inspectManagedEvidenceRecordSetInventory(
   }
 
   const records = await inspectRecords(root, recordEntries, options.signal);
-  let publication:
-    Readonly<ManagedEvidenceRecordSetPublicationInventory> | null = null;
+  let publication: Readonly<ManagedEvidenceRecordSetPublicationInventory> | null = null;
   if (readTransactionResult !== null) {
     const transaction = readTransactionResult.transaction;
-    const final = records.find(
-      (entry) => entry.evidenceId === transaction.manifest.evidenceId,
-    );
+    const final = records.find((entry) => entry.evidenceId === transaction.manifest.evidenceId);
     if (stageEntry !== undefined && final !== undefined) {
       fail("transaction", "$managedEvidence");
     }
-    if (
-      final !== undefined &&
-      final.recordTreePlanDigest !== transaction.recordTreePlanDigest
-    ) {
+    if (final !== undefined && final.recordTreePlanDigest !== transaction.recordTreePlanDigest) {
       fail("transaction", "$managedEvidence");
     }
     if (final !== undefined) {
-      await inspectCurrentFinal(
-        root,
-        transaction,
-        final.rootNode,
-        options.signal,
-      );
+      await inspectCurrentFinal(root, transaction, final.rootNode, options.signal);
     }
-    const stageProgress = stageEntry === undefined
-      ? undefined
-      : await inspectStage(root, stageEntry, transaction, options.signal);
+    const stageProgress =
+      stageEntry === undefined
+        ? undefined
+        : await inspectStage(root, stageEntry, transaction, options.signal);
     publication = Object.freeze({
       transaction,
       transactionDigest: readTransactionResult.transactionDigest,
       transactionNode: readTransactionResult.source.node,
       evidenceId: transaction.manifest.evidenceId,
-      physicalState: final !== undefined
-        ? "final"
-        : stageProgress === undefined
-        ? "absent"
-        : stageProgress.status === "complete"
-        ? "stage-complete"
-        : "stage-incomplete",
+      physicalState:
+        final !== undefined
+          ? "final"
+          : stageProgress === undefined
+            ? "absent"
+            : stageProgress.status === "complete"
+              ? "stage-complete"
+              : "stage-incomplete",
       ...(stageProgress === undefined ? {} : { stageProgress }),
     });
   }

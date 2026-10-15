@@ -1,29 +1,28 @@
 import { types } from "node:util";
 import { threadId } from "node:worker_threads";
-
+import {
+  DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
+} from "../../../foundation/filesystem/durable-directory-materialization.js";
 import {
   createFileCandidateDurably,
   DurableFileCandidateError,
 } from "../../../foundation/filesystem/durable-file-candidate.js";
 import {
-  materializeDirectoryPath,
-  DurableDirectoryMaterializationError,
-} from "../../../foundation/filesystem/durable-directory-materialization.js";
-import {
-  linkRegularFileWithoutReplacement,
   DurableRegularFileLinkError,
+  linkRegularFileWithoutReplacement,
 } from "../../../foundation/filesystem/durable-regular-file-link.js";
 import {
-  settleRegularFileDurability,
   DurableRegularFileSettlementError,
+  settleRegularFileDurability,
 } from "../../../foundation/filesystem/durable-regular-file-settlement.js";
 import {
-  unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
 } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  sameFileNodeIdentity,
   type FileNodeSnapshot,
+  sameFileNodeIdentity,
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
@@ -34,53 +33,56 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import { createDemandEventStreamCommitResourceDeclaration } from "../demand-resource-catalog.js";
+import { isWakeflowError } from "../../../kernel/error.js";
 import {
   advanceStreamIndex,
   buildStreamIndex,
+  type IndexableCommit,
+  type LocatedStreamIndex,
   publishStreamIndex,
   readLatestStreamIndex,
   retireStreamIndexAt,
   retireStreamIndexesBefore,
-  type IndexableCommit,
-  type LocatedStreamIndex,
   type StreamIndex,
 } from "../../../kernel/event-stream/stream-index.js";
-import { isWakeflowError } from "../../../kernel/error.js";
-import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
+import { createDemandEventStreamCommitResourceDeclaration } from "../demand-resource-catalog.js";
 import {
-  computeDemandEventStreamCommitDigest,
-  assertPreparedDemandEventStreamCommit,
-  parseDemandEventStreamCommit,
-  renderDemandEventStreamCommit,
-  DemandEventStreamCommitError,
-  type DemandEventStreamCommit,
-  type PreparedDemandEventStreamCommit,
-} from "./demand-event-stream-commit.js";
-import {
-  demandEventAppendCandidateRef,
-  demandEventStreamCommitRef,
-  parseDemandEventAppendCandidateFileName,
-  DemandEventSourcingPathError,
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
   DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+  DemandEventSourcingPathError,
+  demandEventAppendCandidateRef,
+  demandEventStreamCommitRef,
+  parseDemandEventAppendCandidateFileName,
 } from "./demand-event-sourcing-paths.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
 import {
-  DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
-  DEMAND_FILE_EVENT_STORE_FILE_MODE,
-  DemandFileEventStoreError,
+  assertPreparedDemandEventStreamCommit,
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommit,
+  DemandEventStreamCommitError,
+  type PreparedDemandEventStreamCommit,
+  parseDemandEventStreamCommit,
+  renderDemandEventStreamCommit,
+} from "./demand-event-stream-commit.js";
+import {
   assertDemandFileEventStoreDirectory,
   assertDemandFileEventStoreFile,
+  DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
+  DEMAND_FILE_EVENT_STORE_FILE_MODE,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
+  type DemandFileEventStoreAppendReceipt,
+  type DemandFileEventStoreCandidateRecoveryReceipt,
+  DemandFileEventStoreError,
+  type DemandFileEventStoreReadResult,
+  type DemandFileEventStoreTailReadResult,
   failDemandFileEventStore as fail,
   parseDemandFileEventStoreOptions,
   sameDemandEventStreamCommit,
-  type DemandFileEventStoreAppendReceipt,
-  type DemandFileEventStoreCandidateRecoveryReceipt,
-  type DemandFileEventStoreReadResult,
-  type DemandFileEventStoreTailReadResult,
 } from "./demand-file-event-store-contract.js";
 import {
   assertDemandFileEventAppendAdmissionAgainstPrefix,
@@ -91,19 +93,12 @@ import {
   readDemandFileEventCommitsAfter,
   readDemandFileEventDirectory,
 } from "./demand-file-event-store-reader.js";
-import {
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
-} from "./demand-file-event-store-contract.js";
 
 /** 索引保留的最新检查点数量；更早的索引文件在刷新后退休，每隔一段做一次清扫兜底。 */
 const STREAM_INDEX_RETENTION = 2;
 const STREAM_INDEX_SWEEP_INTERVAL = 16;
 
-function indexableCommit(
-  commit: Readonly<DemandEventStreamCommit>,
-): Readonly<IndexableCommit> {
+function indexableCommit(commit: Readonly<DemandEventStreamCommit>): Readonly<IndexableCommit> {
   return Object.freeze({
     commitId: commit.commitId,
     commitSequence: commit.commitSequence,
@@ -119,9 +114,7 @@ function indexableCommit(
         eventType: event.eventType,
       }),
     ),
-    ...(commit.idempotency === undefined
-      ? {}
-      : { idempotencyKey: commit.idempotency.key }),
+    ...(commit.idempotency === undefined ? {} : { idempotencyKey: commit.idempotency.key }),
   });
 }
 
@@ -141,10 +134,7 @@ const ACTIVE_APPEND_CANDIDATE_TOKENS = new Set<string>();
 class DemandFileEventStoreMutationQueue {
   readonly #tails = new Map<string, Promise<void>>();
 
-  async run<Result>(
-    key: string,
-    operation: () => Promise<Result>,
-  ): Promise<Result> {
+  async run<Result>(key: string, operation: () => Promise<Result>): Promise<Result> {
     const predecessor = this.#tails.get(key) ?? Promise.resolve();
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
@@ -164,9 +154,7 @@ class DemandFileEventStoreMutationQueue {
 
 const APPEND_MUTATION_QUEUE = new DemandFileEventStoreMutationQueue();
 
-function admitCommitPublication(
-  commit: Readonly<DemandEventStreamCommit>,
-): void {
+function admitCommitPublication(commit: Readonly<DemandEventStreamCommit>): void {
   const declaration = createDemandEventStreamCommitResourceDeclaration(
     commit.demandId,
     commit.commitSequence,
@@ -186,9 +174,7 @@ function candidateOwnerState(
 ): "active" | "inactive" | "unknown" {
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
-    return ACTIVE_APPEND_CANDIDATE_TOKENS.has(address.token)
-      ? "active"
-      : "inactive";
+    return ACTIVE_APPEND_CANDIDATE_TOKENS.has(address.token) ? "active" : "inactive";
   }
   try {
     process.kill(address.pid, 0);
@@ -293,16 +279,8 @@ export class DemandFileEventStore {
       commit.demandId,
       signal,
     );
-    if (
-      located !== null &&
-      located.index.commitSequence === commit.commitSequence - 1
-    ) {
-      const admitted = await this.#admitAppendWithIndex(
-        located.index,
-        prepared,
-        commit,
-        signal,
-      );
+    if (located !== null && located.index.commitSequence === commit.commitSequence - 1) {
+      const admitted = await this.#admitAppendWithIndex(located.index, prepared, commit, signal);
       if (admitted) return located.index;
     }
     const prefix = await readAllDemandFileEventCommits(this.#root, signal);
@@ -321,28 +299,19 @@ export class DemandFileEventStore {
     signal: AbortSignal | undefined,
   ): Promise<boolean> {
     const { sourceExpectation } = prepared;
-    const commitBytes = encodeUtf8(
-      renderDemandEventStreamCommit(commit),
-    ).byteLength;
+    const commitBytes = encodeUtf8(renderDemandEventStreamCommit(commit)).byteLength;
     if (
       index.commitSequence >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS ||
       commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES ||
-      index.totalCommitBytes + commitBytes >
-        DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES
+      index.totalCommitBytes + commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES
     ) {
       fail("capacity", "$commit");
     }
     if (commit.commitSequence === 1) {
-      if (
-        commit.expectedStreamRevision !== 0 ||
-        commit.previousCommitDigest !== null
-      ) {
+      if (commit.expectedStreamRevision !== 0 || commit.previousCommitDigest !== null) {
         fail("concurrency-conflict", "$commit");
       }
-      if (
-        sourceExpectation.lastEventDigest !== null ||
-        sourceExpectation.stateDigest !== null
-      ) {
+      if (sourceExpectation.lastEventDigest !== null || sourceExpectation.stateDigest !== null) {
         fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
       }
     } else {
@@ -367,8 +336,7 @@ export class DemandFileEventStore {
       const previousLastEvent = previous.events.at(-1);
       if (previousLastEvent === undefined) return false;
       if (
-        sourceExpectation.stateDigest !==
-          previousLastEvent.resultingStateDigest ||
+        sourceExpectation.stateDigest !== previousLastEvent.resultingStateDigest ||
         sourceExpectation.lastEventDigest !==
           computeDemandEventSourcingStoredEventDigest(previousLastEvent)
       ) {
@@ -378,10 +346,7 @@ export class DemandFileEventStore {
     if (Object.hasOwn(index.commits, commit.commitId)) {
       fail("append-identity-conflict", "$commit/commitId");
     }
-    if (
-      commit.idempotency !== undefined &&
-      Object.hasOwn(index.keys, commit.idempotency.key)
-    ) {
+    if (commit.idempotency !== undefined && Object.hasOwn(index.keys, commit.idempotency.key)) {
       fail("append-identity-conflict", "$commit/idempotency/key");
     }
     for (const [position, event] of commit.events.entries()) {
@@ -486,10 +451,7 @@ export class DemandFileEventStore {
         }
         throw error;
       }
-      assertDemandFileEventStoreFile(entry.node, `$candidates/${index}`, [
-        1n,
-        2n,
-      ]);
+      assertDemandFileEventStoreFile(entry.node, `$candidates/${index}`, [1n, 2n]);
       return Object.freeze({ address, entry, ownerState: candidateOwnerState(address) });
     });
     return Object.freeze(candidates);
@@ -499,7 +461,9 @@ export class DemandFileEventStore {
   async recoverAppendCandidates(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<DemandFileEventStoreCandidateRecoveryReceipt>> {
-    return APPEND_MUTATION_QUEUE.run(this.#root.absolutePath, () => this.#recoverAppendCandidates(options));
+    return APPEND_MUTATION_QUEUE.run(this.#root.absolutePath, () =>
+      this.#recoverAppendCandidates(options),
+    );
   }
 
   async #recoverAppendCandidates(options?: {
@@ -558,10 +522,7 @@ export class DemandFileEventStore {
         rolledBackCount += 1;
         continue;
       }
-      const sameCommit = sameDemandEventStreamCommit(
-        target.commit,
-        candidate.commit,
-      );
+      const sameCommit = sameDemandEventStreamCommit(target.commit, candidate.commit);
       if (entry.node.linkCount === 2n) {
         if (!sameCommit || !sameFileNodeIdentity(entry.node, target.node)) {
           fail("commit-uncertain", `$candidates/${index}`);
@@ -607,18 +568,13 @@ export class DemandFileEventStore {
     try {
       assertPreparedDemandEventStreamCommit(preparedValue);
     } catch (error: unknown) {
-      if (error instanceof DemandEventStreamCommitError)
-        fail("input", "$commit");
+      if (error instanceof DemandEventStreamCommitError) fail("input", "$commit");
       throw error;
     }
     const commit = parseDemandEventStreamCommit(preparedValue.commit);
     admitCommitPublication(commit);
     const commitRef = demandEventStreamCommitRef(commit.commitSequence);
-    const existing = await readDemandFileEventCommitOrNull(
-      this.#root,
-      commitRef,
-      signal,
-    );
+    const existing = await readDemandFileEventCommitOrNull(this.#root, commitRef, signal);
     if (existing !== null) {
       if (!sameDemandEventStreamCommit(existing.commit, commit)) {
         fail("concurrency-conflict", "$commit");
@@ -668,34 +624,23 @@ export class DemandFileEventStore {
 
     try {
       let linkedNode: Readonly<FileNodeSnapshot> | null = null;
-      let disposition: DemandFileEventStoreAppendReceipt["disposition"] =
-        "committed";
+      let disposition: DemandFileEventStoreAppendReceipt["disposition"] = "committed";
       try {
         linkedNode = (
-          await linkRegularFileWithoutReplacement(
-            this.#root,
-            candidateRef,
-            commitRef,
-            {
-              expectedSourceNode: candidateNode,
-              ...(signal === undefined ? {} : { signal }),
-            },
-          )
+          await linkRegularFileWithoutReplacement(this.#root, candidateRef, commitRef, {
+            expectedSourceNode: candidateNode,
+            ...(signal === undefined ? {} : { signal }),
+          })
         ).sourceNode;
       } catch (error: unknown) {
         if (!(error instanceof DurableRegularFileLinkError)) {
           throw error;
         }
-        const committed = await readDemandFileEventCommitOrNull(
-          this.#root,
-          commitRef,
-          undefined,
-          [1n, 2n],
-        );
-        if (
-          committed === null ||
-          !sameDemandEventStreamCommit(committed.commit, commit)
-        ) {
+        const committed = await readDemandFileEventCommitOrNull(this.#root, commitRef, undefined, [
+          1n,
+          2n,
+        ]);
+        if (committed === null || !sameDemandEventStreamCommit(committed.commit, commit)) {
           await this.#retireCandidate(candidateRef, candidateNode, undefined);
           if (error.reason === "destination-exists") {
             fail("concurrency-conflict", "$commit");
@@ -705,14 +650,8 @@ export class DemandFileEventStore {
         }
         await this.#settleCommitTarget(commitRef, committed.node, undefined);
         linkedNode =
-          (
-            await readDemandFileEventCommitOrNull(
-              this.#root,
-              candidateRef,
-              undefined,
-              [1n, 2n],
-            )
-          )?.node ?? null;
+          (await readDemandFileEventCommitOrNull(this.#root, candidateRef, undefined, [1n, 2n]))
+            ?.node ?? null;
         if (error.reason === "destination-exists") {
           disposition = "idempotent";
         }
@@ -722,15 +661,8 @@ export class DemandFileEventStore {
       }
       // 提交已由 link 持久化；候选残留即使在崩溃后留下，也由候选恢复按双链接结算。
       await this.#retireCandidate(candidateRef, linkedNode, undefined, "none");
-      const committed = await readDemandFileEventCommitOrNull(
-        this.#root,
-        commitRef,
-        undefined,
-      );
-      if (
-        committed === null ||
-        !sameDemandEventStreamCommit(committed.commit, commit)
-      ) {
+      const committed = await readDemandFileEventCommitOrNull(this.#root, commitRef, undefined);
+      if (committed === null || !sameDemandEventStreamCommit(committed.commit, commit)) {
         fail("commit-uncertain", "$commit");
       }
       await this.#refreshIndex(admittedIndex, commit, signal);
@@ -749,13 +681,13 @@ export class DemandFileEventStore {
 export {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
+  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
-  DemandFileEventStoreError,
   type DemandFileEventStoreAppendReceipt,
   type DemandFileEventStoreCandidateRecoveryReceipt,
   type DemandFileEventStoreCursor,
+  DemandFileEventStoreError,
   type DemandFileEventStoreReadResult,
   type DemandFileEventStoreTailReadResult,
 } from "./demand-file-event-store-contract.js";

@@ -1,18 +1,19 @@
 import {
-  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
   type DurableAtomicFileStageRecoveryReceipt,
+  recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   inspectWakeflowProgramInstruction,
   WakeflowProgramInstructionInspectionError,
 } from "./wakeflow-program-instruction-inspection.js";
+import { recomposeWakeflowProgramInstruction } from "./wakeflow-program-instruction-recomposition.js";
 import {
   admitWakeflowProgramInstructionLockOperations,
   assertCurrentUserWakeflowProgramInstructionRoot,
@@ -23,16 +24,13 @@ import {
   mapWakeflowProgramInstructionLockError,
   parseWakeflowProgramInstructionRecompositionRecoveryOptions,
   parseWakeflowProgramInstructionRecompositionRequest,
-  wakeflowProgramInstructionInspectionRequest,
-  wakeflowProgramInstructionLockRef,
-  wakeflowProgramInstructionTargetRef,
   type WakeflowProgramInstructionRecompositionRecoveryOptions,
   type WakeflowProgramInstructionRecompositionRecoveryReceipt,
   type WakeflowProgramInstructionRecompositionRequest,
+  wakeflowProgramInstructionInspectionRequest,
+  wakeflowProgramInstructionLockRef,
+  wakeflowProgramInstructionTargetRef,
 } from "./wakeflow-program-instruction-recomposition-contract.js";
-import {
-  recomposeWakeflowProgramInstruction,
-} from "./wakeflow-program-instruction-recomposition.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 非活动锁残留恢复。
@@ -46,9 +44,7 @@ import {
 
 async function recoverAdmittedStages(
   root: RootedDirectory,
-  request: ReturnType<
-    typeof parseWakeflowProgramInstructionRecompositionRequest
-  >,
+  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
   try {
@@ -76,9 +72,7 @@ async function recoverAdmittedStages(
 
 async function assertRecoverableCurrent(
   root: RootedDirectory,
-  request: ReturnType<
-    typeof parseWakeflowProgramInstructionRecompositionRequest
-  >,
+  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
@@ -94,11 +88,7 @@ async function assertRecoverableCurrent(
       }
       if (error.reason === "target-capacity") fail("capacity", "$target");
       if (error.reason === "source-capacity") fail("capacity", "$source");
-      if (
-        error.reason === "input"
-        || error.reason === "context"
-        || error.reason === "authority"
-      ) {
+      if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
         fail("input", error.path);
       }
       fail("recovery-required", "$source");
@@ -114,19 +104,12 @@ export async function recoverWakeflowProgramInstructionRecomposition(
   optionsValue?: WakeflowProgramInstructionRecompositionRecoveryOptions,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionRecoveryReceipt>> {
   assertWakeflowProgramInstructionRecompositionRoot(rootValue);
-  const options =
-    parseWakeflowProgramInstructionRecompositionRecoveryOptions(optionsValue);
+  const options = parseWakeflowProgramInstructionRecompositionRecoveryOptions(optionsValue);
   assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
-  const request = parseWakeflowProgramInstructionRecompositionRequest(
-    requestValue,
-  );
+  const request = parseWakeflowProgramInstructionRecompositionRequest(requestValue);
   admitWakeflowProgramInstructionLockOperations(request);
-  const expectedUserId =
-    currentWakeflowProgramInstructionRecompositionUserId();
-  await assertCurrentUserWakeflowProgramInstructionRoot(
-    rootValue,
-    expectedUserId,
-  );
+  const expectedUserId = currentWakeflowProgramInstructionRecompositionUserId();
+  await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
   const lockRef = wakeflowProgramInstructionLockRef(request);
   const targetRef = wakeflowProgramInstructionTargetRef(request);
 
@@ -146,26 +129,16 @@ export async function recoverWakeflowProgramInstructionRecomposition(
     fail("recovery-required", "$lock");
   }
 
-  const stageRecovery = await recoverAdmittedStages(
-    rootValue,
-    request,
-    options.signal,
-  );
+  const stageRecovery = await recoverAdmittedStages(rootValue, request, options.signal);
   assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
-  await assertCurrentUserWakeflowProgramInstructionRoot(
-    rootValue,
-    expectedUserId,
-  );
+  await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
   await assertRecoverableCurrent(rootValue, request, options.signal);
   assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
 
   try {
-    await retireRootedExclusiveFileLockResidue(
-      rootValue,
-      lockRef,
-      observation,
-      { relatedTargetResourcePaths: [targetRef] },
-    );
+    await retireRootedExclusiveFileLockResidue(rootValue, lockRef, observation, {
+      relatedTargetResourcePaths: [targetRef],
+    });
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
       mapWakeflowProgramInstructionLockError(error, false);

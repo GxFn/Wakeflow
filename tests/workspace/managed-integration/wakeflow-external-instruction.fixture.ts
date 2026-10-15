@@ -1,11 +1,8 @@
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
-export const MANAGED_BLOCK_REPOSITORY_ID =
-  "repository_22222222-2222-4222-8222-222222222222";
-export const EXTERNAL_DESIGN_SURFACE_ID =
-  "surface_33333333-3333-4333-8333-333333333333";
-export const SECOND_PRODUCT_WINDOW_ID =
-  "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const MANAGED_BLOCK_REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
+export const EXTERNAL_DESIGN_SURFACE_ID = "surface_33333333-3333-4333-8333-333333333333";
+export const SECOND_PRODUCT_WINDOW_ID = "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 export const MANAGED_BLOCK_REPOSITORY_TARGET = Object.freeze({
   kind: "repository",

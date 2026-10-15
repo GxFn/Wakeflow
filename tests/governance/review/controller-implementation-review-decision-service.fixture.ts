@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-
+import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import type {
   ImplementationReviewDecisionRequest,
   ImplementationReviewDecisionResult,
@@ -8,10 +8,10 @@ import type {
   TargetResultReviewInspectionResult,
 } from "../../../src/capabilities/result-review/contract.js";
 import {
+  type ExecuteResultReviewOptions,
   executeImplementationReviewDecisionRequest,
   executeTargetResultImportRequest,
   executeTargetResultReviewInspectionRequest,
-  type ExecuteResultReviewOptions,
   type ResultReviewHostFacade,
 } from "../../../src/capabilities/result-review/service.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -19,10 +19,9 @@ import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DeliveryEnvelope } from "../../../src/governance/delivery/delivery-envelope.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import {
-  readDemandResultReviewSnapshot,
   type DemandResultReviewSnapshot,
+  readDemandResultReviewSnapshot,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import type { TaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
@@ -32,17 +31,17 @@ import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspac
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
+  type DeliveredTarget,
+  type DeliveryWindowRoute,
+  type DeliveryWorkspaceFixture,
   deliverFixtureTarget,
   landFixturePrompt,
   registerFixtureWindowRoute,
   withFixtureDemandRoot,
-  type DeliveredTarget,
-  type DeliveryWindowRoute,
-  type DeliveryWorkspaceFixture,
 } from "../delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../result/implementation-target-result-report.fixture.js";
-import { PLANNING_REPOSITORY_ID } from "../tasking/target-task-planning-service.fixture.js";
 import type { TargetTaskPlanningWorkspaceFixtureOptions } from "../tasking/target-task-planning-service.fixture.js";
+import { PLANNING_REPOSITORY_ID } from "../tasking/target-task-planning-service.fixture.js";
 import { implementationReviewJudgmentWire } from "./controller-implementation-review-decision.fixture.js";
 
 /**
@@ -81,7 +80,8 @@ export interface FixtureEvidence {
   readonly bytes: number;
 }
 
-export interface ControllerImplementationReviewDecisionServiceFixture extends DeliveryWorkspaceFixture {
+export interface ControllerImplementationReviewDecisionServiceFixture
+  extends DeliveryWorkspaceFixture {
   readonly controllerRoute: Readonly<DeliveryWindowRoute>;
   readonly delivered: Readonly<DeliveredTarget>;
   readonly envelope: Readonly<DeliveryEnvelope>;
@@ -98,7 +98,8 @@ export async function currentFixtureStreamRevision(
 ): Promise<number> {
   return withFixtureDemandRoot(
     fixture,
-    async (root) => (await new DemandEventSourcingRepository(root).audit()).aggregate.streamRevision,
+    async (root) =>
+      (await new DemandEventSourcingRepository(root).audit()).aggregate.streamRevision,
   );
 }
 
@@ -159,7 +160,9 @@ export async function recordFixtureEvidence(
     { clock: () => capturedAt, durability: DISPOSABLE_WORKSPACE_DURABILITY },
   );
   if (preview.kind !== "WakeflowRecordEvidencePreview" || preview.planDigest === null) {
-    throw new Error(`Expected a ready evidence plan: ${preview.kind === "WakeflowRecordEvidencePreview" ? preview.blockers.join(",") : preview.kind}`);
+    throw new Error(
+      `Expected a ready evidence plan: ${preview.kind === "WakeflowRecordEvidencePreview" ? preview.blockers.join(",") : preview.kind}`,
+    );
   }
   const applied = await executeRecordEvidenceRequest(
     {
@@ -203,7 +206,10 @@ export async function importFixtureImplementationResult(
   options: ImportFixtureImplementationOptions = {},
 ): Promise<Readonly<TargetResultImportResult>> {
   const evidence = options.evidence ?? (await recordFixtureEvidence(fixture));
-  const taskPackage = await loadFixtureTaskPackage(fixture, delivered.envelope.target.taskPackageId);
+  const taskPackage = await loadFixtureTaskPackage(
+    fixture,
+    delivered.envelope.target.taskPackageId,
+  );
   const content =
     options.content ?? createImplementationTargetResultReportContentFixture(taskPackage, evidence);
   return executeTargetResultImportRequest(

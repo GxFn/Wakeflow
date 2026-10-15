@@ -1,28 +1,28 @@
 import {
   createFileAtomically,
-  replaceFileAtomically,
   DurableAtomicFileWriteError,
+  replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
 import {
   inspectWakeflowSupportMemory,
-  WakeflowSupportMemoryInspectionError,
   WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
   type WakeflowSupportMemoryInspection,
+  WakeflowSupportMemoryInspectionError,
 } from "./wakeflow-support-memory-inspection.js";
 import {
   assertWakeflowSupportMemoryPublicationNotAborted,
   failWakeflowSupportMemoryPublication as fail,
   parseWakeflowSupportMemoryPublicationOptions,
   parseWakeflowSupportMemoryPublicationRequest,
-  wakeflowSupportMemoryInspectionRequest,
-  WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationEffect,
+  WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationReceipt,
   type WakeflowSupportMemoryPublicationRequest,
+  wakeflowSupportMemoryInspectionRequest,
 } from "./wakeflow-support-memory-publication-contract.js";
 
 /**
@@ -41,12 +41,12 @@ function mapInspectionError(
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
-    error.reason === "input"
-    || error.reason === "config"
-    || error.reason === "profile"
-    || error.reason === "catalog"
-    || error.reason === "surface"
-    || error.reason === "authority"
+    error.reason === "input" ||
+    error.reason === "config" ||
+    error.reason === "profile" ||
+    error.reason === "catalog" ||
+    error.reason === "surface" ||
+    error.reason === "authority"
   ) {
     fail("input", error.path);
   }
@@ -79,9 +79,9 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
-    error.reason === "target-exists"
-    || error.reason === "expectation-changed"
-    || error.reason === "expectation-read-failure"
+    error.reason === "target-exists" ||
+    error.reason === "expectation-changed" ||
+    error.reason === "expectation-read-failure"
   ) {
     fail("conflict", "$source");
   }
@@ -89,10 +89,10 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
     fail("recovery-required", "$resourcePath");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "stage-cleanup-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "stage-cleanup-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
@@ -106,8 +106,8 @@ async function publishTarget(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowSupportMemoryPublicationEffect>> {
   if (
-    inspection.status !== "publication-required"
-    || inspection.transition.disposition === "current"
+    inspection.status !== "publication-required" ||
+    inspection.transition.disposition === "current"
   ) {
     fail("source-invalid", "$target");
   }
@@ -116,27 +116,17 @@ async function publishTarget(
   try {
     if (target.disposition === "create-required") {
       if (inspection.source !== null) fail("source-invalid", "$source");
-      return await createFileAtomically(
-        supportRoot,
-        resourcePath,
-        target.desiredBytes,
-        {
-          mode: WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
+      return await createFileAtomically(supportRoot, resourcePath, target.desiredBytes, {
+        mode: WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
+        ...(signal === undefined ? {} : { signal }),
+      });
     }
     if (inspection.source === null) fail("source-invalid", "$source");
-    return await replaceFileAtomically(
-      supportRoot,
-      resourcePath,
-      target.desiredBytes,
-      {
-        mode: WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
-        expected: inspection.source,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    return await replaceFileAtomically(supportRoot, resourcePath, target.desiredBytes, {
+      mode: WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
+      expected: inspection.source,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryPublicationError) throw error;
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
@@ -144,14 +134,13 @@ async function publishTarget(
   }
 }
 
-function sameSource(
-  left: Readonly<StableFileSource>,
-  right: Readonly<StableFileSource>,
-): boolean {
-  return left.resourcePath === right.resourcePath
-    && left.byteCount === right.byteCount
-    && left.digest === right.digest
-    && sameFileNodeSnapshot(left.node, right.node);
+function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFileSource>): boolean {
+  return (
+    left.resourcePath === right.resourcePath &&
+    left.byteCount === right.byteCount &&
+    left.digest === right.digest &&
+    sameFileNodeSnapshot(left.node, right.node)
+  );
 }
 
 function currentUserId(): bigint {
@@ -170,36 +159,32 @@ function assertReadback(
   const source = after.source;
   const target = before.transition;
   if (
-    before.status !== "publication-required"
-    || target.disposition === "current"
-    || source === null
-    || after.status !== "current"
-    || after.transition.sourceAuthority !== "desired"
-    || after.currentConfigDigest !== before.currentConfigDigest
-    || after.desiredConfigDigest !== before.desiredConfigDigest
-    || after.catalogDigest !== before.catalogDigest
-    || after.desiredAuthority.authorityDigest
-      !== before.desiredAuthority.authorityDigest
-    || effect.resourcePath !== request.profile.instructionFileName
-    || effect.digest !== target.desiredDigest
-    || effect.byteCount !== target.desiredByteCount
-    || effect.node.kind !== "file"
-    || effect.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE
-    || effect.node.linkCount !== 1n
-    || effect.node.userId !== currentUserId()
-    || source.resourcePath !== effect.resourcePath
-    || source.digest !== effect.digest
-    || source.byteCount !== effect.byteCount
-    || !sameFileNodeSnapshot(source.node, effect.node)
+    before.status !== "publication-required" ||
+    target.disposition === "current" ||
+    source === null ||
+    after.status !== "current" ||
+    after.transition.sourceAuthority !== "desired" ||
+    after.currentConfigDigest !== before.currentConfigDigest ||
+    after.desiredConfigDigest !== before.desiredConfigDigest ||
+    after.catalogDigest !== before.catalogDigest ||
+    after.desiredAuthority.authorityDigest !== before.desiredAuthority.authorityDigest ||
+    effect.resourcePath !== request.profile.instructionFileName ||
+    effect.digest !== target.desiredDigest ||
+    effect.byteCount !== target.desiredByteCount ||
+    effect.node.kind !== "file" ||
+    effect.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
+    effect.node.linkCount !== 1n ||
+    effect.node.userId !== currentUserId() ||
+    source.resourcePath !== effect.resourcePath ||
+    source.digest !== effect.digest ||
+    source.byteCount !== effect.byteCount ||
+    !sameFileNodeSnapshot(source.node, effect.node)
   ) {
     fail("commit-uncertain", "$resourcePath");
   }
   if (effect.publication === "created") {
     if (before.source !== null) fail("commit-uncertain", "$resourcePath");
-  } else if (
-    before.source === null
-    || !sameSource(effect.previous, before.source)
-  ) {
+  } else if (before.source === null || !sameSource(effect.previous, before.source)) {
     fail("commit-uncertain", "$resourcePath");
   }
 }
@@ -214,13 +199,7 @@ export async function publishWakeflowSupportMemory(
   const request = parseWakeflowSupportMemoryPublicationRequest(requestValue);
   const options = parseWakeflowSupportMemoryPublicationOptions(optionsValue);
   assertWakeflowSupportMemoryPublicationNotAborted(options.signal);
-  const before = await inspectCurrent(
-    workspaceRoot,
-    supportRoot,
-    request,
-    options.signal,
-    false,
-  );
+  const before = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, false);
   if (before.status === "current") {
     return Object.freeze({
       disposition: "current",
@@ -229,19 +208,8 @@ export async function publishWakeflowSupportMemory(
     });
   }
   assertWakeflowSupportMemoryPublicationNotAborted(options.signal);
-  const effect = await publishTarget(
-    supportRoot,
-    request,
-    before,
-    options.signal,
-  );
-  const after = await inspectCurrent(
-    workspaceRoot,
-    supportRoot,
-    request,
-    options.signal,
-    true,
-  );
+  const effect = await publishTarget(supportRoot, request, before, options.signal);
+  const after = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, true);
   assertReadback(request, before, effect, after);
   return Object.freeze({
     disposition: effect.publication,
@@ -251,8 +219,8 @@ export async function publishWakeflowSupportMemory(
 }
 
 export {
-  WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationEffect,
+  WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationErrorReason,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationReceipt,

@@ -11,21 +11,12 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
-
+import { type TestContext, test } from "node:test";
+import { materializeDirectoryPath } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  materializeDirectoryPath,
-} from "../../../src/foundation/filesystem/durable-directory-materialization.js";
-import {
-  parsePortableResourcePath,
-} from "../../../src/foundation/filesystem/portable-resource-path.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   ensureWakeflowHostCapabilityLayout,
   inspectWakeflowHostCapabilityLayout,
@@ -33,33 +24,18 @@ import {
   WakeflowHostCapabilityLayoutMaterializationError,
   type WakeflowHostCapabilityLayoutMaterializationErrorReason,
 } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
-import {
-  publishFreshWakeflowWindowRuntime,
-} from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
-async function fixture(
-  t: TestContext,
-  profile: unknown,
-) {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-host-capability-layout-",
-  ));
+async function fixture(t: TestContext, profile: unknown) {
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-host-capability-layout-"));
   const root = await RootedDirectory.open(absolutePath);
-  await materializeDirectoryPath(
-    root,
-    parsePortableResourcePath(".wakeflow-local/runtime"),
-    { mode: 0o700 },
-  );
-  await publishFreshWakeflowWindowRuntime(
-    root,
-    createMinimalWakeflowConfig(),
-    profile,
-    { recoveringFreshPublication: false },
-  );
+  await materializeDirectoryPath(root, parsePortableResourcePath(".wakeflow-local/runtime"), {
+    mode: 0o700,
+  });
+  await publishFreshWakeflowWindowRuntime(root, createMinimalWakeflowConfig(), profile, {
+    recoveringFreshPublication: false,
+  });
   t.after(async () => {
     await root.close();
     rmSync(absolutePath, { recursive: true, force: true });
@@ -91,30 +67,24 @@ test("Host capability layout creates only profile-applicable empty directories",
     { recoveringFreshLayout: false },
   );
   equal(created.createdDirectoryCount, 4);
-  const codexHost = path.join(
-    codex.absolutePath,
-    ".wakeflow-local/runtime/hosts/codex",
-  );
+  const codexHost = path.join(codex.absolutePath, ".wakeflow-local/runtime/hosts/codex");
   equal(readdirSync(path.join(codexHost, "pods")).length, 0);
-  equal(readdirSync(path.join(
-    codexHost,
-    "operations",
-    "keep-live",
-    "leases",
-  )).length, 0);
+  equal(readdirSync(path.join(codexHost, "operations", "keep-live", "leases")).length, 0);
   await expectLayoutError(
-    () => materializeWakeflowHostCapabilityLayout(
-      codex.root,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshLayout: false },
-    ),
+    () =>
+      materializeWakeflowHostCapabilityLayout(codex.root, codexWorkspaceHostResourceProfile, {
+        recoveringFreshLayout: false,
+      }),
     "strict-absent",
   );
-  equal((await materializeWakeflowHostCapabilityLayout(
-    codex.root,
-    codexWorkspaceHostResourceProfile,
-    { recoveringFreshLayout: true },
-  )).disposition, "current");
+  equal(
+    (
+      await materializeWakeflowHostCapabilityLayout(codex.root, codexWorkspaceHostResourceProfile, {
+        recoveringFreshLayout: true,
+      })
+    ).disposition,
+    "current",
+  );
 
   const claude = await fixture(t, claudeCodeWorkspaceHostResourceProfile);
   const claudeCreated = await materializeWakeflowHostCapabilityLayout(
@@ -123,10 +93,7 @@ test("Host capability layout creates only profile-applicable empty directories",
     { recoveringFreshLayout: false },
   );
   equal(claudeCreated.createdDirectoryCount, 9);
-  const claudeHost = path.join(
-    claude.absolutePath,
-    ".wakeflow-local/runtime/hosts/claude-code",
-  );
+  const claudeHost = path.join(claude.absolutePath, ".wakeflow-local/runtime/hosts/claude-code");
   for (const relative of [
     "operations/window-locators",
     "operations/assets",
@@ -139,15 +106,10 @@ test("Host capability layout creates only profile-applicable empty directories",
 
 test("Host capability recovery fills an exact prefix and preserves foreign resources", async (t) => {
   const value = await fixture(t, codexWorkspaceHostResourceProfile);
-  await materializeWakeflowHostCapabilityLayout(
-    value.root,
-    codexWorkspaceHostResourceProfile,
-    { recoveringFreshLayout: false },
-  );
-  const hostRoot = path.join(
-    value.absolutePath,
-    ".wakeflow-local/runtime/hosts/codex",
-  );
+  await materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+    recoveringFreshLayout: false,
+  });
+  const hostRoot = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
   rmdirSync(path.join(hostRoot, "operations", "keep-live", "leases"));
   const recovered = await materializeWakeflowHostCapabilityLayout(
     value.root,
@@ -159,11 +121,10 @@ test("Host capability recovery fills an exact prefix and preserves foreign resou
   const foreign = path.join(hostRoot, "pods", "foreign.json");
   writeFileSync(foreign, "{}\n", { mode: 0o600 });
   await expectLayoutError(
-    () => materializeWakeflowHostCapabilityLayout(
-      value.root,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshLayout: true },
-    ),
+    () =>
+      materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+        recoveringFreshLayout: true,
+      }),
     "prefix-conflict",
   );
   equal(readdirSync(path.dirname(foreign)).includes("foreign.json"), true);
@@ -171,11 +132,9 @@ test("Host capability recovery fills an exact prefix and preserves foreign resou
 
 test("Host capability inspection and ensure ignore live contents and only repair missing directories", async (t) => {
   const value = await fixture(t, codexWorkspaceHostResourceProfile);
-  await materializeWakeflowHostCapabilityLayout(
-    value.root,
-    codexWorkspaceHostResourceProfile,
-    { recoveringFreshLayout: false },
-  );
+  await materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+    recoveringFreshLayout: false,
+  });
   const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
   const leases = path.join(codexHost, "operations", "keep-live", "leases");
   // 运行中的工作区：租约文件与 pod 回执目录都不是冲突。
@@ -209,7 +168,8 @@ test("Host capability inspection and ensure ignore live contents and only repair
   equal(statSync(leases).mode & 0o777, 0o700);
   equal(existsSync(path.join(codexHost, "pods", "pod_x")), true, "ensure must not touch siblings");
   equal(
-    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
+      .status,
     "current",
   );
 
@@ -217,7 +177,8 @@ test("Host capability inspection and ensure ignore live contents and only repair
   rmSync(path.join(codexHost, "operations", "keep-live"), { recursive: true });
   writeFileSync(path.join(codexHost, "operations", "keep-live"), "not a directory\n");
   equal(
-    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
+      .status,
     "conflict",
   );
   await expectLayoutError(
@@ -228,7 +189,8 @@ test("Host capability inspection and ensure ignore live contents and only repair
   // 宿主运行时根缺失：只报告前置缺失，ensure 拒绝。
   rmSync(codexHost, { recursive: true });
   equal(
-    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile)).status,
+    (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
+      .status,
     "prerequisite-missing",
   );
   await expectLayoutError(
@@ -243,23 +205,31 @@ test("Host capability layout maps an already-aborted signal to aborted", async (
   controller.abort();
   const { signal } = controller;
   await expectLayoutError(
-    () => materializeWakeflowHostCapabilityLayout(
-      value.root,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshLayout: false, signal },
-    ),
+    () =>
+      materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+        recoveringFreshLayout: false,
+        signal,
+      }),
     "aborted",
   );
   await expectLayoutError(
-    () => ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
+    () =>
+      ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
     "aborted",
   );
   await expectLayoutError(
-    () => inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
+    () =>
+      inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+        signal,
+      }),
     "aborted",
   );
   const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
-  equal(existsSync(path.join(codexHost, "pods")), false, "an aborted run must not create directories");
+  equal(
+    existsSync(path.join(codexHost, "pods")),
+    false,
+    "an aborted run must not create directories",
+  );
 });
 
 test("Host capability fresh layout refuses a foreign entry under the host runtime root", async (t) => {
@@ -268,11 +238,10 @@ test("Host capability fresh layout refuses a foreign entry under the host runtim
   const foreign = path.join(codexHost, "foreign");
   mkdirSync(foreign, { mode: 0o700 });
   await expectLayoutError(
-    () => materializeWakeflowHostCapabilityLayout(
-      value.root,
-      codexWorkspaceHostResourceProfile,
-      { recoveringFreshLayout: false },
-    ),
+    () =>
+      materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
+        recoveringFreshLayout: false,
+      }),
     "prefix-conflict",
   );
   equal(existsSync(foreign), true, "the foreign entry must be left untouched");

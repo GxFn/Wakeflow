@@ -1,39 +1,30 @@
-import {
-  WAKEFLOW_ACTIVE_ROOT,
-  WAKEFLOW_LOCAL_ROOT,
-} from "../../configuration/wakeflow-config.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../wakeflow-workspace-static-resource-matrix.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
-import type {
-  WakeflowManagedTextEnvelopeTarget,
-} from "./wakeflow-managed-text-envelope.js";
+import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Workspace 根 `.gitignore` 的正文权威。
@@ -45,12 +36,10 @@ import type {
  * 重推导当前 authority，并与调用方预期比较后才能产生文件 effect。
  */
 
-export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND =
-  "WakeflowGitignoreBodyAuthority" as const;
+export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND = "WakeflowGitignoreBodyAuthority" as const;
 export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1 as const;
 export const WAKEFLOW_GITIGNORE_COMPONENT = "workspace-ignore" as const;
-export const WAKEFLOW_GITIGNORE_OWNER =
-  "workspace-ignore-integration" as const;
+export const WAKEFLOW_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
 
 declare const WAKEFLOW_GITIGNORE_RULE_BRAND: unique symbol;
 
@@ -61,8 +50,7 @@ export type WakeflowGitignoreRule = string & {
 
 export interface WakeflowGitignoreBodyAuthority {
   readonly kind: typeof WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND;
-  readonly schemaVersion:
-    typeof WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
+  readonly schemaVersion: typeof WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
   readonly hostIds: readonly WakeflowWorkspaceHostId[];
   readonly rules: readonly WakeflowGitignoreRule[];
   readonly body: string;
@@ -86,16 +74,11 @@ export type WakeflowGitignoreBodyAuthorityErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Wakeflow Gitignore body authority input is invalid.",
-  "profile-set":
-    "Wakeflow Gitignore body authority requires one complete host profile set.",
-  path:
-    "Wakeflow Gitignore body authority cannot encode a private resource path.",
+  "profile-set": "Wakeflow Gitignore body authority requires one complete host profile set.",
+  path: "Wakeflow Gitignore body authority cannot encode a private resource path.",
   authority: "Wakeflow Gitignore body authority record is invalid.",
   outside: "Wakeflow Gitignore outside text input is invalid.",
-} as const satisfies Readonly<Record<
-  WakeflowGitignoreBodyAuthorityErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowGitignoreBodyAuthorityErrorReason, string>>;
 
 /** Gitignore body authority 准入失败的稳定、脱敏错误。 */
 export class WakeflowGitignoreBodyAuthorityError extends Error {
@@ -114,20 +97,9 @@ export class WakeflowGitignoreBodyAuthorityError extends Error {
 const ACTIVE_ROOT_REF = parsePortableResourcePath(WAKEFLOW_ACTIVE_ROOT);
 const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
-const GITIGNORE_MAGIC_CHARACTERS = new Set([
-  "\\",
-  "*",
-  "?",
-  "[",
-  "]",
-  "#",
-  "!",
-]);
+const GITIGNORE_MAGIC_CHARACTERS = new Set(["\\", "*", "?", "[", "]", "#", "!"]);
 
-function fail(
-  reason: WakeflowGitignoreBodyAuthorityErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowGitignoreBodyAuthorityErrorReason, path: string): never {
   throw new WakeflowGitignoreBodyAuthorityError(reason, path);
 }
 
@@ -136,15 +108,10 @@ function lexicalCompare(left: string, right: string): number {
 }
 
 function escapeLiteralPath(value: PortableResourcePath): string {
-  return value.replace(GITIGNORE_MAGIC_PATTERN, (character) => (
-    `\\${character}`
-  ));
+  return value.replace(GITIGNORE_MAGIC_PATTERN, (character) => `\\${character}`);
 }
 
-function rootRule(
-  resourcePath: PortableResourcePath,
-  directory: boolean,
-): WakeflowGitignoreRule {
+function rootRule(resourcePath: PortableResourcePath, directory: boolean): WakeflowGitignoreRule {
   const escaped = escapeLiteralPath(resourcePath);
   if (escaped.length === 0 || escaped.endsWith("\\")) fail("path", "$path");
   return `/${escaped}${directory ? "/" : ""}` as WakeflowGitignoreRule;
@@ -176,10 +143,7 @@ function isLiteralRootRule(value: string): boolean {
     if (character === undefined) return false;
     if (character === "\\") {
       const escaped = encodedPath[index + 1];
-      if (
-        escaped === undefined
-        || !GITIGNORE_MAGIC_CHARACTERS.has(escaped)
-      ) {
+      if (escaped === undefined || !GITIGNORE_MAGIC_CHARACTERS.has(escaped)) {
         return false;
       }
       resourcePath += escaped;
@@ -198,22 +162,18 @@ function isLiteralRootRule(value: string): boolean {
 }
 
 function coveredByPrivateRoot(resourcePath: PortableResourcePath): boolean {
-  return resourcePath === ACTIVE_ROOT_REF
-    || resourcePath === LOCAL_ROOT_REF
-    || resourcePath.startsWith(`${ACTIVE_ROOT_REF}/`)
-    || resourcePath.startsWith(`${LOCAL_ROOT_REF}/`);
+  return (
+    resourcePath === ACTIVE_ROOT_REF ||
+    resourcePath === LOCAL_ROOT_REF ||
+    resourcePath.startsWith(`${ACTIVE_ROOT_REF}/`) ||
+    resourcePath.startsWith(`${LOCAL_ROOT_REF}/`)
+  );
 }
 
-function parseProfiles(
-  value: unknown,
-): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
+function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
   let values: readonly unknown[];
   try {
-    values = parseDenseArray(
-      value,
-      WAKEFLOW_WORKSPACE_HOST_IDS.length,
-      "$profiles",
-    );
+    values = parseDenseArray(value, WAKEFLOW_WORKSPACE_HOST_IDS.length, "$profiles");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", "$profiles");
     throw error;
@@ -241,11 +201,13 @@ function parseProfiles(
   if (WAKEFLOW_WORKSPACE_HOST_IDS.some((hostId) => !byHostId.has(hostId))) {
     fail("profile-set", "$profiles");
   }
-  return Object.freeze(WAKEFLOW_WORKSPACE_HOST_IDS.map((hostId) => {
-    const profile = byHostId.get(hostId);
-    if (profile === undefined) fail("profile-set", "$profiles");
-    return profile;
-  }));
+  return Object.freeze(
+    WAKEFLOW_WORKSPACE_HOST_IDS.map((hostId) => {
+      const profile = byHostId.get(hostId);
+      if (profile === undefined) fail("profile-set", "$profiles");
+      return profile;
+    }),
+  );
 }
 
 /** 从完整宿主画像集合生成唯一、确定性的 Gitignore 正文权威。 */
@@ -260,26 +222,20 @@ export function createWakeflowGitignoreBodyAuthority(
   for (const [index, profile] of profiles.entries()) {
     const localPath = profile.surfaces.settingsIntegration?.localPath;
     if (localPath === ACTIVE_ROOT_REF || localPath === LOCAL_ROOT_REF) {
-      fail(
-        "path",
-        `$/profiles/${index}/surfaces/settingsIntegration/localPath`,
-      );
+      fail("path", `$/profiles/${index}/surfaces/settingsIntegration/localPath`);
     }
     const matrix = createWakeflowWorkspaceStaticResourceMatrix(profile);
     for (const declaration of matrix.declarations) {
       const relativePath = declaration.placement.relativePath;
       if (
-        declaration.placement.root.kind !== "workspace"
-        || declaration.tracking.disposition !== "ignored"
-        || relativePath === null
-        || coveredByPrivateRoot(relativePath)
+        declaration.placement.root.kind !== "workspace" ||
+        declaration.tracking.disposition !== "ignored" ||
+        relativePath === null ||
+        coveredByPrivateRoot(relativePath)
       ) {
         continue;
       }
-      rules.add(rootRule(
-        relativePath,
-        declaration.nodePolicy.kind !== "file",
-      ));
+      rules.add(rootRule(relativePath, declaration.nodePolicy.kind !== "file"));
     }
   }
   const sortedRules = Object.freeze([...rules].sort(lexicalCompare));
@@ -308,9 +264,7 @@ export function createWakeflowGitignoreBodyAuthority(
   });
 }
 
-function authorityRecord(
-  value: unknown,
-): Readonly<Record<string, unknown>> {
+function authorityRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, "$authority");
   } catch (error: unknown) {
@@ -326,19 +280,19 @@ export function parseWakeflowGitignoreBodyAuthority(
   const record = authorityRecord(value);
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 8
-    || keys[0] !== "authorityDigest"
-    || keys[1] !== "body"
-    || keys[2] !== "bodyDigest"
-    || keys[3] !== "envelopeTarget"
-    || keys[4] !== "hostIds"
-    || keys[5] !== "kind"
-    || keys[6] !== "rules"
-    || keys[7] !== "schemaVersion"
-    || record.kind !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND
-    || record.schemaVersion !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION
-    || typeof record.body !== "string"
-    || !record.body.isWellFormed()
+    keys.length !== 8 ||
+    keys[0] !== "authorityDigest" ||
+    keys[1] !== "body" ||
+    keys[2] !== "bodyDigest" ||
+    keys[3] !== "envelopeTarget" ||
+    keys[4] !== "hostIds" ||
+    keys[5] !== "kind" ||
+    keys[6] !== "rules" ||
+    keys[7] !== "schemaVersion" ||
+    record.kind !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND ||
+    record.schemaVersion !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION ||
+    typeof record.body !== "string" ||
+    !record.body.isWellFormed()
   ) {
     fail("authority", "$authority");
   }
@@ -356,29 +310,24 @@ export function parseWakeflowGitignoreBodyAuthority(
     throw error;
   }
   if (
-    hostIdValues.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length
-    || hostIdValues.some((hostId, index) => (
-      hostId !== WAKEFLOW_WORKSPACE_HOST_IDS[index]
-    ))
-    || ruleValues.length === 0
-    || ruleValues.some((rule) => (
-      typeof rule !== "string"
-      || !rule.isWellFormed()
-      || rule.normalize("NFC") !== rule
-      || !isLiteralRootRule(rule)
-    ))
+    hostIdValues.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length ||
+    hostIdValues.some((hostId, index) => hostId !== WAKEFLOW_WORKSPACE_HOST_IDS[index]) ||
+    ruleValues.length === 0 ||
+    ruleValues.some(
+      (rule) =>
+        typeof rule !== "string" ||
+        !rule.isWellFormed() ||
+        rule.normalize("NFC") !== rule ||
+        !isLiteralRootRule(rule),
+    )
   ) {
     fail("authority", "$authority");
   }
-  const rules = Object.freeze(
-    ruleValues as readonly WakeflowGitignoreRule[],
-  );
+  const rules = Object.freeze(ruleValues as readonly WakeflowGitignoreRule[]);
   if (
-    new Set(rules).size !== rules.length
-    || rules.some((rule, index) => (
-      index > 0 && lexicalCompare(rules[index - 1] ?? "", rule) >= 0
-    ))
-    || record.body !== `${rules.join("\n")}\n`
+    new Set(rules).size !== rules.length ||
+    rules.some((rule, index) => index > 0 && lexicalCompare(rules[index - 1] ?? "", rule) >= 0) ||
+    record.body !== `${rules.join("\n")}\n`
   ) {
     fail("authority", "$authority");
   }
@@ -394,13 +343,10 @@ export function parseWakeflowGitignoreBodyAuthority(
     if (error instanceof Sha256Error) fail("authority", error.path);
     throw error;
   }
-  const hostIds = Object.freeze(
-    hostIdValues as readonly WakeflowWorkspaceHostId[],
-  );
+  const hostIds = Object.freeze(hostIdValues as readonly WakeflowWorkspaceHostId[]);
   if (
-    computeSha256Digest(encodeUtf8(record.body), "$authority.body")
-      !== bodyDigest
-    || computeCanonicalJsonSha256Digest({
+    computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||
+    computeCanonicalJsonSha256Digest({
       kind: "WakeflowGitignoreBodyAuthorityDigestBasis",
       schemaVersion: WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION,
       hostIds,
@@ -417,11 +363,10 @@ export function parseWakeflowGitignoreBodyAuthority(
     throw error;
   }
   if (
-    Object.keys(target).sort().join("\u0000")
-      !== "body\u0000component\u0000owner"
-    || target.component !== WAKEFLOW_GITIGNORE_COMPONENT
-    || target.owner !== WAKEFLOW_GITIGNORE_OWNER
-    || target.body !== record.body
+    Object.keys(target).sort().join("\u0000") !== "body\u0000component\u0000owner" ||
+    target.component !== WAKEFLOW_GITIGNORE_COMPONENT ||
+    target.owner !== WAKEFLOW_GITIGNORE_OWNER ||
+    target.body !== record.body
   ) {
     fail("authority", "$authority");
   }
@@ -453,13 +398,13 @@ function outsideSegments(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 2
-    || keys[0] !== "prefix"
-    || keys[1] !== "suffix"
-    || typeof record.prefix !== "string"
-    || typeof record.suffix !== "string"
-    || !record.prefix.isWellFormed()
-    || !record.suffix.isWellFormed()
+    keys.length !== 2 ||
+    keys[0] !== "prefix" ||
+    keys[1] !== "suffix" ||
+    typeof record.prefix !== "string" ||
+    typeof record.suffix !== "string" ||
+    !record.prefix.isWellFormed() ||
+    !record.suffix.isWellFormed()
   ) {
     fail("outside", "$outside");
   }
@@ -467,9 +412,7 @@ function outsideSegments(
 }
 
 function exactLines(text: string): ReadonlySet<string> {
-  return new Set(text.split("\n").map((line) => (
-    line.endsWith("\r") ? line.slice(0, -1) : line
-  )));
+  return new Set(text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line)));
 }
 
 /**
@@ -482,16 +425,9 @@ export function classifyWakeflowGitignoreExactOutsideRules(
 ): Readonly<WakeflowGitignoreExactOutsideClassification> {
   const authority = parseWakeflowGitignoreBodyAuthority(authorityValue);
   const outside = outsideSegments(outsideValue);
-  const lines = new Set([
-    ...exactLines(outside.prefix),
-    ...exactLines(outside.suffix),
-  ]);
-  const exactDuplicateRules = Object.freeze(authority.rules.filter((rule) => (
-    lines.has(rule)
-  )));
-  const exactNegatedRules = Object.freeze(authority.rules.filter((rule) => (
-    lines.has(`!${rule}`)
-  )));
+  const lines = new Set([...exactLines(outside.prefix), ...exactLines(outside.suffix)]);
+  const exactDuplicateRules = Object.freeze(authority.rules.filter((rule) => lines.has(rule)));
+  const exactNegatedRules = Object.freeze(authority.rules.filter((rule) => lines.has(`!${rule}`)));
   return Object.freeze({
     kind: exactNegatedRules.length === 0 ? "compatible" : "conflict",
     exactDuplicateRules,

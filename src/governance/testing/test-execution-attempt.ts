@@ -1,20 +1,20 @@
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import type { WakeflowTestExecutionAttempt as TestExecutionAttemptWire } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
@@ -38,7 +38,8 @@ const ATTEMPT_KIND = "WakeflowTestExecutionAttempt" as const;
 const ATTEMPT_SCHEMA_VERSION = 1 as const;
 
 export type TestEnvironmentSetupDirective =
-  "prepare-fresh-environment" | "reuse-confirmed-environment";
+  | "prepare-fresh-environment"
+  | "reuse-confirmed-environment";
 
 export interface TestExecutionAttemptContract {
   readonly taskPackageId: WakeflowDurableId<"task-package">;
@@ -81,8 +82,7 @@ export interface RerunTestExecutionAttempt extends TestExecutionAttemptBase {
   }>;
 }
 
-export type TestExecutionAttempt =
-  InitialTestExecutionAttempt | RerunTestExecutionAttempt;
+export type TestExecutionAttempt = InitialTestExecutionAttempt | RerunTestExecutionAttempt;
 
 export interface CreateInitialTestExecutionAttemptInput {
   readonly testAttemptId: WakeflowDurableId<"test-attempt">;
@@ -99,7 +99,12 @@ export interface CreateRerunTestExecutionAttemptInput {
 }
 
 export type TestExecutionAttemptErrorReason =
-  "json" | "schema" | "identifier" | "digest" | "task-package" | "relation";
+  | "json"
+  | "schema"
+  | "identifier"
+  | "digest"
+  | "task-package"
+  | "relation";
 
 const ERROR_MESSAGES = {
   json: "Test execution attempt is not passive JSON data.",
@@ -162,8 +167,7 @@ function setupDirective(
   policy: TestSetupPolicy,
   mode: TestExecutionAttempt["mode"],
 ): TestEnvironmentSetupDirective {
-  return policy === "reuse-existing" ||
-    (policy === "fresh-once" && mode === "rerun")
+  return policy === "reuse-existing" || (policy === "fresh-once" && mode === "rerun")
     ? "reuse-confirmed-environment"
     : "prepare-fresh-environment";
 }
@@ -181,9 +185,7 @@ function testPackage(value: unknown): Readonly<TestTaskPackage> {
 }
 
 /** 解析并冻结Test execution attempt。 */
-export function parseTestExecutionAttempt(
-  value: unknown,
-): Readonly<TestExecutionAttempt> {
+export function parseTestExecutionAttempt(value: unknown): Readonly<TestExecutionAttempt> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$attempt");
@@ -200,15 +202,8 @@ export function parseTestExecutionAttempt(
     testAttemptId: id(wire.testAttemptId, "test-attempt", "$/testAttemptId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
     contract: Object.freeze({
-      taskPackageId: id(
-        wire.contract.taskPackageId,
-        "task-package",
-        "$/contract/taskPackageId",
-      ),
-      taskPackageDigest: digest(
-        wire.contract.taskPackageDigest,
-        "$/contract/taskPackageDigest",
-      ),
+      taskPackageId: id(wire.contract.taskPackageId, "task-package", "$/contract/taskPackageId"),
+      taskPackageDigest: digest(wire.contract.taskPackageDigest, "$/contract/taskPackageDigest"),
     }),
     environmentSetup: Object.freeze({
       policy: wire.environmentSetup.policy,

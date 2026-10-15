@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -72,7 +72,9 @@ async function expectBlockFileError(
   }
 }
 
-function request(authority: NonNullable<ReturnType<typeof createWakeflowSupportGitignoreBodyAuthority>>) {
+function request(
+  authority: NonNullable<ReturnType<typeof createWakeflowSupportGitignoreBodyAuthority>>,
+) {
   return {
     resourcePath: WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
     currentTargets: [authority.envelopeTarget],
@@ -98,11 +100,14 @@ test("support gitignore authority lists only the hosts' local settings paths, ro
 
   const codexOnly = createWakeflowSupportGitignoreBodyAuthority([
     codexWorkspaceHostResourceProfile,
-    { ...claudeCodeWorkspaceHostResourceProfile, surfaces: {
-      ...claudeCodeWorkspaceHostResourceProfile.surfaces,
-      settingsIntegration: null,
-      statuslineAsset: null,
-    } },
+    {
+      ...claudeCodeWorkspaceHostResourceProfile,
+      surfaces: {
+        ...claudeCodeWorkspaceHostResourceProfile.surfaces,
+        settingsIntegration: null,
+        statuslineAsset: null,
+      },
+    },
   ]);
   equal(codexOnly, null);
 });
@@ -116,16 +121,16 @@ test("managed block file creates, appends, stays current and refuses edited or f
   equal(absent.source, null);
   equal(existsSync(fresh.gitignore), false, "inspection must not write");
 
-  const created = await recomposeWakeflowManagedBlockFile(
-    fresh.root,
-    request(authority),
-    { createMode: 0o644 },
-  );
+  const created = await recomposeWakeflowManagedBlockFile(fresh.root, request(authority), {
+    createMode: 0o644,
+  });
   equal(created.disposition, "created");
   equal(statSync(fresh.gitignore).mode & 0o777, 0o644);
   deepEqual(
     readFileSync(fresh.gitignore),
-    Buffer.from(recomposeWakeflowManagedTextEnvelope(new Uint8Array(), authority.envelopeTarget).bytes),
+    Buffer.from(
+      recomposeWakeflowManagedTextEnvelope(new Uint8Array(), authority.envelopeTarget).bytes,
+    ),
   );
   equal(
     (await recomposeWakeflowManagedBlockFile(fresh.root, request(authority), { createMode: 0o644 }))
@@ -136,11 +141,9 @@ test("managed block file creates, appends, stays current and refuses edited or f
   const owned = await fixture(t);
   writeFileSync(owned.gitignore, "node_modules/\n*.log\n", { mode: 0o664 });
   chmodSync(owned.gitignore, 0o664);
-  const replaced = await recomposeWakeflowManagedBlockFile(
-    owned.root,
-    request(authority),
-    { createMode: 0o644 },
-  );
+  const replaced = await recomposeWakeflowManagedBlockFile(owned.root, request(authority), {
+    createMode: 0o644,
+  });
   equal(replaced.disposition, "replaced");
   equal(statSync(owned.gitignore).mode & 0o777, 0o664);
   const text = readFileSync(owned.gitignore, "utf8");
@@ -149,7 +152,10 @@ test("managed block file creates, appends, stays current and refuses edited or f
   equal(text.includes("/.claude/settings.local.json"), true);
 
   // 受管区域内的手改破坏 envelope 摘要：只报告。
-  writeFileSync(owned.gitignore, text.replace("/.claude/settings.local.json", "/.claude/settings.local.json\n/extra"));
+  writeFileSync(
+    owned.gitignore,
+    text.replace("/.claude/settings.local.json", "/.claude/settings.local.json\n/extra"),
+  );
   await expectBlockFileError(
     () => inspectWakeflowManagedBlockFile(owned.root, request(authority)),
     "envelope",
@@ -157,10 +163,10 @@ test("managed block file creates, appends, stays current and refuses edited or f
   );
 
   // 自洽但不是已准入渲染的托管正文：未知正文，只报告。
-  const foreign = recomposeWakeflowManagedTextEnvelope(
-    Buffer.from("# owner\n"),
-    { ...authority.envelopeTarget, body: "/.claude/settings.local.json\n/other\n" },
-  ).bytes;
+  const foreign = recomposeWakeflowManagedTextEnvelope(Buffer.from("# owner\n"), {
+    ...authority.envelopeTarget,
+    body: "/.claude/settings.local.json\n/other\n",
+  }).bytes;
   writeFileSync(owned.gitignore, foreign);
   await expectBlockFileError(
     () => recomposeWakeflowManagedBlockFile(owned.root, request(authority), { createMode: 0o644 }),
@@ -173,11 +179,12 @@ test("managed block file creates, appends, stays current and refuses edited or f
   controller.abort();
   const cancelled = await fixture(t);
   await expectBlockFileError(
-    () => recomposeWakeflowManagedBlockFile(
-      cancelled.root,
-      { ...request(authority), signal: controller.signal },
-      { createMode: 0o644 },
-    ),
+    () =>
+      recomposeWakeflowManagedBlockFile(
+        cancelled.root,
+        { ...request(authority), signal: controller.signal },
+        { createMode: 0o644 },
+      ),
     "aborted",
     "$signal",
   );

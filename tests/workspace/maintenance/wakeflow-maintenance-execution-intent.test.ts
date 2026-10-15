@@ -5,15 +5,9 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowHostMaintenanceContribution,
-} from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowHostMaintenanceContribution } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceExecutionIntent,
@@ -28,22 +22,15 @@ import {
   assertWakeflowMaintenanceExecutionIntentCapacity,
   WakeflowMaintenanceExecutionIntentStoreError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  createWakeflowMaintenanceExecutionPlan,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
+import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
-const OPERATION_ID =
-  "maintenance_operation_11111111-1111-4111-8111-111111111111";
+const OPERATION_ID = "maintenance_operation_11111111-1111-4111-8111-111111111111";
 const PROFILES = Object.freeze([
   claudeCodeWorkspaceHostResourceProfile,
   codexWorkspaceHostResourceProfile,
@@ -52,9 +39,7 @@ const PROFILES = Object.freeze([
 function fixture() {
   const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const desiredDigest = computeWakeflowConfigDigest(config);
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   const basis = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
@@ -66,15 +51,17 @@ function fixture() {
     matrixDigest: matrix.matrixDigest,
     coreLayoutInspectionDigest: desiredDigest,
     blockerCodes: Object.freeze([]),
-    steps: Object.freeze([Object.freeze({
-      stepId: "authority:config",
-      kind: "publish-config" as const,
-      ownerId: "config-authority",
-      targetKey: "workspace.config-authority",
-      sourceDigest: null,
-      targetDigest: desiredDigest,
-      dependsOn: Object.freeze([]),
-    })]),
+    steps: Object.freeze([
+      Object.freeze({
+        stepId: "authority:config",
+        kind: "publish-config" as const,
+        ownerId: "config-authority",
+        targetKey: "workspace.config-authority",
+        sourceDigest: null,
+        targetDigest: desiredDigest,
+        dependsOn: Object.freeze([]),
+      }),
+    ]),
   };
   const preview = parseWakeflowStaticMaterializationPreview({
     ...basis,
@@ -102,24 +89,17 @@ test("compact intent reconstructs the exact plan and request after restart", () 
     value.request,
     value.config,
   );
-  deepEqual(intent.hostProfiles.map((entry) => entry.hostId), [
-    "claude-code",
-    "codex",
-  ]);
+  deepEqual(
+    intent.hostProfiles.map((entry) => entry.hostId),
+    ["claude-code", "codex"],
+  );
   equal(intent.planDigest, value.plan.planDigest);
-  const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(
-    intent,
-  );
-  equal(
-    reconstructed.plan.planDigest,
-    value.plan.planDigest,
-  );
+  const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intent);
+  equal(reconstructed.plan.planDigest, value.plan.planDigest);
   const recoveredRequest = reconstructed.request;
   equal(recoveredRequest.action, "fresh-initialize");
   equal(
-    computeWakeflowConfigDigest(
-      parseWakeflowConfig(recoveredRequest.desiredConfig),
-    ),
+    computeWakeflowConfigDigest(parseWakeflowConfig(recoveredRequest.desiredConfig)),
     computeWakeflowConfigDigest(value.config),
   );
 
@@ -173,8 +153,7 @@ test("intent resource is a private immutable transaction artifact", () => {
     scope: "host-neutral",
     placement: {
       root: { kind: "workspace" },
-      relativePath:
-        `.wakeflow-local/runtime/maintenance/transactions/${OPERATION_ID}.intent.json`,
+      relativePath: `.wakeflow-local/runtime/maintenance/transactions/${OPERATION_ID}.intent.json`,
     },
     tracking: { disposition: "ignored", privacy: "runtime-private" },
     nodePolicy: {
@@ -199,15 +178,17 @@ test("intent persistence budget rejects an oversized host payload", () => {
     capabilityId: "codex-maintenance",
     status: "ready",
     blockerCodes: [],
-    operations: [{
-      operationId: "example-operation:program",
-      operationKind: "example-operation",
-      ownerId: "example-owner",
-      targetKey: "example.target",
-      sourceDigest: null,
-      targetDigest: computeWakeflowConfigDigest(value.config),
-      payload: { value: "x".repeat(2 * 1024 * 1024) },
-    }],
+    operations: [
+      {
+        operationId: "example-operation:program",
+        operationKind: "example-operation",
+        ownerId: "example-owner",
+        targetKey: "example.target",
+        sourceDigest: null,
+        targetDigest: computeWakeflowConfigDigest(value.config),
+        payload: { value: "x".repeat(2 * 1024 * 1024) },
+      },
+    ],
   });
   const plan = createWakeflowMaintenanceExecutionPlan(
     value.plan.sharedPreview,

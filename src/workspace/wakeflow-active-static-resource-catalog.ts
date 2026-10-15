@@ -144,7 +144,11 @@ export const REQUIREMENT_BOARD_RESOURCE_OWNER_ID = "requirement-board" as const;
 
 /** 需求看板 owner 的确定性静态资源目录：目录与人读索引。 */
 export const WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG = Object.freeze([
-  directoryDeclaration("active.board.root", REQUIREMENT_BOARD_RESOURCE_OWNER_ID, REQUIREMENT_BOARD_ROOT_REF),
+  directoryDeclaration(
+    "active.board.root",
+    REQUIREMENT_BOARD_RESOURCE_OWNER_ID,
+    REQUIREMENT_BOARD_ROOT_REF,
+  ),
   projectionDeclaration(
     "active.board.index",
     REQUIREMENT_BOARD_RESOURCE_OWNER_ID,

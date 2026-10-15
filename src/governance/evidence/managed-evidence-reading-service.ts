@@ -2,37 +2,32 @@ import { types } from "node:util";
 
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  sameFileNodeSnapshot,
-} from "../../foundation/filesystem/file-node-snapshot.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
+  type ByteCount,
   ByteCountError,
   parseByteCount,
-  type ByteCount,
 } from "../../foundation/numeric/byte-count.js";
 import {
   closeDemandOperationAuthorityContext,
-  openDemandReadAuthorityContext,
-  DemandOperationAuthorityContextError,
   type DemandOperationAuthorityContext,
+  DemandOperationAuthorityContextError,
+  openDemandReadAuthorityContext,
 } from "../demand/demand-operation-authority-context.js";
-import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import type { ManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import {
+  type LoadedManagedEvidenceRecord,
   loadManagedEvidenceRecord,
+  ManagedEvidenceRecordReaderError,
   readManagedEvidencePayloadMember,
   verifyManagedEvidenceRecord,
-  ManagedEvidenceRecordReaderError,
-  type LoadedManagedEvidenceRecord,
 } from "./managed-evidence-record-reader.js";
 import type { ManagedEvidenceRecordInventoryEntry } from "./managed-evidence-record-set-inventory.js";
 
@@ -97,9 +92,7 @@ const ERROR_MESSAGES = {
   capacity: "Managed evidence reading exceeds its caller-provided capacity.",
   aborted: "Managed evidence reading was aborted.",
   "operation-failure": "Managed evidence reading failed.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceReadingServiceErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceReadingServiceErrorReason, string>>;
 
 /** Authority或记录内容无法闭合时的稳定、脱敏读取错误。 */
 export class ManagedEvidenceReadingServiceError extends Error {
@@ -144,10 +137,7 @@ function ownString(value: unknown, key: string): string | null {
     : null;
 }
 
-function fail(
-  reason: ManagedEvidenceReadingServiceErrorReason,
-  cause?: unknown,
-): never {
+function fail(reason: ManagedEvidenceReadingServiceErrorReason, cause?: unknown): never {
   throw new ManagedEvidenceReadingServiceError(
     reason,
     ownString(cause, "code"),
@@ -190,9 +180,7 @@ function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
   }
   if (
     !Object.hasOwn(record, "maximumBytes") ||
-    Object.keys(record).some(
-      (key) => key !== "maximumBytes" && key !== "signal",
-    )
+    Object.keys(record).some((key) => key !== "maximumBytes" && key !== "signal")
   ) {
     fail("input");
   }
@@ -209,10 +197,7 @@ function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
   });
 }
 
-function parseId<K extends "demand" | "evidence">(
-  value: unknown,
-  kind: K,
-): WakeflowDurableId<K> {
+function parseId<K extends "demand" | "evidence">(value: unknown, kind: K): WakeflowDurableId<K> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, `$${kind}Id`);
   } catch (error: unknown) {
@@ -233,10 +218,7 @@ function mapReaderError(error: ManagedEvidenceRecordReaderError): never {
   if (error.reason === "input") fail("input", error);
   if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "root-scope") fail("demand", error);
-  if (
-    error.reason === "not-found" ||
-    error.reason === "member-not-found"
-  ) {
+  if (error.reason === "not-found" || error.reason === "member-not-found") {
     fail("not-found", error);
   }
   if (error.reason === "capacity") fail("capacity", error);
@@ -290,11 +272,7 @@ async function withAuthorityRecord<Result>(
   let failure: unknown;
   try {
     try {
-      context = await openDemandReadAuthorityContext(
-        workspaceRoot,
-        demandId,
-        signal,
-      );
+      context = await openDemandReadAuthorityContext(workspaceRoot, demandId, signal);
     } catch (error: unknown) {
       if (error instanceof DemandOperationAuthorityContextError) {
         mapContextError(error);
@@ -307,14 +285,10 @@ async function withAuthorityRecord<Result>(
     if (expected === undefined) fail("not-found");
     let record: Readonly<LoadedManagedEvidenceRecord>;
     try {
-      record = await loadManagedEvidenceRecord(
-        context.demandRoot,
-        evidenceId,
-        {
-          expectedRootNode: expected.rootNode,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
+      record = await loadManagedEvidenceRecord(context.demandRoot, evidenceId, {
+        expectedRootNode: expected.rootNode,
+        ...(signal === undefined ? {} : { signal }),
+      });
     } catch (error: unknown) {
       if (error instanceof ManagedEvidenceRecordReaderError) {
         mapReaderError(error);
@@ -339,13 +313,14 @@ async function withAuthorityRecord<Result>(
       await closeDemandOperationAuthorityContext(context);
     } catch (error: unknown) {
       if (failure === undefined) {
-        failure = error instanceof DemandOperationAuthorityContextError
-          ? new ManagedEvidenceReadingServiceError(
-              error.reason === "aborted" ? "aborted" : "demand",
-              error.code,
-              error.reason,
-            )
-          : error;
+        failure =
+          error instanceof DemandOperationAuthorityContextError
+            ? new ManagedEvidenceReadingServiceError(
+                error.reason === "aborted" ? "aborted" : "demand",
+                error.code,
+                error.reason,
+              )
+            : error;
       }
     }
   }
@@ -403,17 +378,10 @@ export class ManagedEvidenceReadingService {
       evidenceId,
       options.signal,
       async (root, record) => {
-        const read = await readManagedEvidencePayloadMember(
-          root,
-          record,
-          memberRefValue,
-          {
-            maximumBytes: options.maximumBytes,
-            ...(options.signal === undefined
-              ? {}
-              : { signal: options.signal }),
-          },
-        );
+        const read = await readManagedEvidencePayloadMember(root, record, memberRefValue, {
+          maximumBytes: options.maximumBytes,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
         return Object.freeze({
           manifest: read.record.manifest,
           recordTreePlanDigest: read.record.recordTreePlan.planDigest,

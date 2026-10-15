@@ -2,34 +2,31 @@ import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
 import {
   LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-  validateLoadedArtifactTreeManifest,
   type LoadedArtifactTreeManifest,
+  validateLoadedArtifactTreeManifest,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
-  renderManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
   type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  renderManagedEvidenceManifest,
 } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 import {
-  parseManagedEvidenceRecordTreePlan,
-  planManagedEvidenceRecordTree,
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
   ManagedEvidenceRecordTreePlanError,
   type ManagedEvidenceRecordTreePlanErrorReason,
+  parseManagedEvidenceRecordTreePlan,
+  planManagedEvidenceRecordTree,
 } from "../../../src/governance/evidence/managed-evidence-record-tree-plan.js";
 import {
   managedEvidencePublicationStageRef,
@@ -41,22 +38,13 @@ const IDS = {
     "evidence_11111111-1111-4111-8111-111111111111",
     "evidence",
   ),
-  program: parseWakeflowDurableIdOfKind(
-    "program_22222222-2222-4222-8222-222222222222",
-    "program",
-  ),
-  demand: parseWakeflowDurableIdOfKind(
-    "demand_33333333-3333-4333-8333-333333333333",
-    "demand",
-  ),
+  program: parseWakeflowDurableIdOfKind("program_22222222-2222-4222-8222-222222222222", "program"),
+  demand: parseWakeflowDurableIdOfKind("demand_33333333-3333-4333-8333-333333333333", "demand"),
   repository: parseWakeflowDurableIdOfKind(
     "repository_44444444-4444-4444-8444-444444444444",
     "repository",
   ),
-  window: parseWakeflowDurableIdOfKind(
-    "window_55555555-5555-4555-8555-555555555555",
-    "window",
-  ),
+  window: parseWakeflowDurableIdOfKind("window_55555555-5555-4555-8555-555555555555", "window"),
 } as const;
 
 const AUTHORITY_DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
@@ -89,7 +77,7 @@ function draft(tree: Readonly<LoadedArtifactTreeManifest>) {
     contentReview: {
       disposition: "not-required" as const,
       opaqueFileRefs: [] as const,
-    privacyFindings: [],
+      privacyFindings: [],
     },
   };
 }
@@ -151,15 +139,9 @@ test("Managed Evidence record plan闭合Manifest文件与payload整树", () => {
   equal(plan.evidenceId, IDS.evidence);
   equal(plan.manifest.manifestDigest, value.manifestDigest);
   equal(plan.manifestDocumentDigest, computeSha256Digest(manifestBytes));
-  equal(
-    plan.candidateRootPath,
-    managedEvidencePublicationStageRef(IDS.evidence),
-  );
+  equal(plan.candidateRootPath, managedEvidencePublicationStageRef(IDS.evidence));
   equal(plan.destinationRootPath, managedEvidenceRecordRootRef(IDS.evidence));
-  equal(
-    plan.directoryPlan.directoryMode,
-    MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
-  );
+  equal(plan.directoryPlan.directoryMode, MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE);
   deepEqual(plan.directoryPlan.directories, ["payload", "payload/bin"]);
   deepEqual(
     plan.directoryPlan.files.map((file) => ({
@@ -191,9 +173,7 @@ test("Managed Evidence record plan闭合Manifest文件与payload整树", () => {
   );
   equal(
     plan.directoryPlan.totalBytes,
-    manifestBytes.byteLength +
-      README_BYTES.byteLength +
-      SCRIPT_BYTES.byteLength,
+    manifestBytes.byteLength + README_BYTES.byteLength + SCRIPT_BYTES.byteLength,
   );
   const { planDigest: _planDigest, ...basis } = plan;
   equal(plan.planDigest, computeCanonicalJsonSha256Digest(basis));
@@ -251,8 +231,7 @@ test("Managed Evidence payload预算为完整final record预留Foundation容量"
   );
   equal(
     MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxTotalBytes,
-    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes -
-      MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   );
 
   const deepRef = Array.from(
@@ -279,7 +258,6 @@ test("Managed Evidence payload预算为完整final record预留Foundation容量"
         clock: () => CAPTURED_AT,
       }),
     (error: unknown) =>
-      error instanceof ManagedEvidenceManifestError &&
-      error.reason === "capacity",
+      error instanceof ManagedEvidenceManifestError && error.reason === "capacity",
   );
 });

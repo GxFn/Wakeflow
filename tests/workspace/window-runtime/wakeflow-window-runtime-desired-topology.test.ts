@@ -1,21 +1,11 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  parseWakeflowConfig,
-} from "../../../src/configuration/wakeflow-config.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  compileWakeflowWindowRuntimeDesiredTopology,
-} from "../../../src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { compileWakeflowWindowRuntimeDesiredTopology } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
 function config() {
   return parseWakeflowConfig(createMinimalWakeflowConfig());
@@ -29,27 +19,24 @@ test("Window Runtime desired topology compiles only stable logical facts", () =>
   equal(topology.kind, "WakeflowWindowRuntimeDesiredTopology");
   equal(topology.hostId, "codex");
   equal(topology.windows.length, 4);
-  deepEqual(topology.windows.map((entry) => entry.role), [
-    "controller",
-    "design",
-    "test",
-    "product",
-  ]);
-  deepEqual(topology.windows.map((entry) => entry.configuredPlacement), [
-    ".",
-    "Design",
-    "Test",
-    "../ProductA",
-  ]);
-  deepEqual(topology.windows.map((entry) => entry.logicalRoot.kind), [
-    "program",
-    "support-surface",
-    "support-surface",
-    "repository",
-  ]);
+  deepEqual(
+    topology.windows.map((entry) => entry.role),
+    ["controller", "design", "test", "product"],
+  );
+  deepEqual(
+    topology.windows.map((entry) => entry.configuredPlacement),
+    [".", "Design", "Test", "../ProductA"],
+  );
+  deepEqual(
+    topology.windows.map((entry) => entry.logicalRoot.kind),
+    ["program", "support-surface", "support-surface", "repository"],
+  );
   equal(Object.isFrozen(topology), true);
   equal(Object.isFrozen(topology.windows), true);
-  equal(topology.windows.every((entry) => Object.isFrozen(entry)), true);
+  equal(
+    topology.windows.every((entry) => Object.isFrozen(entry)),
+    true,
+  );
   equal("displayName" in topology.windows[0]!, false);
   equal("dispatchEligibility" in topology.windows[0]!, false);
   equal("identity" in topology.windows[0]!, false);
@@ -64,11 +51,12 @@ test("desired topology ignores presentation and display text but tracks placemen
   );
 
   const presentationChanged = createMinimalWakeflowConfig();
-  (presentationChanged.presentation as Record<string, unknown>).language =
-    "zh-Hans";
-  const windows = (presentationChanged.topology as {
-    windows: Record<string, unknown>[];
-  }).windows;
+  (presentationChanged.presentation as Record<string, unknown>).language = "zh-Hans";
+  const windows = (
+    presentationChanged.topology as {
+      windows: Record<string, unknown>[];
+    }
+  ).windows;
   const designWindow = windows[1];
   if (designWindow === undefined) throw new Error("Expected Design window.");
   designWindow.displayName = "设计窗口";
@@ -79,9 +67,11 @@ test("desired topology ignores presentation and display text but tracks placemen
   equal(textChanged.desiredTopologyDigest, baseline.desiredTopologyDigest);
 
   const placementChanged = createMinimalWakeflowConfig();
-  const surfaces = (placementChanged.topology as {
-    supportSurfaces: Record<string, unknown>[];
-  }).supportSurfaces;
+  const surfaces = (
+    placementChanged.topology as {
+      supportSurfaces: Record<string, unknown>[];
+    }
+  ).supportSurfaces;
   const designSurface = surfaces[0];
   if (designSurface === undefined) throw new Error("Expected Design surface.");
   designSurface.path = "DesignMoved";

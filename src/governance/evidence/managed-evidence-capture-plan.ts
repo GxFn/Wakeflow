@@ -1,27 +1,24 @@
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
+  parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
 import {
-  parseManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
   type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifest,
 } from "./managed-evidence-manifest.js";
 
 /**
@@ -32,8 +29,7 @@ import {
  * plan仍是同一份preview，不授予文件写入、Event追加或恢复能力。
  */
 
-export const MANAGED_EVIDENCE_CAPTURE_PLAN_KIND =
-  "WakeflowManagedEvidenceCapturePlan" as const;
+export const MANAGED_EVIDENCE_CAPTURE_PLAN_KIND = "WakeflowManagedEvidenceCapturePlan" as const;
 export const MANAGED_EVIDENCE_CAPTURE_PLAN_VERSION = 1 as const;
 
 export interface ManagedEvidenceCaptureDemandExpectation {
@@ -67,9 +63,7 @@ const ERROR_MESSAGES = {
   digest: "Managed evidence capture plan contains an invalid digest.",
   manifest: "Managed evidence capture plan contains an invalid Manifest.",
   relation: "Managed evidence capture plan fields do not describe one preview.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceCapturePlanErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceCapturePlanErrorReason, string>>;
 
 /** Capture plan无法形成单一零写preview时的稳定错误。 */
 export class ManagedEvidenceCapturePlanError extends Error {
@@ -93,11 +87,7 @@ interface ManagedEvidenceCapturePlanBasis {
   readonly manifest: Readonly<ManagedEvidenceManifest>;
 }
 
-const CREATE_FIELDS = Object.freeze([
-  "configDigest",
-  "expectedDemand",
-  "manifest",
-] as const);
+const CREATE_FIELDS = Object.freeze(["configDigest", "expectedDemand", "manifest"] as const);
 const PLAN_FIELDS = Object.freeze([
   "configDigest",
   "expectedDemand",
@@ -113,10 +103,7 @@ const EXPECTATION_FIELDS = Object.freeze([
   "streamRevision",
 ] as const);
 
-function fail(
-  reason: ManagedEvidenceCapturePlanErrorReason,
-  path: string,
-): never {
+function fail(reason: ManagedEvidenceCapturePlanErrorReason, path: string): never {
   throw new ManagedEvidenceCapturePlanError(reason, path);
 }
 
@@ -134,10 +121,7 @@ function exactRecord(
   }
   const actual = Object.keys(record).sort();
   const expected = [...fields].sort();
-  if (
-    actual.length !== expected.length ||
-    actual.some((key, index) => key !== expected[index])
-  ) {
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     fail("input", path);
   }
   return record;
@@ -152,15 +136,9 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parseLastEventId(
-  value: unknown,
-): WakeflowDurableId<"demand-event"> {
+function parseLastEventId(value: unknown): WakeflowDurableId<"demand-event"> {
   try {
-    return parseWakeflowDurableIdOfKind(
-      value,
-      "demand-event",
-      "$/expectedDemand/lastEventId",
-    );
+    return parseWakeflowDurableIdOfKind(value, "demand-event", "$/expectedDemand/lastEventId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("identifier", "$/expectedDemand/lastEventId");
@@ -169,9 +147,7 @@ function parseLastEventId(
   }
 }
 
-function parseExpectation(
-  value: unknown,
-): Readonly<ManagedEvidenceCaptureDemandExpectation> {
+function parseExpectation(value: unknown): Readonly<ManagedEvidenceCaptureDemandExpectation> {
   const record = exactRecord(value, EXPECTATION_FIELDS, "$/expectedDemand");
   let streamRevision: DemandEventStreamRevision;
   try {
@@ -187,15 +163,9 @@ function parseExpectation(
   }
   return Object.freeze({
     streamRevision,
-    stateDigest: parseDigest(
-      record.stateDigest,
-      "$/expectedDemand/stateDigest",
-    ),
+    stateDigest: parseDigest(record.stateDigest, "$/expectedDemand/stateDigest"),
     lastEventId: parseLastEventId(record.lastEventId),
-    lastEventDigest: parseDigest(
-      record.lastEventDigest,
-      "$/expectedDemand/lastEventDigest",
-    ),
+    lastEventDigest: parseDigest(record.lastEventDigest, "$/expectedDemand/lastEventDigest"),
   });
 }
 
@@ -235,11 +205,7 @@ export function createManagedEvidenceCapturePlan(
   value: unknown,
 ): Readonly<ManagedEvidenceCapturePlan> {
   const record = exactRecord(value, CREATE_FIELDS, "$input");
-  const basis = buildBasis(
-    record.configDigest,
-    record.expectedDemand,
-    record.manifest,
-  );
+  const basis = buildBasis(record.configDigest, record.expectedDemand, record.manifest);
   return Object.freeze({
     ...basis,
     planDigest: computeCanonicalJsonSha256Digest(basis, "$plan"),
@@ -257,11 +223,7 @@ export function parseManagedEvidenceCapturePlan(
   ) {
     fail("input", "$plan");
   }
-  const basis = buildBasis(
-    record.configDigest,
-    record.expectedDemand,
-    record.manifest,
-  );
+  const basis = buildBasis(record.configDigest, record.expectedDemand, record.manifest);
   const planDigest = parseDigest(record.planDigest, "$/planDigest");
   if (planDigest !== computeCanonicalJsonSha256Digest(basis, "$plan")) {
     fail("relation", "$/planDigest");
@@ -269,8 +231,6 @@ export function parseManagedEvidenceCapturePlan(
   return Object.freeze({ ...basis, planDigest });
 }
 
-export function computeManagedEvidenceCapturePlanDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeManagedEvidenceCapturePlanDigest(value: unknown): Sha256Digest {
   return parseManagedEvidenceCapturePlan(value).planDigest;
 }

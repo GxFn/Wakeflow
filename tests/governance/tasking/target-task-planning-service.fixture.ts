@@ -1,9 +1,13 @@
-import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-
+import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
+import {
+  type ExecuteTargetTaskPlanningOptions,
+  executeTargetTaskPlanningPublicRequest,
+} from "../../../src/capabilities/tasking/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
+import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -13,38 +17,37 @@ import { DemandFileEventStore } from "../../../src/governance/demand/event-sourc
 import {
   computeDemandAuthorityDigest,
   createDemandAuthority,
-  renderDemandAuthority,
   type DemandTestingMode,
+  renderDemandAuthority,
 } from "../../../src/governance/demand/model/demand-authority.js";
 import {
   createDemandIdentity,
   renderDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
+import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
-import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
-import {
-  executeTargetTaskPlanningPublicRequest,
-  type ExecuteTargetTaskPlanningOptions,
-} from "../../../src/capabilities/tasking/service.js";
-import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
-import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { parseAcceptanceCriteria } from "../../../src/kernel/requirement-acceptance.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {
   createPreparedWorkspaceStore,
   DISPOSABLE_ROOT_OPTIONS,
   DISPOSABLE_WORKSPACE_DURABILITY,
 } from "../../support/prepared-workspace.js";
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import {
   claimFixtureRequirement,
   placePendingClaimState,
   requirementLineageOf,
 } from "../demand/requirement-board.fixture.js";
-import { fixtureDocuments, FIXTURE_REQUIREMENT_MARKDOWN, publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
+import {
+  FIXTURE_REQUIREMENT_MARKDOWN,
+  fixtureDocuments,
+  publishFixtureRequirement,
+} from "../ledger/requirement-package.fixture.js";
 
 export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -133,7 +136,12 @@ export interface TargetTaskPlanningWorkspaceFacts {
 export function targetTaskPlanningWorkspaceBaselineKey(
   options: TargetTaskPlanningWorkspaceFixtureOptions,
 ): string | null {
-  if (options.freshBaseline === true || options.requirementMarkdown !== undefined || options.identityText !== undefined) return null;
+  if (
+    options.freshBaseline === true ||
+    options.requirementMarkdown !== undefined ||
+    options.identityText !== undefined
+  )
+    return null;
   return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}|${options.coverAllCriteria === true}`;
 }
 
@@ -166,17 +174,11 @@ async function buildTargetTaskPlanningWorkspace(
     mkdirSync(path.join(workspacePath, relative), { mode: 0o755 });
   }
   const config = parseWakeflowConfig(createMinimalWakeflowConfig());
-  writeFileSync(
-    path.join(workspacePath, "wakeflow.config.json"),
-    renderWakeflowConfig(config),
-    { mode: 0o644 },
-  );
+  writeFileSync(path.join(workspacePath, "wakeflow.config.json"), renderWakeflowConfig(config), {
+    mode: 0o644,
+  });
   materializeFixtureOperationScope(workspacePath);
-  const workspaceRoot = await RootedDirectory.open(
-    workspacePath,
-    "$root",
-    DISPOSABLE_ROOT_OPTIONS,
-  );
+  const workspaceRoot = await RootedDirectory.open(workspacePath, "$root", DISPOSABLE_ROOT_OPTIONS);
   await materializeActiveLayout(workspaceRoot, { recovering: false });
   const testingSummary =
     testingMode === "real-environment"
@@ -199,9 +201,7 @@ async function buildTargetTaskPlanningWorkspace(
       : fixtureDocuments({ requirement: options.requirementMarkdown }),
   );
   const authorityRefs = Object.freeze(
-    loaded.documents.map((document) =>
-      createLedgerAuthorityMemberReference(loaded, document.path),
-    ),
+    loaded.documents.map((document) => createLedgerAuthorityMemberReference(loaded, document.path)),
   );
   await placePendingClaimState(workspaceRoot, loaded);
 
@@ -239,11 +239,7 @@ async function buildTargetTaskPlanningWorkspace(
   );
   mkdirSync(demandRootPath, { mode: 0o700 });
   chmodSync(demandRootPath, 0o700);
-  const demandRoot = await RootedDirectory.open(
-    demandRootPath,
-    "$root",
-    DISPOSABLE_ROOT_OPTIONS,
-  );
+  const demandRoot = await RootedDirectory.open(demandRootPath, "$root", DISPOSABLE_ROOT_OPTIONS);
   try {
     const eventStore = new DemandFileEventStore(demandRoot);
     await eventStore.initialize();
@@ -252,16 +248,12 @@ async function buildTargetTaskPlanningWorkspace(
       mode: 0o700,
     });
     mkdirSync(path.join(demandRootPath, "transactions"), { mode: 0o700 });
-    writeFileSync(
-      path.join(demandRootPath, "identity.json"),
-      renderDemandIdentity(identity),
-      { mode: 0o600 },
-    );
-    writeFileSync(
-      path.join(demandRootPath, "authority.json"),
-      renderDemandAuthority(authority),
-      { mode: 0o600 },
-    );
+    writeFileSync(path.join(demandRootPath, "identity.json"), renderDemandIdentity(identity), {
+      mode: 0o600,
+    });
+    writeFileSync(path.join(demandRootPath, "authority.json"), renderDemandAuthority(authority), {
+      mode: 0o600,
+    });
     const repository = new DemandEventSourcingRepository(demandRoot);
     const created = await executeDemandEventSourcingCommand(
       repository,
@@ -289,45 +281,51 @@ async function buildTargetTaskPlanningWorkspace(
   const [firstMemberRef, ...otherMemberRefs] = memberRefs;
   if (firstMemberRef === undefined) throw new Error("Expected at least one authority member.");
   const taskPackage: WakeflowTargetTaskPlanningRequestV1["taskPackage"] = {
-        assignment: {
-          repositoryId: PLANNING_REPOSITORY_ID,
-          windowId: PLANNING_WINDOW_ID,
+    assignment: {
+      repositoryId: PLANNING_REPOSITORY_ID,
+      windowId: PLANNING_WINDOW_ID,
+    },
+    workType: "implementation" as const,
+    objective: "实现 Target Task Planning 公共垂直切片",
+    confirmedContext: ["Demand Authority 已发布", "当前只规划任务，不执行 Delivery"],
+    selectedAuthorityMemberRefs: [firstMemberRef, ...otherMemberRefs],
+    boundaries: {
+      inScope: ["追加 target-task-planned 事件"],
+      outOfScope: ["Delivery transport"],
+      forbidden: ["调用宿主发送能力"],
+    },
+    completionExpectations: ["Apply 可幂等重试", "TaskPackage 投影严格回读"],
+    commitExpectation: "leave-uncommitted" as const,
+    acceptanceAnchors: [
+      {
+        anchorId: "planning-commit",
+        claim: "Planning 只追加一条业务事件",
+        probe: "审计 Event Store 并检查 stream revision",
+        expected: "同一 plan 重试不增加事件",
+        requirementRef: {
+          recordDigest: loaded.recordDigest,
+          sectionAnchor: "acceptance-criteria",
+          itemId: "ac-1",
         },
-        workType: "implementation" as const,
-        objective: "实现 Target Task Planning 公共垂直切片",
-        confirmedContext: ["Demand Authority 已发布", "当前只规划任务，不执行 Delivery"],
-        selectedAuthorityMemberRefs: [firstMemberRef, ...otherMemberRefs],
-        boundaries: {
-          inScope: ["追加 target-task-planned 事件"],
-          outOfScope: ["Delivery transport"],
-          forbidden: ["调用宿主发送能力"],
-        },
-        completionExpectations: ["Apply 可幂等重试", "TaskPackage 投影严格回读"],
-        commitExpectation: "leave-uncommitted" as const,
-        acceptanceAnchors: [
-          {
-            anchorId: "planning-commit",
-            claim: "Planning 只追加一条业务事件",
-            probe: "审计 Event Store 并检查 stream revision",
-            expected: "同一 plan 重试不增加事件",
-            requirementRef: {
-              recordDigest: loaded.recordDigest,
-              sectionAnchor: "acceptance-criteria",
-              itemId: "ac-1",
-            },
-          },
-        ],
-        lineage: null,
-        sectionAnchors: [],
+      },
+    ],
+    lineage: null,
+    sectionAnchors: [],
   };
   if (options.coverAllCriteria === true) {
-    for (const criterion of parseAcceptanceCriteria(options.requirementMarkdown ?? FIXTURE_REQUIREMENT_MARKDOWN).slice(1)) {
+    for (const criterion of parseAcceptanceCriteria(
+      options.requirementMarkdown ?? FIXTURE_REQUIREMENT_MARKDOWN,
+    ).slice(1)) {
       taskPackage.acceptanceAnchors.push({
         anchorId: `criterion-${criterion.itemId}`,
         claim: criterion.text,
         probe: "核对该条标准的实现与受管结果",
         expected: criterion.text,
-        requirementRef: { recordDigest: loaded.recordDigest, sectionAnchor: "acceptance-criteria", itemId: criterion.itemId },
+        requirementRef: {
+          recordDigest: loaded.recordDigest,
+          sectionAnchor: "acceptance-criteria",
+          itemId: criterion.itemId,
+        },
       });
     }
   }

@@ -1,62 +1,68 @@
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
 import type { WakeflowDecisionRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
 import { WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/decision-recorded-event-data-v1.generated.js";
 import type { WakeflowDemandContinuedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-continued-event-data-v1.generated.js";
 import type { WakeflowDemandEscalatedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-escalated-event-data-v1.generated.js";
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
 import {
-  parseJsonValue,
-  JsonValueError,
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
+import {
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../../../foundation/data/json-value.js";
+import {
+  PassiveOwnDataError,
+  parsePlainRecord,
+} from "../../../foundation/data/passive-own-data.js";
 import {
   createRuntimeJsonSchemaValidator,
   type RuntimeJsonSchemaValidator,
 } from "../../../foundation/schema/runtime-json-schema.js";
-import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-} from "../../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../../foundation/data/passive-own-data.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../../foundation/time/utc-instant.js";
 import {
-  parseManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
+  type DeliveryEnvelope,
+  DeliveryEnvelopeError,
+  parseDeliveryEnvelope,
+} from "../../delivery/delivery-envelope.js";
+import {
+  type DeliveryOutcome,
+  DeliveryOutcomeError,
+  parseDeliveryOutcome,
+} from "../../delivery/delivery-outcome.js";
+import {
+  type DeliveryRearm,
+  DeliveryRearmError,
+  parseDeliveryRearm,
+} from "../../delivery/delivery-rearm.js";
+import {
   type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifest,
 } from "../../evidence/managed-evidence-manifest.js";
 import {
-  parseTaskPackage,
-  TaskPackageError,
-  type TaskPackage,
-} from "../../tasking/task-package.js";
+  type DemandCompletion,
+  DemandCompletionError,
+  parseDemandCompletion,
+} from "../../lifecycle/demand-completion.js";
 import {
   parseTargetResult,
-  targetResultRecordedEventIdFromResult,
-  TargetResultError,
   type TargetResult,
+  TargetResultError,
+  targetResultRecordedEventIdFromResult,
 } from "../../result/target-result.js";
-import {
-  controllerReviewDecisionEventId,
-  parseControllerReviewDecision,
-  ControllerReviewDecisionError,
-  type ControllerReviewDecision,
-} from "../../review/controller-review-decision.js";
 import {
   deriveTargetResultCallbackId,
   parseTargetResultCallbackRecord,
@@ -68,32 +74,22 @@ import {
   type TargetResultEvidenceResolution,
 } from "../../result/target-result-callback.js";
 import {
+  type ControllerProductDefectRemediationAuthorization,
+  ControllerProductDefectRemediationAuthorizationError,
   parseControllerProductDefectRemediationAuthorization,
   productDefectRemediationAuthorizedEventId,
-  ControllerProductDefectRemediationAuthorizationError,
-  type ControllerProductDefectRemediationAuthorization,
 } from "../../review/controller-product-defect-remediation-authorization.js";
 import {
-  parseDemandCompletion,
-  DemandCompletionError,
-  type DemandCompletion,
-} from "../../lifecycle/demand-completion.js";
-
+  type ControllerReviewDecision,
+  ControllerReviewDecisionError,
+  controllerReviewDecisionEventId,
+  parseControllerReviewDecision,
+} from "../../review/controller-review-decision.js";
 import {
-  DeliveryEnvelopeError,
-  parseDeliveryEnvelope,
-  type DeliveryEnvelope,
-} from "../../delivery/delivery-envelope.js";
-import {
-  DeliveryOutcomeError,
-  parseDeliveryOutcome,
-  type DeliveryOutcome,
-} from "../../delivery/delivery-outcome.js";
-import {
-  DeliveryRearmError,
-  parseDeliveryRearm,
-  type DeliveryRearm,
-} from "../../delivery/delivery-rearm.js";
+  parseTaskPackage,
+  type TaskPackage,
+  TaskPackageError,
+} from "../../tasking/task-package.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：尚未进入事件存储的领域事件。
@@ -309,35 +305,25 @@ const ERROR_MESSAGES = {
   identifier: "Demand Event Sourcing event contains an invalid identity.",
   time: "Demand Event Sourcing event contains an invalid recorded time.",
   digest: "Demand Event Sourcing event contains an invalid digest.",
-  "event-type":
-    "Demand Event Sourcing event type and data do not form one closed variant.",
+  "event-type": "Demand Event Sourcing event type and data do not form one closed variant.",
   text: "Demand Event Sourcing event contains non-canonical text.",
-  "task-package":
-    "Demand Event Sourcing event contains an invalid TaskPackage.",
-  "delivery-envelope":
-    "Demand Event Sourcing event contains an invalid Delivery Envelope.",
-  "delivery-outcome":
-    "Demand Event Sourcing event contains an invalid Delivery Outcome.",
-  "delivery-rearm":
-    "Demand Event Sourcing event contains an invalid Delivery Rearm.",
-  "target-result":
-    "Demand Event Sourcing event contains an invalid TargetResult.",
+  "task-package": "Demand Event Sourcing event contains an invalid TaskPackage.",
+  "delivery-envelope": "Demand Event Sourcing event contains an invalid Delivery Envelope.",
+  "delivery-outcome": "Demand Event Sourcing event contains an invalid Delivery Outcome.",
+  "delivery-rearm": "Demand Event Sourcing event contains an invalid Delivery Rearm.",
+  "target-result": "Demand Event Sourcing event contains an invalid TargetResult.",
   "controller-review-decision":
     "Demand Event Sourcing event contains an invalid Controller Review Decision.",
   "controller-product-defect-remediation-authorization":
     "Demand Event Sourcing event contains an invalid Controller Product Defect Remediation Authorization.",
   "target-result-callback":
     "Demand Event Sourcing event contains an invalid Target Result callback record.",
-  "demand-completion":
-    "Demand Event Sourcing event contains an invalid Demand Completion.",
-  "lifecycle-data":
-    "Demand Event Sourcing event carries invalid lifecycle data.",
+  "demand-completion": "Demand Event Sourcing event contains an invalid Demand Completion.",
+  "lifecycle-data": "Demand Event Sourcing event carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing event contains an invalid Managed Evidence Manifest.",
   relation: "Demand Event Sourcing event identity and payload do not close.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingEventErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingEventErrorReason, string>>;
 
 export class DemandEventSourcingEventError extends Error {
   override readonly name = "DemandEventSourcingEventError";
@@ -379,21 +365,19 @@ const LIFECYCLE_DATA_REFERENCES = Object.freeze([
   WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
   WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-const validateEscalatedData =
-  createRuntimeJsonSchemaValidator<WakeflowDemandEscalatedEventDataV1>(
-    WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA,
-    LIFECYCLE_DATA_REFERENCES,
-  );
+const validateEscalatedData = createRuntimeJsonSchemaValidator<WakeflowDemandEscalatedEventDataV1>(
+  WAKEFLOW_DEMAND_ESCALATED_EVENT_DATA_V1_SCHEMA,
+  LIFECYCLE_DATA_REFERENCES,
+);
 const validateDecisionRecordedData =
   createRuntimeJsonSchemaValidator<WakeflowDecisionRecordedEventDataV1>(
     WAKEFLOW_DECISION_RECORDED_EVENT_DATA_V1_SCHEMA,
     LIFECYCLE_DATA_REFERENCES,
   );
-const validateContinuedData =
-  createRuntimeJsonSchemaValidator<WakeflowDemandContinuedEventDataV1>(
-    WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA,
-    LIFECYCLE_DATA_REFERENCES,
-  );
+const validateContinuedData = createRuntimeJsonSchemaValidator<WakeflowDemandContinuedEventDataV1>(
+  WAKEFLOW_DEMAND_CONTINUED_EVENT_DATA_V1_SCHEMA,
+  LIFECYCLE_DATA_REFERENCES,
+);
 
 /** 生命周期事件的数据只有 Schema 形状，没有独立领域编解码器；这里按 Schema 严格准入。 */
 function lifecycleData<Data>(
@@ -412,9 +396,7 @@ function lifecycleData<Data>(
   if (!result.ok) fail("lifecycle-data", path);
   return Object.freeze(result.value);
 }
-const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze([
-  "manifest",
-] as const);
+const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze(["manifest"] as const);
 const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze(["taskPackage"] as const);
 const DELIVERY_PREPARED_DATA_FIELDS = Object.freeze(["envelope"] as const);
 const DELIVERY_OUTCOME_RECORDED_DATA_FIELDS = Object.freeze(["outcome"] as const);
@@ -425,19 +407,11 @@ const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze([
   "result",
 ] as const);
 const CALLBACK_REISSUED_DATA_FIELDS = Object.freeze(["reissue"] as const);
-const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze([
-  "decision",
-] as const);
-const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze([
-  "authorization",
-] as const);
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"] as const);
+const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze(["authorization"] as const);
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
-function fail(
-  reason: DemandEventSourcingEventErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingEventErrorReason, path: string): never {
   throw new DemandEventSourcingEventError(reason, path);
 }
 
@@ -454,10 +428,7 @@ function exactRecord(
     throw error;
   }
   const keys = Object.keys(record).sort();
-  if (
-    keys.length !== fields.length ||
-    keys.some((key, index) => key !== fields[index])
-  ) {
+  if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
     fail("input", path);
   }
   return record;
@@ -510,9 +481,7 @@ function parseCanonicalReason(value: unknown): string {
 }
 
 /** 解析字段集合严格受限，且不含任何持久化位置字段的未提交事件。 */
-export function parseDemandUncommittedEvent(
-  value: unknown,
-): Readonly<DemandUncommittedEvent> {
+export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUncommittedEvent> {
   const record = exactRecord(value, BASE_FIELDS, "$event");
   const eventId = parseId(record.eventId, "demand-event", "$/eventId");
   const demandId = parseId(record.demandId, "demand", "$/demandId");
@@ -520,10 +489,7 @@ export function parseDemandUncommittedEvent(
 
   if (record.eventType === "publication.demand-published") {
     const data = exactRecord(record.data, PUBLISHED_DATA_FIELDS, "$/data");
-    if (
-      data.identityRef !== "identity.json" ||
-      data.authorityRef !== "authority.json"
-    ) {
+    if (data.identityRef !== "identity.json" || data.authorityRef !== "authority.json") {
       fail("event-type", "$/data");
     }
     return Object.freeze({
@@ -533,15 +499,9 @@ export function parseDemandUncommittedEvent(
       eventType: "publication.demand-published",
       data: Object.freeze({
         identityRef: "identity.json",
-        identityDigest: parseDigest(
-          data.identityDigest,
-          "$/data/identityDigest",
-        ),
+        identityDigest: parseDigest(data.identityDigest, "$/data/identityDigest"),
         authorityRef: "authority.json",
-        authorityDigest: parseDigest(
-          data.authorityDigest,
-          "$/data/authorityDigest",
-        ),
+        authorityDigest: parseDigest(data.authorityDigest, "$/data/authorityDigest"),
       }),
     });
   }
@@ -568,10 +528,7 @@ export function parseDemandUncommittedEvent(
       }
       throw error;
     }
-    if (
-      completion.demandId !== demandId ||
-      completion.completedAt !== recordedAt
-    ) {
+    if (completion.demandId !== demandId || completion.completedAt !== recordedAt) {
       fail("relation", "$event");
     }
     return Object.freeze({
@@ -640,11 +597,7 @@ export function parseDemandUncommittedEvent(
   }
 
   if (record.eventType === "evidence.managed-evidence-recorded") {
-    const data = exactRecord(
-      record.data,
-      MANAGED_EVIDENCE_RECORDED_DATA_FIELDS,
-      "$/data",
-    );
+    const data = exactRecord(record.data, MANAGED_EVIDENCE_RECORDED_DATA_FIELDS, "$/data");
     let manifest: Readonly<ManagedEvidenceManifest>;
     try {
       manifest = parseManagedEvidenceManifest(data.manifest);
@@ -667,11 +620,7 @@ export function parseDemandUncommittedEvent(
   }
 
   if (record.eventType === "tasking.target-task-planned") {
-    const data = exactRecord(
-      record.data,
-      TARGET_TASK_PLANNED_DATA_FIELDS,
-      "$/data",
-    );
+    const data = exactRecord(record.data, TARGET_TASK_PLANNED_DATA_FIELDS, "$/data");
     let taskPackage: Readonly<TaskPackage>;
     try {
       taskPackage = parseTaskPackage(data.taskPackage);
@@ -681,10 +630,7 @@ export function parseDemandUncommittedEvent(
       }
       throw error;
     }
-    if (
-      taskPackage.demandId !== demandId ||
-      taskPackage.createdAt !== recordedAt
-    ) {
+    if (taskPackage.demandId !== demandId || taskPackage.createdAt !== recordedAt) {
       fail("relation", "$event");
     }
     return Object.freeze({
@@ -760,11 +706,7 @@ export function parseDemandUncommittedEvent(
   }
 
   if (record.eventType === "result.target-result-recorded") {
-    const data = exactRecord(
-      record.data,
-      TARGET_RESULT_RECORDED_DATA_FIELDS,
-      "$/data",
-    );
+    const data = exactRecord(record.data, TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
     let result: Readonly<TargetResult>;
     try {
       result = parseTargetResult(data.result);
@@ -832,11 +774,7 @@ export function parseDemandUncommittedEvent(
   }
 
   if (record.eventType === "review.target-result-decided") {
-    const data = exactRecord(
-      record.data,
-      CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS,
-      "$/data",
-    );
+    const data = exactRecord(record.data, CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS, "$/data");
     let decision: Readonly<ControllerReviewDecision>;
     try {
       decision = parseControllerReviewDecision(data.decision);
@@ -870,17 +808,10 @@ export function parseDemandUncommittedEvent(
     );
     let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
     try {
-      authorization = parseControllerProductDefectRemediationAuthorization(
-        data.authorization,
-      );
+      authorization = parseControllerProductDefectRemediationAuthorization(data.authorization);
     } catch (error: unknown) {
-      if (
-        error instanceof ControllerProductDefectRemediationAuthorizationError
-      ) {
-        fail(
-          "controller-product-defect-remediation-authorization",
-          "$/data/authorization",
-        );
+      if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
+        fail("controller-product-defect-remediation-authorization", "$/data/authorization");
       }
       throw error;
     }

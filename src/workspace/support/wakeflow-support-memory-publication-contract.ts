@@ -1,21 +1,16 @@
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { DurableAtomicFileStageRecoveryReceipt } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import type {
-  DurableAtomicFileStageRecoveryReceipt,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
-  parseWakeflowSupportMemoryInspectionRequest,
-  WakeflowSupportMemoryInspectionError,
   type ParsedWakeflowSupportMemoryInspectionRequest,
+  parseWakeflowSupportMemoryInspectionRequest,
   type WakeflowSupportMemoryInspection,
+  WakeflowSupportMemoryInspectionError,
   type WakeflowSupportMemoryInspectionRequest,
 } from "./wakeflow-support-memory-inspection.js";
 
@@ -61,16 +56,11 @@ const ERROR_MESSAGES = {
   "source-invalid": "Wakeflow support memory source cannot be published safely.",
   capacity: "Wakeflow support memory publication exceeds its byte budget.",
   conflict: "Wakeflow support memory source changed before atomic publication.",
-  "recovery-required":
-    "Wakeflow support memory publication requires explicit recovery.",
+  "recovery-required": "Wakeflow support memory publication requires explicit recovery.",
   aborted: "Wakeflow support memory publication was aborted before commit.",
   "effect-failure": "Wakeflow support memory could not be published safely.",
-  "commit-uncertain":
-    "Published Wakeflow support memory could not be proven exact.",
-} as const satisfies Readonly<Record<
-  WakeflowSupportMemoryPublicationErrorReason,
-  string
->>;
+  "commit-uncertain": "Published Wakeflow support memory could not be proven exact.",
+} as const satisfies Readonly<Record<WakeflowSupportMemoryPublicationErrorReason, string>>;
 
 /** Support memory 发布与恢复失败的稳定、脱敏错误。 */
 export class WakeflowSupportMemoryPublicationError extends Error {
@@ -123,16 +113,12 @@ export function parseWakeflowSupportMemoryPublicationOptions(
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     failWakeflowSupportMemoryPublication("input", "$options");
   }

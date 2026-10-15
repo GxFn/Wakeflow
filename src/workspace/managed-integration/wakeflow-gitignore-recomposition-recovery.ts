@@ -1,18 +1,19 @@
 import {
-  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
   type DurableAtomicFileStageRecoveryReceipt,
+  recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   inspectWakeflowWorkspaceGitignore,
   WakeflowGitignoreInspectionError,
 } from "./wakeflow-gitignore-inspection.js";
+import { recomposeWakeflowWorkspaceGitignore } from "./wakeflow-gitignore-recomposition.js";
 import {
   admitWakeflowGitignoreRecompositionLockOperations,
   assertCurrentUserWakeflowGitignoreRecompositionRoot,
@@ -23,14 +24,11 @@ import {
   mapWakeflowGitignoreRecompositionLockError,
   parseWakeflowGitignoreRecompositionRecoveryOptions,
   parseWakeflowGitignoreRecompositionRequest,
-  wakeflowGitignoreInspectionRequest,
   type WakeflowGitignoreRecompositionRecoveryOptions,
   type WakeflowGitignoreRecompositionRecoveryReceipt,
   type WakeflowGitignoreRecompositionRequest,
+  wakeflowGitignoreInspectionRequest,
 } from "./wakeflow-gitignore-recomposition-contract.js";
-import {
-  recomposeWakeflowWorkspaceGitignore,
-} from "./wakeflow-gitignore-recomposition.js";
 import {
   WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
   WAKEFLOW_GITIGNORE_REF,
@@ -57,16 +55,10 @@ async function recoverAdmittedStages(
   try {
     const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
-      Object.freeze([
-        WAKEFLOW_GITIGNORE_REF,
-        WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-      ]),
+      Object.freeze([WAKEFLOW_GITIGNORE_REF, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF]),
       signal === undefined ? undefined : { signal },
     );
-    if (
-      receipt.activeStageCount !== 0
-      || receipt.unknownStageCount !== 0
-    ) {
+    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
       fail("recovery-required", "$stages");
     }
     return receipt;
@@ -97,11 +89,7 @@ async function assertRecoverableCurrent(
       if (error.reason === "git" || error.reason === "git-repository") {
         fail("observation-failure", "$git");
       }
-      if (
-        error.reason === "input"
-        || error.reason === "context"
-        || error.reason === "authority"
-      ) {
+      if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
         fail("input", error.path);
       }
       fail("recovery-required", "$source");
@@ -119,17 +107,12 @@ export async function recoverWakeflowWorkspaceGitignoreRecomposition(
   optionsValue?: WakeflowGitignoreRecompositionRecoveryOptions,
 ): Promise<Readonly<WakeflowGitignoreRecompositionRecoveryReceipt>> {
   assertWakeflowGitignoreRecompositionRoot(rootValue);
-  const options = parseWakeflowGitignoreRecompositionRecoveryOptions(
-    optionsValue,
-  );
+  const options = parseWakeflowGitignoreRecompositionRecoveryOptions(optionsValue);
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
   const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   admitWakeflowGitignoreRecompositionLockOperations(request);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
-  await assertCurrentUserWakeflowGitignoreRecompositionRoot(
-    rootValue,
-    expectedUserId,
-  );
+  await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
 
   let observation;
   try {
@@ -152,10 +135,7 @@ export async function recoverWakeflowWorkspaceGitignoreRecomposition(
 
   const stageRecovery = await recoverAdmittedStages(rootValue, options.signal);
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
-  await assertCurrentUserWakeflowGitignoreRecompositionRoot(
-    rootValue,
-    expectedUserId,
-  );
+  await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
   await assertRecoverableCurrent(rootValue, request, options.signal);
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
 

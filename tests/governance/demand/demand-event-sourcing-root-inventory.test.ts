@@ -1,26 +1,18 @@
 import { equal, rejects } from "node:assert/strict";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import {
-  inspectDemandEventSourcingRootInventory,
   DemandEventSourcingRootInventoryError,
+  inspectDemandEventSourcingRootInventory,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
+import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 
 test("Demand Event Sourcing root inventory 同时证明允许项与未知项不存在", async () => {
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-demand-root-inventory-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-root-inventory-"));
   chmodSync(fixtureRoot, 0o700);
   const root = await RootedDirectory.open(fixtureRoot);
   try {
@@ -47,8 +39,7 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
         phase: "publication" as never,
       }),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "input",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "input",
     );
 
     const projectionPath = path.join(
@@ -58,10 +49,7 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
       "task-package_11111111-1111-4111-8111-111111111111.json",
     );
     writeFileSync(projectionPath, "{}\n", { mode: 0o600 });
-    equal(
-      (await inspectDemandEventSourcingRootInventory(root)).artifactCount,
-      1,
-    );
+    equal((await inspectDemandEventSourcingRootInventory(root)).artifactCount, 1);
     rmSync(projectionPath);
 
     // 测试卡目录已随测试合同并入任务包而退役：再出现即树形不合法。
@@ -71,8 +59,7 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "tree-shape",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
     );
     rmSync(path.join(fixtureRoot, "artifacts", "test-cards"), { recursive: true });
 
@@ -86,8 +73,7 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "tree-shape",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
     );
     rmSync(invalidProjectionPath);
 
@@ -96,8 +82,7 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "tree-shape",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
     );
     rmSync(unknownArtifactRoot, { recursive: true });
 
@@ -107,25 +92,18 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "tree-shape",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
     );
     rmSync(path.join(fixtureRoot, "unknown.txt"));
     writeFileSync(
-      path.join(
-        fixtureRoot,
-        "event-sourcing",
-        "append-candidates",
-        "residue.json",
-      ),
+      path.join(fixtureRoot, "event-sourcing", "append-candidates", "residue.json"),
       "residue\n",
       { mode: 0o600 },
     );
     await rejects(
       inspectDemandEventSourcingRootInventory(root),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRootInventoryError &&
-        error.reason === "tree-shape",
+        error instanceof DemandEventSourcingRootInventoryError && error.reason === "tree-shape",
     );
   } finally {
     await root.close();

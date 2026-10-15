@@ -136,14 +136,25 @@ function requirementRecord(
 
 function publication(record: Readonly<RequirementRecord>) {
   const files = [
-    ...MEMBERS.map((member) => ({ path: member.path, bytes: member.bytes, mode: LEDGER_DURABLE_FILE_MODE })),
-    { path: "record.json", bytes: encodeUtf8(renderLedgerAuthorityRecord(record)), mode: LEDGER_DURABLE_FILE_MODE },
+    ...MEMBERS.map((member) => ({
+      path: member.path,
+      bytes: member.bytes,
+      mode: LEDGER_DURABLE_FILE_MODE,
+    })),
+    {
+      path: "record.json",
+      bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
+      mode: LEDGER_DURABLE_FILE_MODE,
+    },
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
   return { record, files, intent: createLedgerRecordPublicationIntent(record, plan) };
 }
 
-function writeIntentFile(rootPath: string, intent: Readonly<LedgerRecordPublicationIntent>): string {
+function writeIntentFile(
+  rootPath: string,
+  intent: Readonly<LedgerRecordPublicationIntent>,
+): string {
   const text = renderLedgerRecordPublicationIntent(intent);
   const file = writeTextFile(rootPath, intent.intentRef, text, LEDGER_TRANSACTION_FILE_MODE);
   chmodSync(file, LEDGER_TRANSACTION_FILE_MODE);
@@ -164,10 +175,18 @@ test("resource node lookup reports absence, the exact node, and unsafe ancestors
   equal(node.linkCount, 1n);
 
   const throughFile = parsePortableResourcePath(`${intent.intentRef}/child`);
-  await expectStoreError(() => ledgerPublicationResourceNodeOrNull(root, throughFile), "root-scope", "$root");
+  await expectStoreError(
+    () => ledgerPublicationResourceNodeOrNull(root, throughFile),
+    "root-scope",
+    "$root",
+  );
   symlinkSync("requirements", path.join(rootPath, "alias"));
   const throughLink = parsePortableResourcePath("alias/record.json");
-  await expectStoreError(() => ledgerPublicationResourceNodeOrNull(root, throughLink), "root-scope", "$root");
+  await expectStoreError(
+    () => ledgerPublicationResourceNodeOrNull(root, throughLink),
+    "root-scope",
+    "$root",
+  );
 });
 
 test("publication intent is created once, read back exactly, and rejects foreign nodes", async (t) => {
@@ -175,7 +194,8 @@ test("publication intent is created once, read back exactly, and rejects foreign
   const { intent } = publication(requirementRecord("示例需求"));
   const intentPath = physical(rootPath, intent.intentRef);
   const text = renderLedgerRecordPublicationIntent(intent);
-  const read = (signal?: AbortSignal) => existingLedgerRecordPublicationIntentOrNull(root, intent.intentRef, signal);
+  const read = (signal?: AbortSignal) =>
+    existingLedgerRecordPublicationIntentOrNull(root, intent.intentRef, signal);
   equal(await read(), null);
 
   const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
@@ -193,7 +213,11 @@ test("publication intent is created once, read back exactly, and rejects foreign
   equal(sameLedgerRecordPublicationIntent(existing.intent, intent), true);
 
   const conflicting = publication(requirementRecord("Conflicting title")).intent;
-  await expectStoreError(() => ensureLedgerRecordPublicationIntent(root, conflicting, undefined), "conflict", "$intent");
+  await expectStoreError(
+    () => ensureLedgerRecordPublicationIntent(root, conflicting, undefined),
+    "conflict",
+    "$intent",
+  );
   equal(readFileSync(intentPath, "utf8"), text);
   await expectStoreError(() => read(ABORTED), "aborted", "$signal");
 
@@ -205,7 +229,11 @@ test("publication intent is created once, read back exactly, and rejects foreign
   // and ensure must not silently overwrite them.
   writeFileSync(intentPath, `${text}\n`);
   await expectStoreError(read, "conflict", "$intent");
-  await expectStoreError(() => ensureLedgerRecordPublicationIntent(root, intent, undefined), "conflict", "$intent");
+  await expectStoreError(
+    () => ensureLedgerRecordPublicationIntent(root, intent, undefined),
+    "conflict",
+    "$intent",
+  );
   writeFileSync(intentPath, "x".repeat(LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES + 1));
   await expectStoreError(read, "capacity", "$intent");
   rmSync(intentPath);
@@ -217,13 +245,29 @@ test("a bare root without the ledger layout fails closed for every transaction r
   const { rootPath, root } = await ledgerRoot(t, false);
   const { intent } = publication(requirementRecord("示例需求"));
   const noop = async () => undefined;
-  await expectStoreError(() => ensureLedgerRecordPublicationIntent(root, intent, undefined), "operation-failure", "$intent");
-  await expectStoreError(() => recoverLedgerIntentAtomicStages(root, intent.intentRef, undefined), "recovery-required", "$intent/stage");
+  await expectStoreError(
+    () => ensureLedgerRecordPublicationIntent(root, intent, undefined),
+    "operation-failure",
+    "$intent",
+  );
+  await expectStoreError(
+    () => recoverLedgerIntentAtomicStages(root, intent.intentRef, undefined),
+    "recovery-required",
+    "$intent/stage",
+  );
   await prepareLedgerRecordPublicationLockRecovery(root, intent.lockRef);
-  await expectStoreError(() => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop), "lock-unsafe", "$lock");
+  await expectStoreError(
+    () => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop),
+    "lock-unsafe",
+    "$lock",
+  );
 
   await materializeLedgerAuthorityLayout(root);
-  await expectStoreError(() => ensureLedgerRecordPublicationIntent(root, intent, ABORTED), "aborted", "$signal");
+  await expectStoreError(
+    () => ensureLedgerRecordPublicationIntent(root, intent, ABORTED),
+    "aborted",
+    "$signal",
+  );
   equal(existsSync(physical(rootPath, intent.intentRef)), false);
 });
 
@@ -232,18 +276,34 @@ test("intent retirement unlinks only the exact stored node", async (t) => {
   const { intent } = publication(requirementRecord("示例需求"));
   const intentPath = physical(rootPath, intent.intentRef);
   const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  await expectStoreError(() => retireLedgerRecordPublicationIntent(root, stored, ABORTED), "aborted", "$signal");
+  await expectStoreError(
+    () => retireLedgerRecordPublicationIntent(root, stored, ABORTED),
+    "aborted",
+    "$signal",
+  );
   equal(existsSync(intentPath), true);
   await retireLedgerRecordPublicationIntent(root, stored, undefined);
   equal(existsSync(intentPath), false);
-  await expectStoreError(() => retireLedgerRecordPublicationIntent(root, stored, undefined), "recovery-required", "$intent");
+  await expectStoreError(
+    () => retireLedgerRecordPublicationIntent(root, stored, undefined),
+    "recovery-required",
+    "$intent",
+  );
 
   const stale = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
   rmSync(intentPath);
   writeIntentFile(rootPath, intent);
-  await expectStoreError(() => retireLedgerRecordPublicationIntent(root, stale, undefined), "recovery-required", "$intent");
+  await expectStoreError(
+    () => retireLedgerRecordPublicationIntent(root, stale, undefined),
+    "recovery-required",
+    "$intent",
+  );
   equal(existsSync(intentPath), true);
-  const fresh = await existingLedgerRecordPublicationIntentOrNull(root, intent.intentRef, undefined);
+  const fresh = await existingLedgerRecordPublicationIntentOrNull(
+    root,
+    intent.intentRef,
+    undefined,
+  );
   ok(fresh !== null);
   await retireLedgerRecordPublicationIntent(root, fresh, undefined);
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
@@ -262,16 +322,25 @@ test("residue inspection admits only a durable stage directory", async (t) => {
   equal(residues.stageNode.permissionBits, LEDGER_DURABLE_DIRECTORY_MODE);
 
   chmodSync(stagePath, 0o700);
-  await expectStoreError(() => inspectLedgerRecordPublicationResidues(root, intent), "conflict", "$stage");
+  await expectStoreError(
+    () => inspectLedgerRecordPublicationResidues(root, intent),
+    "conflict",
+    "$stage",
+  );
   rmSync(stagePath, { recursive: true });
   writeTextFile(rootPath, intent.stageRef, "not a stage");
-  await expectStoreError(() => inspectLedgerRecordPublicationResidues(root, intent), "conflict", "$stage");
+  await expectStoreError(
+    () => inspectLedgerRecordPublicationResidues(root, intent),
+    "conflict",
+    "$stage",
+  );
 });
 
 test("atomic intent stages are retired when stale and preserved while active", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
   const { intent } = publication(requirementRecord("示例需求"));
-  const recover = (signal?: AbortSignal) => recoverLedgerIntentAtomicStages(root, intent.intentRef, signal);
+  const recover = (signal?: AbortSignal) =>
+    recoverLedgerIntentAtomicStages(root, intent.intentRef, signal);
   await recover();
   const digest = computeSha256Digest(encodeUtf8(renderLedgerRecordPublicationIntent(intent)));
   const mode = LEDGER_TRANSACTION_FILE_MODE;
@@ -306,7 +375,9 @@ test("lock recovery retires inactive residues and leaves live or unsafe locks al
   await prepare();
   equal(existsSync(lockPath), false);
 
-  const residue = rootedExclusiveFileLockRecordTextForTest({ tokenUuid: "99999999-9999-4999-8999-999999999999" });
+  const residue = rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "99999999-9999-4999-8999-999999999999",
+  });
   writeFileSync(lockPath, residue, { mode: 0o600 });
   await prepare();
   equal(existsSync(lockPath), false);
@@ -319,7 +390,10 @@ test("lock recovery retires inactive residues and leaves live or unsafe locks al
   equal(existsSync(lockPath), false);
 
   const domainError = new LedgerAuthorityStoreError("conflict", "$test");
-  equal(await expectStoreError(() => locked(() => Promise.reject(domainError)), "conflict", "$test"), domainError);
+  equal(
+    await expectStoreError(() => locked(() => Promise.reject(domainError)), "conflict", "$test"),
+    domainError,
+  );
   await rejects(() => locked(() => Promise.reject(new RangeError("private"))), RangeError);
   equal(existsSync(lockPath), false);
 
@@ -350,7 +424,11 @@ test("a lock held by another owner times out at the publication deadline", async
   try {
     const startedAt = performance.now();
     const noop = async () => undefined;
-    await expectStoreError(() => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop), "lock-timeout", "$lock");
+    await expectStoreError(
+      () => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop),
+      "lock-timeout",
+      "$lock",
+    );
     ok(performance.now() - startedAt >= 9_000);
   } finally {
     await lease.release();
@@ -365,8 +443,17 @@ test("stage publication commits the tree and exact loading proves it", async (t)
   const load = (signal?: AbortSignal) => loadExactPublishedLedgerRecord(root, intent, signal);
   await expectStoreError(load, "not-found", "$record");
 
-  const candidate = await createDirectoryTreeCandidateDurably(root, intent.stageRef, files, CANDIDATE_OPTIONS);
-  await expectStoreError(() => publishLedgerRecordStage(root, intent, candidate, ABORTED), "aborted", "$signal");
+  const candidate = await createDirectoryTreeCandidateDurably(
+    root,
+    intent.stageRef,
+    files,
+    CANDIDATE_OPTIONS,
+  );
+  await expectStoreError(
+    () => publishLedgerRecordStage(root, intent, candidate, ABORTED),
+    "aborted",
+    "$signal",
+  );
   await publishLedgerRecordStage(root, intent, candidate, undefined);
   equal(existsSync(stagePath), false);
   equal(statSync(finalPath).mode & 0o777, LEDGER_DURABLE_DIRECTORY_MODE);
@@ -376,13 +463,29 @@ test("stage publication commits the tree and exact loading proves it", async (t)
   const loaded = await load();
   deepEqual(loaded.record, record);
   equal(loaded.recordDigest, computeLedgerAuthorityRecordDigest(record));
-  deepEqual(loaded.documents.map((document) => document.digest), record.documents.map((document) => document.digest));
+  deepEqual(
+    loaded.documents.map((document) => document.digest),
+    record.documents.map((document) => document.digest),
+  );
   await expectStoreError(() => load(ABORTED), "aborted", "$signal");
 
   // The stage was renamed away: neither the stale candidate nor a fresh one may publish again.
-  await expectStoreError(() => publishLedgerRecordStage(root, intent, candidate, undefined), "conflict", "$stage");
-  const second = await createDirectoryTreeCandidateDurably(root, intent.stageRef, files, CANDIDATE_OPTIONS);
-  await expectStoreError(() => publishLedgerRecordStage(root, intent, second, undefined), "conflict", "$stage");
+  await expectStoreError(
+    () => publishLedgerRecordStage(root, intent, candidate, undefined),
+    "conflict",
+    "$stage",
+  );
+  const second = await createDirectoryTreeCandidateDurably(
+    root,
+    intent.stageRef,
+    files,
+    CANDIDATE_OPTIONS,
+  );
+  await expectStoreError(
+    () => publishLedgerRecordStage(root, intent, second, undefined),
+    "conflict",
+    "$stage",
+  );
   equal(existsSync(stagePath), true);
   rmSync(stagePath, { recursive: true });
 
@@ -393,7 +496,11 @@ test("stage publication commits the tree and exact loading proves it", async (t)
 
   const other = publication(requirementRecord("Other", OTHER_REQUIREMENT_ID)).intent;
   writeTextFile(rootPath, other.finalRootRef, "not a tree");
-  await expectStoreError(() => loadExactPublishedLedgerRecord(root, other, undefined), "conflict", "$record");
+  await expectStoreError(
+    () => loadExactPublishedLedgerRecord(root, other, undefined),
+    "conflict",
+    "$record",
+  );
 });
 
 test("settling a committed intent retires it only when no stage residue remains", async (t) => {
@@ -401,11 +508,17 @@ test("settling a committed intent retires it only when no stage residue remains"
   const { record, files, intent } = publication(requirementRecord("示例需求"));
   const intentPath = physical(rootPath, intent.intentRef);
   const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  const settle = (stageNode: typeof stored.node | null) => settleCommittedLedgerIntent(root, stored, { stageNode }, undefined);
+  const settle = (stageNode: typeof stored.node | null) =>
+    settleCommittedLedgerIntent(root, stored, { stageNode }, undefined);
   await expectStoreError(() => settle(null), "not-found", "$record");
   equal(existsSync(intentPath), true);
 
-  const candidate = await createDirectoryTreeCandidateDurably(root, intent.stageRef, files, CANDIDATE_OPTIONS);
+  const candidate = await createDirectoryTreeCandidateDurably(
+    root,
+    intent.stageRef,
+    files,
+    CANDIDATE_OPTIONS,
+  );
   await publishLedgerRecordStage(root, intent, candidate, undefined);
   await expectStoreError(() => settle(stored.node), "recovery-required", "$stage");
   equal(existsSync(intentPath), true);

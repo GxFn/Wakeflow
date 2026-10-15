@@ -8,8 +8,8 @@ import {
   parseTestTargetResultReport,
   parseTestTargetResultReportDocument,
   renderTestTargetResultReport,
-  testTargetResultReportContentDigest,
   TestTargetResultReportError,
+  testTargetResultReportContentDigest,
 } from "../../../src/governance/result/test-target-result-report.js";
 
 const REPORTED_AT = parseUtcInstant("2026-08-30T10:00:00.000Z");
@@ -92,13 +92,11 @@ test("TestTargetResultReport拒绝悬空Evidence、重复stepId、缺失或多�
         ...content,
         steps: [{ ...firstStep, evidence: { ...firstStep.evidence, digest: SECOND_DIGEST } }],
       }),
-    (error: unknown) =>
-      error instanceof TestTargetResultReportError && error.reason === "relation",
+    (error: unknown) => error instanceof TestTargetResultReportError && error.reason === "relation",
   );
   throws(
     () => createTestTargetResultReport({ ...content, steps: [firstStep, firstStep] }),
-    (error: unknown) =>
-      error instanceof TestTargetResultReportError && error.reason === "relation",
+    (error: unknown) => error instanceof TestTargetResultReportError && error.reason === "relation",
   );
   throws(
     () =>

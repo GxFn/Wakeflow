@@ -1,42 +1,38 @@
 import { types } from "node:util";
 
 import { WAKEFLOW_CONFIG_RESOURCE_CATALOG } from "../configuration/wakeflow-config-resource-catalog.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../foundation/crypto/sha256.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../foundation/data/passive-own-data.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
-import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import {
   WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,
 } from "./wakeflow-active-static-resource-catalog.js";
-import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "./managed-integration/wakeflow-managed-integration-resource-catalog.js";
-import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
-import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
-import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
 } from "./workspace-host-resource-profile.js";
+import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
-  WakeflowWorkspaceResourceDeclarationError,
   WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES,
   type WakeflowWorkspaceResourceDeclaration,
+  WakeflowWorkspaceResourceDeclarationError,
   type WakeflowWorkspaceResourceFamily,
   type WakeflowWorkspaceResourcePlacement,
 } from "./workspace-resource-declaration.js";
+import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
 
 /**
  * Wakeflow Workspace：静态资源矩阵。
@@ -69,15 +65,11 @@ export type WakeflowWorkspaceStaticResourceMatrixErrorReason =
 const ERROR_MESSAGES = {
   input: "Wakeflow static resource matrix input is invalid.",
   scope: "Wakeflow static resource declaration has an invalid scope.",
-  "declaration-id-collision":
-    "Wakeflow static resource declaration identity is duplicated.",
-  "placement-collision":
-    "Wakeflow static resources occupy the same logical placement.",
+  "declaration-id-collision": "Wakeflow static resource declaration identity is duplicated.",
+  "placement-collision": "Wakeflow static resources occupy the same logical placement.",
   digest: "Wakeflow static resource matrix digest is invalid.",
   query: "Wakeflow static resource matrix query is invalid.",
-} as const satisfies Readonly<
-  Record<WakeflowWorkspaceStaticResourceMatrixErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowWorkspaceStaticResourceMatrixErrorReason, string>>;
 
 /** 静态资源矩阵组合或唯一性准入失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
@@ -86,10 +78,7 @@ export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
   readonly reason: WakeflowWorkspaceStaticResourceMatrixErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWorkspaceStaticResourceMatrixErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -109,9 +98,7 @@ const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
-const RESOURCE_FAMILY_SET = new Set<string>(
-  WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES,
-);
+const RESOURCE_FAMILY_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES);
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 
 function compareDeclarationIds(
@@ -131,16 +118,11 @@ function sortedDeclarations(
   return Object.freeze([...declarations].sort(compareDeclarationIds));
 }
 
-function fail(
-  reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWorkspaceStaticResourceMatrixErrorReason, path: string): never {
   throw new WakeflowWorkspaceStaticResourceMatrixError(reason, path);
 }
 
-function logicalRootKey(
-  placement: Readonly<WakeflowWorkspaceResourcePlacement>,
-): string {
+function logicalRootKey(placement: Readonly<WakeflowWorkspaceResourcePlacement>): string {
   const root = placement.root;
   const rootIdentity =
     root.kind === "support-surface"
@@ -157,10 +139,7 @@ function assertPlacementTopology(
   const groups = new Map<
     string,
     {
-      readonly declarationByPath: Map<
-        string,
-        Readonly<WakeflowWorkspaceResourceDeclaration>
-      >;
+      readonly declarationByPath: Map<string, Readonly<WakeflowWorkspaceResourceDeclaration>>;
       readonly spellingByPrefix: Map<string, string>;
     }
   >();
@@ -203,8 +182,7 @@ function assertPlacementTopology(
         if (segment === undefined) {
           fail("placement-collision", "$/declarations");
         }
-        ancestorPath =
-          ancestorPath.length === 0 ? segment : `${ancestorPath}/${segment}`;
+        ancestorPath = ancestorPath.length === 0 ? segment : `${ancestorPath}/${segment}`;
         ancestorPaths.push(ancestorPath);
       }
       for (const ancestorPath of ancestorPaths) {
@@ -319,11 +297,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
   let declarationValues: readonly unknown[];
   try {
     record = parsePlainRecord(value, "$matrix");
-    declarationValues = parseDenseArray(
-      record.declarations,
-      10_000,
-      "$matrix.declarations",
-    );
+    declarationValues = parseDenseArray(record.declarations, 10_000, "$matrix.declarations");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", "$matrix");
     throw error;
@@ -345,14 +319,8 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
   let suppliedSharedDigest: Sha256Digest;
   let suppliedMatrixDigest: Sha256Digest;
   try {
-    suppliedSharedDigest = parseSha256Digest(
-      record.sharedDigest,
-      "$matrix.sharedDigest",
-    );
-    suppliedMatrixDigest = parseSha256Digest(
-      record.matrixDigest,
-      "$matrix.matrixDigest",
-    );
+    suppliedSharedDigest = parseSha256Digest(record.sharedDigest, "$matrix.sharedDigest");
+    suppliedMatrixDigest = parseSha256Digest(record.matrixDigest, "$matrix.matrixDigest");
   } catch (error: unknown) {
     if (error instanceof Sha256Error) fail("input", error.path);
     throw error;
@@ -374,8 +342,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
   if (
     parsedDeclarations.length !== admitted.all.length ||
     parsedDeclarations.some(
-      (entry, index) =>
-        entry.declarationId !== admitted.all[index]?.declarationId,
+      (entry, index) => entry.declarationId !== admitted.all[index]?.declarationId,
     )
   ) {
     fail("input", "$matrix.declarations");
@@ -409,11 +376,7 @@ export function findWakeflowWorkspaceStaticResourceByDeclarationId(
   declarationIdValue: unknown,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> | null {
   const declarationId = queryText(declarationIdValue, "$/declarationId");
-  return (
-    matrix.declarations.find(
-      (entry) => entry.declarationId === declarationId,
-    ) ?? null
-  );
+  return matrix.declarations.find((entry) => entry.declarationId === declarationId) ?? null;
 }
 
 /** 按资源 family 返回保持矩阵顺序的新冻结数组。 */
@@ -436,7 +399,5 @@ export function selectWakeflowWorkspaceStaticResourcesByOwner(
   ownerIdValue: unknown,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
   const ownerId = queryText(ownerIdValue, "$/ownerId");
-  return Object.freeze(
-    matrix.declarations.filter((entry) => entry.ownerId === ownerId),
-  );
+  return Object.freeze(matrix.declarations.filter((entry) => entry.ownerId === ownerId));
 }

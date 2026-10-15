@@ -1,5 +1,13 @@
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
@@ -160,7 +168,12 @@ function singleContentManifest(bytes: Uint8Array, executable: boolean, digest?: 
     schemaVersion: 1,
     fileCount: 1,
     files: [
-      { bytes: bytes.byteLength, digest: digest ?? computeSha256Digest(bytes), executable, ref: "content" },
+      {
+        bytes: bytes.byteLength,
+        digest: digest ?? computeSha256Digest(bytes),
+        executable,
+        ref: "content",
+      },
     ],
     totalBytes: bytes.byteLength,
   });
@@ -176,8 +189,18 @@ function createTreeTransaction(harness: Harness): Transaction {
     schemaVersion: 1,
     fileCount: 2,
     files: [
-      { bytes: readme.byteLength, digest: computeSha256Digest(readme), executable: false, ref: "README.md" },
-      { bytes: script.byteLength, digest: computeSha256Digest(script), executable: true, ref: "bin/run.sh" },
+      {
+        bytes: readme.byteLength,
+        digest: computeSha256Digest(readme),
+        executable: false,
+        ref: "README.md",
+      },
+      {
+        bytes: script.byteLength,
+        digest: computeSha256Digest(script),
+        executable: true,
+        ref: "bin/run.sh",
+      },
     ],
     totalBytes: readme.byteLength + script.byteLength,
   });
@@ -323,7 +346,10 @@ async function expectProjectionPayload(
     schemaVersion: 1,
     source: JSON.parse(JSON.stringify(source)),
   });
-  equal(computeSha256Digest(encodeUtf8(text)), transaction.manifest.payload.treeManifest.files[0]?.digest);
+  equal(
+    computeSha256Digest(encodeUtf8(text)),
+    transaction.manifest.payload.treeManifest.files[0]?.digest,
+  );
   equal(lstatSync(payloadPath(harness, plan)).mode & 0o777, 0o700);
   equal(lstatSync(content).mode & 0o777, 0o600);
   deepEqual((await inspectProgress(harness, plan)).missingFiles, ["manifest.json"]);
@@ -350,8 +376,14 @@ test("input rejections name the offending argument and leave the stage untouched
   const progress = await inspectProgress(harness, plan);
   const raw = materializeManagedEvidencePublicationPayload;
   const { sourceRoot, demandRoot } = harness;
-  await expectFailure(raw(sourceRoot, {} as never, transaction, plan, progress), "input", "$demandRoot");
-  const unknownOption = raw(sourceRoot, demandRoot, transaction, plan, progress, { extra: true } as never);
+  await expectFailure(
+    raw(sourceRoot, {} as never, transaction, plan, progress),
+    "input",
+    "$demandRoot",
+  );
+  const unknownOption = raw(sourceRoot, demandRoot, transaction, plan, progress, {
+    extra: true,
+  } as never);
   await expectFailure(unknownOption, "input", "$options");
   await expectFailure(materialize(harness, {}, plan, { progress }), "input", "$transaction");
   await expectFailure(raw(sourceRoot, demandRoot, transaction, {}, progress), "input", "$plan");
@@ -359,8 +391,16 @@ test("input rejections name the offending argument and leave the stage untouched
   const linkPlan = deriveManagedEvidencePublicationRecordTreePlan(link);
   await expectFailure(materialize(harness, transaction, linkPlan, { progress }), "input", "$plan");
   const lying = Object.freeze({ ...progress, status: "complete" as const });
-  await expectFailure(materialize(harness, transaction, plan, { progress: lying }), "input", "$progress");
-  await expectFailure(materialize(harness, transaction, plan, { sourceRoot: null }), "input", "$sourceRoot");
+  await expectFailure(
+    materialize(harness, transaction, plan, { progress: lying }),
+    "input",
+    "$progress",
+  );
+  await expectFailure(
+    materialize(harness, transaction, plan, { sourceRoot: null }),
+    "input",
+    "$sourceRoot",
+  );
   await expectFailure(materialize(harness, link, linkPlan), "input", "$sourceRoot");
   equal(existsSync(payloadPath(harness, plan)), false);
 });

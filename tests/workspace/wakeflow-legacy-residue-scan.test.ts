@@ -58,13 +58,55 @@ test("legacy residue scan reports scope blocks, broad rules, additionalDirectori
   ]);
   deepEqual(scan.items, [
     // 两个根共用一个上层目录：旁边的 ledger 目录只报一次，报在先看到它的根上。
-    { root: "workspace.root", kind: "ledger-directory", path: "../wakeflow-ledger", line: null, detail: null },
-    { root: REPOSITORY_KEY, kind: "scope-block", path: "CLAUDE.md", line: 3, detail: "<!-- wakeflow:scope:start -->" },
-    { root: REPOSITORY_KEY, kind: "broad-permission", path: ".claude/settings.json", line: 6, detail: "Bash(node *)" },
-    { root: REPOSITORY_KEY, kind: "broad-permission", path: ".claude/settings.json", line: 5, detail: "Bash(tmux *)" },
-    { root: REPOSITORY_KEY, kind: "additional-directories", path: ".claude/settings.json", line: 8, detail: ".." },
-    { root: REPOSITORY_KEY, kind: "root-marker", path: ".wakeflow-stage-20260101", line: null, detail: null },
-    { root: REPOSITORY_KEY, kind: "root-marker", path: ".workspace-active", line: null, detail: null },
+    {
+      root: "workspace.root",
+      kind: "ledger-directory",
+      path: "../wakeflow-ledger",
+      line: null,
+      detail: null,
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "scope-block",
+      path: "CLAUDE.md",
+      line: 3,
+      detail: "<!-- wakeflow:scope:start -->",
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "broad-permission",
+      path: ".claude/settings.json",
+      line: 6,
+      detail: "Bash(node *)",
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "broad-permission",
+      path: ".claude/settings.json",
+      line: 5,
+      detail: "Bash(tmux *)",
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "additional-directories",
+      path: ".claude/settings.json",
+      line: 8,
+      detail: "..",
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "root-marker",
+      path: ".wakeflow-stage-20260101",
+      line: null,
+      detail: null,
+    },
+    {
+      root: REPOSITORY_KEY,
+      kind: "root-marker",
+      path: ".workspace-active",
+      line: null,
+      detail: null,
+    },
   ]);
   // 解析不出的 settings.local.json 计 unreadable，不是"没有残留"。
   equal(scan.unreadable, 1);
@@ -83,10 +125,16 @@ test("legacy residue scan caps at 64 items and counts the rest, and counts a van
   }
   const scan = await scanWakeflowLegacyResidue([
     { key: "workspace.root", absolutePath: root },
-    { key: "support.surface_33333333-3333-4333-8333-333333333333.root", absolutePath: path.join(parent, "gone") },
+    {
+      key: "support.surface_33333333-3333-4333-8333-333333333333.root",
+      absolutePath: path.join(parent, "gone"),
+    },
   ]);
   equal(scan.items.length, WAKEFLOW_LEGACY_RESIDUE_MAXIMUM_ITEMS);
   equal(scan.omitted, 6);
-  equal(scan.items.every((item) => item.kind === "root-marker" && item.root === "workspace.root"), true);
+  equal(
+    scan.items.every((item) => item.kind === "root-marker" && item.root === "workspace.root"),
+    true,
+  );
   equal(scan.unreadable, 1);
 });

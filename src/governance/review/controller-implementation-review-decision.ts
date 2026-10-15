@@ -1,21 +1,21 @@
-import type { WakeflowControllerImplementationReviewDecision as DecisionWire } from "../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
-import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import type { WakeflowControllerImplementationReviewDecision as DecisionWire } from "../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
+import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -23,9 +23,9 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createUuidV4,
@@ -35,30 +35,30 @@ import {
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 import {
   DemandEventStreamPositionError,
-  parseDemandEventStreamRevision,
   type DemandEventStreamRevision,
+  parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
 import {
+  type ControllerIndependentReviewCheck,
+  type ControllerReviewCallbackLanding,
+  type ControllerReviewEscalation,
+  type ControllerReviewedTargetResult,
+  type ControllerReviewResumption,
+  type ControllerReviewTargetCompletion,
   normalizeControllerReviewCallbackLanding,
   normalizeControllerReviewEscalation,
   normalizeControllerReviewResumption,
   normalizeControllerReviewTargetCompletion,
-  type ControllerIndependentReviewCheck,
-  type ControllerReviewCallbackLanding,
-  type ControllerReviewedTargetResult,
-  type ControllerReviewEscalation,
-  type ControllerReviewResumption,
-  type ControllerReviewTargetCompletion,
 } from "./controller-review-decision-contract.js";
 
 /**
@@ -73,17 +73,17 @@ import {
 const DECISION_KIND = "WakeflowControllerImplementationReviewDecision" as const;
 const DECISION_SCHEMA_VERSION = 1 as const;
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export type ControllerImplementationReviewDecisionType =
-  "accept" | "rework" | "blocked" | "escalate";
+  | "accept"
+  | "rework"
+  | "blocked"
+  | "escalate";
 
-export type ControllerRequirementAlignment =
-  "aligned" | "mismatch" | "unresolved";
+export type ControllerRequirementAlignment = "aligned" | "mismatch" | "unresolved";
 
-export type ControllerImplementationQuality =
-  "satisfactory" | "defective" | "unverified";
+export type ControllerImplementationQuality = "satisfactory" | "defective" | "unverified";
 
 /** 不含身份、Review基线和时间的Controller审查判断内容。 */
 export interface ControllerImplementationReviewJudgment {
@@ -115,7 +115,8 @@ export interface ControllerReviewAnchorEvidence {
   ];
 }
 
-export interface ControllerImplementationReviewDecision extends ControllerImplementationReviewJudgment {
+export interface ControllerImplementationReviewDecision
+  extends ControllerImplementationReviewJudgment {
   readonly kind: typeof DECISION_KIND;
   readonly schemaVersion: typeof DECISION_SCHEMA_VERSION;
   readonly targetReviewDecisionId: WakeflowDurableId<"target-review-decision">;
@@ -136,11 +137,7 @@ export interface ControllerImplementationReviewDecision extends ControllerImplem
 
 export type CreateControllerImplementationReviewDecisionInput = Omit<
   ControllerImplementationReviewDecision,
-  | "kind"
-  | "schemaVersion"
-  | "targetReviewDecisionId"
-  | "decidedAt"
-  | "decisionDigest"
+  "kind" | "schemaVersion" | "targetReviewDecisionId" | "decidedAt" | "decisionDigest"
 >;
 
 export interface CreateControllerImplementationReviewDecisionOptions {
@@ -161,22 +158,15 @@ export type ControllerImplementationReviewDecisionErrorReason =
 
 const ERROR_MESSAGES = {
   json: "Controller Implementation Review Decision is not passive JSON data.",
-  schema:
-    "Controller Implementation Review Decision does not satisfy its Schema.",
-  identifier:
-    "Controller Implementation Review Decision contains an invalid identity.",
-  digest:
-    "Controller Implementation Review Decision contains an invalid or inconsistent digest.",
-  position:
-    "Controller Implementation Review Decision contains an invalid Event Stream position.",
+  schema: "Controller Implementation Review Decision does not satisfy its Schema.",
+  identifier: "Controller Implementation Review Decision contains an invalid identity.",
+  digest: "Controller Implementation Review Decision contains an invalid or inconsistent digest.",
+  position: "Controller Implementation Review Decision contains an invalid Event Stream position.",
   time: "Controller Implementation Review Decision contains an invalid decision time.",
   text: "Controller Implementation Review Decision contains invalid review text.",
   relation: "Controller Implementation Review Decision facts are inconsistent.",
-  representation:
-    "Controller Implementation Review Decision bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<ControllerImplementationReviewDecisionErrorReason, string>
->;
+  representation: "Controller Implementation Review Decision bytes are not deterministic.",
+} as const satisfies Readonly<Record<ControllerImplementationReviewDecisionErrorReason, string>>;
 
 /** Controller审查决定准入、创建或确定性表示失败时的稳定错误。 */
 export class ControllerImplementationReviewDecisionError extends Error {
@@ -185,10 +175,7 @@ export class ControllerImplementationReviewDecisionError extends Error {
   readonly reason: ControllerImplementationReviewDecisionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ControllerImplementationReviewDecisionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ControllerImplementationReviewDecisionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -206,10 +193,7 @@ const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
   ],
 );
 
-function fail(
-  reason: ControllerImplementationReviewDecisionErrorReason,
-  path: string,
-): never {
+function fail(reason: ControllerImplementationReviewDecisionErrorReason, path: string): never {
   throw new ControllerImplementationReviewDecisionError(reason, path);
 }
 
@@ -241,10 +225,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function streamRevision(
-  value: unknown,
-  path: string,
-): DemandEventStreamRevision {
+function streamRevision(value: unknown, path: string): DemandEventStreamRevision {
   try {
     return parseDemandEventStreamRevision(value, path);
   } catch (error: unknown) {
@@ -287,9 +268,7 @@ function checkId(value: unknown, path: string): string {
 }
 
 function textList(values: readonly unknown[], path: string): readonly string[] {
-  const admitted = values.map((value, index) =>
-    humanText(value, `${path}/${index}`),
-  );
+  const admitted = values.map((value, index) => humanText(value, `${path}/${index}`));
   if (new Set(admitted).size !== admitted.length) fail("relation", path);
   return Object.freeze(admitted);
 }
@@ -412,10 +391,7 @@ export function parseControllerImplementationReviewDecision(
       checkId: checkId(check.checkId, `$/independentChecks/${index}/checkId`),
       method: humanText(check.method, `$/independentChecks/${index}/method`),
       outcome: check.outcome,
-      observation: humanText(
-        check.observation,
-        `$/independentChecks/${index}/observation`,
-      ),
+      observation: humanText(check.observation, `$/independentChecks/${index}/observation`),
     }),
   );
   if (new Set(checks.map((check) => check.checkId)).size !== checks.length) {
@@ -460,11 +436,7 @@ export function parseControllerImplementationReviewDecision(
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
-    controllerWindowId: id(
-      wire.controllerWindowId,
-      "window",
-      "$/controllerWindowId",
-    ),
+    controllerWindowId: id(wire.controllerWindowId, "window", "$/controllerWindowId"),
     reviewed: reviewedOf(wire.reviewed),
     ...judgment,
     callbackLanding: normalizeControllerReviewCallbackLanding(
@@ -504,20 +476,14 @@ export function createControllerImplementationReviewDecision(
       createUuidV4(options.uuidFactory),
     );
   } catch (error: unknown) {
-    if (
-      error instanceof UuidV4Error ||
-      error instanceof WakeflowDurableIdError
-    ) {
+    if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
       fail("identifier", "$uuidFactory");
     }
     throw error;
   }
   let decidedAt: UtcInstant;
   try {
-    decidedAt =
-      options.clock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(options.clock);
+    decidedAt = options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;
@@ -550,9 +516,7 @@ export function createControllerImplementationReviewDecision(
   });
 }
 
-export function renderControllerImplementationReviewDecision(
-  value: unknown,
-): string {
+export function renderControllerImplementationReviewDecision(value: unknown): string {
   return renderDeterministicJsonDocument(
     parseControllerImplementationReviewDecision(value),
     "$decision",

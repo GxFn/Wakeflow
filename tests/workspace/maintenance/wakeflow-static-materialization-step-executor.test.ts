@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -34,8 +34,7 @@ async function fixture(t: TestContext) {
     shell: false,
     windowsHide: true,
   });
-  if (initialized.status !== 0)
-    throw new Error("Cannot initialize fixture Git.");
+  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -63,10 +62,7 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
   const receipts = await withWakeflowMaintenanceGate(
     workspace.root,
     {
@@ -93,45 +89,20 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
   // 十七步：核心与共享布局、活动布局与看板、投影、ledger、窗口运行时、宿主 capability、
   // 两个支撑面根、工作区与两个支撑面的 .gitignore、程序指令、两份支撑面记忆、配置。
   equal(receipts.length, 17);
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Design", ".gitignore")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Design", "drafts")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "Design", ".gitignore")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Design", "drafts")), true);
   equal(receipts.at(-1)?.stepId, "authority:config");
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, ".wakeflow-active")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
+  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-active")), true);
   equal(
     existsSync(
-      path.join(
-        workspace.absolutePath,
-        ".wakeflow-active",
-        "current",
-        "board",
-        "index.md",
-      ),
+      path.join(workspace.absolutePath, ".wakeflow-active", "current", "board", "index.md"),
     ),
     true,
   );
   equal(
     existsSync(
-      path.join(
-        workspace.absolutePath,
-        ".wakeflow-local",
-        "runtime",
-        "hosts",
-        "codex",
-        "pods",
-      ),
+      path.join(workspace.absolutePath, ".wakeflow-local", "runtime", "hosts", "codex", "pods"),
     ),
     true,
   );
@@ -150,18 +121,9 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
     ),
     true,
   );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")),
-    false,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")), false);
+  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")), true);
   equal(
     existsSync(
       path.join(
@@ -178,14 +140,8 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
     true,
   );
   equal(existsSync(path.join(workspace.absolutePath, "AGENTS.md")), true);
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")),
-    true,
-  );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Test", "AGENTS.md")),
-    true,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")), true);
+  equal(existsSync(path.join(workspace.absolutePath, "Test", "AGENTS.md")), true);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(core.local.status, "idle");
   equal(core.active.status, "present");
@@ -195,13 +151,8 @@ test("whole-owned root accepts existing only while replaying an affected step", 
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
-  const preview = await previewWakeflowStaticMaterialization(
-    workspace.root,
-    input,
-  );
-  const activeStep = preview.steps.find(
-    (entry) => entry.kind === "materialize-active-layout",
-  );
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
+  const activeStep = preview.steps.find((entry) => entry.kind === "materialize-active-layout");
   if (activeStep === undefined) throw new Error("Expected Active root step.");
 
   await withWakeflowMaintenanceGate(
@@ -234,13 +185,8 @@ test("whole-owned root accepts existing only while replaying an affected step", 
       } catch (error: unknown) {
         normalError = error;
       }
-      equal(
-        normalError instanceof WakeflowStaticMaterializationStepExecutionError,
-        true,
-      );
-      if (
-        normalError instanceof WakeflowStaticMaterializationStepExecutionError
-      ) {
+      equal(normalError instanceof WakeflowStaticMaterializationStepExecutionError, true);
+      if (normalError instanceof WakeflowStaticMaterializationStepExecutionError) {
         equal(normalError.reason, "strict-absent");
       }
 
@@ -287,10 +233,7 @@ test("step executor observes cancellation before decoding plan payloads", async 
       } catch (error: unknown) {
         caught = error;
       }
-      equal(
-        caught instanceof WakeflowStaticMaterializationStepExecutionError,
-        true,
-      );
+      equal(caught instanceof WakeflowStaticMaterializationStepExecutionError, true);
       if (caught instanceof WakeflowStaticMaterializationStepExecutionError) {
         equal(caught.reason, "aborted");
       }

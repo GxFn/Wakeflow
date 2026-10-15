@@ -1,18 +1,15 @@
 import pLimit from "p-limit";
 
-import {
-  parseSha256Digest,
-  Sha256Error,
-} from "../../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../../foundation/data/passive-own-data.js";
-import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
 import {
-  sameFileNodeSnapshot,
+  PassiveOwnDataError,
+  parsePlainRecord,
+} from "../../../foundation/data/passive-own-data.js";
+import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
+import {
   type FileNodeSnapshot,
+  sameFileNodeSnapshot,
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
@@ -21,46 +18,44 @@ import {
 } from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
-  StableDirectoryReadError,
   type StableDirectoryEntry,
+  StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { encodeUtf8 } from "../../../foundation/text/utf8.js";
+import {
+  DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+  DemandEventSourcingPathError,
+  demandEventStreamCommitRef,
+  parseDemandEventStreamCommitFileName,
+} from "./demand-event-sourcing-paths.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
 import {
   computeDemandEventStreamCommitDigest,
-  parseDemandEventStreamCommitDocument,
-  DemandEventStreamCommitError,
   type DemandEventStreamCommit,
+  DemandEventStreamCommitError,
   type PreparedDemandEventStreamCommit,
+  parseDemandEventStreamCommitDocument,
   renderDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import {
-  computeDemandEventSourcingStoredEventDigest,
-} from "./demand-event-sourcing-stored-event.js";
-import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import {
+  DemandEventStreamPositionError,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-  DemandEventStreamPositionError,
 } from "./demand-event-stream-position.js";
 import {
-  demandEventStreamCommitRef,
-  parseDemandEventStreamCommitFileName,
-  DemandEventSourcingPathError,
-  DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
-} from "./demand-event-sourcing-paths.js";
-import {
+  assertDemandFileEventStoreDirectory,
+  assertDemandFileEventStoreFile,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
-  DemandFileEventStoreError,
-  assertDemandFileEventStoreDirectory,
-  assertDemandFileEventStoreFile,
-  failDemandFileEventStore as fail,
   type DemandFileEventStoreCursor,
+  DemandFileEventStoreError,
   type DemandFileEventStoreReadResult,
   type DemandFileEventStoreTailReadResult,
+  failDemandFileEventStore as fail,
 } from "./demand-file-event-store-contract.js";
 
 /** Demand 文件事件存储的稳定提交清单与读取边界。 */
@@ -109,15 +104,19 @@ function sameDirectoryRead(
   left: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
   right: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
 ): boolean {
-  return sameFileNodeSnapshot(left.directoryNode, right.directoryNode)
-    && left.entries.length === right.entries.length
-    && left.entries.every((entry, index) => {
+  return (
+    sameFileNodeSnapshot(left.directoryNode, right.directoryNode) &&
+    left.entries.length === right.entries.length &&
+    left.entries.every((entry, index) => {
       const other = right.entries[index];
-      return other !== undefined
-        && entry.name === other.name
-        && entry.resourcePath === other.resourcePath
-        && sameFileNodeSnapshot(entry.node, other.node);
-    });
+      return (
+        other !== undefined &&
+        entry.name === other.name &&
+        entry.resourcePath === other.resourcePath &&
+        sameFileNodeSnapshot(entry.node, other.node)
+      );
+    })
+  );
 }
 
 export async function readDemandFileEventDirectory(
@@ -170,32 +169,23 @@ export async function readDemandFileEventCommit(
     if (error instanceof DemandFileEventStoreError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (
-        error.reason === "root-scope"
-        || error.reason === "unsupported-platform"
-      ) {
+      if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
         fail("root-scope", "$root");
       }
       if (
-        error.reason === "not-found"
-        || error.reason === "expectation-changed"
-        || error.reason === "source-changed"
+        error.reason === "not-found" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "source-changed"
       ) {
         fail("stream-changed", path);
       }
       if (error.reason === "too-large") fail("capacity", path);
-      if (
-        error.reason === "symlink"
-        || error.reason === "not-file"
-      ) {
+      if (error.reason === "symlink" || error.reason === "not-file") {
         fail("stream-invalid", path);
       }
       fail("operation-failure", path);
     }
-    if (
-      error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
-    ) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("stream-invalid", path);
     }
     throw error;
@@ -214,26 +204,20 @@ export async function readDemandFileEventCommit(
   }
 }
 
-function assertCommitChain(
-  commits: readonly Readonly<DemandEventStreamCommit>[],
-): void {
+function assertCommitChain(commits: readonly Readonly<DemandEventStreamCommit>[]): void {
   let previous: Readonly<DemandEventStreamCommit> | null = null;
   const commitIds = new Set<string>();
   const eventIds = new Set<string>();
   for (const [index, commit] of commits.entries()) {
     if (
-      commit.commitSequence !== index + 1
-      || commitIds.has(commit.commitId)
-      || (previous === null && (
-        commit.expectedStreamRevision !== 0
-        || commit.previousCommitDigest !== null
-      ))
-      || (previous !== null && (
-        commit.demandId !== previous.demandId
-        || commit.expectedStreamRevision !== previous.lastStreamRevision
-        || commit.previousCommitDigest
-          !== computeDemandEventStreamCommitDigest(previous)
-      ))
+      commit.commitSequence !== index + 1 ||
+      commitIds.has(commit.commitId) ||
+      (previous === null &&
+        (commit.expectedStreamRevision !== 0 || commit.previousCommitDigest !== null)) ||
+      (previous !== null &&
+        (commit.demandId !== previous.demandId ||
+          commit.expectedStreamRevision !== previous.lastStreamRevision ||
+          commit.previousCommitDigest !== computeDemandEventStreamCommitDigest(previous)))
     ) {
       fail("stream-invalid", `$commits/${index}`);
     }
@@ -269,33 +253,24 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 3
-    || keys[0] !== "commitSequence"
-    || keys[1] !== "lastCommitDigest"
-    || keys[2] !== "streamRevision"
+    keys.length !== 3 ||
+    keys[0] !== "commitSequence" ||
+    keys[1] !== "lastCommitDigest" ||
+    keys[2] !== "streamRevision"
   ) {
     fail("input", "$cursor");
   }
   let lastCommitDigest;
   try {
-    lastCommitDigest = parseSha256Digest(
-      record.lastCommitDigest,
-      "$/lastCommitDigest",
-    );
+    lastCommitDigest = parseSha256Digest(record.lastCommitDigest, "$/lastCommitDigest");
   } catch (error: unknown) {
     if (error instanceof Sha256Error) fail("input", "$/lastCommitDigest");
     throw error;
   }
   try {
     return Object.freeze({
-      commitSequence: parseDemandEventCommitSequence(
-        record.commitSequence,
-        "$/commitSequence",
-      ),
-      streamRevision: parseDemandEventStreamRevision(
-        record.streamRevision,
-        "$/streamRevision",
-      ),
+      commitSequence: parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence"),
+      streamRevision: parseDemandEventStreamRevision(record.streamRevision, "$/streamRevision"),
       lastCommitDigest,
     });
   } catch (error: unknown) {
@@ -314,17 +289,21 @@ async function readCommitEntries(
   policy: DemandFileEventNodePolicy = "private",
 ): Promise<readonly Readonly<LoadedDemandFileEventCommit>[]> {
   const limit = pLimit(COMMIT_READ_CONCURRENCY);
-  const settled = await Promise.allSettled(entries.map((entry, index) => (
-    limit(() => readDemandFileEventCommit(
-      root,
-      entry.resourcePath,
-      entry.node,
-      signal,
-      `$commits/${indexOffset + index}`,
-      [1n],
-      policy,
-    ))
-  )));
+  const settled = await Promise.allSettled(
+    entries.map((entry, index) =>
+      limit(() =>
+        readDemandFileEventCommit(
+          root,
+          entry.resourcePath,
+          entry.node,
+          signal,
+          `$commits/${indexOffset + index}`,
+          [1n],
+          policy,
+        ),
+      ),
+    ),
+  );
   const loaded: Readonly<LoadedDemandFileEventCommit>[] = [];
   for (const result of settled) {
     if (result.status === "rejected") throw result.reason;
@@ -405,10 +384,10 @@ export async function readDemandFileEventCommitsAfter(
   );
   const anchor = anchorLoaded?.commit;
   if (
-    anchor === undefined
-    || anchor.commitSequence !== cursor.commitSequence
-    || anchor.lastStreamRevision !== cursor.streamRevision
-    || computeDemandEventStreamCommitDigest(anchor) !== cursor.lastCommitDigest
+    anchor === undefined ||
+    anchor.commitSequence !== cursor.commitSequence ||
+    anchor.lastStreamRevision !== cursor.streamRevision ||
+    computeDemandEventStreamCommitDigest(anchor) !== cursor.lastCommitDigest
   ) {
     fail("stream-invalid", "$cursor");
   }
@@ -427,11 +406,10 @@ export async function readDemandFileEventCommitsAfter(
     if (loaded === null) break;
     const commit = loaded.commit;
     if (
-      commit.commitSequence !== sequence
-      || commit.demandId !== previous.demandId
-      || commit.expectedStreamRevision !== previous.lastStreamRevision
-      || commit.previousCommitDigest
-        !== computeDemandEventStreamCommitDigest(previous)
+      commit.commitSequence !== sequence ||
+      commit.demandId !== previous.demandId ||
+      commit.expectedStreamRevision !== previous.lastStreamRevision ||
+      commit.previousCommitDigest !== computeDemandEventStreamCommitDigest(previous)
     ) {
       fail("stream-invalid", `$tail/${commits.length}`);
     }
@@ -457,23 +435,13 @@ export async function readDemandFileEventCommitOrNull(
   try {
     resource = await root.inspectExistingResource(ref);
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }
-  return readDemandFileEventCommit(
-    root,
-    ref,
-    resource.node,
-    signal,
-    "$commit",
-    admittedLinkCounts,
-  );
+  return readDemandFileEventCommit(root, ref, resource.node, signal, "$commit", admittedLinkCounts);
 }
 
 export async function readDemandFileEventCommitAt(
@@ -513,60 +481,42 @@ export function assertDemandFileEventAppendAdmissionAgainstPrefix(
     fail("concurrency-conflict", "$commit/commitSequence");
   }
   const currentBytes = prefix.commits.reduce(
-    (total, current) => total + encodeUtf8(
-      renderDemandEventStreamCommit(current),
-    ).byteLength,
+    (total, current) => total + encodeUtf8(renderDemandEventStreamCommit(current)).byteLength,
     0,
   );
-  const commitBytes = encodeUtf8(
-    renderDemandEventStreamCommit(commit),
-  ).byteLength;
+  const commitBytes = encodeUtf8(renderDemandEventStreamCommit(commit)).byteLength;
   if (
-    prefix.commits.length >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS
-    || commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES
-    || currentBytes + commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES
+    prefix.commits.length >= DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS ||
+    commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES ||
+    currentBytes + commitBytes > DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES
   ) {
     fail("capacity", "$commit");
   }
   if (commit.commitSequence === 1) {
-    if (
-      commit.expectedStreamRevision !== 0
-      || commit.previousCommitDigest !== null
-    ) {
+    if (commit.expectedStreamRevision !== 0 || commit.previousCommitDigest !== null) {
       fail("concurrency-conflict", "$commit");
     }
-    if (
-      sourceExpectation.lastEventDigest !== null
-      || sourceExpectation.stateDigest !== null
-    ) {
-      fail(
-        "append-provenance-conflict",
-        "$preparedCommit/sourceExpectation",
-      );
+    if (sourceExpectation.lastEventDigest !== null || sourceExpectation.stateDigest !== null) {
+      fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
     }
   } else {
     const previous = prefix.commits.at(-1);
     if (previous === undefined) fail("stream-invalid", "$commits");
     if (
-      previous.lastStreamRevision !== commit.expectedStreamRevision
-      || computeDemandEventStreamCommitDigest(previous)
-      !== commit.previousCommitDigest
-      || previous.demandId !== commit.demandId
+      previous.lastStreamRevision !== commit.expectedStreamRevision ||
+      computeDemandEventStreamCommitDigest(previous) !== commit.previousCommitDigest ||
+      previous.demandId !== commit.demandId
     ) {
       fail("concurrency-conflict", "$commit");
     }
     const previousLastEvent = previous.events.at(-1);
     if (previousLastEvent === undefined) fail("stream-invalid", "$commits/last");
     if (
-      sourceExpectation.stateDigest
-        !== previousLastEvent.resultingStateDigest
-      || sourceExpectation.lastEventDigest
-        !== computeDemandEventSourcingStoredEventDigest(previousLastEvent)
+      sourceExpectation.stateDigest !== previousLastEvent.resultingStateDigest ||
+      sourceExpectation.lastEventDigest !==
+        computeDemandEventSourcingStoredEventDigest(previousLastEvent)
     ) {
-      fail(
-        "append-provenance-conflict",
-        "$preparedCommit/sourceExpectation",
-      );
+      fail("append-provenance-conflict", "$preparedCommit/sourceExpectation");
     }
   }
 
@@ -574,10 +524,8 @@ export function assertDemandFileEventAppendAdmissionAgainstPrefix(
     fail("append-identity-conflict", "$commit/commitId");
   }
   if (
-    commit.idempotency !== undefined
-    && prefix.commits.some(
-      (current) => current.idempotency?.key === commit.idempotency?.key,
-    )
+    commit.idempotency !== undefined &&
+    prefix.commits.some((current) => current.idempotency?.key === commit.idempotency?.key)
   ) {
     fail("append-identity-conflict", "$commit/idempotency/key");
   }
@@ -587,10 +535,7 @@ export function assertDemandFileEventAppendAdmissionAgainstPrefix(
   }
   for (const [index, event] of commit.events.entries()) {
     if (eventIds.has(event.eventId)) {
-      fail(
-        "append-identity-conflict",
-        `$commit/events/${index}/eventId`,
-      );
+      fail("append-identity-conflict", `$commit/events/${index}/eventId`);
     }
   }
 }

@@ -14,11 +14,11 @@ import {
   createTaskPackageFixture,
   SELECTED_AUTHORITY_REF,
   TARGET_TASK_ID,
+  TASK_PACKAGE_ID,
   TASKING_CONFIG_DIGEST,
   TASKING_CREATED_AT,
   TASKING_REPOSITORY_ID,
   TASKING_WINDOW_ID,
-  TASK_PACKAGE_ID,
   taskPackageDraft,
 } from "./task-package.fixture.js";
 
@@ -93,11 +93,7 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
     { continuation: null },
     { replacesTargetTask: null },
   ]) {
-    expectTaskPackageError(
-      () => parseTaskPackage({ ...taskPackage, ...extension }),
-      "schema",
-      "$",
-    );
+    expectTaskPackageError(() => parseTaskPackage({ ...taskPackage, ...extension }), "schema", "$");
   }
   expectTaskPackageError(
     () => parseTaskPackage({ ...taskPackage, testContract: null }),
@@ -117,10 +113,7 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
     () =>
       parseTaskPackage({
         ...taskPackage,
-        confirmedContext: [
-          taskPackage.confirmedContext[0],
-          taskPackage.confirmedContext[0],
-        ],
+        confirmedContext: [taskPackage.confirmedContext[0], taskPackage.confirmedContext[0]],
       }),
     "relation",
     "$/confirmedContext/1",
@@ -138,10 +131,7 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
     () =>
       parseTaskPackage({
         ...taskPackage,
-        acceptanceAnchors: [
-          taskPackage.acceptanceAnchors[0],
-          taskPackage.acceptanceAnchors[0],
-        ],
+        acceptanceAnchors: [taskPackage.acceptanceAnchors[0], taskPackage.acceptanceAnchors[0]],
       }),
     "relation",
     "$/acceptanceAnchors/1/anchorId",
@@ -203,8 +193,7 @@ test("test TaskPackage is a closed discriminated variant without repository muta
   });
 
   equal(testPackage.workType, "test");
-  if (testPackage.workType !== "test")
-    throw new Error("Expected Test variant.");
+  if (testPackage.workType !== "test") throw new Error("Expected Test variant.");
   deepEqual(testPackage.assignment, { windowId: TASKING_WINDOW_ID });
   deepEqual(testPackage.acceptanceAnchors, []);
   equal(Object.hasOwn(testPackage, "commitExpectation"), false);

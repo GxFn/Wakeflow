@@ -56,9 +56,7 @@ const PROFILES = Object.freeze([
 
 async function fixture(t: TestContext) {
   const absolutePath = realpathSync(
-    mkdtempSync(
-      path.join(os.tmpdir(), "wakeflow-static-materialization-preview-"),
-    ),
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-static-materialization-preview-")),
   );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
@@ -101,16 +99,10 @@ function materializeCoreProtocol(root: string): void {
     mode: 0o700,
     recursive: true,
   });
-  mkdirSync(
-    path.join(
-      root,
-      ".wakeflow-local",
-      "runtime",
-      "maintenance",
-      "transactions",
-    ),
-    { mode: 0o700, recursive: true },
-  );
+  mkdirSync(path.join(root, ".wakeflow-local", "runtime", "maintenance", "transactions"), {
+    mode: 0o700,
+    recursive: true,
+  });
   for (const relative of [
     ".wakeflow-active",
     ".wakeflow-active/current",
@@ -150,14 +142,10 @@ async function installCurrentStaticSurface(
     codexWorkspaceHostResourceProfile,
     { recoveringFreshLayout: false },
   );
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   mkdirSync(path.join(fixtureValue.absolutePath, "Ledger"), { mode: 0o755 });
   chmodSync(path.join(fixtureValue.absolutePath, "Ledger"), 0o755);
-  const ledgerRoot = await RootedDirectory.open(
-    path.join(fixtureValue.absolutePath, "Ledger"),
-  );
+  const ledgerRoot = await RootedDirectory.open(path.join(fixtureValue.absolutePath, "Ledger"));
   try {
     await new LedgerAuthorityStore(ledgerRoot).initialize({
       freshLedger: true,
@@ -178,10 +166,7 @@ async function installCurrentStaticSurface(
       expectedCatalogDigest: catalog.catalogDigest,
       surfaceId: surface.surfaceId,
     });
-    const supportPath = path.resolve(
-      fixtureValue.absolutePath,
-      ...surface.path.split("/"),
-    );
+    const supportPath = path.resolve(fixtureValue.absolutePath, ...surface.path.split("/"));
     const supportRoot = await RootedDirectory.open(supportPath);
     try {
       await publishWakeflowSupportMemory(fixtureValue.root, supportRoot, {
@@ -276,10 +261,7 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
     preview,
   );
   deepEqual(readdirSync(workspace.absolutePath).sort(), before);
-  equal(
-    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
-    false,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
 });
 
 test("static preview preserves cancellation as an operation outcome", async (t) => {
@@ -292,8 +274,7 @@ test("static preview preserves cancellation as an operation outcome", async (t) 
       signal: controller.signal,
     }),
     (error: unknown) =>
-      error instanceof WakeflowStaticMaterializationPreviewError &&
-      error.reason === "aborted",
+      error instanceof WakeflowStaticMaterializationPreviewError && error.reason === "aborted",
   );
 });
 
@@ -308,16 +289,11 @@ test("fresh static preview blocks even an empty pre-existing managed Support roo
   equal(preview.blockerCodes.includes("fresh-support-root-present"), true);
   equal(
     preview.steps.some(
-      (entry) =>
-        entry.stepId ===
-        "support-root:surface_33333333-3333-4333-8333-333333333333",
+      (entry) => entry.stepId === "support-root:surface_33333333-3333-4333-8333-333333333333",
     ),
     false,
   );
-  equal(
-    existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")),
-    false,
-  );
+  equal(existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")), false);
 });
 
 test("fresh static preview never adopts a pre-existing Ledger root", async (t) => {
@@ -384,10 +360,7 @@ test("placement-stable reconfigure plans derived files before Config activation"
     request("reconfigure", parseWakeflowConfig(moved)),
   );
   equal(blocked.status, "blocked");
-  equal(
-    blocked.blockerCodes.includes("reconfigure-layout-change-unsupported"),
-    true,
-  );
+  equal(blocked.blockerCodes.includes("reconfigure-layout-change-unsupported"), true);
 
   // hosts 是启动偏好而不是布局：只改 hosts 的 reconfigure 就绪，派生正文不依赖它，计划只剩 config 一步（§13.116 D1）。
   const preferred = createMinimalWakeflowConfig();
@@ -478,8 +451,7 @@ test("placement-stable reconfigure plans derived files before Config activation"
     ],
   );
   deepEqual(
-    repairs.steps.find((entry) => entry.kind === "initialize-requirement-board")
-      ?.dependsOn,
+    repairs.steps.find((entry) => entry.kind === "initialize-requirement-board")?.dependsOn,
     ["core:active-layout"],
   );
 
@@ -525,7 +497,11 @@ test("fresh preview on a root that is not a Git repository blocks with gitignore
     request("fresh-initialize", desiredConfig()),
   );
   equal(preview.status, "blocked");
-  equal(preview.blockerCodes.includes("gitignore-git-repository"), true, preview.blockerCodes.join(","));
+  equal(
+    preview.blockerCodes.includes("gitignore-git-repository"),
+    true,
+    preview.blockerCodes.join(","),
+  );
   equal(preview.blockerCodes.includes("gitignore-git"), false);
   deepEqual(readdirSync(absolutePath), []);
 });

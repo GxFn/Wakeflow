@@ -1,18 +1,17 @@
-import type {
-  WakeflowDemandEventSourcingStoredEvent as PersistedEventWire,
-} from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
-import {
-  WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA,
-} from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowDemandEventSourcingStoredEvent as PersistedEventWire } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../foundation/crypto/canonical-json-sha256.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -20,31 +19,26 @@ import {
   renderDeterministicJsonDocument,
 } from "../../../foundation/data/deterministic-json-document.js";
 import {
-  JsonValueError,
-  parseJsonValue,
   type JsonObject,
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../../../foundation/data/json-value.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../../foundation/time/utc-instant.js";
 import {
-  parseDemandEventSourcingStateModelVersion,
-  DemandEventSourcingStateVersionError,
   type DemandEventSourcingStateModelVersion,
+  DemandEventSourcingStateVersionError,
+  parseDemandEventSourcingStateModelVersion,
 } from "./demand-event-sourcing-state-version.js";
 import {
-  parseDemandEventStreamRevision,
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
+  parseDemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 
 /**
@@ -59,10 +53,8 @@ export const DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND =
 export const DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION = 1 as const;
 
 export interface DemandEventSourcingPersistedEventEnvelope {
-  readonly artifactKind:
-    typeof DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND;
-  readonly schemaVersion:
-    typeof DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION;
+  readonly artifactKind: typeof DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND;
+  readonly schemaVersion: typeof DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION;
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly streamRevision: DemandEventStreamRevision;
@@ -85,18 +77,15 @@ export type DemandEventSourcingPersistedEventEnvelopeErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "json": "Demand Event Sourcing persisted event is not passive JSON data.",
-  "schema": "Demand Event Sourcing persisted event envelope does not satisfy its Schema.",
-  "identifier": "Demand Event Sourcing persisted event identity is invalid.",
-  "time": "Demand Event Sourcing persisted event time is invalid.",
-  "revision": "Demand Event Sourcing persisted event revision is invalid.",
-  "digest": "Demand Event Sourcing persisted event state digest is invalid.",
+  json: "Demand Event Sourcing persisted event is not passive JSON data.",
+  schema: "Demand Event Sourcing persisted event envelope does not satisfy its Schema.",
+  identifier: "Demand Event Sourcing persisted event identity is invalid.",
+  time: "Demand Event Sourcing persisted event time is invalid.",
+  revision: "Demand Event Sourcing persisted event revision is invalid.",
+  digest: "Demand Event Sourcing persisted event state digest is invalid.",
   "state-version": "Demand Event Sourcing persisted event state-model version is invalid.",
-  "representation": "Demand Event Sourcing persisted event bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingPersistedEventEnvelopeErrorReason,
-  string
->>;
+  representation: "Demand Event Sourcing persisted event bytes are not deterministic.",
+} as const satisfies Readonly<Record<DemandEventSourcingPersistedEventEnvelopeErrorReason, string>>;
 
 export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
   override readonly name = "DemandEventSourcingPersistedEventEnvelopeError";
@@ -104,10 +93,7 @@ export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
   readonly reason: DemandEventSourcingPersistedEventEnvelopeErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DemandEventSourcingPersistedEventEnvelopeErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -119,10 +105,7 @@ const validateWire = createRuntimeJsonSchemaValidator<PersistedEventWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
 
-function fail(
-  reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingPersistedEventEnvelopeErrorReason, path: string): never {
   throw new DemandEventSourcingPersistedEventEnvelopeError(reason, path);
 }
 
@@ -140,9 +123,7 @@ function parseId<Kind extends "demand" | "demand-event">(
 }
 
 function isJsonObject(value: JsonValue): value is JsonObject {
-  return value !== null
-    && typeof value === "object"
-    && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** 解析 envelope；未知 eventType/eventVersion 在本层仍是有效路由事实。 */
@@ -178,10 +159,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   }
   let resultingStateDigest: Sha256Digest;
   try {
-    resultingStateDigest = parseSha256Digest(
-      wire.resultingStateDigest,
-      "$/resultingStateDigest",
-    );
+    resultingStateDigest = parseSha256Digest(wire.resultingStateDigest, "$/resultingStateDigest");
   } catch (error: unknown) {
     if (error instanceof Sha256Error) fail("digest", "$/resultingStateDigest");
     throw error;
@@ -200,10 +178,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   }
   let streamRevision: DemandEventStreamRevision;
   try {
-    streamRevision = parseDemandEventStreamRevision(
-      wire.streamRevision,
-      "$/streamRevision",
-    );
+    streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
       fail("revision", "$/streamRevision");
@@ -225,9 +200,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   });
 }
 
-export function renderDemandEventSourcingPersistedEventEnvelope(
-  value: unknown,
-): string {
+export function renderDemandEventSourcingPersistedEventEnvelope(value: unknown): string {
   return renderDeterministicJsonDocument(
     parseDemandEventSourcingPersistedEventEnvelope(value),
     "$event",
@@ -256,7 +229,5 @@ export function parseDemandEventSourcingPersistedEventEnvelopeDocument(
 export function computeDemandEventSourcingPersistedEventEnvelopeDigest(
   value: unknown,
 ): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingPersistedEventEnvelope(value),
-  );
+  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingPersistedEventEnvelope(value));
 }

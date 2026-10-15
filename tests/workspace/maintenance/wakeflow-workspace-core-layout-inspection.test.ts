@@ -1,33 +1,19 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  chmodSync,
-  mkdtempSync,
-  mkdirSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import {
-  withRootedExclusiveFileLock,
-} from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  WAKEFLOW_MAINTENANCE_GATE_REF,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
-import {
-  inspectWakeflowWorkspaceCoreLayout,
-} from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 
 async function fixture(t: TestContext) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-core-layout-inspection-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-core-layout-inspection-")),
+  );
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -54,9 +40,13 @@ function materializeProtocol(root: string, depth: 1 | 2 | 3 | 4): void {
 
 function writeInactiveLock(root: string): void {
   const lockPath = path.join(root, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"));
-  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "11111111-1111-4111-8111-111111111111",
-  }), { mode: 0o600 });
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }),
+    { mode: 0o600 },
+  );
 }
 
 test("core layout distinguishes absent, bootstrap-prefix and idle", async (t) => {
@@ -107,9 +97,7 @@ test("core layout separates installed resources from fresh-compatible prefix", a
   const partial = await fixture(t);
   mkdirSync(path.join(partial.absolutePath, ".wakeflow-active"), { mode: 0o700 });
   // 根在而 current/ 不在是可由维护 ensure 补齐的 incomplete，不是节点政策冲突。
-  const partialInspection = await inspectWakeflowWorkspaceCoreLayout(
-    partial.root,
-  );
+  const partialInspection = await inspectWakeflowWorkspaceCoreLayout(partial.root);
   equal(partialInspection.active.status, "incomplete");
   deepEqual([...partialInspection.issueCodes], []);
 });
@@ -119,16 +107,16 @@ test("core layout distinguishes busy, recovery residue and conflicts", async (t)
   materializeProtocol(busy.absolutePath, 4);
   let enter: (() => void) | undefined;
   let release: (() => void) | undefined;
-  const entered = new Promise<void>((resolve) => { enter = resolve; });
-  const released = new Promise<void>((resolve) => { release = resolve; });
-  const holder = withRootedExclusiveFileLock(
-    busy.root,
-    WAKEFLOW_MAINTENANCE_GATE_REF,
-    async () => {
-      enter?.();
-      await released;
-    },
-  );
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const holder = withRootedExclusiveFileLock(busy.root, WAKEFLOW_MAINTENANCE_GATE_REF, async () => {
+    enter?.();
+    await released;
+  });
   await entered;
   try {
     const inspected = await inspectWakeflowWorkspaceCoreLayout(busy.root);

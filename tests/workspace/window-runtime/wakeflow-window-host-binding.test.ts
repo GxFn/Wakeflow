@@ -1,8 +1,10 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import {
   createWakeflowWindowHostBinding,
   parseWakeflowWindowHostBinding,
@@ -16,9 +18,6 @@ import {
   parseWakeflowWindowHostIdentityProfile,
   WakeflowWindowHostIdentityProfileError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -41,8 +40,7 @@ test("Host Identity Profile 把宿主 ID 当作不透明值而非旧 UUID 假设
         reservedHandleValues: ["unknown", "current thread"],
       }),
     (error: unknown) =>
-      error instanceof WakeflowWindowHostIdentityProfileError &&
-      error.reason === "reserved",
+      error instanceof WakeflowWindowHostIdentityProfileError && error.reason === "reserved",
   );
   const handle = parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
     kind: "codex-thread",
@@ -59,8 +57,7 @@ test("Host Identity Profile 把宿主 ID 当作不透明值而非旧 UUID 假设
         value: "current thread",
       }),
     (error: unknown) =>
-      error instanceof WakeflowWindowHostIdentityProfileError &&
-      error.reason === "handle",
+      error instanceof WakeflowWindowHostIdentityProfileError && error.reason === "handle",
   );
   throws(
     () =>
@@ -90,30 +87,19 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
     },
     codexWindowHostIdentityProfile,
   );
-  const document = renderWakeflowWindowHostBinding(
-    binding,
-    codexWindowHostIdentityProfile,
-  );
+  const document = renderWakeflowWindowHostBinding(binding, codexWindowHostIdentityProfile);
   equal(document.includes(handle.value), true);
   equal(document.endsWith("\n"), true);
   deepEqual(
-    parseWakeflowWindowHostBindingDocument(
-      document,
-      codexWindowHostIdentityProfile,
-    ),
+    parseWakeflowWindowHostBindingDocument(document, codexWindowHostIdentityProfile),
     binding,
   );
   equal(binding.registeredAt < binding.source.observedAt, true);
 
   throws(
-    () =>
-      parseWakeflowWindowHostBinding(
-        binding,
-        claudeCodeWindowHostIdentityProfile,
-      ),
+    () => parseWakeflowWindowHostBinding(binding, claudeCodeWindowHostIdentityProfile),
     (error: unknown) =>
-      error instanceof WakeflowWindowHostBindingError &&
-      error.reason === "profile",
+      error instanceof WakeflowWindowHostBindingError && error.reason === "profile",
   );
 
   throws(
@@ -126,7 +112,6 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
         codexWindowHostIdentityProfile,
       ),
     (error: unknown) =>
-      error instanceof WakeflowWindowHostBindingError &&
-      error.reason === "handle",
+      error instanceof WakeflowWindowHostBindingError && error.reason === "handle",
   );
 });

@@ -2,7 +2,7 @@ import { equal, ok, rejects } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";

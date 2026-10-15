@@ -9,12 +9,12 @@ import {
   computeManagedEvidenceManifestDigest,
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_MANIFEST_KIND,
+  type ManagedEvidenceManifestDraft,
   ManagedEvidenceManifestError,
+  type ManagedEvidenceManifestErrorReason,
   parseManagedEvidenceManifest,
   parseManagedEvidenceManifestDocument,
   renderManagedEvidenceManifest,
-  type ManagedEvidenceManifestDraft,
-  type ManagedEvidenceManifestErrorReason,
 } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 
 const UUIDS = {
@@ -27,16 +27,10 @@ const UUIDS = {
 } as const;
 
 const IDS = {
-  evidence: parseWakeflowDurableIdOfKind(
-    `evidence_${UUIDS.evidence}`,
-    "evidence",
-  ),
+  evidence: parseWakeflowDurableIdOfKind(`evidence_${UUIDS.evidence}`, "evidence"),
   program: parseWakeflowDurableIdOfKind(`program_${UUIDS.program}`, "program"),
   demand: parseWakeflowDurableIdOfKind(`demand_${UUIDS.demand}`, "demand"),
-  repository: parseWakeflowDurableIdOfKind(
-    `repository_${UUIDS.repository}`,
-    "repository",
-  ),
+  repository: parseWakeflowDurableIdOfKind(`repository_${UUIDS.repository}`, "repository"),
   surface: parseWakeflowDurableIdOfKind(`surface_${UUIDS.surface}`, "surface"),
   window: parseWakeflowDurableIdOfKind(`window_${UUIDS.window}`, "window"),
 } as const;
@@ -153,10 +147,7 @@ test("Managed Evidence Manifest闭合本地tree provenance与payload identity", 
   deepEqual(manifest.contentReview.opaqueFileRefs, ["screenshots/result.png"]);
   equal(Object.isFrozen(manifest), true);
   equal(Object.isFrozen(manifest.payload.treeManifest.files), true);
-  equal(
-    computeManagedEvidenceManifestDigest(manifest),
-    manifest.manifestDigest,
-  );
+  equal(computeManagedEvidenceManifestDigest(manifest), manifest.manifestDigest);
 
   const document = renderManagedEvidenceManifest(manifest);
   equal(document.endsWith("\n"), true);
@@ -227,7 +218,7 @@ test("payload digest与opaque review必须闭合完整tree manifest", () => {
           contentReview: {
             disposition: "controller-confirmed",
             opaqueFileRefs: ["missing.bin"],
-          privacyFindings: [],
+            privacyFindings: [],
           },
         },
         { clock: () => CAPTURED_AT },
@@ -243,7 +234,7 @@ test("payload digest与opaque review必须闭合完整tree manifest", () => {
           contentReview: {
             disposition: "controller-confirmed",
             opaqueFileRefs: ["screenshots/result.png", "logs/report.txt"],
-          privacyFindings: [],
+            privacyFindings: [],
           },
         },
         { clock: () => CAPTURED_AT },
@@ -286,11 +277,7 @@ test("Manifest草稿在读取wall clock之前拒绝开放或行为输入", () =>
       throw new Error("must not execute");
     },
   });
-  expectManifestError(
-    () => createManagedEvidenceManifest(accessorDraft),
-    "input",
-    "$draft",
-  );
+  expectManifestError(() => createManagedEvidenceManifest(accessorDraft), "input", "$draft");
 
   expectManifestError(
     () =>
@@ -308,7 +295,8 @@ test("Manifest草稿在读取wall clock之前拒绝开放或行为输入", () =>
 
 test("kind 与来源绑定，隐私命中必须指向 payload 成员且有序，确认处置与命中集合闭合", () => {
   expectManifestError(
-    () => createManagedEvidenceManifest({ ...treeDraft(), kind: "link" }, { clock: () => CAPTURED_AT }),
+    () =>
+      createManagedEvidenceManifest({ ...treeDraft(), kind: "link" }, { clock: () => CAPTURED_AT }),
     "kind",
     "$/kind",
   );

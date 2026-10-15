@@ -11,10 +11,10 @@ import {
   createWakeflowExternalInstructionBodyAuthority,
   listWakeflowExternalInstructionTargets,
   parseWakeflowExternalInstructionTarget,
-  wakeflowExternalInstructionPlacementKey,
-  wakeflowExternalInstructionTargetKey,
   WakeflowExternalInstructionBodyAuthorityError,
   type WakeflowExternalInstructionBodyAuthorityErrorReason,
+  wakeflowExternalInstructionPlacementKey,
+  wakeflowExternalInstructionTargetKey,
 } from "../../../src/workspace/managed-integration/wakeflow-external-instruction-body-authority.js";
 import {
   inspectWakeflowManagedTextEnvelope,
@@ -63,25 +63,17 @@ function expectAuthorityError(
 
 test("external instruction targets list only managed-block repositories and external-owned managed-block surfaces", () => {
   deepEqual(listWakeflowExternalInstructionTargets(createMinimalWakeflowConfig()), []);
-  const targets = listWakeflowExternalInstructionTargets(
-    createManagedBlockWakeflowConfig(),
-  );
+  const targets = listWakeflowExternalInstructionTargets(createManagedBlockWakeflowConfig());
   deepEqual(targets, [MANAGED_BLOCK_REPOSITORY_TARGET, EXTERNAL_DESIGN_SURFACE_TARGET]);
   assertDeepFrozen(targets);
-  deepEqual(
-    targets.map(wakeflowExternalInstructionTargetKey),
-    [
-      `repository:${MANAGED_BLOCK_REPOSITORY_ID}`,
-      `support-surface:${EXTERNAL_DESIGN_SURFACE_ID}`,
-    ],
-  );
-  deepEqual(
-    targets.map(wakeflowExternalInstructionPlacementKey),
-    [
-      `repository.${MANAGED_BLOCK_REPOSITORY_ID}.root`,
-      `support.${EXTERNAL_DESIGN_SURFACE_ID}.root`,
-    ],
-  );
+  deepEqual(targets.map(wakeflowExternalInstructionTargetKey), [
+    `repository:${MANAGED_BLOCK_REPOSITORY_ID}`,
+    `support-surface:${EXTERNAL_DESIGN_SURFACE_ID}`,
+  ]);
+  deepEqual(targets.map(wakeflowExternalInstructionPlacementKey), [
+    `repository.${MANAGED_BLOCK_REPOSITORY_ID}.root`,
+    `support.${EXTERNAL_DESIGN_SURFACE_ID}.root`,
+  ]);
   deepEqual(
     parseWakeflowExternalInstructionTarget(MANAGED_BLOCK_REPOSITORY_TARGET),
     MANAGED_BLOCK_REPOSITORY_TARGET,
@@ -92,10 +84,11 @@ test("external instruction targets list only managed-block repositories and exte
     "$target",
   );
   expectAuthorityError(
-    () => parseWakeflowExternalInstructionTarget({
-      kind: "support-surface",
-      surfaceId: MANAGED_BLOCK_REPOSITORY_ID,
-    }),
+    () =>
+      parseWakeflowExternalInstructionTarget({
+        kind: "support-surface",
+        surfaceId: MANAGED_BLOCK_REPOSITORY_ID,
+      }),
     "input",
     "$target.surfaceId",
   );
@@ -127,17 +120,16 @@ test("repository instruction authority renders deterministic English content fro
     "### Repository boundary",
     "### Safety boundary",
     `\`"${MANAGED_BLOCK_REPOSITORY_ID}"\``,
-    "`\"Product source responsibility root.\"`",
-    "- `\"window_88888888-8888-4888-8888-888888888888\"`: `\"Product A\"`\n",
+    '`"Product source responsibility root."`',
+    '- `"window_88888888-8888-4888-8888-888888888888"`: `"Product A"`\n',
     `- \`"${SECOND_PRODUCT_WINDOW_ID}"\`: \`"Product A docs"\` (\`"Documentation lane."\`)\n`,
-    "`\".wakeflow-active/\"`",
-    "`\".wakeflow-local/\"`",
+    '`".wakeflow-active/"`',
+    '`".wakeflow-local/"`',
   ]) {
     equal(authority.body.includes(expected), true, expected);
   }
   equal(
-    authority.body.indexOf("window_88888888")
-      < authority.body.indexOf(SECOND_PRODUCT_WINDOW_ID),
+    authority.body.indexOf("window_88888888") < authority.body.indexOf(SECOND_PRODUCT_WINDOW_ID),
     true,
   );
   equal(authority.body.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX), false);
@@ -165,10 +157,7 @@ test("repository instruction authority renders deterministic English content fro
   });
   assertDeepFrozen(authority);
 
-  const envelope = recomposeWakeflowManagedTextEnvelope(
-    new Uint8Array(),
-    authority.envelopeTarget,
-  );
+  const envelope = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), authority.envelopeTarget);
   const inspected = inspectWakeflowManagedTextEnvelope(envelope.bytes);
   equal(inspected.kind, "managed");
   if (inspected.kind === "managed") {
@@ -287,8 +276,8 @@ test("external support surface instruction authority renders the Design role for
     "### Surface boundary",
     "### Safety boundary",
     `\`"${EXTERNAL_DESIGN_SURFACE_ID}"\``,
-    "`\"Externally owned design space.\"`",
-    "`\"window_66666666-6666-4666-8666-666666666666\"`",
+    '`"Externally owned design space."`',
+    '`"window_66666666-6666-4666-8666-666666666666"`',
     "`wakeflow-design`",
   ]) {
     equal(authority.body.includes(expected), true, expected);
@@ -316,7 +305,7 @@ test("external instruction authority renders Simplified Chinese only from the pe
     "### 精确分配规则",
     "### 仓库边界",
     "### 安全边界",
-    "`\"CLAUDE.md\"`",
+    '`"CLAUDE.md"`',
   ]) {
     equal(repository.body.includes(expected), true, expected);
   }
@@ -347,58 +336,64 @@ test("external instruction authority renders Simplified Chinese only from the pe
 test("external instruction authority rejects targets outside the managed-block policy", () => {
   const ownerManaged = createMinimalWakeflowConfig();
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      ownerManaged,
-      codexWorkspaceHostResourceProfile,
-      MANAGED_BLOCK_REPOSITORY_TARGET,
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        ownerManaged,
+        codexWorkspaceHostResourceProfile,
+        MANAGED_BLOCK_REPOSITORY_TARGET,
+      ),
     "target",
     "$target.repositoryId",
   );
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      ownerManaged,
-      codexWorkspaceHostResourceProfile,
-      EXTERNAL_DESIGN_SURFACE_TARGET,
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        ownerManaged,
+        codexWorkspaceHostResourceProfile,
+        EXTERNAL_DESIGN_SURFACE_TARGET,
+      ),
     "target",
     "$target.surfaceId",
   );
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      createManagedBlockWakeflowConfig(),
-      codexWorkspaceHostResourceProfile,
-      {
-        kind: "repository",
-        repositoryId: "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      },
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        createManagedBlockWakeflowConfig(),
+        codexWorkspaceHostResourceProfile,
+        {
+          kind: "repository",
+          repositoryId: "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        },
+      ),
     "target",
     "$target.repositoryId",
   );
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      createManagedBlockWakeflowConfig(),
-      codexWorkspaceHostResourceProfile,
-      { kind: "surface", surfaceId: EXTERNAL_DESIGN_SURFACE_ID },
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        createManagedBlockWakeflowConfig(),
+        codexWorkspaceHostResourceProfile,
+        { kind: "surface", surfaceId: EXTERNAL_DESIGN_SURFACE_ID },
+      ),
     "input",
     "$target",
   );
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      { kind: "WakeflowConfig" },
-      codexWorkspaceHostResourceProfile,
-      MANAGED_BLOCK_REPOSITORY_TARGET,
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        { kind: "WakeflowConfig" },
+        codexWorkspaceHostResourceProfile,
+        MANAGED_BLOCK_REPOSITORY_TARGET,
+      ),
     "config",
   );
   expectAuthorityError(
-    () => createWakeflowExternalInstructionBodyAuthority(
-      createManagedBlockWakeflowConfig(),
-      { hostId: "codex" },
-      MANAGED_BLOCK_REPOSITORY_TARGET,
-    ),
+    () =>
+      createWakeflowExternalInstructionBodyAuthority(
+        createManagedBlockWakeflowConfig(),
+        { hostId: "codex" },
+        MANAGED_BLOCK_REPOSITORY_TARGET,
+      ),
     "profile",
   );
 });

@@ -1,21 +1,22 @@
 import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
-import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../foundation/filesystem/portable-resource-path.js";
+import { streamIndexRef } from "../../kernel/event-stream/stream-index.js";
+import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../../workspace/workspace-resource-declaration.js";
-import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
 import {
-  demandEventSourcingSnapshotRef,
-  demandEventStreamCommitRef,
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+  taskPackageProjectionRef,
+} from "../tasking/task-package-projection-paths.js";
+import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
-  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
   DEMAND_EVENT_SOURCING_IDENTITY_REF,
@@ -23,22 +24,21 @@ import {
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+  demandEventSourcingSnapshotRef,
+  demandEventStreamCommitRef,
 } from "./event-sourcing/demand-event-sourcing-paths.js";
-import { streamIndexRef } from "../../kernel/event-stream/stream-index.js";
+import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
 import {
-  demandFinalPublicationMarkerRef,
-  demandFinalRootRef,
   DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  demandFinalPublicationMarkerRef,
+  demandFinalRootRef,
   demandPublicationLockRef,
   demandPublicationTransactionRef,
 } from "./publication/demand-publication-paths.js";
-import {
-  taskPackageProjectionRef,
-  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
-} from "../tasking/task-package-projection-paths.js";
 
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
@@ -125,9 +125,7 @@ function demandChildRef(
   demandId: WakeflowDurableId<"demand">,
   localRef: PortableResourcePath,
 ): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${demandFinalRootRef(demandId)}/${localRef}`,
-  );
+  return parsePortableResourcePath(`${demandFinalRootRef(demandId)}/${localRef}`);
 }
 
 function exactAggregateRootDeclaration(
@@ -165,33 +163,29 @@ function exactAggregateRootDeclaration(
   });
 }
 
-const DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION =
-  privateDirectoryDeclaration(
-    "demand.publication.root",
-    DEMAND_PUBLICATION_OWNER_ID,
-    DEMAND_PUBLICATION_ROOT_REF,
-  );
+const DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
+  "demand.publication.root",
+  DEMAND_PUBLICATION_OWNER_ID,
+  DEMAND_PUBLICATION_ROOT_REF,
+);
 
-const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION =
-  privateDirectoryDeclaration(
-    "demand.publication.stages-root",
-    DEMAND_PUBLICATION_OWNER_ID,
-    DEMAND_PUBLICATION_STAGES_ROOT_REF,
-  );
+const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
+  "demand.publication.stages-root",
+  DEMAND_PUBLICATION_OWNER_ID,
+  DEMAND_PUBLICATION_STAGES_ROOT_REF,
+);
 
-const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
-  privateDirectoryDeclaration(
-    "demand.publication.transactions-root",
-    DEMAND_PUBLICATION_OWNER_ID,
-    DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
-  );
+const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
+  "demand.publication.transactions-root",
+  DEMAND_PUBLICATION_OWNER_ID,
+  DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+);
 
-const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION =
-  privateDirectoryDeclaration(
-    "demand.publication.locks-root",
-    DEMAND_PUBLICATION_OWNER_ID,
-    DEMAND_PUBLICATION_LOCKS_ROOT_REF,
-  );
+const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
+  "demand.publication.locks-root",
+  DEMAND_PUBLICATION_OWNER_ID,
+  DEMAND_PUBLICATION_LOCKS_ROOT_REF,
+);
 
 /** Demand 发布职责所有者的确定性静态资源目录。 */
 export const WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG = Object.freeze([
@@ -348,17 +342,13 @@ export function createTaskPackageProjectionResourceDeclaration(
   );
 }
 
-
 /** 为一个物理事件流槽位生成不可变权威提交声明。 */
 export function createDemandEventStreamCommitResourceDeclaration(
   demandValue: unknown,
   commitSequenceValue: unknown,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(
-    commitSequenceValue,
-    "$commitSequence",
-  );
+  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.commit-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,
@@ -381,10 +371,7 @@ export function createDemandEventSourcingSnapshotResourceDeclaration(
   commitSequenceValue: unknown,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(
-    commitSequenceValue,
-    "$commitSequence",
-  );
+  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.snapshot-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,
@@ -404,17 +391,11 @@ export function createDemandEventStreamIndexResourceDeclaration(
   commitSequenceValue: unknown,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(
-    commitSequenceValue,
-    "$commitSequence",
-  );
+  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.index-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,
-    demandChildRef(
-      demandId,
-      streamIndexRef(DEMAND_EVENT_STREAM_INDEX_ROOT_REF, commitSequence),
-    ),
+    demandChildRef(demandId, streamIndexRef(DEMAND_EVENT_STREAM_INDEX_ROOT_REF, commitSequence)),
     {
       kind: "resource",
       role: "derived-checkpoint",

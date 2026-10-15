@@ -2,20 +2,17 @@ import { types } from "node:util";
 
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   closeDemandOperationAuthorityContext,
-  openDemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
+  openDemandOperationAuthorityContext,
 } from "../demand/demand-operation-authority-context.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import {
@@ -24,16 +21,16 @@ import {
   type DemandTargetTaskState,
 } from "../demand/model/demand-aggregate-state.js";
 import {
-  TEST_ENVIRONMENT_AUTHORITY_ROLE,
   type DemandTestingDecision,
+  TEST_ENVIRONMENT_AUTHORITY_ROLE,
 } from "../demand/model/demand-authority.js";
 import type { DemandType } from "../demand/model/demand-identity.js";
 import type { LedgerAuthorityMemberReference } from "../ledger/ledger-authority-store.js";
 import {
-  readDemandResultReviewSnapshot,
-  DemandResultReviewSnapshotError,
   type DemandResultReviewSnapshot,
+  DemandResultReviewSnapshotError,
   type DemandResultReviewTarget,
+  readDemandResultReviewSnapshot,
 } from "./demand-result-review-snapshot.js";
 
 /**
@@ -188,10 +185,7 @@ export interface DemandPostAcceptanceTestDelivery {
   readonly testWindowId: WakeflowDurableId<"window">;
 }
 
-type TestTargetState = Extract<
-  DemandTargetTaskState,
-  { readonly workType: "test" }
->;
+type TestTargetState = Extract<DemandTargetTaskState, { readonly workType: "test" }>;
 type ReviewedTestTargetState = Extract<
   TestTargetState,
   {
@@ -203,10 +197,7 @@ type ReviewedTestTargetState = Extract<
       | "test-escalated";
   }
 >;
-type DeliveryBearingTestTargetState = Exclude<
-  TestTargetState,
-  { readonly phase: "planned" }
->;
+type DeliveryBearingTestTargetState = Exclude<TestTargetState, { readonly phase: "planned" }>;
 
 export interface DemandPostAcceptanceRoute {
   readonly kind: typeof ROUTE_KIND;
@@ -242,15 +233,12 @@ const ERROR_MESSAGES = {
   input: "Demand post-acceptance route input is invalid.",
   root: "Demand post-acceptance route root could not be held safely.",
   config: "Demand post-acceptance route Config authority is invalid.",
-  "demand-authority":
-    "Demand post-acceptance route Demand authority is invalid.",
+  "demand-authority": "Demand post-acceptance route Demand authority is invalid.",
   review: "Demand post-acceptance route Review Snapshot is invalid.",
   relation: "Demand post-acceptance route sources are inconsistent.",
   aborted: "Demand post-acceptance route read was aborted.",
   "operation-failure": "Demand post-acceptance route read failed.",
-} as const satisfies Readonly<
-  Record<DemandPostAcceptanceRouteErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandPostAcceptanceRouteErrorReason, string>>;
 
 /** Accepted后路由无法由当前Authority与Review事实安全重建时的稳定错误。 */
 export class DemandPostAcceptanceRouteError extends Error {
@@ -268,9 +256,7 @@ function fail(reason: DemandPostAcceptanceRouteErrorReason): never {
   throw new DemandPostAcceptanceRouteError(reason);
 }
 
-function targetPhase(
-  target: Readonly<DemandResultReviewTarget>,
-): DemandTargetTaskState["phase"] {
+function targetPhase(target: Readonly<DemandResultReviewTarget>): DemandTargetTaskState["phase"] {
   return target.status === "reported"
     ? target.taskPackage.workType === "test"
       ? "test-result-reported"
@@ -278,12 +264,8 @@ function targetPhase(
     : target.phase;
 }
 
-function targetWorkType(
-  target: Readonly<DemandResultReviewTarget>,
-): "implementation" | "test" {
-  return target.status === "awaiting-result"
-    ? target.workType
-    : target.taskPackage.workType;
+function targetWorkType(target: Readonly<DemandResultReviewTarget>): "implementation" | "test" {
+  return target.status === "awaiting-result" ? target.workType : target.taskPackage.workType;
 }
 
 function acceptedTarget(
@@ -338,9 +320,8 @@ export function resolveDemandTestEnvironmentAuthority(
     candidates.length !== 1 ||
     source === undefined ||
     source.reference.memberDigest !==
-      source.record.documents.find(
-        (document) => document.memberRef === source.reference.memberRef,
-      )?.digest
+      source.record.documents.find((document) => document.memberRef === source.reference.memberRef)
+        ?.digest
   ) {
     fail("relation");
   }
@@ -369,11 +350,7 @@ function nextStage(
   if (loaded.authority.testingDecision.mode === "not-applicable") {
     return researchStage(loaded, blockingTargets);
   }
-  if (
-    snapshot.targets.every(
-      (target) => targetWorkType(target) !== "implementation",
-    )
-  ) {
+  if (snapshot.targets.every((target) => targetWorkType(target) !== "implementation")) {
     return Object.freeze({
       status: "not-ready" as const,
       reason: "no-target-tasks" as const,
@@ -402,9 +379,7 @@ function nextStage(
     });
   }
   // 同一时间只有一个未终结的 test 目标；历史代际只能停在 test-product-defect。
-  const openTestTargets = testTargets.filter(
-    (target) => target.phase !== "test-product-defect",
-  );
+  const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
   if (openTestTargets.length > 1) fail("relation");
   const testTarget = openTestTargets[0];
   if (testTarget === undefined) {
@@ -494,8 +469,7 @@ function reviewedTest(
     testWindowId: target.windowId,
     targetResultId: target.currentDelivery.targetResult.targetResultId,
     resultDigest: target.currentDelivery.targetResult.resultDigest,
-    targetReviewDecisionId:
-      target.currentDelivery.reviewDecision.targetReviewDecisionId,
+    targetReviewDecisionId: target.currentDelivery.reviewDecision.targetReviewDecisionId,
     decisionDigest: target.currentDelivery.reviewDecision.decisionDigest,
   });
 }
@@ -551,8 +525,7 @@ function openTestStage(
           taskPackageDigest: testTarget.taskPackageDigest,
           deliveryId: testTarget.currentDelivery.deliveryId,
           testAttemptId: testTarget.currentDelivery.testAttemptId,
-          targetResultId:
-            testTarget.currentDelivery.targetResult.targetResultId,
+          targetResultId: testTarget.currentDelivery.targetResult.targetResultId,
           resultDigest: testTarget.currentDelivery.targetResult.resultDigest,
           outcome: testTarget.currentDelivery.targetResult.outcome,
         }),
@@ -592,8 +565,7 @@ function routeBasis(
 ): Omit<DemandPostAcceptanceRoute, "routeDigest"> {
   const { snapshotDigest: suppliedSnapshotDigest, ...snapshotBasis } = snapshot;
   if (
-    computeCanonicalJsonSha256Digest(snapshotBasis) !==
-      suppliedSnapshotDigest ||
+    computeCanonicalJsonSha256Digest(snapshotBasis) !== suppliedSnapshotDigest ||
     loaded.identity.demandId !== snapshot.demand.demandId ||
     loaded.aggregate.demandId !== snapshot.demand.demandId ||
     loaded.aggregate.state.lifecycle !== snapshot.demand.lifecycle ||
@@ -603,8 +575,7 @@ function routeBasis(
     loaded.aggregate.lastEventDigest !== snapshot.eventStream.lastEventDigest ||
     loaded.aggregate.state.targetTasks.length !== snapshot.targets.length ||
     loaded.aggregate.state.targetTasks.some(
-      (target, index) =>
-        target.targetTaskId !== snapshot.targets[index]?.targetTaskId,
+      (target, index) => target.targetTaskId !== snapshot.targets[index]?.targetTaskId,
     )
   ) {
     fail("relation");
@@ -673,21 +644,14 @@ function parseInput(
   }
   let demandId: WakeflowDurableId<"demand">;
   try {
-    demandId = parseWakeflowDurableIdOfKind(
-      demandIdValue,
-      "demand",
-      "$demandId",
-    );
+    demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("input");
     throw error;
   }
   let options: Readonly<Record<string, unknown>>;
   try {
-    options = parsePlainRecord(
-      optionsValue === undefined ? {} : optionsValue,
-      "$options",
-    );
+    options = parsePlainRecord(optionsValue === undefined ? {} : optionsValue, "$options");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input");
     throw error;

@@ -3,26 +3,22 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
   WakeflowConfigError,
+  type WakeflowConfigIndexes,
+  type WakeflowConfigModel,
   type WakeflowConfigPlacement,
   type WakeflowConfigPod,
-  type WakeflowConfigModel,
-  type WakeflowConfigIndexes,
   type WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
-import {
-  WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS,
-} from "./wakeflow-window-runtime-desired-topology.js";
+import { WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS } from "./wakeflow-window-runtime-desired-topology.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：Config窗口到宿主中立launch intent的纯编译。
@@ -103,21 +99,14 @@ export interface WakeflowWindowLaunchIntentSet {
   readonly launchSetDigest: Sha256Digest;
 }
 
-type WakeflowWindowLaunchIntentErrorReason =
-  | "config"
-  | "profile"
-  | "capacity"
-  | "relation";
+type WakeflowWindowLaunchIntentErrorReason = "config" | "profile" | "capacity" | "relation";
 
 const ERROR_MESSAGES = {
   config: "Wakeflow window launch intent Config is invalid.",
   profile: "Wakeflow window launch intent Host Profile is invalid.",
   capacity: "Wakeflow window launch intent exceeds its static window budget.",
   relation: "Wakeflow window launch intent root cannot be resolved.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowLaunchIntentErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWindowLaunchIntentErrorReason, string>>;
 
 /** Window launch intent 编译失败的稳定、脱敏错误。 */
 export class WakeflowWindowLaunchIntentError extends Error {
@@ -133,10 +122,7 @@ export class WakeflowWindowLaunchIntentError extends Error {
   }
 }
 
-function fail(
-  reason: WakeflowWindowLaunchIntentErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowLaunchIntentErrorReason, path: string): never {
   throw new WakeflowWindowLaunchIntentError(reason, path);
 }
 
@@ -149,9 +135,7 @@ function parseConfig(value: unknown): WakeflowConfigModel {
   }
 }
 
-function parseProfile(
-  value: unknown,
-): Readonly<WakeflowWorkspaceHostResourceProfile> {
+function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
   try {
     return parseWakeflowWorkspaceHostResourceProfile(value);
   } catch (error: unknown) {
@@ -268,31 +252,19 @@ export function compileWakeflowWindowLaunchIntents(
 ): Readonly<WakeflowWindowLaunchIntentSet> {
   const model = parseConfig(configValue);
   const profile = parseProfile(profileValue);
-  if (
-    model.topology.windows.length
-      > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS
-  ) {
+  if (model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
     fail("capacity", "$/topology/windows");
   }
   const indexes = buildWakeflowConfigIndexes(model);
   const configDigest = computeWakeflowConfigDigest(model);
   const profileDigest = computeCanonicalJsonSha256Digest(profile);
-  const intents = Object.freeze([...model.topology.windows]
-    .sort((left, right) => (
-      left.windowId < right.windowId
-        ? -1
-        : left.windowId > right.windowId
-          ? 1
-          : 0
-    ))
-    .map((window) => createIntent(
-      model,
-      profile,
-      configDigest,
-      profileDigest,
-      indexes,
-      window,
-    )));
+  const intents = Object.freeze(
+    [...model.topology.windows]
+      .sort((left, right) =>
+        left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0,
+      )
+      .map((window) => createIntent(model, profile, configDigest, profileDigest, indexes, window)),
+  );
   const basis = Object.freeze({
     kind: "WakeflowWindowLaunchIntentSet" as const,
     schemaVersion: 1 as const,

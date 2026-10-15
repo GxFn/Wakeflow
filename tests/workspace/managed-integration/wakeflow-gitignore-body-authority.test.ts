@@ -1,17 +1,10 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   classifyWakeflowGitignoreExactOutsideRules,
   createWakeflowGitignoreBodyAuthority,
@@ -19,9 +12,7 @@ import {
   WakeflowGitignoreBodyAuthorityError,
   type WakeflowGitignoreBodyAuthorityErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-} from "../../../src/workspace/workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../../src/workspace/workspace-host-resource-profile.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -125,9 +116,7 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     codexWorkspaceHostResourceProfile,
   ]);
   equal(
-    escaped.rules.some((rule) => (
-      rule === "/.claude/local\\[dev\\]\\*\\?.json"
-    )),
+    escaped.rules.some((rule) => rule === "/.claude/local\\[dev\\]\\*\\?.json"),
     true,
   );
 
@@ -135,51 +124,38 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     codexWorkspaceHostResourceProfile,
     claudeCodeWorkspaceHostResourceProfile,
   ]);
-  const compatible = classifyWakeflowGitignoreExactOutsideRules(
-    authority,
-    {
-      prefix: "node_modules/\r\n/.wakeflow-active/\r\n",
-      suffix: "# user suffix\n/.wakeflow-local/\n",
-    },
-  );
+  const compatible = classifyWakeflowGitignoreExactOutsideRules(authority, {
+    prefix: "node_modules/\r\n/.wakeflow-active/\r\n",
+    suffix: "# user suffix\n/.wakeflow-local/\n",
+  });
   deepEqual(compatible, {
     kind: "compatible",
-    exactDuplicateRules: [
-      "/.wakeflow-active/",
-      "/.wakeflow-local/",
-    ],
+    exactDuplicateRules: ["/.wakeflow-active/", "/.wakeflow-local/"],
     exactNegatedRules: [],
   });
   assertDeepFrozen(compatible);
 
-  const conflict = classifyWakeflowGitignoreExactOutsideRules(
-    authority,
-    {
-      prefix: "!/.wakeflow-local/\n",
-      suffix: "!/.claude/settings.local.json\r\n",
-    },
-  );
+  const conflict = classifyWakeflowGitignoreExactOutsideRules(authority, {
+    prefix: "!/.wakeflow-local/\n",
+    suffix: "!/.claude/settings.local.json\r\n",
+  });
   deepEqual(conflict, {
     kind: "conflict",
     exactDuplicateRules: [],
-    exactNegatedRules: [
-      "/.claude/settings.local.json",
-      "/.wakeflow-local/",
-    ],
+    exactNegatedRules: ["/.claude/settings.local.json", "/.wakeflow-local/"],
   });
 
   expectAuthorityError(
-    () => createWakeflowGitignoreBodyAuthority([
-      codexWorkspaceHostResourceProfile,
-    ]),
+    () => createWakeflowGitignoreBodyAuthority([codexWorkspaceHostResourceProfile]),
     "profile-set",
     "$profiles",
   );
   expectAuthorityError(
-    () => createWakeflowGitignoreBodyAuthority([
-      codexWorkspaceHostResourceProfile,
-      codexWorkspaceHostResourceProfile,
-    ]),
+    () =>
+      createWakeflowGitignoreBodyAuthority([
+        codexWorkspaceHostResourceProfile,
+        codexWorkspaceHostResourceProfile,
+      ]),
     "profile-set",
     "$profiles",
   );
@@ -211,10 +187,8 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     launch: { kind: "project-thread" },
   });
   expectAuthorityError(
-    () => createWakeflowGitignoreBodyAuthority([
-      codexWorkspaceHostResourceProfile,
-      collidingClaude,
-    ]),
+    () =>
+      createWakeflowGitignoreBodyAuthority([codexWorkspaceHostResourceProfile, collidingClaude]),
     "path",
     "$/profiles/1/surfaces/settingsIntegration/localPath",
   );
@@ -242,19 +216,15 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     "$authority",
   );
   let trapCalls = 0;
-  const proxy = new Proxy([
-    codexWorkspaceHostResourceProfile,
-    claudeCodeWorkspaceHostResourceProfile,
-  ], {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const proxy = new Proxy(
+    [codexWorkspaceHostResourceProfile, claudeCodeWorkspaceHostResourceProfile],
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
     },
-  });
-  expectAuthorityError(
-    () => createWakeflowGitignoreBodyAuthority(proxy),
-    "input",
-    "$profiles",
   );
+  expectAuthorityError(() => createWakeflowGitignoreBodyAuthority(proxy), "input", "$profiles");
   equal(trapCalls, 0);
 });

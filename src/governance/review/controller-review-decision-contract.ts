@@ -1,18 +1,18 @@
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { TestFailureClassification } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import type { DemandEventStreamRevision } from "../demand/event-sourcing/demand-event-stream-position.js";
 import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
@@ -25,8 +25,7 @@ import type { TargetResultOutcome } from "../result/target-result-report-contrac
  * 记录派生后写进决定，Controller 不撰写。
  */
 
-export type ControllerIndependentCheckOutcome =
-  "passed" | "failed" | "inconclusive";
+export type ControllerIndependentCheckOutcome = "passed" | "failed" | "inconclusive";
 
 export interface ControllerIndependentReviewCheck {
   readonly checkId: string;
@@ -131,13 +130,11 @@ export type ControllerTestReviewEscalation =
       readonly userDecision: Readonly<ControllerReviewEscalation>;
     }>;
 
-export type ControllerReviewSharedErrorReason =
-  "identifier" | "digest" | "time" | "text";
+export type ControllerReviewSharedErrorReason = "identifier" | "digest" | "time" | "text";
 
 type SharedFail = (reason: ControllerReviewSharedErrorReason, path: string) => never;
 
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export interface ControllerReviewEscalationWire {
   readonly issue: string;
@@ -178,12 +175,7 @@ export interface ControllerTestReviewEscalationWire {
   readonly userDecision?: ControllerReviewEscalationWire;
 }
 
-function reviewText(
-  value: string,
-  path: string,
-  fail: SharedFail,
-  maximum = 8192,
-): string {
+function reviewText(value: string, path: string, fail: SharedFail, maximum = 8192): string {
   if (
     value.length === 0 ||
     value.length > maximum ||
@@ -206,9 +198,12 @@ function reviewDigest(value: string, path: string, fail: SharedFail): Sha256Dige
   }
 }
 
-function reviewId<
-  Kind extends "target-review-decision" | "demand-event" | "target-task",
->(value: string, kind: Kind, path: string, fail: SharedFail): WakeflowDurableId<Kind> {
+function reviewId<Kind extends "target-review-decision" | "demand-event" | "target-task">(
+  value: string,
+  kind: Kind,
+  path: string,
+  fail: SharedFail,
+): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
@@ -268,12 +263,7 @@ export function normalizeControllerReviewEscalation(
       ),
     ),
     options: admittedOptions,
-    recommendation: reviewText(
-      wire.recommendation,
-      `${path}/recommendation`,
-      fail,
-      4096,
-    ),
+    recommendation: reviewText(wire.recommendation, `${path}/recommendation`, fail, 4096),
   });
 }
 
@@ -360,10 +350,7 @@ export function normalizeControllerTestReviewEscalation(
     const targetPath = `${path}/remediation/affectedTargets/${index}`;
     const [firstStep, ...otherSteps] = target.failedStepIds;
     if (firstStep === undefined) fail("text", `${targetPath}/failedStepIds`);
-    const failedStepIds: readonly [string, ...string[]] = Object.freeze([
-      firstStep,
-      ...otherSteps,
-    ]);
+    const failedStepIds: readonly [string, ...string[]] = Object.freeze([firstStep, ...otherSteps]);
     return Object.freeze({
       targetTaskId: reviewId(
         target.targetTaskId,

@@ -11,14 +11,16 @@ import {
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
 import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -30,19 +32,14 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import {
   planWholeFileContentTransition,
-  WholeFileContentTransitionError,
   type WholeFileContentTransition,
+  WholeFileContentTransitionError,
 } from "../../foundation/filesystem/whole-file-content-transition.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
-  WakeflowResourceProcessingContractError,
   type WakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
@@ -51,24 +48,20 @@ import {
 } from "../managed-integration/wakeflow-managed-text-history.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
-import type {
-  WakeflowWorkspaceResourceDeclaration,
-} from "../workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
 import {
   createWakeflowManagedSupportResourceCatalog,
   type WakeflowManagedSupportResourceCatalog,
 } from "./wakeflow-managed-support-resource-catalog.js";
+import { WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE } from "./wakeflow-managed-support-root-materialization.js";
 import {
   createWakeflowSupportMemoryAuthority,
-  WakeflowSupportMemoryAuthorityError,
   type WakeflowSupportMemoryAuthority,
+  WakeflowSupportMemoryAuthorityError,
 } from "./wakeflow-support-memory-authority.js";
-import {
-  WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE,
-} from "./wakeflow-managed-support-root-materialization.js";
 
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
@@ -137,14 +130,10 @@ const ERROR_MESSAGES = {
   authority: "Wakeflow support memory content authority is invalid.",
   source: "Wakeflow support memory source cannot be read stably.",
   "source-policy": "Wakeflow support memory source violates its node policy.",
-  "unadmitted-source":
-    "Wakeflow support memory source is not an admitted whole-file render.",
+  "unadmitted-source": "Wakeflow support memory source is not an admitted whole-file render.",
   capacity: "Wakeflow support memory exceeds its byte budget.",
   aborted: "Wakeflow support memory inspection was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowSupportMemoryInspectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowSupportMemoryInspectionErrorReason, string>>;
 
 /** Support memory 只读检查失败的稳定、脱敏错误。 */
 export class WakeflowSupportMemoryInspectionError extends Error {
@@ -171,18 +160,17 @@ export interface ParsedWakeflowSupportMemoryInspectionRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: WakeflowSupportMemoryInspectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowSupportMemoryInspectionErrorReason, path: string): never {
   throw new WakeflowSupportMemoryInspectionError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
@@ -223,14 +211,12 @@ export function parseWakeflowSupportMemoryInspectionRequest(
     "profile",
     "surfaceId",
   ];
-  const expected = record.signal === undefined
-    ? required
-    : [...required, "signal"].sort();
+  const expected = record.signal === undefined ? required : [...required, "signal"].sort();
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== expected.length
-    || keys.some((key, index) => key !== expected[index])
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index]) ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$request");
   }
@@ -274,21 +260,14 @@ export function parseWakeflowSupportMemoryInspectionRequest(
   }
   let surfaceId: WakeflowDurableId<"surface">;
   try {
-    surfaceId = parseWakeflowDurableIdOfKind(
-      record.surfaceId,
-      "surface",
-      "$request.surfaceId",
-    );
+    surfaceId = parseWakeflowDurableIdOfKind(record.surfaceId, "surface", "$request.surfaceId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("input", "$request.surfaceId");
     }
     throw error;
   }
-  const catalog = createWakeflowManagedSupportResourceCatalog(
-    desiredConfig,
-    profile,
-  );
+  const catalog = createWakeflowManagedSupportResourceCatalog(desiredConfig, profile);
   const expectedCatalogDigest = parseDigest(
     record.expectedCatalogDigest,
     "$request.expectedCatalogDigest",
@@ -296,9 +275,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(
   if (catalog.catalogDigest !== expectedCatalogDigest) {
     fail("catalog", "$request.expectedCatalogDigest");
   }
-  if (!catalog.declarations.some((entry) => (
-    entry.declarationId === `support.${surfaceId}.root`
-  ))) {
+  if (!catalog.declarations.some((entry) => entry.declarationId === `support.${surfaceId}.root`)) {
     fail("surface", "$request.surfaceId");
   }
   return Object.freeze({
@@ -315,10 +292,10 @@ export function parseWakeflowSupportMemoryInspectionRequest(
 
 function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", path);
   }
@@ -338,23 +315,15 @@ async function admitRoots(
 ): Promise<void> {
   let report;
   try {
-    report = await validateWakeflowConfigRootPlacements(
-      workspaceRoot,
-      request.desiredConfig,
-    );
+    report = await validateWakeflowConfigRootPlacements(workspaceRoot, request.desiredConfig);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
       fail("placement", error.path);
     }
     throw error;
   }
-  const placement = report.roots.find((entry) => (
-    entry.key === `support.${request.surfaceId}.root`
-  ));
-  if (
-    placement?.state !== "present"
-    || placement.realPath !== supportRoot.absolutePath
-  ) {
+  const placement = report.roots.find((entry) => entry.key === `support.${request.surfaceId}.root`);
+  if (placement?.state !== "present" || placement.realPath !== supportRoot.absolutePath) {
     fail("placement", "$supportRoot");
   }
   let node;
@@ -365,9 +334,9 @@ async function admitRoots(
     throw error;
   }
   if (
-    node.kind !== "directory"
-    || node.permissionBits !== WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE
-    || node.userId !== currentUserId()
+    node.kind !== "directory" ||
+    node.permissionBits !== WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE ||
+    node.userId !== currentUserId()
   ) {
     fail("root-policy", "$supportRoot");
   }
@@ -384,10 +353,7 @@ function currentAuthority(
       request.surfaceId,
     );
   } catch (error: unknown) {
-    if (
-      error instanceof WakeflowSupportMemoryAuthorityError
-      && error.reason === "surface"
-    ) {
+    if (error instanceof WakeflowSupportMemoryAuthorityError && error.reason === "surface") {
       return null;
     }
     if (error instanceof WakeflowSupportMemoryAuthorityError) {
@@ -422,19 +388,15 @@ async function readSource(
   readonly bytes: Uint8Array;
 }> | null> {
   try {
-    const read = await readStableFile(
-      supportRoot,
-      request.profile.instructionFileName,
-      {
-        maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-      },
-    );
+    const read = await readStableFile(supportRoot, request.profile.instructionFileName, {
+      maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
     if (
-      read.node.kind !== "file"
-      || read.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE
-      || read.node.linkCount !== 1n
-      || read.node.userId !== currentUserId()
+      read.node.kind !== "file" ||
+      read.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
+      read.node.linkCount !== 1n ||
+      read.node.userId !== currentUserId()
     ) {
       fail("source-policy", "$source");
     }
@@ -468,19 +430,15 @@ async function revalidateSource(
   initial: Awaited<ReturnType<typeof readSource>>,
 ): Promise<void> {
   try {
-    const current = await readStableFile(
-      supportRoot,
-      request.profile.instructionFileName,
-      {
-        maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
-        ...(initial === null ? {} : { expectedNode: initial.facts.node }),
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-      },
-    );
+    const current = await readStableFile(supportRoot, request.profile.instructionFileName, {
+      maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
+      ...(initial === null ? {} : { expectedNode: initial.facts.node }),
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
     if (
-      initial === null
-      || current.digest !== initial.facts.digest
-      || current.byteCount !== initial.facts.byteCount
+      initial === null ||
+      current.digest !== initial.facts.digest ||
+      current.byteCount !== initial.facts.byteCount
     ) {
       fail("source", "$source");
     }
@@ -506,17 +464,14 @@ export async function inspectWakeflowSupportMemory(
   const request = parseWakeflowSupportMemoryInspectionRequest(requestValue);
   if (request.signal?.aborted === true) fail("aborted", "$signal");
   await admitRoots(workspaceRootValue, supportRootValue, request);
-  const declaration = request.catalog.declarations.find((entry) => (
-    entry.declarationId
-      === `support.${request.surfaceId}.instruction.${request.profile.hostId}`
-  ));
+  const declaration = request.catalog.declarations.find(
+    (entry) =>
+      entry.declarationId === `support.${request.surfaceId}.instruction.${request.profile.hostId}`,
+  );
   if (declaration === undefined) fail("surface", "$request.surfaceId");
   let operation: Readonly<WakeflowResourceOperation>;
   try {
-    operation = admitWakeflowResourceOperation(
-      declaration.processing,
-      "deterministic-rewrite",
-    );
+    operation = admitWakeflowResourceOperation(declaration.processing, "deterministic-rewrite");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
       fail("catalog", "$request.expectedCatalogDigest");
@@ -528,11 +483,10 @@ export async function inspectWakeflowSupportMemory(
   const source = await readSource(supportRootValue, request);
   let transition: Readonly<WholeFileContentTransition>;
   try {
-    transition = planWholeFileContentTransition(
-      source?.bytes ?? null,
-      {
-        // C5（§13.167）：前序渲染作为额外 current 内容准入，旧记忆被重写为当前渲染而不是阻塞。
-        currentContents: current === null
+    transition = planWholeFileContentTransition(source?.bytes ?? null, {
+      // C5（§13.167）：前序渲染作为额外 current 内容准入，旧记忆被重写为当前渲染而不是阻塞。
+      currentContents:
+        current === null
           ? []
           : [
               encodeUtf8(current.body),
@@ -544,9 +498,8 @@ export async function inspectWakeflowSupportMemory(
                 request.surfaceId,
               ).map((body) => encodeUtf8(body)),
             ],
-        desiredContent: encodeUtf8(desired.body),
-      },
-    );
+      desiredContent: encodeUtf8(desired.body),
+    });
   } catch (error: unknown) {
     if (error instanceof WholeFileContentTransitionError) {
       if (error.reason === "unadmitted-source") {
@@ -557,17 +510,15 @@ export async function inspectWakeflowSupportMemory(
     throw error;
   }
   if (
-    transition.desiredByteCount > WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES
-    || transition.desiredDigest !== desired.bodyDigest
+    transition.desiredByteCount > WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES ||
+    transition.desiredDigest !== desired.bodyDigest
   ) {
     fail("capacity", "$target");
   }
   await revalidateSource(supportRootValue, request, source);
   return Object.freeze({
     kind: "WakeflowSupportMemoryInspection",
-    status: transition.disposition === "current"
-      ? "current"
-      : "publication-required",
+    status: transition.disposition === "current" ? "current" : "publication-required",
     currentConfigDigest: request.currentConfigDigest,
     desiredConfigDigest: request.desiredConfigDigest,
     catalogDigest: request.catalog.catalogDigest,

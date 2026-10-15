@@ -1,17 +1,15 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
-  parseWakeflowDurableIdOfKind,
-} from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
-import {
+  ControllerImplementationReviewDecisionError,
   createControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecisionDocument,
   renderControllerImplementationReviewDecision,
-  ControllerImplementationReviewDecisionError,
 } from "../../../src/governance/review/controller-implementation-review-decision.js";
+import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import {
   CONTROLLER_REVIEW_DECIDED_AT,
   CONTROLLER_REVIEW_DECISION_UUID,

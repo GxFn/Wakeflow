@@ -2,41 +2,35 @@ import {
   parseWakeflowConfigPlacement,
   WakeflowConfigError,
 } from "../../configuration/wakeflow-config.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import {
   WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
   type WakeflowWindowRuntimeUnregisteredProjection as WindowRuntimeProjectionWire,
 } from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
 import {
-  WAKEFLOW_SHA256_DIGEST_SCHEMA,
-} from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-  DeterministicJsonDocumentError,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
-  parseJsonValue,
-  JsonValueError,
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
 import {
@@ -60,11 +54,9 @@ import {
  * title、raw handle、绝对路径或时间字段。
  */
 
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND =
-  "WakeflowWindowRuntimeProjection" as const;
+export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND = "WakeflowWindowRuntimeProjection" as const;
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION = 1 as const;
-const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND =
-  "WakeflowWindowRuntimeProjectionSet" as const;
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND = "WakeflowWindowRuntimeProjectionSet" as const;
 
 type WakeflowWindowRuntimeUnregisteredProjectionErrorReason =
   | "input"
@@ -83,24 +75,18 @@ const ERROR_MESSAGES = {
   relation: "Window Runtime unregistered projection fields are inconsistent.",
   digest: "Window Runtime unregistered projection digest is invalid.",
   representation: "Window Runtime unregistered projection bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowWindowRuntimeUnregisteredProjectionErrorReason, string>
+>;
 
 /** 未注册 Window Runtime 投影准入失败的稳定、脱敏错误。 */
-export class WakeflowWindowRuntimeUnregisteredProjectionRecordError
-  extends Error {
-  override readonly name =
-    "WakeflowWindowRuntimeUnregisteredProjectionRecordError";
+export class WakeflowWindowRuntimeUnregisteredProjectionRecordError extends Error {
+  override readonly name = "WakeflowWindowRuntimeUnregisteredProjectionRecordError";
   readonly code = "wakeflow-window-runtime-unregistered-projection-record" as const;
   readonly reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -115,8 +101,7 @@ export interface WakeflowWindowRuntimeUnregisteredProjection {
   readonly windowId: WakeflowDurableId<"window">;
   readonly role: WakeflowWindowRuntimeDesiredWindow["role"];
   readonly logicalRoot: WakeflowWindowRuntimeLogicalRoot;
-  readonly configuredPlacement:
-    WakeflowWindowRuntimeDesiredWindow["configuredPlacement"];
+  readonly configuredPlacement: WakeflowWindowRuntimeDesiredWindow["configuredPlacement"];
   readonly identity: Readonly<{ readonly status: "unregistered" }>;
   readonly rootObservation: Readonly<{
     readonly status: "unobserved";
@@ -124,10 +109,12 @@ export interface WakeflowWindowRuntimeUnregisteredProjection {
   }>;
   readonly preflight: Readonly<{
     readonly status: "blocked";
-    readonly blockingReasons: readonly [Readonly<{
-      readonly code: "identity-unregistered";
-      readonly source: "identity";
-    }>];
+    readonly blockingReasons: readonly [
+      Readonly<{
+        readonly code: "identity-unregistered";
+        readonly source: "identity";
+      }>,
+    ];
   }>;
   readonly sourceFingerprints: Readonly<{
     readonly desiredTopologyDigest: Sha256Digest;
@@ -152,8 +139,7 @@ export interface WakeflowWindowRuntimeUnregisteredProjectionSet {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly projectionRootRef: PortableResourcePath;
   readonly desiredTopologyDigest: Sha256Digest;
-  readonly entries:
-    readonly Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry>[];
+  readonly entries: readonly Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry>[];
   readonly projectionSetDigest: Sha256Digest;
 }
 
@@ -170,20 +156,16 @@ export class WakeflowWindowRuntimeUnregisteredProjectionError extends Error {
   }
 }
 
-const validateProjectionWire =
-  createRuntimeJsonSchemaValidator<WindowRuntimeProjectionWire>(
-    WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
-    [WAKEFLOW_SHA256_DIGEST_SCHEMA],
-  );
+const validateProjectionWire = createRuntimeJsonSchemaValidator<WindowRuntimeProjectionWire>(
+  WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
+  [WAKEFLOW_SHA256_DIGEST_SCHEMA],
+);
 
 function failRecord(
   reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
   path: string,
 ): never {
-  throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(
-    reason,
-    path,
-  );
+  throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(reason, path);
 }
 
 function typedId<Kind extends "program" | "window" | "surface" | "repository">(
@@ -226,28 +208,17 @@ function logicalRoot(
     }
     return Object.freeze({
       kind: "support-surface",
-      surfaceId: typedId(
-        value.surfaceId,
-        "surface",
-        "$/logicalRoot/surfaceId",
-      ),
+      surfaceId: typedId(value.surfaceId, "surface", "$/logicalRoot/surfaceId"),
     });
   }
   if (role !== "product") failRecord("relation", "$/logicalRoot");
   return Object.freeze({
     kind: "repository",
-    repositoryId: typedId(
-      value.repositoryId,
-      "repository",
-      "$/logicalRoot/repositoryId",
-    ),
+    repositoryId: typedId(value.repositoryId, "repository", "$/logicalRoot/repositoryId"),
   });
 }
 
-function configuredPlacement(
-  value: string,
-  role: WindowRuntimeProjectionWire["role"],
-) {
+function configuredPlacement(value: string, role: WindowRuntimeProjectionWire["role"]) {
   if (value === ".") {
     if (role !== "controller") failRecord("relation", "$/configuredPlacement");
     return value;
@@ -263,8 +234,7 @@ function configuredPlacement(
   }
 }
 
-function unregisteredPreflight():
-  WakeflowWindowRuntimeUnregisteredProjection["preflight"] {
+function unregisteredPreflight(): WakeflowWindowRuntimeUnregisteredProjection["preflight"] {
   const reason = Object.freeze({
     code: "identity-unregistered" as const,
     source: "identity" as const,
@@ -289,9 +259,7 @@ function rootObservation(
   };
   return Object.freeze({
     status: "unobserved" as const,
-    observationDigest: computeCanonicalJsonSha256Digest(
-      basis,
-    ),
+    observationDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }
 
@@ -358,10 +326,9 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
     configuredPlacement: placement,
   });
   if (
-    actualObservationDigest !== expectedObservation.observationDigest
-    || sourceFingerprints.rootObservationDigest
-      !== expectedObservation.observationDigest
-    || sourceFingerprints.windowTopologyDigest !== expectedWindowTopologyDigest
+    actualObservationDigest !== expectedObservation.observationDigest ||
+    sourceFingerprints.rootObservationDigest !== expectedObservation.observationDigest ||
+    sourceFingerprints.windowTopologyDigest !== expectedWindowTopologyDigest
   ) {
     failRecord("relation", "$/sourceFingerprints");
   }
@@ -378,17 +345,9 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
     rootObservation: expectedObservation,
     preflight: unregisteredPreflight(),
     sourceFingerprints,
-  } satisfies Omit<
-    WakeflowWindowRuntimeUnregisteredProjection,
-    "projectionDigest"
-  >;
-  const suppliedProjectionDigest = digest(
-    wire.projectionDigest,
-    "$/projectionDigest",
-  );
-  const expectedProjectionDigest = computeCanonicalJsonSha256Digest(
-    projectionBasis(normalized),
-  );
+  } satisfies Omit<WakeflowWindowRuntimeUnregisteredProjection, "projectionDigest">;
+  const suppliedProjectionDigest = digest(wire.projectionDigest, "$/projectionDigest");
+  const expectedProjectionDigest = computeCanonicalJsonSha256Digest(projectionBasis(normalized));
   if (suppliedProjectionDigest !== expectedProjectionDigest) {
     failRecord("digest", "$/projectionDigest");
   }
@@ -404,10 +363,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjection> {
   let value: JsonValue;
   try {
-    value = parseDeterministicJsonDocument(
-      text,
-      "$windowRuntimeProjection",
-    );
+    value = parseDeterministicJsonDocument(text, "$windowRuntimeProjection");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
       failRecord("representation", error.path);
@@ -415,10 +371,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(
     throw error;
   }
   const projection = parseWakeflowWindowRuntimeUnregisteredProjection(value);
-  if (
-    renderDeterministicJsonDocument(projection, "$windowRuntimeProjection")
-      !== text
-  ) {
+  if (renderDeterministicJsonDocument(projection, "$windowRuntimeProjection") !== text) {
     failRecord("representation", "$windowRuntimeProjection");
   }
   return projection;
@@ -430,10 +383,7 @@ function projectionFor(
   desiredTopologyDigest: Sha256Digest,
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjection> {
-  const observation = rootObservation(
-    window.logicalRoot,
-    window.configuredPlacement,
-  );
+  const observation = rootObservation(window.logicalRoot, window.configuredPlacement);
   const basis = {
     kind: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND,
     schemaVersion: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION,
@@ -463,18 +413,13 @@ function entryFor(
   profileValue: unknown,
   projection: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry> {
-  const document = renderDeterministicJsonDocument(
-    projection,
-    "$windowRuntimeProjection",
-  );
+  const document = renderDeterministicJsonDocument(projection, "$windowRuntimeProjection");
   return Object.freeze({
     windowId: projection.windowId,
     resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
     projection,
     document,
-    documentDigest: computeSha256Digest(
-      encodeUtf8(document, "$windowRuntimeProjection"),
-    ),
+    documentDigest: computeSha256Digest(encodeUtf8(document, "$windowRuntimeProjection")),
   });
 }
 
@@ -485,10 +430,7 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet> {
   let desired;
   try {
-    desired = compileWakeflowWindowRuntimeDesiredTopology(
-      configValue,
-      profileValue,
-    );
+    desired = compileWakeflowWindowRuntimeDesiredTopology(configValue, profileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
       throw new WakeflowWindowRuntimeUnregisteredProjectionError(error.path);
@@ -496,15 +438,14 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     throw error;
   }
   const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profileValue);
-  const entries = Object.freeze(desired.windows.map((window) => entryFor(
-    profileValue,
-    projectionFor(
-      desired.programId,
-      desired.hostId,
-      desired.desiredTopologyDigest,
-      window,
+  const entries = Object.freeze(
+    desired.windows.map((window) =>
+      entryFor(
+        profileValue,
+        projectionFor(desired.programId, desired.hostId, desired.desiredTopologyDigest, window),
+      ),
     ),
-  )));
+  );
   const basis = {
     kind: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND,
     schemaVersion: 1 as const,
@@ -522,8 +463,6 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
   return Object.freeze({
     ...basis,
     entries,
-    projectionSetDigest: computeCanonicalJsonSha256Digest(
-      basis,
-    ),
+    projectionSetDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }

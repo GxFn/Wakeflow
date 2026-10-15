@@ -1,15 +1,15 @@
 import type { TargetTaskPlanningResult } from "../../../src/capabilities/tasking/contract.js";
 import {
-  executeTargetTaskPlanningPublicRequest,
   type ExecuteTargetTaskPlanningOptions,
+  executeTargetTaskPlanningPublicRequest,
 } from "../../../src/capabilities/tasking/service.js";
 import type { WakeflowTargetTaskPlanningRequestV1 } from "../../../src/contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DISPOSABLE_WORKSPACE_DURABILITY } from "../../support/prepared-workspace.js";
 import {
+  type AcceptedDemandCompletionWorkspaceFixture,
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   createAcceptedDemandCompletionWorkspaceFixture,
-  type AcceptedDemandCompletionWorkspaceFixture,
 } from "../lifecycle/demand-completion-service.fixture.js";
 
 /**
@@ -107,8 +107,12 @@ export async function createTestTaskPlanningWorkspaceFixture(
 ): Promise<Readonly<TestTaskPlanningWorkspaceFixture>> {
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture({
     testingMode: "real-environment",
-    ...(options.requirementMarkdown === undefined ? {} : { requirementMarkdown: options.requirementMarkdown }),
-    ...(options.coverAllCriteria === undefined ? {} : { coverAllCriteria: options.coverAllCriteria }),
+    ...(options.requirementMarkdown === undefined
+      ? {}
+      : { requirementMarkdown: options.requirementMarkdown }),
+    ...(options.coverAllCriteria === undefined
+      ? {}
+      : { coverAllCriteria: options.coverAllCriteria }),
   });
   const taskPackage = createTestTaskPackageRequestFixture(fixture, options);
   return Object.freeze({

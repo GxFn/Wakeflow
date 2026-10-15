@@ -1,21 +1,15 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  chmodSync,
-  mkdtempSync,
-  rmSync,
-} from "node:fs";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
-  LEDGER_AUTHORITY_LAYOUT_DIGEST,
   inspectLedgerAuthorityLayout,
+  LEDGER_AUTHORITY_LAYOUT_DIGEST,
 } from "../../../src/governance/ledger/ledger-authority-layout.js";
-import {
-  LedgerAuthorityStore,
-} from "../../../src/governance/ledger/ledger-authority-store.js";
+import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 
 test("Ledger layout inspection observes only the three fixed containers", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-ledger-layout-"));
@@ -24,21 +18,23 @@ test("Ledger layout inspection observes only the three fixed containers", async 
     const absent = await inspectLedgerAuthorityLayout(root);
     equal(absent.status, "incomplete");
     equal(absent.authorityDigest, LEDGER_AUTHORITY_LAYOUT_DIGEST);
-    deepEqual(absent.entries.map((entry) => [entry.resourcePath, entry.status]), [
-      ["requirements", "absent"],
-      ["transactions", "absent"],
-      ["archives", "absent"],
-    ]);
+    deepEqual(
+      absent.entries.map((entry) => [entry.resourcePath, entry.status]),
+      [
+        ["requirements", "absent"],
+        ["transactions", "absent"],
+        ["archives", "absent"],
+      ],
+    );
 
     const store = new LedgerAuthorityStore(root);
     await store.initialize({ freshLedger: true });
     const current = await store.inspectLayout();
     equal(current.status, "current");
-    deepEqual(current.entries.map((entry) => entry.observedMode), [
-      0o755,
-      0o700,
-      0o755,
-    ]);
+    deepEqual(
+      current.entries.map((entry) => entry.observedMode),
+      [0o755, 0o700, 0o755],
+    );
 
     chmodSync(path.join(rootPath, "transactions"), 0o755);
     const conflict = await store.inspectLayout();

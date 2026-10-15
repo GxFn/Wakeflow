@@ -1,7 +1,7 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   readWakeflowConfigAuthoritySnapshot,
@@ -38,13 +38,13 @@ import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.
 import { createWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { runGit } from "../../support/git-fixture.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   prepareFixtureDelivery,
 } from "../delivery/delivery-workspace.fixture.js";
-import { runGit } from "../../support/git-fixture.js";
 
 /**
  * 一次观察多域（gate-log §13.94 D1、D4）：每个域独立读取并隔离失败，读不出只让该域
@@ -153,7 +153,9 @@ function absolute(root: string, ref: string): string {
   return path.join(root, ...ref.split("/"));
 }
 
-test("健康工作区：各域 observed；未物化的宿主运行时给出空绑定而不是不可用；projection 作用域不读宿主域；overall idle", { timeout: 120_000 }, async (t) => {
+test("健康工作区：各域 observed；未物化的宿主运行时给出空绑定而不是不可用；projection 作用域不读宿主域；overall idle", {
+  timeout: 120_000,
+}, async (t) => {
   const workspace = await maintainedWorkspace(t);
   const full = await observe(workspace);
   equal(full.observedAt, OBSERVED_AT);
@@ -162,7 +164,13 @@ test("健康工作区：各域 observed；未物化的宿主运行时给出空�
   equal(full.layout.status, "observed");
   equal(full.layout.value?.status, "current");
   equal(full.board.status, "observed");
-  deepEqual(full.board.value?.counts, { pending: 0, parked: 0, claimed: 0, withdrawn: 0, archived: 0 });
+  deepEqual(full.board.value?.counts, {
+    pending: 0,
+    parked: 0,
+    claimed: 0,
+    withdrawn: 0,
+    archived: 0,
+  });
   equal(full.board.value?.indexDigest, full.board.value?.expectedIndexDigest);
   deepEqual(full.demands, { status: "observed", issue: null, value: [] });
   equal(full.claims.status, "observed");
@@ -176,7 +184,13 @@ test("健康工作区：各域 observed；未物化的宿主运行时给出空�
     ],
   );
   deepEqual(
-    full.hooks.map((host) => [host.hostId, host.status, host.directory, host.records, host.skipped]),
+    full.hooks.map((host) => [
+      host.hostId,
+      host.status,
+      host.directory,
+      host.records,
+      host.skipped,
+    ]),
     [
       ["codex", "observed", "absent", 0, 0],
       ["claude-code", "observed", "absent", 0, 0],
@@ -184,12 +198,24 @@ test("健康工作区：各域 observed；未物化的宿主运行时给出空�
   );
   equal(full.pods.status, "observed");
   deepEqual(
-    full.pods.value?.map((pod) => [pod.pod.placement, pod.state, pod.activeDemandId, pod.receipts.length, pod.windowIds.length, pod.boundWindowIds.length]),
+    full.pods.value?.map((pod) => [
+      pod.pod.placement,
+      pod.state,
+      pod.activeDemandId,
+      pod.receipts.length,
+      pod.windowIds.length,
+      pod.boundWindowIds.length,
+    ]),
     [["primary", "creating", null, 0, 4, 0]],
   );
   equal(full.repositories.status, "observed");
   deepEqual(
-    full.repositories.value?.map((repository) => [repository.status, repository.head, repository.branch, repository.detached]),
+    full.repositories.value?.map((repository) => [
+      repository.status,
+      repository.head,
+      repository.branch,
+      repository.detached,
+    ]),
     [["observed", workspace.headCommit, "main", false]],
   );
   deepEqual(
@@ -207,50 +233,74 @@ test("健康工作区：各域 observed；未物化的宿主运行时给出空�
   deepEqual(projection.bindings, []);
   deepEqual(projection.hooks, []);
   deepEqual(projection.assets, []);
-  deepEqual(projection.repositories, { status: "unavailable", issue: "scope:projection", value: null });
+  deepEqual(projection.repositories, {
+    status: "unavailable",
+    issue: "scope:projection",
+    value: null,
+  });
   equal(projection.pods.value?.[0]?.state, null);
   equal(deriveOverallStatus(projection), "idle");
 });
 
-test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：settings 为 drift 而不是 unreadable", { timeout: 120_000 }, async (t) => {
+test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：settings 为 drift 而不是 unreadable", {
+  timeout: 120_000,
+}, async (t) => {
   const workspace = await maintainedWorkspace(t);
   const assetBytes = new TextEncoder().encode("#!/bin/sh\necho wakeflow\n");
-  const assetsDirectory = absolute(workspace.root, `${hostRuntimeRootRef("claude-code")}/operations/assets`);
+  const assetsDirectory = absolute(
+    workspace.root,
+    `${hostRuntimeRootRef("claude-code")}/operations/assets`,
+  );
   mkdirSync(assetsDirectory, { recursive: true });
-  writeFileSync(path.join(assetsDirectory, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME), assetBytes, { mode: 0o600 });
+  writeFileSync(path.join(assetsDirectory, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME), assetBytes, {
+    mode: 0o600,
+  });
   const settingsPath = absolute(workspace.root, CLAUDE_CODE_LOCAL_SETTINGS_REF);
   mkdirSync(path.dirname(settingsPath), { recursive: true });
   writeFileSync(settingsPath, `${JSON.stringify({ permissions: {} })}\n`, { mode: 0o600 });
   chmodSync(settingsPath, 0o600);
   const claudeHost = CODEX_OBSERVATION_FACADE.hosts.find((host) => host.hostId === "claude-code");
   if (claudeHost === undefined) throw new Error("Expected a Claude Code observation host.");
-  const observation = await observeWorkspace(workspace.rooted, workspace.snapshot, workspace.ledgerRoot, {
-    hosts: [
-      {
-        ...claudeHost,
-        statuslineAsset: {
-          fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
-          digest: computeSha256Digest(assetBytes),
-          settings: {
-            path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
-            key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-            expectedEntry: claudeCodeStatuslineSettingsEntry,
+  const observation = await observeWorkspace(
+    workspace.rooted,
+    workspace.snapshot,
+    workspace.ledgerRoot,
+    {
+      hosts: [
+        {
+          ...claudeHost,
+          statuslineAsset: {
+            fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+            digest: computeSha256Digest(assetBytes),
+            settings: {
+              path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+              key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+              expectedEntry: claudeCodeStatuslineSettingsEntry,
+            },
+            companions: [],
           },
-          companions: [],
         },
-      },
-    ],
-    currentHostId: "claude-code",
-    scope: "full",
-    clock: () => OBSERVED_AT,
-  });
+      ],
+      currentHostId: "claude-code",
+      scope: "full",
+      clock: () => OBSERVED_AT,
+    },
+  );
   deepEqual(
-    observation.assets.map((asset) => [asset.hostId, asset.status, asset.settings, asset.companion, asset.issue]),
+    observation.assets.map((asset) => [
+      asset.hostId,
+      asset.status,
+      asset.settings,
+      asset.companion,
+      asset.issue,
+    ]),
     [["claude-code", "current", "drift", null, null]],
   );
 });
 
-test("域隔离：看板目录被文件顶替只让 board 不可用；声明目录被文件顶替只让 claims 不可用；非法声明文件只计 unreadable", { timeout: 120_000 }, async (t) => {
+test("域隔离：看板目录被文件顶替只让 board 不可用；声明目录被文件顶替只让 claims 不可用；非法声明文件只计 unreadable", {
+  timeout: 120_000,
+}, async (t) => {
   const workspace = await maintainedWorkspace(t);
   const boardPath = absolute(workspace.root, REQUIREMENT_BOARD_ROOT_REF);
   rmSync(boardPath, { recursive: true, force: true });
@@ -300,7 +350,9 @@ test("中止信号从任一域上抛，不被隔离成 unavailable", { timeout: 
   );
 });
 
-test("孤儿声明与 overall：持有者不是活动 Demand 或绑定不是当前代即孤儿；active / degraded / blocked / maintenance 只看观察记录", { timeout: 120_000 }, async () => {
+test("孤儿声明与 overall：持有者不是活动 Demand 或绑定不是当前代即孤儿；active / degraded / blocked / maintenance 只看观察记录", {
+  timeout: 120_000,
+}, async () => {
   const fixture = await createDeliveryWorkspaceFixture();
   try {
     git(path.join(fixture.fixtureRoot, "ProductA"), "init", "--quiet", "--initial-branch=main");

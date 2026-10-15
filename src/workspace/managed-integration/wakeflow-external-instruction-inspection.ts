@@ -11,10 +11,7 @@ import {
   type Sha256Digest,
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
@@ -66,8 +63,7 @@ export interface WakeflowExternalInstructionInspection {
   readonly target: Readonly<WakeflowExternalInstructionTarget>;
   readonly currentConfigDigest: Sha256Digest | null;
   readonly desiredConfigDigest: Sha256Digest;
-  readonly currentAuthority:
-    Readonly<WakeflowExternalInstructionBodyAuthority> | null;
+  readonly currentAuthority: Readonly<WakeflowExternalInstructionBodyAuthority> | null;
   readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
   readonly source: Readonly<StableFileSource> | null;
   readonly transition: Readonly<WakeflowManagedTextAuthorityTransition>;
@@ -101,20 +97,13 @@ const ERROR_MESSAGES = {
     "Wakeflow external instruction inspection requires POSIX ownership facts.",
   authority: "Wakeflow external instruction content authority is invalid.",
   source: "Wakeflow external instruction source cannot be read stably.",
-  "source-capacity":
-    "Wakeflow external instruction source exceeds its byte budget.",
-  "source-policy":
-    "Wakeflow external instruction source violates its node policy.",
+  "source-capacity": "Wakeflow external instruction source exceeds its byte budget.",
+  "source-policy": "Wakeflow external instruction source violates its node policy.",
   envelope: "Wakeflow external instruction managed envelope is invalid.",
-  "unknown-managed-body":
-    "Wakeflow external instruction managed body is not an admitted render.",
-  "target-capacity":
-    "Wakeflow external instruction candidate exceeds its byte budget.",
+  "unknown-managed-body": "Wakeflow external instruction managed body is not an admitted render.",
+  "target-capacity": "Wakeflow external instruction candidate exceeds its byte budget.",
   aborted: "Wakeflow external instruction inspection was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowExternalInstructionInspectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowExternalInstructionInspectionErrorReason, string>>;
 
 /** 外部指令只读检查失败的稳定、脱敏错误。 */
 export class WakeflowExternalInstructionInspectionError extends Error {
@@ -123,10 +112,7 @@ export class WakeflowExternalInstructionInspectionError extends Error {
   readonly reason: WakeflowExternalInstructionInspectionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowExternalInstructionInspectionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowExternalInstructionInspectionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -145,15 +131,11 @@ export interface ParsedWakeflowExternalInstructionInspectionRequest {
 
 /** 从 current / desired Config 推导出的两份正文权威；current 里没有该 target 时为 null。 */
 export interface WakeflowExternalInstructionAuthorities {
-  readonly currentAuthority:
-    Readonly<WakeflowExternalInstructionBodyAuthority> | null;
+  readonly currentAuthority: Readonly<WakeflowExternalInstructionBodyAuthority> | null;
   readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
 }
 
-function fail(
-  reason: WakeflowExternalInstructionInspectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowExternalInstructionInspectionErrorReason, path: string): never {
   throw new WakeflowExternalInstructionInspectionError(reason, path);
 }
 
@@ -176,10 +158,12 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function hasTarget(
@@ -212,13 +196,11 @@ export function parseWakeflowExternalInstructionInspectionRequest(
     "profile",
     "target",
   ];
-  const validKeys = record.signal === undefined
-    ? requiredKeys
-    : [...requiredKeys, "signal"].sort();
+  const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
   if (
-    keys.length !== validKeys.length
-    || keys.some((key, index) => key !== validKeys[index])
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    keys.length !== validKeys.length ||
+    keys.some((key, index) => key !== validKeys[index]) ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$request");
   }
@@ -233,20 +215,14 @@ export function parseWakeflowExternalInstructionInspectionRequest(
   }
   let target: Readonly<WakeflowExternalInstructionTarget>;
   try {
-    target = parseWakeflowExternalInstructionTarget(
-      record.target,
-      "$request.target",
-    );
+    target = parseWakeflowExternalInstructionTarget(record.target, "$request.target");
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
       fail("input", error.path);
     }
     throw error;
   }
-  const desiredConfig = parseConfig(
-    record.desiredConfig,
-    "$request.desiredConfig",
-  );
+  const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
   const desiredConfigDigest = parseDigest(
     record.expectedDesiredConfigDigest,
     "$request.expectedDesiredConfigDigest",
@@ -289,10 +265,10 @@ export function parseWakeflowExternalInstructionInspectionRequest(
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -303,11 +279,7 @@ function createAuthority(
   request: Readonly<ParsedWakeflowExternalInstructionInspectionRequest>,
 ): Readonly<WakeflowExternalInstructionBodyAuthority> {
   try {
-    return createWakeflowExternalInstructionBodyAuthority(
-      config,
-      request.profile,
-      request.target,
-    );
+    return createWakeflowExternalInstructionBodyAuthority(config, request.profile, request.target);
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
       fail("authority", error.path);
@@ -338,18 +310,19 @@ export function wakeflowExternalInstructionManagedBlockFileRequest(
   return {
     resourcePath: request.profile.instructionFileName,
     // C5（§13.167）：前序渲染作为额外 current 目标准入。
-    currentTargets: authorities.currentAuthority === null
-      ? []
-      : [
-          authorities.currentAuthority.envelopeTarget,
-          ...historicalWakeflowManagedTextTargets(
-            WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
+    currentTargets:
+      authorities.currentAuthority === null
+        ? []
+        : [
             authorities.currentAuthority.envelopeTarget,
-            request.currentConfig,
-            request.profile,
-            request.target,
-          ),
-        ],
+            ...historicalWakeflowManagedTextTargets(
+              WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
+              authorities.currentAuthority.envelopeTarget,
+              request.currentConfig,
+              request.profile,
+              request.target,
+            ),
+          ],
     desiredTarget: authorities.desiredAuthority.envelopeTarget,
     maximumBytes: WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES,
     ...(signal === undefined ? {} : { signal }),

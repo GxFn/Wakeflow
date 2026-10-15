@@ -4,37 +4,25 @@ import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
-
+import {
+  cancelDemandAggregateState,
+  computeDemandAggregateStateDigest,
+  continueDemandAggregateState,
+  createInitialDemandAggregateState,
+  DemandAggregateStateError,
+  decideTargetResultReviewInDemandAggregateState,
+  escalateDemandAggregateState,
+  parseDemandAggregateState,
+  planTargetTaskInDemandAggregateState,
+  prepareDeliveryInDemandAggregateState,
+  rearmDeliveryInDemandAggregateState,
+  recordDeliveryOutcomeInDemandAggregateState,
+  recordTargetResultInDemandAggregateState,
+} from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
 } from "../../../src/governance/tasking/task-package.js";
-import {
-  cancelDemandAggregateState,
-  escalateDemandAggregateState,
-  computeDemandAggregateStateDigest,
-  continueDemandAggregateState,
-  createInitialDemandAggregateState,
-  decideTargetResultReviewInDemandAggregateState,
-  prepareDeliveryInDemandAggregateState,
-  planTargetTaskInDemandAggregateState,
-  parseDemandAggregateState,
-  rearmDeliveryInDemandAggregateState,
-  recordDeliveryOutcomeInDemandAggregateState,
-  recordTargetResultInDemandAggregateState,
-  DemandAggregateStateError,
-} from "../../../src/governance/demand/model/demand-aggregate-state.js";
-import {
-  createTaskPackageFixture,
-  TARGET_TASK_ID,
-  TASKING_AUTHORITY_DIGEST,
-  TASKING_CREATED_AT,
-  TASKING_DEMAND_ID,
-  TASKING_REPOSITORY_ID,
-  TASKING_WINDOW_ID,
-  TASK_PACKAGE_ID,
-  taskPackageDraft,
-} from "../tasking/task-package.fixture.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -50,12 +38,20 @@ import {
   createTargetResultFixture,
 } from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
+import {
+  createTaskPackageFixture,
+  TARGET_TASK_ID,
+  TASK_PACKAGE_ID,
+  TASKING_AUTHORITY_DIGEST,
+  TASKING_CREATED_AT,
+  TASKING_DEMAND_ID,
+  TASKING_REPOSITORY_ID,
+  TASKING_WINDOW_ID,
+  taskPackageDraft,
+} from "../tasking/task-package.fixture.js";
 
 test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要", () => {
-  const active = createInitialDemandAggregateState(
-    TASKING_DEMAND_ID,
-    TASKING_AUTHORITY_DIGEST,
-  );
+  const active = createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST);
   deepEqual(active, {
     artifactKind: "wakeflow-demand-aggregate-state",
     schemaVersion: 1,
@@ -79,9 +75,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
       repositoryId: TASKING_REPOSITORY_ID,
       windowId: TASKING_WINDOW_ID,
       commitExpectation: taskPackage.commitExpectation,
-      acceptanceAnchorIds: taskPackage.acceptanceAnchors.map(
-        (anchor) => anchor.anchorId,
-      ),
+      acceptanceAnchorIds: taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
       phase: "planned",
     },
   ]);
@@ -111,9 +105,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   });
   throws(
     () => prepareDeliveryInDemandAggregateState(prepared, envelope),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
 
   const observedCases = [
@@ -176,9 +168,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   // accepted 之后不能再记录结局。
   throws(
     () => recordDeliveryOutcomeInDemandAggregateState(accepted, acceptedOutcome),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   const rearm = createDeliveryRearmFixture(envelope, rejectedOutcome);
   const rearmed = rearmDeliveryInDemandAggregateState(rejected, rearm);
@@ -191,9 +181,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   equal(rearmed.targetTasks[0].currentDelivery.deliveryId, DELIVERY_ID);
   throws(
     () => rearmDeliveryInDemandAggregateState(accepted, rearm),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
 
   const targetResult = createTargetResultFixture({
@@ -227,10 +215,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
       8,
       targetResult,
     );
-    const reviewed = decideTargetResultReviewInDemandAggregateState(
-      resultReported,
-      decision,
-    );
+    const reviewed = decideTargetResultReviewInDemandAggregateState(resultReported, decision);
     equal(reviewed.targetTasks[0]?.phase, candidate.phase);
     const target = reviewed.targetTasks[0];
     if (
@@ -242,10 +227,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
       throw new Error("Expected reviewed target state.");
     }
     equal(target.currentDelivery.reviewDecision.decision, candidate.decision);
-    equal(
-      target.currentDelivery.reviewDecision.decisionDigest,
-      decision.decisionDigest,
-    );
+    equal(target.currentDelivery.reviewDecision.decisionDigest, decision.decisionDigest);
   }
 
   const reworkDecision = createControllerImplementationReviewDecisionForState(
@@ -275,10 +257,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
     }),
     preparedAt: parseUtcInstant("2026-08-29T12:14:00.000Z"),
   });
-  const reworkPrepared = prepareDeliveryInDemandAggregateState(
-    reworkRequested,
-    reworkEnvelope,
-  );
+  const reworkPrepared = prepareDeliveryInDemandAggregateState(reworkRequested, reworkEnvelope);
   equal(reworkPrepared.targetTasks[0]?.phase, "delivery-prepared");
   if (reworkPrepared.targetTasks[0]?.phase !== "delivery-prepared") {
     throw new Error("Expected rework delivery-prepared target.");
@@ -288,9 +267,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   equal(reworkPrepared.targetTasks[0].taskPackageId, taskPackage.taskPackageId);
   throws(
     () => prepareDeliveryInDemandAggregateState(planned, reworkEnvelope),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   throws(
     () =>
@@ -311,9 +288,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
           preparedAt: parseUtcInstant("2026-08-29T12:16:00.000Z"),
         }),
       ),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   throws(
     () =>
@@ -326,9 +301,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
           targetResult,
         ),
       ),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
 
   const cancelled = cancelDemandAggregateState(resultReported);
@@ -338,9 +311,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
   });
   throws(
     () => cancelDemandAggregateState(cancelled),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   throws(
     () =>
@@ -356,8 +327,7 @@ test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要
           },
         ],
       }),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError && error.reason === "schema",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "schema",
   );
 });
 
@@ -365,10 +335,7 @@ test("completed终态允许零实现目标（research 的 not-applicable 闭合�
   // 目标数量由完成转换按测试模式把关：controller-only / real-environment 仍要求至少一个已接受目标。
   equal(
     parseDemandAggregateState({
-      ...createInitialDemandAggregateState(
-        TASKING_DEMAND_ID,
-        TASKING_AUTHORITY_DIGEST,
-      ),
+      ...createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
       lifecycle: "completed",
     }).lifecycle,
     "completed",
@@ -376,29 +343,18 @@ test("completed终态允许零实现目标（research 的 not-applicable 闭合�
   throws(
     () =>
       parseDemandAggregateState({
-        ...createInitialDemandAggregateState(
-          TASKING_DEMAND_ID,
-          TASKING_AUTHORITY_DIGEST,
-        ),
+        ...createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
         delivery: { dispatchGroups: [] },
       }),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError && error.reason === "schema",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "schema",
   );
 });
 
 test("replacement 谱系：旧目标进入 superseded，后续规划与 completed 终态只计入未被替代的目标", () => {
-  const active = createInitialDemandAggregateState(
-    TASKING_DEMAND_ID,
-    TASKING_AUTHORITY_DIGEST,
-  );
-  const planned = planTargetTaskInDemandAggregateState(
-    active,
-    createTaskPackageFixture(),
-  );
+  const active = createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST);
+  const planned = planTargetTaskInDemandAggregateState(active, createTaskPackageFixture());
   const clock = () => TASKING_CREATED_AT;
-  const replacementTargetTaskId =
-    "target-task_13131313-1313-4313-8313-131313131313";
+  const replacementTargetTaskId = "target-task_13131313-1313-4313-8313-131313131313";
   const replacement = createTaskPackage(
     {
       ...taskPackageDraft(),
@@ -428,18 +384,15 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
       error.path === "$state/targetTasks/lineage",
   );
   const replaced = planTargetTaskInDemandAggregateState(planned, replacement);
-  const superseded = replaced.targetTasks.find(
-    (target) => target.targetTaskId === TARGET_TASK_ID,
-  );
+  const superseded = replaced.targetTasks.find((target) => target.targetTaskId === TARGET_TASK_ID);
   if (superseded?.phase !== "superseded") {
     throw new Error("Expected the replaced target to be superseded.");
   }
   equal(superseded.supersededByTargetTaskId, replacementTargetTaskId);
   equal(superseded.taskPackageId, TASK_PACKAGE_ID);
   equal(
-    replaced.targetTasks.find(
-      (target) => String(target.targetTaskId) === replacementTargetTaskId,
-    )?.phase,
+    replaced.targetTasks.find((target) => String(target.targetTaskId) === replacementTargetTaskId)
+      ?.phase,
     "planned",
   );
   // 已被替代的目标不能再被替代：第三个包必须替代当前未接受的新目标。
@@ -460,9 +413,7 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
           { clock },
         ),
       ),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   // completed 终态要求每个未被替代的实现目标都已接受：替代目标仍是 planned 就不能是 completed
   //（Schema 的逐目标相位约束先于关系规则拒绝，所以是 schema 而不是 relation）。
@@ -472,8 +423,7 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
         ...replaced,
         lifecycle: "completed",
       }),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError && error.reason === "schema",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "schema",
   );
 });
 
@@ -524,18 +474,30 @@ test("续接把此刻的 test 目标记为历史：没有 test 目标时不写�
   }
 });
 
-
 test("取消等待决定的 Demand 清除活动等待，但保留目标摘要且重复取消仍拒绝", () => {
   const pkg = createTaskPackageFixture();
-  const planned = planTargetTaskInDemandAggregateState(createInitialDemandAggregateState(pkg.demandId, pkg.demandAuthorityDigest), pkg);
-  const awaiting = escalateDemandAggregateState(planned, {
-    issue: "Synthetic cancellation during escalation",
-    source: { kind: "rework-brake", targetTaskId: pkg.targetTaskId, reworkCount: 3 },
-  }, "demand-event_99999999-9999-4999-8999-999999999999");
+  const planned = planTargetTaskInDemandAggregateState(
+    createInitialDemandAggregateState(pkg.demandId, pkg.demandAuthorityDigest),
+    pkg,
+  );
+  const awaiting = escalateDemandAggregateState(
+    planned,
+    {
+      issue: "Synthetic cancellation during escalation",
+      source: { kind: "rework-brake", targetTaskId: pkg.targetTaskId, reworkCount: 3 },
+    },
+    "demand-event_99999999-9999-4999-8999-999999999999",
+  );
   const cancelled = cancelDemandAggregateState(awaiting);
   equal(cancelled.lifecycle, "cancelled");
   equal(cancelled.awaitingDecision, undefined);
   deepEqual(cancelled.targetTasks, awaiting.targetTasks);
-  equal(computeDemandAggregateStateDigest(cancelled), computeDemandAggregateStateDigest(cancelDemandAggregateState(planned)));
-  throws(() => cancelDemandAggregateState(cancelled), (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition");
+  equal(
+    computeDemandAggregateStateDigest(cancelled),
+    computeDemandAggregateStateDigest(cancelDemandAggregateState(planned)),
+  );
+  throws(
+    () => cancelDemandAggregateState(cancelled),
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
+  );
 });

@@ -3,8 +3,8 @@ import {
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -12,9 +12,9 @@ import {
 } from "../../workspace/workspace-resource-declaration.js";
 import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
 import {
-  managedEvidenceRecordRootRef,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,
+  managedEvidenceRecordRootRef,
 } from "./managed-evidence-resource-paths.js";
 
 /**
@@ -25,8 +25,7 @@ import {
  * 只属于一次具体journal，不作为长期资源实例登记。
  */
 
-export const MANAGED_EVIDENCE_RESOURCE_OWNER_ID =
-  "demand-managed-evidence" as const;
+export const MANAGED_EVIDENCE_RESOURCE_OWNER_ID = "demand-managed-evidence" as const;
 
 type ManagedEvidenceResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,

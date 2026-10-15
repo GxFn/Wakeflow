@@ -5,11 +5,11 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createImplementationTargetResultReport,
+  ImplementationTargetResultReportError,
+  implementationTargetResultReportContentDigest,
   parseImplementationTargetResultReport,
   parseImplementationTargetResultReportDocument,
   renderImplementationTargetResultReport,
-  implementationTargetResultReportContentDigest,
-  ImplementationTargetResultReportError,
 } from "../../../src/governance/result/implementation-target-result-report.js";
 import {
   createImplementationTargetResultReportContentFixture,
@@ -34,10 +34,7 @@ test("ImplementationTargetResultReport只保存Agent业务陈述并使用显式G
   equal(Object.hasOwn(report, "claim"), false);
   equal(Object.isFrozen(report.repositoryChange.commits), true);
   const document = renderImplementationTargetResultReport(report);
-  equal(
-    parseImplementationTargetResultReportDocument(document).reportDigest,
-    report.reportDigest,
-  );
+  equal(parseImplementationTargetResultReportDocument(document).reportDigest, report.reportDigest);
 
   const later = createImplementationTargetResultReport(content, {
     clock: () => parseUtcInstant("2026-08-29T12:11:00.000Z"),
@@ -76,8 +73,7 @@ test("ImplementationTargetResultReport拒绝无Locator的anchor evidence与repos
         ],
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultReportError &&
-      error.reason === "relation",
+      error instanceof ImplementationTargetResultReportError && error.reason === "relation",
   );
   throws(
     () =>
@@ -89,8 +85,7 @@ test("ImplementationTargetResultReport拒绝无Locator的anchor evidence与repos
         },
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultReportError &&
-      error.reason === "relation",
+      error instanceof ImplementationTargetResultReportError && error.reason === "relation",
   );
 });
 
@@ -103,7 +98,6 @@ test("ImplementationTargetResultReport拒绝摘要漂移", () => {
         reportDigest: parseSha256Digest(`sha256:${"d".repeat(64)}`),
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultReportError &&
-      error.reason === "digest",
+      error instanceof ImplementationTargetResultReportError && error.reason === "digest",
   );
 });

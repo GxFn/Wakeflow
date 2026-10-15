@@ -5,88 +5,91 @@ import pLimit from "p-limit";
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   inspectLoadedArtifactTree,
-  validateLoadedArtifactTreeManifest,
-  LoadedArtifactTreeIdentityError,
   type LoadedArtifactTreeIdentity,
+  LoadedArtifactTreeIdentityError,
   type LoadedArtifactTreeManifest,
+  validateLoadedArtifactTreeManifest,
 } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parsePlainRecord, PassiveOwnDataError } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  sameFileNodeIdentity,
   type FileNodeSnapshot,
+  sameFileNodeIdentity,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { readStableFile, StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import {
+  readStableFile,
+  StableFileReadError,
+} from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
-import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { WakeflowError } from "../../kernel/error.js";
+import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import {
   CREDENTIAL_PRIVACY_FINDING_KINDS,
   DEFAULT_ALLOWED_ID_PREFIXES,
-  scanPrivacy,
-  scanPrivacyText,
   type PrivacyFinding,
   type PrivacyScanPolicy,
+  scanPrivacy,
+  scanPrivacyText,
 } from "../../kernel/privacy-scan.js";
 import {
   assertDemandOperationConfigCurrent,
   closeDemandOperationAuthorityContext,
-  openDemandOperationAuthorityContext,
-  DemandOperationAuthorityContextError,
   type DemandOperationAuthorityContext,
+  DemandOperationAuthorityContextError,
+  openDemandOperationAuthorityContext,
 } from "../demand/demand-operation-authority-context.js";
 import {
-  loadDemandEventSourcingRootAuthority,
   DemandEventSourcingRootAuthorityError,
+  loadDemandEventSourcingRootAuthority,
 } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandManagedEvidenceSummary } from "../demand/model/demand-aggregate-state.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import {
   createManagedEvidenceCapturePlan,
-  ManagedEvidenceCapturePlanError,
   type ManagedEvidenceCaptureDemandExpectation,
   type ManagedEvidenceCapturePlan,
+  ManagedEvidenceCapturePlanError,
 } from "./managed-evidence-capture-plan.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import {
-  openConfiguredManagedEvidenceSourceRoot,
   ManagedEvidenceConfiguredSourceRootError,
+  openConfiguredManagedEvidenceSourceRoot,
 } from "./managed-evidence-configured-source-root.js";
 import {
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
   MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT,
   type ManagedEvidenceManifest,
-  type ManagedEvidencePrivacyFinding,
   ManagedEvidenceManifestError,
+  type ManagedEvidencePrivacyFinding,
 } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import {
   assertManagedEvidenceKindMatchesSource,
-  managedEvidenceSourceKey,
-  parseManagedEvidenceSourceSelection,
-  ManagedEvidenceSourceSelectionError,
   type ManagedEvidenceContentReviewPolicy,
   type ManagedEvidenceManagedPathSource,
   type ManagedEvidenceSource,
   type ManagedEvidenceSourceSelection,
+  ManagedEvidenceSourceSelectionError,
+  managedEvidenceSourceKey,
+  parseManagedEvidenceSourceSelection,
 } from "./managed-evidence-source-selection.js";
 
 /**
@@ -269,8 +272,7 @@ function parseSelection(value: unknown): Readonly<ManagedEvidenceSourceSelection
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceSourceSelectionError) {
       const mismatch =
-        error.reason === "kind"
-        && isEvidenceKind((value as { readonly kind?: unknown }).kind);
+        error.reason === "kind" && isEvidenceKind((value as { readonly kind?: unknown }).kind);
       fail(mismatch ? "kind" : "input", error);
     }
     throw error;
@@ -521,7 +523,10 @@ async function openSelectedTreeRoot(
     if (error instanceof RootedDirectoryError) fail("source", error);
     throw error;
   }
-  if (observation.node.kind !== "directory" || !sameFileNodeIdentity(observation.node, expectedNode)) {
+  if (
+    observation.node.kind !== "directory" ||
+    !sameFileNodeIdentity(observation.node, expectedNode)
+  ) {
     fail("source-type");
   }
   let treeRoot: RootedDirectory | undefined;
@@ -582,7 +587,10 @@ async function classifyTreeFiles(
         if (Number(read.byteCount) !== file.bytes || read.digest !== file.digest) {
           fail("source-changed");
         }
-        return Object.freeze({ ref: file.ref, content: classifyContent(read.bytes, file.ref, policy) });
+        return Object.freeze({
+          ref: file.ref,
+          content: classifyContent(read.bytes, file.ref, policy),
+        });
       }),
     ),
   );
@@ -944,7 +952,10 @@ export class ManagedEvidenceCapturePlanningService {
         worktreePaths,
         options.signal,
       );
-      const blockers = deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview);
+      const blockers = deriveManagedEvidenceContentBlockers(
+        captured.review,
+        selection.contentReview,
+      );
       if (blockers.length > 0) {
         result = Object.freeze({ status: "blocked" as const, blockers, review: captured.review });
       } else {

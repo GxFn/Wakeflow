@@ -1,16 +1,5 @@
-import {
-  deepEqual,
-  equal,
-  rejects,
-} from "node:assert/strict";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { deepEqual, equal, rejects } from "node:assert/strict";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -24,15 +13,13 @@ import {
 import {
   createManagedEvidencePublicationTransactionJournal,
   loadManagedEvidencePublicationTransaction,
-  retireManagedEvidencePublicationTransactionJournal,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE,
   ManagedEvidencePublicationTransactionStoreError,
   type ManagedEvidencePublicationTransactionStoreErrorReason,
+  retireManagedEvidencePublicationTransactionJournal,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
-import {
-  createManagedEvidencePublicationTransactionFixture,
-} from "./managed-evidence-publication.fixture.js";
+import { createManagedEvidencePublicationTransactionFixture } from "./managed-evidence-publication.fixture.js";
 
 const OTHER_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_99999999-9999-4999-8999-999999999999",
@@ -50,18 +37,13 @@ interface StoreFixture {
 }
 
 async function createStoreFixture(): Promise<StoreFixture> {
-  const rootPath = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-managed-evidence-store-"),
-  );
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-managed-evidence-store-"));
   chmodSync(rootPath, 0o700);
   mkdirSync(path.join(rootPath, "transactions"), { mode: 0o700 });
   return Object.freeze({
     rootPath,
     root: await RootedDirectory.open(rootPath),
-    journalPath: path.join(
-      rootPath,
-      ...MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF.split("/"),
-    ),
+    journalPath: path.join(rootPath, ...MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF.split("/")),
   });
 }
 
@@ -77,47 +59,31 @@ async function expectStoreError(
   await rejects(
     action,
     (error: unknown) =>
-      error instanceof ManagedEvidencePublicationTransactionStoreError &&
-      error.reason === reason,
+      error instanceof ManagedEvidencePublicationTransactionStoreError && error.reason === reason,
   );
 }
 
 test("Transaction Store严格absent-only创建并稳定重读0600单链接journal", async () => {
   const fixture = await createStoreFixture();
   try {
-    const { transaction } =
-      createManagedEvidencePublicationTransactionFixture();
-    equal(
-      await loadManagedEvidencePublicationTransaction(fixture.root),
-      null,
-    );
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
+    equal(await loadManagedEvidencePublicationTransaction(fixture.root), null);
     const stored = await createManagedEvidencePublicationTransactionJournal(
       fixture.root,
       transaction,
     );
     deepEqual(stored.transaction, transaction);
-    equal(
-      stored.source.resourcePath,
-      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-    );
-    equal(
-      stored.source.node.permissionBits,
-      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE,
-    );
+    equal(stored.source.resourcePath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF);
+    equal(stored.source.node.permissionBits, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE);
     equal(stored.source.node.linkCount, 1n);
     equal(Object.isFrozen(stored), true);
 
-    const loaded = await loadManagedEvidencePublicationTransaction(
-      fixture.root,
-    );
+    const loaded = await loadManagedEvidencePublicationTransaction(fixture.root);
     if (loaded === null) throw new Error("Expected stored transaction.");
     deepEqual(loaded.transaction, transaction);
     equal(loaded.transactionDigest, stored.transactionDigest);
     await expectStoreError(
-      createManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        transaction,
-      ),
+      createManagedEvidencePublicationTransactionJournal(fixture.root, transaction),
       "transaction-exists",
     );
   } finally {
@@ -128,17 +94,13 @@ test("Transaction Store严格absent-only创建并稳定重读0600单链接journa
 test("Transaction Store只凭签发能力退休exact文档并拒绝替换journal", async () => {
   const fixture = await createStoreFixture();
   try {
-    const { capturePlan, transaction } =
-      createManagedEvidencePublicationTransactionFixture();
+    const { capturePlan, transaction } = createManagedEvidencePublicationTransactionFixture();
     const stored = await createManagedEvidencePublicationTransactionJournal(
       fixture.root,
       transaction,
     );
     await expectStoreError(
-      retireManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        structuredClone(stored),
-      ),
+      retireManagedEvidencePublicationTransactionJournal(fixture.root, structuredClone(stored)),
       "input",
     );
 
@@ -147,36 +109,21 @@ test("Transaction Store只凭签发能力退休exact文档并拒绝替换journal
       eventId: OTHER_EVENT_ID,
       commitId: OTHER_COMMIT_ID,
     });
-    writeFileSync(
-      fixture.journalPath,
-      renderManagedEvidencePublicationTransaction(replacement),
-    );
+    writeFileSync(fixture.journalPath, renderManagedEvidencePublicationTransaction(replacement));
     await expectStoreError(
-      retireManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        stored,
-      ),
+      retireManagedEvidencePublicationTransactionJournal(fixture.root, stored),
       "conflict",
     );
     equal(existsSync(fixture.journalPath), true);
 
-    const current = await loadManagedEvidencePublicationTransaction(
-      fixture.root,
-    );
+    const current = await loadManagedEvidencePublicationTransaction(fixture.root);
     if (current === null) throw new Error("Expected replacement journal.");
-    const receipt =
-      await retireManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        current,
-      );
+    const receipt = await retireManagedEvidencePublicationTransactionJournal(fixture.root, current);
     equal(receipt.transactionDigest, current.transactionDigest);
     equal(receipt.retirement.replacementObserved, false);
     equal(existsSync(fixture.journalPath), false);
     await expectStoreError(
-      retireManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        current,
-      ),
+      retireManagedEvidencePublicationTransactionJournal(fixture.root, current),
       "input",
     );
   } finally {
@@ -187,27 +134,19 @@ test("Transaction Store只凭签发能力退休exact文档并拒绝替换journal
 test("Transaction Store拒绝错误节点策略并在预取消时保持absent", async () => {
   const fixture = await createStoreFixture();
   try {
-    const { transaction } =
-      createManagedEvidencePublicationTransactionFixture();
-    writeFileSync(
-      fixture.journalPath,
-      renderManagedEvidencePublicationTransaction(transaction),
-      { mode: 0o644 },
-    );
-    await expectStoreError(
-      loadManagedEvidencePublicationTransaction(fixture.root),
-      "conflict",
-    );
+    const { transaction } = createManagedEvidencePublicationTransactionFixture();
+    writeFileSync(fixture.journalPath, renderManagedEvidencePublicationTransaction(transaction), {
+      mode: 0o644,
+    });
+    await expectStoreError(loadManagedEvidencePublicationTransaction(fixture.root), "conflict");
     rmSync(fixture.journalPath);
 
     const controller = new AbortController();
     controller.abort();
     await expectStoreError(
-      createManagedEvidencePublicationTransactionJournal(
-        fixture.root,
-        transaction,
-        { signal: controller.signal },
-      ),
+      createManagedEvidencePublicationTransactionJournal(fixture.root, transaction, {
+        signal: controller.signal,
+      }),
       "aborted",
     );
     equal(existsSync(fixture.journalPath), false);

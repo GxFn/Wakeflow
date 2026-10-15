@@ -1,8 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
@@ -29,14 +26,12 @@ export const WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME = parsePortableResourcePath(
   "$supportGitignore.fileName",
 );
 export const WAKEFLOW_SUPPORT_GITIGNORE_COMPONENT = "support-ignore" as const;
-export const WAKEFLOW_SUPPORT_GITIGNORE_OWNER =
-  "workspace-ignore-integration" as const;
+export const WAKEFLOW_SUPPORT_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
 export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1 as const;
 
 export interface WakeflowSupportGitignoreBodyAuthority {
   readonly kind: "WakeflowSupportGitignoreBodyAuthority";
-  readonly schemaVersion:
-    typeof WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
+  readonly schemaVersion: typeof WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
   readonly hostIds: readonly WakeflowWorkspaceHostId[];
   readonly rules: readonly WakeflowGitignoreRule[];
   readonly body: string;

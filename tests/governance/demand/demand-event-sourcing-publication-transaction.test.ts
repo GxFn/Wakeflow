@@ -1,20 +1,11 @@
-import {
-  deepEqual,
-  equal,
-  throws,
-} from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { canonicalizeJson } from "../../../src/foundation/data/canonical-json.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  createDemandAuthority,
-} from "../../../src/governance/demand/model/demand-authority.js";
-import {
-  createDemandIdentity,
-} from "../../../src/governance/demand/model/demand-identity.js";
+import { createDemandAuthority } from "../../../src/governance/demand/model/demand-authority.js";
+import { createDemandIdentity } from "../../../src/governance/demand/model/demand-identity.js";
 import { parseRequirementLineageReference } from "../../../src/governance/demand/model/requirement-lineage.js";
 import {
   createDemandEventSourcingPublicationTransaction,
@@ -70,22 +61,25 @@ function authorityReference(member: (typeof PACKAGE_MEMBERS)[number]) {
 }
 
 test("Demand Event Sourcing publication transaction 自包含 initial command 与 commit", () => {
-  const identity = createDemandIdentity({
-    programId: PROGRAM_ID,
-    demandId: DEMAND_ID,
-    title: "Demand publication",
-    goal: "发布标准 Event Sourcing root",
-    completionDefinition: "看板认领与 revision 1 闭合",
-    demandType: "requirement",
-    source: parseRequirementLineageReference({
-      artifactKind: "wakeflow-requirement-lineage",
-      schemaVersion: 1,
-      requirementId: REQUIREMENT_ID,
-      recordRef: `requirements/${REQUIREMENT_ID}/record.json`,
-      recordDigest: DIGEST,
-    }),
-    podId: "pod_99999999-9999-4999-8999-999999999999",
-  }, { clock: () => CREATED_AT });
+  const identity = createDemandIdentity(
+    {
+      programId: PROGRAM_ID,
+      demandId: DEMAND_ID,
+      title: "Demand publication",
+      goal: "发布标准 Event Sourcing root",
+      completionDefinition: "看板认领与 revision 1 闭合",
+      demandType: "requirement",
+      source: parseRequirementLineageReference({
+        artifactKind: "wakeflow-requirement-lineage",
+        schemaVersion: 1,
+        requirementId: REQUIREMENT_ID,
+        recordRef: `requirements/${REQUIREMENT_ID}/record.json`,
+        recordDigest: DIGEST,
+      }),
+      podId: "pod_99999999-9999-4999-8999-999999999999",
+    },
+    { clock: () => CREATED_AT },
+  );
   const authority = createDemandAuthority(identity, {
     authorityRefs: PACKAGE_MEMBERS.map(authorityReference),
     testingDecision: {
@@ -122,12 +116,13 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
     transaction,
   );
   throws(
-    () => parseDemandEventSourcingPublicationTransaction({
-      ...transaction,
-      requirementId: "requirement_99999999-9999-4999-8999-999999999999",
-    }),
+    () =>
+      parseDemandEventSourcingPublicationTransaction({
+        ...transaction,
+        requirementId: "requirement_99999999-9999-4999-8999-999999999999",
+      }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingPublicationTransactionError
-      && error.reason === "relation",
+      error instanceof DemandEventSourcingPublicationTransactionError &&
+      error.reason === "relation",
   );
 });

@@ -1,25 +1,24 @@
-import type { WakeflowTargetResult as ResultWire } from "../../contracts/generated/governance/result/target-result.generated.js";
-import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../contracts/generated/governance/result/target-result.generated.js";
-import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
+import type { WakeflowTargetResult as ResultWire } from "../../contracts/generated/governance/result/target-result.generated.js";
+import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../contracts/generated/governance/result/target-result.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../contracts/generated/workspace/window-host-binding.generated.js";
-import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import {
-
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -27,35 +26,35 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { deriveDurableId } from "../../kernel/ids.js";
-import { derivedIdFromWorkClaim } from "../../kernel/work-claims.js";
-import type { DeliveryReadbackStatus } from "../delivery/delivery-outcome.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
+import { deriveDurableId } from "../../kernel/ids.js";
+import { derivedIdFromWorkClaim } from "../../kernel/work-claims.js";
+import type { DeliveryReadbackStatus } from "../delivery/delivery-outcome.js";
 import {
-  parseImplementationTargetResultReport,
-  ImplementationTargetResultReportError,
   type ImplementationTargetResultReport,
+  ImplementationTargetResultReportError,
+  parseImplementationTargetResultReport,
 } from "./implementation-target-result-report.js";
+import type { TargetResultOutcome } from "./target-result-report-contract.js";
 import {
   parseTestTargetResultReport,
-  TestTargetResultReportError,
   type TestTargetResultReport,
+  TestTargetResultReportError,
 } from "./test-target-result-report.js";
-import type { TargetResultOutcome } from "./target-result-report-contract.js";
 
 /**
  * Wakeflow Governance / Result：由Wakeflow authority补齐的不可变TargetResult。
@@ -162,20 +161,17 @@ export class TargetResultError extends Error {
   }
 }
 
-const validateWire = createRuntimeJsonSchemaValidator<ResultWire>(
-  WAKEFLOW_TARGET_RESULT_SCHEMA,
-  [
-    WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
-    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
-    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-    WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA,
-    WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
-    WAKEFLOW_TASK_PACKAGE_SCHEMA,
-    WAKEFLOW_UTC_INSTANT_SCHEMA,
-    WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
-  ],
-);
+const validateWire = createRuntimeJsonSchemaValidator<ResultWire>(WAKEFLOW_TARGET_RESULT_SCHEMA, [
+  WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
+  WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+  WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+  WAKEFLOW_SHA256_DIGEST_SCHEMA,
+  WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA,
+  WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
+  WAKEFLOW_TASK_PACKAGE_SCHEMA,
+  WAKEFLOW_UTC_INSTANT_SCHEMA,
+  WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
+]);
 
 function fail(reason: TargetResultErrorReason, path: string): never {
   throw new TargetResultError(reason, path);
@@ -233,9 +229,7 @@ export type TargetResultBasis =
   | Omit<ImplementationTargetResult, "resultDigest">
   | Omit<TestTargetResult, "resultDigest">;
 
-function resultBasis(
-  value: Readonly<TargetResultBasis>,
-): Readonly<TargetResultBasis> {
+function resultBasis(value: Readonly<TargetResultBasis>): Readonly<TargetResultBasis> {
   return value.workType === "test"
     ? Object.freeze({
         kind: RESULT_KIND,
@@ -283,11 +277,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
     kind: RESULT_KIND,
     schemaVersion: RESULT_SCHEMA_VERSION,
     workType: wire.workType,
-    targetResultId: id(
-      wire.targetResultId,
-      "target-result",
-      "$/targetResultId",
-    ),
+    targetResultId: id(wire.targetResultId, "target-result", "$/targetResultId"),
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
@@ -331,16 +321,8 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       ...common,
       workType: "implementation",
       assignment: Object.freeze({
-        repositoryId: id(
-          wire.assignment.repositoryId,
-          "repository",
-          "$/assignment/repositoryId",
-        ),
-        windowId: id(
-          wire.assignment.windowId,
-          "window",
-          "$/assignment/windowId",
-        ),
+        repositoryId: id(wire.assignment.repositoryId, "repository", "$/assignment/repositoryId"),
+        windowId: id(wire.assignment.windowId, "window", "$/assignment/windowId"),
       }),
       report,
     });
@@ -361,11 +343,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       ...common,
       workType: "test",
       assignment: Object.freeze({
-        windowId: id(
-          wire.assignment.windowId,
-          "window",
-          "$/assignment/windowId",
-        ),
+        windowId: id(wire.assignment.windowId, "window", "$/assignment/windowId"),
       }),
       testExecution: Object.freeze({
         testAttemptId: id(
@@ -420,9 +398,7 @@ export function renderTargetResult(value: unknown): string {
   return renderDeterministicJsonDocument(parseTargetResult(value), "$result");
 }
 
-export function parseTargetResultDocument(
-  textValue: unknown,
-): Readonly<TargetResult> {
+export function parseTargetResultDocument(textValue: unknown): Readonly<TargetResult> {
   let json: JsonValue;
   try {
     json = parseDeterministicJsonDocument(textValue, "$result");

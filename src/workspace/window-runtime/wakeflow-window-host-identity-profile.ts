@@ -1,7 +1,7 @@
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
   WAKEFLOW_WORKSPACE_HOST_IDS,
@@ -16,8 +16,7 @@ import {
  * 内部格式，也不借此取得创建、读取、发送或关闭宿主窗口的能力。
  */
 
-const WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND =
-  "WakeflowWindowHostIdentityProfile" as const;
+const WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND = "WakeflowWindowHostIdentityProfile" as const;
 const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_RESERVED_VALUES = 64;
 const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH = 1024;
 
@@ -62,10 +61,7 @@ const ERROR_MESSAGES = {
   capacity: "Window Host Identity Profile capacity is invalid.",
   reserved: "Window Host Identity Profile reserved value set is invalid.",
   handle: "Window host handle is invalid for the current host profile.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowHostIdentityProfileErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWindowHostIdentityProfileErrorReason, string>>;
 
 /** Host Identity Profile 或 opaque handle 准入失败的稳定错误。 */
 export class WakeflowWindowHostIdentityProfileError extends Error {
@@ -74,10 +70,7 @@ export class WakeflowWindowHostIdentityProfileError extends Error {
   readonly reason: WakeflowWindowHostIdentityProfileErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWindowHostIdentityProfileErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWindowHostIdentityProfileErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -96,17 +89,11 @@ const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 
-function fail(
-  reason: WakeflowWindowHostIdentityProfileErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowHostIdentityProfileErrorReason, path: string): never {
   throw new WakeflowWindowHostIdentityProfileError(reason, path);
 }
 
-function record(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -121,20 +108,17 @@ function exactFields(
   path: string,
 ): void {
   const keys = Object.keys(value).sort();
-  if (
-    keys.length !== fields.length
-    || keys.some((key, index) => key !== fields[index])
-  ) {
+  if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
     fail("shape", path);
   }
 }
 
 function handleKind(value: unknown, path: string): WakeflowWindowHostHandleKind {
   if (
-    typeof value !== "string"
-    || !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || !HANDLE_KIND_PATTERN.test(value)
+    typeof value !== "string" ||
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    !HANDLE_KIND_PATTERN.test(value)
   ) {
     fail("kind", path);
   }
@@ -154,11 +138,10 @@ export function parseWakeflowWindowHostIdentityProfile(
     fail("host", "$profile.hostId");
   }
   if (
-    typeof parsed.maximumHandleLength !== "number"
-    || !Number.isSafeInteger(parsed.maximumHandleLength)
-    || parsed.maximumHandleLength < 1
-    || parsed.maximumHandleLength
-      > WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH
+    typeof parsed.maximumHandleLength !== "number" ||
+    !Number.isSafeInteger(parsed.maximumHandleLength) ||
+    parsed.maximumHandleLength < 1 ||
+    parsed.maximumHandleLength > WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH
   ) {
     fail("capacity", "$profile.maximumHandleLength");
   }
@@ -176,25 +159,27 @@ export function parseWakeflowWindowHostIdentityProfile(
   }
   const seen = new Set<string>();
   let previousKey: string | undefined;
-  const reservedHandleValues = Object.freeze(reservedValues.map((entry, index) => {
-    const caseKey = typeof entry === "string" ? entry.toLowerCase() : "";
-    if (
-      typeof entry !== "string"
-      || !entry.isWellFormed()
-      || entry.normalize("NFC") !== entry
-      || entry.length === 0
-      || entry.length > maximumHandleLength
-      || entry.trim() !== entry
-      || CONTROL_PATTERN.test(entry)
-      || seen.has(caseKey)
-      || (previousKey !== undefined && previousKey >= caseKey)
-    ) {
-      fail("reserved", `$profile.reservedHandleValues/${index}`);
-    }
-    seen.add(caseKey);
-    previousKey = caseKey;
-    return entry;
-  }));
+  const reservedHandleValues = Object.freeze(
+    reservedValues.map((entry, index) => {
+      const caseKey = typeof entry === "string" ? entry.toLowerCase() : "";
+      if (
+        typeof entry !== "string" ||
+        !entry.isWellFormed() ||
+        entry.normalize("NFC") !== entry ||
+        entry.length === 0 ||
+        entry.length > maximumHandleLength ||
+        entry.trim() !== entry ||
+        CONTROL_PATTERN.test(entry) ||
+        seen.has(caseKey) ||
+        (previousKey !== undefined && previousKey >= caseKey)
+      ) {
+        fail("reserved", `$profile.reservedHandleValues/${index}`);
+      }
+      seen.add(caseKey);
+      previousKey = caseKey;
+      return entry;
+    }),
+  );
   return Object.freeze({
     kind: WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND,
     hostId: parsed.hostId as WakeflowWorkspaceHostId,
@@ -215,16 +200,16 @@ export function parseWakeflowWindowHostHandle(
   if (parsed.kind !== profile.handleKind) fail("handle", "$handle.kind");
   const handleValue = parsed.value;
   if (
-    typeof handleValue !== "string"
-    || !handleValue.isWellFormed()
-    || handleValue.normalize("NFC") !== handleValue
-    || handleValue.length === 0
-    || handleValue.length > profile.maximumHandleLength
-    || handleValue.trim() !== handleValue
-    || CONTROL_PATTERN.test(handleValue)
-    || profile.reservedHandleValues.some((reserved) => (
-      reserved.toLowerCase() === handleValue.toLowerCase()
-    ))
+    typeof handleValue !== "string" ||
+    !handleValue.isWellFormed() ||
+    handleValue.normalize("NFC") !== handleValue ||
+    handleValue.length === 0 ||
+    handleValue.length > profile.maximumHandleLength ||
+    handleValue.trim() !== handleValue ||
+    CONTROL_PATTERN.test(handleValue) ||
+    profile.reservedHandleValues.some(
+      (reserved) => reserved.toLowerCase() === handleValue.toLowerCase(),
+    )
   ) {
     fail("handle", "$handle.value");
   }

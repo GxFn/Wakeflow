@@ -34,9 +34,7 @@ function expectHostResourceProfileError(
   return caught;
 }
 
-function codexProfile(
-  overrides: Readonly<Record<string, unknown>> = {},
-): Record<string, unknown> {
+function codexProfile(overrides: Readonly<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     kind: "WakeflowWorkspaceHostResourceProfile",
     hostId: "codex",
@@ -169,132 +167,153 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
 
 test("host resource profile rejects open or behavioral data and unsafe paths", () => {
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      realization: "current",
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          realization: "current",
+        }),
+      ),
     "shape",
     "$/realization",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: true,
-        windowLocator: false,
-        settingsIntegration: null,
-        statuslineAsset: null,
-        tmuxAsset: null,
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-        close: true,
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "git-worktree",
+              attachedDirectories: "prompt-path",
+            },
+            keepLive: true,
+            windowLocator: false,
+            settingsIntegration: null,
+            statuslineAsset: null,
+            tmuxAsset: null,
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+            close: true,
+          },
+        }),
+      ),
     "shape",
     "$/surfaces/close",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      instructionFileName: "nested/AGENTS.md",
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          instructionFileName: "nested/AGENTS.md",
+        }),
+      ),
     "component",
     "$/instructionFileName",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      runtimeDirectoryName: "../codex",
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          runtimeDirectoryName: "../codex",
+        }),
+      ),
     "component",
     "$/runtimeDirectoryName",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: true,
-        windowLocator: true,
-        settingsIntegration: {
-          portablePath: "../settings.json",
-          localPath: ".host/settings.local.json",
-        },
-        statuslineAsset: null,
-        tmuxAsset: null,
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-      },
-      launch: { kind: "project-thread" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "git-worktree",
+              attachedDirectories: "prompt-path",
+            },
+            keepLive: true,
+            windowLocator: true,
+            settingsIntegration: {
+              portablePath: "../settings.json",
+              localPath: ".host/settings.local.json",
+            },
+            statuslineAsset: null,
+            tmuxAsset: null,
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+          },
+          launch: { kind: "project-thread" },
+        }),
+      ),
     "path",
     "$/surfaces/settingsIntegration/portablePath",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: true,
-        windowLocator: true,
-        settingsIntegration: {
-          portablePath: ".host/settings.json",
-          localPath: ".host/settings.local.json",
-          realization: "current",
-        },
-        statuslineAsset: null,
-        tmuxAsset: null,
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-      },
-      launch: { kind: "project-thread" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "git-worktree",
+              attachedDirectories: "prompt-path",
+            },
+            keepLive: true,
+            windowLocator: true,
+            settingsIntegration: {
+              portablePath: ".host/settings.json",
+              localPath: ".host/settings.local.json",
+              realization: "current",
+            },
+            statuslineAsset: null,
+            tmuxAsset: null,
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+          },
+          launch: { kind: "project-thread" },
+        }),
+      ),
     "shape",
     "$/surfaces/settingsIntegration/realization",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: true,
-        windowLocator: true,
-        settingsIntegration: {
-          portablePath: ".host/settings.json",
-          localPath: ".host/settings.local.json",
-        },
-        statuslineAsset: {
-          fileName: "statusline.mjs",
-          executable: true,
-        },
-        tmuxAsset: null,
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-      },
-      launch: { kind: "project-thread" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "git-worktree",
+              attachedDirectories: "prompt-path",
+            },
+            keepLive: true,
+            windowLocator: true,
+            settingsIntegration: {
+              portablePath: ".host/settings.json",
+              localPath: ".host/settings.local.json",
+            },
+            statuslineAsset: {
+              fileName: "statusline.mjs",
+              executable: true,
+            },
+            tmuxAsset: null,
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+          },
+          launch: { kind: "project-thread" },
+        }),
+      ),
     "shape",
     "$/surfaces/statuslineAsset/executable",
   );
@@ -328,70 +347,79 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
 
 test("host resource profile closes relations without encoding host capability branches", () => {
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      runtimeDirectoryName: "claude-code",
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          runtimeDirectoryName: "claude-code",
+        }),
+      ),
     "contradiction",
     "$/runtimeDirectoryName",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "claude-worktree-flag",
-          attachedDirectories: "add-dir-flag",
-        },
-        keepLive: true,
-        windowLocator: true,
-        settingsIntegration: {
-          portablePath: ".host/settings.json",
-          localPath: ".host/settings.json",
-        },
-        statuslineAsset: null,
-        tmuxAsset: null,
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-      },
-      launch: { kind: "project-thread" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "claude-worktree-flag",
+              attachedDirectories: "add-dir-flag",
+            },
+            keepLive: true,
+            windowLocator: true,
+            settingsIntegration: {
+              portablePath: ".host/settings.json",
+              localPath: ".host/settings.json",
+            },
+            statuslineAsset: null,
+            tmuxAsset: null,
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+          },
+          launch: { kind: "project-thread" },
+        }),
+      ),
     "contradiction",
     "$/surfaces/settingsIntegration/localPath",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      surfaces: {
-        windowIdentity: true,
-        podReceipts: true,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: true,
-        windowLocator: false,
-        settingsIntegration: null,
-        statuslineAsset: {
-          fileName: "statusline.mjs",
-        },
-        tmuxAsset: {
-          fileName: "tmux.mjs",
-        },
-        activityMonitor: false,
-        temporaryPrompts: false,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
-      },
-      launch: { kind: "project-thread" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          surfaces: {
+            windowIdentity: true,
+            podReceipts: true,
+            worktree: {
+              launch: "git-worktree",
+              attachedDirectories: "prompt-path",
+            },
+            keepLive: true,
+            windowLocator: false,
+            settingsIntegration: null,
+            statuslineAsset: {
+              fileName: "statusline.mjs",
+            },
+            tmuxAsset: {
+              fileName: "tmux.mjs",
+            },
+            activityMonitor: false,
+            temporaryPrompts: false,
+            runtimeStaleness: "unverified",
+            runtimeRefresh: "user-app-restart",
+          },
+          launch: { kind: "project-thread" },
+        }),
+      ),
     "contradiction",
     "$/surfaces/statuslineAsset",
   );
 
-  const capabilityIndependentCodex =
-    parseWakeflowWorkspaceHostResourceProfile(codexProfile({
+  const capabilityIndependentCodex = parseWakeflowWorkspaceHostResourceProfile(
+    codexProfile({
       surfaces: {
         windowIdentity: false,
         podReceipts: false,
@@ -417,7 +445,8 @@ test("host resource profile closes relations without encoding host capability br
         runtimeRefresh: "user-app-restart",
       },
       launch: { kind: "project-thread" },
-    }));
+    }),
+  );
   equal(capabilityIndependentCodex.hostId, "codex");
   equal(capabilityIndependentCodex.surfaces.windowIdentity, false);
   equal(capabilityIndependentCodex.surfaces.windowLocator, true);
@@ -448,9 +477,12 @@ test("host resource profile admits launch templates and rejects a tmux launch wi
     "$/launch/kind",
   );
   expectHostResourceProfileError(
-    () => parseWakeflowWorkspaceHostResourceProfile(codexProfile({
-      launch: { kind: "project-thread", sessionName: "wakeflow" },
-    })),
+    () =>
+      parseWakeflowWorkspaceHostResourceProfile(
+        codexProfile({
+          launch: { kind: "project-thread", sessionName: "wakeflow" },
+        }),
+      ),
     "shape",
     "$/launch/sessionName",
   );

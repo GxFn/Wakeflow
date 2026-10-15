@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import {
   assertManagedEvidenceKindMatchesSource,
-  managedEvidenceSourceKey,
   ManagedEvidenceSourceSelectionError,
+  type ManagedEvidenceSourceSelectionErrorReason,
+  managedEvidenceSourceKey,
   parseManagedEvidenceLinkUrl,
   parseManagedEvidenceSourceDescriptor,
   parseManagedEvidenceSourceSelection,
-  type ManagedEvidenceSourceSelectionErrorReason,
 } from "../../../src/governance/evidence/managed-evidence-source-selection.js";
 
 const REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
@@ -119,7 +119,11 @@ test("Manifest 来源投影：observation 带脱敏字段，link 的摘要必须
     "$/source",
   );
   deepEqual(
-    parseManagedEvidenceSourceDescriptor({ kind: "link", url: "https://example.com/x", digest: DIGEST }),
+    parseManagedEvidenceSourceDescriptor({
+      kind: "link",
+      url: "https://example.com/x",
+      digest: DIGEST,
+    }),
     { kind: "link", url: "https://example.com/x", digest: DIGEST },
   );
 });

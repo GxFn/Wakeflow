@@ -1,36 +1,23 @@
-import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { equal, rejects } from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   closeDemandOperationRoot,
   openDemandOperationRoot,
 } from "../../../src/governance/demand/demand-operation-authority-context.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
@@ -42,16 +29,17 @@ import {
   createDemandIdentity,
   renderDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
+import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
+import {
+  DemandEventSourcingPublicationServiceError,
+  initializeDemandEventSourcingPublication,
+  publishDemandFromPackage,
+  recoverDemandPublication,
+} from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
   createDemandEventSourcingPublicationTransaction,
   renderDemandEventSourcingPublicationTransaction,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
-import {
-  initializeDemandEventSourcingPublication,
-  publishDemandFromPackage,
-  recoverDemandPublication,
-  DemandEventSourcingPublicationServiceError,
-} from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
   demandFinalRootRef,
   demandPublicationLockRef,
@@ -61,6 +49,8 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
 import {
   REQUIREMENT_BOARD_INDEX_REF,
   requirementClaimStateRef,
@@ -70,16 +60,14 @@ import {
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
 } from "../../../src/kernel/requirement-board.js";
-import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   FIXTURE_REQUIREMENT_ID,
   publishFixtureRequirement,
 } from "../ledger/requirement-package.fixture.js";
-import {
-  placePendingClaimState,
-  requirementLineageOf,
-} from "./requirement-board.fixture.js";
 import { PUBLICATION_SECOND_REQUIREMENT_ID } from "./demand-event-sourcing-publication-service.fixture.js";
+import { placePendingClaimState, requirementLineageOf } from "./requirement-board.fixture.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -116,20 +104,23 @@ async function fixture() {
   const ledgerStore = new LedgerAuthorityStore(ledgerRoot);
   await ledgerStore.initialize({ freshLedger: true });
   const loaded = await publishFixtureRequirement(ledgerStore);
-  const authorityRefs = loaded.documents.map((document) => (
-    createLedgerAuthorityMemberReference(loaded, document.path)
-  ));
+  const authorityRefs = loaded.documents.map((document) =>
+    createLedgerAuthorityMemberReference(loaded, document.path),
+  );
   const claim = await placePendingClaimState(workspaceRoot, loaded);
-  const identity = createDemandIdentity({
-    programId: PROGRAM_ID,
-    demandId: DEMAND_ID,
-    title: "Demand Event Sourcing",
-    goal: "Immutable commit stream 是可变状态唯一权威",
-    completionDefinition: "Command、append、看板认领与 recovery 闭合",
-    demandType: "requirement",
-    source: requirementLineageOf(loaded),
-    podId: "pod_99999999-9999-4999-8999-999999999999",
-  }, { clock: () => CREATED_AT });
+  const identity = createDemandIdentity(
+    {
+      programId: PROGRAM_ID,
+      demandId: DEMAND_ID,
+      title: "Demand Event Sourcing",
+      goal: "Immutable commit stream 是可变状态唯一权威",
+      completionDefinition: "Command、append、看板认领与 recovery 闭合",
+      demandType: "requirement",
+      source: requirementLineageOf(loaded),
+      podId: "pod_99999999-9999-4999-8999-999999999999",
+    },
+    { clock: () => CREATED_AT },
+  );
   const authority = createDemandAuthority(identity, {
     authorityRefs,
     testingDecision: {
@@ -189,10 +180,7 @@ test("publication uses Command Handler and binds exact package predecessor", asy
     equal(result.claim.state.previousStateDigest, value.claim.digest);
     equal(result.claim.state.claim?.demandId, DEMAND_ID);
     equal(result.claim.state.claim?.claimedAt, CREATED_AT);
-    const onBoard = await readRequirementClaimState(
-      value.workspaceRoot,
-      FIXTURE_REQUIREMENT_ID,
-    );
+    const onBoard = await readRequirementClaimState(value.workspaceRoot, FIXTURE_REQUIREMENT_ID);
     equal(onBoard?.digest, result.claim.digest);
     equal(existsSync(workspaceFile(value, REQUIREMENT_BOARD_INDEX_REF)), true);
 
@@ -213,27 +201,37 @@ test("sidecar-only publication recovers without an event append journal", async 
   const value = await fixture();
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
-    const transaction = createDemandEventSourcingPublicationTransaction(
-      publishInput(value),
-    );
+    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const ref = demandPublicationTransactionRef(DEMAND_ID);
     const file = workspaceFile(value, ref);
-    writeFileSync(
-      file,
-      renderDemandEventSourcingPublicationTransaction(transaction),
-      { mode: 0o600 },
-    );
+    writeFileSync(file, renderDemandEventSourcingPublicationTransaction(transaction), {
+      mode: 0o600,
+    });
     const lockRef = demandPublicationLockRef(DEMAND_ID);
     const lockPath = workspaceFile(value, lockRef);
-    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "88888888-8888-4888-8888-888888888888",
-    }), { mode: 0o600 });
+    writeFileSync(
+      lockPath,
+      rootedExclusiveFileLockRecordTextForTest({
+        tokenUuid: "88888888-8888-4888-8888-888888888888",
+      }),
+      { mode: 0o600 },
+    );
     await rejects(
       assertNoActiveDemand(value.workspaceRoot, undefined, null, transaction.identity.podId),
       (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
     );
-    await assertNoActiveDemand(value.workspaceRoot, undefined, DEMAND_ID, transaction.identity.podId);
-    await assertNoActiveDemand(value.workspaceRoot, undefined, null, "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    await assertNoActiveDemand(
+      value.workspaceRoot,
+      undefined,
+      DEMAND_ID,
+      transaction.identity.podId,
+    );
+    await assertNoActiveDemand(
+      value.workspaceRoot,
+      undefined,
+      null,
+      "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
     const foreignTarget = demandPublicationTransactionRef(OTHER_DEMAND_ID);
     const foreignBytes = encodeUtf8("foreign-intent");
     const foreignAddress = issueDurableAtomicFileStageAddress(
@@ -242,17 +240,11 @@ test("sidecar-only publication recovers without an event append journal", async 
       computeSha256Digest(foreignBytes),
       0o600,
     );
-    const foreignStage = durableAtomicFileStageRefForTest(
-      foreignTarget,
-      foreignAddress,
-    );
+    const foreignStage = durableAtomicFileStageRefForTest(foreignTarget, foreignAddress);
     try {
-      await createFileCandidateDurably(
-        value.workspaceRoot,
-        foreignStage,
-        encodeUtf8("partial"),
-        { mode: 0o600 },
-      );
+      await createFileCandidateDurably(value.workspaceRoot, foreignStage, encodeUtf8("partial"), {
+        mode: 0o600,
+      });
     } finally {
       releaseDurableAtomicFileStageAddress(foreignAddress);
     }
@@ -278,13 +270,9 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
   const value = await fixture();
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
-    const transaction = createDemandEventSourcingPublicationTransaction(
-      publishInput(value),
-    );
+    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const targetRef = demandPublicationTransactionRef(DEMAND_ID);
-    const intendedBytes = encodeUtf8(
-      renderDemandEventSourcingPublicationTransaction(transaction),
-    );
+    const intendedBytes = encodeUtf8(renderDemandEventSourcingPublicationTransaction(transaction));
     const address = issueDurableAtomicFileStageAddress(
       "create",
       targetRef,
@@ -293,23 +281,16 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
     );
     const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
     try {
-      await createFileCandidateDurably(
-        value.workspaceRoot,
-        stageRef,
-        encodeUtf8("partial"),
-        { mode: 0o600 },
-      );
+      await createFileCandidateDurably(value.workspaceRoot, stageRef, encodeUtf8("partial"), {
+        mode: 0o600,
+      });
     } finally {
       releaseDurableAtomicFileStageAddress(address);
     }
 
     let caught: unknown;
     try {
-      await recoverDemandPublication(
-        value.workspaceRoot,
-        value.ledgerStore,
-        DEMAND_ID,
-      );
+      await recoverDemandPublication(value.workspaceRoot, value.ledgerStore, DEMAND_ID);
     } catch (error: unknown) {
       caught = error;
     }
@@ -329,11 +310,7 @@ test("recovery without publication storage performs no initialization effects", 
   try {
     let caught: unknown;
     try {
-      await recoverDemandPublication(
-        value.workspaceRoot,
-        value.ledgerStore,
-        DEMAND_ID,
-      );
+      await recoverDemandPublication(value.workspaceRoot, value.ledgerStore, DEMAND_ID);
     } catch (error: unknown) {
       caught = error;
     }
@@ -342,14 +319,11 @@ test("recovery without publication storage performs no initialization effects", 
       equal(caught.reason, "not-found");
       equal(caught.publicationAuthority, "unknown");
     }
-    equal(existsSync(path.join(
-      value.workspacePath,
-      ".wakeflow-active/current/demand-publication",
-    )), false);
-    const onBoard = await readRequirementClaimState(
-      value.workspaceRoot,
-      FIXTURE_REQUIREMENT_ID,
+    equal(
+      existsSync(path.join(value.workspacePath, ".wakeflow-active/current/demand-publication")),
+      false,
     );
+    const onBoard = await readRequirementClaimState(value.workspaceRoot, FIXTURE_REQUIREMENT_ID);
     equal(onBoard?.state.status, "pending");
     equal(onBoard?.digest, value.claim.digest);
   } finally {
@@ -361,9 +335,7 @@ test("published root marker is settled before normal authority load", async () =
   const value = await fixture();
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
-    const transaction = createDemandEventSourcingPublicationTransaction(
-      publishInput(value),
-    );
+    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const text = renderDemandEventSourcingPublicationTransaction(transaction);
     const sidecarRef = demandPublicationTransactionRef(DEMAND_ID);
     const sidecarPath = workspaceFile(value, sidecarRef);
@@ -391,11 +363,9 @@ test("published root marker is settled before normal authority load", async () =
         renderDemandAuthority(transaction.authority),
         { mode: 0o600 },
       );
-      writeFileSync(
-        path.join(finalPath, "transactions", "publication.json"),
-        text,
-        { mode: 0o600 },
-      );
+      writeFileSync(path.join(finalPath, "transactions", "publication.json"), text, {
+        mode: 0o600,
+      });
       const repository = new DemandEventSourcingRepository(demandRoot);
       const created = await executeDemandEventSourcingCommand(
         repository,
@@ -435,25 +405,15 @@ test("publication recovery first settles an interrupted package claim", async ()
     symlinkSync(outside, indexPath);
     let publishError: unknown;
     try {
-      await publishDemandFromPackage(
-        value.workspaceRoot,
-        value.ledgerStore,
-        publishInput(value),
-      );
+      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value));
     } catch (error: unknown) {
       publishError = error;
     }
-    equal(
-      publishError instanceof DemandEventSourcingPublicationServiceError,
-      true,
-    );
+    equal(publishError instanceof DemandEventSourcingPublicationServiceError, true);
     if (publishError instanceof DemandEventSourcingPublicationServiceError) {
       equal(publishError.publicationAuthority, "recoverable");
     }
-    const claimed = await readRequirementClaimState(
-      value.workspaceRoot,
-      FIXTURE_REQUIREMENT_ID,
-    );
+    const claimed = await readRequirementClaimState(value.workspaceRoot, FIXTURE_REQUIREMENT_ID);
     equal(claimed?.state.status, "claimed");
     rmSync(indexPath);
 
@@ -475,10 +435,7 @@ test("publication recovery first settles an interrupted package claim", async ()
 test("publication refuses a claim state that drifted from the plan", async () => {
   const value = await fixture();
   try {
-    const source = await readRequirementClaimState(
-      value.workspaceRoot,
-      FIXTURE_REQUIREMENT_ID,
-    );
+    const source = await readRequirementClaimState(value.workspaceRoot, FIXTURE_REQUIREMENT_ID);
     if (source === null) throw new Error("Expected pending claim state fixture.");
     await replaceRequirementClaimStateFile(
       value.workspaceRoot,
@@ -488,11 +445,7 @@ test("publication refuses a claim state that drifted from the plan", async () =>
 
     let caught: unknown;
     try {
-      await publishDemandFromPackage(
-        value.workspaceRoot,
-        value.ledgerStore,
-        publishInput(value),
-      );
+      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value));
     } catch (error: unknown) {
       caught = error;
     }
@@ -505,11 +458,7 @@ test("publication refuses a claim state that drifted from the plan", async () =>
     rmSync(workspaceFile(value, requirementClaimStateRef(FIXTURE_REQUIREMENT_ID)));
     let missing: unknown;
     try {
-      await publishDemandFromPackage(
-        value.workspaceRoot,
-        value.ledgerStore,
-        publishInput(value),
-      );
+      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value));
     } catch (error: unknown) {
       missing = error;
     }
@@ -518,10 +467,10 @@ test("publication refuses a claim state that drifted from the plan", async () =>
       equal(missing.reason, "package-not-found");
       equal(missing.publicationAuthority, "unchanged");
     }
-    equal(existsSync(path.join(
-      value.workspacePath,
-      ".wakeflow-active/current/demand-publication",
-    )), false);
+    equal(
+      existsSync(path.join(value.workspacePath, ".wakeflow-active/current/demand-publication")),
+      false,
+    );
     equal(existsSync(workspaceFile(value, demandFinalRootRef(DEMAND_ID))), false);
   } finally {
     await cleanup(value);
@@ -533,11 +482,9 @@ test("unresolved Authority has no publication effects", async () => {
   try {
     const badAuthority = {
       ...value.authority,
-      authorityRefs: value.authority.authorityRefs.map((reference, index) => (
-        index === 0
-          ? { ...reference, memberDigest: `sha256:${"f".repeat(64)}` }
-          : reference
-      )),
+      authorityRefs: value.authority.authorityRefs.map((reference, index) =>
+        index === 0 ? { ...reference, memberDigest: `sha256:${"f".repeat(64)}` } : reference,
+      ),
     };
     let caught: unknown;
     try {
@@ -553,14 +500,14 @@ test("unresolved Authority has no publication effects", async () => {
       equal(caught.publicationAuthority, "unchanged");
       equal(caught.reason, "authority");
     }
-    equal(existsSync(path.join(
-      value.workspacePath,
-      ".wakeflow-active/current/demand-publication",
-    )), false);
-    equal(existsSync(path.join(
-      value.workspacePath,
-      `.wakeflow-active/current/${DEMAND_ID}`,
-    )), false);
+    equal(
+      existsSync(path.join(value.workspacePath, ".wakeflow-active/current/demand-publication")),
+      false,
+    );
+    equal(
+      existsSync(path.join(value.workspacePath, `.wakeflow-active/current/${DEMAND_ID}`)),
+      false,
+    );
   } finally {
     await cleanup(value);
   }
@@ -575,11 +522,9 @@ test("Demand 操作根继承来源工作区根的持久化级别", async () => {
   try {
     await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value));
     for (const expected of ["none", "fsync"] as const) {
-      const source = await RootedDirectory.open(
-        value.workspaceRoot.absolutePath,
-        "$root",
-        { durability: expected },
-      );
+      const source = await RootedDirectory.open(value.workspaceRoot.absolutePath, "$root", {
+        durability: expected,
+      });
       try {
         const derived = await openDemandOperationRoot(source, DEMAND_ID);
         try {
@@ -604,22 +549,25 @@ test("publication apply refuses a pod that already has another active Demand", a
       requirementId: PUBLICATION_SECOND_REQUIREMENT_ID,
     });
     const otherClaim = await placePendingClaimState(value.workspaceRoot, other);
-    const otherIdentity = createDemandIdentity({
-      programId: PROGRAM_ID,
-      demandId: OTHER_DEMAND_ID,
-      title: "Occupying Demand",
-      goal: "占用同一个 pod",
-      completionDefinition: "保持活动",
-      demandType: "requirement",
-      source: requirementLineageOf(other),
-      podId: value.identity.podId,
-    }, { clock: () => CREATED_AT });
+    const otherIdentity = createDemandIdentity(
+      {
+        programId: PROGRAM_ID,
+        demandId: OTHER_DEMAND_ID,
+        title: "Occupying Demand",
+        goal: "占用同一个 pod",
+        completionDefinition: "保持活动",
+        demandType: "requirement",
+        source: requirementLineageOf(other),
+        podId: value.identity.podId,
+      },
+      { clock: () => CREATED_AT },
+    );
     await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
       identity: otherIdentity,
       authority: createDemandAuthority(otherIdentity, {
-        authorityRefs: other.documents.map((document) => (
-          createLedgerAuthorityMemberReference(other, document.path)
-        )),
+        authorityRefs: other.documents.map((document) =>
+          createLedgerAuthorityMemberReference(other, document.path),
+        ),
         testingDecision: value.authority.testingDecision,
       }),
       eventId: parseWakeflowDurableIdOfKind(
@@ -636,11 +584,10 @@ test("publication apply refuses a pod that already has another active Demand", a
 
     await rejects(
       publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value)),
-      (error: unknown) => (
-        error instanceof WakeflowError
-        && error.reason === "pod-busy"
-        && error.details?.["demandId"] === OTHER_DEMAND_ID
-      ),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.reason === "pod-busy" &&
+        error.details?.["demandId"] === OTHER_DEMAND_ID,
     );
     equal(existsSync(workspaceFile(value, demandFinalRootRef(DEMAND_ID))), false);
   } finally {

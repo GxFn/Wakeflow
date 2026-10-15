@@ -1,36 +1,36 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
+  assertDeliveryEnvelopeMatchesTaskPackage,
+  type DeliveryEnvelope,
+  DeliveryEnvelopeError,
+  parseDeliveryEnvelope,
+} from "../delivery/delivery-envelope.js";
+import {
   parseTaskPackage,
   TaskPackageError,
   type TestTaskPackage,
 } from "../tasking/task-package.js";
 import {
-  assertDeliveryEnvelopeMatchesTaskPackage,
-  DeliveryEnvelopeError,
-  parseDeliveryEnvelope,
-  type DeliveryEnvelope,
-} from "../delivery/delivery-envelope.js";
-import {
   assertTestExecutionAttemptMatchesPackage,
   TestExecutionAttemptError,
 } from "../testing/test-execution-attempt.js";
-import {
-  parseTestTargetResultReport,
-  TestTargetResultReportError,
-  type TestTargetResultReport,
-} from "./test-target-result-report.js";
 import {
   assertDeliveryBindingFollowsEnvelope,
   ImplementationTargetResultError,
 } from "./implementation-target-result.js";
 import {
   parseTargetResult,
-  TargetResultError,
-  targetResultIdForClaim,
   type TargetResultBasis,
   type TargetResultDeliveryBinding,
+  TargetResultError,
   type TestTargetResult,
+  targetResultIdForClaim,
 } from "./target-result.js";
+import {
+  parseTestTargetResultReport,
+  type TestTargetResultReport,
+  TestTargetResultReportError,
+} from "./test-target-result-report.js";
 
 /**
  * Test 任务包（含测试合同）、逻辑尝试、投递信封与宿主效果处置的 Result 来源闭合。
@@ -56,8 +56,7 @@ export type TestTargetResultErrorReason =
 const ERROR_MESSAGES = {
   "task-package": "Test Target Result requires a valid Test TaskPackage.",
   envelope: "Test Target Result requires a valid test Delivery Envelope.",
-  delivery:
-    "Test Target Result requires an accepted or indeterminate delivery generation.",
+  delivery: "Test Target Result requires an accepted or indeterminate delivery generation.",
   report: "Test Target Result requires a valid Test Report.",
   relation: "Test Target Result sources are inconsistent.",
 } as const satisfies Readonly<Record<TestTargetResultErrorReason, string>>;
@@ -89,7 +88,9 @@ function assertReportMatchesContract(
 ): void {
   // 重跑范围已由 assertTestExecutionAttemptMatchesPackage 证明属于合同。
   const scopedIds =
-    scope === null ? new Set(taskPackage.testContract.steps.map((step) => step.stepId)) : new Set(scope);
+    scope === null
+      ? new Set(taskPackage.testContract.steps.map((step) => step.stepId))
+      : new Set(scope);
   const seen = new Set<string>();
   for (const step of report.steps) {
     if (!scopedIds.has(step.stepId) || seen.has(step.stepId)) fail("relation");

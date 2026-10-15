@@ -3,28 +3,27 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
-  executeDemandEventSourcingCommand,
   DemandEventSourcingCommandHandlerError,
+  executeDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import {
-  createTaskPackageFixture,
-  TASKING_AUTHORITY_DIGEST,
-  TASKING_DEMAND_ID,
-} from "../tasking/task-package.fixture.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
   createDeliveryRearmFixture,
   createWorkClaimFixture,
 } from "../delivery/delivery-records.fixture.js";
+import {
+  createTaskPackageFixture,
+  TASKING_AUTHORITY_DIGEST,
+  TASKING_DEMAND_ID,
+} from "../tasking/task-package.fixture.js";
 
 const DEMAND_ID = TASKING_DEMAND_ID;
 const EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -102,9 +101,7 @@ function cancellationCommand(eventId = OTHER_EVENT_ID) {
 }
 
 test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 commitId 幂等", async () => {
-  const fixtureRoot = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-demand-command-handler-"),
-  );
+  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-command-handler-"));
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const eventStore = new DemandFileEventStore(root);
@@ -116,26 +113,23 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
         commitId: COMMIT_ID,
       } as never),
       (error: unknown) =>
-        error instanceof DemandEventSourcingCommandHandlerError &&
-        error.reason === "input",
+        error instanceof DemandEventSourcingCommandHandlerError && error.reason === "input",
     );
 
-    const committed = await executeDemandEventSourcingCommand(
-      repository,
-      COMMAND,
-      { commitId: COMMIT_ID, expectedStreamRevision: 0 },
-    );
+    const committed = await executeDemandEventSourcingCommand(repository, COMMAND, {
+      commitId: COMMIT_ID,
+      expectedStreamRevision: 0,
+    });
     equal(committed.disposition, "committed");
     equal(committed.aggregate.streamRevision, 1);
     equal(committed.aggregate.state.lifecycle, "active");
     await repository.publishSnapshot(committed.aggregate);
     equal((await repository.load())?.snapshotStatus, "used");
 
-    const retried = await executeDemandEventSourcingCommand(
-      repository,
-      COMMAND,
-      { commitId: COMMIT_ID, expectedStreamRevision: 0 },
-    );
+    const retried = await executeDemandEventSourcingCommand(repository, COMMAND, {
+      commitId: COMMIT_ID,
+      expectedStreamRevision: 0,
+    });
     equal(retried.disposition, "idempotent");
     equal(retried.commit.commitId, COMMIT_ID);
     equal((await eventStore.readCommits()).commits.length, 1);
@@ -160,11 +154,10 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
         error.reason === "idempotency-conflict",
     );
     await rejects(
-      executeDemandEventSourcingCommand(
-        repository,
-        cancellationCommand(EVENT_ID),
-        { commitId: OTHER_COMMIT_ID, expectedStreamRevision: 1 },
-      ),
+      executeDemandEventSourcingCommand(repository, cancellationCommand(EVENT_ID), {
+        commitId: OTHER_COMMIT_ID,
+        expectedStreamRevision: 1,
+      }),
       (error: unknown) =>
         error instanceof DemandEventSourcingCommandHandlerError &&
         error.reason === "idempotency-conflict",
@@ -178,25 +171,20 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
       eventId: PLAN_EVENT_ID,
       taskPackage,
     });
-    const planned = await executeDemandEventSourcingCommand(
-      repository,
-      planCommand,
-      {
-        commitId: PLAN_COMMIT_ID,
-        expectedStreamRevision: 1,
-      },
-    );
+    const planned = await executeDemandEventSourcingCommand(repository, planCommand, {
+      commitId: PLAN_COMMIT_ID,
+      expectedStreamRevision: 1,
+    });
     equal(planned.disposition, "committed");
     equal(planned.aggregate.streamRevision, 2);
     equal(planned.aggregate.lastEvent.eventType, "tasking.target-task-planned");
     equal(planned.aggregate.state.targetTasks.length, 1);
     equal((await repository.audit()).aggregate.state.targetTasks.length, 1);
 
-    const retriedPlan = await executeDemandEventSourcingCommand(
-      repository,
-      planCommand,
-      { commitId: PLAN_COMMIT_ID, expectedStreamRevision: 1 },
-    );
+    const retriedPlan = await executeDemandEventSourcingCommand(repository, planCommand, {
+      commitId: PLAN_COMMIT_ID,
+      expectedStreamRevision: 1,
+    });
     equal(retriedPlan.disposition, "idempotent");
     equal(retriedPlan.aggregate.streamRevision, 2);
     equal((await eventStore.readCommits()).commits.length, 2);
@@ -210,24 +198,19 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
       envelope,
       taskPackage,
     });
-    const prepared = await executeDemandEventSourcingCommand(
-      repository,
-      deliveryCommand,
-      { commitId: DELIVERY_COMMIT_ID, expectedStreamRevision: 2 },
-    );
+    const prepared = await executeDemandEventSourcingCommand(repository, deliveryCommand, {
+      commitId: DELIVERY_COMMIT_ID,
+      expectedStreamRevision: 2,
+    });
     equal(prepared.disposition, "committed");
     equal(prepared.aggregate.streamRevision, 3);
     equal(prepared.aggregate.lastEvent.eventType, "delivery.delivery-prepared");
     equal(prepared.aggregate.state.targetTasks[0]?.phase, "delivery-prepared");
-    equal(
-      (await repository.audit()).aggregate.state.targetTasks[0]?.phase,
-      "delivery-prepared",
-    );
-    const retriedDelivery = await executeDemandEventSourcingCommand(
-      repository,
-      deliveryCommand,
-      { commitId: DELIVERY_COMMIT_ID, expectedStreamRevision: 2 },
-    );
+    equal((await repository.audit()).aggregate.state.targetTasks[0]?.phase, "delivery-prepared");
+    const retriedDelivery = await executeDemandEventSourcingCommand(repository, deliveryCommand, {
+      commitId: DELIVERY_COMMIT_ID,
+      expectedStreamRevision: 2,
+    });
     equal(retriedDelivery.disposition, "idempotent");
     equal(retriedDelivery.aggregate.streamRevision, 3);
     equal((await eventStore.readCommits()).commits.length, 3);
@@ -255,23 +238,18 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
         error.reason === "idempotency-conflict",
     );
     equal((await eventStore.readCommits()).commits.length, 3);
-    const observed = await executeDemandEventSourcingCommand(
-      repository,
-      outcomeCommand,
-      { commitId: OUTCOME_COMMIT_ID, expectedStreamRevision: 3 },
-    );
+    const observed = await executeDemandEventSourcingCommand(repository, outcomeCommand, {
+      commitId: OUTCOME_COMMIT_ID,
+      expectedStreamRevision: 3,
+    });
     equal(observed.disposition, "committed");
     equal(observed.aggregate.streamRevision, 4);
-    equal(
-      observed.aggregate.lastEvent.eventType,
-      "delivery.delivery-outcome-recorded",
-    );
+    equal(observed.aggregate.lastEvent.eventType, "delivery.delivery-outcome-recorded");
     equal(observed.aggregate.state.targetTasks[0]?.phase, "host-effect-rejected");
-    const retriedObservation = await executeDemandEventSourcingCommand(
-      repository,
-      outcomeCommand,
-      { commitId: OUTCOME_COMMIT_ID, expectedStreamRevision: 3 },
-    );
+    const retriedObservation = await executeDemandEventSourcingCommand(repository, outcomeCommand, {
+      commitId: OUTCOME_COMMIT_ID,
+      expectedStreamRevision: 3,
+    });
     equal(retriedObservation.disposition, "idempotent");
     equal(retriedObservation.aggregate.streamRevision, 4);
     equal((await eventStore.readCommits()).commits.length, 4);
@@ -304,11 +282,10 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
       eventId: REARM_EVENT_ID,
       rearm,
     });
-    const rearmed = await executeDemandEventSourcingCommand(
-      repository,
-      rearmCommand,
-      { commitId: REARM_COMMIT_ID, expectedStreamRevision: 4 },
-    );
+    const rearmed = await executeDemandEventSourcingCommand(repository, rearmCommand, {
+      commitId: REARM_COMMIT_ID,
+      expectedStreamRevision: 4,
+    });
     equal(rearmed.disposition, "committed");
     equal(rearmed.aggregate.streamRevision, 5);
     equal(rearmed.aggregate.lastEvent.eventType, "delivery.delivery-rearmed");
@@ -318,11 +295,10 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
       throw new Error("Expected rearmed delivery-prepared target.");
     }
     equal(rearmedTarget.currentDelivery.generation, 2);
-    const retriedRearm = await executeDemandEventSourcingCommand(
-      repository,
-      rearmCommand,
-      { commitId: REARM_COMMIT_ID, expectedStreamRevision: 4 },
-    );
+    const retriedRearm = await executeDemandEventSourcingCommand(repository, rearmCommand, {
+      commitId: REARM_COMMIT_ID,
+      expectedStreamRevision: 4,
+    });
     equal(retriedRearm.disposition, "idempotent");
     equal(retriedRearm.aggregate.streamRevision, 5);
     equal((await eventStore.readCommits()).commits.length, 5);

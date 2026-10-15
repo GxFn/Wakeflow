@@ -3,9 +3,9 @@ import { test } from "node:test";
 
 import {
   parseTaskPackageProjectionFileName,
-  taskPackageProjectionRef,
-  TaskPackageProjectionPathError,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+  TaskPackageProjectionPathError,
+  taskPackageProjectionRef,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
 import { TASK_PACKAGE_ID } from "./task-package.fixture.js";
 
@@ -31,18 +31,11 @@ test("TaskPackage projection path rejects aliases and unrelated identities", () 
     "target-task_44444444-4444-4444-8444-444444444444.json",
     null,
   ]) {
-    throws(
-      () => parseTaskPackageProjectionFileName(value),
-      TaskPackageProjectionPathError,
-    );
+    throws(() => parseTaskPackageProjectionFileName(value), TaskPackageProjectionPathError);
   }
   throws(
-    () => taskPackageProjectionRef(
-      "target-task_44444444-4444-4444-8444-444444444444",
-    ),
-    (error: unknown) => (
-      error instanceof TaskPackageProjectionPathError
-      && error.reason === "identifier"
-    ),
+    () => taskPackageProjectionRef("target-task_44444444-4444-4444-8444-444444444444"),
+    (error: unknown) =>
+      error instanceof TaskPackageProjectionPathError && error.reason === "identifier",
   );
 });

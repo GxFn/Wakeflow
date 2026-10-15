@@ -1,10 +1,10 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
@@ -23,42 +23,27 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowManagedSupportResourceCatalog,
-} from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
-import {
-  materializeWakeflowManagedSupportRoot,
-} from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
-import {
-  createWakeflowSupportMemoryAuthority,
-} from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
+import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
+import { createWakeflowSupportMemoryAuthority } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
 import {
   publishWakeflowSupportMemory,
   WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationErrorReason,
 } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
-import {
-  recoverWakeflowSupportMemory,
-} from "../../../src/workspace/support/wakeflow-support-memory-recovery.js";
-import {
-  createMinimalWakeflowConfig,
-} from "../../configuration/wakeflow-config.fixture.js";
+import { recoverWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-recovery.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
 async function fixture(t: TestContext) {
-  const container = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-support-memory-publication-",
-  )));
+  const container = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-support-memory-publication-")),
+  );
   const workspacePath = path.join(container, "Workspace");
   mkdirSync(workspacePath, { mode: 0o755 });
   const workspaceRoot = await RootedDirectory.open(workspacePath);
@@ -106,9 +91,8 @@ function request(
   );
   return Object.freeze({
     currentConfig,
-    expectedCurrentConfigDigest: currentConfig === null
-      ? null
-      : computeWakeflowConfigDigest(currentConfig),
+    expectedCurrentConfigDigest:
+      currentConfig === null ? null : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
     profile: codexWorkspaceHostResourceProfile,
@@ -185,9 +169,7 @@ test("Support memory publication replaces only an admitted prior language", asyn
   if (replaced.effect?.publication === "replaced") {
     equal(replaced.effect.previous.digest, sourceDigest);
   }
-  equal(readFileSync(workspace.memoryPath, "utf8").includes(
-    "Wakeflow Design 支持窗口",
-  ), true);
+  equal(readFileSync(workspace.memoryPath, "utf8").includes("Wakeflow Design 支持窗口"), true);
 });
 
 test("Support memory publication preserves unknown whole-file bytes", async (t) => {
@@ -196,18 +178,20 @@ test("Support memory publication preserves unknown whole-file bytes", async (t) 
   const unknown = Buffer.from("# User-owned unknown file\n");
   writeFileSync(workspace.memoryPath, unknown, { mode: 0o644 });
   await expectPublicationError(
-    () => publishWakeflowSupportMemory(
-      workspace.workspaceRoot,
-      workspace.supportRoot,
-      request(desired, desired),
-    ),
+    () =>
+      publishWakeflowSupportMemory(
+        workspace.workspaceRoot,
+        workspace.supportRoot,
+        request(desired, desired),
+      ),
     "source-invalid",
     "$source",
   );
   deepEqual(readFileSync(workspace.memoryPath), unknown);
-  equal(readdirSync(workspace.supportPath).some((name) => (
-    name.startsWith(".wakeflow-atomic-")
-  )), false);
+  equal(
+    readdirSync(workspace.supportPath).some((name) => name.startsWith(".wakeflow-atomic-")),
+    false,
+  );
 });
 
 test("Support memory recovery retires an inactive stage and republishes", async (t) => {
@@ -235,12 +219,9 @@ test("Support memory recovery retires an inactive stage and republishes", async 
   const stageRef = durableAtomicFileStageRefForTest("AGENTS.md", address);
   let released = false;
   try {
-    await createFileCandidateDurably(
-      workspace.supportRoot,
-      stageRef,
-      desiredBytes,
-      { mode: 0o644 },
-    );
+    await createFileCandidateDurably(workspace.supportRoot, stageRef, desiredBytes, {
+      mode: 0o644,
+    });
     releaseDurableAtomicFileStageAddress(address);
     released = true;
 

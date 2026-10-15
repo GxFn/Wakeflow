@@ -1,19 +1,19 @@
-import type { WakeflowTaskPackage as TaskPackageWire } from "../../contracts/generated/governance/tasking/task-package.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import type { WakeflowTaskPackage as TaskPackageWire } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -21,29 +21,26 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 import {
+  type LedgerAuthorityMemberReference,
   LedgerAuthorityStoreError,
   parseLedgerAuthorityMemberReference,
-  type LedgerAuthorityMemberReference,
 } from "../ledger/ledger-authority-store.js";
 
 /**
@@ -98,8 +95,14 @@ export interface TaskPackageAcceptanceAnchor {
 
 /** 同仓库再来一个包必须声明谱系：替代未接受的旧目标，或续接已接受的旧目标（能力卡 5 Q2）。 */
 export type TaskPackageLineage =
-  | Readonly<{ readonly kind: "replacement"; readonly replacesTargetTaskId: WakeflowDurableId<"target-task"> }>
-  | Readonly<{ readonly kind: "continuation"; readonly continuesTargetTaskId: WakeflowDurableId<"target-task"> }>
+  | Readonly<{
+      readonly kind: "replacement";
+      readonly replacesTargetTaskId: WakeflowDurableId<"target-task">;
+    }>
+  | Readonly<{
+      readonly kind: "continuation";
+      readonly continuesTargetTaskId: WakeflowDurableId<"target-task">;
+    }>
   | null;
 
 /** 需求包 `taskPlanReview` 为 user 时，任务清单先交用户过目，确认时间记入包（ADR-0011 补充）。 */
@@ -144,14 +147,12 @@ export interface TestImplementationBaseline {
 }
 
 /** test 包谱系：首轮为 null；产品缺陷修复后的新代际记 retest（能力卡 5 Q5）。 */
-export type TestTaskLineage =
-  | Readonly<{
-      readonly kind: "retest";
-      readonly retestsTargetTaskId: WakeflowDurableId<"target-task">;
-      readonly productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
-      readonly authorizationDigest: Sha256Digest;
-    }>
-  | null;
+export type TestTaskLineage = Readonly<{
+  readonly kind: "retest";
+  readonly retestsTargetTaskId: WakeflowDurableId<"target-task">;
+  readonly productDefectRemediationId: WakeflowDurableId<"product-defect-remediation">;
+  readonly authorizationDigest: Sha256Digest;
+}> | null;
 
 interface TaskPackageBase {
   readonly artifactKind: typeof TASK_PACKAGE_ARTIFACT_KIND;
@@ -251,8 +252,7 @@ const ERROR_MESSAGES = {
   text: "Task package contains non-canonical text.",
   reference: "Task package contains an invalid Ledger authority reference.",
   relation: "Task package contains inconsistent local relationships.",
-  representation:
-    "Task package bytes are not its deterministic domain representation.",
+  representation: "Task package bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TaskPackageErrorReason, string>>;
 
 /** TaskPackage 准入或确定性表示失败时返回的稳定、脱敏错误。 */
@@ -378,12 +378,10 @@ const AUTHORED_CONTENT_DRAFT_REFERENCE = parseLedgerAuthorityMemberReference({
   schemaVersion: 1,
   family: "requirement",
   recordId: "requirement_00000000-0000-4000-8000-000000000010",
-  recordRef:
-    "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
+  recordRef: "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
   recordDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
   memberPath: "requirement.md",
-  memberRef:
-    "requirements/requirement_00000000-0000-4000-8000-000000000010/requirement.md",
+  memberRef: "requirements/requirement_00000000-0000-4000-8000-000000000010/requirement.md",
   memberDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
   role: "requirement",
   mediaType: "text/markdown",
@@ -442,17 +440,11 @@ function parseCreationTime(value: unknown): UtcInstant {
   }
 }
 
-function parseTextList(
-  values: readonly string[],
-  path: string,
-): readonly string[] {
+function parseTextList(values: readonly string[], path: string): readonly string[] {
   const parsed: string[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < values.length; index += 1) {
-    const text = parseCanonicalText(
-      values[index] as string,
-      `${path}/${index}`,
-    );
+    const text = parseCanonicalText(values[index] as string, `${path}/${index}`);
     if (seen.has(text)) fail("relation", `${path}/${index}`);
     seen.add(text);
     parsed.push(text);
@@ -514,10 +506,7 @@ function parseAcceptanceAnchors(
         claim: parseCanonicalText(value.claim, `${path}/claim`),
         probe: parseCanonicalText(value.probe, `${path}/probe`),
         expected: parseCanonicalText(value.expected, `${path}/expected`),
-        requirementRef: parseRequirementRef(
-          value.requirementRef,
-          `${path}/requirementRef`,
-        ),
+        requirementRef: parseRequirementRef(value.requirementRef, `${path}/requirementRef`),
       }),
     );
   }
@@ -547,9 +536,7 @@ function parseLineage(
   return Object.freeze({ kind: "continuation" as const, continuesTargetTaskId });
 }
 
-function parsePlanReview(
-  value: TaskPackageWire["planReview"],
-): TaskPackagePlanReview {
+function parsePlanReview(value: TaskPackageWire["planReview"]): TaskPackagePlanReview {
   if (value === undefined) fail("schema", "$/planReview");
   if (value.reviewer === "controller") {
     return Object.freeze({ reviewer: "controller" as const });
@@ -564,9 +551,7 @@ function parsePlanReview(
   return Object.freeze({ reviewer: "user" as const, confirmedAt });
 }
 
-function parseSectionAnchors(
-  value: TaskPackageWire["sectionAnchors"],
-): readonly string[] {
+function parseSectionAnchors(value: TaskPackageWire["sectionAnchors"]): readonly string[] {
   if (value === undefined) fail("schema", "$/sectionAnchors");
   const seen = new Set<string>();
   for (const [index, anchor] of value.entries()) {
@@ -579,7 +564,11 @@ function parseSectionAnchors(
 const STEP_ID_PREFIX = "ts-";
 
 function parseRequirementRef(
-  value: Readonly<{ readonly recordDigest: string; readonly sectionAnchor: string; readonly itemId: string }>,
+  value: Readonly<{
+    readonly recordDigest: string;
+    readonly sectionAnchor: string;
+    readonly itemId: string;
+  }>,
   path: string,
 ): Readonly<TaskPackageRequirementRef> {
   return Object.freeze({
@@ -589,9 +578,7 @@ function parseRequirementRef(
   });
 }
 
-function parseTestContract(
-  value: TaskPackageWire["testContract"],
-): Readonly<TestContract> {
+function parseTestContract(value: TaskPackageWire["testContract"]): Readonly<TestContract> {
   if (value === undefined) fail("schema", "$/testContract");
   const steps: Readonly<TestContractStep>[] = [];
   const itemIds = new Set<string>();
@@ -623,7 +610,10 @@ function parseTestContract(
     if (error instanceof LedgerAuthorityStoreError) fail("reference", "$/testContract/environment");
     throw error;
   }
-  const stopConditions = parseNonEmptyTextList(value.stopConditions, "$/testContract/stopConditions");
+  const stopConditions = parseNonEmptyTextList(
+    value.stopConditions,
+    "$/testContract/stopConditions",
+  );
   const skills = new Set<string>();
   for (const [index, skill] of value.allowedSkills.entries()) {
     if (skills.has(skill)) fail("relation", `$/testContract/allowedSkills/${index}`);
@@ -700,14 +690,8 @@ function parseTestLineage(
 }
 
 function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
-  const confirmedContext = parseNonEmptyTextList(
-    wire.confirmedContext,
-    "$/confirmedContext",
-  );
-  const inScope = parseNonEmptyTextList(
-    wire.boundaries.inScope,
-    "$/boundaries/inScope",
-  );
+  const confirmedContext = parseNonEmptyTextList(wire.confirmedContext, "$/confirmedContext");
+  const inScope = parseNonEmptyTextList(wire.boundaries.inScope, "$/boundaries/inScope");
   const completionExpectations = parseNonEmptyTextList(
     wire.completionExpectations,
     "$/completionExpectations",
@@ -718,52 +702,32 @@ function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
     programId: parseId(wire.programId, "program", "$/programId"),
     configDigest: parseDigest(wire.configDigest, "$/configDigest"),
     demandId: parseId(wire.demandId, "demand", "$/demandId"),
-    demandAuthorityDigest: parseDigest(
-      wire.demandAuthorityDigest,
-      "$/demandAuthorityDigest",
-    ),
-    taskPackageId: parseId(
-      wire.taskPackageId,
-      "task-package",
-      "$/taskPackageId",
-    ),
+    demandAuthorityDigest: parseDigest(wire.demandAuthorityDigest, "$/demandAuthorityDigest"),
+    taskPackageId: parseId(wire.taskPackageId, "task-package", "$/taskPackageId"),
     targetTaskId: parseId(wire.targetTaskId, "target-task", "$/targetTaskId"),
     createdAt: parseCreationTime(wire.createdAt),
     objective: parseCanonicalText(wire.objective, "$/objective"),
     confirmedContext,
-    selectedAuthorityRefs: parseSelectedAuthorityRefs(
-      wire.selectedAuthorityRefs,
-    ),
+    selectedAuthorityRefs: parseSelectedAuthorityRefs(wire.selectedAuthorityRefs),
     boundaries: Object.freeze({
       inScope,
-      outOfScope: parseTextList(
-        wire.boundaries.outOfScope,
-        "$/boundaries/outOfScope",
-      ),
-      forbidden: parseTextList(
-        wire.boundaries.forbidden,
-        "$/boundaries/forbidden",
-      ),
+      outOfScope: parseTextList(wire.boundaries.outOfScope, "$/boundaries/outOfScope"),
+      forbidden: parseTextList(wire.boundaries.forbidden, "$/boundaries/forbidden"),
     }),
     completionExpectations,
   } as const;
-  const windowId = parseId(
-    wire.assignment.windowId,
-    "window",
-    "$/assignment/windowId",
-  );
+  const windowId = parseId(wire.assignment.windowId, "window", "$/assignment/windowId");
   const acceptanceAnchors = parseAcceptanceAnchors(wire.acceptanceAnchors);
   if (wire.workType === "implementation") {
-    if (
-      !("repositoryId" in wire.assignment) ||
-      wire.commitExpectation === undefined
-    ) {
+    if (!("repositoryId" in wire.assignment) || wire.commitExpectation === undefined) {
       fail("schema", "$/assignment");
     }
     const firstAnchor = acceptanceAnchors[0];
     if (firstAnchor === undefined) fail("schema", "$/acceptanceAnchors");
-    const parsedAnchors: ImplementationTaskPackage["acceptanceAnchors"] =
-      Object.freeze([firstAnchor, ...acceptanceAnchors.slice(1)]);
+    const parsedAnchors: ImplementationTaskPackage["acceptanceAnchors"] = Object.freeze([
+      firstAnchor,
+      ...acceptanceAnchors.slice(1),
+    ]);
     const implementation: ImplementationTaskPackage = {
       ...common,
       assignment: Object.freeze({
@@ -856,8 +820,7 @@ export function createTaskPackage(
     throw error;
   }
   const keys = Object.keys(record).sort();
-  const expectedFields =
-    record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
+  const expectedFields = record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
   if (
     keys.length !== expectedFields.length ||
     keys.some((key, index) => key !== expectedFields[index])
@@ -907,9 +870,7 @@ export function createTaskPackage(
  * 受控的 Program/Demand/Config/Authority/Task/Event 时间字段由 Planning owner 注入；
  * 本函数使用固定内部值复用完整 TaskPackage parser，随后只投影调用方拥有的字段。
  */
-export function parseTaskPackageContentDraft(
-  value: unknown,
-): TaskPackageContentDraft {
+export function parseTaskPackageContentDraft(value: unknown): TaskPackageContentDraft {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$contentDraft");
@@ -1017,10 +978,7 @@ export function parseTaskPackageAuthoredContentDraft(
 
 /** 渲染 TaskPackage 的唯一确定性 JSON 文档表示。 */
 export function renderTaskPackage(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseTaskPackage(value),
-    "$taskPackage",
-  );
+  return renderDeterministicJsonDocument(parseTaskPackage(value), "$taskPackage");
 }
 
 /** 只接受与领域确定性表示逐字节相同的 TaskPackage 文档。 */

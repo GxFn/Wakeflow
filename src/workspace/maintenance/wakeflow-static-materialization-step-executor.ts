@@ -25,10 +25,7 @@ import {
 } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   AbsoluteDirectoryMaterializationError,
   materializeAbsoluteDirectoryPlacement,
@@ -182,12 +179,9 @@ const ERROR_MESSAGES = {
   input: "Wakeflow static materialization step input is invalid.",
   gate: "Wakeflow static materialization step requires the active gate.",
   plan: "Wakeflow static materialization step is not in the confirmed preview.",
-  "source-config":
-    "Wakeflow static materialization source Config is inconsistent.",
-  "target-authority":
-    "Wakeflow static materialization target authority changed.",
-  "strict-absent":
-    "Wakeflow fresh whole-owned target was not created exclusively.",
+  "source-config": "Wakeflow static materialization source Config is inconsistent.",
+  "target-authority": "Wakeflow static materialization target authority changed.",
+  "strict-absent": "Wakeflow fresh whole-owned target was not created exclusively.",
   owner: "Wakeflow static materialization domain owner failed.",
   "root-scope": "Wakeflow static materialization lost its root scope.",
   aborted: "Wakeflow static materialization step was aborted.",
@@ -202,20 +196,14 @@ export class WakeflowStaticMaterializationStepExecutionError extends Error {
   readonly reason: WakeflowStaticMaterializationStepExecutionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowStaticMaterializationStepExecutionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowStaticMaterializationStepExecutionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowStaticMaterializationStepExecutionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowStaticMaterializationStepExecutionErrorReason, path: string): never {
   throw new WakeflowStaticMaterializationStepExecutionError(reason, path);
 }
 
@@ -225,9 +213,7 @@ interface ParsedStepExecutionOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function parseExecutionOptions(
-  value: unknown,
-): Readonly<ParsedStepExecutionOptions> {
+function parseExecutionOptions(value: unknown): Readonly<ParsedStepExecutionOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$options");
@@ -239,10 +225,7 @@ function parseExecutionOptions(
     !Object.hasOwn(record, "recoveringAffectedStep") ||
     !Object.hasOwn(record, "sourceConfig") ||
     Object.keys(record).some(
-      (key) =>
-        key !== "recoveringAffectedStep" &&
-        key !== "signal" &&
-        key !== "sourceConfig",
+      (key) => key !== "recoveringAffectedStep" && key !== "signal" && key !== "sourceConfig",
     ) ||
     typeof record.recoveringAffectedStep !== "boolean" ||
     (record.signal !== undefined &&
@@ -295,8 +278,7 @@ function desiredConfig(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
 ): WakeflowConfigModel {
-  const desired =
-    request.action === "reconcile" ? sourceConfig : request.desiredConfig;
+  const desired = request.action === "reconcile" ? sourceConfig : request.desiredConfig;
   if (desired === null) fail("source-config", "$options.sourceConfig");
   return desired;
 }
@@ -320,10 +302,7 @@ async function optionalConfigSnapshot(
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
-    if (
-      error instanceof WakeflowConfigAuthoritySnapshotError &&
-      error.reason === "source"
-    ) {
+    if (error instanceof WakeflowConfigAuthoritySnapshotError && error.reason === "source") {
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
@@ -350,10 +329,7 @@ async function executeLocalProtocol(
   );
   let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
-    core = await inspectWakeflowWorkspaceCoreLayout(
-      root,
-      signal === undefined ? {} : { signal },
-    );
+    core = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -415,12 +391,7 @@ async function executeSharedCoordinationLayout(
   assertStepTarget(step, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST);
   try {
     const result = await materializeWakeflowSharedCoordinationLayout(root, {
-      mode:
-        action === "fresh-initialize"
-          ? recovering
-            ? "recover"
-            : "fresh"
-          : "ensure",
+      mode: action === "fresh-initialize" ? (recovering ? "recover" : "fresh") : "ensure",
       ...(signal === undefined ? {} : { signal }),
     });
     return receipt(step.stepId, result.disposition, {
@@ -446,10 +417,7 @@ async function requirementBoardRootExists(root: RootedDirectory): Promise<boolea
     await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
     return true;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -553,20 +521,15 @@ async function executeLedgerLayout(
     }
     throw error;
   }
-  const placement = placements.roots.find(
-    (entry) => entry.key === "ledger.root",
-  );
+  const placement = placements.roots.find((entry) => entry.key === "ledger.root");
   if (placement === undefined) fail("plan", "$ledgerRoot");
 
   let materialized;
   try {
-    materialized = await materializeAbsoluteDirectoryPlacement(
-      placement.absolutePath,
-      {
-        mode: LEDGER_DURABLE_DIRECTORY_MODE,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    materialized = await materializeAbsoluteDirectoryPlacement(placement.absolutePath, {
+      mode: LEDGER_DURABLE_DIRECTORY_MODE,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryMaterializationError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -588,13 +551,9 @@ async function executeLedgerLayout(
 
   let ledgerRoot: RootedDirectory;
   try {
-    ledgerRoot = await RootedDirectory.open(
-      materialized.absolutePath,
-      "$ledgerRoot",
-    );
+    ledgerRoot = await RootedDirectory.open(materialized.absolutePath, "$ledgerRoot");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError)
-      fail("root-scope", "$ledgerRoot");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$ledgerRoot");
     throw error;
   }
   let inspection;
@@ -605,9 +564,7 @@ async function executeLedgerLayout(
       freshLedger: true,
       ...(signal === undefined ? {} : { signal }),
     });
-    inspection = await store.inspectLayout(
-      signal === undefined ? undefined : { signal },
-    );
+    inspection = await store.inspectLayout(signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
     primaryError = error;
   }
@@ -619,25 +576,18 @@ async function executeLedgerLayout(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof LedgerAuthorityStoreError) {
-      fail(
-        primaryError.reason === "aborted" ? "aborted" : "owner",
-        "$ledgerLayout",
-      );
+      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$ledgerLayout");
     }
     throw primaryError;
   }
   if (closeError !== undefined || inspection?.status !== "current") {
     fail("owner", "$ledgerLayout");
   }
-  return receipt(
-    step.stepId,
-    finalSegment.disposition === "created" ? "created" : "current",
-    {
-      absolutePlacementState: placement.state,
-      authorityDigest: inspection.authorityDigest,
-      observationDigest: inspection.observationDigest,
-    },
-  );
+  return receipt(step.stepId, finalSegment.disposition === "created" ? "created" : "current", {
+    absolutePlacementState: placement.state,
+    authorityDigest: inspection.authorityDigest,
+    observationDigest: inspection.observationDigest,
+  });
 }
 
 async function executeUnregisteredWindowRuntime(
@@ -651,10 +601,7 @@ async function executeUnregisteredWindowRuntime(
   if (step.targetKey !== request.currentHostProfile.hostId) {
     fail("plan", "$windowRuntime");
   }
-  const authority = compileWakeflowFreshWindowRuntimeAuthority(
-    desired,
-    request.currentHostProfile,
-  );
+  const authority = compileWakeflowFreshWindowRuntimeAuthority(desired, request.currentHostProfile);
   assertStepTarget(step, authority.authorityDigest);
   if (request.action !== "fresh-initialize") {
     // 对账 / 重配置：只补齐缺失的目录骨架与未登记投影，已有投影不动（§13.114 D2）。
@@ -715,27 +662,22 @@ async function executeHostCapabilityLayout(
   if (step.targetKey !== request.currentHostProfile.hostId) {
     fail("plan", "$hostCapabilityLayout");
   }
-  const authority = compileWakeflowHostCapabilityLayoutAuthority(
-    request.currentHostProfile,
-  );
+  const authority = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
   assertStepTarget(step, authority.authorityDigest);
   try {
     // fresh 要求全部目标不存在（恢复时接受 exact 空前缀）；reconcile/reconfigure 的修复只补齐
     // 缺失目录、不枚举运行中的内容。
-    const result = request.action === "fresh-initialize"
-      ? await materializeWakeflowHostCapabilityLayout(
-          root,
-          request.currentHostProfile,
-          {
+    const result =
+      request.action === "fresh-initialize"
+        ? await materializeWakeflowHostCapabilityLayout(root, request.currentHostProfile, {
             recoveringFreshLayout: recovering,
             ...(signal === undefined ? {} : { signal }),
-          },
-        )
-      : await ensureWakeflowHostCapabilityLayout(
-          root,
-          request.currentHostProfile,
-          signal === undefined ? {} : { signal },
-        );
+          })
+        : await ensureWakeflowHostCapabilityLayout(
+            root,
+            request.currentHostProfile,
+            signal === undefined ? {} : { signal },
+          );
     return receipt(step.stepId, result.disposition, {
       authorityDigest: result.authorityDigest,
       createdDirectoryCount: result.createdDirectoryCount,
@@ -762,10 +704,7 @@ async function executeSupportRoot(
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
-  const catalog = createWakeflowManagedSupportResourceCatalog(
-    desired,
-    request.currentHostProfile,
-  );
+  const catalog = createWakeflowManagedSupportResourceCatalog(desired, request.currentHostProfile);
   const declaration = catalog.declarations.find(
     (entry) => entry.declarationId === `support.${step.targetKey}.root`,
   );
@@ -788,15 +727,11 @@ async function executeSupportRoot(
     ) {
       fail("strict-absent", "$supportRoot");
     }
-    return receipt(
-      step.stepId,
-      result.disposition === "created" ? "created" : "current",
-      {
-        surfaceId: result.surfaceId,
-        inodeId: result.node.inodeId.toString(),
-        mode: result.node.permissionBits,
-      },
-    );
+    return receipt(step.stepId, result.disposition === "created" ? "created" : "current", {
+      surfaceId: result.surfaceId,
+      inodeId: result.node.inodeId.toString(),
+      mode: result.node.permissionBits,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationStepExecutionError) {
       throw error;
@@ -817,9 +752,7 @@ async function executeGitignore(
 ) {
   const authority = createWakeflowGitignoreBodyAuthority(request.hostProfiles);
   assertStepTarget(step, authority.authorityDigest);
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    request.currentHostProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
   try {
     const result = await recomposeWakeflowWorkspaceGitignore(
       root,
@@ -830,14 +763,10 @@ async function executeGitignore(
       },
       signal === undefined ? undefined : { signal },
     );
-    return receipt(
-      step.stepId,
-      result.disposition === "current" ? "current" : "updated",
-      {
-        authorityDigest: result.inspection.authority.authorityDigest,
-        sourceDigest: result.inspection.source?.digest ?? null,
-      },
-    );
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+      authorityDigest: result.inspection.authority.authorityDigest,
+      sourceDigest: result.inspection.source?.digest ?? null,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreRecompositionError) {
       fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore");
@@ -877,22 +806,16 @@ async function executeProgramInstruction(
         profile,
         currentConfig: sourceConfig,
         expectedCurrentConfigDigest:
-          sourceConfig === null
-            ? null
-            : computeWakeflowConfigDigest(sourceConfig),
+          sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
       },
       signal === undefined ? undefined : { signal },
     );
-    return receipt(
-      step.stepId,
-      result.disposition === "current" ? "current" : "updated",
-      {
-        authorityDigest: result.inspection.desiredAuthority.authorityDigest,
-        sourceDigest: result.inspection.source?.digest ?? null,
-      },
-    );
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+      authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+      sourceDigest: result.inspection.source?.digest ?? null,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionRecompositionError) {
       fail(error.reason === "aborted" ? "aborted" : "owner", "$program");
@@ -954,20 +877,16 @@ async function executeExternalInstruction(
   if (placement?.state !== "present") fail("root-scope", "$externalRoot");
   let externalRoot: RootedDirectory;
   try {
-    externalRoot = await RootedDirectory.open(
-      placement.absolutePath,
-      "$externalRoot",
-      { durability: root.durability },
-    );
+    externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("root-scope", "$externalRoot");
     }
     throw error;
   }
-  let result:
-    | Awaited<ReturnType<typeof recomposeWakeflowExternalInstruction>>
-    | undefined;
+  let result: Awaited<ReturnType<typeof recomposeWakeflowExternalInstruction>> | undefined;
   let primaryError: unknown;
   try {
     result = await recomposeWakeflowExternalInstruction(
@@ -977,9 +896,7 @@ async function executeExternalInstruction(
         target,
         currentConfig: sourceConfig,
         expectedCurrentConfigDigest:
-          sourceConfig === null
-            ? null
-            : computeWakeflowConfigDigest(sourceConfig),
+          sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
       },
@@ -996,24 +913,17 @@ async function executeExternalInstruction(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowExternalInstructionRecompositionError) {
-      fail(
-        primaryError.reason === "aborted" ? "aborted" : "owner",
-        "$externalInstruction",
-      );
+      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$externalInstruction");
     }
     throw primaryError;
   }
   if (closeError !== undefined || result === undefined) {
     fail("owner", "$externalRoot");
   }
-  return receipt(
-    step.stepId,
-    result.disposition === "current" ? "current" : "updated",
-    {
-      authorityDigest: result.inspection.desiredAuthority.authorityDigest,
-      sourceDigest: result.inspection.source?.digest ?? null,
-    },
-  );
+  return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+    authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+    sourceDigest: result.inspection.source?.digest ?? null,
+  });
 }
 
 async function executeSupportGitignore(
@@ -1023,15 +933,11 @@ async function executeSupportGitignore(
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
-  const authority = createWakeflowSupportGitignoreBodyAuthority(
-    request.hostProfiles,
-  );
+  const authority = createWakeflowSupportGitignoreBodyAuthority(request.hostProfiles);
   if (authority === null) fail("plan", "$step.kind");
   assertStepTarget(step, authority.authorityDigest);
   const surface = desired.topology.supportSurfaces.find(
-    (entry) =>
-      entry.surfaceId === step.targetKey &&
-      entry.ownership === "wakeflow-managed",
+    (entry) => entry.surfaceId === step.targetKey && entry.ownership === "wakeflow-managed",
   );
   if (surface === undefined) fail("plan", "$step.targetKey");
   let placements;
@@ -1049,20 +955,16 @@ async function executeSupportGitignore(
   if (placement?.state !== "present") fail("root-scope", "$supportRoot");
   let supportRoot: RootedDirectory;
   try {
-    supportRoot = await RootedDirectory.open(
-      placement.absolutePath,
-      "$supportRoot",
-      { durability: root.durability },
-    );
+    supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("root-scope", "$supportRoot");
     }
     throw error;
   }
-  let result:
-    | Awaited<ReturnType<typeof recomposeWakeflowManagedBlockFile>>
-    | undefined;
+  let result: Awaited<ReturnType<typeof recomposeWakeflowManagedBlockFile>> | undefined;
   let primaryError: unknown;
   try {
     result = await recomposeWakeflowManagedBlockFile(
@@ -1093,24 +995,17 @@ async function executeSupportGitignore(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowManagedBlockFileError) {
-      fail(
-        primaryError.reason === "aborted" ? "aborted" : "owner",
-        "$supportGitignore",
-      );
+      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$supportGitignore");
     }
     throw primaryError;
   }
   if (closeError !== undefined || result === undefined) {
     fail("owner", "$supportRoot");
   }
-  return receipt(
-    step.stepId,
-    result.disposition === "current" ? "current" : "updated",
-    {
-      authorityDigest: authority.authorityDigest,
-      sourceDigest: result.inspection.source?.digest ?? null,
-    },
-  );
+  return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+    authorityDigest: authority.authorityDigest,
+    sourceDigest: result.inspection.source?.digest ?? null,
+  });
 }
 
 async function executeSupportMemory(
@@ -1136,25 +1031,20 @@ async function executeSupportMemory(
     }
     throw error;
   }
-  const placement = placements.roots.find(
-    (entry) => entry.key === `support.${surfaceId}.root`,
-  );
+  const placement = placements.roots.find((entry) => entry.key === `support.${surfaceId}.root`);
   if (placement?.state !== "present") fail("root-scope", "$supportRoot");
   let supportRoot: RootedDirectory;
   try {
-    supportRoot = await RootedDirectory.open(
-      placement.absolutePath,
-      "$supportRoot",
-      { durability: root.durability },
-    );
+    supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot", {
+      durability: root.durability,
+    });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       fail("root-scope", "$supportRoot");
     }
     throw error;
   }
-  let result:
-    Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
+  let result: Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
   let primaryError: unknown;
   try {
     const catalog = createWakeflowManagedSupportResourceCatalog(desired, profile);
@@ -1164,9 +1054,7 @@ async function executeSupportMemory(
       {
         currentConfig: sourceConfig,
         expectedCurrentConfigDigest:
-          sourceConfig === null
-            ? null
-            : computeWakeflowConfigDigest(sourceConfig),
+          sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         profile,
@@ -1186,24 +1074,17 @@ async function executeSupportMemory(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowSupportMemoryPublicationError) {
-      fail(
-        primaryError.reason === "aborted" ? "aborted" : "owner",
-        "$supportMemory",
-      );
+      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$supportMemory");
     }
     throw primaryError;
   }
   if (closeError !== undefined || result === undefined) {
     fail("owner", "$supportRoot");
   }
-  return receipt(
-    step.stepId,
-    result.disposition === "current" ? "current" : "updated",
-    {
-      authorityDigest: result.inspection.desiredAuthority.authorityDigest,
-      sourceDigest: result.inspection.source?.digest ?? null,
-    },
-  );
+  return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+    authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+    sourceDigest: result.inspection.source?.digest ?? null,
+  });
 }
 
 async function executeConfig(
@@ -1235,10 +1116,7 @@ async function executeConfig(
         sourceDigest: result.authority.source.digest,
       });
     }
-    if (
-      current === null ||
-      current.configDigest !== preview.currentConfigDigest
-    ) {
+    if (current === null || current.configDigest !== preview.currentConfigDigest) {
       fail("source-config", "$config");
     }
     const result = await replaceWakeflowConfigAuthority(
@@ -1247,14 +1125,10 @@ async function executeConfig(
       current,
       signal === undefined ? undefined : { signal },
     );
-    return receipt(
-      step.stepId,
-      result.disposition === "current" ? "current" : "updated",
-      {
-        configDigest: result.authority.configDigest,
-        sourceDigest: result.authority.source.digest,
-      },
-    );
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+      configDigest: result.authority.configDigest,
+      sourceDigest: result.authority.source.digest,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationStepExecutionError) {
       throw error;
@@ -1298,9 +1172,7 @@ export async function executeWakeflowStaticMaterializationStep(
     }
     throw error;
   }
-  let request: ReturnType<
-    typeof parseWakeflowStaticMaterializationPreviewRequest
-  >;
+  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
   try {
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
@@ -1309,11 +1181,7 @@ export async function executeWakeflowStaticMaterializationStep(
     }
     throw error;
   }
-  if (
-    typeof stepIdValue !== "string" ||
-    stepIdValue.length > 256 ||
-    !stepIdValue.isWellFormed()
-  ) {
+  if (typeof stepIdValue !== "string" || stepIdValue.length > 256 || !stepIdValue.isWellFormed()) {
     fail("input", "$stepId");
   }
   const step = preview.steps.find((entry) => entry.stepId === stepIdValue);
@@ -1321,25 +1189,16 @@ export async function executeWakeflowStaticMaterializationStep(
   if (preview.status !== "ready") fail("plan", "$preview.status");
   const { sourceConfig, signal } = parsedOptions;
   const recovering = parsedOptions.recoveringAffectedStep;
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    request.currentHostProfile,
-  );
-  if (
-    preview.action !== request.action ||
-    preview.matrixDigest !== matrix.matrixDigest
-  ) {
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
+  if (preview.action !== request.action || preview.matrixDigest !== matrix.matrixDigest) {
     fail("plan", "$preview");
   }
   const desired = desiredConfig(request, sourceConfig);
   if (preview.desiredConfigDigest !== computeWakeflowConfigDigest(desired)) {
     fail("plan", "$preview.desiredConfigDigest");
   }
-  const sourceDigest =
-    sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig);
-  if (
-    step.kind !== "publish-config" &&
-    sourceDigest !== preview.currentConfigDigest
-  ) {
+  const sourceDigest = sourceConfig === null ? null : computeWakeflowConfigDigest(sourceConfig);
+  if (step.kind !== "publish-config" && sourceDigest !== preview.currentConfigDigest) {
     fail("source-config", "$options.sourceConfig");
   }
 
@@ -1347,13 +1206,7 @@ export async function executeWakeflowStaticMaterializationStep(
     return executeLocalProtocol(root, step, signal);
   }
   if (step.kind === "materialize-shared-coordination-layout") {
-    return executeSharedCoordinationLayout(
-      root,
-      step,
-      request.action,
-      recovering,
-      signal,
-    );
+    return executeSharedCoordinationLayout(root, step, request.action, recovering, signal);
   }
   if (step.kind === "materialize-active-layout") {
     // reconcile/reconfigure 的活动布局修复以幂等 ensure 执行；fresh 仍要求严格不存在。
@@ -1368,33 +1221,13 @@ export async function executeWakeflowStaticMaterializationStep(
     return executeRequirementBoardInitialization(root, step, recovering, signal);
   }
   if (step.kind === "publish-fresh-active-workspace-projection") {
-    return executeActiveWorkspaceProjection(
-      root,
-      step,
-      desired,
-      recovering,
-      signal,
-    );
+    return executeActiveWorkspaceProjection(root, step, desired, recovering, signal);
   }
   if (step.kind === "materialize-ledger-layout") {
-    return executeLedgerLayout(
-      root,
-      step,
-      request,
-      desired,
-      recovering,
-      signal,
-    );
+    return executeLedgerLayout(root, step, request, desired, recovering, signal);
   }
   if (step.kind === "publish-unregistered-window-runtime") {
-    return executeUnregisteredWindowRuntime(
-      root,
-      step,
-      request,
-      desired,
-      recovering,
-      signal,
-    );
+    return executeUnregisteredWindowRuntime(root, step, request, desired, recovering, signal);
   }
   if (step.kind === "materialize-host-capability-layout") {
     return executeHostCapabilityLayout(root, step, request, recovering, signal);
@@ -1409,34 +1242,13 @@ export async function executeWakeflowStaticMaterializationStep(
     return executeSupportGitignore(root, step, request, desired, signal);
   }
   if (step.kind === "recompose-program-instruction") {
-    return executeProgramInstruction(
-      root,
-      step,
-      request,
-      sourceConfig,
-      desired,
-      signal,
-    );
+    return executeProgramInstruction(root, step, request, sourceConfig, desired, signal);
   }
   if (step.kind === "recompose-external-instruction") {
-    return executeExternalInstruction(
-      root,
-      step,
-      request,
-      sourceConfig,
-      desired,
-      signal,
-    );
+    return executeExternalInstruction(root, step, request, sourceConfig, desired, signal);
   }
   if (step.kind === "publish-support-memory") {
-    return executeSupportMemory(
-      root,
-      step,
-      request,
-      sourceConfig,
-      desired,
-      signal,
-    );
+    return executeSupportMemory(root, step, request, sourceConfig, desired, signal);
   }
   if (step.kind === "publish-config") {
     return executeConfig(root, step, preview, desired, signal);

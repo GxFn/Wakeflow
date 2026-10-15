@@ -17,16 +17,12 @@ import type { ManagedEvidenceManagedPathSource } from "./managed-evidence-source
  * payload内容，也不持有Publication事务状态。
  */
 
-export type ManagedEvidenceConfiguredSourceRootErrorReason =
-  | "placement"
-  | "root-scope";
+export type ManagedEvidenceConfiguredSourceRootErrorReason = "placement" | "root-scope";
 
 const ERROR_MESSAGES = {
   placement: "Managed evidence source root has no current Config placement.",
   "root-scope": "Managed evidence source root differs from its Config placement.",
-} as const satisfies Readonly<
-  Record<ManagedEvidenceConfiguredSourceRootErrorReason, string>
->;
+} as const satisfies Readonly<Record<ManagedEvidenceConfiguredSourceRootErrorReason, string>>;
 
 /** 逻辑source root无法闭合到当前Config物理根时的稳定错误。 */
 export class ManagedEvidenceConfiguredSourceRootError extends Error {
@@ -64,14 +60,8 @@ function sourcePlacement(
       ? config.indexes.repositoryById[root.repositoryId] !== undefined
       : config.indexes.surfaceById[root.surfaceId] !== undefined;
   if (!entityExists) fail("placement");
-  const placement = config.placements.roots.find(
-    (entry) => entry.key === selectedRootKey(root),
-  );
-  if (
-    placement === undefined ||
-    placement.state !== "present" ||
-    placement.realPath === null
-  ) {
+  const placement = config.placements.roots.find((entry) => entry.key === selectedRootKey(root));
+  if (placement === undefined || placement.state !== "present" || placement.realPath === null) {
     fail("placement");
   }
   return placement;
@@ -104,7 +94,10 @@ async function openPodWorktreeRoot(
   signal: AbortSignal | undefined,
 ): Promise<RootedDirectory> {
   const pod = config.indexes.podById[root.podId];
-  if (pod === undefined || !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)) {
+  if (
+    pod === undefined ||
+    !pod.worktrees.some((entry) => entry.repositoryId === root.repositoryId)
+  ) {
     fail("placement");
   }
   const receipt = (await listReceipts(workspaceRoot, root.podId, signal)).find(

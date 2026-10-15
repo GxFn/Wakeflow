@@ -1,12 +1,12 @@
 import {
   parseTargetResult,
-  TargetResultError,
   type TargetResult,
+  TargetResultError,
 } from "../result/target-result.js";
 import {
-  parseControllerImplementationReviewDecision,
-  ControllerImplementationReviewDecisionError,
   type ControllerImplementationReviewDecision,
+  ControllerImplementationReviewDecisionError,
+  parseControllerImplementationReviewDecision,
 } from "../review/controller-implementation-review-decision.js";
 import {
   projectTargetDeliveryReworkContext,
@@ -31,19 +31,13 @@ type ReworkCorrectionSource =
     readonly outcome: "failed" | "inconclusive";
   };
 
-export type TargetDeliveryReworkContextErrorReason =
-  "decision" | "result" | "relation";
+export type TargetDeliveryReworkContextErrorReason = "decision" | "result" | "relation";
 
 const ERROR_MESSAGES = {
-  decision:
-    "Target Delivery rework context requires a valid Controller Decision.",
-  result:
-    "Target Delivery rework context requires a valid previous TargetResult.",
-  relation:
-    "Target Delivery rework Decision and previous Result are inconsistent.",
-} as const satisfies Readonly<
-  Record<TargetDeliveryReworkContextErrorReason, string>
->;
+  decision: "Target Delivery rework context requires a valid Controller Decision.",
+  result: "Target Delivery rework context requires a valid previous TargetResult.",
+  relation: "Target Delivery rework Decision and previous Result are inconsistent.",
+} as const satisfies Readonly<Record<TargetDeliveryReworkContextErrorReason, string>>;
 
 /** 完整返工来源无法形成一致投递投影时的稳定错误。 */
 export class TargetDeliveryReworkContextError extends Error {
@@ -89,14 +83,12 @@ export function createTargetDeliveryReworkContext(
     decision.programId !== previousResult.programId ||
     decision.demandId !== previousResult.demandId ||
     decision.targetTaskId !== previousResult.targetTaskId ||
-    decision.reviewed.taskPackageId !==
-      previousResult.taskPackage.taskPackageId ||
+    decision.reviewed.taskPackageId !== previousResult.taskPackage.taskPackageId ||
     decision.reviewed.taskPackageDigest !== previousResult.taskPackage.digest ||
     decision.reviewed.targetResultId !== previousResult.targetResultId ||
     decision.reviewed.targetResultDigest !== previousResult.resultDigest ||
     decision.reviewed.targetResultOutcome !== previousResult.report.outcome ||
-    decision.reviewed.targetResultReportedAt !==
-      previousResult.report.reportedAt ||
+    decision.reviewed.targetResultReportedAt !== previousResult.report.reportedAt ||
     requiredCorrections.length === 0 ||
     !requiredCorrections.some((check) => check.outcome === "failed")
   ) {

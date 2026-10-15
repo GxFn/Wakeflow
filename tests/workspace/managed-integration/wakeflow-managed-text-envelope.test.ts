@@ -97,19 +97,13 @@ test("managed text envelope recomposes and removes one byte-exact owned block", 
   equal(Object.isFrozen(inspection), true);
   equal(Object.isFrozen(inspection.ownedRange), true);
 
-  const current = recomposeWakeflowManagedTextEnvelope(
-    inserted.bytes,
-    TARGET,
-  );
+  const current = recomposeWakeflowManagedTextEnvelope(inserted.bytes, TARGET);
   equal(current.disposition, "current");
   deepEqual(bytes(current.bytes), bytes(inserted.bytes));
 
   const suffix = encodeUtf8("用户后缀\r\n");
   const withSuffix = Buffer.concat([bytes(inserted.bytes), suffix]);
-  const updated = recomposeWakeflowManagedTextEnvelope(
-    withSuffix,
-    UPDATED_TARGET,
-  );
+  const updated = recomposeWakeflowManagedTextEnvelope(withSuffix, UPDATED_TARGET);
   equal(updated.disposition, "updated");
   deepEqual(bytes(updated.bytes).subarray(0, outside.byteLength), outsideSnapshot);
   deepEqual(bytes(updated.bytes).subarray(-suffix.byteLength), bytes(suffix));
@@ -125,25 +119,15 @@ test("managed text envelope recomposes and removes one byte-exact owned block", 
     owner: TARGET.owner,
   });
   equal(removed.disposition, "removed");
-  deepEqual(
-    bytes(removed.bytes),
-    Buffer.concat([outsideSnapshot, suffix]),
-  );
+  deepEqual(bytes(removed.bytes), Buffer.concat([outsideSnapshot, suffix]));
   equal(removed.digest, computeSha256Digest(removed.bytes));
 });
 
 test("managed text envelope rejects malformed, foreign, and behavioral input", () => {
-  const valid = bytes(recomposeWakeflowManagedTextEnvelope(
-    encodeUtf8("用户前缀\n"),
-    TARGET,
-  ).bytes);
+  const valid = bytes(recomposeWakeflowManagedTextEnvelope(encodeUtf8("用户前缀\n"), TARGET).bytes);
   const text = valid.toString("utf8");
-  const begin = text.match(
-    /<!-- wakeflow:managed-content:v1:begin[^\n]+ -->/u,
-  )?.[0];
-  const end = text.match(
-    /<!-- wakeflow:managed-content:v1:end[^\n]+ -->/u,
-  )?.[0];
+  const begin = text.match(/<!-- wakeflow:managed-content:v1:begin[^\n]+ -->/u)?.[0];
+  const end = text.match(/<!-- wakeflow:managed-content:v1:end[^\n]+ -->/u)?.[0];
   if (begin === undefined || end === undefined) {
     throw new Error("Managed marker fixture is unavailable.");
   }
@@ -180,13 +164,9 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
     },
     {
       name: "end-owner-mismatch",
-      source: encodeUtf8(text.replace(
-        end,
-        end.replace(
-          "owner=host-instruction-integration",
-          "owner=foreign-owner",
-        ),
-      )),
+      source: encodeUtf8(
+        text.replace(end, end.replace("owner=host-instruction-integration", "owner=foreign-owner")),
+      ),
       reason: "marker-pair" as const,
       path: "$marker",
     },
@@ -219,52 +199,50 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
     "two newlines\n\n",
   ]) {
     expectEnvelopeError(
-      () => recomposeWakeflowManagedTextEnvelope(valid, {
-        ...TARGET,
-        body,
-      }),
+      () =>
+        recomposeWakeflowManagedTextEnvelope(valid, {
+          ...TARGET,
+          body,
+        }),
       "body-profile",
       "$target.body",
     );
   }
   expectEnvelopeError(
-    () => inspectWakeflowManagedTextEnvelope(
-      Uint8Array.from([0xc3, 0x28]),
-    ),
+    () => inspectWakeflowManagedTextEnvelope(Uint8Array.from([0xc3, 0x28])),
     "utf8",
     "$source",
   );
   expectEnvelopeError(
-    () => inspectWakeflowManagedTextEnvelope(encodeUtf8(
-      "<!-- wakeflow:managed-content:v2:begin component=future -->\n",
-    )),
+    () =>
+      inspectWakeflowManagedTextEnvelope(
+        encodeUtf8("<!-- wakeflow:managed-content:v2:begin component=future -->\n"),
+      ),
     "marker",
     "$marker",
   );
   expectEnvelopeError(
-    () => recomposeWakeflowManagedTextEnvelope(valid, {
-      ...TARGET,
-      owner: "foreign-owner",
-    }),
+    () =>
+      recomposeWakeflowManagedTextEnvelope(valid, {
+        ...TARGET,
+        owner: "foreign-owner",
+      }),
     "relation",
     "$target",
   );
   expectEnvelopeError(
-    () => removeWakeflowManagedTextEnvelope(valid, {
-      component: "foreign-component",
-      owner: TARGET.owner,
-    }),
+    () =>
+      removeWakeflowManagedTextEnvelope(valid, {
+        component: "foreign-component",
+        owner: TARGET.owner,
+      }),
     "relation",
     "$identity",
   );
 
   const sharedSource = new Uint8Array(new SharedArrayBuffer(4));
   sharedSource.set(encodeUtf8("text"));
-  expectEnvelopeError(
-    () => inspectWakeflowManagedTextEnvelope(sharedSource),
-    "input",
-    "$source",
-  );
+  expectEnvelopeError(() => inspectWakeflowManagedTextEnvelope(sharedSource), "input", "$source");
 
   let trapCalls = 0;
   const byteProxy = new Proxy(Uint8Array.from([0x61]), {
@@ -273,21 +251,20 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
       return undefined;
     },
   });
-  expectEnvelopeError(
-    () => inspectWakeflowManagedTextEnvelope(byteProxy),
-    "input",
-    "$source",
+  expectEnvelopeError(() => inspectWakeflowManagedTextEnvelope(byteProxy), "input", "$source");
+  const targetProxy = new Proxy(
+    { ...TARGET },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
+    },
   );
-  const targetProxy = new Proxy({ ...TARGET }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
   expectEnvelopeError(
     () => recomposeWakeflowManagedTextEnvelope(valid, targetProxy),
     "input",
@@ -296,10 +273,7 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
   equal(trapCalls, 0);
 
   const mutableSource = encodeUtf8("alias source");
-  const recomposed = recomposeWakeflowManagedTextEnvelope(
-    mutableSource,
-    TARGET,
-  );
+  const recomposed = recomposeWakeflowManagedTextEnvelope(mutableSource, TARGET);
   mutableSource.fill(0);
   equal(bytes(recomposed.bytes).includes(0), false);
 });

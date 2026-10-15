@@ -81,6 +81,7 @@ import {
 } from "../support/wakeflow-support-memory-inspection.js";
 import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
+import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 import {
   inspectWakeflowSharedCoordinationLayout,
   WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
@@ -119,7 +120,6 @@ import {
   type WakeflowWorkspaceCoreLayoutInspection,
   WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
-import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 
 /**
  * Wakeflow Workspace / Maintenance：当前静态 owner 集合的 preview-only 物化计划。
@@ -149,10 +149,7 @@ async function configResourceExists(root: RootedDirectory): Promise<boolean> {
     await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
     return true;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -284,7 +281,9 @@ async function addedRepositoryRootBlockers(
   if (repositories.length === 0) return Object.freeze(blockers);
   const existingRoots: string[] = [];
   for (const repository of current.topology.repositories) {
-    const physical = await canonicalDirectoryPath(repositoryAbsolutePath(workspaceRoot, repository));
+    const physical = await canonicalDirectoryPath(
+      repositoryAbsolutePath(workspaceRoot, repository),
+    );
     if (physical !== null) existingRoots.push(physical);
   }
   for (const repository of repositories) {
@@ -333,7 +332,10 @@ async function probeAddedRepositoryRoot(
 ): Promise<string | Readonly<{ readonly root: string }>> {
   let gitDirectory: RootedDirectory | null = null;
   try {
-    gitDirectory = await RootedDirectory.open(nodePath.join(absolutePath, ".git"), "$repositoryRoot");
+    gitDirectory = await RootedDirectory.open(
+      nodePath.join(absolutePath, ".git"),
+      "$repositoryRoot",
+    );
     return Object.freeze({ root: nodePath.dirname(gitDirectory.absolutePath) });
   } catch (error: unknown) {
     if (!(error instanceof RootedDirectoryError)) throw error;
@@ -383,14 +385,8 @@ function addBlocker(blockers: Set<string>, code: string): void {
   blockers.add(code);
 }
 
-function placementFor(
-  report: Readonly<WakeflowConfigRootPlacementReport>,
-  surfaceId: string,
-) {
-  return (
-    report.roots.find((entry) => entry.key === `support.${surfaceId}.root`) ??
-    null
-  );
+function placementFor(report: Readonly<WakeflowConfigRootPlacementReport>, surfaceId: string) {
+  return report.roots.find((entry) => entry.key === `support.${surfaceId}.root`) ?? null;
 }
 
 function ledgerPlacement(report: Readonly<WakeflowConfigRootPlacementReport>) {
@@ -517,12 +513,7 @@ async function inspectSupportGitignore(
     });
     if (inspected.status === "recompose-required") {
       steps.push(
-        supportGitignoreStep(
-          surfaceId,
-          authority,
-          inspected.source?.digest ?? null,
-          dependsOn,
-        ),
+        supportGitignoreStep(surfaceId, authority, inspected.source?.digest ?? null, dependsOn),
       );
     }
   } catch (error: unknown) {
@@ -557,13 +548,8 @@ async function inspectSupportMemories(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
-  const catalog = createWakeflowManagedSupportResourceCatalog(
-    desired,
-    request.currentHostProfile,
-  );
-  const supportIgnore = createWakeflowSupportGitignoreBodyAuthority(
-    request.hostProfiles,
-  );
+  const catalog = createWakeflowManagedSupportResourceCatalog(desired, request.currentHostProfile);
+  const supportIgnore = createWakeflowSupportGitignoreBodyAuthority(request.hostProfiles);
   for (const surface of desired.topology.supportSurfaces) {
     assertNotAborted(request.signal);
     if (surface.ownership !== "wakeflow-managed") continue;
@@ -613,9 +599,7 @@ async function inspectSupportMemories(
         }),
       );
       if (supportIgnore !== null) {
-        steps.push(
-          supportGitignoreStep(surface.surfaceId, supportIgnore, null, [rootStepId]),
-        );
+        steps.push(supportGitignoreStep(surface.surfaceId, supportIgnore, null, [rootStepId]));
       }
       continue;
     }
@@ -682,18 +666,13 @@ async function inspectSupportMemories(
         }),
       );
       if (supportIgnore !== null) {
-        steps.push(
-          supportGitignoreStep(surface.surfaceId, supportIgnore, null, rootStepIds),
-        );
+        steps.push(supportGitignoreStep(surface.surfaceId, supportIgnore, null, rootStepIds));
       }
       continue;
     }
     let supportRoot: RootedDirectory;
     try {
-      supportRoot = await RootedDirectory.open(
-        placement.absolutePath,
-        "$supportRoot",
-      );
+      supportRoot = await RootedDirectory.open(placement.absolutePath, "$supportRoot");
     } catch {
       addBlocker(blockers, "support-root-unavailable");
       continue;
@@ -701,8 +680,7 @@ async function inspectSupportMemories(
     try {
       const inspected = await inspectWakeflowSupportMemory(root, supportRoot, {
         currentConfig: current,
-        expectedCurrentConfigDigest:
-          current === null ? null : computeWakeflowConfigDigest(current),
+        expectedCurrentConfigDigest: current === null ? null : computeWakeflowConfigDigest(current),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         profile: request.currentHostProfile,
@@ -803,9 +781,8 @@ async function inspectExternalInstructions(
   for (const target of listWakeflowExternalInstructionTargets(desired)) {
     assertNotAborted(request.signal);
     const placement =
-      report.roots.find(
-        (entry) => entry.key === wakeflowExternalInstructionPlacementKey(target),
-      ) ?? null;
+      report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ??
+      null;
     if (placement === null) {
       addBlocker(blockers, "external-instruction-placement-unavailable");
       continue;
@@ -817,11 +794,9 @@ async function inspectExternalInstructions(
     }
     let externalRoot: RootedDirectory;
     try {
-      externalRoot = await RootedDirectory.open(
-        placement.absolutePath,
-        "$externalRoot",
-        { durability: root.durability },
-      );
+      externalRoot = await RootedDirectory.open(placement.absolutePath, "$externalRoot", {
+        durability: root.durability,
+      });
     } catch {
       addBlocker(blockers, "external-instruction-root-unavailable");
       continue;
@@ -831,15 +806,13 @@ async function inspectExternalInstructions(
         profile: request.currentHostProfile,
         target,
         currentConfig: current,
-        expectedCurrentConfigDigest:
-          current === null ? null : computeWakeflowConfigDigest(current),
+        expectedCurrentConfigDigest: current === null ? null : computeWakeflowConfigDigest(current),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
       if (inspected.status === "recompose-required") {
-        const targetId =
-          target.kind === "repository" ? target.repositoryId : target.surfaceId;
+        const targetId = target.kind === "repository" ? target.repositoryId : target.surfaceId;
         steps.push(
           step({
             stepId: `integration:external-instruction:${targetId}`,
@@ -869,8 +842,7 @@ async function inspectExternalInstructions(
             peerInspected.transition.sourceAuthority === "admitted-current" &&
             peerInspected.status === "recompose-required"
           ) {
-            const targetId =
-              target.kind === "repository" ? target.repositoryId : target.surfaceId;
+            const targetId = target.kind === "repository" ? target.repositoryId : target.surfaceId;
             steps.push(
               step({
                 stepId: `integration:external-instruction:${targetId}:${peer.hostId}`,
@@ -909,17 +881,12 @@ async function inspectExternalInstructions(
   }
 }
 
-async function requirementBoardRootAbsent(
-  root: RootedDirectory,
-): Promise<boolean> {
+async function requirementBoardRootAbsent(root: RootedDirectory): Promise<boolean> {
   try {
     await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
     return false;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError &&
-      error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return true;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -986,9 +953,7 @@ async function planHostCapabilityLayoutRepair(
   assertNotAborted(request.signal);
   let authorityDigest: Sha256Digest;
   try {
-    const authority = compileWakeflowHostCapabilityLayoutAuthority(
-      request.currentHostProfile,
-    );
+    const authority = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
     if (authority.declarations.length === 0) return;
     authorityDigest = authority.authorityDigest;
   } catch (error: unknown) {
@@ -1049,7 +1014,8 @@ async function planHostCapabilityLayoutRepair(
       kind: "materialize-host-capability-layout",
       ownerId: "host-capability-layout",
       targetKey: request.currentHostProfile.hostId,
-      sourceDigest: inspection.status === "prerequisite-missing" ? null : inspection.observationDigest,
+      sourceDigest:
+        inspection.status === "prerequisite-missing" ? null : inspection.observationDigest,
       targetDigest: authorityDigest,
       dependsOn,
     }),
@@ -1103,8 +1069,7 @@ export async function previewWakeflowStaticMaterialization(
   ) {
     fail("input", "$root");
   }
-  const request =
-    parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+  const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   if (
     typeof optionsValue !== "object" ||
     optionsValue === null ||
@@ -1114,9 +1079,7 @@ export async function previewWakeflowStaticMaterialization(
     fail("input", "$options");
   }
   assertNotAborted(request.signal);
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    request.currentHostProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
   let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   if (optionsValue.gateContext === undefined) {
     try {
@@ -1133,10 +1096,7 @@ export async function previewWakeflowStaticMaterialization(
     }
   } else {
     try {
-      core = wakeflowMaintenanceCoreInspectionForGateContext(
-        optionsValue.gateContext,
-        rootValue,
-      );
+      core = wakeflowMaintenanceCoreInspectionForGateContext(optionsValue.gateContext, rootValue);
     } catch (error: unknown) {
       if (error instanceof WakeflowMaintenanceGateError) {
         fail("input", "$options.gateContext");
@@ -1194,11 +1154,7 @@ export async function previewWakeflowStaticMaterialization(
   if (desired === null) addBlocker(blockers, "desired-config-unavailable");
   let addedRepositories: readonly Readonly<WakeflowConfigRepository>[] = Object.freeze([]);
 
-  if (
-    request.action === "reconfigure" &&
-    current !== null &&
-    desired !== null
-  ) {
+  if (request.action === "reconfigure" && current !== null && desired !== null) {
     if (current.model.program.programId !== desired.program.programId) {
       addBlocker(blockers, "reconfigure-program-identity-change");
     }
@@ -1245,9 +1201,7 @@ export async function previewWakeflowStaticMaterialization(
             targetKey: "coordination.shared-layout",
             sourceDigest: shared.observationDigest,
             targetDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
-            dependsOn: steps.some(
-              (entry) => entry.stepId === "core:local-protocol",
-            )
+            dependsOn: steps.some((entry) => entry.stepId === "core:local-protocol")
               ? ["core:local-protocol"]
               : [],
           }),
@@ -1519,19 +1473,10 @@ export async function previewWakeflowStaticMaterialization(
   ]);
   const sortedBlockers = Object.freeze([...blockers].sort());
   const orderedSteps = [...steps].sort((left, right) => {
-    const rank =
-      (stepRank.get(left.kind) ?? 99) - (stepRank.get(right.kind) ?? 99);
-    return rank !== 0
-      ? rank
-      : left.stepId < right.stepId
-        ? -1
-        : left.stepId > right.stepId
-          ? 1
-          : 0;
+    const rank = (stepRank.get(left.kind) ?? 99) - (stepRank.get(right.kind) ?? 99);
+    return rank !== 0 ? rank : left.stepId < right.stepId ? -1 : left.stepId > right.stepId ? 1 : 0;
   });
-  const stepPosition = new Map(
-    orderedSteps.map((entry, index) => [entry.stepId, index] as const),
-  );
+  const stepPosition = new Map(orderedSteps.map((entry, index) => [entry.stepId, index] as const));
   const frozenSteps = Object.freeze(
     orderedSteps.map((entry) =>
       step({
@@ -1545,16 +1490,14 @@ export async function previewWakeflowStaticMaterialization(
     ),
   );
   const currentConfigDigest = current?.configDigest ?? null;
-  const desiredConfigDigest =
-    desired === null ? null : computeWakeflowConfigDigest(desired);
+  const desiredConfigDigest = desired === null ? null : computeWakeflowConfigDigest(desired);
   assertNotAborted(request.signal);
   const plan = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
     executionBoundary: "preview-only" as const,
     action: request.action,
-    status:
-      sortedBlockers.length === 0 ? ("ready" as const) : ("blocked" as const),
+    status: sortedBlockers.length === 0 ? ("ready" as const) : ("blocked" as const),
     currentConfigDigest,
     desiredConfigDigest,
     matrixDigest: matrix.matrixDigest,

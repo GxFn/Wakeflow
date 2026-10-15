@@ -1,21 +1,19 @@
 import {
-  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { publishWakeflowSupportMemory } from "./wakeflow-support-memory-publication.js";
 import {
   assertWakeflowSupportMemoryPublicationNotAborted,
   failWakeflowSupportMemoryPublication as fail,
   parseWakeflowSupportMemoryPublicationOptions,
   parseWakeflowSupportMemoryPublicationRequest,
-  wakeflowSupportMemoryInspectionRequest,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationRequest,
   type WakeflowSupportMemoryRecoveryReceipt,
+  wakeflowSupportMemoryInspectionRequest,
 } from "./wakeflow-support-memory-publication-contract.js";
-import {
-  publishWakeflowSupportMemory,
-} from "./wakeflow-support-memory-publication.js";
 
 /**
  * Wakeflow Workspace / Support：whole-file memory 原子 stage 的显式恢复。
@@ -47,10 +45,7 @@ export async function recoverWakeflowSupportMemory(
     }
     throw error;
   }
-  if (
-    stageRecovery.activeStageCount !== 0
-    || stageRecovery.unknownStageCount !== 0
-  ) {
+  if (stageRecovery.activeStageCount !== 0 || stageRecovery.unknownStageCount !== 0) {
     fail("recovery-required", "$stages");
   }
   const publication = await publishWakeflowSupportMemory(
@@ -66,6 +61,4 @@ export async function recoverWakeflowSupportMemory(
   });
 }
 
-export type {
-  WakeflowSupportMemoryRecoveryReceipt,
-} from "./wakeflow-support-memory-publication-contract.js";
+export type { WakeflowSupportMemoryRecoveryReceipt } from "./wakeflow-support-memory-publication-contract.js";

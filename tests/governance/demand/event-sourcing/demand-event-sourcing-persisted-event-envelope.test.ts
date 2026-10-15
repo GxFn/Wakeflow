@@ -77,7 +77,10 @@ function expectEnvelopeError(
 
 test("a committed Demand event round-trips through wire, document and digest", () => {
   const event = committedEvent();
-  equal(DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND, "wakeflow-demand-event-sourcing-event");
+  equal(
+    DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
+    "wakeflow-demand-event-sourcing-event",
+  );
   equal(DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION, 1);
   const parsed = parseDemandEventSourcingPersistedEventEnvelope(wireOf());
   deepEqual(parsed, event);
@@ -132,12 +135,20 @@ test("the envelope digest changes with every persisted field", () => {
     ["resultingStateDigest", `sha256:${"f".repeat(64)}`],
   ];
   for (const [key, value] of variants) {
-    notEqual(computeDemandEventSourcingPersistedEventEnvelopeDigest({ ...wireOf(), [key]: value }), base, key);
+    notEqual(
+      computeDemandEventSourcingPersistedEventEnvelopeDigest({ ...wireOf(), [key]: value }),
+      base,
+      key,
+    );
   }
 });
 
 test("values that are not passive JSON data are rejected as json before the Schema runs", () => {
-  expectEnvelopeError(() => parseDemandEventSourcingPersistedEventEnvelope(undefined), "json", "$event");
+  expectEnvelopeError(
+    () => parseDemandEventSourcingPersistedEventEnvelope(undefined),
+    "json",
+    "$event",
+  );
   expectEnvelopeError(() => parseDemandEventSourcingPersistedEventEnvelope("{}"), "schema", "$");
   expectEnvelopeError(
     () => parseDemandEventSourcingPersistedEventEnvelope(new Proxy(wireOf(), {})),
@@ -194,7 +205,11 @@ test("Schema rejections cover kind, version, identity, time, shape, bounds and e
   for (const key of Object.keys(wireOf())) {
     const missing = wireOf();
     delete missing[key];
-    expectEnvelopeError(() => parseDemandEventSourcingPersistedEventEnvelope(missing), "schema", "$");
+    expectEnvelopeError(
+      () => parseDemandEventSourcingPersistedEventEnvelope(missing),
+      "schema",
+      "$",
+    );
   }
   expectEnvelopeError(
     () => parseDemandEventSourcingPersistedEventEnvelope({ ...wireOf(), extra: true }),
@@ -216,7 +231,11 @@ test("a calendar-impossible instant passes the Schema pattern but is rejected as
     "$/recordedAt",
   );
   expectEnvelopeError(
-    () => computeDemandEventSourcingPersistedEventEnvelopeDigest({ ...wireOf(), recordedAt: "2026-04-31T12:00:00Z" }),
+    () =>
+      computeDemandEventSourcingPersistedEventEnvelopeDigest({
+        ...wireOf(),
+        recordedAt: "2026-04-31T12:00:00Z",
+      }),
     "time",
     "$/recordedAt",
   );
@@ -231,13 +250,21 @@ test("document parsing admits only the exact deterministic rendering of an envel
   expectEnvelopeError(() => parse(text.trimEnd()), "representation", "$event");
   expectEnvelopeError(() => parse(`${text}\n`), "representation", "$event");
   expectEnvelopeError(() => parse(JSON.stringify(JSON.parse(text))), "representation", "$event");
-  expectEnvelopeError(() => parse(text.replace('"streamRevision": 1', '"streamRevision": 1 ')), "representation", "$event");
+  expectEnvelopeError(
+    () => parse(text.replace('"streamRevision": 1', '"streamRevision": 1 ')),
+    "representation",
+    "$event",
+  );
   // Reordered keys are deterministic text, but not the envelope's own rendering.
   const reordered = `${JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text)).reverse()), null, 2)}\n`;
   notEqual(reordered, text);
   expectEnvelopeError(() => parse(reordered), "representation", "$event");
   // Deterministic text that is not an envelope keeps the inner rejection.
-  expectEnvelopeError(() => parse(`${JSON.stringify({ hello: "world" }, null, 2)}\n`), "schema", "$");
+  expectEnvelopeError(
+    () => parse(`${JSON.stringify({ hello: "world" }, null, 2)}\n`),
+    "schema",
+    "$",
+  );
   const impossible = text.replace("2026-08-26T10:00:00.000Z", "2026-02-30T10:00:00.000Z");
   expectEnvelopeError(() => parse(impossible), "time", "$/recordedAt");
   deepEqual(parse(text), committedEvent());

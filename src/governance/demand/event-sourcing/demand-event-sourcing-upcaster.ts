@@ -1,16 +1,12 @@
-import {
-  EventSourcingVersionEvolutionError,
-} from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
+import { EventSourcingVersionEvolutionError } from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
 import {
   DemandEventSourcingEventError,
   type DemandUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
+import { decodeDemandEventSourcingPersistedEvent } from "./demand-event-sourcing-event-version-codec.js";
 import {
-  decodeDemandEventSourcingPersistedEvent,
-} from "./demand-event-sourcing-event-version-codec.js";
-import {
-  parseDemandEventSourcingPersistedEventEnvelope,
   DemandEventSourcingPersistedEventEnvelopeError,
+  parseDemandEventSourcingPersistedEventEnvelope,
 } from "./demand-event-sourcing-persisted-event-envelope.js";
 
 /**
@@ -30,16 +26,13 @@ export type DemandEventSourcingUpcasterErrorReason =
   | "event";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing upcaster input is invalid.",
+  input: "Demand Event Sourcing upcaster input is invalid.",
   "unsupported-event-type": "Demand Event Sourcing event type is unsupported.",
   "unsupported-version": "Demand Event Sourcing event version is unsupported.",
-  "codec": "Demand Event Sourcing persisted event payload is invalid.",
-  "upcast": "Demand Event Sourcing event version evolution failed.",
-  "event": "Demand Event Sourcing persisted event cannot become a current event.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingUpcasterErrorReason,
-  string
->>;
+  codec: "Demand Event Sourcing persisted event payload is invalid.",
+  upcast: "Demand Event Sourcing event version evolution failed.",
+  event: "Demand Event Sourcing persisted event cannot become a current event.",
+} as const satisfies Readonly<Record<DemandEventSourcingUpcasterErrorReason, string>>;
 
 export class DemandEventSourcingUpcasterError extends Error {
   override readonly name = "DemandEventSourcingUpcasterError";

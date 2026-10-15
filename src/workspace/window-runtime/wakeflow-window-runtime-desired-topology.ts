@@ -2,20 +2,18 @@ import {
   buildWakeflowConfigIndexes,
   parseWakeflowConfig,
   WakeflowConfigError,
-  type WakeflowConfigPlacement,
-  type WakeflowConfigModel,
   type WakeflowConfigIndexes,
+  type WakeflowConfigModel,
+  type WakeflowConfigPlacement,
   type WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 
 /**
@@ -56,8 +54,7 @@ export interface WakeflowWindowRuntimeDesiredWindow {
 
 export interface WakeflowWindowRuntimeDesiredTopology {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_KIND;
-  readonly schemaVersion:
-    typeof WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_VERSION;
+  readonly schemaVersion: typeof WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_VERSION;
   readonly programId: WakeflowDurableId<"program">;
   readonly hostId: WakeflowWorkspaceHostId;
   readonly windows: readonly Readonly<WakeflowWindowRuntimeDesiredWindow>[];
@@ -75,10 +72,7 @@ const ERROR_MESSAGES = {
   profile: "Window Runtime desired topology Host Profile is invalid.",
   capacity: "Window Runtime desired topology exceeds its static window budget.",
   reference: "Window Runtime desired topology contains an unresolved root reference.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowRuntimeDesiredTopologyErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWindowRuntimeDesiredTopologyErrorReason, string>>;
 
 /** Window Runtime 期望拓扑编译失败的稳定、脱敏错误。 */
 export class WakeflowWindowRuntimeDesiredTopologyError extends Error {
@@ -87,20 +81,14 @@ export class WakeflowWindowRuntimeDesiredTopologyError extends Error {
   readonly reason: WakeflowWindowRuntimeDesiredTopologyErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWindowRuntimeDesiredTopologyErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowRuntimeDesiredTopologyErrorReason, path: string): never {
   throw new WakeflowWindowRuntimeDesiredTopologyError(reason, path);
 }
 
@@ -108,11 +96,7 @@ function compareWindowId(
   left: Readonly<WakeflowConfigWindow>,
   right: Readonly<WakeflowConfigWindow>,
 ): number {
-  return left.windowId < right.windowId
-    ? -1
-    : left.windowId > right.windowId
-      ? 1
-      : 0;
+  return left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0;
 }
 
 function desiredWindow(
@@ -185,9 +169,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
     }
     throw error;
   }
-  if (
-    model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS
-  ) {
+  if (model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
     fail("capacity", "$/topology/windows");
   }
   const indexes = buildWakeflowConfigIndexes(model);

@@ -1,12 +1,10 @@
 import { types } from "node:util";
 
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
   RootedDirectory,
@@ -22,12 +20,8 @@ import {
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_TRANSACTION_DIRECTORY_MODE,
 } from "./ledger-authority-storage-policy.js";
-import {
-  throwLedgerAuthorityStoreError as fail,
-} from "./ledger-authority-store-contract.js";
-import {
-  WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
-} from "./ledger-resource-catalog.js";
+import { throwLedgerAuthorityStoreError as fail } from "./ledger-authority-store-contract.js";
+import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "./ledger-resource-catalog.js";
 
 /**
  * Wakeflow Governance / Ledger：Ledger 根内固定容器的只读观察与幂等物化。
@@ -37,13 +31,9 @@ import {
  * 具备基础布局；记录发布仍由 `LedgerAuthorityStore` 的逐记录事务负责。
  */
 
-const LEDGER_AUTHORITY_LAYOUT_KIND =
-  "WakeflowLedgerAuthorityLayoutInspection" as const;
+const LEDGER_AUTHORITY_LAYOUT_KIND = "WakeflowLedgerAuthorityLayoutInspection" as const;
 
-type LedgerAuthorityLayoutEntryStatus =
-  | "absent"
-  | "current"
-  | "conflict";
+type LedgerAuthorityLayoutEntryStatus = "absent" | "current" | "conflict";
 
 export interface LedgerAuthorityLayoutEntryInspection {
   readonly resourcePath:
@@ -91,19 +81,18 @@ const LEDGER_AUTHORITY_LAYOUT_POLICIES = Object.freeze([
 ]) satisfies readonly Readonly<LedgerAuthorityLayoutEntryPolicy>[];
 
 /** 固定容器策略的语义摘要；不包含绝对路径、inode 或当前目录内容。 */
-export const LEDGER_AUTHORITY_LAYOUT_DIGEST =
-  computeCanonicalJsonSha256Digest({
-    kind: "WakeflowLedgerAuthorityLayoutAuthority",
-    schemaVersion: 1,
-    declarations: WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
-  });
+export const LEDGER_AUTHORITY_LAYOUT_DIGEST = computeCanonicalJsonSha256Digest({
+  kind: "WakeflowLedgerAuthorityLayoutAuthority",
+  schemaVersion: 1,
+  declarations: WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
+});
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -123,27 +112,21 @@ async function inspectEntry(
       `$layout/${policy.resourcePath}`,
     );
     const userId = currentUserId();
-    const current = resource.node.kind === "directory"
-      && resource.node.permissionBits === policy.mode
-      && (
-        !policy.requireCurrentUser
-        || userId === null
-        || resource.node.userId === userId
-      );
+    const current =
+      resource.node.kind === "directory" &&
+      resource.node.permissionBits === policy.mode &&
+      (!policy.requireCurrentUser || userId === null || resource.node.userId === userId);
     return Object.freeze({
       resourcePath: policy.resourcePath,
       expectedMode: policy.mode,
-      status: current ? "current" as const : "conflict" as const,
+      status: current ? ("current" as const) : ("conflict" as const),
       observedKind: resource.node.kind,
       observedMode: resource.node.permissionBits,
       deviceId: resource.node.deviceId.toString(),
       inodeId: resource.node.inodeId.toString(),
     });
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return Object.freeze({
         resourcePath: policy.resourcePath,
         expectedMode: policy.mode,
@@ -172,11 +155,11 @@ export async function inspectLedgerAuthorityLayout(
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }
-  const entries = Object.freeze(await Promise.all(
-    LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => (
-      inspectEntry(rootValue, policy)
-    )),
-  ));
+  const entries = Object.freeze(
+    await Promise.all(
+      LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => inspectEntry(rootValue, policy)),
+    ),
+  );
   assertNotAborted(signal);
   try {
     await rootValue.assertCurrent("$root");
@@ -185,10 +168,10 @@ export async function inspectLedgerAuthorityLayout(
     throw error;
   }
   const status = entries.some((entry) => entry.status === "conflict")
-    ? "conflict" as const
+    ? ("conflict" as const)
     : entries.some((entry) => entry.status === "absent")
-      ? "incomplete" as const
-      : "current" as const;
+      ? ("incomplete" as const)
+      : ("current" as const);
   const observationBasis = {
     kind: LEDGER_AUTHORITY_LAYOUT_KIND,
     status,

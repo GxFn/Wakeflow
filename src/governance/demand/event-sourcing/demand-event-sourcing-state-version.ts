@@ -7,26 +7,21 @@
  */
 
 export const DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION = 1 as const;
-export const DEMAND_EVENT_SOURCING_SUPPORTED_STATE_MODEL_VERSIONS =
-  Object.freeze([DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION] as const);
+export const DEMAND_EVENT_SOURCING_SUPPORTED_STATE_MODEL_VERSIONS = Object.freeze([
+  DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
+] as const);
 
 declare const DEMAND_EVENT_SOURCING_STATE_MODEL_VERSION_BRAND: unique symbol;
 export type DemandEventSourcingStateModelVersion = number & {
-  readonly [DEMAND_EVENT_SOURCING_STATE_MODEL_VERSION_BRAND]:
-    "DemandEventSourcingStateModelVersion";
+  readonly [DEMAND_EVENT_SOURCING_STATE_MODEL_VERSION_BRAND]: "DemandEventSourcingStateModelVersion";
 };
 
-export type DemandEventSourcingStateVersionErrorReason =
-  | "input"
-  | "unsupported-version";
+export type DemandEventSourcingStateVersionErrorReason = "input" | "unsupported-version";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing state-model version is invalid.",
+  input: "Demand Event Sourcing state-model version is invalid.",
   "unsupported-version": "Demand Event Sourcing state-model version is unsupported.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingStateVersionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DemandEventSourcingStateVersionErrorReason, string>>;
 
 export class DemandEventSourcingStateVersionError extends Error {
   override readonly name = "DemandEventSourcingStateVersionError";
@@ -34,20 +29,14 @@ export class DemandEventSourcingStateVersionError extends Error {
   readonly reason: DemandEventSourcingStateVersionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DemandEventSourcingStateVersionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DemandEventSourcingStateVersionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: DemandEventSourcingStateVersionErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingStateVersionErrorReason, path: string): never {
   throw new DemandEventSourcingStateVersionError(reason, path);
 }
 

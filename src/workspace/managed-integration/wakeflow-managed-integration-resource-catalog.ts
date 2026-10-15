@@ -1,6 +1,4 @@
-import {
-  parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -16,8 +14,9 @@ import {
  */
 
 export const WAKEFLOW_GITIGNORE_REF = parsePortableResourcePath(".gitignore");
-export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF =
-  parsePortableResourcePath(".wakeflow-gitignore-recomposition.lock");
+export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF = parsePortableResourcePath(
+  ".wakeflow-gitignore-recomposition.lock",
+);
 
 export const WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION =
   parseWakeflowWorkspaceResourceDeclaration({
@@ -72,17 +71,13 @@ export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION =
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-retire",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });
 
 /** Managed Integration 职责所有者的确定性静态资源目录。 */
-export const WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG =
-  Object.freeze([
-    WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
-    WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
-  ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
+export const WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG = Object.freeze([
+  WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
+  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
+]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];

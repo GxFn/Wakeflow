@@ -1,21 +1,18 @@
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../contracts/identity/wakeflow-durable-id.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../contracts/identity/wakeflow-durable-id.js";
-import {
   parseWakeflowResourceProcessingContract,
-  WakeflowResourceProcessingContractError,
   type WakeflowResourceProcessingContract,
+  WakeflowResourceProcessingContractError,
 } from "../foundation/resource/resource-processing-contract.js";
 
 /**
@@ -48,16 +45,14 @@ export const WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES = Object.freeze([
   "repository",
 ] as const);
 
-export type WakeflowWorkspaceResourceFamily =
-  (typeof WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES)[number];
+export type WakeflowWorkspaceResourceFamily = (typeof WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES)[number];
 
 export const WAKEFLOW_WORKSPACE_RESOURCE_SCOPES = Object.freeze([
   "host-neutral",
   "current-host",
 ] as const);
 
-export type WakeflowWorkspaceResourceScope =
-  (typeof WAKEFLOW_WORKSPACE_RESOURCE_SCOPES)[number];
+export type WakeflowWorkspaceResourceScope = (typeof WAKEFLOW_WORKSPACE_RESOURCE_SCOPES)[number];
 
 export const WAKEFLOW_WORKSPACE_RESOURCE_TRACKING_DISPOSITIONS = Object.freeze([
   "tracked",
@@ -81,14 +76,12 @@ declare const WORKSPACE_RESOURCE_OWNER_ID_BRAND: unique symbol;
 
 /** 资源矩阵内全局唯一、面向职责的资源声明 ID。 */
 export type WakeflowWorkspaceResourceDeclarationId = string & {
-  readonly [WORKSPACE_RESOURCE_DECLARATION_ID_BRAND]:
-    "WakeflowWorkspaceResourceDeclarationId";
+  readonly [WORKSPACE_RESOURCE_DECLARATION_ID_BRAND]: "WakeflowWorkspaceResourceDeclarationId";
 };
 
 /** 不承载行为的稳定职责所有者 ID。 */
 export type WakeflowWorkspaceResourceOwnerId = string & {
-  readonly [WORKSPACE_RESOURCE_OWNER_ID_BRAND]:
-    "WakeflowWorkspaceResourceOwnerId";
+  readonly [WORKSPACE_RESOURCE_OWNER_ID_BRAND]: "WakeflowWorkspaceResourceOwnerId";
 };
 
 export type WakeflowWorkspaceResourceLogicalRoot =
@@ -112,14 +105,8 @@ interface WorkspaceRootPlacement<
 }
 
 export type WakeflowWorkspaceResourcePlacement =
-  | WorkspaceRootPlacement<
-      { readonly kind: "workspace" },
-      PortableResourcePath
-    >
-  | WorkspaceRootPlacement<
-      { readonly kind: "ledger" },
-      PortableResourcePath | null
-    >
+  | WorkspaceRootPlacement<{ readonly kind: "workspace" }, PortableResourcePath>
+  | WorkspaceRootPlacement<{ readonly kind: "ledger" }, PortableResourcePath | null>
   | WorkspaceRootPlacement<
       {
         readonly kind: "support-surface";
@@ -140,17 +127,9 @@ export interface WakeflowWorkspaceResourceTracking {
   readonly privacy: WakeflowWorkspaceResourcePrivacy;
 }
 
-export type WakeflowWorkspaceResourceFileMode =
-  | "0600"
-  | "0644"
-  | "0700"
-  | "0755"
-  | "owner-defined";
+export type WakeflowWorkspaceResourceFileMode = "0600" | "0644" | "0700" | "0755" | "owner-defined";
 
-export type WakeflowWorkspaceResourceDirectoryMode =
-  | "0700"
-  | "0755"
-  | "owner-defined";
+export type WakeflowWorkspaceResourceDirectoryMode = "0700" | "0755" | "owner-defined";
 
 export interface WakeflowWorkspaceFileNodePolicy {
   readonly kind: "file";
@@ -215,10 +194,7 @@ const ERROR_MESSAGES = {
   "node-policy": "Wakeflow workspace resource node policy is invalid.",
   processing: "Wakeflow workspace resource processing contract is invalid.",
   compatibility: "Wakeflow workspace resource declaration facts conflict.",
-} as const satisfies Readonly<Record<
-  WakeflowWorkspaceResourceDeclarationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWorkspaceResourceDeclarationErrorReason, string>>;
 
 /** Workspace 资源声明准入失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceResourceDeclarationError extends Error {
@@ -227,10 +203,7 @@ export class WakeflowWorkspaceResourceDeclarationError extends Error {
   readonly reason: WakeflowWorkspaceResourceDeclarationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWorkspaceResourceDeclarationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWorkspaceResourceDeclarationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -239,26 +212,11 @@ export class WakeflowWorkspaceResourceDeclarationError extends Error {
 
 const FAMILY_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES);
 const SCOPE_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_SCOPES);
-const TRACKING_SET = new Set<string>(
-  WAKEFLOW_WORKSPACE_RESOURCE_TRACKING_DISPOSITIONS,
-);
-const PRIVACY_SET = new Set<string>(
-  WAKEFLOW_WORKSPACE_RESOURCE_PRIVACY_CLASSES,
-);
-const FILE_MODE_SET = new Set<string>([
-  "0600",
-  "0644",
-  "0700",
-  "0755",
-  "owner-defined",
-]);
-const DIRECTORY_MODE_SET = new Set<string>([
-  "0700",
-  "0755",
-  "owner-defined",
-]);
-const DECLARATION_ID_PATTERN =
-  /^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9_-]*)+$/u;
+const TRACKING_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_TRACKING_DISPOSITIONS);
+const PRIVACY_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_PRIVACY_CLASSES);
+const FILE_MODE_SET = new Set<string>(["0600", "0644", "0700", "0755", "owner-defined"]);
+const DIRECTORY_MODE_SET = new Set<string>(["0700", "0755", "owner-defined"]);
+const DECLARATION_ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9_-]*)+$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const DECLARATION_FIELDS = new Set([
   "kind",
@@ -276,29 +234,16 @@ const SIMPLE_ROOT_FIELDS = new Set(["kind"]);
 const SUPPORT_ROOT_FIELDS = new Set(["kind", "surfaceId"]);
 const REPOSITORY_ROOT_FIELDS = new Set(["kind", "repositoryId"]);
 const TRACKING_FIELDS = new Set(["disposition", "privacy"]);
-const FILE_NODE_POLICY_FIELDS = new Set([
-  "kind",
-  "mode",
-  "linkPolicy",
-  "executablePolicy",
-]);
+const FILE_NODE_POLICY_FIELDS = new Set(["kind", "mode", "linkPolicy", "executablePolicy"]);
 const DIRECTORY_NODE_POLICY_FIELDS = new Set([
   "kind",
   "mode",
   "symlinkPolicy",
   "existingModePolicy",
 ]);
-const TREE_NODE_POLICY_FIELDS = new Set([
-  "kind",
-  "rootMode",
-  "symlinkPolicy",
-  "executablePolicy",
-]);
+const TREE_NODE_POLICY_FIELDS = new Set(["kind", "rootMode", "symlinkPolicy", "executablePolicy"]);
 
-function fail(
-  reason: WakeflowWorkspaceResourceDeclarationErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWorkspaceResourceDeclarationErrorReason, path: string): never {
   throw new WakeflowWorkspaceResourceDeclarationError(reason, path);
 }
 
@@ -312,14 +257,13 @@ function assertExactFields(
   allowed: ReadonlySet<string>,
   path: string,
 ): void {
-  const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+  const unknown = Object.keys(record)
+    .sort()
+    .find((key) => !allowed.has(key));
   if (unknown !== undefined) fail("shape", propertyPath(path, unknown));
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -335,19 +279,17 @@ function stableIdentifier(
   path: string,
 ): string {
   if (
-    typeof value !== "string"
-    || !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || !pattern.test(value)
+    typeof value !== "string" ||
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    !pattern.test(value)
   ) {
     fail(reason, path);
   }
   return value;
 }
 
-function declarationId(
-  value: unknown,
-): WakeflowWorkspaceResourceDeclarationId {
+function declarationId(value: unknown): WakeflowWorkspaceResourceDeclarationId {
   return stableIdentifier(
     value,
     DECLARATION_ID_PATTERN,
@@ -379,9 +321,7 @@ function scope(value: unknown): WakeflowWorkspaceResourceScope {
   return value as WakeflowWorkspaceResourceScope;
 }
 
-function parseLogicalRoot(
-  value: unknown,
-): Readonly<WakeflowWorkspaceResourceLogicalRoot> {
+function parseLogicalRoot(value: unknown): Readonly<WakeflowWorkspaceResourceLogicalRoot> {
   const record = plainRecord(value, "$/placement/root");
   if (record.kind === "workspace") {
     assertExactFields(record, SIMPLE_ROOT_FIELDS, "$/placement/root");
@@ -450,21 +390,15 @@ function parseRelativePath(
   }
 }
 
-function parsePlacement(
-  value: unknown,
-): Readonly<WakeflowWorkspaceResourcePlacement> {
+function parsePlacement(value: unknown): Readonly<WakeflowWorkspaceResourcePlacement> {
   const record = plainRecord(value, "$/placement");
   assertExactFields(record, PLACEMENT_FIELDS, "$/placement");
   const root = parseLogicalRoot(record.root);
   const relativePath = parseRelativePath(record.relativePath, root);
-  return Object.freeze({ root, relativePath }) as Readonly<
-    WakeflowWorkspaceResourcePlacement
-  >;
+  return Object.freeze({ root, relativePath }) as Readonly<WakeflowWorkspaceResourcePlacement>;
 }
 
-function parseTracking(
-  value: unknown,
-): Readonly<WakeflowWorkspaceResourceTracking> {
+function parseTracking(value: unknown): Readonly<WakeflowWorkspaceResourceTracking> {
   const record = plainRecord(value, "$/tracking");
   assertExactFields(record, TRACKING_FIELDS, "$/tracking");
   if (typeof record.disposition !== "string" || !TRACKING_SET.has(record.disposition)) {
@@ -479,9 +413,7 @@ function parseTracking(
   });
 }
 
-function parseNodePolicy(
-  value: unknown,
-): Readonly<WakeflowWorkspaceResourceNodePolicy> {
+function parseNodePolicy(value: unknown): Readonly<WakeflowWorkspaceResourceNodePolicy> {
   const record = plainRecord(value, "$/nodePolicy");
   if (record.kind === "file") {
     assertExactFields(record, FILE_NODE_POLICY_FIELDS, "$/nodePolicy");
@@ -527,7 +459,10 @@ function parseNodePolicy(
     if (record.symlinkPolicy !== "reject") {
       fail("node-policy", "$/nodePolicy/symlinkPolicy");
     }
-    if (record.executablePolicy !== "forbidden" && record.executablePolicy !== "manifest-declared") {
+    if (
+      record.executablePolicy !== "forbidden" &&
+      record.executablePolicy !== "manifest-declared"
+    ) {
       fail("node-policy", "$/nodePolicy/executablePolicy");
     }
     return Object.freeze({
@@ -544,9 +479,7 @@ function rebaseProcessingPath(path: string): string {
   return path === "$" ? "$/processing" : `$/processing${path.slice(1)}`;
 }
 
-function parseProcessing(
-  value: unknown,
-): Readonly<WakeflowResourceProcessingContract> {
+function parseProcessing(value: unknown): Readonly<WakeflowResourceProcessingContract> {
   try {
     return parseWakeflowResourceProcessingContract(value);
   } catch (error: unknown) {
@@ -561,13 +494,14 @@ function assertFamilyPlacement(
   familyValue: WakeflowWorkspaceResourceFamily,
   placement: Readonly<WakeflowWorkspaceResourcePlacement>,
 ): void {
-  const requiredRootKind = familyValue === "ledger"
-    ? "ledger"
-    : familyValue === "support"
-      ? "support-surface"
-      : familyValue === "repository"
-        ? "repository"
-        : "workspace";
+  const requiredRootKind =
+    familyValue === "ledger"
+      ? "ledger"
+      : familyValue === "support"
+        ? "support-surface"
+        : familyValue === "repository"
+          ? "repository"
+          : "workspace";
   if (placement.root.kind !== requiredRootKind) {
     fail("compatibility", "$/placement/root/kind");
   }
@@ -590,9 +524,9 @@ function assertProcessingNodeCompatibility(
     return;
   }
   if (
-    processing.role !== "external-reference"
-    && processing.role !== "transaction-artifact"
-    && nodePolicy.kind !== "file"
+    processing.role !== "external-reference" &&
+    processing.role !== "transaction-artifact" &&
+    nodePolicy.kind !== "file"
   ) {
     fail("compatibility", "$/nodePolicy/kind");
   }
@@ -623,25 +557,24 @@ function assertTrackingNodeCompatibility(
   tracking: Readonly<WakeflowWorkspaceResourceTracking>,
   nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>,
 ): void {
-  if (
-    tracking.disposition === "tracked"
-    && tracking.privacy === "runtime-private"
-  ) {
+  if (tracking.disposition === "tracked" && tracking.privacy === "runtime-private") {
     fail("compatibility", "$/tracking/privacy");
   }
   const mode = nodeMode(nodePolicy);
   if (tracking.disposition === "owner-defined") {
     if (mode !== "owner-defined") {
-      fail("compatibility", nodePolicy.kind === "tree"
-        ? "$/nodePolicy/rootMode"
-        : "$/nodePolicy/mode");
+      fail(
+        "compatibility",
+        nodePolicy.kind === "tree" ? "$/nodePolicy/rootMode" : "$/nodePolicy/mode",
+      );
     }
     return;
   }
   if (mode !== expectedManagedMode(tracking, nodePolicy)) {
-    fail("compatibility", nodePolicy.kind === "tree"
-      ? "$/nodePolicy/rootMode"
-      : "$/nodePolicy/mode");
+    fail(
+      "compatibility",
+      nodePolicy.kind === "tree" ? "$/nodePolicy/rootMode" : "$/nodePolicy/mode",
+    );
   }
   if (nodePolicy.kind === "file" && nodePolicy.linkPolicy !== "single-link") {
     fail("compatibility", "$/nodePolicy/linkPolicy");
@@ -662,16 +595,13 @@ function assertDeclarationCompatibility(
   assertProcessingNodeCompatibility(processing, nodePolicy);
   assertTrackingNodeCompatibility(tracking, nodePolicy);
   if (
-    processing.kind === "resource"
-    && processing.role === "external-reference"
-    && tracking.disposition !== "owner-defined"
+    processing.kind === "resource" &&
+    processing.role === "external-reference" &&
+    tracking.disposition !== "owner-defined"
   ) {
     fail("compatibility", "$/tracking/disposition");
   }
-  if (
-    processing.kind === "directory-container"
-    && tracking.disposition === "owner-defined"
-  ) {
+  if (processing.kind === "directory-container" && tracking.disposition === "owner-defined") {
     fail("compatibility", "$/tracking/disposition");
   }
 }
@@ -693,13 +623,7 @@ export function parseWakeflowWorkspaceResourceDeclaration(
   const tracking = parseTracking(record.tracking);
   const nodePolicy = parseNodePolicy(record.nodePolicy);
   const processing = parseProcessing(record.processing);
-  assertDeclarationCompatibility(
-    familyValue,
-    placement,
-    tracking,
-    nodePolicy,
-    processing,
-  );
+  assertDeclarationCompatibility(familyValue, placement, tracking, nodePolicy, processing);
   return Object.freeze({
     kind: WAKEFLOW_WORKSPACE_RESOURCE_DECLARATION_KIND,
     declarationId: declarationIdValue,

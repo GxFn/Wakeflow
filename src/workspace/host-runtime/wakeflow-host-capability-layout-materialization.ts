@@ -1,24 +1,19 @@
 import { types } from "node:util";
 
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   createDirectoryAtomically,
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
+  type PortableResourcePath,
   parsePortableResourcePath,
   splitPortableResourcePath,
-  type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -29,18 +24,18 @@ import {
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import {
+  parseWakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
+} from "../workspace-host-resource-profile.js";
+import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
   wakeflowHostRuntimeRootRef,
 } from "../workspace-host-runtime-paths.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
-import {
   compileWakeflowHostCapabilityLayoutAuthority,
-  WakeflowHostCapabilityLayoutAuthorityError,
   type WakeflowHostCapabilityLayoutAuthority,
+  WakeflowHostCapabilityLayoutAuthorityError,
 } from "./wakeflow-host-capability-layout-authority.js";
 
 /**
@@ -82,10 +77,9 @@ const ERROR_MESSAGES = {
   "root-scope": "Host capability layout lost workspace scope.",
   aborted: "Host capability layout materialization was aborted.",
   "operation-failure": "Host capability layout materialization failed.",
-} as const satisfies Readonly<Record<
-  WakeflowHostCapabilityLayoutMaterializationErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowHostCapabilityLayoutMaterializationErrorReason, string>
+>;
 
 /** Host capability layout 物化失败的稳定、脱敏错误。 */
 export class WakeflowHostCapabilityLayoutMaterializationError extends Error {
@@ -94,10 +88,7 @@ export class WakeflowHostCapabilityLayoutMaterializationError extends Error {
   readonly reason: WakeflowHostCapabilityLayoutMaterializationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowHostCapabilityLayoutMaterializationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -117,10 +108,7 @@ interface DirectoryEffect {
 
 type ExpectedChildren = ReadonlyMap<PortableResourcePath, ReadonlySet<string>>;
 
-function fail(
-  reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowHostCapabilityLayoutMaterializationErrorReason, path: string): never {
   throw new WakeflowHostCapabilityLayoutMaterializationError(reason, path);
 }
 
@@ -133,20 +121,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    !Object.hasOwn(record, "recoveringFreshLayout")
-    || Object.keys(record).some((key) => (
-      key !== "recoveringFreshLayout" && key !== "signal"
-    ))
-    || typeof record.recoveringFreshLayout !== "boolean"
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    !Object.hasOwn(record, "recoveringFreshLayout") ||
+    Object.keys(record).some((key) => key !== "recoveringFreshLayout" && key !== "signal") ||
+    typeof record.recoveringFreshLayout !== "boolean" ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -157,19 +139,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
-function assertPrivateDirectory(
-  node: Readonly<FileNodeSnapshot>,
-  path: string,
-): void {
+function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
-    node.kind !== "directory"
-    || node.permissionBits !== 0o700
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== "directory" ||
+    node.permissionBits !== 0o700 ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("prefix-conflict", path);
   }
@@ -202,9 +179,7 @@ function expectedChildren(
     mutable.set(parent, children);
     if (!mutable.has(resourcePath)) mutable.set(resourcePath, new Set());
   }
-  return new Map([...mutable].map(([parent, children]) => (
-    [parent, new Set(children)] as const
-  )));
+  return new Map([...mutable].map(([parent, children]) => [parent, new Set(children)] as const));
 }
 
 async function optionalDirectory(
@@ -216,10 +191,7 @@ async function optionalDirectory(
     assertPrivateDirectory(resource.node, `$layout/${resourcePath}`);
     return resource.node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) return null;
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
       throw error;
     }
@@ -261,24 +233,20 @@ async function inspectPartialTree(
   requireComplete: boolean,
 ): Promise<void> {
   for (const [parent, childNames] of expected) {
-    if (await optionalDirectory(root, parent) === null) {
+    if ((await optionalDirectory(root, parent)) === null) {
       if (requireComplete) fail("prefix-conflict", `$layout/${parent}`);
       continue;
     }
-    const directory = await readDirectory(
-      root,
-      parent,
-      childNames.size + 1,
-      signal,
-    );
+    const directory = await readDirectory(root, parent, childNames.size + 1, signal);
     if (
-      directory.entries.some((entry) => (
-        !childNames.has(entry.name)
-        || entry.node.kind !== "directory"
-        || entry.node.permissionBits !== 0o700
-        || (currentUserId() !== null && entry.node.userId !== currentUserId())
-      ))
-      || (requireComplete && directory.entries.length !== childNames.size)
+      directory.entries.some(
+        (entry) =>
+          !childNames.has(entry.name) ||
+          entry.node.kind !== "directory" ||
+          entry.node.permissionBits !== 0o700 ||
+          (currentUserId() !== null && entry.node.userId !== currentUserId()),
+      ) ||
+      (requireComplete && directory.entries.length !== childNames.size)
     ) {
       fail("prefix-conflict", `$layout/${parent}`);
     }
@@ -292,7 +260,7 @@ async function assertTargetsAbsent(
   for (const declaration of authority.declarations) {
     const resourcePath = declaration.placement.relativePath;
     if (resourcePath === null) fail("authority", "$declarations");
-    if (await optionalDirectory(root, resourcePath) !== null) {
+    if ((await optionalDirectory(root, resourcePath)) !== null) {
       fail("strict-absent", `$layout/${resourcePath}`);
     }
   }
@@ -359,8 +327,8 @@ function parseProfileAndAuthority(profileValue: unknown) {
     };
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError
-      || error instanceof WakeflowHostCapabilityLayoutAuthorityError
+      error instanceof WakeflowWorkspaceHostResourceProfileError ||
+      error instanceof WakeflowHostCapabilityLayoutAuthorityError
     ) {
       fail("authority", error.path);
     }
@@ -372,9 +340,7 @@ function layoutResult(
   authority: Readonly<WakeflowHostCapabilityLayoutAuthority>,
   effects: readonly Readonly<DirectoryEffect>[],
 ): Readonly<WakeflowHostCapabilityLayoutMaterializationResult> {
-  const createdDirectoryCount = effects.filter((entry) => (
-    entry.disposition === "created"
-  )).length;
+  const createdDirectoryCount = effects.filter((entry) => entry.disposition === "created").length;
   const observationBasis = {
     kind: "WakeflowHostCapabilityLayoutObservation",
     authorityDigest: authority.authorityDigest,
@@ -388,9 +354,7 @@ function layoutResult(
     disposition: createdDirectoryCount === 0 ? "current" : "created",
     authorityDigest: authority.authorityDigest,
     createdDirectoryCount,
-    observationDigest: computeCanonicalJsonSha256Digest(
-      observationBasis as unknown as JsonValue,
-    ),
+    observationDigest: computeCanonicalJsonSha256Digest(observationBasis as unknown as JsonValue),
   });
 }
 
@@ -398,9 +362,11 @@ async function prerequisitesPresent(
   root: RootedDirectory,
   profile: Readonly<ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>>,
 ): Promise<boolean> {
-  return await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile)) !== null
-    && await optionalDirectory(root, wakeflowHostIdentityRootRef(profile)) !== null
-    && await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile)) !== null;
+  return (
+    (await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile))) !== null &&
+    (await optionalDirectory(root, wakeflowHostIdentityRootRef(profile))) !== null &&
+    (await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile))) !== null
+  );
 }
 
 function declarationPath(
@@ -418,10 +384,10 @@ export async function inspectWakeflowHostCapabilityLayout(
   optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowHostCapabilityLayoutInspection>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -434,7 +400,7 @@ export async function inspectWakeflowHostCapabilityLayout(
       status = "prerequisite-missing";
     } else {
       for (const declaration of authority.declarations) {
-        if (await optionalDirectory(rootValue, declarationPath(declaration)) === null) {
+        if ((await optionalDirectory(rootValue, declarationPath(declaration))) === null) {
           missingDirectoryCount += 1;
         }
       }
@@ -442,8 +408,8 @@ export async function inspectWakeflowHostCapabilityLayout(
     }
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowHostCapabilityLayoutMaterializationError
-      && error.reason === "prefix-conflict"
+      error instanceof WakeflowHostCapabilityLayoutMaterializationError &&
+      error.reason === "prefix-conflict"
     ) {
       status = "conflict";
     } else {
@@ -472,10 +438,10 @@ export async function ensureWakeflowHostCapabilityLayout(
   optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowHostCapabilityLayoutMaterializationResult>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -490,7 +456,9 @@ export async function ensureWakeflowHostCapabilityLayout(
     const resourcePath = declarationPath(declaration);
     const existing = await optionalDirectory(rootValue, resourcePath);
     if (existing !== null) {
-      effects.push(Object.freeze({ resourcePath, disposition: "current" as const, node: existing }));
+      effects.push(
+        Object.freeze({ resourcePath, disposition: "current" as const, node: existing }),
+      );
       continue;
     }
     let materialized;
@@ -509,11 +477,13 @@ export async function ensureWakeflowHostCapabilityLayout(
     for (const segment of materialized.segments) {
       assertPrivateDirectory(segment.node, `$layout/${segment.resourcePath}`);
     }
-    effects.push(Object.freeze({
-      resourcePath,
-      disposition: "created" as const,
-      node: materialized.node,
-    }));
+    effects.push(
+      Object.freeze({
+        resourcePath,
+        disposition: "created" as const,
+        node: materialized.node,
+      }),
+    );
   }
   return layoutResult(authority, effects);
 }
@@ -525,10 +495,10 @@ export async function materializeWakeflowHostCapabilityLayout(
   optionsValue: WakeflowHostCapabilityLayoutMaterializationOptions,
 ): Promise<Readonly<WakeflowHostCapabilityLayoutMaterializationResult>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -536,16 +506,12 @@ export async function materializeWakeflowHostCapabilityLayout(
   if (options.signal?.aborted === true) fail("aborted", "$signal");
   const { profile, authority } = parseProfileAndAuthority(profileValue);
   const hostRoot = wakeflowHostRuntimeRootRef(profile);
-  if (await optionalDirectory(rootValue, hostRoot) === null) {
+  if ((await optionalDirectory(rootValue, hostRoot)) === null) {
     fail("prerequisite", "$hostRoot");
   }
   if (
-    await optionalDirectory(rootValue, wakeflowHostIdentityRootRef(profile))
-      === null
-    || await optionalDirectory(
-      rootValue,
-      wakeflowHostProjectionsRootRef(profile),
-    ) === null
+    (await optionalDirectory(rootValue, wakeflowHostIdentityRootRef(profile))) === null ||
+    (await optionalDirectory(rootValue, wakeflowHostProjectionsRootRef(profile))) === null
   ) {
     fail("prerequisite", "$hostLayout");
   }
@@ -558,12 +524,9 @@ export async function materializeWakeflowHostCapabilityLayout(
   for (const declaration of authority.declarations) {
     const resourcePath = declaration.placement.relativePath;
     if (resourcePath === null) fail("authority", "$declarations");
-    effects.push(await ensureDirectory(
-      rootValue,
-      resourcePath,
-      options.recoveringFreshLayout,
-      options.signal,
-    ));
+    effects.push(
+      await ensureDirectory(rootValue, resourcePath, options.recoveringFreshLayout, options.signal),
+    );
   }
   await inspectPartialTree(rootValue, expected, options.signal, true);
   return layoutResult(authority, effects);

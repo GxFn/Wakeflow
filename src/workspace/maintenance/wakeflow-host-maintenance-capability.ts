@@ -2,23 +2,18 @@ import { types } from "node:util";
 
 import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
   WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import type { WakeflowMaintenanceGateContext } from "./wakeflow-maintenance-gate.js";
 import type {
   WakeflowHostMaintenanceContribution,
   WakeflowHostMaintenanceOperation,
 } from "./wakeflow-host-maintenance-contribution.js";
-import type {
-  WakeflowStaticMaterializationAction,
-} from "./wakeflow-static-materialization-preview-contract.js";
+import type { WakeflowMaintenanceGateContext } from "./wakeflow-maintenance-gate.js";
+import type { WakeflowStaticMaterializationAction } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
  * Wakeflow Workspace / Maintenance：当前宿主维护能力的依赖反转端口。
@@ -74,10 +69,7 @@ const ERROR_MESSAGES = {
   host: "Wakeflow host maintenance capability does not match the current host.",
   identity: "Wakeflow host maintenance capability identity is invalid.",
   contribution: "Wakeflow host maintenance contribution does not match its capability.",
-} as const satisfies Readonly<Record<
-  WakeflowHostMaintenanceCapabilityErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowHostMaintenanceCapabilityErrorReason, string>>;
 
 /** 当前宿主 capability 准入失败的稳定、脱敏错误。 */
 export class WakeflowHostMaintenanceCapabilityError extends Error {
@@ -86,10 +78,7 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
   readonly reason: WakeflowHostMaintenanceCapabilityErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowHostMaintenanceCapabilityErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowHostMaintenanceCapabilityErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -99,10 +88,7 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
 
-function fail(
-  reason: WakeflowHostMaintenanceCapabilityErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowHostMaintenanceCapabilityErrorReason, path: string): never {
   throw new WakeflowHostMaintenanceCapabilityError(reason, path);
 }
 
@@ -119,20 +105,19 @@ export function assertWakeflowHostMaintenanceCapability(
     throw error;
   }
   if (
-    !Object.isFrozen(value)
-    ||
-    Object.keys(record).sort().join("\u0000")
-      !== "capabilityId\u0000executeOperation\u0000hostId\u0000kind\u0000planContribution"
-    || record.kind !== "WakeflowHostMaintenanceCapability"
-    || record.hostId !== expectedHostId
-    || typeof record.capabilityId !== "string"
-    || record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH
-    || !record.capabilityId.isWellFormed()
-    || !CAPABILITY_ID_PATTERN.test(record.capabilityId)
-    || typeof record.planContribution !== "function"
-    || types.isProxy(record.planContribution)
-    || typeof record.executeOperation !== "function"
-    || types.isProxy(record.executeOperation)
+    !Object.isFrozen(value) ||
+    Object.keys(record).sort().join("\u0000") !==
+      "capabilityId\u0000executeOperation\u0000hostId\u0000kind\u0000planContribution" ||
+    record.kind !== "WakeflowHostMaintenanceCapability" ||
+    record.hostId !== expectedHostId ||
+    typeof record.capabilityId !== "string" ||
+    record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH ||
+    !record.capabilityId.isWellFormed() ||
+    !CAPABILITY_ID_PATTERN.test(record.capabilityId) ||
+    typeof record.planContribution !== "function" ||
+    types.isProxy(record.planContribution) ||
+    typeof record.executeOperation !== "function" ||
+    types.isProxy(record.executeOperation)
   ) {
     fail(record.hostId === expectedHostId ? "identity" : "host", "$capability");
   }
@@ -144,8 +129,8 @@ export function assertWakeflowHostMaintenanceContributionCapability(
   contribution: Readonly<WakeflowHostMaintenanceContribution>,
 ): void {
   if (
-    contribution.hostId !== capability.hostId
-    || contribution.capabilityId !== capability.capabilityId
+    contribution.hostId !== capability.hostId ||
+    contribution.capabilityId !== capability.capabilityId
   ) {
     fail("contribution", "$contribution");
   }

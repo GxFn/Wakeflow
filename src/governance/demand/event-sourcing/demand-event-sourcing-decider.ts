@@ -1,102 +1,62 @@
-import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
-import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-} from "../../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../../foundation/data/passive-own-data.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
 import {
-  deriveUuidV4,
-  parseUuidV4,
-} from "../../../foundation/identity/uuid-v4.js";
+  PassiveOwnDataError,
+  parsePlainRecord,
+} from "../../../foundation/data/passive-own-data.js";
+import { deriveUuidV4, parseUuidV4 } from "../../../foundation/identity/uuid-v4.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../../foundation/time/utc-instant.js";
 import {
-  cancelDemandAggregateState,
-  authorizeProductDefectRemediationInDemandAggregateState,
-  completeDemandAggregateState,
-  continueDemandAggregateState,
-  createInitialDemandAggregateState,
-  historicalTestTargetIdsAtContinuation,
-  decideTargetResultReviewInDemandAggregateState,
-  escalateDemandAggregateState,
-  recordDeliveryOutcomeInDemandAggregateState,
-  prepareDeliveryInDemandAggregateState,
-  rearmDeliveryInDemandAggregateState,
-  recordDecisionInDemandAggregateState,
-  recordManagedEvidenceInDemandAggregateState,
-  recordTargetResultInDemandAggregateState,
-  reissueCallbackInDemandAggregateState,
-  planTargetTaskInDemandAggregateState,
-  parseDemandAggregateState,
-  DemandAggregateStateError,
-  type DemandAggregateState,
-} from "../model/demand-aggregate-state.js";
-import {
-  computeDemandAuthorityDigest,
-  parseDemandAuthority,
-  DemandAuthorityError,
-  type DemandAuthority,
-} from "../model/demand-authority.js";
-import {
-  parseTaskPackage,
-  TaskPackageError,
-  type TaskPackage,
-} from "../../tasking/task-package.js";
-import {
   assertDeliveryEnvelopeMatchesTaskPackage,
+  type DeliveryEnvelope,
   DeliveryEnvelopeError,
   parseDeliveryEnvelope,
-  type DeliveryEnvelope,
 } from "../../delivery/delivery-envelope.js";
 import {
+  type DeliveryOutcome,
   DeliveryOutcomeError,
   parseDeliveryOutcome,
-  type DeliveryOutcome,
 } from "../../delivery/delivery-outcome.js";
 import {
+  type DeliveryRearm,
   DeliveryRearmError,
   parseDeliveryRearm,
-  type DeliveryRearm,
 } from "../../delivery/delivery-rearm.js";
-import {
-  createTargetDeliveryReworkContext,
-  TargetDeliveryReworkContextError,
-} from "../../delivery/target-delivery-rework-context.js";
 import {
   createTargetDeliveryProductDefectRemediationContext,
   TargetDeliveryProductDefectRemediationContextError,
 } from "../../delivery/target-delivery-product-defect-remediation-context.js";
 import {
+  createTargetDeliveryReworkContext,
+  TargetDeliveryReworkContextError,
+} from "../../delivery/target-delivery-rework-context.js";
+import {
+  type ManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifest,
+} from "../../evidence/managed-evidence-manifest.js";
+import {
+  type DemandCompletion,
+  DemandCompletionError,
+  parseDemandCompletion,
+} from "../../lifecycle/demand-completion.js";
+import {
   parseTargetResult,
-  targetResultRecordedEventIdFromResult,
-  TargetResultError,
   type TargetResult,
+  TargetResultError,
+  targetResultRecordedEventIdFromResult,
 } from "../../result/target-result.js";
-import {
-  parseControllerImplementationReviewDecision,
-  ControllerImplementationReviewDecisionError,
-  type ControllerImplementationReviewDecision,
-} from "../../review/controller-implementation-review-decision.js";
-import {
-  controllerReviewDecisionEventId,
-  parseControllerReviewDecision,
-  ControllerReviewDecisionError,
-  type ControllerReviewDecision,
-} from "../../review/controller-review-decision.js";
-import type { ControllerReviewEscalation } from "../../review/controller-review-decision-contract.js";
 import {
   parseTargetResultCallbackRecord,
   parseTargetResultCallbackReissue,
@@ -107,33 +67,67 @@ import {
   type TargetResultEvidenceResolution,
 } from "../../result/target-result-callback.js";
 import {
+  type ControllerImplementationReviewDecision,
+  ControllerImplementationReviewDecisionError,
+  parseControllerImplementationReviewDecision,
+} from "../../review/controller-implementation-review-decision.js";
+import {
+  type ControllerProductDefectRemediationAuthorization,
+  ControllerProductDefectRemediationAuthorizationError,
   parseControllerProductDefectRemediationAuthorization,
   productDefectRemediationAuthorizedEventId,
-  ControllerProductDefectRemediationAuthorizationError,
-  type ControllerProductDefectRemediationAuthorization,
 } from "../../review/controller-product-defect-remediation-authorization.js";
 import {
-  parseDemandUncommittedEvent,
-  DemandEventSourcingEventError,
-  type DemandContinuation,
-  type DemandDecisionRecord,
-  type DemandEscalation,
-  type DemandUncommittedEvent,
-} from "./demand-event-sourcing-event.js";
+  type ControllerReviewDecision,
+  ControllerReviewDecisionError,
+  controllerReviewDecisionEventId,
+  parseControllerReviewDecision,
+} from "../../review/controller-review-decision.js";
+import type { ControllerReviewEscalation } from "../../review/controller-review-decision-contract.js";
 import {
-  parseManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
-  type ManagedEvidenceManifest,
-} from "../../evidence/managed-evidence-manifest.js";
-import {
-  parseDemandCompletion,
-  DemandCompletionError,
-  type DemandCompletion,
-} from "../../lifecycle/demand-completion.js";
+  parseTaskPackage,
+  type TaskPackage,
+  TaskPackageError,
+} from "../../tasking/task-package.js";
 import {
   assertTestExecutionAttemptMatchesPackage,
   TestExecutionAttemptError,
 } from "../../testing/test-execution-attempt.js";
+import {
+  authorizeProductDefectRemediationInDemandAggregateState,
+  cancelDemandAggregateState,
+  completeDemandAggregateState,
+  continueDemandAggregateState,
+  createInitialDemandAggregateState,
+  type DemandAggregateState,
+  DemandAggregateStateError,
+  decideTargetResultReviewInDemandAggregateState,
+  escalateDemandAggregateState,
+  historicalTestTargetIdsAtContinuation,
+  parseDemandAggregateState,
+  planTargetTaskInDemandAggregateState,
+  prepareDeliveryInDemandAggregateState,
+  rearmDeliveryInDemandAggregateState,
+  recordDecisionInDemandAggregateState,
+  recordDeliveryOutcomeInDemandAggregateState,
+  recordManagedEvidenceInDemandAggregateState,
+  recordTargetResultInDemandAggregateState,
+  reissueCallbackInDemandAggregateState,
+} from "../model/demand-aggregate-state.js";
+import {
+  computeDemandAuthorityDigest,
+  type DemandAuthority,
+  DemandAuthorityError,
+  parseDemandAuthority,
+} from "../model/demand-authority.js";
+import {
+  type DemandContinuation,
+  type DemandDecisionRecord,
+  type DemandEscalation,
+  DemandEventSourcingEventError,
+  type DemandUncommittedEvent,
+  parseDemandUncommittedEvent,
+} from "./demand-event-sourcing-event.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：Demand 聚合的纯决策器。
@@ -317,28 +311,20 @@ const ERROR_MESSAGES = {
   time: "Demand Event Sourcing command contains an invalid recorded time.",
   digest: "Demand Event Sourcing command contains an invalid digest.",
   text: "Demand Event Sourcing command contains non-canonical text.",
-  "task-package":
-    "Demand Event Sourcing command contains an invalid TaskPackage.",
-  "demand-authority":
-    "Demand Event Sourcing command contains an invalid Demand Authority.",
-  "demand-completion":
-    "Demand Event Sourcing command contains an invalid Demand Completion.",
-  "lifecycle-data":
-    "Demand Event Sourcing command carries invalid lifecycle data.",
+  "task-package": "Demand Event Sourcing command contains an invalid TaskPackage.",
+  "demand-authority": "Demand Event Sourcing command contains an invalid Demand Authority.",
+  "demand-completion": "Demand Event Sourcing command contains an invalid Demand Completion.",
+  "lifecycle-data": "Demand Event Sourcing command carries invalid lifecycle data.",
   "managed-evidence-manifest":
     "Demand Event Sourcing command contains an invalid Managed Evidence Manifest.",
-  "delivery-envelope":
-    "Demand Event Sourcing command contains an invalid Delivery Envelope.",
+  "delivery-envelope": "Demand Event Sourcing command contains an invalid Delivery Envelope.",
   "target-delivery-rework-context":
     "Demand Event Sourcing command contains an invalid Target Delivery rework source.",
   "target-delivery-product-defect-remediation-context":
     "Demand Event Sourcing command contains an invalid Target Delivery product-defect remediation source.",
-  "delivery-outcome":
-    "Demand Event Sourcing command contains an invalid Delivery Outcome.",
-  "delivery-rearm":
-    "Demand Event Sourcing command contains an invalid Delivery Rearm.",
-  "target-result":
-    "Demand Event Sourcing command contains an invalid TargetResult.",
+  "delivery-outcome": "Demand Event Sourcing command contains an invalid Delivery Outcome.",
+  "delivery-rearm": "Demand Event Sourcing command contains an invalid Delivery Rearm.",
+  "target-result": "Demand Event Sourcing command contains an invalid TargetResult.",
   "controller-implementation-review-decision":
     "Demand Event Sourcing command contains an invalid Controller Target Review Decision.",
   "controller-review-decision":
@@ -349,12 +335,9 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing command contains an invalid Target Result callback record.",
   state: "Demand Event Sourcing Decider received an invalid aggregate state.",
   identity: "Demand Event Sourcing command does not belong to the aggregate.",
-  transition:
-    "Demand Event Sourcing command or event is not admitted from the current state.",
+  transition: "Demand Event Sourcing command or event is not admitted from the current state.",
   event: "Demand Event Sourcing Decider received an invalid event.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingDecisionErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingDecisionErrorReason, string>>;
 
 export class DemandEventSourcingDecisionError extends Error {
   override readonly name = "DemandEventSourcingDecisionError";
@@ -474,13 +457,9 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
   "commandVersion",
   "decision",
 ] as const);
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
-function fail(
-  reason: DemandEventSourcingDecisionErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingDecisionErrorReason, path: string): never {
   throw new DemandEventSourcingDecisionError(reason, path);
 }
 
@@ -544,10 +523,7 @@ function exactCommand(
   fields: readonly string[],
 ): Readonly<Record<string, unknown>> {
   const keys = Object.keys(record).sort();
-  if (
-    keys.length !== fields.length ||
-    keys.some((key, index) => key !== fields[index])
-  ) {
+  if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
     fail("input", "$command");
   }
   return record;
@@ -620,10 +596,7 @@ export function parseDemandEventSourcingCommand(
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
       recordedAt: parseTime(command.recordedAt),
       identityDigest: parseDigest(command.identityDigest, "$/identityDigest"),
-      authorityDigest: parseDigest(
-        command.authorityDigest,
-        "$/authorityDigest",
-      ),
+      authorityDigest: parseDigest(command.authorityDigest, "$/authorityDigest"),
     });
   }
 
@@ -751,10 +724,7 @@ export function parseDemandEventSourcingCommand(
 
   if (base.commandType === "delivery.prepare-delivery") {
     const hasReworkSource = Object.hasOwn(base, "reworkSource");
-    const hasProductDefectRemediationSource = Object.hasOwn(
-      base,
-      "productDefectRemediationSource",
-    );
+    const hasProductDefectRemediationSource = Object.hasOwn(base, "productDefectRemediationSource");
     if (hasReworkSource && hasProductDefectRemediationSource) {
       fail("input", "$command");
     }
@@ -763,9 +733,7 @@ export function parseDemandEventSourcingCommand(
       [
         ...PREPARE_DELIVERY_BASE_FIELDS,
         ...(hasReworkSource ? (["reworkSource"] as const) : []),
-        ...(hasProductDefectRemediationSource
-          ? (["productDefectRemediationSource"] as const)
-          : []),
+        ...(hasProductDefectRemediationSource ? (["productDefectRemediationSource"] as const) : []),
       ].sort(),
     );
     let envelope: Readonly<DeliveryEnvelope>;
@@ -829,10 +797,7 @@ export function parseDemandEventSourcingCommand(
         decision = parseControllerImplementationReviewDecision(source.decision);
       } catch (error: unknown) {
         if (error instanceof ControllerImplementationReviewDecisionError) {
-          fail(
-            "controller-implementation-review-decision",
-            "$/reworkSource/decision",
-          );
+          fail("controller-implementation-review-decision", "$/reworkSource/decision");
         }
         throw error;
       }
@@ -897,13 +862,9 @@ export function parseDemandEventSourcingCommand(
       let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
       let previousResult: Readonly<TargetResult>;
       try {
-        authorization = parseControllerProductDefectRemediationAuthorization(
-          source.authorization,
-        );
+        authorization = parseControllerProductDefectRemediationAuthorization(source.authorization);
       } catch (error: unknown) {
-        if (
-          error instanceof ControllerProductDefectRemediationAuthorizationError
-        ) {
+        if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
           fail(
             "controller-product-defect-remediation-authorization",
             "$/productDefectRemediationSource/authorization",
@@ -915,10 +876,7 @@ export function parseDemandEventSourcingCommand(
         previousResult = parseTargetResult(source.previousResult);
       } catch (error: unknown) {
         if (error instanceof TargetResultError) {
-          fail(
-            "target-result",
-            "$/productDefectRemediationSource/previousResult",
-          );
+          fail("target-result", "$/productDefectRemediationSource/previousResult");
         }
         throw error;
       }
@@ -939,9 +897,7 @@ export function parseDemandEventSourcingCommand(
         }
       } catch (error: unknown) {
         if (error instanceof DemandEventSourcingDecisionError) throw error;
-        if (
-          error instanceof TargetDeliveryProductDefectRemediationContextError
-        ) {
+        if (error instanceof TargetDeliveryProductDefectRemediationContextError) {
           fail(
             "target-delivery-product-defect-remediation-context",
             "$/productDefectRemediationSource",
@@ -966,9 +922,7 @@ export function parseDemandEventSourcingCommand(
       envelope,
       taskPackage,
       ...(reworkSource === undefined ? {} : { reworkSource }),
-      ...(productDefectRemediationSource === undefined
-        ? {}
-        : { productDefectRemediationSource }),
+      ...(productDefectRemediationSource === undefined ? {} : { productDefectRemediationSource }),
     });
   }
 
@@ -1091,34 +1045,21 @@ export function parseDemandEventSourcingCommand(
     }
     let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
     try {
-      authorization = parseControllerProductDefectRemediationAuthorization(
-        command.authorization,
-      );
+      authorization = parseControllerProductDefectRemediationAuthorization(command.authorization);
     } catch (error: unknown) {
-      if (
-        error instanceof ControllerProductDefectRemediationAuthorizationError
-      ) {
-        fail(
-          "controller-product-defect-remediation-authorization",
-          "$/authorization",
-        );
+      if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
+        fail("controller-product-defect-remediation-authorization", "$/authorization");
       }
       throw error;
     }
     if (
       authorization.source.testReviewDecision.targetReviewDecisionId !==
         decision.targetReviewDecisionId ||
-      authorization.source.testReviewDecision.decisionDigest !==
-        decision.decisionDigest ||
-      authorization.source.reviewSnapshotDigest !==
-        decision.reviewed.snapshotDigest ||
-      authorization.source.streamRevision !==
-        decision.reviewed.streamRevision + 1
+      authorization.source.testReviewDecision.decisionDigest !== decision.decisionDigest ||
+      authorization.source.reviewSnapshotDigest !== decision.reviewed.snapshotDigest ||
+      authorization.source.streamRevision !== decision.reviewed.streamRevision + 1
     ) {
-      fail(
-        "controller-product-defect-remediation-authorization",
-        "$/authorization/source",
-      );
+      fail("controller-product-defect-remediation-authorization", "$/authorization/source");
     }
     return Object.freeze({
       commandType: "review.decide-target-result",
@@ -1132,12 +1073,8 @@ export function parseDemandEventSourcingCommand(
 }
 
 /** 计算已准入命令的稳定幂等摘要；事件存储不接受调用方自行声明的摘要。 */
-export function computeDemandEventSourcingCommandDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingCommand(value),
-  );
+export function computeDemandEventSourcingCommandDigest(value: unknown): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingCommand(value));
 }
 
 type DecidedEvents = readonly [
@@ -1235,11 +1172,7 @@ export function decideDemandEventSourcingCommand(
   }
   if (command.commandType === "result.record-target-result") {
     try {
-      recordTargetResultInDemandAggregateState(
-        state,
-        command.result,
-        command.callback,
-      );
+      recordTargetResultInDemandAggregateState(state, command.result, command.callback);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1383,10 +1316,7 @@ export function decideDemandEventSourcingCommand(
   }
   if (command.commandType === "lifecycle.record-decision") {
     try {
-      recordDecisionInDemandAggregateState(
-        state,
-        command.decision.escalationEventId,
-      );
+      recordDecisionInDemandAggregateState(state, command.decision.escalationEventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/awaitingDecision");
@@ -1427,9 +1357,7 @@ export function decideDemandEventSourcingCommand(
         eventType: "lifecycle.demand-continued",
         data: {
           continuation: command.continuation,
-          ...(historicalTestTargetIds.length === 0
-            ? {}
-            : { historicalTestTargetIds }),
+          ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
         },
       }),
     );
@@ -1456,10 +1384,7 @@ function decideReview(
 ): DecidedEvents {
   let decided: Readonly<DemandAggregateState>;
   try {
-    decided = decideTargetResultReviewInDemandAggregateState(
-      state,
-      command.decision,
-    );
+    decided = decideTargetResultReviewInDemandAggregateState(state, command.decision);
   } catch (error: unknown) {
     if (error instanceof DemandAggregateStateError) {
       fail("transition", "$state/targetTasks");
@@ -1476,10 +1401,7 @@ function decideReview(
   const authorization = command.authorization;
   if (authorization !== undefined) {
     try {
-      authorizeProductDefectRemediationInDemandAggregateState(
-        decided,
-        authorization,
-      );
+      authorizeProductDefectRemediationInDemandAggregateState(decided, authorization);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1500,9 +1422,7 @@ function decideReview(
   const escalation = reviewEscalation(decided, command.decision, decidedEvent);
   if (escalation !== null) return Object.freeze([decidedEvent, escalation]);
   const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
-  return brake === null
-    ? singleEvent(decidedEvent)
-    : Object.freeze([decidedEvent, brake]);
+  return brake === null ? singleEvent(decidedEvent) : Object.freeze([decidedEvent, brake]);
 }
 
 function reviewEscalationContent(
@@ -1550,11 +1470,7 @@ function reviewEscalation(
     fail("lifecycle-data", "$/decision/escalation");
   }
   try {
-    escalateDemandAggregateState(
-      decided,
-      escalationEvent.data.escalation,
-      escalationEvent.eventId,
-    );
+    escalateDemandAggregateState(decided, escalationEvent.data.escalation, escalationEvent.eventId);
   } catch (error: unknown) {
     if (error instanceof DemandAggregateStateError) {
       fail("transition", "$state/awaitingDecision");
@@ -1576,9 +1492,7 @@ function reworkBrakeEscalation(
   if (decision.decision !== "rework" || decided.awaitingDecision !== undefined) {
     return null;
   }
-  const target = decided.targetTasks.find(
-    (entry) => entry.targetTaskId === decision.targetTaskId,
-  );
+  const target = decided.targetTasks.find((entry) => entry.targetTaskId === decision.targetTaskId);
   if (
     target === undefined ||
     target.workType === "test" ||
@@ -1655,19 +1569,13 @@ export function evolveDemandEventSourcingState(
 
   if (event.eventType === "publication.demand-published") {
     if (state !== null) fail("transition", "$state");
-    return createInitialDemandAggregateState(
-      event.demandId,
-      event.data.authorityDigest,
-    );
+    return createInitialDemandAggregateState(event.demandId, event.data.authorityDigest);
   }
   if (state === null) fail("transition", "$state");
   if (state.demandId !== event.demandId) fail("identity", "$/demandId");
   if (event.eventType === "evidence.managed-evidence-recorded") {
     try {
-      return recordManagedEvidenceInDemandAggregateState(
-        state,
-        event.data.manifest,
-      );
+      return recordManagedEvidenceInDemandAggregateState(state, event.data.manifest);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/managedEvidence");
@@ -1677,10 +1585,7 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "tasking.target-task-planned") {
     try {
-      return planTargetTaskInDemandAggregateState(
-        state,
-        event.data.taskPackage,
-      );
+      return planTargetTaskInDemandAggregateState(state, event.data.taskPackage);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1700,10 +1605,7 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "delivery.delivery-outcome-recorded") {
     try {
-      return recordDeliveryOutcomeInDemandAggregateState(
-        state,
-        event.data.outcome,
-      );
+      return recordDeliveryOutcomeInDemandAggregateState(state, event.data.outcome);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1747,10 +1649,7 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "review.target-result-decided") {
     try {
-      return decideTargetResultReviewInDemandAggregateState(
-        state,
-        event.data.decision,
-      );
+      return decideTargetResultReviewInDemandAggregateState(state, event.data.decision);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/targetTasks");
@@ -1773,11 +1672,7 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "lifecycle.demand-escalated") {
     try {
-      return escalateDemandAggregateState(
-        state,
-        event.data.escalation,
-        event.eventId,
-      );
+      return escalateDemandAggregateState(state, event.data.escalation, event.eventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/awaitingDecision");
@@ -1787,10 +1682,7 @@ export function evolveDemandEventSourcingState(
   }
   if (event.eventType === "lifecycle.decision-recorded") {
     try {
-      return recordDecisionInDemandAggregateState(
-        state,
-        event.data.decision.escalationEventId,
-      );
+      return recordDecisionInDemandAggregateState(state, event.data.decision.escalationEventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
         fail("transition", "$state/awaitingDecision");

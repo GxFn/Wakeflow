@@ -1,17 +1,18 @@
 import { types } from "node:util";
-
-import {
-  parseDenseArray,
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  RootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  PassiveOwnDataError,
+  parseDenseArray,
+  parsePlainRecord,
+} from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  inspectLedgerAuthorityLayout,
+  materializeLedgerAuthorityLayout,
+} from "./ledger-authority-layout.js";
 import {
   createLedgerAuthorityMemberReference,
   loadLedgerAuthorityRecord,
@@ -20,22 +21,18 @@ import {
 } from "./ledger-authority-reader.js";
 import type { RequirementRecord } from "./ledger-authority-record.js";
 import {
-  LedgerAuthorityStoreError,
-  isLedgerAbortSignal,
-  parseLedgerAuthorityStoreOptions,
   throwLedgerAuthorityStoreError as fail,
   type InitializeLedgerAuthorityStoreOptions,
+  isLedgerAbortSignal,
   type LedgerAuthorityMemberInput,
   type LedgerAuthorityMemberReference,
   type LedgerAuthorityPublicationResult,
+  LedgerAuthorityStoreError,
   type LedgerAuthorityStoreOptions,
   type LoadedLedgerAuthorityRecord,
+  parseLedgerAuthorityStoreOptions,
   type ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";
-import {
-  inspectLedgerAuthorityLayout,
-  materializeLedgerAuthorityLayout,
-} from "./ledger-authority-layout.js";
 import {
   recoverExactLedgerAuthorityRecordPublication,
   recoverLedgerAuthorityRecordPublication,
@@ -68,11 +65,9 @@ function parseInitializeOptions(
     throw error;
   }
   if (
-    record.freshLedger !== true
-    || Object.keys(record).some(
-      (key) => key !== "freshLedger" && key !== "signal",
-    )
-    || (!isLedgerAbortSignal(record.signal) && record.signal !== undefined)
+    record.freshLedger !== true ||
+    Object.keys(record).some((key) => key !== "freshLedger" && key !== "signal") ||
+    (!isLedgerAbortSignal(record.signal) && record.signal !== undefined)
   ) {
     fail("input", "$options");
   }
@@ -84,10 +79,10 @@ export class LedgerAuthorityStore {
 
   constructor(root: RootedDirectory) {
     if (
-      typeof root !== "object"
-      || root === null
-      || types.isProxy(root)
-      || !(root instanceof RootedDirectory)
+      typeof root !== "object" ||
+      root === null ||
+      types.isProxy(root) ||
+      !(root instanceof RootedDirectory)
     ) {
       fail("input", "$root");
     }
@@ -132,12 +127,7 @@ export class LedgerAuthorityStore {
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LedgerAuthorityPublicationResult<RequirementRecord>>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
-    return publishLedgerAuthorityRecord(
-      this.#root,
-      recordValue,
-      membersValue,
-      signal,
-    );
+    return publishLedgerAuthorityRecord(this.#root, recordValue, membersValue, signal);
   }
 
   /** 按类型化记录标识恢复由精简意图记录描述的发布操作。 */
@@ -146,11 +136,7 @@ export class LedgerAuthorityStore {
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
-    return recoverLedgerAuthorityRecordPublication(
-      this.#root,
-      recordIdValue,
-      signal,
-    );
+    return recoverLedgerAuthorityRecordPublication(this.#root, recordIdValue, signal);
   }
 
   /**
@@ -161,11 +147,7 @@ export class LedgerAuthorityStore {
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
-    return recoverExactLedgerAuthorityRecordPublication(
-      this.#root,
-      expectedIntentValue,
-      signal,
-    );
+    return recoverExactLedgerAuthorityRecordPublication(this.#root, expectedIntentValue, signal);
   }
 
   async resolveMemberReference(
@@ -174,17 +156,8 @@ export class LedgerAuthorityStore {
   ): Promise<Readonly<ResolvedLedgerAuthorityMember>> {
     const { signal } = parseLedgerAuthorityStoreOptions(options);
     const reference = parseLedgerAuthorityMemberReference(referenceValue);
-    const loaded = await loadLedgerAuthorityRecord(
-      this.#root,
-      reference.recordId,
-      signal,
-    );
-    return resolveLoadedLedgerAuthorityMemberReference(
-      this.#root,
-      loaded,
-      reference,
-      signal,
-    );
+    const loaded = await loadLedgerAuthorityRecord(this.#root, reference.recordId, signal);
+    return resolveLoadedLedgerAuthorityMemberReference(this.#root, loaded, reference, signal);
   }
 
   /** 在一次批量解析中，同一不可变记录最多加载一次。 */
@@ -216,40 +189,29 @@ export class LedgerAuthorityStore {
       }
     });
     const loadedByRecord = new Map<string, Readonly<LoadedLedgerAuthorityRecord>>();
-    const prepared: Array<Readonly<{
-      reference: Readonly<LedgerAuthorityMemberReference>;
-      loaded: Readonly<LoadedLedgerAuthorityRecord>;
-    }>> = [];
+    const prepared: Array<
+      Readonly<{
+        reference: Readonly<LedgerAuthorityMemberReference>;
+        loaded: Readonly<LoadedLedgerAuthorityRecord>;
+      }>
+    > = [];
     for (const reference of references) {
       const key = reference.recordId;
       let loaded = loadedByRecord.get(key);
       if (loaded === undefined) {
-        loaded = await loadLedgerAuthorityRecord(
-          this.#root,
-          reference.recordId,
-          signal,
-        );
+        loaded = await loadLedgerAuthorityRecord(this.#root, reference.recordId, signal);
         loadedByRecord.set(key, loaded);
       }
       prepared.push(Object.freeze({ reference, loaded }));
     }
     const resolved: ResolvedLedgerAuthorityMember[] = [];
-    for (
-      let index = 0;
-      index < prepared.length;
-      index += LEDGER_MEMBER_READ_CONCURRENCY
-    ) {
+    for (let index = 0; index < prepared.length; index += LEDGER_MEMBER_READ_CONCURRENCY) {
       const settled = await Promise.allSettled(
-        prepared.slice(index, index + LEDGER_MEMBER_READ_CONCURRENCY).map(
-          ({ loaded, reference }) => (
-            resolveLoadedLedgerAuthorityMemberReference(
-              this.#root,
-              loaded,
-              reference,
-              signal,
-            )
+        prepared
+          .slice(index, index + LEDGER_MEMBER_READ_CONCURRENCY)
+          .map(({ loaded, reference }) =>
+            resolveLoadedLedgerAuthorityMemberReference(this.#root, loaded, reference, signal),
           ),
-        ),
       );
       for (const result of settled) {
         if (result.status === "rejected") throw result.reason;
@@ -260,11 +222,6 @@ export class LedgerAuthorityStore {
   }
 }
 
-export {
-  createLedgerAuthorityMemberReference,
-  parseLedgerAuthorityMemberReference,
-};
-export { LedgerAuthorityStoreError } from "./ledger-authority-store-contract.js";
 export type {
   InitializeLedgerAuthorityStoreOptions,
   LedgerAuthorityFileSource,
@@ -277,3 +234,5 @@ export type {
   LoadedLedgerAuthorityRecord,
   ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";
+export { LedgerAuthorityStoreError } from "./ledger-authority-store-contract.js";
+export { createLedgerAuthorityMemberReference, parseLedgerAuthorityMemberReference };

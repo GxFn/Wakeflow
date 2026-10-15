@@ -1,27 +1,27 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
-  parseTaskPackage,
-  TaskPackageError,
-  type ImplementationTaskPackage,
-} from "../tasking/task-package.js";
-import {
   assertDeliveryEnvelopeMatchesTaskPackage,
+  type DeliveryEnvelope,
   DeliveryEnvelopeError,
   parseDeliveryEnvelope,
-  type DeliveryEnvelope,
 } from "../delivery/delivery-envelope.js";
 import {
-  parseImplementationTargetResultReport,
-  ImplementationTargetResultReportError,
+  type ImplementationTaskPackage,
+  parseTaskPackage,
+  TaskPackageError,
+} from "../tasking/task-package.js";
+import {
   type ImplementationTargetResultReport,
+  ImplementationTargetResultReportError,
+  parseImplementationTargetResultReport,
 } from "./implementation-target-result-report.js";
 import {
-  parseTargetResult,
-  TargetResultError,
-  targetResultIdForClaim,
   type ImplementationTargetResult,
+  parseTargetResult,
   type TargetResultBasis,
   type TargetResultDeliveryBinding,
+  TargetResultError,
+  targetResultIdForClaim,
 } from "./target-result.js";
 
 /**
@@ -39,20 +39,20 @@ export interface CreateImplementationTargetResultInput {
 }
 
 export type ImplementationTargetResultErrorReason =
-  "task-package" | "envelope" | "delivery" | "report" | "relation";
+  | "task-package"
+  | "envelope"
+  | "delivery"
+  | "report"
+  | "relation";
 
 const ERROR_MESSAGES = {
-  "task-package":
-    "Implementation Target Result requires a valid implementation TaskPackage.",
+  "task-package": "Implementation Target Result requires a valid implementation TaskPackage.",
   envelope: "Implementation Target Result requires a valid Delivery Envelope.",
   delivery:
     "Implementation Target Result requires an accepted or indeterminate delivery generation.",
-  report:
-    "Implementation Target Result requires a valid implementation Report.",
+  report: "Implementation Target Result requires a valid implementation Report.",
   relation: "Implementation Target Result sources are inconsistent.",
-} as const satisfies Readonly<
-  Record<ImplementationTargetResultErrorReason, string>
->;
+} as const satisfies Readonly<Record<ImplementationTargetResultErrorReason, string>>;
 
 /** implementation来源闭合失败时的稳定错误。 */
 export class ImplementationTargetResultError extends Error {
@@ -74,22 +74,16 @@ function assertReportMatchesTaskPackage(
   report: Readonly<ImplementationTargetResultReport>,
   taskPackage: Readonly<ImplementationTaskPackage>,
 ): void {
-  if (
-    report.repositoryChange.repositoryId !== taskPackage.assignment.repositoryId
-  ) {
+  if (report.repositoryChange.repositoryId !== taskPackage.assignment.repositoryId) {
     fail("relation");
   }
-  const expectedAnchors = taskPackage.acceptanceAnchors.map(
-    (anchor) => anchor.anchorId,
-  );
+  const expectedAnchors = taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId);
   const actualAnchors = report.anchorEvidence.map((entry) => entry.anchorId);
   if (
     actualAnchors.some((anchorId) => !expectedAnchors.includes(anchorId)) ||
     (report.outcome === "completed" &&
       (actualAnchors.length !== expectedAnchors.length ||
-        expectedAnchors.some(
-          (anchorId) => !actualAnchors.includes(anchorId),
-        ))) ||
+        expectedAnchors.some((anchorId) => !actualAnchors.includes(anchorId)))) ||
     (report.outcome === "completed" &&
       taskPackage.commitExpectation === "commit" &&
       report.repositoryChange.disposition !== "committed") ||

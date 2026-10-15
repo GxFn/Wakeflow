@@ -1,28 +1,25 @@
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  DeterministicJsonDocumentError,
-} from "../../foundation/data/deterministic-json-document.js";
+  DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesMatchingTargets,
+} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  recoverDurableAtomicFileStagesMatchingTargets,
-  DurableAtomicFileStageRecoveryError,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
-  inspectDirectoryTreeCandidate,
-  DurableDirectoryTreeCandidateError,
   type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidate,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
-  publishDirectoryTreeCandidateDurably,
   DurableDirectoryTreePublicationError,
+  publishDirectoryTreeCandidateDurably,
 } from "../../foundation/filesystem/durable-directory-tree-publication.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
@@ -32,40 +29,41 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
+  RootedExclusiveFileLockError,
   retireRootedExclusiveFileLockResidue,
   withRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import {
   admitWakeflowResourceOperation,
-  WakeflowResourceProcessingContractError,
   type WakeflowDirectoryContainerRecipe,
   type WakeflowResourceMutationRecipe,
+  WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
 import {
-  LedgerAuthorityStoreError,
+  currentUserId,
+  LEDGER_DURABLE_DIRECTORY_MODE,
+  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
+  LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+  LEDGER_TRANSACTION_FILE_MODE,
+} from "./ledger-authority-storage-policy.js";
+import {
   throwLedgerAuthorityStoreError as fail,
+  LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "./ledger-authority-store-contract.js";
-import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 import {
+  type LedgerRecordPublicationIntent,
+  LedgerRecordPublicationIntentError,
   parseLedgerRecordPublicationIntentDocument,
   renderLedgerRecordPublicationIntent,
   sameLedgerRecordPublicationIntent,
-  LedgerRecordPublicationIntentError,
-  type LedgerRecordPublicationIntent,
 } from "./ledger-record-publication-intent.js";
-import {
-  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
-  LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-  LEDGER_DURABLE_DIRECTORY_MODE,
-  LEDGER_TRANSACTION_FILE_MODE,
-  currentUserId,
-} from "./ledger-authority-storage-policy.js";
+import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 
 /**
  * Wakeflow Governance / Ledger：逐记录发布流程的私有存储与协调边界。
@@ -109,10 +107,7 @@ export async function ledgerPublicationResourceNodeOrNull(
   try {
     return (await root.inspectExistingResource(resourcePath)).node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -123,10 +118,10 @@ export async function ledgerPublicationResourceNodeOrNull(
 function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
   const userId = currentUserId();
   if (
-    node.kind !== "file"
-    || node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE
-    || node.linkCount !== 1n
-    || (userId !== null && node.userId !== userId)
+    node.kind !== "file" ||
+    node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE ||
+    node.linkCount !== 1n ||
+    (userId !== null && node.userId !== userId)
   ) {
     fail("conflict", "$intent");
   }
@@ -135,9 +130,9 @@ function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
 function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
   const userId = currentUserId();
   if (
-    node.kind !== "directory"
-    || node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
-    || (userId !== null && node.userId !== userId)
+    node.kind !== "directory" ||
+    node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE ||
+    (userId !== null && node.userId !== userId)
   ) {
     fail("conflict", "$stage");
   }
@@ -163,10 +158,7 @@ async function readStoredIntent(
       if (error.reason === "too-large") fail("capacity", "$intent");
       fail("conflict", "$intent");
     }
-    if (
-      error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
-    ) {
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("conflict", "$intent");
     }
     throw error;
@@ -214,26 +206,21 @@ export async function ensureLedgerRecordPublicationIntent(
     fail("capacity", "$intent");
   }
   try {
-    await createFileAtomically(
-      root,
-      expected.intentRef,
-      bytes,
-      {
-        mode: LEDGER_TRANSACTION_FILE_MODE,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    await createFileAtomically(root, expected.intentRef, bytes, {
+      mode: LEDGER_TRANSACTION_FILE_MODE,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "capacity") fail("capacity", "$intent");
       if (error.reason === "root-scope") fail("root-scope", "$root");
       if (
-        error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "stage-recovery-required"
-        || error.reason === "close-failure"
+        error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "stage-recovery-required" ||
+        error.reason === "close-failure"
       ) {
         fail("recovery-required", "$intent");
       }
@@ -249,10 +236,7 @@ export async function ensureLedgerRecordPublicationIntent(
     expected.intentRef,
     signal,
   );
-  if (
-    stored === null
-    || !sameLedgerRecordPublicationIntent(stored.intent, expected)
-  ) {
+  if (stored === null || !sameLedgerRecordPublicationIntent(stored.intent, expected)) {
     fail("conflict", "$intent");
   }
   return stored;
@@ -263,11 +247,7 @@ export async function retireLedgerRecordPublicationIntent(
   stored: Readonly<StoredLedgerRecordPublicationIntent>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  admitLedgerResourceOperation(
-    stored.intent,
-    stored.intent.intentRef,
-    "exact-retire",
-  );
+  admitLedgerResourceOperation(stored.intent, stored.intent.intentRef, "exact-retire");
   try {
     await unlinkRegularFileExactly(root, stored.intent.intentRef, {
       expectedNode: stored.node,
@@ -286,10 +266,7 @@ export async function inspectLedgerRecordPublicationResidues(
   root: RootedDirectory,
   intent: Readonly<LedgerRecordPublicationIntent>,
 ): Promise<Readonly<LedgerRecordPublicationResidues>> {
-  const stageNode = await ledgerPublicationResourceNodeOrNull(
-    root,
-    intent.stageRef,
-  );
+  const stageNode = await ledgerPublicationResourceNodeOrNull(root, intent.stageRef);
   if (stageNode !== null) assertTransactionStageNode(stageNode);
   return Object.freeze({
     stageNode,
@@ -350,9 +327,9 @@ function mapLockError(error: RootedExclusiveFileLockError): never {
   if (error.reason === "timeout") fail("lock-timeout", "$lock");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (
-    error.reason === "unsafe-lock"
-    || error.reason === "parent"
-    || error.reason === "root-scope"
+    error.reason === "unsafe-lock" ||
+    error.reason === "parent" ||
+    error.reason === "root-scope"
   ) {
     fail("lock-unsafe", "$lock");
   }
@@ -367,8 +344,7 @@ export async function withLedgerRecordPublicationLock<Result>(
 ): Promise<Result> {
   try {
     return await withRootedExclusiveFileLock(root, lockRef, action, {
-      acquireTimeoutMilliseconds:
-        LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+      acquireTimeoutMilliseconds: LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
@@ -383,22 +359,14 @@ export async function loadExactPublishedLedgerRecord(
   intent: Readonly<LedgerRecordPublicationIntent>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
-  const finalNode = await ledgerPublicationResourceNodeOrNull(
-    root,
-    intent.finalRootRef,
-  );
+  const finalNode = await ledgerPublicationResourceNodeOrNull(root, intent.finalRootRef);
   if (finalNode === null) fail("not-found", "$record");
   if (finalNode.kind !== "directory") fail("conflict", "$record");
   try {
-    await inspectDirectoryTreeCandidate(
-      root,
-      intent.finalRootRef,
-      intent.treePlan,
-      {
-        expectedRootNode: finalNode,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    await inspectDirectoryTreeCandidate(root, intent.finalRootRef, intent.treePlan, {
+      expectedRootNode: finalNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -406,17 +374,13 @@ export async function loadExactPublishedLedgerRecord(
     }
     throw error;
   }
-  const loaded = await loadLedgerAuthorityRecord(
-    root,
-    intent.record.requirementId,
-    signal,
-  );
+  const loaded = await loadLedgerAuthorityRecord(root, intent.record.requirementId, signal);
   if (
-    loaded.recordDigest !== computeLedgerAuthorityRecordDigest(intent.record)
-    || loaded.documents.length !== intent.record.documents.length
-    || loaded.documents.some((document, index) => (
-      document.digest !== intent.record.documents[index]?.digest
-    ))
+    loaded.recordDigest !== computeLedgerAuthorityRecordDigest(intent.record) ||
+    loaded.documents.length !== intent.record.documents.length ||
+    loaded.documents.some(
+      (document, index) => document.digest !== intent.record.documents[index]?.digest,
+    )
   ) {
     fail("conflict", "$record");
   }
@@ -429,11 +393,7 @@ export async function publishLedgerRecordStage(
   candidate: Readonly<DirectoryTreeCandidateResult>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  admitLedgerResourceOperation(
-    intent,
-    intent.finalRootRef,
-    "exact-directory-publish",
-  );
+  admitLedgerResourceOperation(intent, intent.finalRootRef, "exact-directory-publish");
   try {
     await publishDirectoryTreeCandidateDurably(
       root,
@@ -445,10 +405,7 @@ export async function publishLedgerRecordStage(
     if (error instanceof DurableDirectoryTreePublicationError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "cross-device") fail("root-scope", "$stage");
-      if (
-        error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-      ) {
+      if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
         fail("recovery-required", "$stage");
       }
       fail("conflict", "$stage");

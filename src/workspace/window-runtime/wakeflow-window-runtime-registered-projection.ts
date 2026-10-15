@@ -1,46 +1,29 @@
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import {
-  WAKEFLOW_SHA256_DIGEST_SCHEMA,
-} from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import {
-  WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA,
   type WakeflowWindowRuntimeRegisteredProjection as RegisteredProjectionWire,
+  WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA,
 } from "../../contracts/generated/workspace/window-runtime-registered-projection.generated.js";
-import {
-  WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
-} from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  type Sha256Digest,
-} from "../../foundation/crypto/sha256.js";
-import {
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
-import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA } from "../../contracts/generated/workspace/window-runtime-unregistered-projection.generated.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../foundation/data/json-value.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWindowHostBinding,
   type WakeflowWindowHostBinding,
 } from "./wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostBindingId } from "./wakeflow-window-host-binding-id.js";
-import type {
-  WakeflowWindowRuntimeLogicalRoot,
-} from "./wakeflow-window-runtime-desired-topology.js";
+import type { WakeflowWindowRuntimeLogicalRoot } from "./wakeflow-window-runtime-desired-topology.js";
 import {
   wakeflowWindowHostBindingRef,
   wakeflowWindowRuntimeProjectionRef,
@@ -69,21 +52,21 @@ export interface WakeflowWindowRuntimeRegisteredProjection {
   readonly windowId: WakeflowDurableId<"window">;
   readonly role: WakeflowWindowRuntimeUnregisteredProjection["role"];
   readonly logicalRoot: WakeflowWindowRuntimeLogicalRoot;
-  readonly configuredPlacement:
-    WakeflowWindowRuntimeUnregisteredProjection["configuredPlacement"];
+  readonly configuredPlacement: WakeflowWindowRuntimeUnregisteredProjection["configuredPlacement"];
   readonly identity: Readonly<{
     readonly status: "registered";
     readonly bindingRef: PortableResourcePath;
     readonly bindingId: WakeflowWindowHostBindingId;
   }>;
-  readonly rootObservation:
-    WakeflowWindowRuntimeUnregisteredProjection["rootObservation"];
+  readonly rootObservation: WakeflowWindowRuntimeUnregisteredProjection["rootObservation"];
   readonly preflight: Readonly<{
     readonly status: "blocked";
-    readonly blockingReasons: readonly [Readonly<{
-      readonly code: "root-unobserved";
-      readonly source: "root-observation";
-    }>];
+    readonly blockingReasons: readonly [
+      Readonly<{
+        readonly code: "root-unobserved";
+        readonly source: "root-observation";
+      }>,
+    ];
   }>;
   readonly sourceFingerprints: Readonly<{
     readonly desiredTopologyDigest: Sha256Digest;
@@ -101,19 +84,13 @@ export interface WakeflowWindowRuntimeRegisteredProjectionEntry {
   readonly documentDigest: Sha256Digest;
 }
 
-type WakeflowWindowRuntimeRegisteredProjectionErrorReason =
-  | "input"
-  | "schema"
-  | "source";
+type WakeflowWindowRuntimeRegisteredProjectionErrorReason = "input" | "schema" | "source";
 
 const ERROR_MESSAGES = {
   input: "Window Runtime registered projection input is invalid.",
   schema: "Window Runtime registered projection does not satisfy its Schema.",
   source: "Window Runtime registered projection sources are inconsistent.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowRuntimeRegisteredProjectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWindowRuntimeRegisteredProjectionErrorReason, string>>;
 
 /** Registered projection 编译或准入失败的稳定、脱敏错误。 */
 export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
@@ -122,10 +99,7 @@ export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
   readonly reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -134,16 +108,10 @@ export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
 
 const validateWire = createRuntimeJsonSchemaValidator<RegisteredProjectionWire>(
   WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA,
-  [
-    WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
-  ],
+  [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA],
 );
 
-function fail(
-  reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason, path: string): never {
   throw new WakeflowWindowRuntimeRegisteredProjectionError(reason, path);
 }
 
@@ -172,11 +140,11 @@ function assertSources(
   binding: Readonly<WakeflowWindowHostBinding>,
 ): void {
   if (
-    !profile.surfaces.windowIdentity
-    || profile.hostId !== source.hostId
-    || source.programId !== binding.programId
-    || source.hostId !== binding.hostId
-    || source.windowId !== binding.windowId
+    !profile.surfaces.windowIdentity ||
+    profile.hostId !== source.hostId ||
+    source.programId !== binding.programId ||
+    source.hostId !== binding.hostId ||
+    source.windowId !== binding.windowId
   ) {
     fail("source", "$sources");
   }
@@ -195,10 +163,7 @@ function compileWakeflowWindowRuntimeRegisteredProjection(
   try {
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
     source = parseWakeflowWindowRuntimeUnregisteredProjection(unregisteredValue);
-    binding = parseWakeflowWindowHostBinding(
-      bindingValue,
-      identityProfileValue,
-    );
+    binding = parseWakeflowWindowHostBinding(bindingValue, identityProfileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
       fail("input", "$profile");
@@ -234,18 +199,13 @@ function compileWakeflowWindowRuntimeRegisteredProjection(
       windowTopologyDigest: source.sourceFingerprints.windowTopologyDigest,
       rootObservationDigest: source.sourceFingerprints.rootObservationDigest,
     }),
-  } satisfies Omit<
-    WakeflowWindowRuntimeRegisteredProjection,
-    "projectionDigest"
-  >;
+  } satisfies Omit<WakeflowWindowRuntimeRegisteredProjection, "projectionDigest">;
   const body = projectionBasis(basis);
   const projection = Object.freeze({
     ...body,
     projectionDigest: computeCanonicalJsonSha256Digest(body),
   });
-  const validated = validateWire(
-    parseJsonValue(projection, "$projection"),
-  );
+  const validated = validateWire(parseJsonValue(projection, "$projection"));
   if (!validated.ok) fail("schema", validated.path);
   return projection;
 }
@@ -263,20 +223,12 @@ export function compileWakeflowWindowRuntimeRegisteredProjectionEntry(
     unregisteredValue,
     bindingValue,
   );
-  const document = renderDeterministicJsonDocument(
-    projection,
-    "$windowRuntimeProjection",
-  );
+  const document = renderDeterministicJsonDocument(projection, "$windowRuntimeProjection");
   return Object.freeze({
     windowId: projection.windowId,
-    resourceRef: wakeflowWindowRuntimeProjectionRef(
-      profileValue,
-      projection.windowId,
-    ),
+    resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
     projection,
     document,
-    documentDigest: computeSha256Digest(
-      encodeUtf8(document, "$windowRuntimeProjection"),
-    ),
+    documentDigest: computeSha256Digest(encodeUtf8(document, "$windowRuntimeProjection")),
   });
 }

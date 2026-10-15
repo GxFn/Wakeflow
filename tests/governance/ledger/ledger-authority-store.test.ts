@@ -1,7 +1,4 @@
-import {
-  deepEqual,
-  equal,
-} from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -21,40 +18,34 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
   createDirectoryTreeCandidateDurably,
   planDirectoryTreeCandidate,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
-import {
-  createDirectoryAtomically,
-} from "../../../src/foundation/filesystem/durable-directory-materialization.js";
-import {
-  publishDirectoryTreeCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { publishDirectoryTreeCandidateDurably } from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   createRequirementRecord,
-  renderLedgerAuthorityRecord,
   type RequirementRecord,
+  renderLedgerAuthorityRecord,
 } from "../../../src/governance/ledger/ledger-authority-record.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
-  parseLedgerAuthorityMemberReference,
   type LedgerAuthorityStoreErrorReason,
+  parseLedgerAuthorityMemberReference,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   createLedgerRecordPublicationIntent,
   renderLedgerRecordPublicationIntent,
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_RECORDED_AT,
@@ -108,10 +99,9 @@ function requirementRecord(
   requirementId: `requirement_${string}`,
   title: string,
 ): Readonly<RequirementRecord> {
-  return createRequirementRecord(
-    requirementRecordDraft({ requirementId, title }),
-    { clock: () => FIXTURE_RECORDED_AT },
-  );
+  return createRequirementRecord(requirementRecordDraft({ requirementId, title }), {
+    clock: () => FIXTURE_RECORDED_AT,
+  });
 }
 
 function publicationPlan(record: Readonly<RequirementRecord>) {
@@ -126,9 +116,7 @@ function publicationPlan(record: Readonly<RequirementRecord>) {
       bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
       mode: 0o644,
     },
-  ].sort((left, right) => (
-    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
-  ));
+  ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
   return {
     files,
@@ -168,10 +156,7 @@ test("Ledger publishes one requirement package tree and idempotently reuses it",
         ["requirement", `requirements/${REQUIREMENT_ID}/requirement.md`],
       ],
     );
-    equal(
-      statSync(path.join(rootPath, "requirements", REQUIREMENT_ID)).mode & 0o777,
-      0o755,
-    );
+    equal(statSync(path.join(rootPath, "requirements", REQUIREMENT_ID)).mode & 0o777, 0o755);
     equal(
       statSync(path.join(rootPath, "requirements", REQUIREMENT_ID, "record.json")).mode & 0o777,
       0o644,
@@ -204,7 +189,12 @@ test("Ledger publishes one requirement package tree and idempotently reuses it",
       ]),
       [
         ["requirement", "landing", "landing.md", `requirements/${REQUIREMENT_ID}/landing.md`],
-        ["requirement", "requirement", "requirement.md", `requirements/${REQUIREMENT_ID}/requirement.md`],
+        [
+          "requirement",
+          "requirement",
+          "requirement.md",
+          `requirements/${REQUIREMENT_ID}/requirement.md`,
+        ],
       ],
     );
     deepEqual(
@@ -223,15 +213,20 @@ test("Ledger publishes one requirement package tree and idempotently reuses it",
       "input",
     );
     await expectStoreError(
-      () => parseLedgerAuthorityMemberReference({ ...requirementReference, role: "goal-stage-decision" }),
+      () =>
+        parseLedgerAuthorityMemberReference({
+          ...requirementReference,
+          role: "goal-stage-decision",
+        }),
       "input",
     );
     await expectStoreError(
-      () => parseLedgerAuthorityMemberReference({
-        ...requirementReference,
-        memberPath: "Record.json",
-        memberRef: requirementReference.recordRef,
-      }),
+      () =>
+        parseLedgerAuthorityMemberReference({
+          ...requirementReference,
+          memberPath: "Record.json",
+          memberRef: requirementReference.recordRef,
+        }),
       "input",
     );
     await expectStoreError(
@@ -264,13 +259,15 @@ test("complete private stage recovers from exact compact intent without member p
       CANDIDATE_OPTIONS,
     );
     const lockPath = path.join(rootPath, ...publication.intent.lockRef.split("/"));
-    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "99999999-9999-4999-8999-999999999999",
-    }), { mode: 0o600 });
-
-    const recovered = await store.recoverExactRecordPublication(
-      publication.intent,
+    writeFileSync(
+      lockPath,
+      rootedExclusiveFileLockRecordTextForTest({
+        tokenUuid: "99999999-9999-4999-8999-999999999999",
+      }),
+      { mode: 0o600 },
     );
+
+    const recovered = await store.recoverExactRecordPublication(publication.intent);
     equal(recovered.wroteAuthority, true);
     equal(recovered.loaded.recordDigest.length, 71);
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
@@ -309,18 +306,9 @@ test("exact recovery rejects a different intent before lock or publication", asy
       "conflict",
     );
     equal(readFileSync(lockPath, "utf8"), foreignLock);
-    equal(
-      existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))),
-      true,
-    );
-    equal(
-      existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))),
-      true,
-    );
-    equal(
-      existsSync(path.join(rootPath, ...publication.intent.finalRootRef.split("/"))),
-      false,
-    );
+    equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), true);
+    equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), true);
+    equal(existsSync(path.join(rootPath, ...publication.intent.finalRootRef.split("/"))), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -333,14 +321,15 @@ test("recovery without an exact intent preserves an inactive lock residue", asyn
     const record = requirementRecord(REQUIREMENT_ID, "Missing recovery intent");
     const lockRef = publicationPlan(record).intent.lockRef;
     const lockPath = path.join(rootPath, ...lockRef.split("/"));
-    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "77777777-7777-4777-8777-777777777777",
-    }), { mode: 0o600 });
-
-    await expectStoreError(
-      () => store.recoverRecordPublication(REQUIREMENT_ID),
-      "not-found",
+    writeFileSync(
+      lockPath,
+      rootedExclusiveFileLockRecordTextForTest({
+        tokenUuid: "77777777-7777-4777-8777-777777777777",
+      }),
+      { mode: 0o600 },
     );
+
+    await expectStoreError(() => store.recoverRecordPublication(REQUIREMENT_ID), "not-found");
     equal(existsSync(lockPath), true);
   } finally {
     await root.close();
@@ -354,11 +343,9 @@ test("incomplete stage requests exact input and publish retry fills only missing
     const record = requirementRecord(REQUIREMENT_ID, "Resume staged authority");
     const publication = publicationPlan(record);
     writeIntent(rootPath, publication.intent);
-    await createDirectoryAtomically(
-      root,
-      parsePortableResourcePath(publication.intent.stageRef),
-      { mode: 0o755 },
-    );
+    await createDirectoryAtomically(root, parsePortableResourcePath(publication.intent.stageRef), {
+      mode: 0o755,
+    });
     await createFileCandidateDurably(
       root,
       parsePortableResourcePath(`${publication.intent.stageRef}/record.json`),
@@ -400,17 +387,11 @@ test("one pending record intent does not block unrelated reads or publications",
       computeSha256Digest(intendedBytes),
       0o600,
     );
-    const unrelatedStage = durableAtomicFileStageRefForTest(
-      unrelatedTarget,
-      address,
-    );
+    const unrelatedStage = durableAtomicFileStageRefForTest(unrelatedTarget, address);
     try {
-      await createFileCandidateDurably(
-        root,
-        unrelatedStage,
-        encodeUtf8("partial"),
-        { mode: 0o600 },
-      );
+      await createFileCandidateDurably(root, unrelatedStage, encodeUtf8("partial"), {
+        mode: 0o600,
+      });
     } finally {
       releaseDurableAtomicFileStageAddress(address);
     }
@@ -436,10 +417,7 @@ test("same record concurrent publication has one commit and one idempotent resul
       store.publish(record, MEMBERS),
       store.publish(record, MEMBERS),
     ]);
-    deepEqual(
-      results.map((result) => result.wroteAuthority).sort(),
-      [false, true],
-    );
+    deepEqual(results.map((result) => result.wroteAuthority).sort(), [false, true]);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();
@@ -459,11 +437,7 @@ test("published final with remaining exact intent settles forward", async () => 
       publication.files,
       CANDIDATE_OPTIONS,
     );
-    await publishDirectoryTreeCandidateDurably(
-      root,
-      candidate,
-      publication.intent.finalRootRef,
-    );
+    await publishDirectoryTreeCandidateDurably(root, candidate, publication.intent.finalRootRef);
 
     const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
     equal(recovered.wroteAuthority, false);

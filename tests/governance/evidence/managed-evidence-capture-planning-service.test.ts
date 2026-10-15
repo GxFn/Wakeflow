@@ -21,8 +21,8 @@ import {
   EVIDENCE_DESIGN_SURFACE_ID,
   EVIDENCE_REPOSITORY_ID,
   fileSelection,
-  readyCapturePlan,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
+  readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 
 /**
@@ -62,28 +62,55 @@ test("colored and opaque UTF-8 evidence rejects credentials even with controller
         const result = await service(fixture).preview(fixture.demandId, treeSelection(review));
         equal(result.status, "blocked");
         if (result.status === "blocked") {
-          equal(result.review.credentialFindings.some((f) => f.kind === "credential-assignment"), true);
+          equal(
+            result.review.credentialFindings.some((f) => f.kind === "credential-assignment"),
+            true,
+          );
         }
       }
     }
     // §13.161 B9-3：夹着非 UTF-8 字节的成员是 opaque，但凭证类命中仍然阻塞，确认也放不过。
-    writeFileSync(file, Buffer.concat([Buffer.from([0xff, 0xfe, 0x00]), Buffer.from(`\nPASSWORD=${secret}\n`)]));
+    writeFileSync(
+      file,
+      Buffer.concat([Buffer.from([0xff, 0xfe, 0x00]), Buffer.from(`\nPASSWORD=${secret}\n`)]),
+    );
     for (const review of ["reject", "controller-confirmed"] as const) {
       const result = await service(fixture).preview(fixture.demandId, treeSelection(review));
       equal(result.status, "blocked");
       if (result.status === "blocked") {
-        equal(result.review.credentialFindings.some((f) => f.kind === "credential-assignment"), true);
-        equal(result.review.opaqueFileRefs.some((ref) => String(ref).endsWith("colored.txt")), true);
+        equal(
+          result.review.credentialFindings.some((f) => f.kind === "credential-assignment"),
+          true,
+        );
+        equal(
+          result.review.opaqueFileRefs.some((ref) => String(ref).endsWith("colored.txt")),
+          true,
+        );
         equal(JSON.stringify(result).includes(secret), false);
       }
     }
     writeFileSync(file, "\u001b[32mtests passed\u001b[0m\n");
-    const ready = readyCapturePlan(await service(fixture).preview(fixture.demandId, {
-      kind: "test-output",
-      source: { kind: "managed-path", root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID }, path: "artifacts/test-run/logs/colored.txt", resourceType: "file" },
-      contentReview: "reject",
-    }, { clock: () => EVIDENCE_CAPTURED_AT }));
-    deepEqual(ready.manifest.contentReview, { disposition: "not-required", opaqueFileRefs: [], privacyFindings: [] });
+    const ready = readyCapturePlan(
+      await service(fixture).preview(
+        fixture.demandId,
+        {
+          kind: "test-output",
+          source: {
+            kind: "managed-path",
+            root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID },
+            path: "artifacts/test-run/logs/colored.txt",
+            resourceType: "file",
+          },
+          contentReview: "reject",
+        },
+        { clock: () => EVIDENCE_CAPTURED_AT },
+      ),
+    );
+    deepEqual(ready.manifest.contentReview, {
+      disposition: "not-required",
+      opaqueFileRefs: [],
+      privacyFindings: [],
+    });
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }
@@ -348,7 +375,11 @@ test("observation 来源只保留 hook 记录的脱敏投影；link 与 commit �
         { clock: () => EVIDENCE_CAPTURED_AT },
       ),
     );
-    deepEqual(link.manifest.source, { kind: "link", url: "https://example.com/report", digest: null });
+    deepEqual(link.manifest.source, {
+      kind: "link",
+      url: "https://example.com/report",
+      digest: null,
+    });
     const leaking = await service(fixture).preview(
       fixture.demandId,
       {
@@ -368,7 +399,11 @@ test("observation 来源只保留 hook 记录的脱敏投影；link 与 commit �
         fixture.demandId,
         {
           kind: "commit",
-          source: { kind: "commit", repositoryId: EVIDENCE_REPOSITORY_ID, commitOid: "a".repeat(40) },
+          source: {
+            kind: "commit",
+            repositoryId: EVIDENCE_REPOSITORY_ID,
+            commitOid: "a".repeat(40),
+          },
           contentReview: "reject",
         },
         { clock: () => EVIDENCE_CAPTURED_AT },

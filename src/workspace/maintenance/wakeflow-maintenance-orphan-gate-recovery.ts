@@ -1,6 +1,7 @@
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
   RootedDirectory,
@@ -8,20 +9,19 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceJournalRef,
   wakeflowMaintenanceOperationUuid,
-  type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
 import {
   WAKEFLOW_MAINTENANCE_GATE_REF,
@@ -29,8 +29,8 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
-  WakeflowWorkspaceCoreLayoutInspectionError,
   type WakeflowWorkspaceCoreLayoutInspection,
+  WakeflowWorkspaceCoreLayoutInspectionError,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 
 /**
@@ -63,13 +63,9 @@ const ERROR_MESSAGES = {
   "owner-active-or-unknown":
     "Wakeflow maintenance gate owner is active or cannot be proven inactive.",
   "journal-present": "Wakeflow maintenance gate already has a journal.",
-  "transaction-residue":
-    "Wakeflow maintenance transaction root contains residue.",
+  "transaction-residue": "Wakeflow maintenance transaction root contains residue.",
   "recovery-required": "Wakeflow maintenance orphan gate could not be retired safely.",
-} as const satisfies Readonly<Record<
-  WakeflowMaintenanceOrphanGateRecoveryErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowMaintenanceOrphanGateRecoveryErrorReason, string>>;
 
 /** Orphan maintenance gate 恢复失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceOrphanGateRecoveryError extends Error {
@@ -78,20 +74,14 @@ export class WakeflowMaintenanceOrphanGateRecoveryError extends Error {
   readonly reason: WakeflowMaintenanceOrphanGateRecoveryErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowMaintenanceOrphanGateRecoveryErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowMaintenanceOrphanGateRecoveryErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(
-  reason: WakeflowMaintenanceOrphanGateRecoveryErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowMaintenanceOrphanGateRecoveryErrorReason, path: string): never {
   throw new WakeflowMaintenanceOrphanGateRecoveryError(reason, path);
 }
 
@@ -100,16 +90,10 @@ async function journalExists(
   operationId: WakeflowMaintenanceOperationId,
 ): Promise<boolean> {
   try {
-    await root.inspectExistingResource(
-      wakeflowMaintenanceJournalRef(operationId),
-      "$journal",
-    );
+    await root.inspectExistingResource(wakeflowMaintenanceJournalRef(operationId), "$journal");
     return true;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
     if (error instanceof RootedDirectoryError) {
@@ -121,11 +105,9 @@ async function journalExists(
 
 async function materializeTransactions(root: RootedDirectory): Promise<void> {
   try {
-    await materializeDirectoryPath(
-      root,
-      WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-      { mode: 0o700 },
-    );
+    await materializeDirectoryPath(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+      mode: 0o700,
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
       fail("recovery-required", "$transactions");
@@ -136,11 +118,9 @@ async function materializeTransactions(root: RootedDirectory): Promise<void> {
 
 async function assertTransactionsEmpty(root: RootedDirectory): Promise<void> {
   try {
-    await readStableResourceDirectory(
-      root,
-      WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-      { maximumEntries: 0 },
-    );
+    await readStableResourceDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, {
+      maximumEntries: 0,
+    });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "too-many-entries") {
@@ -168,10 +148,7 @@ export async function recoverWakeflowMaintenanceOrphanGate(
   }
   let observation;
   try {
-    observation = await inspectRootedExclusiveFileLock(
-      root,
-      WAKEFLOW_MAINTENANCE_GATE_REF,
-    );
+    observation = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
       fail("recovery-required", "$gate");
@@ -194,11 +171,7 @@ export async function recoverWakeflowMaintenanceOrphanGate(
   await materializeTransactions(root);
   await assertTransactionsEmpty(root);
   try {
-    await retireRootedExclusiveFileLockResidue(
-      root,
-      WAKEFLOW_MAINTENANCE_GATE_REF,
-      observation,
-    );
+    await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_MAINTENANCE_GATE_REF, observation);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
       fail("recovery-required", "$gate");

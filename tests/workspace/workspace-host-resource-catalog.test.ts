@@ -1,25 +1,14 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import type {
-  WakeflowResourceProcessingContract,
-} from "../../src/foundation/resource/resource-processing-contract.js";
+import type { WakeflowResourceProcessingContract } from "../../src/foundation/resource/resource-processing-contract.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
 } from "../../src/workspace/workspace-host-resource-profile.js";
-import type {
-  WakeflowWorkspaceResourceNodePolicy,
-} from "../../src/workspace/workspace-resource-declaration.js";
-import {
-  createWakeflowWorkspaceHostResourceCatalog,
-} from "../../src/workspace/workspace-host-resource-catalog.js";
+import type { WakeflowWorkspaceResourceNodePolicy } from "../../src/workspace/workspace-resource-declaration.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -31,18 +20,14 @@ function modeOf(nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>): stri
   return nodePolicy.kind === "tree" ? nodePolicy.rootMode : nodePolicy.mode;
 }
 
-function processingOf(
-  processing: Readonly<WakeflowResourceProcessingContract>,
-): string {
+function processingOf(processing: Readonly<WakeflowResourceProcessingContract>): string {
   return processing.kind === "directory-container"
     ? `directory-container:${processing.materializationRecipe}`
     : `${processing.role}:${processing.allowedMutationRecipes.join("+")}`;
 }
 
 test("Codex Host Resource Catalog contains only its static profile surfaces", () => {
-  const catalog = createWakeflowWorkspaceHostResourceCatalog(
-    codexWorkspaceHostResourceProfile,
-  );
+  const catalog = createWakeflowWorkspaceHostResourceCatalog(codexWorkspaceHostResourceProfile);
   deepEqual(
     catalog.map((entry) => ({
       declarationId: entry.declarationId,
@@ -154,19 +139,16 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
   );
   equal(catalog.length, 12);
   equal(
-    catalog.every((entry) =>
-      entry.family === "host-runtime"
-      && entry.scope === "current-host"
-      && !entry.placement.relativePath?.includes("{")),
+    catalog.every(
+      (entry) =>
+        entry.family === "host-runtime" &&
+        entry.scope === "current-host" &&
+        !entry.placement.relativePath?.includes("{"),
+    ),
     true,
   );
   assertDeepFrozen(catalog);
-  deepEqual(
-    createWakeflowWorkspaceHostResourceCatalog(
-      codexWorkspaceHostResourceProfile,
-    ),
-    catalog,
-  );
+  deepEqual(createWakeflowWorkspaceHostResourceCatalog(codexWorkspaceHostResourceProfile), catalog);
 
   let invalidProfile: unknown;
   try {
@@ -174,10 +156,7 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
   } catch (error: unknown) {
     invalidProfile = error;
   }
-  equal(
-    invalidProfile instanceof WakeflowWorkspaceHostResourceProfileError,
-    true,
-  );
+  equal(invalidProfile instanceof WakeflowWorkspaceHostResourceProfileError, true);
 });
 
 test("optional Host resources are compiled from profile values without host branches", () => {
@@ -235,11 +214,9 @@ test("optional Host resources are compiled from profile values without host bran
         processing: "transaction-artifact:exclusive-create+exact-retire",
       },
       {
-        declarationId:
-          "host-runtime.claude-code.window-runtime-projections-root",
+        declarationId: "host-runtime.claude-code.window-runtime-projections-root",
         ownerId: "window-runtime-projection",
-        relativePath:
-          ".wakeflow-local/runtime/hosts/claude-code/projections/window-runtime",
+        relativePath: ".wakeflow-local/runtime/hosts/claude-code/projections/window-runtime",
         tracking: "ignored:runtime-private",
         mode: "0700",
         processing: "directory-container:materialize-directory",
@@ -374,50 +351,49 @@ test("optional Host resources are compiled from profile values without host bran
     equal(statusline.nodePolicy.executablePolicy, "forbidden");
   }
   equal(
-    catalog.every((entry) =>
-      entry.nodePolicy.kind !== "file"
-      || entry.nodePolicy.executablePolicy === "forbidden"),
+    catalog.every(
+      (entry) =>
+        entry.nodePolicy.kind !== "file" || entry.nodePolicy.executablePolicy === "forbidden",
+    ),
     true,
   );
   equal(
-    catalog.every((entry) =>
-      !entry.placement.relativePath?.includes("{")),
+    catalog.every((entry) => !entry.placement.relativePath?.includes("{")),
     true,
   );
   assertDeepFrozen(catalog);
 
-  const capabilityIndependentCodex =
-    parseWakeflowWorkspaceHostResourceProfile({
-      kind: "WakeflowWorkspaceHostResourceProfile",
-      hostId: "codex",
-      runtimeDirectoryName: "codex",
-      instructionFileName: "CUSTOM.md",
-      surfaces: {
-        windowIdentity: false,
-        podReceipts: false,
-        worktree: {
-          launch: "git-worktree",
-          attachedDirectories: "prompt-path",
-        },
-        keepLive: false,
-        windowLocator: true,
-        settingsIntegration: {
-          portablePath: ".tool/settings.json",
-          localPath: ".tool/settings.local.json",
-        },
-        statuslineAsset: { fileName: "statusline.mjs" },
-        tmuxAsset: null,
-        activityMonitor: true,
-        temporaryPrompts: true,
-        runtimeStaleness: "unverified",
-        runtimeRefresh: "user-app-restart",
+  const capabilityIndependentCodex = parseWakeflowWorkspaceHostResourceProfile({
+    kind: "WakeflowWorkspaceHostResourceProfile",
+    hostId: "codex",
+    runtimeDirectoryName: "codex",
+    instructionFileName: "CUSTOM.md",
+    surfaces: {
+      windowIdentity: false,
+      podReceipts: false,
+      worktree: {
+        launch: "git-worktree",
+        attachedDirectories: "prompt-path",
       },
-      launch: { kind: "project-thread" },
-    });
+      keepLive: false,
+      windowLocator: true,
+      settingsIntegration: {
+        portablePath: ".tool/settings.json",
+        localPath: ".tool/settings.local.json",
+      },
+      statuslineAsset: { fileName: "statusline.mjs" },
+      tmuxAsset: null,
+      activityMonitor: true,
+      temporaryPrompts: true,
+      runtimeStaleness: "unverified",
+      runtimeRefresh: "user-app-restart",
+    },
+    launch: { kind: "project-thread" },
+  });
   deepEqual(
-    createWakeflowWorkspaceHostResourceCatalog(
-      capabilityIndependentCodex,
-    ).map((entry) => entry.declarationId),
+    createWakeflowWorkspaceHostResourceCatalog(capabilityIndependentCodex).map(
+      (entry) => entry.declarationId,
+    ),
     [
       "host-runtime.codex.root",
       "host-runtime.codex.identity-root",

@@ -1,7 +1,4 @@
-import {
-  equal,
-  match,
-} from "node:assert/strict";
+import { equal, match } from "node:assert/strict";
 import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -13,20 +10,20 @@ import { parsePortableResourcePath } from "../../../src/foundation/filesystem/po
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
-  createRequirementRecord,
-  renderLedgerAuthorityRecord,
-  type RequirementRecord,
-} from "../../../src/governance/ledger/ledger-authority-record.js";
-import {
   ledgerRecordPublicationIntentRef,
   ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
 } from "../../../src/governance/ledger/ledger-authority-paths.js";
 import {
+  createRequirementRecord,
+  type RequirementRecord,
+  renderLedgerAuthorityRecord,
+} from "../../../src/governance/ledger/ledger-authority-record.js";
+import {
   createLedgerRecordPublicationIntent,
+  LedgerRecordPublicationIntentError,
   parseLedgerRecordPublicationIntentDocument,
   renderLedgerRecordPublicationIntent,
-  LedgerRecordPublicationIntentError,
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
 import {
   FIXTURE_RECORDED_AT,
@@ -52,20 +49,21 @@ function fixtureRecord(): Readonly<RequirementRecord> {
 }
 
 function fixturePlan(record: Readonly<RequirementRecord>) {
-  return planDirectoryTreeCandidate([
-    ...MEMBERS.map((member) => ({
-      path: member.path,
-      bytes: member.bytes,
-      mode: 0o644,
-    })),
-    {
-      path: "record.json",
-      bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
-      mode: 0o644,
-    },
-  ].sort((left, right) => (
-    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
-  )), PLAN_OPTIONS);
+  return planDirectoryTreeCandidate(
+    [
+      ...MEMBERS.map((member) => ({
+        path: member.path,
+        bytes: member.bytes,
+        mode: 0o644,
+      })),
+      {
+        path: "record.json",
+        bytes: encodeUtf8(renderLedgerAuthorityRecord(record)),
+        mode: 0o644,
+      },
+    ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)),
+    PLAN_OPTIONS,
+  );
 }
 
 test("Ledger publication intent stores metadata without duplicating member payload", () => {
@@ -121,29 +119,36 @@ test("Ledger publication intent reapplies its owner byte budget", () => {
   if (landing === undefined || requirement === undefined) {
     throw new Error("Expected two fixture members.");
   }
-  const plan = planDirectoryTreeCandidateFromFileDescriptors([{
-    path: parsePortableResourcePath(landing.path),
-    byteCount: parseByteCount(landing.bytes.byteLength),
-    digest: computeSha256Digest(landing.bytes),
-    mode: 0o644,
-  }, {
-    path: parsePortableResourcePath("record.json"),
-    byteCount: parseByteCount(recordBytes.byteLength),
-    digest: computeSha256Digest(recordBytes),
-    mode: 0o644,
-  }, {
-    path: parsePortableResourcePath(requirement.path),
-    byteCount: parseByteCount(4 * 1024 * 1024 + 1),
-    digest: computeSha256Digest(requirement.bytes),
-    mode: 0o644,
-  }], {
-    directoryMode: 0o755,
-    maximumDepth: 64,
-    maximumEntries: 8192,
-    maximumFileBytes: 32 * 1024 * 1024,
-    maximumFiles: 4096,
-    maximumTotalBytes: 256 * 1024 * 1024,
-  });
+  const plan = planDirectoryTreeCandidateFromFileDescriptors(
+    [
+      {
+        path: parsePortableResourcePath(landing.path),
+        byteCount: parseByteCount(landing.bytes.byteLength),
+        digest: computeSha256Digest(landing.bytes),
+        mode: 0o644,
+      },
+      {
+        path: parsePortableResourcePath("record.json"),
+        byteCount: parseByteCount(recordBytes.byteLength),
+        digest: computeSha256Digest(recordBytes),
+        mode: 0o644,
+      },
+      {
+        path: parsePortableResourcePath(requirement.path),
+        byteCount: parseByteCount(4 * 1024 * 1024 + 1),
+        digest: computeSha256Digest(requirement.bytes),
+        mode: 0o644,
+      },
+    ],
+    {
+      directoryMode: 0o755,
+      maximumDepth: 64,
+      maximumEntries: 8192,
+      maximumFileBytes: 32 * 1024 * 1024,
+      maximumFiles: 4096,
+      maximumTotalBytes: 256 * 1024 * 1024,
+    },
+  );
 
   let caught: unknown;
   try {

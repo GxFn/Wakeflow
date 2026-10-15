@@ -4,20 +4,20 @@ import { parsePortableResourcePath } from "../../../src/foundation/filesystem/po
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
-  markdownSectionBodyDigest,
-  normalizeMarkdownAnchor,
-  parseMarkdownSections,
-} from "../../../src/kernel/markdown-sections.js";
-import {
-  createRequirementRecord,
   type CreateRequirementRecordInput,
+  createRequirementRecord,
   type RequirementRecord,
 } from "../../../src/governance/ledger/ledger-authority-record.js";
+import type { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import type {
   LedgerAuthorityMemberInput,
   LoadedLedgerAuthorityRecord,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
-import type { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
+import {
+  markdownSectionBodyDigest,
+  normalizeMarkdownAnchor,
+  parseMarkdownSections,
+} from "../../../src/kernel/markdown-sections.js";
 
 /**
  * 需求包 fixture：一份合法的 requirement 类型需求包（requirement.md 与 landing.md），
@@ -79,14 +79,22 @@ export function fixtureDocuments(
   overrides: Partial<Record<"requirement" | "landing", string>> = {},
 ): readonly FixtureDocument[] {
   return [
-    { role: "requirement", path: "requirement.md", text: overrides.requirement ?? FIXTURE_REQUIREMENT_MARKDOWN },
+    {
+      role: "requirement",
+      path: "requirement.md",
+      text: overrides.requirement ?? FIXTURE_REQUIREMENT_MARKDOWN,
+    },
     { role: "landing", path: "landing.md", text: overrides.landing ?? FIXTURE_LANDING_MARKDOWN },
   ];
 }
 
 /** 记录成员与发布成员都按路径升序；ledger 编解码器与发布器按该顺序逐项对应。 */
-function sortedByPath<Item extends { readonly path: string }>(items: readonly Item[]): readonly Item[] {
-  return [...items].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+function sortedByPath<Item extends { readonly path: string }>(
+  items: readonly Item[],
+): readonly Item[] {
+  return [...items].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
 }
 
 export function requirementMembers(
@@ -101,7 +109,9 @@ export function requirementMembers(
 function sectionsOf(documents: readonly FixtureDocument[]) {
   return documents.flatMap((document) =>
     parseMarkdownSections(document.text).flatMap((section) => {
-      const anchor = resolveRequirementSectionAnchor(section.heading) ?? normalizeMarkdownAnchor(section.heading);
+      const anchor =
+        resolveRequirementSectionAnchor(section.heading) ??
+        normalizeMarkdownAnchor(section.heading);
       if (anchor === null) return [];
       return [
         {

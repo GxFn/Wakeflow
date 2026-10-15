@@ -11,34 +11,22 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowGitignoreBodyAuthority,
-} from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { createWakeflowGitignoreBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
 import {
   recomposeWakeflowWorkspaceGitignore,
   WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
-import {
-  inspectWakeflowManagedTextEnvelope,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
-import {
-  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { inspectWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -57,10 +45,7 @@ async function fixture(
   source?: string | Uint8Array,
   initializeGit = true,
 ): Promise<Readonly<GitFixture>> {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-gitignore-recomposition-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-gitignore-recomposition-"));
   if (initializeGit) {
     const initialized = spawnSync("git", ["init", "--quiet"], {
       cwd: absolutePath,
@@ -84,18 +69,13 @@ async function fixture(
   return Object.freeze({
     absolutePath,
     gitignorePath,
-    lockPath: path.join(
-      absolutePath,
-      WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-    ),
+    lockPath: path.join(absolutePath, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF),
     root,
   });
 }
 
 function request() {
-  const matrix = createWakeflowWorkspaceStaticResourceMatrix(
-    codexWorkspaceHostResourceProfile,
-  );
+  const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   return Object.freeze({
     matrix,
     expectedMatrixDigest: matrix.matrixDigest,
@@ -124,16 +104,16 @@ async function expectRecompositionError(
 
 test("Gitignore recomposition atomically creates once and then remains current", async (t) => {
   const current = await fixture(t);
-  const created = await recomposeWakeflowWorkspaceGitignore(
-    current.root,
-    request(),
-  );
+  const created = await recomposeWakeflowWorkspaceGitignore(current.root, request());
 
   equal(created.disposition, "created");
   equal(created.effect?.publication, "created");
   equal(created.inspection.status, "managed-current");
   equal(created.inspection.target, null);
-  equal(created.inspection.gitRuleChecks.every((entry) => entry.ignored), true);
+  equal(
+    created.inspection.gitRuleChecks.every((entry) => entry.ignored),
+    true,
+  );
   equal(statSync(current.gitignorePath).mode & 0o777, 0o644);
   equal(existsSync(current.lockPath), false);
   const createdBytes = readFileSync(current.gitignorePath);
@@ -141,22 +121,17 @@ test("Gitignore recomposition atomically creates once and then remains current",
   const envelope = inspectWakeflowManagedTextEnvelope(createdBytes);
   equal(envelope.kind, "managed");
   equal(
-    created.inspection.authority.rules.some((rule) => (
-      rule === "/.wakeflow-config-authority.lock"
-    )),
+    created.inspection.authority.rules.some((rule) => rule === "/.wakeflow-config-authority.lock"),
     true,
   );
   equal(
-    created.inspection.authority.rules.some((rule) => (
-      rule === "/.wakeflow-gitignore-recomposition.lock"
-    )),
+    created.inspection.authority.rules.some(
+      (rule) => rule === "/.wakeflow-gitignore-recomposition.lock",
+    ),
     true,
   );
 
-  const currentReceipt = await recomposeWakeflowWorkspaceGitignore(
-    current.root,
-    request(),
-  );
+  const currentReceipt = await recomposeWakeflowWorkspaceGitignore(current.root, request());
   equal(currentReceipt.disposition, "current");
   equal(currentReceipt.effect, null);
   equal(currentReceipt.inspection.status, "managed-current");
@@ -169,10 +144,7 @@ test("Gitignore recomposition replaces an exact source and preserves user-owned 
   const source = "node_modules/\n# user-owned\n";
   const current = await fixture(t, source);
   const sourceDigest = computeSha256Digest(Buffer.from(source));
-  const receipt = await recomposeWakeflowWorkspaceGitignore(
-    current.root,
-    request(),
-  );
+  const receipt = await recomposeWakeflowWorkspaceGitignore(current.root, request());
 
   equal(receipt.disposition, "replaced");
   equal(receipt.effect?.publication, "replaced");
@@ -190,10 +162,7 @@ test("Gitignore recomposition leaves a satisfying user-owned file byte-exact", a
   const current = await fixture(t, source);
   const before = readFileSync(current.gitignorePath);
   const beforeNode = statSync(current.gitignorePath, { bigint: true });
-  const receipt = await recomposeWakeflowWorkspaceGitignore(
-    current.root,
-    request(),
-  );
+  const receipt = await recomposeWakeflowWorkspaceGitignore(current.root, request());
 
   equal(receipt.disposition, "current");
   equal(receipt.effect, null);
@@ -231,11 +200,8 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
     const controller = new AbortController();
     controller.abort();
     await expectRecompositionError(
-      () => recomposeWakeflowWorkspaceGitignore(
-        current.root,
-        request(),
-        { signal: controller.signal },
-      ),
+      () =>
+        recomposeWakeflowWorkspaceGitignore(current.root, request(), { signal: controller.signal }),
       "aborted",
       "$signal",
     );
@@ -246,8 +212,12 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
     const current = await fixture(subtest);
     let enter: (() => void) | undefined;
     let release: (() => void) | undefined;
-    const entered = new Promise<void>((resolve) => { enter = resolve; });
-    const released = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const holder = withRootedExclusiveFileLock(
       current.root,
       WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
@@ -259,14 +229,11 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
     await entered;
     try {
       await expectRecompositionError(
-        () => recomposeWakeflowWorkspaceGitignore(
-          current.root,
-          request(),
-          {
+        () =>
+          recomposeWakeflowWorkspaceGitignore(current.root, request(), {
             acquireTimeoutMilliseconds: 30,
             retryDelayMilliseconds: 5,
-          },
-        ),
+          }),
         "lock-timeout",
         "$lock",
       );

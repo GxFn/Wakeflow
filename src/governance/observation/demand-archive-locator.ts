@@ -1,4 +1,8 @@
-import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
@@ -13,7 +17,11 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { parseUtcInstant, type UtcInstant, UtcInstantError } from "../../foundation/time/utc-instant.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
 
@@ -69,7 +77,11 @@ function summarize(
     fail("precondition-failed", "archive-manifest", "$archive/manifest/terminalEvent/eventId");
   }
   if (!Number.isSafeInteger(terminal.streamRevision) || (terminal.streamRevision as number) < 2) {
-    fail("precondition-failed", "archive-manifest", "$archive/manifest/terminalEvent/streamRevision");
+    fail(
+      "precondition-failed",
+      "archive-manifest",
+      "$archive/manifest/terminalEvent/streamRevision",
+    );
   }
   let archivedAt: UtcInstant;
   let manifestDigest: Sha256Digest;

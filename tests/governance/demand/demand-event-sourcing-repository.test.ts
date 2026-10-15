@@ -1,55 +1,28 @@
-import {
-  equal,
-  ok,
-  rejects,
-  throws,
-} from "node:assert/strict";
-import {
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { equal, ok, rejects, throws } from "node:assert/strict";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { computeSha256Digest, parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  decideDemandEventSourcingCommand,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import {
-  prepareDemandEventStreamCommit,
-} from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import {
-  DemandFileEventStore,
-} from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import {
-  DemandFileEventSnapshotStore,
-} from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
-import {
-  demandEventSourcingSnapshotRef,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { decideDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { demandEventSourcingSnapshotRef } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { prepareDemandEventStreamCommit } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
+import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -87,10 +60,8 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     const repository = new DemandEventSourcingRepository(root);
     throws(
       () => new DemandEventSourcingRepository(eventStore as never),
-      (error: unknown) => (
-        error instanceof DemandEventSourcingRepositoryError
-        && error.reason === "input"
-      ),
+      (error: unknown) =>
+        error instanceof DemandEventSourcingRepositoryError && error.reason === "input",
     );
     await eventStore.initialize();
 
@@ -110,9 +81,7 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     });
     await eventStore.append(first);
 
-    const snapshotRef = demandEventSourcingSnapshotRef(
-      first.commit.commitSequence,
-    );
+    const snapshotRef = demandEventSourcingSnapshotRef(first.commit.commitSequence);
     const intendedSnapshotBytes = encodeUtf8("intended-snapshot");
     const stageAddress = issueDurableAtomicFileStageAddress(
       "create",
@@ -122,12 +91,7 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     );
     const stageRef = durableAtomicFileStageRefForTest(snapshotRef, stageAddress);
     try {
-      await createFileCandidateDurably(
-        root,
-        stageRef,
-        encodeUtf8("partial"),
-        { mode: 0o600 },
-      );
+      await createFileCandidateDurably(root, stageRef, encodeUtf8("partial"), { mode: 0o600 });
     } finally {
       releaseDurableAtomicFileStageAddress(stageAddress);
     }
@@ -181,18 +145,15 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
       "snapshots",
       "0000000000000001.json",
     );
-    const persistedSnapshot = JSON.parse(
-      readFileSync(snapshotPath, "utf8"),
-    ) as Record<string, unknown>;
+    const persistedSnapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
     const incompatibleSnapshot = {
       ...persistedSnapshot,
       versionCompatibilityDigest: IDENTITY_DIGEST,
     };
-    const incompatibleSnapshotText = `${JSON.stringify(
-      incompatibleSnapshot,
-      null,
-      2,
-    )}\n`;
+    const incompatibleSnapshotText = `${JSON.stringify(incompatibleSnapshot, null, 2)}\n`;
     writeFileSync(snapshotPath, incompatibleSnapshotText, { mode: 0o600 });
     const fallback = await repository.load();
     equal(fallback?.snapshotStatus, "invalid");
@@ -201,12 +162,11 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     equal(readFileSync(snapshotPath, "utf8"), incompatibleSnapshotText);
 
     await repository.publishSnapshot(second.aggregate);
-    writeFileSync(path.join(
-      fixtureRoot,
-      "event-sourcing",
-      "commits",
-      "0000000000000001.json",
-    ), "{}\n", { mode: 0o600 });
+    writeFileSync(
+      path.join(fixtureRoot, "event-sourcing", "commits", "0000000000000001.json"),
+      "{}\n",
+      { mode: 0o600 },
+    );
     const prefixOptimized = await repository.load();
     equal(prefixOptimized?.snapshotStatus, "used");
     equal(prefixOptimized?.snapshotCommitSequence, 2);
@@ -214,8 +174,7 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     await rejects(
       repository.audit(),
       (error: unknown) =>
-        error instanceof DemandEventSourcingRepositoryError &&
-        error.reason === "stream",
+        error instanceof DemandEventSourcingRepositoryError && error.reason === "stream",
     );
   } finally {
     await root.close();

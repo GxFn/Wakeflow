@@ -2,20 +2,17 @@ import {
   createWakeflowDurableId,
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import { parseUuidV4 } from "../../foundation/identity/uuid-v4.js";
 import {
-  parseControllerImplementationReviewDecision,
-  ControllerImplementationReviewDecisionError,
   type ControllerImplementationReviewDecision,
+  ControllerImplementationReviewDecisionError,
+  parseControllerImplementationReviewDecision,
 } from "./controller-implementation-review-decision.js";
 import {
-  parseControllerTestReviewDecision,
-  ControllerTestReviewDecisionError,
   type ControllerTestReviewDecision,
+  ControllerTestReviewDecisionError,
+  parseControllerTestReviewDecision,
 } from "./controller-test-review-decision.js";
 
 /** Controller对implementation或Test TargetResult作出的共享持久Decision联合。 */
@@ -23,16 +20,15 @@ import {
 const DECISION_ID_PREFIX = "target-review-decision_";
 
 export type ControllerReviewDecision =
-  ControllerImplementationReviewDecision | ControllerTestReviewDecision;
+  | ControllerImplementationReviewDecision
+  | ControllerTestReviewDecision;
 
 export type ControllerReviewDecisionErrorReason = "json" | "decision";
 
 const ERROR_MESSAGES = {
   json: "Controller Review Decision is not passive JSON data.",
   decision: "Controller Review Decision variant is invalid.",
-} as const satisfies Readonly<
-  Record<ControllerReviewDecisionErrorReason, string>
->;
+} as const satisfies Readonly<Record<ControllerReviewDecisionErrorReason, string>>;
 
 export class ControllerReviewDecisionError extends Error {
   override readonly name = "ControllerReviewDecisionError";
@@ -49,9 +45,7 @@ function fail(reason: ControllerReviewDecisionErrorReason): never {
   throw new ControllerReviewDecisionError(reason);
 }
 
-export function parseControllerReviewDecision(
-  value: unknown,
-): Readonly<ControllerReviewDecision> {
+export function parseControllerReviewDecision(value: unknown): Readonly<ControllerReviewDecision> {
   let json;
   try {
     json = parseJsonValue(value, "$decision");
@@ -84,14 +78,10 @@ export function parseControllerReviewDecision(
 
 function decisionUuid(value: unknown) {
   const decision = parseControllerReviewDecision(value);
-  return parseUuidV4(
-    decision.targetReviewDecisionId.slice(DECISION_ID_PREFIX.length),
-  );
+  return parseUuidV4(decision.targetReviewDecisionId.slice(DECISION_ID_PREFIX.length));
 }
 
-export function controllerReviewDecisionEventId(
-  value: unknown,
-): WakeflowDurableId<"demand-event"> {
+export function controllerReviewDecisionEventId(value: unknown): WakeflowDurableId<"demand-event"> {
   return createWakeflowDurableId("demand-event", decisionUuid(value));
 }
 

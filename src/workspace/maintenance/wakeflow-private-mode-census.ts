@@ -6,8 +6,8 @@ import {
 } from "../../foundation/filesystem/bounded-directory-tree-scan.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   classifyPrivateNode,

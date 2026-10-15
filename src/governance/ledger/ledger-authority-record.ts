@@ -1,19 +1,18 @@
-import type {
-  WakeflowRequirementRecord as RequirementRecordWire,
-} from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
-import {
-  WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
-} from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowRequirementRecord as RequirementRecordWire } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
+import { WAKEFLOW_REQUIREMENT_RECORD_SCHEMA } from "../../contracts/generated/governance/ledger/requirement-record.generated.js";
 import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -21,37 +20,27 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 
 /**
@@ -68,19 +57,16 @@ import {
  * 校验；成员字节、不可变发布、重新加载和引用解析由 `LedgerAuthorityStore` 负责。
  */
 
-const REQUIREMENT_RECORD_ARTIFACT_KIND =
-  "wakeflow-requirement-record" as const;
+const REQUIREMENT_RECORD_ARTIFACT_KIND = "wakeflow-requirement-record" as const;
 const LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION = 1 as const;
 const REQUIREMENT_DOCUMENT_PATH = "requirement.md";
 const LANDING_DOCUMENT_PATH = "landing.md";
 const ATTACHMENTS_DIRECTORY = "attachments";
 
-export type RequirementDocumentRole =
-  RequirementRecordWire["documents"][number]["role"];
+export type RequirementDocumentRole = RequirementRecordWire["documents"][number]["role"];
 export type RequirementDemandType = RequirementRecordWire["demandType"];
 export type RequirementPriority = RequirementRecordWire["priority"];
-export type RequirementTestingMode =
-  RequirementRecordWire["testingDecision"]["mode"];
+export type RequirementTestingMode = RequirementRecordWire["testingDecision"]["mode"];
 export type RequirementTaskPlanReview = RequirementRecordWire["taskPlanReview"];
 
 export interface LedgerAuthorityDocument {
@@ -142,10 +128,11 @@ type RequirementRecordDraftFields = Omit<
  * 创建输入：省略协议头与写入时间。标识字段接受 `<kind>_<uuid>` 文本外形，由
  * 编解码器解析并授予品牌；已解析的类型化标识原样通过。
  */
-export interface CreateRequirementRecordInput extends Omit<
-  RequirementRecordDraftFields,
-  "requirementId" | "programId" | "originWindowId" | "supersedes"
-> {
+export interface CreateRequirementRecordInput
+  extends Omit<
+    RequirementRecordDraftFields,
+    "requirementId" | "programId" | "originWindowId" | "supersedes"
+  > {
   readonly requirementId: `requirement_${string}`;
   readonly programId: `program_${string}`;
   readonly originWindowId: `window_${string}`;
@@ -169,20 +156,17 @@ export type LedgerAuthorityRecordErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "input": "Ledger authority record input is invalid.",
-  "json": "Ledger authority record is not passive JSON data.",
-  "schema": "Ledger authority record does not satisfy its portable Schema.",
-  "identifier": "Ledger authority record contains an invalid typed identity.",
-  "time": "Ledger authority record contains an invalid instant.",
-  "text": "Ledger authority record contains non-canonical text.",
-  "document": "Ledger authority document inventory is inconsistent.",
-  "section": "Ledger authority section table is inconsistent.",
-  "relation": "Ledger authority record header fields contradict each other.",
-  "representation": "Ledger authority record bytes are not its deterministic domain representation.",
-} as const satisfies Readonly<Record<
-  LedgerAuthorityRecordErrorReason,
-  string
->>;
+  input: "Ledger authority record input is invalid.",
+  json: "Ledger authority record is not passive JSON data.",
+  schema: "Ledger authority record does not satisfy its portable Schema.",
+  identifier: "Ledger authority record contains an invalid typed identity.",
+  time: "Ledger authority record contains an invalid instant.",
+  text: "Ledger authority record contains non-canonical text.",
+  document: "Ledger authority document inventory is inconsistent.",
+  section: "Ledger authority section table is inconsistent.",
+  relation: "Ledger authority record header fields contradict each other.",
+  representation: "Ledger authority record bytes are not its deterministic domain representation.",
+} as const satisfies Readonly<Record<LedgerAuthorityRecordErrorReason, string>>;
 
 /** Ledger 权威记录准入或持久化表示验证失败时返回的稳定、脱敏错误。 */
 export class LedgerAuthorityRecordError extends Error {
@@ -198,18 +182,16 @@ export class LedgerAuthorityRecordError extends Error {
   }
 }
 
-const validateRequirementWire =
-  createRuntimeJsonSchemaValidator<RequirementRecordWire>(
-    WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
-    [
-      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-      WAKEFLOW_SHA256_DIGEST_SCHEMA,
-      WAKEFLOW_UTC_INSTANT_SCHEMA,
-    ],
-  );
+const validateRequirementWire = createRuntimeJsonSchemaValidator<RequirementRecordWire>(
+  WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
+  [
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+  ],
+);
 
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
   "confirmation",
   "demandType",
@@ -230,18 +212,15 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "$draftValidationInstant",
 );
 
-function fail(
-  reason: LedgerAuthorityRecordErrorReason,
-  path: string,
-): never {
+function fail(reason: LedgerAuthorityRecordErrorReason, path: string): never {
   throw new LedgerAuthorityRecordError(reason, path);
 }
 
 function parseCanonicalText(value: string, path: string): string {
   if (
-    !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || CONTROL_EXCEPT_LF_PATTERN.test(value)
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    CONTROL_EXCEPT_LF_PATTERN.test(value)
   ) {
     fail("text", path);
   }
@@ -296,8 +275,8 @@ function parseMemberPath(
     throw error;
   }
   if (
-    memberPath.toLowerCase() === "record.json"
-    || memberPath.toLowerCase().startsWith("record.json/")
+    memberPath.toLowerCase() === "record.json" ||
+    memberPath.toLowerCase().startsWith("record.json/")
   ) {
     fail(reason, path);
   }
@@ -315,11 +294,12 @@ function parseDocument(
   const path = `$/documents/${index}`;
   const memberPath = parseMemberPath(wire.path, "document", `${path}/path`);
   const segments = splitPortableResourcePath(memberPath);
-  const roleMatchesPath = wire.role === "requirement"
-    ? memberPath === REQUIREMENT_DOCUMENT_PATH
-    : wire.role === "landing"
-      ? memberPath === LANDING_DOCUMENT_PATH
-      : segments.length === 2 && segments[0] === ATTACHMENTS_DIRECTORY;
+  const roleMatchesPath =
+    wire.role === "requirement"
+      ? memberPath === REQUIREMENT_DOCUMENT_PATH
+      : wire.role === "landing"
+        ? memberPath === LANDING_DOCUMENT_PATH
+        : segments.length === 2 && segments[0] === ATTACHMENTS_DIRECTORY;
   if (!roleMatchesPath) fail("document", `${path}/path`);
   return Object.freeze({
     role: wire.role,
@@ -330,9 +310,7 @@ function parseDocument(
 }
 
 /** 成员按路径严格升序、无大小写冲突，且恰有一份 requirement.md 与一份 landing.md。 */
-function assertDocumentRelations(
-  documents: readonly Readonly<LedgerAuthorityDocument>[],
-): void {
+function assertDocumentRelations(documents: readonly Readonly<LedgerAuthorityDocument>[]): void {
   const nodesByCaseKey = new Map<
     string,
     Readonly<{ readonly path: string; readonly kind: "directory" | "file" }>
@@ -343,22 +321,16 @@ function assertDocumentRelations(
     const document = documents[index];
     if (document === undefined) fail("document", "$/documents");
     const previous = documents[index - 1];
-    if (
-      previous !== undefined
-      && compareText(previous.path, document.path) >= 0
-    ) {
+    if (previous !== undefined && compareText(previous.path, document.path) >= 0) {
       fail("document", `$/documents/${index}/path`);
     }
     const segments = splitPortableResourcePath(document.path);
     for (let depth = 1; depth <= segments.length; depth += 1) {
       const nodePath = segments.slice(0, depth).join("/");
-      const kind = depth === segments.length ? "file" as const : "directory" as const;
+      const kind = depth === segments.length ? ("file" as const) : ("directory" as const);
       const caseKey = nodePath.toLowerCase();
       const existing = nodesByCaseKey.get(caseKey);
-      if (
-        existing !== undefined
-        && (existing.path !== nodePath || existing.kind !== kind)
-      ) {
+      if (existing !== undefined && (existing.path !== nodePath || existing.kind !== kind)) {
         fail("document", `$/documents/${index}/path`);
       }
       if (existing === undefined) {
@@ -409,31 +381,21 @@ function assertSectionRelations(
   }
 }
 
-function normalizeRequirement(
-  wire: Readonly<RequirementRecordWire>,
-): Readonly<RequirementRecord> {
-  const requirementId = parseId(
-    wire.requirementId,
-    "requirement",
-    "$/requirementId",
-  );
-  const supersedes = wire.supersedes === null
-    ? null
-    : parseId(wire.supersedes, "requirement", "$/supersedes");
+function normalizeRequirement(wire: Readonly<RequirementRecordWire>): Readonly<RequirementRecord> {
+  const requirementId = parseId(wire.requirementId, "requirement", "$/requirementId");
+  const supersedes =
+    wire.supersedes === null ? null : parseId(wire.supersedes, "requirement", "$/supersedes");
   if (supersedes === requirementId) fail("relation", "$/supersedes");
-  if (
-    (wire.demandType === "research")
-    !== (wire.testingDecision.mode === "not-applicable")
-  ) {
+  if ((wire.demandType === "research") !== (wire.testingDecision.mode === "not-applicable")) {
     fail("relation", "$/testingDecision/mode");
   }
-  const documents = Object.freeze(wire.documents.map((document, index) => (
-    parseDocument(document, index)
-  )));
+  const documents = Object.freeze(
+    wire.documents.map((document, index) => parseDocument(document, index)),
+  );
   assertDocumentRelations(documents);
-  const sections = Object.freeze(wire.sections.map((section, index) => (
-    parseSection(section, index)
-  )));
+  const sections = Object.freeze(
+    wire.sections.map((section, index) => parseSection(section, index)),
+  );
   assertSectionRelations(documents, sections);
   return Object.freeze({
     artifactKind: REQUIREMENT_RECORD_ARTIFACT_KIND,
@@ -447,23 +409,18 @@ function normalizeRequirement(
     originWindowId: parseId(wire.originWindowId, "window", "$/originWindowId"),
     testingDecision: Object.freeze({
       mode: wire.testingDecision.mode,
-      summary: parseCanonicalText(
-        wire.testingDecision.summary,
-        "$/testingDecision/summary",
-      ),
+      summary: parseCanonicalText(wire.testingDecision.summary, "$/testingDecision/summary"),
     }),
     taskPlanReview: wire.taskPlanReview,
     supersedes,
-    parked: wire.parked === null
-      ? null
-      : Object.freeze({
-        trigger: parseCanonicalText(wire.parked.trigger, "$/parked/trigger"),
-      }),
+    parked:
+      wire.parked === null
+        ? null
+        : Object.freeze({
+            trigger: parseCanonicalText(wire.parked.trigger, "$/parked/trigger"),
+          }),
     confirmation: Object.freeze({
-      confirmedAt: parseInstant(
-        wire.confirmation.confirmedAt,
-        "$/confirmation/confirmedAt",
-      ),
+      confirmedAt: parseInstant(wire.confirmation.confirmedAt, "$/confirmation/confirmedAt"),
       sectionDigest: parseDigest(
         wire.confirmation.sectionDigest,
         "schema",
@@ -476,9 +433,7 @@ function normalizeRequirement(
 }
 
 /** 将任意 JSON 值解析为字段集合严格受限、关系已闭合的需求包记录。 */
-export function parseLedgerAuthorityRecord(
-  value: unknown,
-): Readonly<LedgerAuthorityRecord> {
+export function parseLedgerAuthorityRecord(value: unknown): Readonly<LedgerAuthorityRecord> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$record");
@@ -511,8 +466,8 @@ function exactDraft(value: unknown): Readonly<Record<string, unknown>> {
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== REQUIREMENT_DRAFT_FIELDS.length
-    || keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])
+    keys.length !== REQUIREMENT_DRAFT_FIELDS.length ||
+    keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])
   ) {
     fail("input", "$draft");
   }
@@ -571,16 +526,11 @@ export function createRequirementRecord(
 
 /** 按唯一字段顺序渲染确定性格式化 JSON 文档。 */
 export function renderLedgerAuthorityRecord(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseLedgerAuthorityRecord(value),
-    "$record",
-  );
+  return renderDeterministicJsonDocument(parseLedgerAuthorityRecord(value), "$record");
 }
 
 /** 解析磁盘文档，并拒绝格式化方式或领域字段顺序发生漂移。 */
-export function parseLedgerAuthorityRecordDocument(
-  text: unknown,
-): Readonly<LedgerAuthorityRecord> {
+export function parseLedgerAuthorityRecordDocument(text: unknown): Readonly<LedgerAuthorityRecord> {
   let json: JsonValue;
   try {
     json = parseDeterministicJsonDocument(text, "$record");
@@ -598,10 +548,6 @@ export function parseLedgerAuthorityRecordDocument(
 }
 
 /** 计算与 JSON 字段顺序无关的 Ledger 权威记录语义摘要。 */
-export function computeLedgerAuthorityRecordDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseLedgerAuthorityRecord(value),
-  );
+export function computeLedgerAuthorityRecordDigest(value: unknown): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(parseLedgerAuthorityRecord(value));
 }

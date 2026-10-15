@@ -1,17 +1,12 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { DurableAtomicFileStageRecoveryReceipt } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import type {
-  DurableAtomicFileStageRecoveryReceipt,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -24,17 +19,13 @@ import {
   createWakeflowWorkspaceStaticResourceOperationContext,
   WakeflowWorkspaceStaticResourceOperationContextError,
 } from "../wakeflow-workspace-static-resource-operation-context.js";
+import { wakeflowProgramInstructionRecompositionLockRef } from "../workspace-host-resource-catalog.js";
+import type { WakeflowWorkspaceHostResourceComponent } from "../workspace-host-resource-profile.js";
 import {
-  wakeflowProgramInstructionRecompositionLockRef,
-} from "../workspace-host-resource-catalog.js";
-import type {
-  WakeflowWorkspaceHostResourceComponent,
-} from "../workspace-host-resource-profile.js";
-import {
-  parseWakeflowProgramInstructionInspectionRequest,
-  WakeflowProgramInstructionInspectionError,
   type ParsedWakeflowProgramInstructionInspectionRequest,
+  parseWakeflowProgramInstructionInspectionRequest,
   type WakeflowProgramInstructionInspection,
+  WakeflowProgramInstructionInspectionError,
   type WakeflowProgramInstructionInspectionRequest,
 } from "./wakeflow-program-instruction-inspection.js";
 
@@ -45,8 +36,7 @@ import {
  * 指令文件、不生成正文、不取得锁，也不发布或恢复任何资源。
  */
 
-export const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS =
-  10_000;
+export const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export type WakeflowProgramInstructionRecompositionRequest = Omit<
   WakeflowProgramInstructionInspectionRequest,
@@ -69,8 +59,7 @@ export type WakeflowProgramInstructionRecompositionEffect =
 
 export interface WakeflowProgramInstructionRecompositionReceipt {
   readonly disposition: "current" | "created" | "replaced";
-  readonly effect:
-    Readonly<WakeflowProgramInstructionRecompositionEffect> | null;
+  readonly effect: Readonly<WakeflowProgramInstructionRecompositionEffect> | null;
   readonly inspection: Readonly<WakeflowProgramInstructionInspection>;
 }
 
@@ -78,8 +67,7 @@ export interface WakeflowProgramInstructionRecompositionRecoveryReceipt {
   readonly disposition: "recovered";
   readonly retiredLockDigest: Sha256Digest;
   readonly stageRecovery: Readonly<DurableAtomicFileStageRecoveryReceipt>;
-  readonly recomposition:
-    Readonly<WakeflowProgramInstructionRecompositionReceipt>;
+  readonly recomposition: Readonly<WakeflowProgramInstructionRecompositionReceipt>;
 }
 
 export type WakeflowProgramInstructionRecompositionErrorReason =
@@ -102,31 +90,21 @@ const ERROR_MESSAGES = {
   input: "Wakeflow Program Instruction recomposition input is invalid.",
   "unsupported-platform":
     "Wakeflow Program Instruction recomposition requires POSIX ownership facts.",
-  "root-scope":
-    "Wakeflow Program Instruction recomposition lost its workspace root scope.",
+  "root-scope": "Wakeflow Program Instruction recomposition lost its workspace root scope.",
   "root-policy":
     "Wakeflow Program Instruction recomposition requires a current-user workspace root.",
-  "source-invalid":
-    "Wakeflow Program Instruction source cannot be recomposed safely.",
+  "source-invalid": "Wakeflow Program Instruction source cannot be recomposed safely.",
   capacity: "Wakeflow Program Instruction recomposition exceeds its byte budget.",
-  conflict:
-    "Wakeflow Program Instruction source changed before atomic publication.",
-  "lock-timeout":
-    "Wakeflow Program Instruction recomposition lock acquisition timed out.",
+  conflict: "Wakeflow Program Instruction source changed before atomic publication.",
+  "lock-timeout": "Wakeflow Program Instruction recomposition lock acquisition timed out.",
   "lock-unsafe": "Wakeflow Program Instruction recomposition lock is unsafe.",
   "recovery-not-required":
     "Wakeflow Program Instruction recomposition has no lock residue to recover.",
-  "recovery-required":
-    "Wakeflow Program Instruction recomposition requires explicit recovery.",
+  "recovery-required": "Wakeflow Program Instruction recomposition requires explicit recovery.",
   aborted: "Wakeflow Program Instruction recomposition was aborted before commit.",
-  "effect-failure":
-    "Wakeflow Program Instruction candidate could not be published safely.",
-  "commit-uncertain":
-    "Published Wakeflow Program Instruction could not be proven exact.",
-} as const satisfies Readonly<Record<
-  WakeflowProgramInstructionRecompositionErrorReason,
-  string
->>;
+  "effect-failure": "Wakeflow Program Instruction candidate could not be published safely.",
+  "commit-uncertain": "Published Wakeflow Program Instruction could not be proven exact.",
+} as const satisfies Readonly<Record<WakeflowProgramInstructionRecompositionErrorReason, string>>;
 
 /** Program Instruction 重组与恢复失败的稳定、脱敏错误。 */
 export class WakeflowProgramInstructionRecompositionError extends Error {
@@ -135,10 +113,7 @@ export class WakeflowProgramInstructionRecompositionError extends Error {
   readonly reason: WakeflowProgramInstructionRecompositionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowProgramInstructionRecompositionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowProgramInstructionRecompositionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -166,19 +141,16 @@ export function assertWakeflowProgramInstructionRecompositionRoot(
   value: unknown,
 ): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     failWakeflowProgramInstructionRecomposition("input", "$root");
   }
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -207,19 +179,16 @@ export function parseWakeflowProgramInstructionRecompositionRequest(
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function positiveMilliseconds(value: unknown, path: string): number {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value <= 0
-    || value > 300_000
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
     failWakeflowProgramInstructionRecomposition("input", path);
   }
   return value;
@@ -229,14 +198,10 @@ export function parseWakeflowProgramInstructionRecompositionOptions(
   value: unknown,
 ): Readonly<ParsedWakeflowProgramInstructionRecompositionOptions> {
   const record = plainRecord(value === undefined ? {} : value, "$options");
-  const allowed = new Set([
-    "acquireTimeoutMilliseconds",
-    "retryDelayMilliseconds",
-    "signal",
-  ]);
+  const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
   if (
-    Object.keys(record).some((key) => !allowed.has(key))
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => !allowed.has(key)) ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     failWakeflowProgramInstructionRecomposition("input", "$options");
   }
@@ -248,12 +213,10 @@ export function parseWakeflowProgramInstructionRecompositionOptions(
             record.acquireTimeoutMilliseconds,
             "$options.acquireTimeoutMilliseconds",
           ),
-    retryDelayMilliseconds: record.retryDelayMilliseconds === undefined
-      ? undefined
-      : positiveMilliseconds(
-          record.retryDelayMilliseconds,
-          "$options.retryDelayMilliseconds",
-        ),
+    retryDelayMilliseconds:
+      record.retryDelayMilliseconds === undefined
+        ? undefined
+        : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
     signal: record.signal as AbortSignal | undefined,
   });
 }
@@ -263,8 +226,8 @@ export function parseWakeflowProgramInstructionRecompositionRecoveryOptions(
 ): Readonly<ParsedWakeflowProgramInstructionRecompositionRecoveryOptions> {
   const record = plainRecord(value === undefined ? {} : value, "$options");
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     failWakeflowProgramInstructionRecomposition("input", "$options");
   }
@@ -281,10 +244,7 @@ export function assertWakeflowProgramInstructionRecompositionNotAborted(
 
 export function currentWakeflowProgramInstructionRecompositionUserId(): bigint {
   if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    failWakeflowProgramInstructionRecomposition(
-      "unsupported-platform",
-      "$root",
-    );
+    failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root");
   }
   return BigInt(process.geteuid());
 }
@@ -314,23 +274,14 @@ export function admitWakeflowProgramInstructionLockOperations(
 ): void {
   for (const recipe of ["exclusive-create", "exact-retire"] as const) {
     try {
-      createWakeflowWorkspaceStaticResourceOperationContext(
-        request.matrix,
-        {
-          expectedMatrixDigest: request.expectedMatrixDigest,
-          declarationId:
-            `host-runtime.${request.profile.hostId}.instruction-lock`,
-          recipe,
-        },
-      );
+      createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
+        expectedMatrixDigest: request.expectedMatrixDigest,
+        declarationId: `host-runtime.${request.profile.hostId}.instruction-lock`,
+        recipe,
+      });
     } catch (error: unknown) {
-      if (
-        error instanceof WakeflowWorkspaceStaticResourceOperationContextError
-      ) {
-        failWakeflowProgramInstructionRecomposition(
-          "input",
-          "$request.matrix",
-        );
+      if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
+        failWakeflowProgramInstructionRecomposition("input", "$request.matrix");
       }
       throw error;
     }
@@ -382,10 +333,7 @@ export function mapWakeflowProgramInstructionLockError(
   committed: boolean,
 ): never {
   if (committed) {
-    failWakeflowProgramInstructionRecomposition(
-      "commit-uncertain",
-      "$resourcePath",
-    );
+    failWakeflowProgramInstructionRecomposition("commit-uncertain", "$resourcePath");
   }
   if (error.reason === "input") {
     failWakeflowProgramInstructionRecomposition("input", error.path);
@@ -400,14 +348,11 @@ export function mapWakeflowProgramInstructionLockError(
     failWakeflowProgramInstructionRecomposition("root-scope", "$root");
   }
   if (
-    error.reason === "owner-active"
-    || error.reason === "residue-changed"
-    || error.reason === "release-failure"
+    error.reason === "owner-active" ||
+    error.reason === "residue-changed" ||
+    error.reason === "release-failure"
   ) {
-    failWakeflowProgramInstructionRecomposition(
-      "recovery-required",
-      "$lock",
-    );
+    failWakeflowProgramInstructionRecomposition("recovery-required", "$lock");
   }
   failWakeflowProgramInstructionRecomposition("lock-unsafe", "$lock");
 }

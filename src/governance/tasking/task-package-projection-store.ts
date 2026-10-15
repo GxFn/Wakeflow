@@ -2,31 +2,28 @@ import { types } from "node:util";
 
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+  type DeterministicJsonFileResult,
+  readDeterministicJsonFile,
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
-import {
-  readDeterministicJsonFile,
-  type DeterministicJsonFileResult,
-} from "../../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   RootedDirectory,
@@ -52,12 +49,12 @@ import {
   computeTaskPackageDigest,
   parseTaskPackageDocument,
   renderTaskPackage,
-  TaskPackageError,
   type TaskPackage,
+  TaskPackageError,
 } from "./task-package.js";
 import {
-  taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+  taskPackageProjectionRef,
 } from "./task-package-projection-paths.js";
 
 /**
@@ -129,15 +126,10 @@ const ERROR_MESSAGES = {
   "root-scope": "TaskPackage projection store lost its rooted scope.",
   aborted: "TaskPackage projection operation was aborted.",
   "operation-failure": "TaskPackage projection operation failed.",
-} as const satisfies Readonly<Record<
-  TaskPackageProjectionStoreErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<TaskPackageProjectionStoreErrorReason, string>>;
 
 /** 并发 create 的胜者在 stage 退休前让目标短暂拥有两个硬链接；败者有界重读而不是失败。 */
-const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([
-  1, 2, 4, 8, 16, 32, 64, 128, 256,
-]);
+const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128, 256]);
 
 async function loadCurrentProjection(
   root: RootedDirectory,
@@ -151,10 +143,10 @@ async function loadCurrentProjection(
       return await loadProjection(root, taskPackageId, taskPackageDigest, signal);
     } catch (error: unknown) {
       if (
-        disposition !== "current"
-        || !(error instanceof TaskPackageProjectionStoreError)
-        || error.reason !== "recovery-required"
-        || attempt === CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.length - 1
+        disposition !== "current" ||
+        !(error instanceof TaskPackageProjectionStoreError) ||
+        error.reason !== "recovery-required" ||
+        attempt === CONCURRENT_PUBLICATION_RETRY_DELAYS_MS.length - 1
       ) {
         throw error;
       }
@@ -177,22 +169,13 @@ export class TaskPackageProjectionStoreError extends Error {
   }
 }
 
-function fail(
-  reason: TaskPackageProjectionStoreErrorReason,
-  path: string,
-): never {
+function fail(reason: TaskPackageProjectionStoreErrorReason, path: string): never {
   throw new TaskPackageProjectionStoreError(reason, path);
 }
 
-function parseTaskPackageId(
-  value: unknown,
-): WakeflowDurableId<"task-package"> {
+function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
   try {
-    return parseWakeflowDurableIdOfKind(
-      value,
-      "task-package",
-      "$taskPackageId",
-    );
+    return parseWakeflowDurableIdOfKind(value, "task-package", "$taskPackageId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("input", "$taskPackageId");
@@ -201,7 +184,10 @@ function parseTaskPackageId(
   }
 }
 
-function parseSignal(value: unknown, allowed: ReadonlySet<string>): Readonly<{
+function parseSignal(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+): Readonly<{
   readonly record: Readonly<Record<string, unknown>>;
   readonly signal: AbortSignal | undefined;
 }> {
@@ -213,16 +199,12 @@ function parseSignal(value: unknown, allowed: ReadonlySet<string>): Readonly<{
     throw error;
   }
   if (
-    Object.keys(record).some((key) => !allowed.has(key))
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    Object.keys(record).some((key) => !allowed.has(key)) ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -232,16 +214,11 @@ function parseSignal(value: unknown, allowed: ReadonlySet<string>): Readonly<{
   });
 }
 
-function parseLoadOptions(
-  value: unknown,
-): Readonly<{
+function parseLoadOptions(value: unknown): Readonly<{
   readonly expectedTaskPackageDigest: Sha256Digest;
   readonly signal: AbortSignal | undefined;
 }> {
-  const parsed = parseSignal(
-    value,
-    new Set(["expectedTaskPackageDigest", "signal"]),
-  );
+  const parsed = parseSignal(value, new Set(["expectedTaskPackageDigest", "signal"]));
   if (!Object.hasOwn(parsed.record, "expectedTaskPackageDigest")) {
     fail("input", "$options/expectedTaskPackageDigest");
   }
@@ -271,9 +248,7 @@ function parseMaterializeOptions(
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 function assertPrivateNode(
@@ -282,25 +257,24 @@ function assertPrivateNode(
   path: string,
 ): void {
   if (
-    kind === "file"
-    && node.kind === "file"
-    && node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE
-    && node.linkCount === 2n
-    && (currentUserId() === null || node.userId === currentUserId())
+    kind === "file" &&
+    node.kind === "file" &&
+    node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE &&
+    node.linkCount === 2n &&
+    (currentUserId() === null || node.userId === currentUserId())
   ) {
     // 原子 create 的已发布目标在 stage 退休前短暂拥有两个硬链接；调用方必须重试，
     // 不能在提交者尚未完成耐久结算时把它宣布为 current。
     fail("recovery-required", path);
   }
   if (
-    node.kind !== kind
-    || node.permissionBits !== (
-      kind === "file"
+    node.kind !== kind ||
+    node.permissionBits !==
+      (kind === "file"
         ? TASK_PACKAGE_PROJECTION_FILE_MODE
-        : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE
-    )
-    || (kind === "file" && node.linkCount !== 1n)
-    || (currentUserId() !== null && node.userId !== currentUserId())
+        : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE) ||
+    (kind === "file" && node.linkCount !== 1n) ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("node-policy", path);
   }
@@ -311,21 +285,16 @@ async function projectionNodeOrNull(
   taskPackageId: WakeflowDurableId<"task-package">,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(
-      taskPackageProjectionRef(taskPackageId),
-    )).node;
+    return (await root.inspectExistingResource(taskPackageProjectionRef(taskPackageId))).node;
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) {
       if (
-        error.reason === "ancestor-symlink"
-        || error.reason === "ancestor-type"
-        || error.reason === "resource-alias"
+        error.reason === "ancestor-symlink" ||
+        error.reason === "ancestor-type" ||
+        error.reason === "resource-alias"
       ) {
         fail("node-policy", "$projection");
       }
@@ -345,16 +314,10 @@ function mapProjectionReadError(error: unknown): never {
     if (error.reason === "not-found") {
       fail("projection-not-found", "$projection");
     }
-    if (
-      error.reason === "root-scope"
-      || error.reason === "unsupported-platform"
-    ) {
+    if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
       fail("root-scope", "$root");
     }
-    if (
-      error.reason === "expectation-changed"
-      || error.reason === "source-changed"
-    ) {
+    if (error.reason === "expectation-changed" || error.reason === "source-changed") {
       fail("conflict", "$projection");
     }
     if (error.reason === "too-large") fail("capacity", "$projection");
@@ -364,9 +327,9 @@ function mapProjectionReadError(error: unknown): never {
     fail("operation-failure", "$projection");
   }
   if (
-    error instanceof StrictTextFileError
-    || error instanceof DeterministicJsonDocumentError
-    || error instanceof TaskPackageError
+    error instanceof StrictTextFileError ||
+    error instanceof DeterministicJsonDocumentError ||
+    error instanceof TaskPackageError
   ) {
     fail("conflict", "$projection");
   }
@@ -401,8 +364,8 @@ async function loadProjection(
   }
   const taskPackageDigest = computeTaskPackageDigest(taskPackage);
   if (
-    taskPackage.taskPackageId !== taskPackageId
-    || taskPackageDigest !== expectedTaskPackageDigest
+    taskPackage.taskPackageId !== taskPackageId ||
+    taskPackageDigest !== expectedTaskPackageDigest
   ) {
     fail("conflict", "$projection");
   }
@@ -415,21 +378,14 @@ function mapRepositoryError(error: DemandEventSourcingRepositoryError): never {
   fail("authority", "$events");
 }
 
-function admitProjectionOperations(
-  taskPackage: Readonly<TaskPackage>,
-): void {
+function admitProjectionOperations(taskPackage: Readonly<TaskPackage>): void {
   try {
-    const rootDeclaration = createDemandEventSourcingResourceCatalog(
-      taskPackage.demandId,
-    ).find((entry) => (
-      entry.declarationId
-        === `demand.event-sourcing.${taskPackage.demandId}.task-packages-root`
-    ));
-    if (rootDeclaration === undefined) fail("operation-failure", "$catalog");
-    admitWakeflowResourceOperation(
-      rootDeclaration.processing,
-      "materialize-directory",
+    const rootDeclaration = createDemandEventSourcingResourceCatalog(taskPackage.demandId).find(
+      (entry) =>
+        entry.declarationId === `demand.event-sourcing.${taskPackage.demandId}.task-packages-root`,
     );
+    if (rootDeclaration === undefined) fail("operation-failure", "$catalog");
+    admitWakeflowResourceOperation(rootDeclaration.processing, "materialize-directory");
     admitWakeflowResourceOperation(
       createTaskPackageProjectionResourceDeclaration(
         taskPackage.demandId,
@@ -449,22 +405,19 @@ function admitProjectionOperations(
 function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (
-    error.reason === "root-scope"
-    || error.reason === "parent-changed"
-    || error.reason === "path-changed"
+    error.reason === "root-scope" ||
+    error.reason === "parent-changed" ||
+    error.reason === "path-changed"
   ) {
     fail("root-scope", "$root");
   }
-  if (
-    error.reason === "target-symlink"
-    || error.reason === "target-not-directory"
-  ) {
+  if (error.reason === "target-symlink" || error.reason === "target-not-directory") {
     fail("node-policy", "$projectionRoot");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$projectionRoot");
   }
@@ -473,10 +426,7 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
 
 function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
-  if (
-    error.reason === "root-scope"
-    || error.reason === "parent-changed"
-  ) {
+  if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
   }
   if (error.reason === "capacity") fail("capacity", "$projection");
@@ -484,10 +434,10 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
     fail("recovery-required", "$projection");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "durability-failure"
-    || error.reason === "stage-cleanup-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "stage-cleanup-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$projection");
   }
@@ -500,10 +450,10 @@ export class TaskPackageProjectionStore {
 
   constructor(root: RootedDirectory) {
     if (
-      typeof root !== "object"
-      || root === null
-      || types.isProxy(root)
-      || !(root instanceof RootedDirectory)
+      typeof root !== "object" ||
+      root === null ||
+      types.isProxy(root) ||
+      !(root instanceof RootedDirectory)
     ) {
       fail("input", "$root");
     }
@@ -581,10 +531,7 @@ export class TaskPackageProjectionStore {
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (error: unknown) {
-      if (
-        error instanceof DurableAtomicFileWriteError
-        && error.reason === "target-exists"
-      ) {
+      if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
         disposition = "current";
       } else if (error instanceof DurableAtomicFileWriteError) {
         mapAtomicWriteError(error);
@@ -602,19 +549,13 @@ export class TaskPackageProjectionStore {
         signal,
       );
     } catch (error: unknown) {
-      if (
-        disposition === "created"
-        && error instanceof TaskPackageProjectionStoreError
-      ) {
+      if (disposition === "created" && error instanceof TaskPackageProjectionStoreError) {
         fail("commit-uncertain", "$projection");
       }
       throw error;
     }
     if (projection.source.text !== desiredText) {
-      fail(
-        disposition === "created" ? "commit-uncertain" : "conflict",
-        "$projection",
-      );
+      fail(disposition === "created" ? "commit-uncertain" : "conflict", "$projection");
     }
     return Object.freeze({
       disposition,

@@ -4,7 +4,11 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { type JsonValue, JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
+import {
+  type JsonValue,
+  JsonValueError,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -30,13 +34,13 @@ import {
   type ActiveLayoutInspection,
   inspectActiveLayout,
 } from "../../kernel/active-projection.js";
-import { countIncidents } from "../../kernel/incident.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
   type HostHookEvent,
   scanHostHookObservations,
 } from "../../kernel/hook-observations.js";
+import { countIncidents } from "../../kernel/incident.js";
 import {
   hostHookObservationsRootRef,
   hostRuntimeRootRef,
@@ -46,8 +50,8 @@ import {
 } from "../../kernel/layout.js";
 import {
   listPodWorktreeReceiptsAnyHost,
-  type PodWorktreeReceipt,
   observeWorktreeCheckout,
+  type PodWorktreeReceipt,
   type WorktreeCheckoutObservation,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
@@ -56,6 +60,10 @@ import {
   renderRequirementBoardIndex,
 } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
+import {
+  scanWakeflowLegacyResidue,
+  type WakeflowLegacyResidueScan,
+} from "../../workspace/wakeflow-legacy-residue-scan.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -68,7 +76,10 @@ import {
   WakeflowWindowRuntimeProjectionError,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
-import { buildDemandControllerRoute, type DemandControllerRoute } from "../controller/demand-controller-route.js";
+import {
+  buildDemandControllerRoute,
+  type DemandControllerRoute,
+} from "../controller/demand-controller-route.js";
 import {
   closeDemandOperationRoot,
   openDemandOperationRoot,
@@ -88,15 +99,14 @@ import {
   type ObservedArchivedDemands,
   observeArchivedDemands,
 } from "./archived-demand-observation.js";
-import { WAKEFLOW_OBSERVATION_POLICY, type WakeflowObservationPolicy } from "./observation-policy.js";
+import {
+  WAKEFLOW_OBSERVATION_POLICY,
+  type WakeflowObservationPolicy,
+} from "./observation-policy.js";
 import {
   observeRepositoryPointers,
   type RepositoryPointerObservation,
 } from "./repository-pointer-observation.js";
-import {
-  scanWakeflowLegacyResidue,
-  type WakeflowLegacyResidueScan,
-} from "../../workspace/wakeflow-legacy-residue-scan.js";
 
 /**
  * Wakeflow Governance / Observation：一次观察，多份投影（能力卡 9 §9.1，gate-log §13.94 D4）。
@@ -316,7 +326,11 @@ async function observeDomain<Value>(
       if (error instanceof WakeflowError) throw error;
       fail("io-failure", "aborted", "$signal", { cause: error });
     }
-    return Object.freeze({ status: "unavailable" as const, issue: `${name}:${reason}`, value: null });
+    return Object.freeze({
+      status: "unavailable" as const,
+      issue: `${name}:${reason}`,
+      value: null,
+    });
   }
 }
 
@@ -362,7 +376,9 @@ async function listActiveDemandIds(
       ...signalOptions(signal),
     });
     return listing.entries
-      .filter((entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name))
+      .filter(
+        (entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name),
+      )
       .map((entry) => entry.name)
       .sort();
   } catch (error: unknown) {
@@ -380,10 +396,21 @@ async function observeDemand(
   let demandRoot: RootedDirectory | null = null;
   try {
     demandRoot = await openDemandOperationRoot(root, demandId as WakeflowDurableId<"demand">);
-    const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, store, signalOptions(signal));
+    const loaded = await loadDemandEventSourcingRootAuthority(
+      demandRoot,
+      store,
+      signalOptions(signal),
+    );
     const reviewSnapshot = await readDemandResultReviewSnapshot(demandRoot, signalOptions(signal));
     const route = buildDemandControllerRoute(loaded, reviewSnapshot);
-    return Object.freeze({ demandId, status: "observed" as const, issue: null, loaded, reviewSnapshot, route });
+    return Object.freeze({
+      demandId,
+      status: "observed" as const,
+      issue: null,
+      loaded,
+      reviewSnapshot,
+      route,
+    });
   } catch (error: unknown) {
     const reason = reasonOf(error);
     if (reason === null) throw error;
@@ -424,7 +451,9 @@ async function observeClaims(
       maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
       ...signalOptions(signal),
     });
-    names = listing.entries.filter((entry) => entry.node.kind === "file").map((entry) => entry.name);
+    names = listing.entries
+      .filter((entry) => entry.node.kind === "file")
+      .map((entry) => entry.name);
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
       return Object.freeze({ claims: Object.freeze([]), unreadable: 0 });
@@ -547,30 +576,39 @@ async function observeHostHooks(
     const latestKeys = new Map<string, string>();
     const startKeys = new Map<string, string>();
     const startDigests = new Map<string, Sha256Digest | null>();
-    const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
-      if (!latestBySession.has(record.sessionId) && latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
-        fail("io-failure", "observation-session-limit", "$observations");
-      }
-      const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
-      if (record.event === "session-start") {
-        const previousStart = startKeys.get(record.sessionId);
-        if (previousStart === undefined || previousStart <= key) {
-          startKeys.set(record.sessionId, key);
-          startDigests.set(record.sessionId, record.artifactManifestDigest);
+    const inventory = await scanHostHookObservations(
+      root,
+      hostId,
+      {},
+      (record) => {
+        if (
+          !latestBySession.has(record.sessionId) &&
+          latestBySession.size >= HOOK_RECORDS_MAXIMUM
+        ) {
+          fail("io-failure", "observation-session-limit", "$observations");
         }
-      }
-      const previous = latestKeys.get(record.sessionId);
-      if (previous === undefined || previous <= key) {
-        latestKeys.set(record.sessionId, key);
-        latestBySession.set(record.sessionId, {
-          event: record.event,
-          recordedAt: record.recordedAt,
-          observerManifestDigest: record.artifactManifestDigest,
-          notificationType: record.notificationType,
-          sessionStartObserverManifestDigest: null,
-        });
-      }
-    }, signalOptions(signal));
+        const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+        if (record.event === "session-start") {
+          const previousStart = startKeys.get(record.sessionId);
+          if (previousStart === undefined || previousStart <= key) {
+            startKeys.set(record.sessionId, key);
+            startDigests.set(record.sessionId, record.artifactManifestDigest);
+          }
+        }
+        const previous = latestKeys.get(record.sessionId);
+        if (previous === undefined || previous <= key) {
+          latestKeys.set(record.sessionId, key);
+          latestBySession.set(record.sessionId, {
+            event: record.event,
+            recordedAt: record.recordedAt,
+            observerManifestDigest: record.artifactManifestDigest,
+            notificationType: record.notificationType,
+            sessionStartObserverManifestDigest: null,
+          });
+        }
+      },
+      signalOptions(signal),
+    );
     for (const [sessionId, latest] of latestBySession) {
       latestBySession.set(sessionId, {
         ...latest,
@@ -777,8 +815,8 @@ async function observeSettingsEntry(
     if (read.node.permissionBits !== 0o600) return "mode";
     if (entry === undefined) return "drift";
     const expected = settings.expectedEntry(root.absolutePath);
-    return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings"))
-      === computeCanonicalJsonSha256Digest(expected)
+    return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings")) ===
+      computeCanonicalJsonSha256Digest(expected)
       ? "current"
       : "drift";
   } catch (error: unknown) {
@@ -873,7 +911,8 @@ async function observeHostProjections(
         hostId: host.hostId,
         status: "unavailable" as const,
         issue: inspection.status,
-        runtime: inspection.status === "runtime-missing" ? ("absent" as const) : ("present" as const),
+        runtime:
+          inspection.status === "runtime-missing" ? ("absent" as const) : ("present" as const),
         windows: Object.freeze([]),
       });
     }
@@ -893,10 +932,7 @@ async function observeHostProjections(
       ),
     });
   } catch (error: unknown) {
-    if (
-      error instanceof WakeflowWindowRuntimeProjectionError &&
-      error.reason === "aborted"
-    ) {
+    if (error instanceof WakeflowWindowRuntimeProjectionError && error.reason === "aborted") {
       fail("io-failure", "aborted", "$signal", { cause: error });
     }
     const reason = reasonOf(error);
@@ -935,7 +971,10 @@ function terminalCandidateOf(
   state: RequirementClaimState,
 ): Readonly<ArchivedDemandCandidate> | null {
   if (state.status === "archived" && state.archive !== null) {
-    return Object.freeze({ demandId: state.archive.demandId, archivedAt: state.archive.archivedAt });
+    return Object.freeze({
+      demandId: state.archive.demandId,
+      archivedAt: state.archive.archivedAt,
+    });
   }
   if (
     state.status === "withdrawn" &&
@@ -951,7 +990,9 @@ function terminalCandidateOf(
   return null;
 }
 
-function worktreePodIdsOf(snapshot: Readonly<WakeflowConfigAuthoritySnapshot>): ReadonlySet<string> {
+function worktreePodIdsOf(
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+): ReadonlySet<string> {
   return new Set(
     snapshot.model.pods.filter((pod) => pod.placement === "worktree").map((pod) => pod.podId),
   );
@@ -976,7 +1017,9 @@ export async function observeWorkspace(
 ): Promise<Readonly<WorkspaceObservation>> {
   const { signal, scope } = options;
   const observedAt = observedAtOf(options.clock);
-  const layout = await observeDomain("layout", () => inspectActiveLayout(root, signalOptions(signal)));
+  const layout = await observeDomain("layout", () =>
+    inspectActiveLayout(root, signalOptions(signal)),
+  );
   const board = await observeDomain("board", () => observeBoard(root, signal));
   const demands = await observeDomain("demands", () => observeDemands(root, ledgerRoot, signal));
   const claims = await observeDomain("claims", () => observeClaims(root, signal));
@@ -1076,7 +1119,8 @@ export function orphanWorkClaims(
     observation.bindings.flatMap((host) => host.bindings.map((binding) => binding.bindingId)),
   );
   const bindingsObserved =
-    observation.scope === "full" && observation.bindings.every((host) => host.status === "observed");
+    observation.scope === "full" &&
+    observation.bindings.every((host) => host.status === "observed");
   return Object.freeze(
     (observation.claims.value?.claims ?? []).filter(
       (claim) =>

@@ -1,28 +1,26 @@
 import { types } from "node:util";
-
-import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesForTargets,
+} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import {
-  recoverDurableAtomicFileStagesForTargets,
-  DurableAtomicFileStageRecoveryError,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
+  RootedExclusiveFileLockError,
   retireRootedExclusiveFileLockResidue,
   withRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   readStableResourceDirectory,
@@ -31,28 +29,26 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
-import type { UtcInstant } from "../../foundation/time/utc-instant.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowWindowHostBinding,
   parseWakeflowWindowHostBindingDocument,
   renderWakeflowWindowHostBinding,
-  WakeflowWindowHostBindingError,
   type WakeflowWindowHostBinding,
+  WakeflowWindowHostBindingError,
 } from "./wakeflow-window-host-binding.js";
 import {
   createWakeflowWindowHostBindingId,
   WakeflowWindowHostBindingIdError,
 } from "./wakeflow-window-host-binding-id.js";
-import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type {
   WakeflowWindowHostHandle,
   WakeflowWindowHostIdentityProfile,
@@ -84,7 +80,8 @@ export interface WakeflowWindowHostBindingStoreAuthority {
 }
 
 /** 首次注册写入在通用Store authority之外必须提供的创建事实。 */
-export interface WakeflowWindowHostBindingCreateAuthority extends WakeflowWindowHostBindingStoreAuthority {
+export interface WakeflowWindowHostBindingCreateAuthority
+  extends WakeflowWindowHostBindingStoreAuthority {
   readonly windowId: WakeflowDurableId<"window">;
   readonly bindingRef: PortableResourcePath;
   readonly launchIntentDigest: Sha256Digest;
@@ -128,9 +125,7 @@ const ERROR_MESSAGES = {
   time: "Window Host Binding store clock could not be read safely.",
   "binding-id": "Window Host Binding ID could not be allocated safely.",
   write: "Window Host Binding authority could not be published safely.",
-} as const satisfies Readonly<
-  Record<WakeflowWindowHostBindingStoreErrorReason, string>
->;
+} as const satisfies Readonly<Record<WakeflowWindowHostBindingStoreErrorReason, string>>;
 
 /** Binding store 物理操作失败的稳定、脱敏错误。 */
 export class WakeflowWindowHostBindingStoreError extends Error {
@@ -177,12 +172,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     if (error instanceof PassiveOwnDataError) fail("input", "$options");
     throw error;
   }
-  const allowed = new Set([
-    "acquireTimeoutMilliseconds",
-    "signal",
-    "uuidFactory",
-    "wallClock",
-  ]);
+  const allowed = new Set(["acquireTimeoutMilliseconds", "signal", "uuidFactory", "wallClock"]);
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     fail("input", "$options");
   }
@@ -216,8 +206,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
     wallClock: record.wallClock as UtcWallClock | undefined,
     signal: record.signal as AbortSignal | undefined,
-    acquireTimeoutMilliseconds: record.acquireTimeoutMilliseconds as
-      number | undefined,
+    acquireTimeoutMilliseconds: record.acquireTimeoutMilliseconds as number | undefined,
   });
 }
 
@@ -255,8 +244,7 @@ function privateNode(
   kind: "directory" | "file",
   path: string,
 ): void {
-  const currentUserId =
-    typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
+  const currentUserId = typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
   if (
     node.kind !== kind ||
     node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
@@ -323,14 +311,10 @@ async function readInventory(
 ): Promise<Readonly<WakeflowWindowHostBindingInventory>> {
   let directory;
   try {
-    directory = await readStableResourceDirectory(
-      root,
-      authority.bindingRootRef,
-      {
-        maximumEntries: authority.bindingRefs.length + 1,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    directory = await readStableResourceDirectory(root, authority.bindingRootRef, {
+      maximumEntries: authority.bindingRefs.length + 1,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
@@ -370,10 +354,7 @@ async function readInventory(
     }
     let binding: Readonly<WakeflowWindowHostBinding>;
     try {
-      binding = parseWakeflowWindowHostBindingDocument(
-        read.text,
-        authority.identityProfile,
-      );
+      binding = parseWakeflowWindowHostBindingDocument(read.text, authority.identityProfile);
     } catch (error: unknown) {
       if (error instanceof WakeflowWindowHostBindingError) {
         fail("inventory", "$inventory");
@@ -383,10 +364,8 @@ async function readInventory(
     if (
       binding.programId !== authority.programId ||
       binding.hostId !== authority.resourceProfile.hostId ||
-      wakeflowWindowHostBindingRef(
-        authority.resourceProfile,
-        binding.windowId,
-      ) !== entry.resourcePath
+      wakeflowWindowHostBindingRef(authority.resourceProfile, binding.windowId) !==
+        entry.resourcePath
     ) {
       fail("inventory", "$inventory");
     }
@@ -444,10 +423,7 @@ function sameInventory(
   left: Readonly<WakeflowWindowHostBindingInventory>,
   right: Readonly<WakeflowWindowHostBindingInventory>,
 ): boolean {
-  return (
-    canonicalizeJson(left, "$leftInventory") ===
-    canonicalizeJson(right, "$rightInventory")
-  );
+  return canonicalizeJson(left, "$leftInventory") === canonicalizeJson(right, "$rightInventory");
 }
 
 /**
@@ -483,12 +459,11 @@ export async function inspectWakeflowWindowHostBindingInventory(
 /** 在恢复后的专用锁内提供一份完整 Binding inventory。 */
 export async function withWakeflowWindowHostBindingStore<Result>(
   root: RootedDirectory,
-  authoritySource: Readonly<WakeflowWindowHostBindingStoreAuthority> |
-    (() => Promise<Readonly<WakeflowWindowHostBindingStoreAuthority>>),
+  authoritySource:
+    | Readonly<WakeflowWindowHostBindingStoreAuthority>
+    | (() => Promise<Readonly<WakeflowWindowHostBindingStoreAuthority>>),
   optionsValue: WakeflowWindowHostBindingStoreOptions,
-  operation: (
-    context: Readonly<WakeflowWindowHostBindingStoreContext>,
-  ) => Promise<Result>,
+  operation: (context: Readonly<WakeflowWindowHostBindingStoreContext>) => Promise<Result>,
 ): Promise<Result> {
   if (
     typeof root !== "object" ||
@@ -502,7 +477,8 @@ export async function withWakeflowWindowHostBindingStore<Result>(
   }
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
-  const authority = typeof authoritySource === "function" ? await authoritySource() : authoritySource;
+  const authority =
+    typeof authoritySource === "function" ? await authoritySource() : authoritySource;
   await prepareStaleLockRecovery(root, authority, options.signal);
   try {
     return await withRootedExclusiveFileLock(
@@ -510,8 +486,12 @@ export async function withWakeflowWindowHostBindingStore<Result>(
       authority.lockRef,
       async () => {
         const current = typeof authoritySource === "function" ? await authoritySource() : authority;
-        if (current.lockRef !== authority.lockRef || current.bindingRootRef !== authority.bindingRootRef ||
-          current.programId !== authority.programId || current.resourceProfile.hostId !== authority.resourceProfile.hostId) {
+        if (
+          current.lockRef !== authority.lockRef ||
+          current.bindingRootRef !== authority.bindingRootRef ||
+          current.programId !== authority.programId ||
+          current.resourceProfile.hostId !== authority.resourceProfile.hostId
+        ) {
           fail("input", "$authority");
         }
         await recoverStages(root, current.bindingRefs, options.signal);
@@ -549,23 +529,15 @@ export async function createWakeflowWindowHostBindingInStore(
   let registeredAt: UtcInstant;
   try {
     registeredAt =
-      context.wallClock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(context.wallClock);
+      context.wallClock === undefined ? readUtcWallClock() : readUtcWallClock(context.wallClock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;
   }
   let binding: Readonly<WakeflowWindowHostBinding>;
   try {
-    const allocatedBindingId = createWakeflowWindowHostBindingId(
-      context.uuidFactory,
-    );
-    if (
-      context.inventory.bindings.some(
-        (entry) => entry.bindingId === allocatedBindingId,
-      )
-    ) {
+    const allocatedBindingId = createWakeflowWindowHostBindingId(context.uuidFactory);
+    if (context.inventory.bindings.some((entry) => entry.bindingId === allocatedBindingId)) {
       fail("binding-id", "$bindingId");
     }
     binding = createWakeflowWindowHostBinding(
@@ -595,10 +567,7 @@ export async function createWakeflowWindowHostBindingInStore(
     await createFileAtomically(
       root,
       authority.bindingRef,
-      encodeUtf8(
-        renderWakeflowWindowHostBinding(binding, authority.identityProfile),
-        "$binding",
-      ),
+      encodeUtf8(renderWakeflowWindowHostBinding(binding, authority.identityProfile), "$binding"),
       {
         mode: 0o600,
         ...(context.signal === undefined ? {} : { signal: context.signal }),

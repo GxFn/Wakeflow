@@ -4,8 +4,8 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   computeDeliveryPromptDigest,
   createDeliveryEnvelope,
-  deliveryTaskPackageRef,
   type DeliveryEnvelope,
+  deliveryTaskPackageRef,
   type TargetDeliveryProductDefectRemediationContext,
   type TargetDeliveryReworkContext,
 } from "../../../src/governance/delivery/delivery-envelope.js";
@@ -77,9 +77,7 @@ export interface WorkClaimFixtureOptions {
   readonly claimedAt?: WorkClaim["claimedAt"];
 }
 
-export function createWorkClaimFixture(
-  options: WorkClaimFixtureOptions = {},
-): Readonly<WorkClaim> {
+export function createWorkClaimFixture(options: WorkClaimFixtureOptions = {}): Readonly<WorkClaim> {
   return createWorkClaim({
     claimId: options.claimId ?? DELIVERY_CLAIM_ID,
     hostId: "codex",
@@ -165,8 +163,7 @@ export function createDeliveryOutcomeFixture(
   const envelope = options.envelope ?? createDeliveryEnvelopeFixture({ claim });
   const disposition = options.disposition ?? "accepted";
   const evidenceKind =
-    options.evidenceKind ??
-    (disposition === "accepted" ? "hook-record" : "agent-declaration");
+    options.evidenceKind ?? (disposition === "accepted" ? "hook-record" : "agent-declaration");
   const attemptStatus =
     options.attemptStatus ??
     (disposition === "rejected-before-send" ? "failed-before-send" : "sent");
@@ -184,7 +181,8 @@ export function createDeliveryOutcomeFixture(
     disposition,
     attempt: {
       status: attemptStatus,
-      evidenceDigest: attemptStatus === "sent" ? parseSha256Digest(`sha256:${"a".repeat(64)}`) : null,
+      evidenceDigest:
+        attemptStatus === "sent" ? parseSha256Digest(`sha256:${"a".repeat(64)}`) : null,
     },
     readback: {
       status: readbackStatus,
@@ -194,7 +192,8 @@ export function createDeliveryOutcomeFixture(
     evidence: {
       kind: evidenceKind,
       hookRecordId,
-      rationale: evidenceKind === "controller-resolution" ? "Controller 已核对目标会话记录。" : null,
+      rationale:
+        evidenceKind === "controller-resolution" ? "Controller 已核对目标会话记录。" : null,
     },
     observedAt: options.observedAt ?? DELIVERY_OUTCOME_OBSERVED_AT,
   });

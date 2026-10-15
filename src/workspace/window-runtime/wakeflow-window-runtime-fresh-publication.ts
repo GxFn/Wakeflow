@@ -1,19 +1,12 @@
 import { types } from "node:util";
 
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  hasDurableAtomicFileStagePrefix,
-} from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
-import {
-  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
   createFileAtomically,
@@ -24,12 +17,12 @@ import {
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
-  sameFileNodeIdentity,
   type FileNodeSnapshot,
+  sameFileNodeIdentity,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  splitPortableResourcePath,
   type PortableResourcePath,
+  splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -39,9 +32,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import {
-  StableFileReadError,
-} from "../../foundation/filesystem/stable-file-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
   StrictTextFileError,
@@ -51,9 +42,7 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import {
-  WAKEFLOW_RUNTIME_ROOT_REF,
-} from "../maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -64,14 +53,12 @@ import {
   wakeflowHostProjectionsRootRef,
   wakeflowHostRuntimeRootRef,
 } from "../workspace-host-runtime-paths.js";
+import { WakeflowWindowRuntimeDesiredTopologyError } from "./wakeflow-window-runtime-desired-topology.js";
 import {
   compileWakeflowFreshWindowRuntimeAuthority,
-  WakeflowFreshWindowRuntimeAuthorityError,
   type WakeflowFreshWindowRuntimeAuthority,
+  WakeflowFreshWindowRuntimeAuthorityError,
 } from "./wakeflow-window-runtime-fresh-authority.js";
-import {
-  WakeflowWindowRuntimeDesiredTopologyError,
-} from "./wakeflow-window-runtime-desired-topology.js";
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
@@ -79,8 +66,8 @@ import {
 import { WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES } from "./wakeflow-window-runtime-projection-document.js";
 import {
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
-  WakeflowWindowRuntimeUnregisteredProjectionRecordError,
   type WakeflowWindowRuntimeUnregisteredProjectionEntry,
+  WakeflowWindowRuntimeUnregisteredProjectionRecordError,
 } from "./wakeflow-window-runtime-unregistered-projection.js";
 
 /**
@@ -126,10 +113,7 @@ const ERROR_MESSAGES = {
   "root-scope": "Fresh Window Runtime publication lost workspace scope.",
   aborted: "Fresh Window Runtime publication was aborted.",
   "operation-failure": "Fresh Window Runtime publication failed.",
-} as const satisfies Readonly<Record<
-  WakeflowFreshWindowRuntimePublicationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowFreshWindowRuntimePublicationErrorReason, string>>;
 
 /** Fresh Window Runtime 发布失败的稳定、脱敏错误。 */
 export class WakeflowFreshWindowRuntimePublicationError extends Error {
@@ -138,10 +122,7 @@ export class WakeflowFreshWindowRuntimePublicationError extends Error {
   readonly reason: WakeflowFreshWindowRuntimePublicationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowFreshWindowRuntimePublicationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowFreshWindowRuntimePublicationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -159,28 +140,17 @@ interface DirectoryEffect {
   readonly node: Readonly<FileNodeSnapshot>;
 }
 
-function fail(
-  reason: WakeflowFreshWindowRuntimePublicationErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowFreshWindowRuntimePublicationErrorReason, path: string): never {
   throw new WakeflowFreshWindowRuntimePublicationError(reason, path);
 }
 
-function admitAuthorityOperations(
-  authority: Readonly<WakeflowFreshWindowRuntimeAuthority>,
-): void {
+function admitAuthorityOperations(authority: Readonly<WakeflowFreshWindowRuntimeAuthority>): void {
   try {
     for (const declaration of authority.layoutDeclarations) {
-      admitWakeflowResourceOperation(
-        declaration.processing,
-        "materialize-directory",
-      );
+      admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
     }
     for (const declaration of authority.projectionDeclarations) {
-      admitWakeflowResourceOperation(
-        declaration.processing,
-        "deterministic-rewrite",
-      );
+      admitWakeflowResourceOperation(declaration.processing, "deterministic-rewrite");
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
@@ -199,20 +169,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    !Object.hasOwn(record, "recoveringFreshPublication")
-    || Object.keys(record).some((key) => (
-      key !== "recoveringFreshPublication" && key !== "signal"
-    ))
-    || typeof record.recoveringFreshPublication !== "boolean"
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    !Object.hasOwn(record, "recoveringFreshPublication") ||
+    Object.keys(record).some((key) => key !== "recoveringFreshPublication" && key !== "signal") ||
+    typeof record.recoveringFreshPublication !== "boolean" ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -223,9 +187,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function"
-    ? BigInt(process.geteuid())
-    : null;
+  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 
 function assertPrivateNode(
@@ -234,10 +196,10 @@ function assertPrivateNode(
   path: string,
 ): void {
   if (
-    node.kind !== kind
-    || node.permissionBits !== (kind === "directory" ? 0o700 : 0o600)
-    || (kind === "file" && node.linkCount !== 1n)
-    || (currentUserId() !== null && node.userId !== currentUserId())
+    node.kind !== kind ||
+    node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
+    (kind === "file" && node.linkCount !== 1n) ||
+    (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("prefix-conflict", path);
   }
@@ -270,20 +232,13 @@ async function ensureDirectory(
       node: existing.node,
     });
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       try {
         const created = await createDirectoryAtomically(root, resourcePath, {
           mode: 0o700,
           ...(signal === undefined ? {} : { signal }),
         });
-        assertPrivateNode(
-          created.node,
-          "directory",
-          `$layout/${resourcePath}`,
-        );
+        assertPrivateNode(created.node, "directory", `$layout/${resourcePath}`);
         return Object.freeze({
           resourcePath,
           disposition: "created" as const,
@@ -343,16 +298,11 @@ async function assertExactDirectoryChildren(
   expectedNames: readonly string[],
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  const read = await readPrivateDirectory(
-    root,
-    resourcePath,
-    expectedNames.length + 1,
-    signal,
-  );
+  const read = await readPrivateDirectory(root, resourcePath, expectedNames.length + 1, signal);
   const expected = new Set(expectedNames);
   if (
-    read.entries.length !== expected.size
-    || read.entries.some((entry) => !expected.has(entry.name))
+    read.entries.length !== expected.size ||
+    read.entries.some((entry) => !expected.has(entry.name))
   ) {
     fail("prefix-conflict", `$layout/${resourcePath}`);
   }
@@ -398,13 +348,14 @@ async function assertProjectionNamespaceNames(
   const inventory = await readPrivateDirectory(
     root,
     authority.projectionSet.projectionRootRef,
-    (expected.size * 2) + 1,
+    expected.size * 2 + 1,
     signal,
   );
-  if (inventory.entries.some((entry) => (
-    !expected.has(entry.name)
-    && !hasDurableAtomicFileStagePrefix(entry.name)
-  ))) {
+  if (
+    inventory.entries.some(
+      (entry) => !expected.has(entry.name) && !hasDurableAtomicFileStagePrefix(entry.name),
+    )
+  ) {
     fail("prefix-conflict", "$projectionInventory");
   }
 }
@@ -414,9 +365,9 @@ async function inspectProjectionInventory(
   authority: Readonly<WakeflowFreshWindowRuntimeAuthority>,
   signal: AbortSignal | undefined,
 ) {
-  const expected = new Map(authority.projectionSet.entries.map((entry) => (
-    [expectedFileName(entry), entry] as const
-  )));
+  const expected = new Map(
+    authority.projectionSet.entries.map((entry) => [expectedFileName(entry), entry] as const),
+  );
   if (expected.has("")) fail("authority", "$projectionSet");
   const read = await readPrivateDirectory(
     root,
@@ -428,11 +379,7 @@ async function inspectProjectionInventory(
   for (const directoryEntry of read.entries) {
     const entry = expected.get(directoryEntry.name);
     if (entry === undefined) fail("prefix-conflict", "$projectionInventory");
-    assertPrivateNode(
-      directoryEntry.node,
-      "file",
-      `$projectionInventory/${directoryEntry.name}`,
-    );
+    assertPrivateNode(directoryEntry.node, "file", `$projectionInventory/${directoryEntry.name}`);
     let source;
     try {
       source = await readStrictTextFile(root, entry.resourceRef, {
@@ -477,15 +424,10 @@ async function createMissingProjections(
       fail("capacity", "$projectionWrite");
     }
     try {
-      await createFileAtomically(
-        root,
-        entry.resourceRef,
-        bytes,
-        {
-          mode: 0o600,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
+      await createFileAtomically(root, entry.resourceRef, bytes, {
+        mode: 0o600,
+        ...(signal === undefined ? {} : { signal }),
+      });
       created += 1;
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileWriteError) {
@@ -493,11 +435,11 @@ async function createMissingProjections(
         if (error.reason === "capacity") fail("capacity", "$projectionWrite");
         if (error.reason === "root-scope") fail("root-scope", "$root");
         if (
-          error.reason === "commit-uncertain"
-          || error.reason === "durability-failure"
-          || error.reason === "stage-cleanup-failure"
-          || error.reason === "stage-recovery-required"
-          || error.reason === "close-failure"
+          error.reason === "commit-uncertain" ||
+          error.reason === "durability-failure" ||
+          error.reason === "stage-cleanup-failure" ||
+          error.reason === "stage-recovery-required" ||
+          error.reason === "close-failure"
         ) {
           fail("recovery-required", "$projectionWrite");
         }
@@ -517,10 +459,10 @@ export async function publishFreshWakeflowWindowRuntime(
   optionsValue: WakeflowFreshWindowRuntimePublicationOptions,
 ): Promise<Readonly<WakeflowFreshWindowRuntimePublicationResult>> {
   if (
-    typeof rootValue !== "object"
-    || rootValue === null
-    || types.isProxy(rootValue)
-    || !(rootValue instanceof RootedDirectory)
+    typeof rootValue !== "object" ||
+    rootValue === null ||
+    types.isProxy(rootValue) ||
+    !(rootValue instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -528,16 +470,13 @@ export async function publishFreshWakeflowWindowRuntime(
   if (options.signal?.aborted === true) fail("aborted", "$signal");
   let authority: Readonly<WakeflowFreshWindowRuntimeAuthority>;
   try {
-    authority = compileWakeflowFreshWindowRuntimeAuthority(
-      configValue,
-      profileValue,
-    );
+    authority = compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue);
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowFreshWindowRuntimeAuthorityError
-      || error instanceof WakeflowWindowRuntimeDesiredTopologyError
-      || error instanceof WakeflowWorkspaceHostResourceProfileError
-      || error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError
+      error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
+      error instanceof WakeflowWindowRuntimeDesiredTopologyError ||
+      error instanceof WakeflowWorkspaceHostResourceProfileError ||
+      error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError
     ) {
       fail("authority", error.path);
     }
@@ -556,21 +495,21 @@ export async function publishFreshWakeflowWindowRuntime(
   ];
   const directoryEffects: Readonly<DirectoryEffect>[] = [];
   for (const resourcePath of directoryPaths) {
-    directoryEffects.push(await ensureDirectory(
-      rootValue,
-      resourcePath,
-      options.recoveringFreshPublication,
-      options.signal,
-    ));
+    directoryEffects.push(
+      await ensureDirectory(
+        rootValue,
+        resourcePath,
+        options.recoveringFreshPublication,
+        options.signal,
+      ),
+    );
   }
-  const declaredLayoutPaths = authority.layoutDeclarations.map((entry) => (
-    entry.placement.relativePath
-  ));
+  const declaredLayoutPaths = authority.layoutDeclarations.map(
+    (entry) => entry.placement.relativePath,
+  );
   if (
-    declaredLayoutPaths.length !== directoryPaths.length
-    || declaredLayoutPaths.some((resourcePath, index) => (
-      resourcePath !== directoryPaths[index]
-    ))
+    declaredLayoutPaths.length !== directoryPaths.length ||
+    declaredLayoutPaths.some((resourcePath, index) => resourcePath !== directoryPaths[index])
   ) {
     fail("authority", "$layoutDeclarations");
   }
@@ -605,25 +544,15 @@ export async function publishFreshWakeflowWindowRuntime(
   );
   await assertProjectionNamespaceNames(rootValue, authority, options.signal);
   await recoverProjectionStages(rootValue, authority, options.signal);
-  const before = await inspectProjectionInventory(
-    rootValue,
-    authority,
-    options.signal,
-  );
+  const before = await inspectProjectionInventory(rootValue, authority, options.signal);
   const createdProjectionCount = await createMissingProjections(
     rootValue,
     authority,
     before.current,
     options.signal,
   );
-  const after = await inspectProjectionInventory(
-    rootValue,
-    authority,
-    options.signal,
-  );
-  if (
-    after.current.size !== authority.projectionSet.entries.length
-  ) {
+  const after = await inspectProjectionInventory(rootValue, authority, options.signal);
+  if (after.current.size !== authority.projectionSet.entries.length) {
     fail("operation-failure", "$projectionReadback");
   }
   const finalBindingNode = await assertBindingsEmpty(
@@ -649,9 +578,9 @@ export async function publishFreshWakeflowWindowRuntime(
       fail("prefix-conflict", `$layout/${effect.resourcePath}`);
     }
   }
-  const createdDirectoryCount = directoryEffects.filter((entry) => (
-    entry.disposition === "created"
-  )).length;
+  const createdDirectoryCount = directoryEffects.filter(
+    (entry) => entry.disposition === "created",
+  ).length;
   const observationBasis = {
     kind: "WakeflowFreshWindowRuntimePublicationObservation",
     authorityDigest: authority.authorityDigest,
@@ -672,9 +601,7 @@ export async function publishFreshWakeflowWindowRuntime(
   };
   return Object.freeze({
     disposition:
-      createdDirectoryCount === 0 && createdProjectionCount === 0
-        ? "current"
-        : "created",
+      createdDirectoryCount === 0 && createdProjectionCount === 0 ? "current" : "created",
     authorityDigest: authority.authorityDigest,
     projectionSetDigest: authority.projectionSet.projectionSetDigest,
     createdDirectoryCount,

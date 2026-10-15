@@ -8,16 +8,11 @@ import {
 } from "../../configuration/wakeflow-config.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../foundation/data/passive-own-data.js";
-import {
-  RootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
@@ -25,25 +20,25 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
-  createWakeflowWorkspaceStaticResourceOperationContext,
-  WakeflowWorkspaceStaticResourceOperationContextError,
-  type WakeflowWorkspaceStaticResourceOperationContext,
-} from "../wakeflow-workspace-static-resource-operation-context.js";
-import {
   createWakeflowWorkspaceStaticResourceMatrix,
   parseWakeflowWorkspaceStaticResourceMatrix,
-  WakeflowWorkspaceStaticResourceMatrixError,
   type WakeflowWorkspaceStaticResourceMatrix,
+  WakeflowWorkspaceStaticResourceMatrixError,
 } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
+  createWakeflowWorkspaceStaticResourceOperationContext,
+  type WakeflowWorkspaceStaticResourceOperationContext,
+  WakeflowWorkspaceStaticResourceOperationContextError,
+} from "../wakeflow-workspace-static-resource-operation-context.js";
+import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
   planWakeflowManagedTextAuthorityTransition,
-  WakeflowManagedTextAuthorityTransitionError,
   type WakeflowManagedTextAuthorityTransition,
+  WakeflowManagedTextAuthorityTransitionError,
 } from "./wakeflow-managed-text-authority-transition.js";
 import {
   historicalWakeflowManagedTextTargets,
@@ -51,8 +46,8 @@ import {
 } from "./wakeflow-managed-text-history.js";
 import {
   createWakeflowProgramInstructionBodyAuthority,
-  WakeflowProgramInstructionBodyAuthorityError,
   type WakeflowProgramInstructionBodyAuthority,
+  WakeflowProgramInstructionBodyAuthorityError,
 } from "./wakeflow-program-instruction-body-authority.js";
 
 /**
@@ -73,19 +68,15 @@ export const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
 );
 export const WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE = 0o644;
 
-type WakeflowProgramInstructionInspectionStatus =
-  | "managed-current"
-  | "recompose-required";
+type WakeflowProgramInstructionInspectionStatus = "managed-current" | "recompose-required";
 
 export interface WakeflowProgramInstructionInspection {
   readonly status: WakeflowProgramInstructionInspectionStatus;
   readonly context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   readonly currentConfigDigest: Sha256Digest | null;
   readonly desiredConfigDigest: Sha256Digest;
-  readonly currentAuthority:
-    Readonly<WakeflowProgramInstructionBodyAuthority> | null;
-  readonly desiredAuthority:
-    Readonly<WakeflowProgramInstructionBodyAuthority>;
+  readonly currentAuthority: Readonly<WakeflowProgramInstructionBodyAuthority> | null;
+  readonly desiredAuthority: Readonly<WakeflowProgramInstructionBodyAuthority>;
   readonly source: Readonly<StableFileSource> | null;
   readonly transition: Readonly<WakeflowManagedTextAuthorityTransition>;
 }
@@ -116,25 +107,17 @@ export type WakeflowProgramInstructionInspectionErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Wakeflow Program Instruction inspection input is invalid.",
-  "unsupported-platform":
-    "Wakeflow Program Instruction inspection requires POSIX ownership facts.",
+  "unsupported-platform": "Wakeflow Program Instruction inspection requires POSIX ownership facts.",
   context: "Wakeflow Program Instruction operation context is invalid.",
   authority: "Wakeflow Program Instruction content authority is invalid.",
   source: "Wakeflow Program Instruction source cannot be read stably.",
-  "source-capacity":
-    "Wakeflow Program Instruction source exceeds its byte budget.",
-  "source-policy":
-    "Wakeflow Program Instruction source violates its node policy.",
+  "source-capacity": "Wakeflow Program Instruction source exceeds its byte budget.",
+  "source-policy": "Wakeflow Program Instruction source violates its node policy.",
   envelope: "Wakeflow Program Instruction managed envelope is invalid.",
-  "unknown-managed-body":
-    "Wakeflow Program Instruction managed body is not an admitted render.",
-  "target-capacity":
-    "Wakeflow Program Instruction candidate exceeds its byte budget.",
+  "unknown-managed-body": "Wakeflow Program Instruction managed body is not an admitted render.",
+  "target-capacity": "Wakeflow Program Instruction candidate exceeds its byte budget.",
   aborted: "Wakeflow Program Instruction inspection was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowProgramInstructionInspectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowProgramInstructionInspectionErrorReason, string>>;
 
 /** Program Instruction 只读检查失败的稳定、脱敏错误。 */
 export class WakeflowProgramInstructionInspectionError extends Error {
@@ -143,10 +126,7 @@ export class WakeflowProgramInstructionInspectionError extends Error {
   readonly reason: WakeflowProgramInstructionInspectionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowProgramInstructionInspectionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowProgramInstructionInspectionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -164,10 +144,7 @@ export interface ParsedWakeflowProgramInstructionInspectionRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: WakeflowProgramInstructionInspectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowProgramInstructionInspectionErrorReason, path: string): never {
   throw new WakeflowProgramInstructionInspectionError(reason, path);
 }
 
@@ -190,10 +167,12 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 /** 快照并绑定 Matrix、Host Profile 与 current/desired Config 摘要。 */
@@ -217,13 +196,11 @@ export function parseWakeflowProgramInstructionInspectionRequest(
     "matrix",
     "profile",
   ];
-  const validKeys = record.signal === undefined
-    ? requiredKeys
-    : [...requiredKeys, "signal"].sort();
+  const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
   if (
-    keys.length !== validKeys.length
-    || keys.some((key, index) => key !== validKeys[index])
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    keys.length !== validKeys.length ||
+    keys.some((key, index) => key !== validKeys[index]) ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$request");
   }
@@ -253,17 +230,13 @@ export function parseWakeflowProgramInstructionInspectionRequest(
     throw error;
   }
   if (
-    profile.hostId !== matrix.hostId
-    || createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest
-      !== matrix.matrixDigest
+    profile.hostId !== matrix.hostId ||
+    createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== matrix.matrixDigest
   ) {
     fail("input", "$request.matrix");
   }
 
-  const desiredConfig = parseConfig(
-    record.desiredConfig,
-    "$request.desiredConfig",
-  );
+  const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
   const desiredConfigDigest = parseDigest(
     record.expectedDesiredConfigDigest,
     "$request.expectedDesiredConfigDigest",
@@ -280,17 +253,12 @@ export function parseWakeflowProgramInstructionInspectionRequest(
     currentConfig = null;
     currentConfigDigest = null;
   } else {
-    currentConfig = parseConfig(
-      record.currentConfig,
-      "$request.currentConfig",
-    );
+    currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
     currentConfigDigest = parseDigest(
       record.expectedCurrentConfigDigest,
       "$request.expectedCurrentConfigDigest",
     );
-    if (
-      computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest
-    ) {
+    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
       fail("input", "$request.expectedCurrentConfigDigest");
     }
     if (currentConfig.program.programId !== desiredConfig.program.programId) {
@@ -311,10 +279,10 @@ export function parseWakeflowProgramInstructionInspectionRequest(
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -336,19 +304,15 @@ async function readSource(
   readonly bytes: Uint8Array;
 }> | null> {
   try {
-    const read = await readStableFile(
-      root,
-      request.profile.instructionFileName,
-      {
-        maximumBytes: WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES,
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-      },
-    );
+    const read = await readStableFile(root, request.profile.instructionFileName, {
+      maximumBytes: WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
     if (
-      read.node.kind !== "file"
-      || read.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE
-      || read.node.linkCount !== 1n
-      || read.node.userId !== expectedUserId
+      read.node.kind !== "file" ||
+      read.node.permissionBits !== WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE ||
+      read.node.linkCount !== 1n ||
+      read.node.userId !== expectedUserId
     ) {
       fail("source-policy", "$source");
     }
@@ -384,19 +348,15 @@ async function revalidateSource(
   initial: Awaited<ReturnType<typeof readSource>>,
 ): Promise<void> {
   try {
-    const current = await readStableFile(
-      root,
-      request.profile.instructionFileName,
-      {
-        maximumBytes: WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES,
-        ...(initial === null ? {} : { expectedNode: initial.facts.node }),
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-      },
-    );
+    const current = await readStableFile(root, request.profile.instructionFileName, {
+      maximumBytes: WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES,
+      ...(initial === null ? {} : { expectedNode: initial.facts.node }),
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
     if (
-      initial === null
-      || current.digest !== initial.facts.digest
-      || current.byteCount !== initial.facts.byteCount
+      initial === null ||
+      current.digest !== initial.facts.digest ||
+      current.byteCount !== initial.facts.byteCount
     ) {
       fail("source", "$source");
     }
@@ -433,41 +393,31 @@ export async function inspectWakeflowProgramInstruction(
   requestValue: WakeflowProgramInstructionInspectionRequest,
 ): Promise<Readonly<WakeflowProgramInstructionInspection>> {
   assertRoot(rootValue);
-  const request = parseWakeflowProgramInstructionInspectionRequest(
-    requestValue,
-  );
+  const request = parseWakeflowProgramInstructionInspectionRequest(requestValue);
   if (request.signal?.aborted === true) fail("aborted", "$signal");
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {
-    context = createWakeflowWorkspaceStaticResourceOperationContext(
-      request.matrix,
-      {
-        expectedMatrixDigest: request.expectedMatrixDigest,
-        declarationId: `host-runtime.${request.profile.hostId}.instruction`,
-        recipe: "exact-source-recompose",
-      },
-    );
+    context = createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
+      expectedMatrixDigest: request.expectedMatrixDigest,
+      declarationId: `host-runtime.${request.profile.hostId}.instruction`,
+      recipe: "exact-source-recompose",
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
       fail("context", "$context");
     }
     throw error;
   }
-  const currentAuthority = request.currentConfig === null
-    ? null
-    : createAuthority(request.currentConfig, request.profile);
-  const desiredAuthority = createAuthority(
-    request.desiredConfig,
-    request.profile,
-  );
+  const currentAuthority =
+    request.currentConfig === null ? null : createAuthority(request.currentConfig, request.profile);
+  const desiredAuthority = createAuthority(request.desiredConfig, request.profile);
   const read = await readSource(rootValue, request, currentUserId());
   let transition: Readonly<WakeflowManagedTextAuthorityTransition>;
   try {
-    transition = planWakeflowManagedTextAuthorityTransition(
-      read?.bytes ?? new Uint8Array(),
-      {
-        // C5（§13.167）：前序渲染作为额外 current 目标准入，旧正文被重组为当前渲染而不是阻塞。
-        currentTargets: currentAuthority === null
+    transition = planWakeflowManagedTextAuthorityTransition(read?.bytes ?? new Uint8Array(), {
+      // C5（§13.167）：前序渲染作为额外 current 目标准入，旧正文被重组为当前渲染而不是阻塞。
+      currentTargets:
+        currentAuthority === null
           ? []
           : [
               currentAuthority.envelopeTarget,
@@ -478,9 +428,8 @@ export async function inspectWakeflowProgramInstruction(
                 request.profile,
               ),
             ],
-        desiredTarget: desiredAuthority.envelopeTarget,
-      },
-    );
+      desiredTarget: desiredAuthority.envelopeTarget,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
       if (error.reason === "unadmitted-source") {
@@ -493,16 +442,14 @@ export async function inspectWakeflowProgramInstruction(
     throw error;
   }
   if (
-    transition.target !== null
-    && transition.target.byteCount > WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES
+    transition.target !== null &&
+    transition.target.byteCount > WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES
   ) {
     fail("target-capacity", "$target");
   }
   await revalidateSource(rootValue, request, read);
   return Object.freeze({
-    status: transition.disposition === "current"
-      ? "managed-current"
-      : "recompose-required",
+    status: transition.disposition === "current" ? "managed-current" : "recompose-required",
     context,
     currentConfigDigest: request.currentConfigDigest,
     desiredConfigDigest: request.desiredConfigDigest,

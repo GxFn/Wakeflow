@@ -1,4 +1,3 @@
-import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import {
   mkdirSync,
@@ -44,6 +43,7 @@ import {
 } from "../../../src/kernel/pod-worktree-receipts.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 
 /**
  * 观察 → 投影事实 → 刷新（gate-log §13.94 D5、§13.96）：worktree 检出目录此刻在不在是本地
@@ -226,7 +226,12 @@ function projectionOf(
 ) {
   return renderActiveProjectionFiles(
     buildActiveProjectionFacts(
-      observationOf(fixtureValue, scope, [worktreePod(fixtureValue, receipts)], observedDemands([])),
+      observationOf(
+        fixtureValue,
+        scope,
+        [worktreePod(fixtureValue, receipts)],
+        observedDemands([]),
+      ),
     ),
   );
 }
@@ -288,9 +293,9 @@ test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提
   await rejects(
     refreshActiveProjection(workspace.workspaceRoot),
     (error: unknown) =>
-      error instanceof WakeflowError
-      && error.code === "precondition-failed"
-      && error.reason === "ledger-root-missing",
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "ledger-root-missing",
   );
 
   let mutations = 0;
@@ -307,13 +312,23 @@ test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提
     (error: unknown) => error instanceof WakeflowError && error.reason === "aborted",
   );
   const cancellation = new AbortController();
-  const committed = await afterMutationRefresh(workspace.workspaceRoot, cancellation.signal, async () => {
-    writeFileSync(path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"), "committed\n");
-    cancellation.abort();
-    return "committed";
-  });
+  const committed = await afterMutationRefresh(
+    workspace.workspaceRoot,
+    cancellation.signal,
+    async () => {
+      writeFileSync(
+        path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"),
+        "committed\n",
+      );
+      cancellation.abort();
+      return "committed";
+    },
+  );
   equal(committed, "committed");
-  equal(readFileSync(path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"), "utf8"), "committed\n");
+  equal(
+    readFileSync(path.join(workspace.workspaceRoot.absolutePath, "committed-result.txt"), "utf8"),
+    "committed\n",
+  );
 });
 
 test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection-contended 失败，一个字节都不写", async (t) => {
@@ -335,10 +350,10 @@ test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection
   await rejects(
     refreshActiveProjection(root, { acquireTimeoutMilliseconds: 50 }),
     (error: unknown) =>
-      error instanceof WakeflowError
-      && error.code === "io-failure"
-      && error.reason === "projection-contended"
-      && error.retryable,
+      error instanceof WakeflowError &&
+      error.code === "io-failure" &&
+      error.reason === "projection-contended" &&
+      error.retryable,
   );
 
   deepEqual(readdirSync(activeRoot).sort(), before, "争用的一轮不得新建任何投影文件");

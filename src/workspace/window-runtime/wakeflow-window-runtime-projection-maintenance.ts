@@ -3,16 +3,15 @@ import {
   WakeflowConfigError,
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
@@ -25,16 +24,9 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { isWakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
-import {
-  withWakeflowWindowHostBindingStore,
-  WakeflowWindowHostBindingStoreError,
-} from "./wakeflow-window-host-binding-store.js";
-import {
-  compileWakeflowWindowHostBindingStoreAuthority,
-  WakeflowWindowHostBindingStoreAuthorityError,
-} from "./wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowHostMaintenanceOperationInput } from "../maintenance/wakeflow-host-maintenance-contribution.js";
 import type { WakeflowStaticMaterializationAction } from "../maintenance/wakeflow-static-materialization-preview-contract.js";
 import {
@@ -47,6 +39,14 @@ import {
   wakeflowHostProjectionsRootRef,
   wakeflowHostRuntimeRootRef,
 } from "../workspace-host-runtime-paths.js";
+import {
+  WakeflowWindowHostBindingStoreError,
+  withWakeflowWindowHostBindingStore,
+} from "./wakeflow-window-host-binding-store.js";
+import {
+  compileWakeflowWindowHostBindingStoreAuthority,
+  WakeflowWindowHostBindingStoreAuthorityError,
+} from "./wakeflow-window-host-binding-store-authority.js";
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRef,
@@ -63,8 +63,8 @@ import {
   failWindowRuntimeProjection,
   inspectWakeflowWindowRuntimeProjectionEntries,
   resolveWakeflowWindowRuntimeProjectionExpectedEntries,
-  type WakeflowWindowRuntimeProjectionExpectedEntry,
   type WakeflowWindowRuntimeProjectionExpectedEntries,
+  type WakeflowWindowRuntimeProjectionExpectedEntry,
   type WakeflowWindowRuntimeProjectionInputs,
 } from "./wakeflow-window-runtime-projection-inspection.js";
 import {
@@ -88,8 +88,7 @@ import {
 
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND =
   "window-runtime-projection" as const;
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID =
-  "window-runtime-projection" as const;
+export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID = "window-runtime-projection" as const;
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER =
   "window-runtime-projection-unsafe" as const;
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER =
@@ -223,7 +222,9 @@ export interface WakeflowWindowRuntimeProjectionRefreshReceipt {
 /** Rendering inputs and publication share the registration lock; observation remains zero-write. */
 async function withCurrentProjectionEntries<Result>(
   root: RootedDirectory,
-  source: WakeflowWindowRuntimeProjectionInputs | (() => Promise<WakeflowWindowRuntimeProjectionInputs>),
+  source:
+    | WakeflowWindowRuntimeProjectionInputs
+    | (() => Promise<WakeflowWindowRuntimeProjectionInputs>),
   signal: AbortSignal | undefined,
   operation: (expected: WakeflowWindowRuntimeProjectionExpectedEntries) => Promise<Result>,
 ): Promise<Result> {
@@ -231,7 +232,9 @@ async function withCurrentProjectionEntries<Result>(
   let authority;
   try {
     authority = compileWakeflowWindowHostBindingStoreAuthority(
-      inputs.config, inputs.resourceProfile, inputs.identityProfile,
+      inputs.config,
+      inputs.resourceProfile,
+      inputs.identityProfile,
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
@@ -257,15 +260,22 @@ async function withCurrentProjectionEntries<Result>(
   const loadAuthority = async () => {
     if (!first && typeof source === "function") inputs = await source();
     first = false;
-    return compileWakeflowWindowHostBindingStoreAuthority(inputs.config, inputs.resourceProfile, inputs.identityProfile);
+    return compileWakeflowWindowHostBindingStoreAuthority(
+      inputs.config,
+      inputs.resourceProfile,
+      inputs.identityProfile,
+    );
   };
   try {
     return await withWakeflowWindowHostBindingStore(
-      root, loadAuthority, signal === undefined ? {} : { signal },
-      async (store) => operation({
-        kind: "entries",
-        entries: compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, store.inventory),
-      }),
+      root,
+      loadAuthority,
+      signal === undefined ? {} : { signal },
+      async (store) =>
+        operation({
+          kind: "entries",
+          entries: compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, store.inventory),
+        }),
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
@@ -289,56 +299,76 @@ export async function refreshWakeflowWindowRuntimeProjections(
   const loadInputs = async () => {
     let snapshot;
     try {
-      snapshot = await readWakeflowConfigAuthoritySnapshot(rootValue,
-        request.signal === undefined ? {} : { signal: request.signal });
+      snapshot = await readWakeflowConfigAuthoritySnapshot(
+        rootValue,
+        request.signal === undefined ? {} : { signal: request.signal },
+      );
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigAuthoritySnapshotError) {
         failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "input", "$config");
       }
       throw error;
     }
-    return admitWakeflowWindowRuntimeProjectionInputs(rootValue, snapshot.model,
-      request.resourceProfile, request.identityProfile);
+    return admitWakeflowWindowRuntimeProjectionInputs(
+      rootValue,
+      snapshot.model,
+      request.resourceProfile,
+      request.identityProfile,
+    );
   };
   try {
-  return await withWorkspaceOperationScope(rootValue, "shared", () => withCurrentProjectionEntries(rootValue, loadInputs, request.signal, async (expected) => {
-    if (expected.kind !== "entries") {
-      return Object.freeze({ status: expected.kind, published: 0, unsafe: 0 });
-    }
-    const inspected = await inspectWakeflowWindowRuntimeProjectionEntries(
+    return await withWorkspaceOperationScope(
       rootValue,
-      expected.entries,
-      request.signal,
-    );
-    let published = 0;
-    let unsafe = 0;
-    for (const item of inspected) {
-      if (item.status === "current") continue;
-      if (item.status === "unsafe") {
-        unsafe += 1;
-        continue;
-      }
-      try {
-        await publishWakeflowWindowRuntimeProjectionDocument(
-          rootValue,
-          item.entry.target,
-          request.signal,
-        );
-      } catch (error: unknown) {
-        if (isWakeflowError(error)) {
-          failWindowRuntimeProjection(
-            error.reason === "aborted" ? "aborted" : "effect",
-            "$projection",
+      "shared",
+      () =>
+        withCurrentProjectionEntries(rootValue, loadInputs, request.signal, async (expected) => {
+          if (expected.kind !== "entries") {
+            return Object.freeze({ status: expected.kind, published: 0, unsafe: 0 });
+          }
+          const inspected = await inspectWakeflowWindowRuntimeProjectionEntries(
+            rootValue,
+            expected.entries,
+            request.signal,
           );
-        }
-        throw error;
-      }
-      published += 1;
-    }
-    return Object.freeze({ status: "refreshed" as const, published, unsafe });
-  }), request.signal === undefined ? {} : { signal: request.signal });
+          let published = 0;
+          let unsafe = 0;
+          for (const item of inspected) {
+            if (item.status === "current") continue;
+            if (item.status === "unsafe") {
+              unsafe += 1;
+              continue;
+            }
+            try {
+              await publishWakeflowWindowRuntimeProjectionDocument(
+                rootValue,
+                item.entry.target,
+                request.signal,
+              );
+            } catch (error: unknown) {
+              if (isWakeflowError(error)) {
+                failWindowRuntimeProjection(
+                  error.reason === "aborted" ? "aborted" : "effect",
+                  "$projection",
+                );
+              }
+              throw error;
+            }
+            published += 1;
+          }
+          return Object.freeze({ status: "refreshed" as const, published, unsafe });
+        }),
+      request.signal === undefined ? {} : { signal: request.signal },
+    );
   } catch (error: unknown) {
-    if (isWakeflowError(error)) failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : error.reason === "config-authority" ? "input" : "effect", "$projection");
+    if (isWakeflowError(error))
+      failWindowRuntimeProjection(
+        error.reason === "aborted"
+          ? "aborted"
+          : error.reason === "config-authority"
+            ? "input"
+            : "effect",
+        "$projection",
+      );
     throw error;
   }
 }
@@ -450,7 +480,10 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileWriteError) {
         if (error.reason === "target-exists") continue;
-        failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+        failWindowRuntimeProjection(
+          error.reason === "aborted" ? "aborted" : "effect",
+          "$projection",
+        );
       }
       if (isWakeflowError(error)) {
         failWindowRuntimeProjection(
@@ -509,7 +542,8 @@ export async function retireWakeflowWindowRuntimeProjections(
       node = (await rootValue.inspectExistingResource(resourceRef, "$projection")).node;
     } catch (error: unknown) {
       if (!(error instanceof RootedDirectoryError)) throw error;
-      if (error.reason !== "resource-not-found") failWindowRuntimeProjection("effect", "$projection");
+      if (error.reason !== "resource-not-found")
+        failWindowRuntimeProjection("effect", "$projection");
       absent += 1;
       continue;
     }
@@ -548,9 +582,9 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
     if (expected.kind !== "entries") failWindowRuntimeProjection("plan", "$operation");
     const entry = expected.entries.find((candidate) => candidate.windowId === request.targetKey);
     if (
-      entry === undefined
-      || request.operationId !== `window-runtime-projection:${entry.windowId}`
-      || entry.target.documentDigest !== request.targetDigest
+      entry === undefined ||
+      request.operationId !== `window-runtime-projection:${entry.windowId}` ||
+      entry.target.documentDigest !== request.targetDigest
     ) {
       failWindowRuntimeProjection("plan", "$operation");
     }
@@ -563,17 +597,21 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
       );
     } catch (error: unknown) {
       if (isWakeflowError(error)) {
-        failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "effect", "$projection");
+        failWindowRuntimeProjection(
+          error.reason === "aborted" ? "aborted" : "effect",
+          "$projection",
+        );
       }
       throw error;
     }
     return Object.freeze({
       operationId: request.operationId,
-      disposition: receipt.disposition === "current"
-        ? ("current" as const)
-        : receipt.disposition === "created"
-          ? ("created" as const)
-          : ("updated" as const),
+      disposition:
+        receipt.disposition === "current"
+          ? ("current" as const)
+          : receipt.disposition === "created"
+            ? ("created" as const)
+            : ("updated" as const),
       observationDigest: receipt.documentDigest,
     });
   });

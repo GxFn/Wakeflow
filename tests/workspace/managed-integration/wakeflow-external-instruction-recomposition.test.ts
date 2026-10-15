@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
@@ -57,10 +57,9 @@ async function fixture(
   source?: string | Uint8Array,
   mode = 0o644,
 ): Promise<Readonly<Fixture>> {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-external-instruction-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-external-instruction-")),
+  );
   const instructionPath = path.join(absolutePath, "AGENTS.md");
   if (source !== undefined) {
     writeFileSync(instructionPath, source, { mode });
@@ -87,9 +86,8 @@ function request(
     profile: codexWorkspaceHostResourceProfile,
     target,
     currentConfig,
-    expectedCurrentConfigDigest: currentConfig === null
-      ? null
-      : computeWakeflowConfigDigest(currentConfig),
+    expectedCurrentConfigDigest:
+      currentConfig === null ? null : computeWakeflowConfigDigest(currentConfig),
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
   });
@@ -156,10 +154,9 @@ test("external instruction recomposition creates the managed block once and stay
   );
   deepEqual(
     readFileSync(workspace.instructionPath),
-    Buffer.from(recomposeWakeflowManagedTextEnvelope(
-      new Uint8Array(),
-      authority.envelopeTarget,
-    ).bytes),
+    Buffer.from(
+      recomposeWakeflowManagedTextEnvelope(new Uint8Array(), authority.envelopeTarget).bytes,
+    ),
   );
   const node = statSync(workspace.instructionPath, { bigint: true });
 
@@ -237,10 +234,7 @@ test("external instruction recomposition replaces only an admitted render and ne
   // owner-managed 的前序 Config 同样没有前序渲染。
   const ownerManaged = parseWakeflowConfig(createMinimalWakeflowConfig());
   await expectRecompositionError(
-    () => recomposeWakeflowExternalInstruction(
-      workspace.root,
-      request(ownerManaged, desired),
-    ),
+    () => recomposeWakeflowExternalInstruction(workspace.root, request(ownerManaged, desired)),
     "source-invalid",
     "$source",
   );
@@ -256,23 +250,15 @@ test("external instruction recomposition replaces only an admitted render and ne
   equal(finalBytes.includes(Buffer.from("Wakeflow 仓库指令")), true);
 
   // 受管区域内的原地改动破坏 envelope 摘要：按 envelope 拒绝，绝不覆盖。
-  const tampered = finalBytes
-    .toString("utf8")
-    .replace("### 安全边界", "### 安全边界（用户改动）");
+  const tampered = finalBytes.toString("utf8").replace("### 安全边界", "### 安全边界（用户改动）");
   writeFileSync(workspace.instructionPath, tampered);
   await expectRecompositionError(
-    () => recomposeWakeflowExternalInstruction(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => recomposeWakeflowExternalInstruction(workspace.root, request(desired, desired)),
     "source-invalid",
     "$source",
   );
   await expectInspectionError(
-    () => inspectWakeflowExternalInstruction(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => inspectWakeflowExternalInstruction(workspace.root, request(desired, desired)),
     "envelope",
     "$source",
   );
@@ -291,18 +277,12 @@ test("external instruction recomposition replaces only an admitted render and ne
     recomposeWakeflowManagedTextEnvelope(outside, foreignAuthority.envelopeTarget).bytes,
   );
   await expectInspectionError(
-    () => inspectWakeflowExternalInstruction(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => inspectWakeflowExternalInstruction(workspace.root, request(desired, desired)),
     "unknown-managed-body",
     "$source",
   );
   await expectRecompositionError(
-    () => recomposeWakeflowExternalInstruction(
-      workspace.root,
-      request(desired, desired),
-    ),
+    () => recomposeWakeflowExternalInstruction(workspace.root, request(desired, desired)),
     "source-invalid",
     "$source",
   );
@@ -334,21 +314,21 @@ test("external instruction recomposition rejects unsafe sources, foreign targets
 
   const plain = await fixture(t);
   await expectRecompositionError(
-    () => recomposeWakeflowExternalInstruction(
-      plain.root,
-      request(null, parseWakeflowConfig(createMinimalWakeflowConfig())),
-    ),
+    () =>
+      recomposeWakeflowExternalInstruction(
+        plain.root,
+        request(null, parseWakeflowConfig(createMinimalWakeflowConfig())),
+      ),
     "input",
     "$request.target",
   );
   const controller = new AbortController();
   controller.abort();
   await expectRecompositionError(
-    () => recomposeWakeflowExternalInstruction(
-      plain.root,
-      request(null, desired),
-      { signal: controller.signal },
-    ),
+    () =>
+      recomposeWakeflowExternalInstruction(plain.root, request(null, desired), {
+        signal: controller.signal,
+      }),
     "aborted",
     "$signal",
   );
@@ -360,9 +340,7 @@ test("external instruction recomposition rejects unsafe sources, foreign targets
   );
   equal(surface.disposition, "created");
   equal(
-    readFileSync(plain.instructionPath, "utf8").includes(
-      "## Wakeflow Design Support Instructions",
-    ),
+    readFileSync(plain.instructionPath, "utf8").includes("## Wakeflow Design Support Instructions"),
     true,
   );
 });

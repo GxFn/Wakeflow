@@ -92,9 +92,9 @@ export async function inspectWakeflowWindowRuntimeProjectionDocument(
       }
     }
     if (
-      error instanceof StableFileReadError
-      || error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
+      error instanceof StableFileReadError ||
+      error instanceof StrictTextFileError ||
+      error instanceof DeterministicJsonDocumentError
     ) {
       return Object.freeze({
         resourceRef: target.resourceRef,

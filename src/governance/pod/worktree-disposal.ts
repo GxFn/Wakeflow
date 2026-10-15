@@ -88,7 +88,8 @@ function removeCommand(relativePath: string, locked: boolean): string {
     const budget = SUGGESTED_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
     return `${REMOVE_COMMAND_PREFIX}${shellPathWord(relativePath, budget)}`;
   }
-  const fixed = UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
+  const fixed =
+    UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
   const shown = shellPathWord(relativePath, Math.floor((SUGGESTED_MAXIMUM_LENGTH - fixed) / 2));
   return `${UNLOCK_COMMAND_PREFIX}${shown}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${shown}`;
 }

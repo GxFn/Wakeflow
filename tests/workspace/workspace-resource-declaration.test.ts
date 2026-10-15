@@ -60,10 +60,7 @@ function configDeclaration(
     processing: {
       kind: "resource",
       role: "mutable-snapshot",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-source-replace",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
       recoveryStrategy: "owner-forward-recovery",
     },
     ...overrides,
@@ -109,10 +106,7 @@ test("workspace resource declaration binds complete logical resource facts", () 
     processing: {
       kind: "resource",
       role: "mutable-snapshot",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-source-replace",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
       recoveryStrategy: "owner-forward-recovery",
     },
   };
@@ -156,16 +150,14 @@ test("workspace resource declaration binds complete logical resource facts", () 
 
   const repository = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId:
-      "repository.repository_22222222-2222-4222-8222-222222222222.root",
+    declarationId: "repository.repository_22222222-2222-4222-8222-222222222222.root",
     family: "repository",
     ownerId: "repository-owner",
     scope: "host-neutral",
     placement: {
       root: {
         kind: "repository",
-        repositoryId:
-          "repository_22222222-2222-4222-8222-222222222222",
+        repositoryId: "repository_22222222-2222-4222-8222-222222222222",
       },
       relativePath: null,
     },
@@ -232,9 +224,12 @@ test("workspace resource declaration binds complete logical resource facts", () 
 
 test("workspace resource declaration rejects open and invalid logical data", () => {
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      unexpected: true,
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          unexpected: true,
+        }),
+      ),
     "shape",
     "$/unexpected",
   );
@@ -244,33 +239,42 @@ test("workspace resource declaration rejects open and invalid logical data", () 
     relativePath: "wakeflow.config.json",
   };
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      placement: placementWithOpenRoot,
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          placement: placementWithOpenRoot,
+        }),
+      ),
     "shape",
     "$/placement/root/repositoryId",
   );
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      tracking: {
-        disposition: "tracked",
-        privacy: "shareable",
-        inferred: true,
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          tracking: {
+            disposition: "tracked",
+            privacy: "shareable",
+            inferred: true,
+          },
+        }),
+      ),
     "shape",
     "$/tracking/inferred",
   );
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      nodePolicy: {
-        kind: "file",
-        mode: "0644",
-        linkPolicy: "single-link",
-        executablePolicy: "forbidden",
-        chmodExisting: true,
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          nodePolicy: {
+            kind: "file",
+            mode: "0644",
+            linkPolicy: "single-link",
+            executablePolicy: "forbidden",
+            chmodExisting: true,
+          },
+        }),
+      ),
     "shape",
     "$/nodePolicy/chmodExisting",
   );
@@ -282,56 +286,71 @@ test("workspace resource declaration rejects open and invalid logical data", () 
     ["scope", "all-hosts", "scope", "$/scope"],
   ] as const) {
     expectWorkspaceResourceDeclarationError(
-      () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-        [field]: value,
-      })),
+      () =>
+        parseWakeflowWorkspaceResourceDeclaration(
+          configDeclaration({
+            [field]: value,
+          }),
+        ),
       reason,
       path,
     );
   }
 
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      placement: {
-        root: {
-          kind: "repository",
-          repositoryId: "surface_33333333-3333-4333-8333-333333333333",
-        },
-        relativePath: null,
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          placement: {
+            root: {
+              kind: "repository",
+              repositoryId: "surface_33333333-3333-4333-8333-333333333333",
+            },
+            relativePath: null,
+          },
+        }),
+      ),
     "placement",
     "$/placement/root/repositoryId",
   );
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      placement: {
-        root: { kind: "workspace" },
-        relativePath: "../outside",
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          placement: {
+            root: { kind: "workspace" },
+            relativePath: "../outside",
+          },
+        }),
+      ),
     "placement",
     "$/placement/relativePath",
   );
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      placement: {
-        root: { kind: "workspace" },
-        relativePath: null,
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          placement: {
+            root: { kind: "workspace" },
+            relativePath: null,
+          },
+        }),
+      ),
     "placement",
     "$/placement/relativePath",
   );
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-      processing: {
-        kind: "resource",
-        role: "mutable-snapshot",
-        allowedMutationRecipes: ["no-write"],
-        recoveryStrategy: "owner-forward-recovery",
-      },
-    })),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration(
+        configDeclaration({
+          processing: {
+            kind: "resource",
+            role: "mutable-snapshot",
+            allowedMutationRecipes: ["no-write"],
+            recoveryStrategy: "owner-forward-recovery",
+          },
+        }),
+      ),
     "processing",
     "$/processing/allowedMutationRecipes/0",
   );
@@ -367,10 +386,7 @@ test("workspace resource declaration rejects incompatible resource facts", () =>
   const mutableProcessing = {
     kind: "resource",
     role: "mutable-snapshot",
-    allowedMutationRecipes: [
-      "exclusive-create",
-      "exact-source-replace",
-    ],
+    allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
     recoveryStrategy: "owner-forward-recovery",
   };
   const file0644 = {
@@ -381,95 +397,123 @@ test("workspace resource declaration rejects incompatible resource facts", () =>
   };
 
   for (const [overrides, path] of [
-    [{
-      nodePolicy: {
-        kind: "directory",
-        mode: "0755",
-        symlinkPolicy: "reject",
-        existingModePolicy: "observe-without-change",
+    [
+      {
+        nodePolicy: {
+          kind: "directory",
+          mode: "0755",
+          symlinkPolicy: "reject",
+          existingModePolicy: "observe-without-change",
+        },
       },
-    }, "$/nodePolicy/kind"],
-    [{
-      processing: {
-        kind: "resource",
-        role: "manifested-tree",
-        allowedMutationRecipes: ["tree-publish-or-move"],
-        recoveryStrategy: "manifest-closure",
+      "$/nodePolicy/kind",
+    ],
+    [
+      {
+        processing: {
+          kind: "resource",
+          role: "manifested-tree",
+          allowedMutationRecipes: ["tree-publish-or-move"],
+          recoveryStrategy: "manifest-closure",
+        },
       },
-    }, "$/nodePolicy/kind"],
-    [{
-      processing: {
-        kind: "directory-container",
-        materializationRecipe: "materialize-directory",
-        existingDirectoryPolicy: "observe-without-mode-change",
-        collisionPolicy: "reject-non-directory",
-        descendantAuthority: "separate-declaration-required",
-        recoveryStrategy: "report-only",
+      "$/nodePolicy/kind",
+    ],
+    [
+      {
+        processing: {
+          kind: "directory-container",
+          materializationRecipe: "materialize-directory",
+          existingDirectoryPolicy: "observe-without-mode-change",
+          collisionPolicy: "reject-non-directory",
+          descendantAuthority: "separate-declaration-required",
+          recoveryStrategy: "report-only",
+        },
       },
-    }, "$/nodePolicy/kind"],
-    [{
-      nodePolicy: {
-        ...file0644,
-        mode: "0600",
+      "$/nodePolicy/kind",
+    ],
+    [
+      {
+        nodePolicy: {
+          ...file0644,
+          mode: "0600",
+        },
       },
-    }, "$/nodePolicy/mode"],
-    [{
-      tracking: {
-        disposition: "tracked",
-        privacy: "runtime-private",
+      "$/nodePolicy/mode",
+    ],
+    [
+      {
+        tracking: {
+          disposition: "tracked",
+          privacy: "runtime-private",
+        },
       },
-    }, "$/tracking/privacy"],
-    [{
-      tracking: {
-        disposition: "owner-defined",
-        privacy: "shareable",
+      "$/tracking/privacy",
+    ],
+    [
+      {
+        tracking: {
+          disposition: "owner-defined",
+          privacy: "shareable",
+        },
       },
-    }, "$/nodePolicy/mode"],
-    [{
-      family: "ledger",
-    }, "$/placement/root/kind"],
-    [{
-      family: "active",
-      placement: {
-        root: { kind: "ledger" },
-        relativePath: "active.json",
+      "$/nodePolicy/mode",
+    ],
+    [
+      {
+        family: "ledger",
       },
-    }, "$/placement/root/kind"],
+      "$/placement/root/kind",
+    ],
+    [
+      {
+        family: "active",
+        placement: {
+          root: { kind: "ledger" },
+          relativePath: "active.json",
+        },
+      },
+      "$/placement/root/kind",
+    ],
   ] as const) {
     expectWorkspaceResourceDeclarationError(
-      () => parseWakeflowWorkspaceResourceDeclaration(configDeclaration({
-        processing: mutableProcessing,
-        nodePolicy: file0644,
-        ...overrides,
-      })),
+      () =>
+        parseWakeflowWorkspaceResourceDeclaration(
+          configDeclaration({
+            processing: mutableProcessing,
+            nodePolicy: file0644,
+            ...overrides,
+          }),
+        ),
       "compatibility",
       path,
     );
   }
 
   expectWorkspaceResourceDeclarationError(
-    () => parseWakeflowWorkspaceResourceDeclaration({
-      kind: "WakeflowWorkspaceResourceDeclaration",
-      declarationId: "ledger.root-file",
-      family: "ledger",
-      ownerId: "ledger-authority",
-      scope: "host-neutral",
-      placement: {
-        root: { kind: "ledger" },
-        relativePath: null,
-      },
-      tracking: {
-        disposition: "tracked",
-        privacy: "shareable",
-      },
-      nodePolicy: file0644,
-      processing: {
-        kind: "resource",
-        role: "immutable-fact",
-        allowedMutationRecipes: ["exclusive-create"],
-        recoveryStrategy: "exact-idempotent-retry",
-      },
-    }),
+    () =>
+      parseWakeflowWorkspaceResourceDeclaration({
+        kind: "WakeflowWorkspaceResourceDeclaration",
+        declarationId: "ledger.root-file",
+        family: "ledger",
+        ownerId: "ledger-authority",
+        scope: "host-neutral",
+        placement: {
+          root: { kind: "ledger" },
+          relativePath: null,
+        },
+        tracking: {
+          disposition: "tracked",
+          privacy: "shareable",
+        },
+        nodePolicy: file0644,
+        processing: {
+          kind: "resource",
+          role: "immutable-fact",
+          allowedMutationRecipes: ["exclusive-create"],
+          recoveryStrategy: "exact-idempotent-retry",
+        },
+      }),
     "compatibility",
     "$/placement/relativePath",
   );

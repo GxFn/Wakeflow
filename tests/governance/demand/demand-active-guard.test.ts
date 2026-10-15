@@ -14,8 +14,8 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createDemandAuthority } from "../../../src/governance/demand/model/demand-authority.js";
 import { createDemandIdentity } from "../../../src/governance/demand/model/demand-identity.js";
 import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
-import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { publishDemandFromPackage } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
+import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
@@ -43,26 +43,41 @@ async function activeDemandWorkspace() {
   await ledgerStore.initialize({ freshLedger: true });
   const loaded = await publishFixtureRequirement(ledgerStore);
   const claim = await placePendingClaimState(workspaceRoot, loaded);
-  const identity = createDemandIdentity({
-    programId: parseWakeflowDurableIdOfKind("program_11111111-1111-4111-8111-111111111111", "program"),
-    demandId: parseWakeflowDurableIdOfKind("demand_22222222-2222-4222-8222-222222222222", "demand"),
-    title: "Active Guard",
-    goal: "占用一个 pod",
-    completionDefinition: "保持活动",
-    demandType: "requirement",
-    source: requirementLineageOf(loaded),
-    podId: OWNER_POD_ID,
-  }, { clock: () => CREATED_AT });
+  const identity = createDemandIdentity(
+    {
+      programId: parseWakeflowDurableIdOfKind(
+        "program_11111111-1111-4111-8111-111111111111",
+        "program",
+      ),
+      demandId: parseWakeflowDurableIdOfKind(
+        "demand_22222222-2222-4222-8222-222222222222",
+        "demand",
+      ),
+      title: "Active Guard",
+      goal: "占用一个 pod",
+      completionDefinition: "保持活动",
+      demandType: "requirement",
+      source: requirementLineageOf(loaded),
+      podId: OWNER_POD_ID,
+    },
+    { clock: () => CREATED_AT },
+  );
   await publishDemandFromPackage(workspaceRoot, ledgerStore, {
     identity,
     authority: createDemandAuthority(identity, {
-      authorityRefs: loaded.documents.map((document) => (
-        createLedgerAuthorityMemberReference(loaded, document.path)
-      )),
+      authorityRefs: loaded.documents.map((document) =>
+        createLedgerAuthorityMemberReference(loaded, document.path),
+      ),
       testingDecision: { mode: "controller-only", summary: "聚焦测试", environmentMemberRef: null },
     }),
-    eventId: parseWakeflowDurableIdOfKind("demand-event_44444444-4444-4444-8444-444444444444", "demand-event"),
-    commitId: parseWakeflowDurableIdOfKind("demand-event-commit_77777777-7777-4777-8777-777777777777", "demand-event-commit"),
+    eventId: parseWakeflowDurableIdOfKind(
+      "demand-event_44444444-4444-4444-8444-444444444444",
+      "demand-event",
+    ),
+    commitId: parseWakeflowDurableIdOfKind(
+      "demand-event-commit_77777777-7777-4777-8777-777777777777",
+      "demand-event-commit",
+    ),
     recordedAt: CREATED_AT,
     expectedClaimStateDigest: claim.digest,
   });
@@ -101,11 +116,8 @@ test("活动守卫在读取身份记录时被中止报告io-failure/aborted而�
     const scripted = scriptedSignal(identityCheck);
     await rejects(
       assertNoActiveDemand(workspace.workspaceRoot, scripted.signal, null, OTHER_POD_ID),
-      (error: unknown) => (
-        error instanceof WakeflowError
-        && error.code === "io-failure"
-        && error.reason === "aborted"
-      ),
+      (error: unknown) =>
+        error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
     );
     equal(scripted.stacks[identityCheck]?.includes("identityPodId"), true);
   } finally {
@@ -133,10 +145,10 @@ test("发布意图目录里 foundation 的原子暂存不是残留：活写者�
     await rejects(
       assertNoActiveDemand(workspace.workspaceRoot, undefined, null, OTHER_POD_ID),
       (error: unknown) =>
-        error instanceof WakeflowError
-        && error.code === "concurrency-conflict"
-        && error.reason === "pod-publication-in-flight"
-        && error.retryable === true,
+        error instanceof WakeflowError &&
+        error.code === "concurrency-conflict" &&
+        error.reason === "pod-publication-in-flight" &&
+        error.retryable === true,
     );
     releaseDurableAtomicFileStageAddress(address);
     // 写者死了：暂存不再占用 pod，守卫通过，也不越权删除它。
@@ -147,9 +159,9 @@ test("发布意图目录里 foundation 的原子暂存不是残留：活写者�
     await rejects(
       assertNoActiveDemand(workspace.workspaceRoot, undefined, null, OTHER_POD_ID),
       (error: unknown) =>
-        error instanceof WakeflowError
-        && error.code === "precondition-failed"
-        && error.reason === "pod-publication-residue",
+        error instanceof WakeflowError &&
+        error.code === "precondition-failed" &&
+        error.reason === "pod-publication-residue",
     );
   } finally {
     await workspace.cleanup();

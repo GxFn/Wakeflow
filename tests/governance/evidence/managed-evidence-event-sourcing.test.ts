@@ -6,26 +6,26 @@ import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
+  DemandEventSourcingDecisionError,
   decideDemandEventSourcingCommand,
   evolveDemandEventSourcingState,
-  DemandEventSourcingDecisionError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
-  parseDemandUncommittedEvent,
   DemandEventSourcingEventError,
+  parseDemandUncommittedEvent,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event.js";
 import { encodeCurrentDemandEventVersion } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
+import { upcastDemandEventSourcingStoredEvent } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import {
   applyDemandEventStreamCommit,
   prepareDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { upcastDemandEventSourcingStoredEvent } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import {
   computeDemandAggregateStateDigest,
   createInitialDemandAggregateState,
+  DemandAggregateStateError,
   parseDemandAggregateState,
   recordManagedEvidenceInDemandAggregateState,
-  DemandAggregateStateError,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import {
   createManagedEvidenceManifest,
@@ -108,7 +108,7 @@ function createManifest(
       contentReview: {
         disposition: "not-required",
         opaqueFileRefs: [],
-      privacyFindings: [],
+        privacyFindings: [],
       },
     },
     { clock: () => CAPTURED_AT },
@@ -117,10 +117,7 @@ function createManifest(
 
 test("Managed Evidence Event保存完整Manifest，Aggregate只投影稳定selector", () => {
   const manifest = createManifest();
-  const initial = createInitialDemandAggregateState(
-    DEMAND_ID,
-    AUTHORITY_DIGEST,
-  );
+  const initial = createInitialDemandAggregateState(DEMAND_ID, AUTHORITY_DIGEST);
   equal(Object.hasOwn(initial, "managedEvidence"), false);
 
   const [event] = decideDemandEventSourcingCommand(initial, {
@@ -176,10 +173,7 @@ test("Managed Evidence Event保存完整Manifest，Aggregate只投影稳定selec
 });
 
 test("Managed Evidence reducer按ID排序，并拒绝重复或错误Authority", () => {
-  const initial = createInitialDemandAggregateState(
-    DEMAND_ID,
-    AUTHORITY_DIGEST,
-  );
+  const initial = createInitialDemandAggregateState(DEMAND_ID, AUTHORITY_DIGEST);
   const later = createManifest("88888888-8888-4888-8888-888888888888");
   const earlier = createManifest("77777777-7777-4777-8777-777777777777");
   const first = recordManagedEvidenceInDemandAggregateState(initial, later);
@@ -191,9 +185,7 @@ test("Managed Evidence reducer按ID排序，并拒绝重复或错误Authority", 
 
   throws(
     () => recordManagedEvidenceInDemandAggregateState(second, earlier),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   throws(
     () =>
@@ -204,9 +196,7 @@ test("Managed Evidence reducer按ID排序，并拒绝重复或错误Authority", 
           parseSha256Digest(`sha256:${"d".repeat(64)}`),
         ),
       ),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError &&
-      error.reason === "transition",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
   throws(
     () =>
@@ -214,8 +204,7 @@ test("Managed Evidence reducer按ID排序，并拒绝重复或错误Authority", 
         ...second,
         managedEvidence: [...(second.managedEvidence ?? [])].reverse(),
       }),
-    (error: unknown) =>
-      error instanceof DemandAggregateStateError && error.reason === "relation",
+    (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "relation",
   );
 });
 
@@ -235,15 +224,12 @@ test("Managed Evidence Event经过真实Commit编码后可从前缀精确重放"
     events: [publishedEvent],
   });
   const manifest = createManifest();
-  const [evidenceEvent] = decideDemandEventSourcingCommand(
-    published.aggregate.state,
-    {
-      commandType: "evidence.record-managed-evidence",
-      commandVersion: 1,
-      eventId: EVENT_ID,
-      manifest,
-    },
-  );
+  const [evidenceEvent] = decideDemandEventSourcingCommand(published.aggregate.state, {
+    commandType: "evidence.record-managed-evidence",
+    commandVersion: 1,
+    eventId: EVENT_ID,
+    manifest,
+  });
   const recorded = prepareDemandEventStreamCommit(published.aggregate, {
     commitId: EVIDENCE_COMMIT_ID,
     commandDigest: parseSha256Digest(`sha256:${"1".repeat(64)}`),
@@ -251,27 +237,15 @@ test("Managed Evidence Event经过真实Commit编码后可从前缀精确重放"
   });
 
   equal(recorded.commit.events[0]?.eventVersion, 1);
-  equal(
-    recorded.commit.events[0]?.eventType,
-    "evidence.managed-evidence-recorded",
-  );
-  const replayed = applyDemandEventStreamCommit(
-    published.aggregate,
-    recorded.commit,
-  );
+  equal(recorded.commit.events[0]?.eventType, "evidence.managed-evidence-recorded");
+  const replayed = applyDemandEventStreamCommit(published.aggregate, recorded.commit);
   deepEqual(replayed, recorded.aggregate);
-  equal(
-    replayed.state.managedEvidence?.[0]?.manifestDigest,
-    manifest.manifestDigest,
-  );
+  equal(replayed.state.managedEvidence?.[0]?.manifestDigest, manifest.manifestDigest);
 });
 
 test("Event与Command严格闭合Manifest的Demand、时间和字段集合", () => {
   const manifest = createManifest();
-  const initial = createInitialDemandAggregateState(
-    DEMAND_ID,
-    AUTHORITY_DIGEST,
-  );
+  const initial = createInitialDemandAggregateState(DEMAND_ID, AUTHORITY_DIGEST);
   throws(
     () =>
       parseDemandUncommittedEvent({
@@ -282,8 +256,7 @@ test("Event与Command严格闭合Manifest的Demand、时间和字段集合", () 
         data: { manifest },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingEventError &&
-      error.reason === "relation",
+      error instanceof DemandEventSourcingEventError && error.reason === "relation",
   );
   throws(
     () =>
@@ -295,7 +268,6 @@ test("Event与Command严格闭合Manifest的Demand、时间和字段集合", () 
         expectedStateDigest: computeDemandAggregateStateDigest(initial),
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingDecisionError &&
-      error.reason === "input",
+      error instanceof DemandEventSourcingDecisionError && error.reason === "input",
   );
 });

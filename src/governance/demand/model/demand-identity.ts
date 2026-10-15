@@ -1,17 +1,16 @@
-import type {
-  WakeflowDemandIdentity as DemandIdentityWire,
-} from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
-import {
-  WAKEFLOW_DEMAND_IDENTITY_SCHEMA,
-} from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowDemandIdentity as DemandIdentityWire } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
+import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/governance/demand/demand-identity.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../foundation/crypto/canonical-json-sha256.js";
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -19,31 +18,24 @@ import {
   renderDeterministicJsonDocument,
 } from "../../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../../foundation/data/json-value.js";
 import {
-  parsePlainRecord,
   PassiveOwnDataError,
+  parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../../foundation/time/wall-clock.js";
 import {
   parseRequirementLineageReference,
@@ -59,8 +51,7 @@ import {
  * 不能被事件存储替换。
  */
 
-const DEMAND_IDENTITY_ARTIFACT_KIND =
-  "wakeflow-demand-identity" as const;
+const DEMAND_IDENTITY_ARTIFACT_KIND = "wakeflow-demand-identity" as const;
 const DEMAND_IDENTITY_SCHEMA_VERSION = 1 as const;
 
 export type DemandType = "requirement" | "bug" | "supplement" | "research";
@@ -94,14 +85,14 @@ export type DemandIdentityErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "input": "Demand identity input is invalid.",
-  "json": "Demand identity is not passive JSON data.",
-  "schema": "Demand identity does not satisfy its portable Schema.",
-  "identifier": "Demand identity contains an invalid typed identity.",
-  "time": "Demand identity contains an invalid creation time.",
-  "text": "Demand identity contains non-canonical text.",
-  "source": "Demand identity requirement lineage is invalid.",
-  "representation": "Demand identity bytes are not its deterministic domain representation.",
+  input: "Demand identity input is invalid.",
+  json: "Demand identity is not passive JSON data.",
+  schema: "Demand identity does not satisfy its portable Schema.",
+  identifier: "Demand identity contains an invalid typed identity.",
+  time: "Demand identity contains an invalid creation time.",
+  text: "Demand identity contains non-canonical text.",
+  source: "Demand identity requirement lineage is invalid.",
+  representation: "Demand identity bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<DemandIdentityErrorReason, string>>;
 
 export class DemandIdentityError extends Error {
@@ -127,8 +118,7 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandIdentityWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const DRAFT_FIELDS = Object.freeze([
   "completionDefinition",
   "demandId",
@@ -150,9 +140,9 @@ function fail(reason: DemandIdentityErrorReason, path: string): never {
 
 function parseCanonicalText(value: string, path: string): string {
   if (
-    !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || CONTROL_EXCEPT_LF_PATTERN.test(value)
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    CONTROL_EXCEPT_LF_PATTERN.test(value)
   ) {
     fail("text", path);
   }
@@ -172,9 +162,7 @@ function parseId<Kind extends "program" | "demand" | "pod">(
   }
 }
 
-function normalizeWire(
-  wire: Readonly<DemandIdentityWire>,
-): Readonly<DemandIdentity> {
+function normalizeWire(wire: Readonly<DemandIdentityWire>): Readonly<DemandIdentity> {
   let source: Readonly<RequirementLineageReference>;
   try {
     source = parseRequirementLineageReference(wire.source);
@@ -197,10 +185,7 @@ function normalizeWire(
     createdAt,
     title: parseCanonicalText(wire.title, "$/title"),
     goal: parseCanonicalText(wire.goal, "$/goal"),
-    completionDefinition: parseCanonicalText(
-      wire.completionDefinition,
-      "$/completionDefinition",
-    ),
+    completionDefinition: parseCanonicalText(wire.completionDefinition, "$/completionDefinition"),
     demandType: wire.demandType,
     source,
     podId: parseId(wire.podId, "pod", "$/podId"),
@@ -254,8 +239,8 @@ export function createDemandIdentity(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== DRAFT_FIELDS.length
-    || keys.some((key, index) => key !== DRAFT_FIELDS[index])
+    keys.length !== DRAFT_FIELDS.length ||
+    keys.some((key, index) => key !== DRAFT_FIELDS[index])
   ) {
     fail("input", "$draft");
   }
@@ -279,15 +264,10 @@ export function createDemandIdentity(
 }
 
 export function renderDemandIdentity(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandIdentity(value),
-    "$identity",
-  );
+  return renderDeterministicJsonDocument(parseDemandIdentity(value), "$identity");
 }
 
-export function parseDemandIdentityDocument(
-  text: unknown,
-): Readonly<DemandIdentity> {
+export function parseDemandIdentityDocument(text: unknown): Readonly<DemandIdentity> {
   let json: JsonValue;
   try {
     json = parseDeterministicJsonDocument(text, "$identity");
@@ -305,7 +285,5 @@ export function parseDemandIdentityDocument(
 }
 
 export function computeDemandIdentityDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseDemandIdentity(value),
-  );
+  return computeCanonicalJsonSha256Digest(parseDemandIdentity(value));
 }

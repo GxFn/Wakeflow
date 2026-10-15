@@ -1,12 +1,12 @@
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
-import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
 
 /** Wakeflow Workspace：宿主中立共享运行时与协调根的静态资源目录。 */
 

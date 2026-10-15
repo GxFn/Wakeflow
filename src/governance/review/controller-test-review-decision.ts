@@ -1,21 +1,21 @@
-import type { WakeflowControllerTestReviewDecision as DecisionWire } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
-import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import type { WakeflowControllerTestReviewDecision as DecisionWire } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
+import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import {
   createWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -23,9 +23,9 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createUuidV4,
@@ -35,29 +35,29 @@ import {
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
 import {
   DemandEventStreamPositionError,
   parseDemandEventStreamRevision,
 } from "../demand/event-sourcing/demand-event-stream-position.js";
 import {
-  normalizeControllerReviewCallbackLanding,
-  normalizeControllerReviewResumption,
-  normalizeControllerReviewTargetCompletion,
-  normalizeControllerTestReviewEscalation,
   type ControllerIndependentReviewCheck,
   type ControllerReviewCallbackLanding,
   type ControllerReviewedTargetResult,
   type ControllerReviewResumption,
   type ControllerReviewTargetCompletion,
   type ControllerTestReviewEscalation,
+  normalizeControllerReviewCallbackLanding,
+  normalizeControllerReviewResumption,
+  normalizeControllerReviewTargetCompletion,
+  normalizeControllerTestReviewEscalation,
 } from "./controller-review-decision-contract.js";
 
 /**
@@ -72,14 +72,15 @@ import {
 const DECISION_KIND = "WakeflowControllerTestReviewDecision" as const;
 const DECISION_SCHEMA_VERSION = 1 as const;
 const CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
 export type ControllerTestReviewDecisionType =
-  "accept" | "request-another-attempt" | "blocked" | "escalate";
+  | "accept"
+  | "request-another-attempt"
+  | "blocked"
+  | "escalate";
 
-export type ControllerTestConclusion =
-  "satisfied" | "defect-observed" | "inconclusive";
+export type ControllerTestConclusion = "satisfied" | "defect-observed" | "inconclusive";
 
 export type ControllerTestEvidenceSufficiency = "sufficient" | "insufficient";
 
@@ -122,11 +123,7 @@ export interface ControllerTestReviewDecision extends ControllerTestReviewJudgme
 
 export type CreateControllerTestReviewDecisionInput = Omit<
   ControllerTestReviewDecision,
-  | "kind"
-  | "schemaVersion"
-  | "targetReviewDecisionId"
-  | "decidedAt"
-  | "decisionDigest"
+  "kind" | "schemaVersion" | "targetReviewDecisionId" | "decidedAt" | "decisionDigest"
 >;
 
 export interface CreateControllerTestReviewDecisionOptions {
@@ -149,18 +146,13 @@ const ERROR_MESSAGES = {
   json: "Controller Test Review Decision is not passive JSON data.",
   schema: "Controller Test Review Decision does not satisfy its Schema.",
   identifier: "Controller Test Review Decision contains an invalid identity.",
-  digest:
-    "Controller Test Review Decision contains an invalid or inconsistent digest.",
-  position:
-    "Controller Test Review Decision contains an invalid Event Stream position.",
+  digest: "Controller Test Review Decision contains an invalid or inconsistent digest.",
+  position: "Controller Test Review Decision contains an invalid Event Stream position.",
   time: "Controller Test Review Decision contains an invalid decision time.",
   text: "Controller Test Review Decision contains invalid review text.",
   relation: "Controller Test Review Decision facts are inconsistent.",
-  representation:
-    "Controller Test Review Decision bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<ControllerTestReviewDecisionErrorReason, string>
->;
+  representation: "Controller Test Review Decision bytes are not deterministic.",
+} as const satisfies Readonly<Record<ControllerTestReviewDecisionErrorReason, string>>;
 
 export class ControllerTestReviewDecisionError extends Error {
   override readonly name = "ControllerTestReviewDecisionError";
@@ -186,10 +178,7 @@ const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
   ],
 );
 
-function fail(
-  reason: ControllerTestReviewDecisionErrorReason,
-  path: string,
-): never {
+function fail(reason: ControllerTestReviewDecisionErrorReason, path: string): never {
   throw new ControllerTestReviewDecisionError(reason, path);
 }
 
@@ -262,9 +251,7 @@ function checkId(value: unknown, path: string): string {
 }
 
 function textList(values: readonly unknown[], path: string): readonly string[] {
-  const admitted = values.map((value, index) =>
-    humanText(value, `${path}/${index}`),
-  );
+  const admitted = values.map((value, index) => humanText(value, `${path}/${index}`));
   if (new Set(admitted).size !== admitted.length) fail("relation", path);
   return Object.freeze(admitted);
 }
@@ -315,10 +302,7 @@ export function assertControllerTestReviewJudgment(
     (decision === "request-another-attempt" &&
       ((assessment.conclusion !== "inconclusive" &&
         assessment.evidenceSufficiency !== "insufficient") ||
-        !checks.some(
-          (check) =>
-            check.outcome === "failed" || check.outcome === "inconclusive",
-        ) ||
+        !checks.some((check) => check.outcome === "failed" || check.outcome === "inconclusive") ||
         blockingReasons.length !== 0)) ||
     (escalation !== null &&
       escalation.classification === "product-defect" &&
@@ -332,8 +316,7 @@ export function assertControllerTestReviewJudgment(
       assessment.conclusion === "satisfied") ||
     (decision === "blocked" &&
       (blockingReasons.length === 0 ||
-        (assessment.conclusion === "satisfied" &&
-          assessment.evidenceSufficiency === "sufficient")))
+        (assessment.conclusion === "satisfied" && assessment.evidenceSufficiency === "sufficient")))
   ) {
     fail("relation", "$/decision");
   }
@@ -403,10 +386,7 @@ export function parseControllerTestReviewDecision(
       checkId: checkId(check.checkId, `$/independentChecks/${index}/checkId`),
       method: humanText(check.method, `$/independentChecks/${index}/method`),
       outcome: check.outcome,
-      observation: humanText(
-        check.observation,
-        `$/independentChecks/${index}/observation`,
-      ),
+      observation: humanText(check.observation, `$/independentChecks/${index}/observation`),
     }),
   );
   if (new Set(checks.map((check) => check.checkId)).size !== checks.length) {
@@ -447,11 +427,7 @@ export function parseControllerTestReviewDecision(
         ? null
         : normalizeControllerReviewResumption(wire.resumption, "$/resumption", fail),
   };
-  assertControllerTestReviewJudgment(
-    judgment,
-    reviewed.targetResultOutcome,
-    targetCompletion,
-  );
+  assertControllerTestReviewJudgment(judgment, reviewed.targetResultOutcome, targetCompletion);
   // decidedAt只保存审计观察；因果顺序由reported Snapshot、stream revision和append CAS证明。
   const basis = decisionBasis({
     kind: DECISION_KIND,
@@ -464,11 +440,7 @@ export function parseControllerTestReviewDecision(
     programId: id(wire.programId, "program", "$/programId"),
     demandId: id(wire.demandId, "demand", "$/demandId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
-    controllerWindowId: id(
-      wire.controllerWindowId,
-      "window",
-      "$/controllerWindowId",
-    ),
+    controllerWindowId: id(wire.controllerWindowId, "window", "$/controllerWindowId"),
     reviewed,
     testExecution,
     ...judgment,
@@ -498,20 +470,14 @@ export function createControllerTestReviewDecision(
       createUuidV4(options.uuidFactory),
     );
   } catch (error: unknown) {
-    if (
-      error instanceof UuidV4Error ||
-      error instanceof WakeflowDurableIdError
-    ) {
+    if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
       fail("identifier", "$uuidFactory");
     }
     throw error;
   }
   let decidedAt: UtcInstant;
   try {
-    decidedAt =
-      options.clock === undefined
-        ? readUtcWallClock()
-        : readUtcWallClock(options.clock);
+    decidedAt = options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$clock");
     throw error;
@@ -546,10 +512,7 @@ export function createControllerTestReviewDecision(
 }
 
 export function renderControllerTestReviewDecision(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseControllerTestReviewDecision(value),
-    "$decision",
-  );
+  return renderDeterministicJsonDocument(parseControllerTestReviewDecision(value), "$decision");
 }
 
 export function parseControllerTestReviewDecisionDocument(

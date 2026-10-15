@@ -5,8 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -96,7 +96,10 @@ test(
     const census = await inspectWakeflowPrivateModes(root);
     equal(census.status, "unsafe");
     deepEqual(census.unsafe, refs([".wakeflow-local/runtime/open"]));
-    deepEqual(census.drifted.map((entry) => entry.resourcePath), refs([".wakeflow-local/runtime"]));
+    deepEqual(
+      census.drifted.map((entry) => entry.resourcePath),
+      refs([".wakeflow-local/runtime"]),
+    );
     const receipt = await convergeWakeflowPrivateModes(root, census);
     deepEqual({ ...receipt }, { converged: 1, current: 0, changed: 0 });
     equal(lstatSync(path.join(rootPath, ".wakeflow-local/runtime/open")).mode & 0o777, 0o777);
@@ -117,7 +120,10 @@ test(
       chmodSync(path.join(rootPath, ".wakeflow-local/runtime/x/state.json"), 0o640);
       const receipt = await convergeWakeflowPrivateModes(root, census);
       deepEqual({ ...receipt }, { converged: 0, current: 0, changed: 1 });
-      equal(lstatSync(path.join(rootPath, ".wakeflow-local/runtime/x/state.json")).mode & 0o777, 0o640);
+      equal(
+        lstatSync(path.join(rootPath, ".wakeflow-local/runtime/x/state.json")).mode & 0o777,
+        0o640,
+      );
     },
     { active: false },
   ),

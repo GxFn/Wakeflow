@@ -1,30 +1,19 @@
-import {
-  deepEqual,
-  equal,
-  throws,
-} from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  decideDemandEventSourcingCommand,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import {
-  prepareDemandEventStreamCommit,
-} from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { decideDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   createDemandEventSourcingSnapshot,
+  DemandEventSourcingSnapshotError,
   parseDemandEventSourcingSnapshot,
   parseDemandEventSourcingSnapshotDocument,
   renderDemandEventSourcingSnapshot,
   restoreDemandEventSourcingSnapshot,
-  DemandEventSourcingSnapshotError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.js";
-import {
-  computeDemandEventSourcingVersionCompatibilityDigest,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.js";
+import { computeDemandEventSourcingVersionCompatibilityDigest } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.js";
+import { prepareDemandEventStreamCommit } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -74,33 +63,33 @@ test("Demand Event Sourcing snapshot 是按 commitSequence 定位的 immutable c
     computeDemandEventSourcingVersionCompatibilityDigest(),
   );
 
-  const restored = restoreDemandEventSourcingSnapshot(
-    snapshot,
-    current.commit,
-  );
+  const restored = restoreDemandEventSourcingSnapshot(snapshot, current.commit);
   deepEqual(restored, current.aggregate);
 
   const text = renderDemandEventSourcingSnapshot(snapshot);
   deepEqual(parseDemandEventSourcingSnapshotDocument(text), snapshot);
   throws(
-    () => parseDemandEventSourcingSnapshot({
-      ...snapshot,
-      commitSequence: 2,
-    }),
+    () =>
+      parseDemandEventSourcingSnapshot({
+        ...snapshot,
+        commitSequence: 2,
+      }),
     DemandEventSourcingSnapshotError,
   );
   throws(
-    () => parseDemandEventSourcingSnapshot({
-      ...snapshot,
-      versionCompatibilityDigest: IDENTITY_DIGEST,
-    }),
+    () =>
+      parseDemandEventSourcingSnapshot({
+        ...snapshot,
+        versionCompatibilityDigest: IDENTITY_DIGEST,
+      }),
     DemandEventSourcingSnapshotError,
   );
   throws(
-    () => restoreDemandEventSourcingSnapshot(
-      { ...snapshot, lastCommitDigest: IDENTITY_DIGEST },
-      current.commit,
-    ),
+    () =>
+      restoreDemandEventSourcingSnapshot(
+        { ...snapshot, lastCommitDigest: IDENTITY_DIGEST },
+        current.commit,
+      ),
     DemandEventSourcingSnapshotError,
   );
 });

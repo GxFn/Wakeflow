@@ -10,16 +10,15 @@ import {
   type WakeflowResourceProcessingContract,
   WakeflowResourceProcessingContractError,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
-import type { WakeflowWorkspaceResourceNodePolicy } from "../../../src/workspace/workspace-resource-declaration.js";
 import {
-  parseDemandEventCommitSequence,
-  DemandEventStreamPositionError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+  createDemandEventSourcingResourceCatalog,
+  createDemandEventSourcingSnapshotResourceDeclaration,
+  createDemandEventStreamCommitResourceDeclaration,
+  createTaskPackageProjectionResourceDeclaration,
+  WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
+} from "../../../src/governance/demand/demand-resource-catalog.js";
 import {
-  demandEventSourcingSnapshotRef,
-  demandEventStreamCommitRef,
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
-  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_AUTHORITY_REF,
   DEMAND_EVENT_SOURCING_IDENTITY_REF,
@@ -27,29 +26,30 @@ import {
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+  DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
+  demandEventSourcingSnapshotRef,
+  demandEventStreamCommitRef,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import {
-  demandFinalPublicationMarkerRef,
-  demandFinalRootRef,
+  DemandEventStreamPositionError,
+  parseDemandEventCommitSequence,
+} from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import {
   DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  demandFinalPublicationMarkerRef,
+  demandFinalRootRef,
   demandPublicationLockRef,
   demandPublicationStageRef,
   demandPublicationTransactionRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
-  createDemandEventSourcingSnapshotResourceDeclaration,
-  createDemandEventSourcingResourceCatalog,
-  createDemandEventStreamCommitResourceDeclaration,
-  createTaskPackageProjectionResourceDeclaration,
-  WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
-} from "../../../src/governance/demand/demand-resource-catalog.js";
-import {
-  taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+  taskPackageProjectionRef,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
+import type { WakeflowWorkspaceResourceNodePolicy } from "../../../src/workspace/workspace-resource-declaration.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -67,15 +67,11 @@ function assertDeepFrozen(value: unknown): void {
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
-function modeOf(
-  nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>,
-): string {
+function modeOf(nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>): string {
   return nodePolicy.kind === "tree" ? nodePolicy.rootMode : nodePolicy.mode;
 }
 
-function processingOf(
-  processing: Readonly<WakeflowResourceProcessingContract>,
-): string {
+function processingOf(processing: Readonly<WakeflowResourceProcessingContract>): string {
   return processing.kind === "directory-container"
     ? `directory-container:${processing.materializationRecipe}`
     : `${processing.role}:${processing.allowedMutationRecipes.join("+")}`;
@@ -264,10 +260,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
     true,
   );
   equal(
-    catalog.some(
-      (entry) =>
-        entry.placement.relativePath === demandPublicationStageRef(DEMAND_ID),
-    ),
+    catalog.some((entry) => entry.placement.relativePath === demandPublicationStageRef(DEMAND_ID)),
     false,
   );
   equal(
@@ -288,30 +281,18 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
   if (publicationMarker === undefined) {
     throw new Error("Expected the publication marker declaration.");
   }
-  deepEqual(
-    admitWakeflowResourceOperation(
-      publicationMarker.processing,
-      "exact-retire",
-    ),
-    {
-      kind: "resource-mutation",
-      role: "transaction-artifact",
-      recipe: "exact-retire",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(publicationMarker.processing, "exact-retire"), {
+    kind: "resource-mutation",
+    role: "transaction-artifact",
+    recipe: "exact-retire",
+  });
   let directMarkerCreation: unknown;
   try {
-    admitWakeflowResourceOperation(
-      publicationMarker.processing,
-      "exclusive-create",
-    );
+    admitWakeflowResourceOperation(publicationMarker.processing, "exclusive-create");
   } catch (error: unknown) {
     directMarkerCreation = error;
   }
-  equal(
-    directMarkerCreation instanceof WakeflowResourceProcessingContractError,
-    true,
-  );
+  equal(directMarkerCreation instanceof WakeflowResourceProcessingContractError, true);
 
   let caught: unknown;
   try {
@@ -323,10 +304,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
 });
 
 test("TaskPackage projection declaration remains derived and create-only", () => {
-  const declaration = createTaskPackageProjectionResourceDeclaration(
-    DEMAND_ID,
-    TASK_PACKAGE_ID,
-  );
+  const declaration = createTaskPackageProjectionResourceDeclaration(DEMAND_ID, TASK_PACKAGE_ID);
   deepEqual(
     {
       declarationId: declaration.declarationId,
@@ -346,28 +324,19 @@ test("TaskPackage projection declaration remains derived and create-only", () =>
       },
     },
   );
-  deepEqual(
-    admitWakeflowResourceOperation(declaration.processing, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "derived-projection",
-      recipe: "exclusive-create",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(declaration.processing, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "derived-projection",
+    recipe: "exclusive-create",
+  });
   assertDeepFrozen(declaration);
 });
 
 test("Demand commit and snapshot declarations keep authority and checkpoint distinct", () => {
   const rootRef = demandFinalRootRef(DEMAND_ID);
   const prefix = `demand.event-sourcing.${DEMAND_ID}`;
-  const commit = createDemandEventStreamCommitResourceDeclaration(
-    DEMAND_ID,
-    COMMIT_SEQUENCE,
-  );
-  const snapshot = createDemandEventSourcingSnapshotResourceDeclaration(
-    DEMAND_ID,
-    COMMIT_SEQUENCE,
-  );
+  const commit = createDemandEventStreamCommitResourceDeclaration(DEMAND_ID, COMMIT_SEQUENCE);
+  const snapshot = createDemandEventSourcingSnapshotResourceDeclaration(DEMAND_ID, COMMIT_SEQUENCE);
 
   deepEqual(
     [commit, snapshot].map((entry) => ({
@@ -416,36 +385,24 @@ test("Demand commit and snapshot declarations keep authority and checkpoint dist
   }
   assertDeepFrozen(commit);
   assertDeepFrozen(snapshot);
-  deepEqual(
-    admitWakeflowResourceOperation(commit.processing, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "immutable-fact",
-      recipe: "exclusive-create",
-    },
-  );
-  deepEqual(
-    admitWakeflowResourceOperation(snapshot.processing, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "derived-checkpoint",
-      recipe: "exclusive-create",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(commit.processing, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "immutable-fact",
+    recipe: "exclusive-create",
+  });
+  deepEqual(admitWakeflowResourceOperation(snapshot.processing, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "derived-checkpoint",
+    recipe: "exclusive-create",
+  });
 
   let rejectedOperation: unknown;
   try {
-    admitWakeflowResourceOperation(
-      snapshot.processing,
-      "deterministic-rewrite",
-    );
+    admitWakeflowResourceOperation(snapshot.processing, "deterministic-rewrite");
   } catch (error: unknown) {
     rejectedOperation = error;
   }
-  equal(
-    rejectedOperation instanceof WakeflowResourceProcessingContractError,
-    true,
-  );
+  equal(rejectedOperation instanceof WakeflowResourceProcessingContractError, true);
 
   let invalidSequence: unknown;
   try {
@@ -459,10 +416,7 @@ test("Demand commit and snapshot declarations keep authority and checkpoint dist
     equal(invalidSequence.path, "$commitSequence");
   }
   deepEqual(
-    createDemandEventSourcingSnapshotResourceDeclaration(
-      DEMAND_ID,
-      COMMIT_SEQUENCE,
-    ),
+    createDemandEventSourcingSnapshotResourceDeclaration(DEMAND_ID, COMMIT_SEQUENCE),
     snapshot,
   );
 });

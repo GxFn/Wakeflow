@@ -1,19 +1,18 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  parseTargetResultDocument,
-  renderTargetResult,
-  targetResultIdForClaim,
-  targetResultRecordedCommitIdFromResult,
-  targetResultRecordedEventIdFromResult,
-  type TargetResultDeliveryBinding,
-} from "../../../src/governance/result/target-result.js";
 import {
   createImplementationTargetResult,
   ImplementationTargetResultError,
 } from "../../../src/governance/result/implementation-target-result.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
+import {
+  parseTargetResultDocument,
+  renderTargetResult,
+  type TargetResultDeliveryBinding,
+  targetResultIdForClaim,
+  targetResultRecordedCommitIdFromResult,
+  targetResultRecordedEventIdFromResult,
+} from "../../../src/governance/result/target-result.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
 import {
   createDeliveryEnvelopeFixture,
@@ -22,12 +21,12 @@ import {
   OTHER_DELIVERY_CLAIM_ID,
 } from "../delivery/delivery-records.fixture.js";
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
-import { createTargetResultFixture, deliveryBindingFromOutcome } from "./target-result.fixture.js";
 import {
   createImplementationTargetResultReportContentFixture,
   createImplementationTargetResultReportFixture,
   TARGET_RESULT_REPORTED_AT,
 } from "./implementation-target-result-report.fixture.js";
+import { createTargetResultFixture, deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
 function implementationTaskPackageFixture() {
   const taskPackage = createTaskPackageFixture();
@@ -86,8 +85,7 @@ test("completed TargetResult要求完整anchor mapping与TaskPackage commit poli
         ),
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultError &&
-      error.reason === "relation",
+      error instanceof ImplementationTargetResultError && error.reason === "relation",
   );
   throws(
     () =>
@@ -109,8 +107,7 @@ test("completed TargetResult要求完整anchor mapping与TaskPackage commit poli
         ),
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultError &&
-      error.reason === "relation",
+      error instanceof ImplementationTargetResultError && error.reason === "relation",
   );
 });
 
@@ -129,8 +126,7 @@ test("投递绑定必须跟随信封：另一把声明的围栏或 rejected 结�
         report: createImplementationTargetResultReportFixture(),
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultError &&
-      error.reason === "delivery",
+      error instanceof ImplementationTargetResultError && error.reason === "delivery",
   );
   const rejected = {
     ...deliveryBindingFromOutcome(createDeliveryOutcomeFixture({ claim, envelope })),
@@ -145,8 +141,7 @@ test("投递绑定必须跟随信封：另一把声明的围栏或 rejected 结�
         report: createImplementationTargetResultReportFixture(),
       }),
     (error: unknown) =>
-      error instanceof ImplementationTargetResultError &&
-      error.reason === "delivery",
+      error instanceof ImplementationTargetResultError && error.reason === "delivery",
   );
 });
 
@@ -166,7 +161,12 @@ test("blocked TargetResult允许部分或空anchor evidence且仍不是acceptanc
     taskPackage: implementationTaskPackageFixture(),
     envelope,
     delivery: deliveryBindingFromOutcome(
-      createDeliveryOutcomeFixture({ claim, envelope, disposition: "indeterminate", readbackStatus: "unavailable" }),
+      createDeliveryOutcomeFixture({
+        claim,
+        envelope,
+        disposition: "indeterminate",
+        readbackStatus: "unavailable",
+      }),
     ),
     report,
   });

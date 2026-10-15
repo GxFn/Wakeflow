@@ -1,22 +1,15 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  decideDemandEventSourcingCommand,
-  evolveDemandEventSourcingState,
-  DemandEventSourcingDecisionError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import { computeDemandAggregateStateDigest } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
 import {
-  createTaskPackageFixture,
-  TARGET_TASK_ID,
-  TASKING_AUTHORITY_DIGEST,
-  TASKING_DEMAND_ID,
-} from "../tasking/task-package.fixture.js";
+  DemandEventSourcingDecisionError,
+  decideDemandEventSourcingCommand,
+  evolveDemandEventSourcingState,
+} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { computeDemandAggregateStateDigest } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -29,6 +22,12 @@ import {
   createTargetResultFixture,
 } from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionForState } from "../review/controller-implementation-review-decision.fixture.js";
+import {
+  createTaskPackageFixture,
+  TARGET_TASK_ID,
+  TASKING_AUTHORITY_DIGEST,
+  TASKING_DEMAND_ID,
+} from "../tasking/task-package.fixture.js";
 
 const PUBLISHED_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_22222222-2222-4222-8222-222222222222",
@@ -132,10 +131,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     throw new Error("Expected delivery outcome recorded event.");
   }
   equal(observed.data.outcome.outcomeDigest, outcome.outcomeDigest);
-  const hostEffectObserved = evolveDemandEventSourcingState(
-    deliveryPrepared,
-    observed,
-  );
+  const hostEffectObserved = evolveDemandEventSourcingState(deliveryPrepared, observed);
   equal(hostEffectObserved.targetTasks[0]?.phase, "host-effect-accepted");
   const targetResult = createTargetResultFixture({ claim, envelope, outcome });
   const [resultEvent] = decideDemandEventSourcingCommand(hostEffectObserved, {
@@ -146,10 +142,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     evidenceResolution: [],
   });
   equal(resultEvent?.eventType, "result.target-result-recorded");
-  const resultReported = evolveDemandEventSourcingState(
-    hostEffectObserved,
-    resultEvent,
-  );
+  const resultReported = evolveDemandEventSourcingState(hostEffectObserved, resultEvent);
   equal(resultReported.targetTasks[0]?.phase, "result-reported");
   const reviewDecision = createControllerImplementationReviewDecisionForState(
     computeDemandAggregateStateDigest(resultReported),
@@ -167,10 +160,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     throw new Error("Expected target review decided event.");
   }
   equal(reviewedEvent.data.decision.decision, "accept");
-  const acceptedState = evolveDemandEventSourcingState(
-    resultReported,
-    reviewedEvent,
-  );
+  const acceptedState = evolveDemandEventSourcingState(resultReported, reviewedEvent);
   equal(acceptedState.targetTasks[0]?.phase, "accepted");
 
   const reworkDecision = createControllerImplementationReviewDecisionForState(
@@ -179,18 +169,12 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     8,
     targetResult,
   );
-  const [reworkDecisionEvent] = decideDemandEventSourcingCommand(
-    resultReported,
-    {
-      commandType: "review.decide-target-result",
-      commandVersion: 1,
-      decision: reworkDecision,
-    },
-  );
-  const reworkRequested = evolveDemandEventSourcingState(
-    resultReported,
-    reworkDecisionEvent,
-  );
+  const [reworkDecisionEvent] = decideDemandEventSourcingCommand(resultReported, {
+    commandType: "review.decide-target-result",
+    commandVersion: 1,
+    decision: reworkDecision,
+  });
+  const reworkRequested = evolveDemandEventSourcingState(resultReported, reworkDecisionEvent);
   const reworkEnvelope = createDeliveryEnvelopeFixture({
     claim: createWorkClaimFixture({
       claimId: OTHER_DELIVERY_CLAIM_ID,
@@ -239,23 +223,20 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
       error instanceof DemandEventSourcingDecisionError &&
       error.reason === "target-delivery-rework-context",
   );
-  const [reworkPreparedEvent] = decideDemandEventSourcingCommand(
-    reworkRequested,
-    {
-      commandType: "delivery.prepare-delivery",
-      commandVersion: 1,
-      eventId: parseWakeflowDurableIdOfKind(
-        "demand-event_89898989-8989-4989-8989-898989898989",
-        "demand-event",
-      ),
-      envelope: reworkEnvelope,
-      taskPackage,
-      reworkSource: {
-        decision: reworkDecision,
-        previousResult: targetResult,
-      },
+  const [reworkPreparedEvent] = decideDemandEventSourcingCommand(reworkRequested, {
+    commandType: "delivery.prepare-delivery",
+    commandVersion: 1,
+    eventId: parseWakeflowDurableIdOfKind(
+      "demand-event_89898989-8989-4989-8989-898989898989",
+      "demand-event",
+    ),
+    envelope: reworkEnvelope,
+    taskPackage,
+    reworkSource: {
+      decision: reworkDecision,
+      previousResult: targetResult,
     },
-  );
+  });
   equal(reworkPreparedEvent?.eventType, "delivery.delivery-prepared");
   throws(
     () =>
@@ -265,8 +246,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
         decision: reviewDecision,
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingDecisionError &&
-      error.reason === "transition",
+      error instanceof DemandEventSourcingDecisionError && error.reason === "transition",
   );
   const rejectedOutcome = createDeliveryOutcomeFixture({
     claim,
@@ -280,10 +260,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     eventId: REJECTED_EVENT_ID,
     outcome: rejectedOutcome,
   });
-  const rejectedState = evolveDemandEventSourcingState(
-    deliveryPrepared,
-    rejectedEvent,
-  );
+  const rejectedState = evolveDemandEventSourcingState(deliveryPrepared, rejectedEvent);
   equal(rejectedState.targetTasks[0]?.phase, "host-effect-rejected");
   const rearm = createDeliveryRearmFixture(envelope, rejectedOutcome);
   const [rearmedEvent] = decideDemandEventSourcingCommand(rejectedState, {
@@ -293,10 +270,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     rearm,
   });
   equal(rearmedEvent?.eventType, "delivery.delivery-rearmed");
-  const rearmedState = evolveDemandEventSourcingState(
-    rejectedState,
-    rearmedEvent,
-  );
+  const rearmedState = evolveDemandEventSourcingState(rejectedState, rearmedEvent);
   equal(rearmedState.targetTasks[0]?.phase, "delivery-prepared");
 
   throws(
@@ -308,8 +282,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
         taskPackage,
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingDecisionError &&
-      error.reason === "transition",
+      error instanceof DemandEventSourcingDecisionError && error.reason === "transition",
   );
   throws(
     () =>
@@ -323,8 +296,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
         },
       }),
     (error: unknown) =>
-      error instanceof DemandEventSourcingDecisionError &&
-      error.reason === "transition",
+      error instanceof DemandEventSourcingDecisionError && error.reason === "transition",
   );
 
   const [cancelled] = decideDemandEventSourcingCommand(resultReported, {

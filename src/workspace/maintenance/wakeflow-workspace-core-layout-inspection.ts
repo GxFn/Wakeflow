@@ -1,12 +1,8 @@
 import { types } from "node:util";
 
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  hasDurableAtomicFileStagePrefix,
-} from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   RootedDirectory,
@@ -107,10 +103,7 @@ const ERROR_MESSAGES = {
   "source-changed": "Wakeflow workspace core layout changed during inspection.",
   inspection: "Wakeflow workspace core layout could not be inspected safely.",
   aborted: "Wakeflow workspace core layout inspection was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowWorkspaceCoreLayoutInspectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowWorkspaceCoreLayoutInspectionErrorReason, string>>;
 
 /** 核心私有布局检查失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
@@ -119,10 +112,7 @@ export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
   readonly reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -131,20 +121,17 @@ export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
 
 const MAXIMUM_PROTOCOL_ENTRIES = 4_096;
 
-function fail(
-  reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason, path: string): never {
   throw new WakeflowWorkspaceCoreLayoutInspectionError(reason, path);
 }
 
 function parseSignal(value: unknown): AbortSignal | undefined {
   if (value === undefined) return undefined;
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof AbortSignal)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof AbortSignal)
   ) {
     fail("input", "$options.signal");
   }
@@ -157,10 +144,10 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -190,9 +177,7 @@ function nodeDigest(node: Readonly<FileNodeSnapshot>): Sha256Digest {
   });
 }
 
-function directoryDigest(
-  read: Readonly<StableDirectoryReadResult>,
-): Sha256Digest {
+function directoryDigest(read: Readonly<StableDirectoryReadResult>): Sha256Digest {
   return computeCanonicalJsonSha256Digest({
     nodeDigest: nodeDigest(read.directoryNode),
     entries: read.entries.map((entry) => ({
@@ -203,9 +188,9 @@ function directoryDigest(
 }
 
 function validPrivateDirectory(node: Readonly<FileNodeSnapshot>): boolean {
-  return node.kind === "directory"
-    && node.permissionBits === 0o700
-    && node.userId === currentUserId();
+  return (
+    node.kind === "directory" && node.permissionBits === 0o700 && node.userId === currentUserId()
+  );
 }
 
 async function optionalResource(
@@ -215,10 +200,7 @@ async function optionalResource(
   try {
     return await root.inspectExistingResource(resourcePath, "$resourcePath");
   } catch (error: unknown) {
-    if (
-      error instanceof RootedDirectoryError
-      && error.reason === "resource-not-found"
-    ) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
@@ -243,10 +225,7 @@ async function readDirectory(
       if (error.reason === "source-changed") {
         fail("source-changed", "$resourcePath");
       }
-      if (
-        error.reason === "root-scope"
-        || error.reason === "expectation-changed"
-      ) {
+      if (error.reason === "root-scope" || error.reason === "expectation-changed") {
         fail("root-scope", "$root");
       }
       fail("inspection", "$resourcePath");
@@ -258,26 +237,24 @@ async function readDirectory(
 async function inspectActive(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
-): Promise<Readonly<{
-  readonly status: WakeflowActiveRootStatus;
-  readonly nodeDigest: Sha256Digest | null;
-}>> {
+): Promise<
+  Readonly<{
+    readonly status: WakeflowActiveRootStatus;
+    readonly nodeDigest: Sha256Digest | null;
+  }>
+> {
   try {
-    const inspection = await inspectActiveLayout(
-      root,
-      signal === undefined ? {} : { signal },
-    );
+    const inspection = await inspectActiveLayout(root, signal === undefined ? {} : { signal });
     return Object.freeze({
-      status: inspection.status === "absent"
-        ? "absent" as const
-        : inspection.status === "current"
-          ? "present" as const
-          : inspection.status === "incomplete"
-            ? "incomplete" as const
-            : "conflict" as const,
-      nodeDigest: inspection.status === "absent"
-        ? null
-        : inspection.observationDigest,
+      status:
+        inspection.status === "absent"
+          ? ("absent" as const)
+          : inspection.status === "current"
+            ? ("present" as const)
+            : inspection.status === "incomplete"
+              ? ("incomplete" as const)
+              : ("conflict" as const),
+      nodeDigest: inspection.status === "absent" ? null : inspection.observationDigest,
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
@@ -289,10 +266,7 @@ async function inspectActive(
   }
 }
 
-function entryNamed(
-  read: Readonly<StableDirectoryReadResult>,
-  name: string,
-) {
+function entryNamed(read: Readonly<StableDirectoryReadResult>, name: string) {
   return read.entries.find((entry) => entry.name === name) ?? null;
 }
 
@@ -390,9 +364,14 @@ async function inspectLocal(
   }
   const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
   // `incidents` 是边界诊断的可丢弃落点（§13.166 G1）：它的存在不说明工作区已被使用，不影响 fresh 兼容。
-  if (runtime.entries.some((entry) => (
-    entry.name !== "maintenance" && entry.name !== "operation-admission" && entry.name !== "incidents"
-  ))) {
+  if (
+    runtime.entries.some(
+      (entry) =>
+        entry.name !== "maintenance" &&
+        entry.name !== "operation-admission" &&
+        entry.name !== "incidents",
+    )
+  ) {
     freshCompatible = false;
   }
   const admission = entryNamed(runtime, "operation-admission");
@@ -403,21 +382,14 @@ async function inspectLocal(
       if (contents.entries.length !== 0) freshCompatible = false;
     }
   }
-  const stagePresent = runtime.entries.some((entry) => (
-    hasDurableAtomicFileStagePrefix(entry.name)
-  ));
+  const stagePresent = runtime.entries.some((entry) => hasDurableAtomicFileStagePrefix(entry.name));
   if (stagePresent) issueCodes.push("maintenance-gate-stage-residue");
   const maintenanceEntry = entryNamed(runtime, "maintenance");
   let lockState: GateLockState = "absent";
   try {
-    const lock = await inspectRootedExclusiveFileLock(
-      root,
-      WAKEFLOW_MAINTENANCE_GATE_REF,
-    );
+    const lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
     if (lock.status === "held") {
-      lockState = lock.ownerState === "active"
-        ? "active"
-        : "inactive-or-unknown";
+      lockState = lock.ownerState === "active" ? "active" : "inactive-or-unknown";
       freshCompatible = false;
     }
   } catch (error: unknown) {
@@ -461,11 +433,7 @@ async function inspectLocal(
       protocolDigest: directoryDigest(runtime),
     });
   }
-  const maintenance = await readDirectory(
-    root,
-    WAKEFLOW_MAINTENANCE_ROOT_REF,
-    signal,
-  );
+  const maintenance = await readDirectory(root, WAKEFLOW_MAINTENANCE_ROOT_REF, signal);
   if (maintenance.entries.some((entry) => entry.name !== "transactions")) {
     issueCodes.push("maintenance-root-unknown-entry");
     return Object.freeze({
@@ -515,13 +483,14 @@ async function inspectLocal(
     issueCodes.push("maintenance-transaction-residue");
     freshCompatible = false;
   }
-  const status: WakeflowLocalProtocolStatus = lockState === "unsafe"
-    ? "conflict"
-    : lockState === "active"
-      ? "busy"
-      : lockState === "inactive-or-unknown" || residuePresent
-        ? "recovery-required"
-        : "idle";
+  const status: WakeflowLocalProtocolStatus =
+    lockState === "unsafe"
+      ? "conflict"
+      : lockState === "active"
+        ? "busy"
+        : lockState === "inactive-or-unknown" || residuePresent
+          ? "recovery-required"
+          : "idle";
   return Object.freeze({
     status,
     freshCompatible: freshCompatible && status === "idle",
@@ -545,10 +514,10 @@ export async function inspectWakeflowWorkspaceCoreLayout(
 ): Promise<Readonly<WakeflowWorkspaceCoreLayoutInspection>> {
   assertRoot(rootValue);
   if (
-    typeof optionsValue !== "object"
-    || optionsValue === null
-    || types.isProxy(optionsValue)
-    || Object.keys(optionsValue).some((key) => key !== "signal")
+    typeof optionsValue !== "object" ||
+    optionsValue === null ||
+    types.isProxy(optionsValue) ||
+    Object.keys(optionsValue).some((key) => key !== "signal")
   ) {
     fail("input", "$options");
   }

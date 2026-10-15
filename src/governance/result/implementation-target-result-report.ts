@@ -1,19 +1,20 @@
-import type { WakeflowImplementationTargetResultReport as ReportWire } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
-import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowImplementationTargetResultReport as ReportWire } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -21,33 +22,32 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
-  JsonValueError,
-  parseJsonValue,
   type JsonObject,
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  parseGitObjectId,
-  GitObjectIdError,
   type GitObjectId,
+  GitObjectIdError,
+  parseGitObjectId,
 } from "../../foundation/git/git-object-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
-  UtcWallClockError,
   type UtcWallClock,
+  UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
-import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import type {
   TargetResultEvidenceLocator,
   TargetResultOutcome,
@@ -64,12 +64,13 @@ import type {
 const REPORT_KIND = "WakeflowImplementationTargetResultReport" as const;
 const REPORT_SCHEMA_VERSION = 1 as const;
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const CONTROL_EXCEPT_LF_PATTERN =
-  /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/u;
 
 export type ImplementationTargetResultRepositoryDisposition =
-  "committed" | "left-uncommitted" | "no-changes";
+  | "committed"
+  | "left-uncommitted"
+  | "no-changes";
 
 export interface ImplementationTargetResultAnchorEvidence {
   readonly anchorId: string;
@@ -121,21 +122,15 @@ export type ImplementationTargetResultReportErrorReason =
 const ERROR_MESSAGES = {
   input: "Implementation Target Result Report is not passive closed JSON data.",
   schema: "Implementation Target Result Report does not satisfy its Schema.",
-  identifier:
-    "Implementation Target Result Report contains an invalid identity.",
-  digest:
-    "Implementation Target Result Report contains an invalid or inconsistent digest.",
+  identifier: "Implementation Target Result Report contains an invalid identity.",
+  digest: "Implementation Target Result Report contains an invalid or inconsistent digest.",
   path: "Implementation Target Result Report contains an invalid portable resource path.",
-  "git-object-id":
-    "Implementation Target Result Report contains an invalid Git object ID.",
+  "git-object-id": "Implementation Target Result Report contains an invalid Git object ID.",
   text: "Implementation Target Result Report contains invalid human text or token text.",
   time: "Implementation Target Result Report contains an invalid time.",
   relation: "Implementation Target Result Report facts are inconsistent.",
-  representation:
-    "Implementation Target Result Report bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<ImplementationTargetResultReportErrorReason, string>
->;
+  representation: "Implementation Target Result Report bytes are not deterministic.",
+} as const satisfies Readonly<Record<ImplementationTargetResultReportErrorReason, string>>;
 
 export class ImplementationTargetResultReportError extends Error {
   override readonly name = "ImplementationTargetResultReportError";
@@ -143,10 +138,7 @@ export class ImplementationTargetResultReportError extends Error {
   readonly reason: ImplementationTargetResultReportErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: ImplementationTargetResultReportErrorReason,
-    path: string,
-  ) {
+  constructor(reason: ImplementationTargetResultReportErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -163,18 +155,11 @@ const validateWire = createRuntimeJsonSchemaValidator<ReportWire>(
   ],
 );
 
-function fail(
-  reason: ImplementationTargetResultReportErrorReason,
-  path: string,
-): never {
+function fail(reason: ImplementationTargetResultReportErrorReason, path: string): never {
   throw new ImplementationTargetResultReportError(reason, path);
 }
 
-function jsonRecord(
-  value: unknown,
-  fields: readonly string[],
-  path: string,
-): Readonly<JsonObject> {
+function jsonRecord(value: unknown, fields: readonly string[], path: string): Readonly<JsonObject> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, path);
@@ -187,10 +172,7 @@ function jsonRecord(
   }
   const keys = Object.keys(json).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     fail("input", path);
   }
   return json as JsonObject;
@@ -218,10 +200,7 @@ function token(value: unknown, path: string): string {
   return value;
 }
 
-function repositoryId(
-  value: unknown,
-  path: string,
-): WakeflowDurableId<"repository"> {
+function repositoryId(value: unknown, path: string): WakeflowDurableId<"repository"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "repository", path);
   } catch (error: unknown) {
@@ -266,11 +245,7 @@ function instant(value: unknown, path: string): UtcInstant {
   }
 }
 
-function stringArray(
-  value: unknown,
-  path: string,
-  maximumItems = 64,
-): readonly string[] {
+function stringArray(value: unknown, path: string, maximumItems = 64): readonly string[] {
   if (!Array.isArray(value) || value.length > maximumItems) {
     fail("input", path);
   }
@@ -327,19 +302,14 @@ export function parseImplementationTargetResultReportContent(
   const commits = repository.commits.map((entry, index) =>
     gitObjectId(entry, `$/repositoryChange/commits/${index}`),
   );
-  const commitKeys = commits.map(
-    (entry) => `${entry.algorithm}:${entry.value}`,
-  );
+  const commitKeys = commits.map((entry) => `${entry.algorithm}:${entry.value}`);
   if (
     new Set(commitKeys).size !== commitKeys.length ||
     (repository.disposition === "committed") !== commits.length > 0
   ) {
     fail("relation", "$/repositoryChange/commits");
   }
-  if (
-    !Array.isArray(record.evidenceLocators) ||
-    record.evidenceLocators.length > 64
-  ) {
+  if (!Array.isArray(record.evidenceLocators) || record.evidenceLocators.length > 64) {
     fail("input", "$/evidenceLocators");
   }
   const locators = record.evidenceLocators.map((entry, index) => {
@@ -352,21 +322,14 @@ export function parseImplementationTargetResultReportContent(
       digest: digest(locator.digest, `${path}/digest`),
     });
   });
-  const locatorKeys = locators.map(
-    (entry) => `${entry.kind}\0${entry.ref}\0${entry.digest}`,
-  );
+  const locatorKeys = locators.map((entry) => `${entry.kind}\0${entry.ref}\0${entry.digest}`);
   if (new Set(locatorKeys).size !== locatorKeys.length) {
     fail("relation", "$/evidenceLocators");
   }
-  if (
-    !Array.isArray(record.anchorEvidence) ||
-    record.anchorEvidence.length > 32
-  ) {
+  if (!Array.isArray(record.anchorEvidence) || record.anchorEvidence.length > 32) {
     fail("input", "$/anchorEvidence");
   }
-  const locatorRefs = new Set(
-    locators.map((entry) => `${entry.ref}\0${entry.digest}`),
-  );
+  const locatorRefs = new Set(locators.map((entry) => `${entry.ref}\0${entry.digest}`));
   const anchorIds = new Set<string>();
   const anchorEvidence = record.anchorEvidence.map((entry, index) => {
     const path = `$/anchorEvidence/${index}`;
@@ -393,9 +356,7 @@ export function parseImplementationTargetResultReportContent(
       }
       return admitted;
     });
-    const referenceKeys = references.map(
-      (reference) => `${reference.ref}\0${reference.digest}`,
-    );
+    const referenceKeys = references.map((reference) => `${reference.ref}\0${reference.digest}`);
     if (new Set(referenceKeys).size !== referenceKeys.length) {
       fail("relation", `${path}/evidenceRefs`);
     }
@@ -408,10 +369,7 @@ export function parseImplementationTargetResultReportContent(
     outcome: record.outcome,
     summary: text(record.summary, "$/summary"),
     repositoryChange: Object.freeze({
-      repositoryId: repositoryId(
-        repository.repositoryId,
-        "$/repositoryChange/repositoryId",
-      ),
+      repositoryId: repositoryId(repository.repositoryId, "$/repositoryChange/repositoryId"),
       disposition: repository.disposition,
       branch: repository.branch,
       commits: Object.freeze(commits),
@@ -499,19 +457,12 @@ export function createImplementationTargetResultReport(
   });
 }
 
-export function implementationTargetResultReportContentDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseImplementationTargetResultReportContent(value),
-  );
+export function implementationTargetResultReportContentDigest(value: unknown): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(parseImplementationTargetResultReportContent(value));
 }
 
 export function renderImplementationTargetResultReport(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseImplementationTargetResultReport(value),
-    "$report",
-  );
+  return renderDeterministicJsonDocument(parseImplementationTargetResultReport(value), "$report");
 }
 
 export function parseImplementationTargetResultReportDocument(

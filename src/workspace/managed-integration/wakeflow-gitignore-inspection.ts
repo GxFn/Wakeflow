@@ -1,10 +1,7 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -27,16 +24,9 @@ import {
   type GitIgnorePathObservation,
   observeGitIgnorePaths,
 } from "../../foundation/git/git-ignore-observation.js";
-import {
-  parseByteCount,
-} from "../../foundation/numeric/byte-count.js";
-import {
-  decodeUtf8,
-  Utf8Error,
-} from "../../foundation/text/utf8.js";
-import type {
-  WakeflowWorkspaceStaticResourceMatrix,
-} from "../wakeflow-workspace-static-resource-matrix.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import type { WakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   createWakeflowWorkspaceStaticResourceOperationContext,
   type WakeflowWorkspaceStaticResourceOperationContext,
@@ -50,9 +40,7 @@ import {
   type WakeflowGitignoreExactOutsideClassification,
   type WakeflowGitignoreRule,
 } from "./wakeflow-gitignore-body-authority.js";
-import {
-  WAKEFLOW_GITIGNORE_REF,
-} from "./wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-catalog.js";
 import {
   inspectWakeflowManagedTextEnvelope,
   recomposeWakeflowManagedTextEnvelope,
@@ -97,11 +85,9 @@ export interface WakeflowGitignoreInspection {
   readonly authority: Readonly<WakeflowGitignoreBodyAuthority>;
   readonly source: Readonly<StableFileSource> | null;
   readonly envelope: Readonly<WakeflowManagedTextEnvelopeInspection>;
-  readonly exactOutside:
-    Readonly<WakeflowGitignoreExactOutsideClassification>;
+  readonly exactOutside: Readonly<WakeflowGitignoreExactOutsideClassification>;
   readonly gitRuleChecks: readonly Readonly<WakeflowGitignoreRuleCheck>[];
-  readonly targetGitRuleChecks:
-    readonly Readonly<WakeflowGitignoreRuleCheck>[] | null;
+  readonly targetGitRuleChecks: readonly Readonly<WakeflowGitignoreRuleCheck>[] | null;
   readonly target: Readonly<WakeflowManagedTextRecompositionResult> | null;
 }
 
@@ -127,10 +113,8 @@ const ERROR_MESSAGES = {
   source: "Wakeflow Gitignore source cannot be read stably.",
   "source-policy": "Wakeflow Gitignore source violates its node policy.",
   envelope: "Wakeflow Gitignore managed envelope is invalid.",
-  "outside-conflict":
-    "Wakeflow Gitignore outside rules conflict with managed rules.",
-  "unknown-managed-body":
-    "Wakeflow Gitignore managed body is not an admitted render.",
+  "outside-conflict": "Wakeflow Gitignore outside rules conflict with managed rules.",
+  "unknown-managed-body": "Wakeflow Gitignore managed body is not an admitted render.",
   "target-capacity": "Wakeflow Gitignore candidate exceeds its byte budget.",
   "candidate-semantics":
     "Wakeflow Gitignore candidate does not provide its required Git semantics.",
@@ -138,10 +122,7 @@ const ERROR_MESSAGES = {
     "Wakeflow workspace root is not a Git repository; the managed .gitignore block is verified through Git, so run `git init` there first.",
   git: "Wakeflow Gitignore semantics could not be verified by Git.",
   aborted: "Wakeflow Gitignore inspection was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowGitignoreInspectionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowGitignoreInspectionErrorReason, string>>;
 
 /** Gitignore 只读检查失败的稳定、脱敏错误。 */
 export class WakeflowGitignoreInspectionError extends Error {
@@ -164,19 +145,16 @@ interface ParsedRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: WakeflowGitignoreInspectionErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowGitignoreInspectionErrorReason, path: string): never {
   throw new WakeflowGitignoreInspectionError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -192,18 +170,13 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   }
   const keys = Object.keys(record).sort();
   if (
-    (keys.length !== 3 && keys.length !== 4)
-    || keys[0] !== "expectedMatrixDigest"
-    || keys[1] !== "hostProfiles"
-    || keys[2] !== "matrix"
-    || (keys.length === 4 && keys[3] !== "signal")
-    || (
-      record.signal !== undefined
-      && (
-        types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    (keys.length !== 3 && keys.length !== 4) ||
+    keys[0] !== "expectedMatrixDigest" ||
+    keys[1] !== "hostProfiles" ||
+    keys[2] !== "matrix" ||
+    (keys.length === 4 && keys[3] !== "signal") ||
+    (record.signal !== undefined &&
+      (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$request");
   }
@@ -236,10 +209,10 @@ async function readSource(
       ...(signal === undefined ? {} : { signal }),
     });
     if (
-      read.node.kind !== "file"
-      || read.node.permissionBits !== 0o644
-      || read.node.linkCount !== 1n
-      || read.node.userId !== expectedUserId
+      read.node.kind !== "file" ||
+      read.node.permissionBits !== 0o644 ||
+      read.node.linkCount !== 1n ||
+      read.node.userId !== expectedUserId
     ) {
       fail("source-policy", "$source");
     }
@@ -257,10 +230,7 @@ async function readSource(
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (
-        error.reason === "symlink"
-        || error.reason === "not-file"
-      ) {
+      if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source");
       }
       fail("source", "$source");
@@ -281,9 +251,9 @@ async function revalidateSource(
       ...(signal === undefined ? {} : { signal }),
     });
     if (
-      initial === null
-      || current.digest !== initial.facts.digest
-      || current.byteCount !== initial.facts.byteCount
+      initial === null ||
+      current.digest !== initial.facts.digest ||
+      current.byteCount !== initial.facts.byteCount
     ) {
       fail("source", "$source");
     }
@@ -307,14 +277,18 @@ function decodeOutside(
       return Object.freeze({ prefix: decodeUtf8(bytes), suffix: "" });
     }
     return Object.freeze({
-      prefix: decodeUtf8(bytes.subarray(
-        envelope.prefixOutsideRange.offset,
-        envelope.prefixOutsideRange.endExclusive,
-      )),
-      suffix: decodeUtf8(bytes.subarray(
-        envelope.suffixOutsideRange.offset,
-        envelope.suffixOutsideRange.endExclusive,
-      )),
+      prefix: decodeUtf8(
+        bytes.subarray(
+          envelope.prefixOutsideRange.offset,
+          envelope.prefixOutsideRange.endExclusive,
+        ),
+      ),
+      suffix: decodeUtf8(
+        bytes.subarray(
+          envelope.suffixOutsideRange.offset,
+          envelope.suffixOutsideRange.endExclusive,
+        ),
+      ),
     });
   } catch (error: unknown) {
     if (error instanceof Utf8Error) fail("envelope", "$source");
@@ -353,9 +327,7 @@ function decodeLiteralRule(rule: WakeflowGitignoreRule): Readonly<{
 function probePath(rule: WakeflowGitignoreRule): PortableResourcePath {
   const decoded = decodeLiteralRule(rule);
   return decoded.directory
-    ? parsePortableResourcePath(
-      `${decoded.resourcePath}/${GIT_DIRECTORY_PROBE_NAME}`,
-    )
+    ? parsePortableResourcePath(`${decoded.resourcePath}/${GIT_DIRECTORY_PROBE_NAME}`)
     : decoded.resourcePath;
 }
 
@@ -387,35 +359,37 @@ function ruleChecks(
   probes: readonly PortableResourcePath[],
   observations: readonly Readonly<GitIgnorePathObservation>[],
 ): readonly Readonly<WakeflowGitignoreRuleCheck>[] {
-  if (
-    observations.length !== rules.length
-    || probes.length !== rules.length
-  ) {
+  if (observations.length !== rules.length || probes.length !== rules.length) {
     fail("git", "$git");
   }
-  return Object.freeze(rules.map((rule, index) => {
-    const pathObservation = observations[index];
-    const probe = probes[index];
-    if (pathObservation === undefined || pathObservation.path !== probe) {
-      fail("git", "$git");
-    }
-    return Object.freeze({
-      rule,
-      probePath: pathObservation.path,
-      ignored: pathObservation.ignored
-        && pathObservation.decision?.source === ".gitignore",
-    });
-  }));
+  return Object.freeze(
+    rules.map((rule, index) => {
+      const pathObservation = observations[index];
+      const probe = probes[index];
+      if (pathObservation === undefined || pathObservation.path !== probe) {
+        fail("git", "$git");
+      }
+      return Object.freeze({
+        rule,
+        probePath: pathObservation.path,
+        ignored: pathObservation.ignored && pathObservation.decision?.source === ".gitignore",
+      });
+    }),
+  );
 }
 
 function unmatchedRuleChecks(
   rules: readonly WakeflowGitignoreRule[],
 ): readonly Readonly<WakeflowGitignoreRuleCheck>[] {
-  return Object.freeze(rules.map((rule) => Object.freeze({
-    rule,
-    probePath: probePath(rule),
-    ignored: false,
-  })));
+  return Object.freeze(
+    rules.map((rule) =>
+      Object.freeze({
+        rule,
+        probePath: probePath(rule),
+        ignored: false,
+      }),
+    ),
+  );
 }
 
 async function observeTargetRules(
@@ -445,8 +419,8 @@ async function observeTargetRules(
     throw error;
   }
   if (
-    observed.candidateByteCount !== target.byteCount
-    || observed.candidateDigest !== target.digest
+    observed.candidateByteCount !== target.byteCount ||
+    observed.candidateDigest !== target.digest
   ) {
     fail("git", "$git");
   }
@@ -498,14 +472,11 @@ export async function inspectWakeflowWorkspaceGitignore(
   const expectedUserId = currentUserId();
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {
-    context = createWakeflowWorkspaceStaticResourceOperationContext(
-      request.matrix,
-      {
-        expectedMatrixDigest: request.expectedMatrixDigest,
-        declarationId: "workspace.ignore-integration",
-        recipe: "exact-source-recompose",
-      },
-    );
+    context = createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
+      expectedMatrixDigest: request.expectedMatrixDigest,
+      declarationId: "workspace.ignore-integration",
+      recipe: "exact-source-recompose",
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
       fail("context", "$context");
@@ -526,21 +497,21 @@ export async function inspectWakeflowWorkspaceGitignore(
   const bytes = read?.bytes ?? new Uint8Array();
   const envelope = inspectEnvelope(bytes);
   if (
-    envelope.kind === "managed"
-    && (
-      envelope.component !== authority.envelopeTarget.component
-      || envelope.owner !== authority.envelopeTarget.owner
-    )
+    envelope.kind === "managed" &&
+    (envelope.component !== authority.envelopeTarget.component ||
+      envelope.owner !== authority.envelopeTarget.owner)
   ) {
     fail("envelope", "$source");
   }
-  const managedBodyCurrent = envelope.kind === "managed"
-    && envelope.bodyDigest === authority.bodyDigest
-    && envelope.body === authority.body;
+  const managedBodyCurrent =
+    envelope.kind === "managed" &&
+    envelope.bodyDigest === authority.bodyDigest &&
+    envelope.body === authority.body;
   // C5（§13.167）：前序渲染的正文被准入但不算 current，走下面的重组路径换成当前渲染。
-  const managedBodyHistorical = envelope.kind === "managed"
-    && !managedBodyCurrent
-    && historicalWakeflowManagedTextBodies(
+  const managedBodyHistorical =
+    envelope.kind === "managed" &&
+    !managedBodyCurrent &&
+    historicalWakeflowManagedTextBodies(
       WAKEFLOW_GITIGNORE_BODY_HISTORY,
       authority.body,
       request.hostProfiles,
@@ -555,9 +526,10 @@ export async function inspectWakeflowWorkspaceGitignore(
   if (exactOutside.kind === "conflict") {
     fail("outside-conflict", "$source");
   }
-  const gitRuleChecks = read === null
-    ? unmatchedRuleChecks(authority.rules)
-    : await observeRules(rootValue, authority.rules, request.signal);
+  const gitRuleChecks =
+    read === null
+      ? unmatchedRuleChecks(authority.rules)
+      : await observeRules(rootValue, authority.rules, request.signal);
   if (read !== null) {
     await revalidateSource(rootValue, read, request.signal);
   }
@@ -589,10 +561,7 @@ export async function inspectWakeflowWorkspaceGitignore(
       target: null,
     });
   }
-  const target = recomposeWakeflowManagedTextEnvelope(
-    bytes,
-    authority.envelopeTarget,
-  );
+  const target = recomposeWakeflowManagedTextEnvelope(bytes, authority.envelopeTarget);
   const targetGitRuleChecks = await observeTargetRules(
     rootValue,
     authority.rules,

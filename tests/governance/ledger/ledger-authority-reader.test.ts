@@ -1,12 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
@@ -89,7 +82,12 @@ async function publishedLedger(t: TestContext) {
   await materializeLedgerAuthorityLayout(root);
   const record = requirementRecord("示例需求");
   await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined);
-  return { rootPath, root, record, finalPath: path.join(rootPath, "requirements", FIXTURE_REQUIREMENT_ID) };
+  return {
+    rootPath,
+    root,
+    record,
+    finalPath: path.join(rootPath, "requirements", FIXTURE_REQUIREMENT_ID),
+  };
 }
 
 test("loads a committed record tree with exact sources and derives member references", async (t) => {
@@ -103,7 +101,10 @@ test("loads a committed record tree with exact sources and derives member refere
   equal(loaded.recordSource.resourcePath, loaded.recordRef);
   equal(loaded.recordSource.node.kind, "file");
   equal(loaded.recordSource.node.permissionBits, LEDGER_DURABLE_FILE_MODE);
-  equal(loaded.recordSource.digest, computeSha256Digest(encodeUtf8(renderLedgerAuthorityRecord(record))));
+  equal(
+    loaded.recordSource.digest,
+    computeSha256Digest(encodeUtf8(renderLedgerAuthorityRecord(record))),
+  );
   deepEqual(
     loaded.documents.map((document) => [
       document.role,
@@ -114,8 +115,22 @@ test("loads a committed record tree with exact sources and derives member refere
       document.source.node.permissionBits,
     ]),
     [
-      ["landing", "landing.md", `${RECORD_ROOT_REF}/landing.md`, `${RECORD_ROOT_REF}/landing.md`, true, 0o644],
-      ["requirement", "requirement.md", `${RECORD_ROOT_REF}/requirement.md`, `${RECORD_ROOT_REF}/requirement.md`, true, 0o644],
+      [
+        "landing",
+        "landing.md",
+        `${RECORD_ROOT_REF}/landing.md`,
+        `${RECORD_ROOT_REF}/landing.md`,
+        true,
+        0o644,
+      ],
+      [
+        "requirement",
+        "requirement.md",
+        `${RECORD_ROOT_REF}/requirement.md`,
+        `${RECORD_ROOT_REF}/requirement.md`,
+        true,
+        0o644,
+      ],
     ],
   );
   equal(Object.isFrozen(loaded), true);
@@ -138,7 +153,12 @@ test("loads a committed record tree with exact sources and derives member refere
   equal(Object.isFrozen(reference), true);
   deepEqual(parseLedgerAuthorityMemberReference(JSON.parse(JSON.stringify(reference))), reference);
 
-  const resolved = await resolveLoadedLedgerAuthorityMemberReference(root, loaded, reference, undefined);
+  const resolved = await resolveLoadedLedgerAuthorityMemberReference(
+    root,
+    loaded,
+    reference,
+    undefined,
+  );
   deepEqual(resolved.bytes, encodeUtf8(FIXTURE_REQUIREMENT_MARKDOWN));
   equal(resolved.reference, reference);
   equal(resolved.loaded, loaded);
@@ -181,38 +201,50 @@ test("member reference parsing enforces the schema and the ref relations", async
     await expectStoreError(() => parseLedgerAuthorityMemberReference(value), "input");
   }
   await expectStoreError(
-    () => parseLedgerAuthorityMemberReference({ ...wire, memberPath: "record.json", memberRef: wire.recordRef }),
+    () =>
+      parseLedgerAuthorityMemberReference({
+        ...wire,
+        memberPath: "record.json",
+        memberRef: wire.recordRef,
+      }),
     "input",
     "$/memberPath",
   );
   await expectStoreError(
-    () => parseLedgerAuthorityMemberReference({
-      ...wire,
-      memberPath: "Record.JSON",
-      memberRef: `${RECORD_ROOT_REF}/Record.JSON`,
-    }),
+    () =>
+      parseLedgerAuthorityMemberReference({
+        ...wire,
+        memberPath: "Record.JSON",
+        memberRef: `${RECORD_ROOT_REF}/Record.JSON`,
+      }),
     "input",
     "$/memberPath",
   );
   await expectStoreError(
-    () => parseLedgerAuthorityMemberReference({
-      ...wire,
-      memberPath: "record.json/landing.md",
-      memberRef: `${RECORD_ROOT_REF}/record.json/landing.md`,
-    }),
+    () =>
+      parseLedgerAuthorityMemberReference({
+        ...wire,
+        memberPath: "record.json/landing.md",
+        memberRef: `${RECORD_ROOT_REF}/record.json/landing.md`,
+      }),
     "input",
     "$/memberPath",
   );
   await expectStoreError(
-    () => parseLedgerAuthorityMemberReference({
-      ...wire,
-      recordRef: `requirements/${OTHER_REQUIREMENT_ID}/record.json`,
-    }),
+    () =>
+      parseLedgerAuthorityMemberReference({
+        ...wire,
+        recordRef: `requirements/${OTHER_REQUIREMENT_ID}/record.json`,
+      }),
     "input",
     "$reference",
   );
   await expectStoreError(
-    () => parseLedgerAuthorityMemberReference({ ...wire, memberRef: `${RECORD_ROOT_REF}/requirement.md` }),
+    () =>
+      parseLedgerAuthorityMemberReference({
+        ...wire,
+        memberRef: `${RECORD_ROOT_REF}/requirement.md`,
+      }),
     "input",
     "$reference",
   );
@@ -222,10 +254,26 @@ test("member reference parsing enforces the schema and the ref relations", async
     "$reference",
   );
 
-  await expectStoreError(() => createLedgerAuthorityMemberReference(loaded, "notes.md"), "input", "$memberPath");
-  await expectStoreError(() => createLedgerAuthorityMemberReference(loaded, "record.json"), "input", "$memberPath");
-  await expectStoreError(() => createLedgerAuthorityMemberReference(loaded, "../landing.md"), "input", "$memberPath");
-  await expectStoreError(() => createLedgerAuthorityMemberReference(loaded, 42), "input", "$memberPath");
+  await expectStoreError(
+    () => createLedgerAuthorityMemberReference(loaded, "notes.md"),
+    "input",
+    "$memberPath",
+  );
+  await expectStoreError(
+    () => createLedgerAuthorityMemberReference(loaded, "record.json"),
+    "input",
+    "$memberPath",
+  );
+  await expectStoreError(
+    () => createLedgerAuthorityMemberReference(loaded, "../landing.md"),
+    "input",
+    "$memberPath",
+  );
+  await expectStoreError(
+    () => createLedgerAuthorityMemberReference(loaded, 42),
+    "input",
+    "$memberPath",
+  );
 });
 
 test("member resolution requires an exact match with the loaded record and the bytes on disk", async (t) => {
@@ -266,7 +314,12 @@ test("member resolution requires an exact match with the loaded record and the b
     "$reference",
   );
   const reloaded = await loadLedgerAuthorityRecord(root, record.requirementId, undefined);
-  const resolved = await resolveLoadedLedgerAuthorityMemberReference(root, reloaded, reference, undefined);
+  const resolved = await resolveLoadedLedgerAuthorityMemberReference(
+    root,
+    reloaded,
+    reference,
+    undefined,
+  );
   deepEqual(resolved.bytes, encodeUtf8(FIXTURE_LANDING_MARKDOWN));
 });
 
@@ -275,10 +328,16 @@ test("strict tree loading fails closed on every physical drift", async (t) => {
   const recordPath = path.join(finalPath, "record.json");
   const landingPath = path.join(finalPath, "landing.md");
   const recordText = readFileSync(recordPath, "utf8");
-  const load = (signal?: AbortSignal) => loadLedgerAuthorityRecord(root, record.requirementId, signal);
+  const load = (signal?: AbortSignal) =>
+    loadLedgerAuthorityRecord(root, record.requirementId, signal);
 
   await expectStoreError(
-    () => loadLedgerAuthorityRecord(root, requirementRecord("Other", OTHER_REQUIREMENT_ID).requirementId, undefined),
+    () =>
+      loadLedgerAuthorityRecord(
+        root,
+        requirementRecord("Other", OTHER_REQUIREMENT_ID).requirementId,
+        undefined,
+      ),
     "not-found",
     "$record",
   );
@@ -299,7 +358,10 @@ test("strict tree loading fails closed on every physical drift", async (t) => {
   await expectStoreError(() => load(), "record", "$record");
   writeFileSync(recordPath, `${recordText}\n`);
   await expectStoreError(() => load(), "record", "$record");
-  writeFileSync(recordPath, renderLedgerAuthorityRecord(requirementRecord("Other", OTHER_REQUIREMENT_ID)));
+  writeFileSync(
+    recordPath,
+    renderLedgerAuthorityRecord(requirementRecord("Other", OTHER_REQUIREMENT_ID)),
+  );
   await expectStoreError(() => load(), "conflict", "$record");
   writeFileSync(recordPath, recordText);
 
@@ -325,9 +387,13 @@ test("strict tree loading fails closed on every physical drift", async (t) => {
   chmodSync(landingPath, LEDGER_DURABLE_FILE_MODE);
   deepEqual((await load()).record, record);
 
-  writeFileSync(path.join(finalPath, "huge.bin"), Buffer.alloc(LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES + 1), {
-    mode: LEDGER_DURABLE_FILE_MODE,
-  });
+  writeFileSync(
+    path.join(finalPath, "huge.bin"),
+    Buffer.alloc(LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES + 1),
+    {
+      mode: LEDGER_DURABLE_FILE_MODE,
+    },
+  );
   await expectStoreError(() => load(), "capacity", "$record");
   rmSync(path.join(finalPath, "huge.bin"));
 

@@ -14,27 +14,27 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { ManagedEvidencePublicationApplicationService } from "../../../src/governance/evidence/managed-evidence-publication-application-service.js";
 import {
-  createManagedEvidencePublicationTransaction,
   computeManagedEvidencePublicationTransactionDigest,
+  createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationRecordTreePlan,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
-import {
-  loadManagedEvidenceRecord,
-  readManagedEvidencePayloadMember,
-  ManagedEvidenceRecordReaderError,
-} from "../../../src/governance/evidence/managed-evidence-record-reader.js";
 import {
   ManagedEvidenceReadingService,
   ManagedEvidenceReadingServiceError,
 } from "../../../src/governance/evidence/managed-evidence-reading-service.js";
+import {
+  loadManagedEvidenceRecord,
+  ManagedEvidenceRecordReaderError,
+  readManagedEvidencePayloadMember,
+} from "../../../src/governance/evidence/managed-evidence-record-reader.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   EVIDENCE_CAPTURED_AT,
   EVIDENCE_DEMAND_ID,
   EVIDENCE_REPOSITORY_ID,
-  readyCapturePlan,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
+  readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
 
 const EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -46,9 +46,7 @@ const COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit",
 );
 
-function demandRootPath(
-  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
-): string {
+function demandRootPath(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>): string {
   return path.join(
     fixture.publication.workspacePath,
     ".wakeflow-active",
@@ -86,9 +84,7 @@ async function publishEvidence(
     eventId: EVENT_ID,
     commitId: COMMIT_ID,
   });
-  await new ManagedEvidencePublicationApplicationService(
-    fixture.publication.workspaceRoot,
-  ).apply(
+  await new ManagedEvidencePublicationApplicationService(fixture.publication.workspaceRoot).apply(
     transaction,
     computeManagedEvidencePublicationTransactionDigest(transaction),
   );
@@ -125,9 +121,7 @@ test("Reading Service区分Manifest、单成员与完整record验证", async () 
     } finally {
       await closeDemandOperationAuthorityContext(readContext);
     }
-    const service = new ManagedEvidenceReadingService(
-      fixture.publication.workspaceRoot,
-    );
+    const service = new ManagedEvidenceReadingService(fixture.publication.workspaceRoot);
     const manifest = await service.readManifest(
       EVIDENCE_DEMAND_ID,
       capturePlan.manifest.evidenceId,
@@ -154,15 +148,11 @@ test("Reading Service区分Manifest、单成员与完整record验证", async () 
     equal(verified.recordTreePlanDigest, manifest.recordTreePlanDigest);
 
     await rejects(
-      service.readPayloadMember(
-        EVIDENCE_DEMAND_ID,
-        capturePlan.manifest.evidenceId,
-        "content",
-        { maximumBytes: parseByteCount(4) },
-      ),
+      service.readPayloadMember(EVIDENCE_DEMAND_ID, capturePlan.manifest.evidenceId, "content", {
+        maximumBytes: parseByteCount(4),
+      }),
       (error: unknown) =>
-        error instanceof ManagedEvidenceReadingServiceError &&
-        error.reason === "capacity",
+        error instanceof ManagedEvidenceReadingServiceError && error.reason === "capacity",
     );
     await rejects(
       service.readPayloadMember(
@@ -172,26 +162,18 @@ test("Reading Service区分Manifest、单成员与完整record验证", async () 
         { maximumBytes: parseByteCount(64) },
       ),
       (error: unknown) =>
-        error instanceof ManagedEvidenceReadingServiceError &&
-        error.reason === "not-found",
+        error instanceof ManagedEvidenceReadingServiceError && error.reason === "not-found",
     );
 
     const demandRoot = await RootedDirectory.open(demandRootPath(fixture));
     try {
-      const loaded = await loadManagedEvidenceRecord(
-        demandRoot,
-        capturePlan.manifest.evidenceId,
-      );
+      const loaded = await loadManagedEvidenceRecord(demandRoot, capturePlan.manifest.evidenceId);
       await rejects(
-        readManagedEvidencePayloadMember(
-          demandRoot,
-          structuredClone(loaded),
-          "content",
-          { maximumBytes: parseByteCount(64) },
-        ),
+        readManagedEvidencePayloadMember(demandRoot, structuredClone(loaded), "content", {
+          maximumBytes: parseByteCount(64),
+        }),
         (error: unknown) =>
-          error instanceof ManagedEvidenceRecordReaderError &&
-          error.reason === "input",
+          error instanceof ManagedEvidenceRecordReaderError && error.reason === "input",
       );
     } finally {
       await demandRoot.close();
@@ -209,9 +191,7 @@ test("单成员读取不扫描无关payload，但完整验证和目标读取会�
       { path: "artifacts/test-run", resourceType: "tree" },
       "controller-confirmed",
     );
-    deepEqual(capturePlan.manifest.contentReview.opaqueFileRefs, [
-      "screenshots/result.bin",
-    ]);
+    deepEqual(capturePlan.manifest.contentReview.opaqueFileRefs, ["screenshots/result.bin"]);
     const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
     const payloadRoot = path.join(
       demandRootPath(fixture),
@@ -223,9 +203,7 @@ test("单成员读取不扫描无关payload，但完整验证和目标读取会�
       Uint8Array.from([0x00, 0x00, 0x00, 0x00]),
     );
 
-    const service = new ManagedEvidenceReadingService(
-      fixture.publication.workspaceRoot,
-    );
+    const service = new ManagedEvidenceReadingService(fixture.publication.workspaceRoot);
     const unaffected = await service.readPayloadMember(
       EVIDENCE_DEMAND_ID,
       capturePlan.manifest.evidenceId,
@@ -236,13 +214,9 @@ test("单成员读取不扫描无关payload，但完整验证和目标读取会�
     equal(unaffected.payloadVerification, "member");
 
     await rejects(
-      service.verifyRecord(
-        EVIDENCE_DEMAND_ID,
-        capturePlan.manifest.evidenceId,
-      ),
+      service.verifyRecord(EVIDENCE_DEMAND_ID, capturePlan.manifest.evidenceId),
       (error: unknown) =>
-        error instanceof ManagedEvidenceReadingServiceError &&
-        error.reason === "record",
+        error instanceof ManagedEvidenceReadingServiceError && error.reason === "record",
     );
     await rejects(
       service.readPayloadMember(
@@ -252,8 +226,7 @@ test("单成员读取不扫描无关payload，但完整验证和目标读取会�
         { maximumBytes: parseByteCount(64) },
       ),
       (error: unknown) =>
-        error instanceof ManagedEvidenceReadingServiceError &&
-        error.reason === "record",
+        error instanceof ManagedEvidenceReadingServiceError && error.reason === "record",
     );
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);

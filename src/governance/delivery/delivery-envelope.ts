@@ -2,74 +2,74 @@ import {
   WAKEFLOW_PRESENTATION_LANGUAGES,
   type WakeflowPresentationLanguage,
 } from "../../configuration/wakeflow-config.js";
-import type { WakeflowDeliveryEnvelope as DeliveryEnvelopeWire } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
-import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
-import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
-import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
+import type { WakeflowDeliveryEnvelope as DeliveryEnvelopeWire } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
+import { WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA } from "../../contracts/generated/governance/delivery/delivery-envelope.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../contracts/generated/workspace/window-host-binding.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import {
+  parseUtcInstant,
+  type UtcInstant,
+  UtcInstantError,
+} from "../../foundation/time/utc-instant.js";
 import {
   computePromptDigest,
   DELIVERY_PROMPT_MAXIMUM_CHARACTERS,
 } from "../../kernel/prompt-digest.js";
 import {
-  parseUtcInstant,
-  UtcInstantError,
-  type UtcInstant,
-} from "../../foundation/time/utc-instant.js";
+  parseWakeflowWindowHostBindingId,
+  type WakeflowWindowHostBindingId,
+  WakeflowWindowHostBindingIdError,
+} from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import type { WakeflowWorkspaceHostId } from "../../workspace/workspace-host-resource-profile.js";
 import { WAKEFLOW_WORKSPACE_HOST_IDS } from "../../workspace/workspace-host-resource-profile.js";
-import {
-  parseWakeflowWindowHostBindingId,
-  WakeflowWindowHostBindingIdError,
-  type WakeflowWindowHostBindingId,
-} from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
-import {
-  parseTestExecutionAttempt,
-  TestExecutionAttemptError,
-  type TestExecutionAttempt,
-} from "../testing/test-execution-attempt.js";
 import {
   computeTaskPackageDigest,
   parseTaskPackage,
-  TaskPackageError,
   type TaskPackage,
+  TaskPackageError,
 } from "../tasking/task-package.js";
 import {
-  taskPackageProjectionRef,
   TaskPackageProjectionPathError,
+  taskPackageProjectionRef,
 } from "../tasking/task-package-projection-paths.js";
+import {
+  parseTestExecutionAttempt,
+  type TestExecutionAttempt,
+  TestExecutionAttemptError,
+} from "../testing/test-execution-attempt.js";
 
 /**
  * Wakeflow Governance / Delivery：一次投递的不可变信封（能力卡 6 修订、ADR-0009）。
@@ -160,7 +160,10 @@ export interface ProjectTargetDeliveryProductDefectRemediationContextInput {
   }>[];
 }
 
-export type DeliveryPurpose = "initial" | "implementation-review-rework" | "product-defect-remediation";
+export type DeliveryPurpose =
+  | "initial"
+  | "implementation-review-rework"
+  | "product-defect-remediation";
 
 export type DeliveryEnvelopeErrorReason =
   | "json"
@@ -218,8 +221,10 @@ const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const LANGUAGES = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
+
 /** 投递 prompt 的字符上限：规则住在内核 `prompt-digest`（§13.97 D3），这里再导出给渲染侧。 */
 export { DELIVERY_PROMPT_MAXIMUM_CHARACTERS };
+
 const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
   WAKEFLOW_DELIVERY_ENVELOPE_SCHEMA,
   [
@@ -272,20 +277,13 @@ function exactRecord(
   }
   const keys = Object.keys(record).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     fail("rework", path);
   }
   return record;
 }
 
-function reworkText(
-  value: unknown,
-  maximumCodePoints: number,
-  path: string,
-): string {
+function reworkText(value: unknown, maximumCodePoints: number, path: string): string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -349,10 +347,7 @@ export function parseTargetDeliveryReworkContext(
       ["checkId", "outcome", "methodSummary", "observationSummary"],
       correctionPath,
     );
-    if (
-      correction.outcome !== "failed" &&
-      correction.outcome !== "inconclusive"
-    ) {
+    if (correction.outcome !== "failed" && correction.outcome !== "inconclusive") {
       fail("rework", `${correctionPath}/outcome`);
     }
     return Object.freeze({
@@ -371,16 +366,17 @@ export function parseTargetDeliveryReworkContext(
     });
   });
   if (
-    new Set(corrections.map((correction) => correction.checkId)).size !==
-      corrections.length ||
+    new Set(corrections.map((correction) => correction.checkId)).size !== corrections.length ||
     !corrections.some((correction) => correction.outcome === "failed")
   ) {
     fail("rework", `${path}/requiredCorrections`);
   }
   const first = corrections[0];
   if (first === undefined) fail("rework", `${path}/requiredCorrections`);
-  const requiredCorrections: TargetDeliveryReworkContext["requiredCorrections"] =
-    Object.freeze([first, ...corrections.slice(1)]);
+  const requiredCorrections: TargetDeliveryReworkContext["requiredCorrections"] = Object.freeze([
+    first,
+    ...corrections.slice(1),
+  ]);
   return Object.freeze({
     decision: Object.freeze({
       targetReviewDecisionId: parseId(
@@ -388,10 +384,7 @@ export function parseTargetDeliveryReworkContext(
         "target-review-decision",
         `${path}/decision/targetReviewDecisionId`,
       ),
-      decisionDigest: digest(
-        decision.decisionDigest,
-        `${path}/decision/decisionDigest`,
-      ),
+      decisionDigest: digest(decision.decisionDigest, `${path}/decision/decisionDigest`),
     }),
     previousResult: Object.freeze({
       targetResultId: parseId(
@@ -399,10 +392,7 @@ export function parseTargetDeliveryReworkContext(
         "target-result",
         `${path}/previousResult/targetResultId`,
       ),
-      resultDigest: digest(
-        previousResult.resultDigest,
-        `${path}/previousResult/resultDigest`,
-      ),
+      resultDigest: digest(previousResult.resultDigest, `${path}/previousResult/resultDigest`),
     }),
     rationaleSummary: reworkText(
       record.rationaleSummary,
@@ -413,10 +403,7 @@ export function parseTargetDeliveryReworkContext(
   });
 }
 
-function summarizeReworkText(
-  value: unknown,
-  maximumCodePoints: number,
-): string {
+function summarizeReworkText(value: unknown, maximumCodePoints: number): string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -439,17 +426,11 @@ export function projectTargetDeliveryReworkContext(
   return parseTargetDeliveryReworkContext({
     decision: input.decision,
     previousResult: input.previousResult,
-    rationaleSummary: summarizeReworkText(
-      input.rationale,
-      MAXIMUM_REWORK_RATIONALE_CODE_POINTS,
-    ),
+    rationaleSummary: summarizeReworkText(input.rationale, MAXIMUM_REWORK_RATIONALE_CODE_POINTS),
     requiredCorrections: input.requiredCorrections.map((correction) => ({
       checkId: correction.checkId,
       outcome: correction.outcome,
-      methodSummary: summarizeReworkText(
-        correction.method,
-        MAXIMUM_REWORK_METHOD_CODE_POINTS,
-      ),
+      methodSummary: summarizeReworkText(correction.method, MAXIMUM_REWORK_METHOD_CODE_POINTS),
       observationSummary: summarizeReworkText(
         correction.observation,
         MAXIMUM_REWORK_OBSERVATION_CODE_POINTS,
@@ -474,20 +455,13 @@ function remediationRecord(
   }
   const keys = Object.keys(record).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     fail("product-defect-remediation", path);
   }
   return record;
 }
 
-function remediationText(
-  value: unknown,
-  maximumCodePoints: number,
-  path: string,
-): string {
+function remediationText(value: unknown, maximumCodePoints: number, path: string): string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -561,11 +535,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(
   }
   const corrections = correctionValues.map((value, index) => {
     const correctionPath = `${path}/requiredCorrections/${index}`;
-    const correction = remediationRecord(
-      value,
-      ["stepId", "observedSummary"],
-      correctionPath,
-    );
+    const correction = remediationRecord(value, ["stepId", "observedSummary"], correctionPath);
     return Object.freeze({
       stepId: remediationStepId(correction.stepId, `${correctionPath}/stepId`),
       observedSummary: remediationText(
@@ -575,10 +545,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(
       ),
     });
   });
-  if (
-    new Set(corrections.map((correction) => correction.stepId)).size !==
-    corrections.length
-  ) {
+  if (new Set(corrections.map((correction) => correction.stepId)).size !== corrections.length) {
     fail("product-defect-remediation", `${path}/requiredCorrections`);
   }
   const first = corrections[0];
@@ -616,10 +583,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(
         "target-result",
         `${path}/previousResult/targetResultId`,
       ),
-      resultDigest: digest(
-        previousResult.resultDigest,
-        `${path}/previousResult/resultDigest`,
-      ),
+      resultDigest: digest(previousResult.resultDigest, `${path}/previousResult/resultDigest`),
     }),
     authorizationRationaleSummary: remediationText(
       record.authorizationRationaleSummary,
@@ -635,10 +599,7 @@ export function parseTargetDeliveryProductDefectRemediationContext(
   });
 }
 
-function summarizeRemediationText(
-  value: unknown,
-  maximumCodePoints: number,
-): string {
+function summarizeRemediationText(value: unknown, maximumCodePoints: number): string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -767,7 +728,9 @@ export interface TestDeliveryEnvelope extends DeliveryEnvelopeBase {
 
 export type DeliveryEnvelope = ImplementationDeliveryEnvelope | TestDeliveryEnvelope;
 
-type EnvelopeBasis = Omit<ImplementationDeliveryEnvelope, "envelopeDigest"> | Omit<TestDeliveryEnvelope, "envelopeDigest">;
+type EnvelopeBasis =
+  | Omit<ImplementationDeliveryEnvelope, "envelopeDigest">
+  | Omit<TestDeliveryEnvelope, "envelopeDigest">;
 
 export type DeliveryEnvelopeDraft =
   | Omit<ImplementationDeliveryEnvelope, "kind" | "schemaVersion" | "envelopeDigest">
@@ -852,7 +815,10 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
   }
   let taskPackageRef: PortableResourcePath;
   try {
-    taskPackageRef = parsePortableResourcePath(wire.target.taskPackageRef, "$/target/taskPackageRef");
+    taskPackageRef = parsePortableResourcePath(
+      wire.target.taskPackageRef,
+      "$/target/taskPackageRef",
+    );
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) fail("path", "$/target/taskPackageRef");
     throw error;
@@ -886,7 +852,8 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
     },
     preparedAt: parseTime(wire.preparedAt, "$/preparedAt"),
   };
-  if (computePromptDigest(shared.portablePrompt) !== shared.promptDigest) fail("digest", "$/promptDigest");
+  if (computePromptDigest(shared.portablePrompt) !== shared.promptDigest)
+    fail("digest", "$/promptDigest");
   let basis: EnvelopeBasis;
   if (wire.workType === "test") {
     if (wire.attempt === undefined) fail("schema", "$/workType");
@@ -907,7 +874,9 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
     basis = envelopeBasis({ ...shared, workType: "test", attempt });
   } else {
     const rework =
-      wire.rework === undefined ? undefined : parseTargetDeliveryReworkContext(wire.rework, "$/rework");
+      wire.rework === undefined
+        ? undefined
+        : parseTargetDeliveryReworkContext(wire.rework, "$/rework");
     const productDefectRemediation =
       wire.productDefectRemediation === undefined
         ? undefined
@@ -926,14 +895,24 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
     });
   }
   const envelopeDigest = digest(wire.envelopeDigest, "$/envelopeDigest");
-  if (computeCanonicalJsonSha256Digest(basis) !== envelopeDigest) fail("digest", "$/envelopeDigest");
+  if (computeCanonicalJsonSha256Digest(basis) !== envelopeDigest)
+    fail("digest", "$/envelopeDigest");
   return Object.freeze({ ...basis, envelopeDigest }) as Readonly<DeliveryEnvelope>;
 }
 
 /** 从草稿封一份信封。 */
-export function createDeliveryEnvelope(draft: Readonly<DeliveryEnvelopeDraft>): Readonly<DeliveryEnvelope> {
-  const basis = envelopeBasis({ ...draft, kind: "WakeflowDeliveryEnvelope", schemaVersion: 1 } as EnvelopeBasis);
-  return parseDeliveryEnvelope({ ...basis, envelopeDigest: computeCanonicalJsonSha256Digest(basis) });
+export function createDeliveryEnvelope(
+  draft: Readonly<DeliveryEnvelopeDraft>,
+): Readonly<DeliveryEnvelope> {
+  const basis = envelopeBasis({
+    ...draft,
+    kind: "WakeflowDeliveryEnvelope",
+    schemaVersion: 1,
+  } as EnvelopeBasis);
+  return parseDeliveryEnvelope({
+    ...basis,
+    envelopeDigest: computeCanonicalJsonSha256Digest(basis),
+  });
 }
 
 /** 实现投递的目的由其上下文决定：初次、评审返工或产品缺陷修复。 */

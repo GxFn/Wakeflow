@@ -3,18 +3,10 @@ import type {
   WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import type {
-  WakeflowMaintenanceExecutionPlan,
-} from "./wakeflow-maintenance-execution-plan.js";
-import type {
-  WakeflowMaintenanceExecutionTransactionReceipt,
-} from "./wakeflow-maintenance-execution-transaction.js";
-import type {
-  WakeflowMaintenanceOperationId,
-} from "./wakeflow-maintenance-operation-id.js";
-import type {
-  WakeflowStaticMaterializationPreviewRequest,
-} from "./wakeflow-static-materialization-preview-contract.js";
+import type { WakeflowMaintenanceExecutionPlan } from "./wakeflow-maintenance-execution-plan.js";
+import type { WakeflowMaintenanceExecutionTransactionReceipt } from "./wakeflow-maintenance-execution-transaction.js";
+import type { WakeflowMaintenanceOperationId } from "./wakeflow-maintenance-operation-id.js";
+import type { WakeflowStaticMaterializationPreviewRequest } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
  * Wakeflow Workspace / Maintenance：公共协调器使用的单宿主固定端口。
@@ -29,10 +21,8 @@ export interface WakeflowMaintenancePublicHostFacade {
    * 该制品或位于其中的工作区根，以及与之重叠的配置根（旧实现 bootstrap 的同一护栏，§13.124）。
    */
   readonly artifactRoot: string | null;
-  readonly currentHostProfile:
-    Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly hostProfiles:
-    readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+  readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
   readonly preview: (
     root: RootedDirectory,
     request: WakeflowStaticMaterializationPreviewRequest,

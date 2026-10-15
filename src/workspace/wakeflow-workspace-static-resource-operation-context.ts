@@ -1,29 +1,18 @@
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../foundation/data/passive-own-data.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
   admitWakeflowResourceOperation,
-  WakeflowResourceProcessingContractError,
   type WakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
 } from "../foundation/resource/resource-processing-contract.js";
 import {
   findWakeflowWorkspaceStaticResourceByDeclarationId,
   parseWakeflowWorkspaceStaticResourceMatrix,
-  WakeflowWorkspaceStaticResourceMatrixError,
   type WakeflowWorkspaceStaticResourceMatrix,
+  WakeflowWorkspaceStaticResourceMatrixError,
 } from "./wakeflow-workspace-static-resource-matrix.js";
-import type {
-  WakeflowWorkspaceHostId,
-} from "./workspace-host-resource-profile.js";
-import type {
-  WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+import type { WakeflowWorkspaceHostId } from "./workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "./workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace：静态资源的一次机械操作上下文。
@@ -37,8 +26,7 @@ export const WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND =
   "WakeflowWorkspaceStaticResourceOperationContext" as const;
 
 export interface WakeflowWorkspaceStaticResourceOperationContext {
-  readonly kind:
-    typeof WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND;
+  readonly kind: typeof WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND;
   readonly hostId: WakeflowWorkspaceHostId;
   readonly matrixDigest: Sha256Digest;
   readonly declaration: Readonly<WakeflowWorkspaceResourceDeclaration>;
@@ -55,30 +43,21 @@ export type WakeflowWorkspaceStaticResourceOperationContextErrorReason =
 const ERROR_MESSAGES = {
   input: "Wakeflow static resource operation context input is invalid.",
   matrix: "Wakeflow static resource operation context matrix is invalid.",
-  "matrix-changed":
-    "Wakeflow static resource matrix differs from its expectation.",
-  "declaration-not-found":
-    "Wakeflow static resource declaration does not exist.",
+  "matrix-changed": "Wakeflow static resource matrix differs from its expectation.",
+  "declaration-not-found": "Wakeflow static resource declaration does not exist.",
   operation: "Wakeflow static resource operation is not admitted.",
-} as const satisfies Readonly<Record<
-  WakeflowWorkspaceStaticResourceOperationContextErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowWorkspaceStaticResourceOperationContextErrorReason, string>
+>;
 
 /** 静态资源操作上下文准入失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceStaticResourceOperationContextError
-  extends Error {
-  override readonly name =
-    "WakeflowWorkspaceStaticResourceOperationContextError";
-  readonly code =
-    "wakeflow-workspace-static-resource-operation-context" as const;
+export class WakeflowWorkspaceStaticResourceOperationContextError extends Error {
+  override readonly name = "WakeflowWorkspaceStaticResourceOperationContextError";
+  readonly code = "wakeflow-workspace-static-resource-operation-context" as const;
   readonly reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -98,10 +77,7 @@ function fail(
   throw new WakeflowWorkspaceStaticResourceOperationContextError(reason, path);
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -114,12 +90,12 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   const record = plainRecord(value, "$request");
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 3
-    || keys[0] !== "declarationId"
-    || keys[1] !== "expectedMatrixDigest"
-    || keys[2] !== "recipe"
-    || typeof record.declarationId !== "string"
-    || record.declarationId.length === 0
+    keys.length !== 3 ||
+    keys[0] !== "declarationId" ||
+    keys[1] !== "expectedMatrixDigest" ||
+    keys[2] !== "recipe" ||
+    typeof record.declarationId !== "string" ||
+    record.declarationId.length === 0
   ) {
     fail("input", "$request");
   }
@@ -169,10 +145,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(
   }
   let operation: Readonly<WakeflowResourceOperation>;
   try {
-    operation = admitWakeflowResourceOperation(
-      selected.processing,
-      request.recipe,
-    );
+    operation = admitWakeflowResourceOperation(selected.processing, request.recipe);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
       fail("operation", "$request.recipe");

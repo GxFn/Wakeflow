@@ -1,12 +1,12 @@
 import {
   parseTargetResult,
-  TargetResultError,
   type TargetResult,
+  TargetResultError,
 } from "../result/target-result.js";
 import {
-  parseControllerProductDefectRemediationAuthorization,
-  ControllerProductDefectRemediationAuthorizationError,
   type ControllerProductDefectRemediationAuthorization,
+  ControllerProductDefectRemediationAuthorizationError,
+  parseControllerProductDefectRemediationAuthorization,
 } from "../review/controller-product-defect-remediation-authorization.js";
 import {
   projectTargetDeliveryProductDefectRemediationContext,
@@ -27,7 +27,9 @@ export interface CreateTargetDeliveryProductDefectRemediationContextInput {
 }
 
 export type TargetDeliveryProductDefectRemediationContextErrorReason =
-  "authorization" | "result" | "relation";
+  | "authorization"
+  | "result"
+  | "relation";
 
 const ERROR_MESSAGES = {
   authorization:
@@ -42,21 +44,16 @@ const ERROR_MESSAGES = {
 
 export class TargetDeliveryProductDefectRemediationContextError extends Error {
   override readonly name = "TargetDeliveryProductDefectRemediationContextError";
-  readonly code =
-    "wakeflow-target-delivery-product-defect-remediation-context" as const;
+  readonly code = "wakeflow-target-delivery-product-defect-remediation-context" as const;
   readonly reason: TargetDeliveryProductDefectRemediationContextErrorReason;
 
-  constructor(
-    reason: TargetDeliveryProductDefectRemediationContextErrorReason,
-  ) {
+  constructor(reason: TargetDeliveryProductDefectRemediationContextErrorReason) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
   }
 }
 
-function fail(
-  reason: TargetDeliveryProductDefectRemediationContextErrorReason,
-): never {
+function fail(reason: TargetDeliveryProductDefectRemediationContextErrorReason): never {
   throw new TargetDeliveryProductDefectRemediationContextError(reason);
 }
 
@@ -67,9 +64,7 @@ export function createTargetDeliveryProductDefectRemediationContext(
   let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
   let previousResult: Readonly<TargetResult>;
   try {
-    authorization = parseControllerProductDefectRemediationAuthorization(
-      input.authorization,
-    );
+    authorization = parseControllerProductDefectRemediationAuthorization(input.authorization);
   } catch (error: unknown) {
     if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
       fail("authorization");
@@ -90,8 +85,7 @@ export function createTargetDeliveryProductDefectRemediationContext(
     affected === undefined ||
     authorization.programId !== previousResult.programId ||
     authorization.demandId !== previousResult.demandId ||
-    affected.baseline.taskPackageId !==
-      previousResult.taskPackage.taskPackageId ||
+    affected.baseline.taskPackageId !== previousResult.taskPackage.taskPackageId ||
     affected.baseline.taskPackageDigest !== previousResult.taskPackage.digest ||
     affected.baseline.repositoryId !== previousResult.assignment.repositoryId ||
     affected.baseline.windowId !== previousResult.assignment.windowId ||
@@ -114,8 +108,7 @@ export function createTargetDeliveryProductDefectRemediationContext(
       authorizationDigest: authorization.authorizationDigest,
     }),
     testReviewDecision: Object.freeze({
-      targetReviewDecisionId:
-        authorization.source.testReviewDecision.targetReviewDecisionId,
+      targetReviewDecisionId: authorization.source.testReviewDecision.targetReviewDecisionId,
       decisionDigest: authorization.source.testReviewDecision.decisionDigest,
     }),
     previousResult: Object.freeze({

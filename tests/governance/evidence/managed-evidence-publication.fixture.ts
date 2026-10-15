@@ -1,10 +1,7 @@
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { validateLoadedArtifactTreeManifest } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
+import { computeSha256Digest, parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
@@ -14,18 +11,12 @@ import { createManagedEvidencePublicationTransaction } from "../../../src/govern
 /** Managed Evidence纯合同与存储测试共享的最小、无I/O fixture。 */
 
 export const MANAGED_EVIDENCE_PUBLICATION_TEST_IDS = Object.freeze({
-  program: parseWakeflowDurableIdOfKind(
-    "program_11111111-1111-4111-8111-111111111111",
-    "program",
-  ),
+  program: parseWakeflowDurableIdOfKind("program_11111111-1111-4111-8111-111111111111", "program"),
   otherProgram: parseWakeflowDurableIdOfKind(
     "program_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     "program",
   ),
-  demand: parseWakeflowDurableIdOfKind(
-    "demand_22222222-2222-4222-8222-222222222222",
-    "demand",
-  ),
+  demand: parseWakeflowDurableIdOfKind("demand_22222222-2222-4222-8222-222222222222", "demand"),
   evidence: parseWakeflowDurableIdOfKind(
     "evidence_33333333-3333-4333-8333-333333333333",
     "evidence",
@@ -34,10 +25,7 @@ export const MANAGED_EVIDENCE_PUBLICATION_TEST_IDS = Object.freeze({
     "repository_44444444-4444-4444-8444-444444444444",
     "repository",
   ),
-  window: parseWakeflowDurableIdOfKind(
-    "window_55555555-5555-4555-8555-555555555555",
-    "window",
-  ),
+  window: parseWakeflowDurableIdOfKind("window_55555555-5555-4555-8555-555555555555", "window"),
   previousEvent: parseWakeflowDurableIdOfKind(
     "demand-event_66666666-6666-4666-8666-666666666666",
     "demand-event",
@@ -63,9 +51,7 @@ export const MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS = Object.freeze({
 export const MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT = parseUtcInstant(
   "2026-09-02T08:00:00.000Z",
 );
-export const MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT = encodeUtf8(
-  "managed evidence\n",
-);
+export const MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT = encodeUtf8("managed evidence\n");
 
 type LoadedTreeManifestFixture = ReturnType<typeof validateLoadedArtifactTreeManifest>;
 
@@ -79,18 +65,22 @@ export function createManagedEvidenceCapturePlanFixture(
   const ids = MANAGED_EVIDENCE_PUBLICATION_TEST_IDS;
   const digests = MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS;
   const content = MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT;
-  const treeManifest = overrides.treeManifest ?? validateLoadedArtifactTreeManifest({
-    artifactKind: "wakeflow-loaded-artifact-tree",
-    schemaVersion: 1,
-    fileCount: 1,
-    files: [{
-      bytes: content.byteLength,
-      digest: computeSha256Digest(content),
-      executable: false,
-      ref: "content",
-    }],
-    totalBytes: content.byteLength,
-  });
+  const treeManifest =
+    overrides.treeManifest ??
+    validateLoadedArtifactTreeManifest({
+      artifactKind: "wakeflow-loaded-artifact-tree",
+      schemaVersion: 1,
+      fileCount: 1,
+      files: [
+        {
+          bytes: content.byteLength,
+          digest: computeSha256Digest(content),
+          executable: false,
+          ref: "content",
+        },
+      ],
+      totalBytes: content.byteLength,
+    });
   const manifest = createManagedEvidenceManifest(
     {
       evidenceId: ids.evidence,
@@ -115,7 +105,7 @@ export function createManagedEvidenceCapturePlanFixture(
       contentReview: {
         disposition: "not-required",
         opaqueFileRefs: [],
-      privacyFindings: [],
+        privacyFindings: [],
       },
     },
     { clock: () => MANAGED_EVIDENCE_PUBLICATION_TEST_CAPTURED_AT },

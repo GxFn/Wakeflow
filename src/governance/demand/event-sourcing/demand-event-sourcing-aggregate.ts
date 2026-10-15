@@ -1,44 +1,44 @@
 import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../../../foundation/crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../../foundation/data/passive-own-data.js";
-import {
   parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../../foundation/crypto/sha256.js";
+import {
+  PassiveOwnDataError,
+  parsePlainRecord,
+} from "../../../foundation/data/passive-own-data.js";
+import {
   computeDemandAggregateStateDigest,
-  parseDemandAggregateState,
-  DemandAggregateStateError,
   type DemandAggregateState,
+  DemandAggregateStateError,
+  parseDemandAggregateState,
 } from "../model/demand-aggregate-state.js";
-import {
-  computeDemandEventSourcingStoredEventDigest,
-  parseDemandEventSourcingStoredEvent,
-  DemandEventSourcingStoredEventError,
-  type DemandEventSourcingStoredEvent,
-} from "./demand-event-sourcing-stored-event.js";
-import {
-  parseDemandEventCommitSequence,
-  parseDemandEventStreamRevision,
-  DemandEventStreamPositionError,
-  type DemandEventCommitSequence,
-  type DemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
-import {
-  upcastDemandEventSourcingStoredEvent,
-  DemandEventSourcingUpcasterError,
-} from "./demand-event-sourcing-upcaster.js";
 import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
+import {
+  computeDemandEventSourcingStoredEventDigest,
+  type DemandEventSourcingStoredEvent,
+  DemandEventSourcingStoredEventError,
+  parseDemandEventSourcingStoredEvent,
+} from "./demand-event-sourcing-stored-event.js";
+import {
+  DemandEventSourcingUpcasterError,
+  upcastDemandEventSourcingStoredEvent,
+} from "./demand-event-sourcing-upcaster.js";
+import {
+  type DemandEventCommitSequence,
+  DemandEventStreamPositionError,
+  type DemandEventStreamRevision,
+  parseDemandEventCommitSequence,
+  parseDemandEventStreamRevision,
+} from "./demand-event-stream-position.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：一次聚合重建结果。
@@ -69,18 +69,15 @@ export type DemandEventSourcingAggregateErrorReason =
   | "relation";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing aggregate input is invalid.",
-  "identifier": "Demand Event Sourcing aggregate contains an invalid identity.",
-  "position": "Demand Event Sourcing aggregate contains an invalid cursor.",
-  "digest": "Demand Event Sourcing aggregate contains an invalid digest.",
-  "event": "Demand Event Sourcing aggregate contains an invalid tail event.",
-  "version": "Demand Event Sourcing aggregate tail version is unsupported.",
-  "state": "Demand Event Sourcing aggregate contains an invalid state.",
-  "relation": "Demand Event Sourcing aggregate cursor, tail and state do not close.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingAggregateErrorReason,
-  string
->>;
+  input: "Demand Event Sourcing aggregate input is invalid.",
+  identifier: "Demand Event Sourcing aggregate contains an invalid identity.",
+  position: "Demand Event Sourcing aggregate contains an invalid cursor.",
+  digest: "Demand Event Sourcing aggregate contains an invalid digest.",
+  event: "Demand Event Sourcing aggregate contains an invalid tail event.",
+  version: "Demand Event Sourcing aggregate tail version is unsupported.",
+  state: "Demand Event Sourcing aggregate contains an invalid state.",
+  relation: "Demand Event Sourcing aggregate cursor, tail and state do not close.",
+} as const satisfies Readonly<Record<DemandEventSourcingAggregateErrorReason, string>>;
 
 export class DemandEventSourcingAggregateError extends Error {
   override readonly name = "DemandEventSourcingAggregateError";
@@ -106,10 +103,7 @@ const FIELDS = Object.freeze([
   "streamRevision",
 ] as const);
 
-function fail(
-  reason: DemandEventSourcingAggregateErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingAggregateErrorReason, path: string): never {
   throw new DemandEventSourcingAggregateError(reason, path);
 }
 
@@ -134,19 +128,12 @@ export function parseDemandEventSourcingAggregate(
     throw error;
   }
   const keys = Object.keys(record).sort();
-  if (
-    keys.length !== FIELDS.length
-    || keys.some((key, index) => key !== FIELDS[index])
-  ) {
+  if (keys.length !== FIELDS.length || keys.some((key, index) => key !== FIELDS[index])) {
     fail("input", "$aggregate");
   }
   let demandId: WakeflowDurableId<"demand">;
   try {
-    demandId = parseWakeflowDurableIdOfKind(
-      record.demandId,
-      "demand",
-      "$/demandId",
-    );
+    demandId = parseWakeflowDurableIdOfKind(record.demandId, "demand", "$/demandId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("identifier", "$/demandId");
@@ -170,8 +157,8 @@ export function parseDemandEventSourcingAggregate(
     upcastDemandEventSourcingStoredEvent(lastEvent);
   } catch (error: unknown) {
     if (
-      error instanceof DemandEventSourcingStateVersionError
-      || error instanceof DemandEventSourcingUpcasterError
+      error instanceof DemandEventSourcingStateVersionError ||
+      error instanceof DemandEventSourcingUpcasterError
     ) {
       fail("version", "$/lastEvent");
     }
@@ -187,34 +174,24 @@ export function parseDemandEventSourcingAggregate(
   let streamRevision: DemandEventStreamRevision;
   let commitSequence: DemandEventCommitSequence;
   try {
-    streamRevision = parseDemandEventStreamRevision(
-      record.streamRevision,
-      "$/streamRevision",
-    );
-    commitSequence = parseDemandEventCommitSequence(
-      record.commitSequence,
-      "$/commitSequence",
-    );
+    streamRevision = parseDemandEventStreamRevision(record.streamRevision, "$/streamRevision");
+    commitSequence = parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
       fail("position", error.path);
     }
     throw error;
   }
-  const lastEventDigest = parseDigest(
-    record.lastEventDigest,
-    "$/lastEventDigest",
-  );
+  const lastEventDigest = parseDigest(record.lastEventDigest, "$/lastEventDigest");
   const stateDigest = parseDigest(record.stateDigest, "$/stateDigest");
   if (
-    commitSequence > streamRevision
-    ||
-    lastEvent.demandId !== demandId
-    || lastEvent.streamRevision !== streamRevision
-    || state.demandId !== demandId
-    || computeDemandEventSourcingStoredEventDigest(lastEvent) !== lastEventDigest
-    || computeDemandAggregateStateDigest(state) !== stateDigest
-    || lastEvent.resultingStateDigest !== stateDigest
+    commitSequence > streamRevision ||
+    lastEvent.demandId !== demandId ||
+    lastEvent.streamRevision !== streamRevision ||
+    state.demandId !== demandId ||
+    computeDemandEventSourcingStoredEventDigest(lastEvent) !== lastEventDigest ||
+    computeDemandAggregateStateDigest(state) !== stateDigest ||
+    lastEvent.resultingStateDigest !== stateDigest
   ) {
     fail("relation", "$aggregate");
   }
@@ -222,10 +199,7 @@ export function parseDemandEventSourcingAggregate(
     demandId,
     commitSequence,
     streamRevision,
-    lastCommitDigest: parseDigest(
-      record.lastCommitDigest,
-      "$/lastCommitDigest",
-    ),
+    lastCommitDigest: parseDigest(record.lastCommitDigest, "$/lastCommitDigest"),
     lastEvent,
     lastEventDigest,
     state,

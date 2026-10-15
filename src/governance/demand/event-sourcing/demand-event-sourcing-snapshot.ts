@@ -1,16 +1,21 @@
-import type { WakeflowDemandEventSourcingSnapshot as SnapshotWire } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
-import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
-import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
+import type { WakeflowDemandEventSourcingSnapshot as SnapshotWire } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
@@ -18,42 +23,37 @@ import {
   renderDeterministicJsonDocument,
 } from "../../../foundation/data/deterministic-json-document.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../../foundation/data/json-value.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandAggregateStateDigest,
-  parseDemandAggregateState,
-  DemandAggregateStateError,
   type DemandAggregateState,
+  DemandAggregateStateError,
+  parseDemandAggregateState,
 } from "../model/demand-aggregate-state.js";
 import {
-  computeDemandEventStreamCommitDigest,
-  parseDemandEventStreamCommit,
-  DemandEventStreamCommitError,
-  type DemandEventStreamCommit,
-} from "./demand-event-stream-commit.js";
-import {
-  parseDemandEventSourcingAggregate,
-  DemandEventSourcingAggregateError,
   type DemandEventSourcingAggregate,
+  DemandEventSourcingAggregateError,
+  parseDemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
 import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
+import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-event-sourcing-version-compatibility.js";
 import {
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommit,
+  DemandEventStreamCommitError,
+  parseDemandEventStreamCommit,
+} from "./demand-event-stream-commit.js";
+import {
+  type DemandEventCommitSequence,
+  DemandEventStreamPositionError,
+  type DemandEventStreamRevision,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-  DemandEventStreamPositionError,
-  type DemandEventCommitSequence,
-  type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
-import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-event-sourcing-version-compatibility.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。
@@ -97,18 +97,14 @@ const ERROR_MESSAGES = {
   json: "Demand Event Sourcing snapshot is not passive JSON data.",
   schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
   identifier: "Demand Event Sourcing snapshot contains an invalid identity.",
-  position:
-    "Demand Event Sourcing snapshot contains an invalid stream position.",
+  position: "Demand Event Sourcing snapshot contains an invalid stream position.",
   digest: "Demand Event Sourcing snapshot contains an invalid digest.",
   state: "Demand Event Sourcing snapshot contains an invalid aggregate state.",
   aggregate: "Demand Event Sourcing snapshot requires a valid aggregate.",
   commit: "Demand Event Sourcing snapshot requires a valid anchor commit.",
-  mismatch:
-    "Demand Event Sourcing snapshot does not match its commit boundary.",
+  mismatch: "Demand Event Sourcing snapshot does not match its commit boundary.",
   representation: "Demand Event Sourcing snapshot bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<DemandEventSourcingSnapshotErrorReason, string>
->;
+} as const satisfies Readonly<Record<DemandEventSourcingSnapshotErrorReason, string>>;
 
 export class DemandEventSourcingSnapshotError extends Error {
   override readonly name = "DemandEventSourcingSnapshotError";
@@ -135,10 +131,7 @@ const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
   ],
 );
 
-function fail(
-  reason: DemandEventSourcingSnapshotErrorReason,
-  path: string,
-): never {
+function fail(reason: DemandEventSourcingSnapshotErrorReason, path: string): never {
   throw new DemandEventSourcingSnapshotError(reason, path);
 }
 
@@ -167,16 +160,8 @@ export function parseDemandEventSourcingSnapshot(
   let demandId: WakeflowDurableId<"demand">;
   let lastEventId: WakeflowDurableId<"demand-event">;
   try {
-    demandId = parseWakeflowDurableIdOfKind(
-      wire.demandId,
-      "demand",
-      "$/demandId",
-    );
-    lastEventId = parseWakeflowDurableIdOfKind(
-      wire.lastEventId,
-      "demand-event",
-      "$/lastEventId",
-    );
+    demandId = parseWakeflowDurableIdOfKind(wire.demandId, "demand", "$/demandId");
+    lastEventId = parseWakeflowDurableIdOfKind(wire.lastEventId, "demand-event", "$/lastEventId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("identifier", error.path);
@@ -198,14 +183,8 @@ export function parseDemandEventSourcingSnapshot(
   let commitSequence: DemandEventCommitSequence;
   let streamRevision: DemandEventStreamRevision;
   try {
-    commitSequence = parseDemandEventCommitSequence(
-      wire.commitSequence,
-      "$/commitSequence",
-    );
-    streamRevision = parseDemandEventStreamRevision(
-      wire.streamRevision,
-      "$/streamRevision",
-    );
+    commitSequence = parseDemandEventCommitSequence(wire.commitSequence, "$/commitSequence");
+    streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
       fail("position", error.path);
@@ -216,8 +195,7 @@ export function parseDemandEventSourcingSnapshot(
     state.demandId !== demandId ||
     commitSequence > streamRevision ||
     computeDemandAggregateStateDigest(state) !== stateDigest ||
-    versionCompatibilityDigest !==
-      computeDemandEventSourcingVersionCompatibilityDigest()
+    versionCompatibilityDigest !== computeDemandEventSourcingVersionCompatibilityDigest()
   ) {
     fail("mismatch", "$snapshot");
   }
@@ -251,8 +229,7 @@ export function createDemandEventSourcingSnapshot(
   return parseDemandEventSourcingSnapshot({
     artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
-    versionCompatibilityDigest:
-      computeDemandEventSourcingVersionCompatibilityDigest(),
+    versionCompatibilityDigest: computeDemandEventSourcingVersionCompatibilityDigest(),
     demandId: aggregate.demandId,
     commitSequence: aggregate.commitSequence,
     streamRevision: aggregate.streamRevision,
@@ -274,8 +251,7 @@ export function restoreDemandEventSourcingSnapshot(
   try {
     anchor = parseDemandEventStreamCommit(anchorCommitValue);
   } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError)
-      fail("commit", "$commit");
+    if (error instanceof DemandEventStreamCommitError) fail("commit", "$commit");
     throw error;
   }
   const lastEvent = anchor.events.at(-1);
@@ -284,11 +260,9 @@ export function restoreDemandEventSourcingSnapshot(
     anchor.demandId !== snapshot.demandId ||
     anchor.commitSequence !== snapshot.commitSequence ||
     anchor.lastStreamRevision !== snapshot.streamRevision ||
-    computeDemandEventStreamCommitDigest(anchor) !==
-      snapshot.lastCommitDigest ||
+    computeDemandEventStreamCommitDigest(anchor) !== snapshot.lastCommitDigest ||
     lastEvent.eventId !== snapshot.lastEventId ||
-    computeDemandEventSourcingStoredEventDigest(lastEvent) !==
-      snapshot.lastEventDigest ||
+    computeDemandEventSourcingStoredEventDigest(lastEvent) !== snapshot.lastEventDigest ||
     lastEvent.resultingStateDigest !== snapshot.stateDigest
   ) {
     fail("mismatch", "$snapshot");
@@ -313,10 +287,7 @@ export function restoreDemandEventSourcingSnapshot(
 }
 
 export function renderDemandEventSourcingSnapshot(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandEventSourcingSnapshot(value),
-    "$snapshot",
-  );
+  return renderDeterministicJsonDocument(parseDemandEventSourcingSnapshot(value), "$snapshot");
 }
 
 export function parseDemandEventSourcingSnapshotDocument(
@@ -339,10 +310,6 @@ export function parseDemandEventSourcingSnapshotDocument(
 }
 
 /** 快照自身的语义摘要；它与快照中的聚合 `stateDigest` 明确不同。 */
-export function computeDemandEventSourcingSnapshotDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingSnapshot(value),
-  );
+export function computeDemandEventSourcingSnapshotDigest(value: unknown): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingSnapshot(value));
 }

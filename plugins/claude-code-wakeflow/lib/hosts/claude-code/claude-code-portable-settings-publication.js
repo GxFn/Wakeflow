@@ -1,13 +1,13 @@
 import { types } from "node:util";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { decodeUtf8, encodeUtf8, Utf8Error, } from "../../foundation/text/utf8.js";
+import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 /**
  * Wakeflow Host / Claude Code：单个已授权根的 portable settings CAS owner。
@@ -57,18 +57,17 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules")
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))
-        || (record.rules !== undefined
-            && (!Array.isArray(record.rules)
-                || record.rules.some((entry) => typeof entry !== "string")))
-        || (record.retiredRules !== undefined
-            && (!Array.isArray(record.retiredRules)
-                || record.retiredRules.some((entry) => typeof entry !== "string")))) {
+    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules") ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal))) ||
+        (record.rules !== undefined &&
+            (!Array.isArray(record.rules) || record.rules.some((entry) => typeof entry !== "string"))) ||
+        (record.retiredRules !== undefined &&
+            (!Array.isArray(record.retiredRules) ||
+                record.retiredRules.some((entry) => typeof entry !== "string")))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -82,22 +81,20 @@ function parseOptions(value) {
     });
 }
 function currentUserId() {
-    return typeof process.geteuid === "function"
-        ? BigInt(process.geteuid())
-        : null;
+    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 function assertDirectoryNode(node) {
-    if (node.kind !== "directory"
-        || (node.permissionBits !== 0o700 && node.permissionBits !== 0o755)
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== "directory" ||
+        (node.permissionBits !== 0o700 && node.permissionBits !== 0o755) ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("directory-policy", "$settingsDirectory");
     }
 }
 function assertSourceNode(node) {
-    if (node.kind !== "file"
-        || node.permissionBits !== 0o644
-        || node.linkCount !== 1n
-        || (currentUserId() !== null && node.userId !== currentUserId())) {
+    if (node.kind !== "file" ||
+        node.permissionBits !== 0o644 ||
+        node.linkCount !== 1n ||
+        (currentUserId() !== null && node.userId !== currentUserId())) {
         fail("source-policy", "$settings");
     }
 }
@@ -108,8 +105,7 @@ async function directoryNodeOrNull(root) {
         return resource.node;
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found")
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
             return null;
         if (error instanceof ClaudeCodePortableSettingsPublicationError)
             throw error;
@@ -124,8 +120,7 @@ async function sourceOrNull(root, signal) {
         resource = await root.inspectExistingResource(CLAUDE_CODE_PORTABLE_SETTINGS_REF);
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError
-            && error.reason === "resource-not-found")
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
             return null;
         if (error instanceof RootedDirectoryError)
             fail("root-scope", "$root");
@@ -145,9 +140,9 @@ async function sourceOrNull(root, signal) {
                 fail("aborted", "$signal");
             if (error.reason === "root-scope")
                 fail("root-scope", "$root");
-            if (error.reason === "expectation-changed"
-                || error.reason === "source-changed"
-                || error.reason === "not-found") {
+            if (error.reason === "expectation-changed" ||
+                error.reason === "source-changed" ||
+                error.reason === "not-found") {
                 fail("source-changed", "$settings");
             }
             fail("source-policy", "$settings");
@@ -157,9 +152,7 @@ async function sourceOrNull(root, signal) {
 }
 async function inspectSource(root, signal, rules, retiredRules) {
     const directoryNode = await directoryNodeOrNull(root);
-    const source = directoryNode === null
-        ? null
-        : await sourceOrNull(root, signal);
+    const source = directoryNode === null ? null : await sourceOrNull(root, signal);
     let sourceText = null;
     if (source !== null) {
         try {
@@ -176,10 +169,10 @@ async function inspectSource(root, signal, rules, retiredRules) {
 }
 /** 只读检查一个已授权根的 portable settings，不返回用户源文本或节点身份。 */
 export async function inspectClaudeCodePortableSettings(rootValue, optionsValue = {}) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const options = parseOptions(optionsValue);
@@ -215,9 +208,9 @@ async function ensureSettingsDirectory(root, inspection, signal) {
     }
 }
 function assertTransitionReady(transition) {
-    if ((transition.status !== "create" && transition.status !== "update")
-        || transition.desiredText === null
-        || transition.desiredDigest === null) {
+    if ((transition.status !== "create" && transition.status !== "update") ||
+        transition.desiredText === null ||
+        transition.desiredDigest === null) {
         fail("transition-blocked", "$transition", transition.reason);
     }
 }
@@ -254,9 +247,9 @@ async function publishTransition(root, inspection, signal) {
         if (error instanceof DurableAtomicFileWriteError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            if (error.reason === "target-exists"
-                || error.reason === "expectation-changed"
-                || error.reason === "expectation-read-failure") {
+            if (error.reason === "target-exists" ||
+                error.reason === "expectation-changed" ||
+                error.reason === "expectation-read-failure") {
                 fail("source-changed", "$settings");
             }
             if (error.reason === "stage-recovery-required") {
@@ -269,10 +262,10 @@ async function publishTransition(root, inspection, signal) {
 }
 /** 创建、最小更新或幂等复用一个已授权根的 portable settings。 */
 export async function publishClaudeCodePortableSettings(rootValue, optionsValue = {}) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const options = parseOptions(optionsValue);
@@ -296,16 +289,15 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     await ensureSettingsDirectory(rootValue, before, options.signal);
     if (before.directoryNode === null) {
         const afterDirectory = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
-        if (afterDirectory.source !== null
-            || afterDirectory.transition.status !== "create") {
+        if (afterDirectory.source !== null || afterDirectory.transition.status !== "create") {
             fail("source-changed", "$settings");
         }
     }
     await publishTransition(rootValue, before, options.signal);
     const after = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
-    if (after.transition.status !== "current"
-        || before.transition.desiredDigest === null
-        || after.source?.digest !== before.transition.desiredDigest) {
+    if (after.transition.status !== "current" ||
+        before.transition.desiredDigest === null ||
+        after.source?.digest !== before.transition.desiredDigest) {
         fail("operation-failure", "$readback");
     }
     return Object.freeze({
@@ -317,10 +309,10 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
 }
 /** 只结算目标同父目录内属于 portable settings 的 inactive Foundation stage。 */
 export async function settleClaudeCodePortableSettingsPublicationStages(rootValue, optionsValue = {}) {
-    if (typeof rootValue !== "object"
-        || rootValue === null
-        || types.isProxy(rootValue)
-        || !(rootValue instanceof RootedDirectory)) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
     const options = parseOptions(optionsValue);

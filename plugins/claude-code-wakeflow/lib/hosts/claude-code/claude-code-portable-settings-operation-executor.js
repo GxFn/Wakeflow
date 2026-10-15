@@ -3,7 +3,7 @@ import { parseWakeflowConfig, parseWakeflowConfigPlacement, WakeflowConfigError,
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { compileClaudeCodePortableSettingsRootAuthority, createClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-composition.js";
@@ -129,32 +129,29 @@ function parseOperation(value) {
         throw error;
     }
     const keys = Object.keys(record).sort();
-    if (keys.length !== 7
-        || keys[0] !== "action"
-        || keys[1] !== "authorityDigest"
-        || keys[2] !== "operationDigest"
-        || keys[3] !== "operationId"
-        || keys[4] !== "root"
-        || keys[5] !== "sourceDigest"
-        || keys[6] !== "targetDigest"
-        || (record.action !== "create" && record.action !== "update")
-        || typeof record.operationId !== "string") {
+    if (keys.length !== 7 ||
+        keys[0] !== "action" ||
+        keys[1] !== "authorityDigest" ||
+        keys[2] !== "operationDigest" ||
+        keys[3] !== "operationId" ||
+        keys[4] !== "root" ||
+        keys[5] !== "sourceDigest" ||
+        keys[6] !== "targetDigest" ||
+        (record.action !== "create" && record.action !== "update") ||
+        typeof record.operationId !== "string") {
         fail("operation", "$operation");
     }
     const root = operationRoot(record.root);
     const authorityDigest = digest(record.authorityDigest, "$operation.authorityDigest");
-    const sourceDigest = record.sourceDigest === null
-        ? null
-        : digest(record.sourceDigest, "$operation.sourceDigest");
+    const sourceDigest = record.sourceDigest === null ? null : digest(record.sourceDigest, "$operation.sourceDigest");
     const targetDigest = digest(record.targetDigest, "$operation.targetDigest");
-    if ((record.action === "create" && sourceDigest !== null)
-        || (record.action === "update" && sourceDigest === null)) {
+    if ((record.action === "create" && sourceDigest !== null) ||
+        (record.action === "update" && sourceDigest === null)) {
         fail("operation", "$operation.sourceDigest");
     }
     const expected = createClaudeCodePortableSettingsOperation(authorityDigest, root, record.action, sourceDigest, targetDigest);
-    if (expected.operationId !== record.operationId
-        || expected.operationDigest
-            !== digest(record.operationDigest, "$operation.operationDigest")) {
+    if (expected.operationId !== record.operationId ||
+        expected.operationDigest !== digest(record.operationDigest, "$operation.operationDigest")) {
         fail("operation", "$operation.operationDigest");
     }
     return expected;
@@ -169,21 +166,21 @@ function parseRequest(value) {
             fail("input", "$request");
         throw error;
     }
-    if (!Object.hasOwn(record, "config")
-        || !Object.hasOwn(record, "profile")
-        || !Object.hasOwn(record, "operation")
-        || !Object.hasOwn(record, "recoveringAffectedOperation")
-        || Object.keys(record).some((key) => (key !== "config"
-            && key !== "profile"
-            && key !== "operation"
-            && key !== "recoveringAffectedOperation"
-            && key !== "signal"))
-        || typeof record.recoveringAffectedOperation !== "boolean"
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (!Object.hasOwn(record, "config") ||
+        !Object.hasOwn(record, "profile") ||
+        !Object.hasOwn(record, "operation") ||
+        !Object.hasOwn(record, "recoveringAffectedOperation") ||
+        Object.keys(record).some((key) => key !== "config" &&
+            key !== "profile" &&
+            key !== "operation" &&
+            key !== "recoveringAffectedOperation" &&
+            key !== "signal") ||
+        typeof record.recoveringAffectedOperation !== "boolean" ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$request");
     }
     let model;
@@ -205,9 +202,8 @@ function parseRequest(value) {
         }
         throw error;
     }
-    if (profile.hostId !== "claude-code"
-        || profile.surfaces.settingsIntegration?.portablePath
-            !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
+    if (profile.hostId !== "claude-code" ||
+        profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
         fail("profile", "$/profile");
     }
     return Object.freeze({
@@ -219,13 +215,13 @@ function parseRequest(value) {
     });
 }
 function sameRoot(left, right) {
-    return left.rootKind === right.rootKind
-        && left.rootId === right.rootId
-        && left.configuredPlacement === right.configuredPlacement
-        && left.resourceRef === right.resourceRef
-        && (left.rootKind !== "support-surface"
-            || right.rootKind !== "support-surface"
-            || left.role === right.role);
+    return (left.rootKind === right.rootKind &&
+        left.rootId === right.rootId &&
+        left.configuredPlacement === right.configuredPlacement &&
+        left.resourceRef === right.resourceRef &&
+        (left.rootKind !== "support-surface" ||
+            right.rootKind !== "support-surface" ||
+            left.role === right.role));
 }
 async function executeAtRoot(root, request) {
     if (request.recoveringAffectedOperation) {
@@ -261,8 +257,8 @@ async function executeAtRoot(root, request) {
         fail("transition-blocked", "$transition");
     }
     if (inspection.transition.status === "current") {
-        if (!request.recoveringAffectedOperation
-            || inspection.sourceDigest !== request.operation.targetDigest) {
+        if (!request.recoveringAffectedOperation ||
+            inspection.sourceDigest !== request.operation.targetDigest) {
             fail("source-stale", "$operation.sourceDigest");
         }
         return Object.freeze({
@@ -300,18 +296,18 @@ async function executeAtRoot(root, request) {
         }
         throw error;
     }
-    if (published.sourceDigest !== request.operation.sourceDigest
-        || published.targetDigest !== request.operation.targetDigest) {
+    if (published.sourceDigest !== request.operation.sourceDigest ||
+        published.targetDigest !== request.operation.targetDigest) {
         fail("owner", "$publication");
     }
     return published;
 }
 /** 执行一个 exact confirmed portable settings operation。 */
 export async function executeClaudeCodePortableSettingsOperation(workspaceRootValue, requestValue) {
-    if (typeof workspaceRootValue !== "object"
-        || workspaceRootValue === null
-        || types.isProxy(workspaceRootValue)
-        || !(workspaceRootValue instanceof RootedDirectory)) {
+    if (typeof workspaceRootValue !== "object" ||
+        workspaceRootValue === null ||
+        types.isProxy(workspaceRootValue) ||
+        !(workspaceRootValue instanceof RootedDirectory)) {
         fail("input", "$workspaceRoot");
     }
     const request = parseRequest(requestValue);
@@ -321,10 +317,9 @@ export async function executeClaudeCodePortableSettingsOperation(workspaceRootVa
     if (authority.authorityDigest !== request.operation.authorityDigest) {
         fail("authority-changed", "$operation.authorityDigest");
     }
-    const authoritativeRoot = authority.roots.find((root) => (root.rootKind === request.operation.root.rootKind
-        && root.rootId === request.operation.root.rootId));
-    if (authoritativeRoot === undefined
-        || !sameRoot(authoritativeRoot, request.operation.root)) {
+    const authoritativeRoot = authority.roots.find((root) => root.rootKind === request.operation.root.rootKind &&
+        root.rootId === request.operation.root.rootId);
+    if (authoritativeRoot === undefined || !sameRoot(authoritativeRoot, request.operation.root)) {
         fail("authority-changed", "$operation.root");
     }
     let targetRoot = workspaceRootValue;
@@ -340,7 +335,7 @@ export async function executeClaudeCodePortableSettingsOperation(workspaceRootVa
             }
             throw error;
         }
-        const placement = placements.roots.find((entry) => (entry.key === `support.${authoritativeRoot.rootId}.root`));
+        const placement = placements.roots.find((entry) => entry.key === `support.${authoritativeRoot.rootId}.root`);
         if (placement?.state !== "present")
             fail("placement", "$supportRoot");
         try {

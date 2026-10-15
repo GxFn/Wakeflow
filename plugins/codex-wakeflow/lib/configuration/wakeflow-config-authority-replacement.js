@@ -1,9 +1,8 @@
-import { replaceFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
+import { DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { assertCurrentUserWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthorityDesiredPlacements, assertWakeflowConfigAuthorityNotAborted, assertWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthoritySourcePolicy, currentWakeflowConfigAuthorityUserId, failWakeflowConfigAuthorityReplacement as fail, mapWakeflowConfigAuthorityLockError, matchesWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityReplacementOptions, prepareWakeflowConfigAuthorityDesired, readCurrentWakeflowConfigAuthority, sameWakeflowConfigAuthoritySource, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
 import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, } from "./wakeflow-config-authority-snapshot.js";
-import { assertCurrentUserWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthorityDesiredPlacements, assertWakeflowConfigAuthorityNotAborted, assertWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthoritySourcePolicy, currentWakeflowConfigAuthorityUserId, failWakeflowConfigAuthorityReplacement as fail, mapWakeflowConfigAuthorityLockError, matchesWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityReplacementOptions, prepareWakeflowConfigAuthorityDesired, readCurrentWakeflowConfigAuthority, sameWakeflowConfigAuthoritySource, wakeflowConfigAuthorityLockOptions, WakeflowConfigAuthorityReplacementError, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, } from "./wakeflow-config-authority-replacement-contract.js";
 /**
  * Wakeflow Configuration：Config 权威记录的正常读取、幂等判断与条件替换路径。
  *
@@ -18,18 +17,16 @@ function mapAtomicReplaceError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$config");
-    if (error.reason === "expectation-changed"
-        || error.reason === "expectation-read-failure") {
+    if (error.reason === "expectation-changed" || error.reason === "expectation-read-failure") {
         fail("conflict", "$source");
     }
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed") {
+    if (error.reason === "root-scope" || error.reason === "parent-changed") {
         fail("root-scope", "$root");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     if (error.reason === "stage-recovery-required") {
@@ -53,18 +50,18 @@ async function replaceCurrentBytes(root, current, desired, signal) {
     }
 }
 function assertReplacementReadback(source, effect, authority, desired, expectedUserId) {
-    if (effect.resourcePath !== WAKEFLOW_CONFIG_FILE_REF
-        || effect.digest !== desired.sourceDigest
-        || !sameWakeflowConfigAuthoritySource(effect.previous, source.source)
-        || effect.node.kind !== "file"
-        || effect.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || effect.node.linkCount !== 1n
-        || effect.node.userId !== expectedUserId
-        || authority.source.resourcePath !== effect.resourcePath
-        || authority.source.digest !== effect.digest
-        || authority.source.byteCount !== effect.byteCount
-        || !sameFileNodeSnapshot(authority.source.node, effect.node)
-        || authority.configDigest !== desired.configDigest) {
+    if (effect.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
+        effect.digest !== desired.sourceDigest ||
+        !sameWakeflowConfigAuthoritySource(effect.previous, source.source) ||
+        effect.node.kind !== "file" ||
+        effect.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        effect.node.linkCount !== 1n ||
+        effect.node.userId !== expectedUserId ||
+        authority.source.resourcePath !== effect.resourcePath ||
+        authority.source.digest !== effect.digest ||
+        authority.source.byteCount !== effect.byteCount ||
+        !sameFileNodeSnapshot(authority.source.node, effect.node) ||
+        authority.configDigest !== desired.configDigest) {
         fail("commit-uncertain", "$resourcePath");
     }
 }
@@ -122,7 +119,9 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
     assertWakeflowConfigAuthorityNotAborted(parsed.signal);
     let committed = false;
     try {
-        return await withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, () => replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => { committed = true; }), wakeflowConfigAuthorityLockOptions(parsed));
+        return await withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, () => replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
+            committed = true;
+        }), wakeflowConfigAuthorityLockOptions(parsed));
     }
     catch (error) {
         if (error instanceof WakeflowConfigAuthorityReplacementError)
@@ -133,4 +132,4 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
         fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath");
     }
 }
-export { WakeflowConfigAuthorityReplacementError, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS, } from "./wakeflow-config-authority-replacement-contract.js";
+export { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS, WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";

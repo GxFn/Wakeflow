@@ -1,8 +1,8 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
-import { computeCanonicalJsonSha256Digest, } from "../../foundation/crypto/canonical-json-sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
@@ -54,17 +54,17 @@ function parseRequest(value) {
             fail("input", "$request");
         throw error;
     }
-    if (!Object.hasOwn(record, "action")
-        || !Object.hasOwn(record, "config")
-        || !Object.hasOwn(record, "profile")
-        || Object.keys(record).some((key) => (key !== "action" && key !== "config" && key !== "profile" && key !== "signal"))
-        || typeof record.action !== "string"
-        || !CLAUDE_CODE_PORTABLE_SETTINGS_COMPOSITION_ACTIONS.includes(record.action)
-        || (record.signal !== undefined
-            && (typeof record.signal !== "object"
-                || record.signal === null
-                || types.isProxy(record.signal)
-                || !(record.signal instanceof AbortSignal)))) {
+    if (!Object.hasOwn(record, "action") ||
+        !Object.hasOwn(record, "config") ||
+        !Object.hasOwn(record, "profile") ||
+        Object.keys(record).some((key) => key !== "action" && key !== "config" && key !== "profile" && key !== "signal") ||
+        typeof record.action !== "string" ||
+        !CLAUDE_CODE_PORTABLE_SETTINGS_COMPOSITION_ACTIONS.includes(record.action) ||
+        (record.signal !== undefined &&
+            (typeof record.signal !== "object" ||
+                record.signal === null ||
+                types.isProxy(record.signal) ||
+                !(record.signal instanceof AbortSignal)))) {
         fail("input", "$request");
     }
     let model;
@@ -86,9 +86,8 @@ function parseRequest(value) {
         }
         throw error;
     }
-    if (profile.hostId !== "claude-code"
-        || profile.surfaces.settingsIntegration?.portablePath
-            !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
+    if (profile.hostId !== "claude-code" ||
+        profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
         fail("profile", "$/profile");
     }
     return Object.freeze({
@@ -99,13 +98,15 @@ function parseRequest(value) {
     });
 }
 export function compileClaudeCodePortableSettingsRootAuthority(model) {
-    const roots = [Object.freeze({
+    const roots = [
+        Object.freeze({
             rootKind: "program",
             rootId: model.program.programId,
             configuredPlacement: ".",
             resourceRef: CLAUDE_CODE_PORTABLE_SETTINGS_REF,
-        })];
-    for (const surface of [...model.topology.supportSurfaces].sort((left, right) => (left.surfaceId < right.surfaceId ? -1 : left.surfaceId > right.surfaceId ? 1 : 0))) {
+        }),
+    ];
+    for (const surface of [...model.topology.supportSurfaces].sort((left, right) => left.surfaceId < right.surfaceId ? -1 : left.surfaceId > right.surfaceId ? 1 : 0)) {
         if (surface.ownership !== "wakeflow-managed")
             continue;
         roots.push(Object.freeze({
@@ -156,8 +157,7 @@ const BLOCKING_PUBLICATION_REASONS = new Set([
 async function inspectRootSettings(root, options) {
     try {
         return {
-            transition: (await inspectClaudeCodePortableSettings(root, options))
-                .transition,
+            transition: (await inspectClaudeCodePortableSettings(root, options)).transition,
         };
     }
     catch (error) {
@@ -185,7 +185,11 @@ async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
     let inspection;
     let primaryError;
     try {
-        inspection = await inspectRootSettings(root, { rules, retiredRules, ...(signal === undefined ? {} : { signal }) });
+        inspection = await inspectRootSettings(root, {
+            rules,
+            retiredRules,
+            ...(signal === undefined ? {} : { signal }),
+        });
     }
     catch (error) {
         primaryError = error;
@@ -207,10 +211,10 @@ async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
 }
 /** 为 Program 与 Wakeflow-managed Support roots 生成零写入 portable settings 计划。 */
 export async function planClaudeCodePortableSettingsComposition(workspaceRootValue, requestValue) {
-    if (typeof workspaceRootValue !== "object"
-        || workspaceRootValue === null
-        || types.isProxy(workspaceRootValue)
-        || !(workspaceRootValue instanceof RootedDirectory)) {
+    if (typeof workspaceRootValue !== "object" ||
+        workspaceRootValue === null ||
+        types.isProxy(workspaceRootValue) ||
+        !(workspaceRootValue instanceof RootedDirectory)) {
         fail("input", "$workspaceRoot");
     }
     const request = parseRequest(requestValue);
@@ -242,7 +246,7 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
             });
         }
         else {
-            const placement = placements.roots.find((entry) => (entry.key === `support.${root.rootId}.root`));
+            const placement = placements.roots.find((entry) => entry.key === `support.${root.rootId}.root`);
             if (placement === undefined)
                 fail("placement", "$supportRoot");
             if (placement.state === "missing") {

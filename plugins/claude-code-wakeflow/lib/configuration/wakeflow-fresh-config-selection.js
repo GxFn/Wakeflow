@@ -1,8 +1,8 @@
 import { types } from "node:util";
-import { computeCanonicalJsonSha256Digest, } from "../foundation/crypto/canonical-json-sha256.js";
-import { JsonValueError, parseJsonValue, } from "../foundation/data/json-value.js";
-import { parseDenseArray, parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
 import { createWakeflowDurableId, } from "../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
+import { JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
+import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../foundation/data/passive-own-data.js";
 import { createUuidV4, deriveUuidV4, UuidV4Error, } from "../foundation/identity/uuid-v4.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_ID, WAKEFLOW_CONFIG_SCHEMA_VERSION, WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE, WakeflowConfigError, } from "./wakeflow-config.js";
 /**
@@ -83,17 +83,16 @@ function array(value, path) {
 }
 function assertFields(value, required, optional, path) {
     const allowed = new Set([...required, ...optional]);
-    if (required.some((key) => !Object.hasOwn(value, key))
-        || Object.keys(value).some((key) => !allowed.has(key))) {
+    if (required.some((key) => !Object.hasOwn(value, key)) ||
+        Object.keys(value).some((key) => !allowed.has(key))) {
         fail("shape", path);
     }
 }
 function parseOptions(value) {
     const parsed = record(value, "$options");
-    if (Object.keys(parsed).some((key) => key !== "uuidFactory")
-        || (parsed.uuidFactory !== undefined
-            && (typeof parsed.uuidFactory !== "function"
-                || types.isProxy(parsed.uuidFactory)))) {
+    if (Object.keys(parsed).some((key) => key !== "uuidFactory") ||
+        (parsed.uuidFactory !== undefined &&
+            (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory)))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -101,9 +100,9 @@ function parseOptions(value) {
     });
 }
 function selectionKey(value, path, seen) {
-    if (typeof value !== "string"
-        || !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(value)
-        || seen.has(value)) {
+    if (typeof value !== "string" ||
+        !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(value) ||
+        seen.has(value)) {
         fail("selection-key", path);
     }
     seen.add(value);
@@ -122,9 +121,10 @@ export const WAKEFLOW_PRIMARY_POD_NAME = "main";
 function allocateId(kind, options, seenUuid, seed, key) {
     let uuid;
     try {
-        uuid = options.uuidFactory === undefined
-            ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
-            : createUuidV4(options.uuidFactory);
+        uuid =
+            options.uuidFactory === undefined
+                ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
+                : createUuidV4(options.uuidFactory);
     }
     catch (error) {
         if (error instanceof UuidV4Error)
@@ -137,18 +137,13 @@ function allocateId(kind, options, seenUuid, seed, key) {
     return createWakeflowDurableId(kind, uuid);
 }
 function sortedAllocations(values) {
-    return Object.freeze([...values].sort((left, right) => (left.selectionKey < right.selectionKey
-        ? -1
-        : left.selectionKey > right.selectionKey
-            ? 1
-            : 0)));
+    return Object.freeze([...values].sort((left, right) => left.selectionKey < right.selectionKey ? -1 : left.selectionKey > right.selectionKey ? 1 : 0));
 }
 /** 把闭合Fresh selection编译为完整typed Config和可审查ID allocation。 */
 export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue = {}) {
     const options = parseOptions(optionsValue);
     const selection = record(snapshotSelection(selectionValue), "$selection");
-    if (Object.keys(selection).sort().join("\u0000")
-        !== TOP_LEVEL_FIELDS.join("\u0000")) {
+    if (Object.keys(selection).sort().join("\u0000") !== TOP_LEVEL_FIELDS.join("\u0000")) {
         fail("shape", "$selection");
     }
     const program = record(selection.program, "$/program");
@@ -163,8 +158,8 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
     const repositoryValues = array(topology.repositories, "$/topology/repositories");
     const surfaceValues = array(topology.supportSurfaces, "$/topology/supportSurfaces");
     const windowValues = array(topology.windows, "$/topology/windows");
-    if (repositoryValues.length + surfaceValues.length + windowValues.length
-        > WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES) {
+    if (repositoryValues.length + surfaceValues.length + windowValues.length >
+        WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES) {
         fail("capacity", "$/topology");
     }
     const seenKeys = new Set();
@@ -197,9 +192,9 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
         }
         else {
             assertFields(root, ["kind", "selectionKey"], [], `${path}/root`);
-            if ((root.kind !== "repository" && root.kind !== "support-surface")
-                || typeof root.selectionKey !== "string"
-                || !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(root.selectionKey)) {
+            if ((root.kind !== "repository" && root.kind !== "support-surface") ||
+                typeof root.selectionKey !== "string" ||
+                !WAKEFLOW_FRESH_SELECTION_KEY_PATTERN.test(root.selectionKey)) {
                 fail("reference", `${path}/root`);
             }
         }

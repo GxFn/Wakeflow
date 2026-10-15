@@ -1,4 +1,4 @@
-import { parseWakeflowWorkspaceHostResourceProfile, } from "../../workspace/workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 /**
  * Wakeflow Host / Codex：资源矩阵所需的 Codex 静态值。
  *

@@ -1,17 +1,16 @@
 import { types } from "node:util";
+import { parseWakeflowDurableIdOfKind, } from "../contracts/identity/wakeflow-durable-id.js";
 import { computeSha256Digest, parseSha256Digest, } from "../foundation/crypto/sha256.js";
-import { parsePlainRecord, pickOwnDataProperties, } from "../foundation/data/passive-own-data.js";
-import { parseDurableAtomicFileReplaceOptions, } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
-import { sameFileNodeSnapshot, } from "../foundation/filesystem/file-node-snapshot.js";
+import { parsePlainRecord, pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
+import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
+import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
-import { RootedExclusiveFileLockError, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { parseWakeflowDurableIdOfKind, } from "../contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
-import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
+import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, WakeflowConfigAuthoritySnapshotError, } from "./wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
+import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
  *
@@ -22,22 +21,22 @@ import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF = parsePortableResourcePath(".wakeflow-config-authority.lock");
 export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 const ERROR_MESSAGES = {
-    "input": "Wakeflow config authority replacement input is invalid.",
+    input: "Wakeflow config authority replacement input is invalid.",
     "unsupported-platform": "Wakeflow config authority replacement requires reliable local POSIX ownership semantics.",
     "root-scope": "Wakeflow config authority replacement lost its workspace root scope.",
     "root-policy": "Wakeflow config authority replacement requires a current-user workspace root.",
-    "config": "Wakeflow config authority replacement requires one strict desired model.",
-    "capacity": "Wakeflow config authority replacement exceeds its recoverable byte limit.",
-    "placement": "Wakeflow config authority replacement declares an unsafe root placement.",
+    config: "Wakeflow config authority replacement requires one strict desired model.",
+    capacity: "Wakeflow config authority replacement exceeds its recoverable byte limit.",
+    placement: "Wakeflow config authority replacement declares an unsafe root placement.",
     "source-invalid": "Current Wakeflow config authority cannot be loaded strictly.",
     "source-policy": "Current Wakeflow config authority violates replacement source policy.",
     "program-identity": "Wakeflow config authority replacement cannot change program identity.",
-    "conflict": "Wakeflow config authority no longer matches its expected source.",
+    conflict: "Wakeflow config authority no longer matches its expected source.",
     "lock-timeout": "Wakeflow config authority replacement lock acquisition timed out.",
     "lock-unsafe": "Wakeflow config authority replacement lock is unsafe.",
     "recovery-not-required": "Wakeflow config authority replacement has no lock residue to recover.",
     "recovery-required": "Wakeflow config authority replacement residue cannot be recovered automatically.",
-    "aborted": "Wakeflow config authority replacement was aborted before commit.",
+    aborted: "Wakeflow config authority replacement was aborted before commit.",
     "replacement-failure": "Wakeflow config authority could not be replaced safely.",
     "commit-uncertain": "Replaced Wakeflow config authority could not be proven exact.",
 };
@@ -57,18 +56,18 @@ export function failWakeflowConfigAuthorityReplacement(reason, path) {
     throw new WakeflowConfigAuthorityReplacementError(reason, path);
 }
 export function assertWakeflowConfigAuthorityRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         failWakeflowConfigAuthorityReplacement("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function optionRecord(value) {
     try {
@@ -79,10 +78,7 @@ function optionRecord(value) {
     }
 }
 function parsePositiveMilliseconds(value, path) {
-    if (typeof value !== "number"
-        || !Number.isSafeInteger(value)
-        || value <= 0
-        || value > 300_000) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
         failWakeflowConfigAuthorityReplacement("input", path);
     }
     return value;
@@ -97,11 +93,7 @@ function parseSignal(value) {
 }
 export function parseWakeflowConfigAuthorityReplacementOptions(value) {
     const record = optionRecord(value);
-    const allowed = new Set([
-        "acquireTimeoutMilliseconds",
-        "retryDelayMilliseconds",
-        "signal",
-    ]);
+    const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
     if (Object.keys(record).some((key) => !allowed.has(key))) {
         failWakeflowConfigAuthorityReplacement("input", "$options");
     }
@@ -150,26 +142,26 @@ export async function assertCurrentUserWakeflowConfigAuthorityRoot(root, expecte
     }
 }
 export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
-    let projected;
-    let modelProjected;
-    let programProjected;
-    let sourceProjected;
-    try {
-        projected = pickOwnDataProperties(value, ["configDigest", "model", "source", "workspaceRoot"], "$expected");
-        modelProjected = pickOwnDataProperties(projected.model, ["program"], "$/expected/model");
-        programProjected = pickOwnDataProperties(modelProjected.program, ["programId"], "$/expected/model/program");
-        sourceProjected = pickOwnDataProperties(projected.source, ["byteCount", "digest", "node", "resourcePath"], "$/expected/source");
-    }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$expected");
-    }
-    if (typeof projected.workspaceRoot !== "string"
-        || projected.configDigest === undefined
-        || programProjected.programId === undefined
-        || sourceProjected.byteCount === undefined
-        || sourceProjected.digest === undefined
-        || sourceProjected.node === undefined
-        || sourceProjected.resourcePath === undefined) {
+    // 四层投影在一个 try 里取出：任何一层的形状问题都是同一个 input 拒绝；const 让类型随键集合推导。
+    const { projected, programProjected, sourceProjected } = (() => {
+        try {
+            const projected = pickOwnDataProperties(value, ["configDigest", "model", "source", "workspaceRoot"], "$expected");
+            const modelProjected = pickOwnDataProperties(projected.model, ["program"], "$/expected/model");
+            const programProjected = pickOwnDataProperties(modelProjected.program, ["programId"], "$/expected/model/program");
+            const sourceProjected = pickOwnDataProperties(projected.source, ["byteCount", "digest", "node", "resourcePath"], "$/expected/source");
+            return { projected, programProjected, sourceProjected };
+        }
+        catch {
+            return failWakeflowConfigAuthorityReplacement("input", "$expected");
+        }
+    })();
+    if (typeof projected.workspaceRoot !== "string" ||
+        projected.configDigest === undefined ||
+        programProjected.programId === undefined ||
+        sourceProjected.byteCount === undefined ||
+        sourceProjected.digest === undefined ||
+        sourceProjected.node === undefined ||
+        sourceProjected.resourcePath === undefined) {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
     let configDigest;
@@ -201,10 +193,10 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
     catch {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
-    if (source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF
-        || source.node.linkCount !== 1n
-        || source.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || source.node.userId !== expectedUserId) {
+    if (source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
+        source.node.linkCount !== 1n ||
+        source.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        source.node.userId !== expectedUserId) {
         failWakeflowConfigAuthorityReplacement("source-policy", "$/expected/source");
     }
     return Object.freeze({
@@ -292,30 +284,30 @@ export async function readCurrentWakeflowConfigAuthority(root, signal, afterComm
 }
 export function assertWakeflowConfigAuthoritySourcePolicy(snapshot, expectedUserId) {
     const node = snapshot.source.node;
-    if (node.kind !== "file"
-        || node.linkCount !== 1n
-        || node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || node.userId !== expectedUserId) {
+    if (node.kind !== "file" ||
+        node.linkCount !== 1n ||
+        node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        node.userId !== expectedUserId) {
         failWakeflowConfigAuthorityReplacement("source-policy", "$source");
     }
 }
 export function sameWakeflowConfigAuthoritySource(left, right) {
     try {
-        return left.resourcePath === right.resourcePath
-            && left.byteCount === right.byteCount
-            && left.digest === right.digest
-            && sameFileNodeSnapshot(left.node, right.node);
+        return (left.resourcePath === right.resourcePath &&
+            left.byteCount === right.byteCount &&
+            left.digest === right.digest &&
+            sameFileNodeSnapshot(left.node, right.node));
     }
     catch {
         failWakeflowConfigAuthorityReplacement("input", "$expected");
     }
 }
 export function matchesWakeflowConfigAuthorityExpectation(root, current, expected) {
-    return expected.workspaceRoot === root.absolutePath
-        && current.workspaceRoot === root.absolutePath
-        && current.configDigest === expected.configDigest
-        && current.model.program.programId === expected.programId
-        && sameWakeflowConfigAuthoritySource(current.source, expected.source);
+    return (expected.workspaceRoot === root.absolutePath &&
+        current.workspaceRoot === root.absolutePath &&
+        current.configDigest === expected.configDigest &&
+        current.model.program.programId === expected.programId &&
+        sameWakeflowConfigAuthoritySource(current.source, expected.source));
 }
 export function wakeflowConfigAuthorityLockOptions(options) {
     return {

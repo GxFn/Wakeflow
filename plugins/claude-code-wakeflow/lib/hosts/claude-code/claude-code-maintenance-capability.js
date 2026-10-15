@@ -1,9 +1,9 @@
-import { createWakeflowHostMaintenanceContribution, } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
-import { planClaudeCodePortableSettingsComposition, } from "./claude-code-portable-settings-composition.js";
+import { planClaudeCodePortableSettingsComposition } from "./claude-code-portable-settings-composition.js";
 import { ClaudeCodePortableSettingsOperationExecutionError, executeClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-operation-executor.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
 import { CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID, ClaudeCodeStatuslineSettingsOperationError, executeClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsOperation, } from "./claude-code-statusline-settings-operation.js";
@@ -163,8 +163,8 @@ async function executeHostAssetOperation(execute, root, request) {
             recoveringAffectedOperation: request.recoveringAffectedOperation,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
-        if (executed.operationId !== request.operation.operationId
-            || executed.targetDigest !== request.operation.targetDigest) {
+        if (executed.operationId !== request.operation.operationId ||
+            executed.targetDigest !== request.operation.targetDigest) {
             fail("owner", "$operation");
         }
         return Object.freeze({
@@ -214,24 +214,24 @@ async function executeOperation(root, context, request) {
     }
     if (request.profile.hostId !== "claude-code")
         fail("operation", "$operation");
-    if (request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND
-        && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID) {
+    if (request.operation.operationKind === CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND &&
+        request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID) {
         return executeHostAssetOperation(executeClaudeCodeStatuslineAssetOperation, root, request);
     }
-    if (request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND
-        && request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID) {
+    if (request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND &&
+        request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID) {
         return executeHostAssetOperation(executeClaudeCodeTmuxAssetOperation, root, request);
     }
-    if (request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND
-        && request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID) {
+    if (request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND &&
+        request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID) {
         return executeStatuslineSettingsOperation(root, request);
     }
-    if (request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND
-        && request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID) {
+    if (request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND &&
+        request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID) {
         return executeProjectionOperation(root, request);
     }
-    if (request.operation.operationKind !== "portable-settings"
-        || request.operation.ownerId !== "claude-code-portable-settings") {
+    if (request.operation.operationKind !== "portable-settings" ||
+        request.operation.ownerId !== "claude-code-portable-settings") {
         fail("operation", "$operation");
     }
     let executed;
@@ -250,8 +250,8 @@ async function executeOperation(root, context, request) {
         }
         throw error;
     }
-    if (executed.operationId !== request.operation.operationId
-        || executed.targetDigest !== request.operation.targetDigest) {
+    if (executed.operationId !== request.operation.operationId ||
+        executed.targetDigest !== request.operation.targetDigest) {
         fail("owner", "$operation");
     }
     return Object.freeze({

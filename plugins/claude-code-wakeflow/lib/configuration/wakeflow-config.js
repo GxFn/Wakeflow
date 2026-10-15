@@ -1,7 +1,7 @@
 import { WAKEFLOW_CONFIG_SCHEMA, } from "../contracts/generated/configuration/wakeflow-config.generated.js";
 import { parseWakeflowDurableId, parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { JsonValueError, parseJsonValue, } from "../foundation/data/json-value.js";
+import { JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 /**
  * Wakeflow Configuration：公开配置的 Schema 准入与跨字段领域模型。
@@ -21,10 +21,7 @@ import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-j
 export { WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_ID, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../contracts/vocabulary/wakeflow-config-identity.js";
 export const WAKEFLOW_ACTIVE_ROOT = ".wakeflow-active";
 export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local";
-export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze([
-    "en",
-    "zh-Hans",
-]);
+export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze(["en", "zh-Hans"]);
 /**
  * Fresh Config producer 在用户未选择语言时写入的显式值。
  * Parser 不会为缺失字段注入默认值，持久文档始终保存唯一语言权威。
@@ -32,12 +29,12 @@ export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze([
 export const WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE = "en";
 const ERROR_MESSAGES = {
     "json-value": "Wakeflow config input is not passive JSON data.",
-    "schema": "Wakeflow config does not satisfy the public Schema.",
-    "identifier": "Wakeflow config contains an invalid typed identifier.",
+    schema: "Wakeflow config does not satisfy the public Schema.",
+    identifier: "Wakeflow config contains an invalid typed identifier.",
     "identifier-collision": "Wakeflow config durable identifiers collide.",
-    "reference": "Wakeflow config contains an unresolved typed reference.",
-    "topology": "Wakeflow config topology relationships are inconsistent.",
-    "placement": "Wakeflow config contains a non-canonical placement.",
+    reference: "Wakeflow config contains an unresolved typed reference.",
+    topology: "Wakeflow config topology relationships are inconsistent.",
+    placement: "Wakeflow config contains a non-canonical placement.",
 };
 /** 配置内存模型失败的稳定、脱敏错误。 */
 export class WakeflowConfigError extends Error {
@@ -51,6 +48,7 @@ export class WakeflowConfigError extends Error {
         this.path = path;
     }
 }
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in config text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/u;
 function fail(reason, path) {
@@ -60,11 +58,11 @@ const validateWireConfig = createRuntimeJsonSchemaValidator(WAKEFLOW_CONFIG_SCHE
 /** 兄弟根放置至多一个前导 `..`：hook 观察脚本按"祖先或祖先的直接子目录"找回工作区（§13.97 D2e）。 */
 const SIBLING_PLACEMENT_MAXIMUM_PARENT_SEGMENTS = 1;
 function parsePlacement(value, path, maximumParentSegments = Number.POSITIVE_INFINITY) {
-    if (!value.isWellFormed()
-        || value.normalize("NFC") !== value
-        || CONTROL_PATTERN.test(value)
-        || value.includes("\\")
-        || WINDOWS_DRIVE_PATTERN.test(value)) {
+    if (!value.isWellFormed() ||
+        value.normalize("NFC") !== value ||
+        CONTROL_PATTERN.test(value) ||
+        value.includes("\\") ||
+        WINDOWS_DRIVE_PATTERN.test(value)) {
         fail("placement", path);
     }
     const segments = value.split("/");
@@ -73,11 +71,10 @@ function parsePlacement(value, path, maximumParentSegments = Number.POSITIVE_INF
         parentSegments += 1;
     if (parentSegments > maximumParentSegments)
         fail("placement", path);
-    if (parentSegments === segments.length
-        || segments.slice(parentSegments).some((segment) => segment.length === 0
-            || segment === "."
-            || segment === ".."
-            || segment.trim() !== segment)) {
+    if (parentSegments === segments.length ||
+        segments
+            .slice(parentSegments)
+            .some((segment) => segment.length === 0 || segment === "." || segment === ".." || segment.trim() !== segment)) {
         fail("placement", path);
     }
     return value;
@@ -290,14 +287,8 @@ function frozenRecord(entries) {
 }
 /** 为已验证模型建立冻结的常用实体索引；索引不会反向成为配置权威事实。 */
 export function buildWakeflowConfigIndexes(model) {
-    const repositoryById = frozenRecord(model.topology.repositories.map((repository) => [
-        repository.repositoryId,
-        repository,
-    ]));
-    const surfaceById = frozenRecord(model.topology.supportSurfaces.map((surface) => [
-        surface.surfaceId,
-        surface,
-    ]));
+    const repositoryById = frozenRecord(model.topology.repositories.map((repository) => [repository.repositoryId, repository]));
+    const surfaceById = frozenRecord(model.topology.supportSurfaces.map((surface) => [surface.surfaceId, surface]));
     const windowEntries = [];
     const podIdEntries = [];
     for (const window of model.topology.windows) {
@@ -349,9 +340,7 @@ function buildPodScope(model, pod) {
             members.push(window);
         }
     }
-    if (controllerWindow === undefined
-        || designWindow === undefined
-        || testWindow === undefined) {
+    if (controllerWindow === undefined || designWindow === undefined || testWindow === undefined) {
         fail("topology", "$/pods");
     }
     return Object.freeze({

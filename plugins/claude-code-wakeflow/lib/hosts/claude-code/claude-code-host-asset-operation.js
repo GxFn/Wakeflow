@@ -1,6 +1,6 @@
 import { types } from "node:util";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
@@ -40,10 +40,10 @@ function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
 function assertRoot(root) {
-    if (typeof root !== "object"
-        || root === null
-        || types.isProxy(root)
-        || !(root instanceof RootedDirectory)) {
+    if (typeof root !== "object" ||
+        root === null ||
+        types.isProxy(root) ||
+        !(root instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -76,9 +76,9 @@ async function currentAsset(root, asset, signal) {
 export async function planClaudeCodeHostAssetOperation(root, asset, options = {}) {
     assertRoot(root);
     const current = await currentAsset(root, asset, options.signal);
-    if (current !== null
-        && current.digest === asset.digest
-        && current.node.permissionBits === ASSET_MODE) {
+    if (current !== null &&
+        current.digest === asset.digest &&
+        current.node.permissionBits === ASSET_MODE) {
         return null;
     }
     return Object.freeze({
@@ -113,9 +113,9 @@ function parsePayload(value, asset) {
             fail("operation", "$operation.digest");
         throw error;
     }
-    if (Object.keys(record).sort().join(" ") !== "digest fileName"
-        || record.fileName !== asset.fileName
-        || digest !== asset.digest) {
+    if (Object.keys(record).sort().join(" ") !== "digest fileName" ||
+        record.fileName !== asset.fileName ||
+        digest !== asset.digest) {
         fail("operation", "$operation");
     }
     return Object.freeze({ fileName: asset.fileName, digest });
@@ -141,9 +141,9 @@ export async function executeClaudeCodeHostAssetOperation(root, asset, request) 
     assertRoot(root);
     const payload = parsePayload(request.operation, asset);
     const current = await currentAsset(root, asset, request.signal);
-    if (current !== null
-        && current.digest === payload.digest
-        && current.node.permissionBits === ASSET_MODE) {
+    if (current !== null &&
+        current.digest === payload.digest &&
+        current.node.permissionBits === ASSET_MODE) {
         return Object.freeze({
             operationId: asset.operationId,
             disposition: "current",

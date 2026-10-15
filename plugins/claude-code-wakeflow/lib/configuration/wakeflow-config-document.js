@@ -1,5 +1,5 @@
 import { renderDeterministicJsonDocument } from "../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, } from "../foundation/data/json-value.js";
+import { parseJsonValue } from "../foundation/data/json-value.js";
 import { parseWakeflowConfig, } from "./wakeflow-config.js";
 /**
  * Wakeflow Configuration：公开配置的唯一确定性格式化 JSON 表示。
@@ -98,9 +98,7 @@ function roleMapRepresentation(value) {
 }
 function launchRepresentation(value) {
     return {
-        ...optionalField("modelByRole", value.modelByRole === undefined
-            ? undefined
-            : roleMapRepresentation(value.modelByRole)),
+        ...optionalField("modelByRole", value.modelByRole === undefined ? undefined : roleMapRepresentation(value.modelByRole)),
         ...optionalField("reasoningEffortByRole", value.reasoningEffortByRole === undefined
             ? undefined
             : roleMapRepresentation(value.reasoningEffortByRole)),

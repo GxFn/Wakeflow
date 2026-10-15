@@ -1,15 +1,15 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
-import { readDeterministicJsonFile, } from "../foundation/filesystem/deterministic-json-file.js";
-import { DeterministicJsonDocumentError, } from "../foundation/data/deterministic-json-document.js";
+import { DeterministicJsonDocumentError } from "../foundation/data/deterministic-json-document.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
-import { parseByteCount, } from "../foundation/numeric/byte-count.js";
-import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
+import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { buildWakeflowConfigIndexes, computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
+import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 /**
  * Wakeflow Configuration：单次操作范围内的 配置权威快照。
  *
@@ -25,17 +25,17 @@ export const WAKEFLOW_CONFIG_FILE_REF = parsePortableResourcePath("wakeflow.conf
 export const WAKEFLOW_CONFIG_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 export const WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE = 0o644;
 const ERROR_MESSAGES = {
-    "input": "Wakeflow config authority snapshot input is invalid.",
+    input: "Wakeflow config authority snapshot input is invalid.",
     "root-scope": "Wakeflow config workspace root could not be held stable.",
-    "source": "Wakeflow canonical config source is unavailable or unsafe.",
+    source: "Wakeflow canonical config source is unavailable or unsafe.",
     "source-policy": "Wakeflow canonical config source violates its node policy.",
     "source-changed": "Wakeflow canonical config changed during snapshot loading.",
-    "encoding": "Wakeflow canonical config is not strict UTF-8 text.",
-    "json": "Wakeflow canonical config is not valid JSON.",
-    "representation": "Wakeflow canonical config does not use its deterministic domain representation.",
-    "config": "Wakeflow canonical config is not the strict public authority.",
-    "placement": "Wakeflow canonical config declares unsafe root placements.",
-    "aborted": "Wakeflow config authority snapshot loading was aborted.",
+    encoding: "Wakeflow canonical config is not strict UTF-8 text.",
+    json: "Wakeflow canonical config is not valid JSON.",
+    representation: "Wakeflow canonical config does not use its deterministic domain representation.",
+    config: "Wakeflow canonical config is not the strict public authority.",
+    placement: "Wakeflow canonical config declares unsafe root placements.",
+    aborted: "Wakeflow config authority snapshot loading was aborted.",
     "load-failure": "Wakeflow config authority snapshot failed closed.",
 };
 /** 配置权威快照失败时返回的稳定、脱敏错误。 */
@@ -54,18 +54,18 @@ function fail(reason, path) {
     throw new WakeflowConfigAuthoritySnapshotError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -139,9 +139,9 @@ function assertSourcePolicy(node) {
             fail("source-policy", "$source");
         }
     }
-    if (node.linkCount !== 1n
-        || node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || (currentUserId !== null && node.userId !== currentUserId)) {
+    if (node.linkCount !== 1n ||
+        node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        (currentUserId !== null && node.userId !== currentUserId)) {
         fail("source-policy", "$source");
     }
 }

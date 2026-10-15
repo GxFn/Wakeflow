@@ -1,5 +1,5 @@
 import { WAKEFLOW_WINDOW_ROLES } from "../../contracts/vocabulary/wakeflow-role-tool-access.js";
-import { parseWakeflowNodeEngineBounds, WAKEFLOW_NODE_ENGINES } from "../../contracts/vocabulary/wakeflow-runtime-engines.js";
+import { parseWakeflowNodeEngineBounds, WAKEFLOW_NODE_ENGINES, } from "../../contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -1818,5 +1818,7 @@ function main() {
 main();
 `;
 /** 资产的精确字节：维护事务写入的就是这一份，verify 按它核对。 */
-export const CLAUDE_CODE_TMUX_ASSET_CONTENT = SCRIPT.endsWith("\n") ? SCRIPT : `${SCRIPT}\n`;
+export const CLAUDE_CODE_TMUX_ASSET_CONTENT = SCRIPT.endsWith("\n")
+    ? SCRIPT
+    : `${SCRIPT}\n`;
 export const CLAUDE_CODE_TMUX_ASSET_DIGEST = computeSha256Digest(encodeUtf8(CLAUDE_CODE_TMUX_ASSET_CONTENT, "$asset"), "$asset");

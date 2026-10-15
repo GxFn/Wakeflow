@@ -1,15 +1,15 @@
-import { types } from "node:util";
 import nodePath from "node:path";
+import { types } from "node:util";
 import { AbsoluteDirectoryPlacementError, inspectAbsoluteDirectoryPlacement, } from "../foundation/filesystem/absolute-directory-placement.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT, } from "./wakeflow-config.js";
 const ERROR_MESSAGES = {
-    "input": "Wakeflow config placement input is invalid.",
+    input: "Wakeflow config placement input is invalid.",
     "root-scope": "Wakeflow workspace root changed during placement admission.",
     "lexical-overlap": "Wakeflow configured roots overlap lexically.",
-    "symlink": "Wakeflow configured root contains a symbolic link.",
+    symlink: "Wakeflow configured root contains a symbolic link.",
     "not-directory": "Wakeflow configured root contains a non-directory node.",
-    "alias": "Wakeflow configured root does not use its canonical physical spelling.",
+    alias: "Wakeflow configured root does not use its canonical physical spelling.",
     "physical-overlap": "Wakeflow configured roots overlap physically.",
     "inspection-failure": "Wakeflow configured roots could not be inspected safely.",
 };
@@ -29,10 +29,10 @@ function fail(reason, path) {
     throw new WakeflowConfigRootPlacementError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -130,8 +130,7 @@ export async function validateWakeflowConfigRootPlacements(root, model) {
     const observed = [];
     for (const [index, entry] of planned.entries()) {
         const observation = await observeRoot(entry, index);
-        if (observation.state === "present"
-            && observation.spellingIsCanonical !== true) {
+        if (observation.state === "present" && observation.spellingIsCanonical !== true) {
             fail("alias", `$placements/${index}`);
         }
         if (observation.state === "missing") {
@@ -167,7 +166,6 @@ export async function validateWakeflowConfigRootPlacements(root, model) {
     return Object.freeze({
         workspaceRoot: root.absolutePath,
         roots,
-        missingRootKeys: Object.freeze(roots.filter((entry) => entry.state === "missing")
-            .map((entry) => entry.key)),
+        missingRootKeys: Object.freeze(roots.filter((entry) => entry.state === "missing").map((entry) => entry.key)),
     });
 }

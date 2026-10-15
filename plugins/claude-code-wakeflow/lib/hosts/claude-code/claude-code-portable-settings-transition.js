@@ -1,5 +1,5 @@
 import { applyEdits, findNodeAtLocation, getNodeValue, modify, parseTree, } from "jsonc-parser";
-import { computeSha256Digest, } from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES as WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST } from "../../workspace/wakeflow-legacy-residue-scan.js";
@@ -17,9 +17,7 @@ import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-as
 export const WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE = WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE;
 /** 旧插件的三条宽泛规则；唯一来源在 workspace 的遗留残留扫描（F4，§13.168），这里只转发。 */
 export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST;
-const DEFAULT_RULES = Object.freeze([
-    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-]);
+const DEFAULT_RULES = Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE]);
 /**
  * 每种根拥有的 allow 规则（§13.117 D5；ADR-0020 决定 3，§13.168）：工作区根是整服务器 MCP 规则加一条
  * tmux 助手调用；支撑面按角色只放行该角色使用的工具，不再放行整个服务器。
@@ -77,9 +75,9 @@ function duplicateKeyExists(node) {
         for (const property of node.children ?? []) {
             const keyNode = property.children?.[0];
             const valueNode = property.children?.[1];
-            if (keyNode?.type !== "string"
-                || typeof keyNode.value !== "string"
-                || valueNode === undefined)
+            if (keyNode?.type !== "string" ||
+                typeof keyNode.value !== "string" ||
+                valueNode === undefined)
                 return true;
             if (seen.has(keyNode.value))
                 return true;
@@ -154,11 +152,11 @@ function desiredCreateText(rules) {
 function parseRules(value) {
     if (value === undefined)
         return DEFAULT_RULES;
-    if (!Array.isArray(value)
-        || value.length === 0
-        || value.some((entry) => typeof entry !== "string" || entry.length === 0)
-        || new Set(value).size !== value.length
-        || value.some((entry) => (WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(entry)))) {
+    if (!Array.isArray(value) ||
+        value.length === 0 ||
+        value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
+        new Set(value).size !== value.length ||
+        value.some((entry) => WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(entry))) {
         failInput("$rules");
     }
     return Object.freeze([...value]);
@@ -167,9 +165,9 @@ function parseRules(value) {
 function parseRetiredRules(value) {
     if (value === undefined)
         return Object.freeze([]);
-    if (!Array.isArray(value)
-        || value.some((entry) => typeof entry !== "string" || entry.length === 0)
-        || new Set(value).size !== value.length) {
+    if (!Array.isArray(value) ||
+        value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
+        new Set(value).size !== value.length) {
         failInput("$retiredRules");
     }
     return Object.freeze([...value]);
@@ -219,18 +217,18 @@ export function planClaudeCodePortableSettingsTransition(sourceTextValue, rulesV
     const allowNode = findNodeAtLocation(root, ["permissions", "allow"]);
     let existingAllow = Object.freeze([]);
     if (allowNode !== undefined) {
-        if (allowNode.type !== "array"
-            || (allowNode.children ?? []).some((entry) => (entry.type !== "string" || typeof entry.value !== "string"))) {
+        if (allowNode.type !== "array" ||
+            (allowNode.children ?? []).some((entry) => entry.type !== "string" || typeof entry.value !== "string")) {
             return blocked("allow-not-string-array", sourceDigest);
         }
         existingAllow = Object.freeze((allowNode.children ?? []).map((entry) => entry.value));
     }
-    if (existingAllow.some((entry) => (WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(entry)))) {
+    if (existingAllow.some((entry) => WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(entry))) {
         return blocked("legacy-broad-permission-present", sourceDigest);
     }
     const desiredAllow = managedAllowEntries(existingAllow, rules, retiredRules);
-    if (existingAllow.length === desiredAllow.length
-        && existingAllow.every((entry, index) => entry === desiredAllow[index])) {
+    if (existingAllow.length === desiredAllow.length &&
+        existingAllow.every((entry, index) => entry === desiredAllow[index])) {
         return Object.freeze({
             kind: "ClaudeCodePortableSettingsTransition",
             status: "current",
@@ -242,16 +240,16 @@ export function planClaudeCodePortableSettingsTransition(sourceTextValue, rulesV
     }
     let desiredText;
     try {
-        desiredText = applyEdits(sourceText, modify(sourceText, ["permissions", "allow"], desiredAllow, { formattingOptions: sourceFormatting(sourceText) }));
+        desiredText = applyEdits(sourceText, modify(sourceText, ["permissions", "allow"], desiredAllow, {
+            formattingOptions: sourceFormatting(sourceText),
+        }));
     }
     catch {
         return blocked("syntax", sourceDigest);
     }
     const desiredErrors = [];
     const desiredRoot = parseTree(desiredText, desiredErrors, STRICT_PARSE_OPTIONS);
-    if (desiredRoot === undefined
-        || desiredErrors.length > 0
-        || duplicateKeyExists(desiredRoot)) {
+    if (desiredRoot === undefined || desiredErrors.length > 0 || duplicateKeyExists(desiredRoot)) {
         return blocked("syntax", sourceDigest);
     }
     return Object.freeze({

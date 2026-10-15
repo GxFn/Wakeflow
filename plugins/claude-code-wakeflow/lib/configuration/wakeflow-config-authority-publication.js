@@ -1,23 +1,23 @@
 import { types } from "node:util";
-import { parsePlainRecord, PassiveOwnDataError, } from "../foundation/data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
-import { sameFileNodeSnapshot, } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
+import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
+import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
-import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
-import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
+import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
+import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
 const ERROR_MESSAGES = {
-    "input": "Wakeflow config authority publication input is invalid.",
+    input: "Wakeflow config authority publication input is invalid.",
     "unsupported-platform": "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
     "root-scope": "Wakeflow config authority publication lost its workspace root scope.",
     "root-policy": "Wakeflow config authority publication requires a current-user workspace root.",
-    "config": "Wakeflow config authority publication requires one strict model.",
-    "capacity": "Wakeflow config authority publication exceeds its recoverable byte limit.",
-    "placement": "Wakeflow config authority publication declares an unsafe root placement.",
+    config: "Wakeflow config authority publication requires one strict model.",
+    capacity: "Wakeflow config authority publication exceeds its recoverable byte limit.",
+    placement: "Wakeflow config authority publication declares an unsafe root placement.",
     "target-exists": "Wakeflow config authority already exists.",
-    "aborted": "Wakeflow config authority publication was aborted before commit.",
+    aborted: "Wakeflow config authority publication was aborted before commit.",
     "publication-failure": "Wakeflow config authority could not be published safely.",
     "commit-uncertain": "Published Wakeflow config authority could not be proven exact.",
 };
@@ -37,18 +37,18 @@ function fail(reason, path) {
     throw new WakeflowConfigAuthorityPublicationError(reason, path);
 }
 function assertRoot(value) {
-    if (typeof value !== "object"
-        || value === null
-        || types.isProxy(value)
-        || !(value instanceof RootedDirectory)) {
+    if (typeof value !== "object" ||
+        value === null ||
+        types.isProxy(value) ||
+        !(value instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
 function isAbortSignal(value) {
-    return typeof value === "object"
-        && value !== null
-        && !types.isProxy(value)
-        && value instanceof AbortSignal;
+    return (typeof value === "object" &&
+        value !== null &&
+        !types.isProxy(value) &&
+        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;
@@ -60,8 +60,8 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal")
-        || (record.signal !== undefined && !isAbortSignal(record.signal))) {
+    if (Object.keys(record).some((key) => key !== "signal") ||
+        (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$options");
     }
     return Object.freeze({
@@ -146,14 +146,13 @@ function mapAtomicWriteError(error) {
         fail("aborted", "$signal");
     if (error.reason === "capacity")
         fail("capacity", "$config");
-    if (error.reason === "root-scope"
-        || error.reason === "parent-changed") {
+    if (error.reason === "root-scope" || error.reason === "parent-changed") {
         fail("root-scope", "$root");
     }
-    if (error.reason === "commit-uncertain"
-        || error.reason === "durability-failure"
-        || error.reason === "stage-cleanup-failure"
-        || error.reason === "close-failure") {
+    if (error.reason === "commit-uncertain" ||
+        error.reason === "durability-failure" ||
+        error.reason === "stage-cleanup-failure" ||
+        error.reason === "close-failure") {
         fail("commit-uncertain", "$resourcePath");
     }
     fail("publication-failure", "$resourcePath");
@@ -181,16 +180,16 @@ async function readBackCommittedAuthority(root) {
     }
 }
 function assertReadback(publication, authority, expectedConfigDigest, expectedUserId) {
-    if (publication.resourcePath !== WAKEFLOW_CONFIG_FILE_REF
-        || publication.node.kind !== "file"
-        || publication.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
-        || publication.node.linkCount !== 1n
-        || publication.node.userId !== expectedUserId
-        || authority.source.resourcePath !== publication.resourcePath
-        || authority.source.byteCount !== publication.byteCount
-        || authority.source.digest !== publication.digest
-        || !sameFileNodeSnapshot(authority.source.node, publication.node)
-        || authority.configDigest !== expectedConfigDigest) {
+    if (publication.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
+        publication.node.kind !== "file" ||
+        publication.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
+        publication.node.linkCount !== 1n ||
+        publication.node.userId !== expectedUserId ||
+        authority.source.resourcePath !== publication.resourcePath ||
+        authority.source.byteCount !== publication.byteCount ||
+        authority.source.digest !== publication.digest ||
+        !sameFileNodeSnapshot(authority.source.node, publication.node) ||
+        authority.configDigest !== expectedConfigDigest) {
         fail("commit-uncertain", "$resourcePath");
     }
 }

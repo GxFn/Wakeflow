@@ -1,6 +1,6 @@
-import { previewWakeflowMaintenanceExecution, } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import { previewWakeflowMaintenanceExecution } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import { executeWakeflowMaintenanceExecutionTransaction, recoverWakeflowMaintenanceExecutionTransaction, } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
-import { claudeCodeMaintenanceCapability, } from "./claude-code-maintenance-capability.js";
+import { claudeCodeMaintenanceCapability } from "./claude-code-maintenance-capability.js";
 /**
  * Wakeflow Host / Claude Code：Claude 维护执行的固定 composition root。
  *

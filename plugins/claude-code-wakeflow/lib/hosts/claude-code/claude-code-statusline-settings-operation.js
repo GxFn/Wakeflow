@@ -1,8 +1,8 @@
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
-import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
-import { PassiveOwnDataError, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
+import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
@@ -28,8 +28,8 @@ export const CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID = "claude-code-statusline-
 /** 排在资产安装之后：先装资产，再让 settings 指向它。 */
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID = "claude-statusline-settings:install";
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_KEY = "statusLine";
-export const CLAUDE_CODE_LOCAL_SETTINGS_REF = parsePortableResourcePath(claudeCodeWorkspaceHostResourceProfile.surfaces.settingsIntegration?.localPath
-    ?? ".claude/settings.local.json", "$settings");
+export const CLAUDE_CODE_LOCAL_SETTINGS_REF = parsePortableResourcePath(claudeCodeWorkspaceHostResourceProfile.surfaces.settingsIntegration?.localPath ??
+    ".claude/settings.local.json", "$settings");
 /** 计划失败时宿主贡献报出的 blocker。 */
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER = "claude-settings-local-unreadable";
 const TARGET_KEY = "settings:claude-code:local-statusline";
@@ -63,10 +63,10 @@ function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
 function assertRoot(root) {
-    if (typeof root !== "object"
-        || root === null
-        || types.isProxy(root)
-        || !(root instanceof RootedDirectory)) {
+    if (typeof root !== "object" ||
+        root === null ||
+        types.isProxy(root) ||
+        !(root instanceof RootedDirectory)) {
         fail("input", "$root");
     }
 }
@@ -147,9 +147,9 @@ function entryCurrent(current, entry) {
     if (current === null)
         return false;
     const existing = current.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
-    return (existing !== undefined
-        && computeCanonicalJsonSha256Digest(existing) === computeCanonicalJsonSha256Digest(entry)
-        && current.source.node.permissionBits === SETTINGS_MODE);
+    return (existing !== undefined &&
+        computeCanonicalJsonSha256Digest(existing) === computeCanonicalJsonSha256Digest(entry) &&
+        current.source.node.permissionBits === SETTINGS_MODE);
 }
 /** 零写计划：键已是期望值且 0600 即 null，否则一条操作；文件读不出即抛 `settings-unreadable`。 */
 export async function planClaudeCodeStatuslineSettingsOperation(root, options = {}) {
@@ -182,9 +182,9 @@ function parsePayload(value) {
             fail("operation", error.path);
         throw error;
     }
-    if (Object.keys(record).sort().join(" ") !== "key path"
-        || record.path !== CLAUDE_CODE_LOCAL_SETTINGS_REF
-        || record.key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY) {
+    if (Object.keys(record).sort().join(" ") !== "key path" ||
+        record.path !== CLAUDE_CODE_LOCAL_SETTINGS_REF ||
+        record.key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY) {
         fail("operation", "$operation");
     }
     return Object.freeze({
@@ -261,17 +261,17 @@ export async function executeClaudeCodeStatuslineSettingsOperation(root, request
     parsePayload(request.operation);
     const digests = parseDigests(request);
     const current = await currentSettings(root, request.signal);
-    if (current !== null
-        && current.source.digest === digests.targetDigest
-        && current.source.node.permissionBits === SETTINGS_MODE) {
+    if (current !== null &&
+        current.source.digest === digests.targetDigest &&
+        current.source.node.permissionBits === SETTINGS_MODE) {
         return Object.freeze({
             operationId: CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
             disposition: "current",
             targetDigest: digests.targetDigest,
         });
     }
-    if (!request.recoveringAffectedOperation
-        && (current?.source.digest ?? null) !== digests.sourceDigest) {
+    if (!request.recoveringAffectedOperation &&
+        (current?.source.digest ?? null) !== digests.sourceDigest) {
         fail("source-stale", "$settings");
     }
     const bytes = renderTarget(current?.document ?? {}, claudeCodeStatuslineSettingsEntry(root.absolutePath));

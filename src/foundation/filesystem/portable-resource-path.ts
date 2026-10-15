@@ -14,10 +14,7 @@ import {
  * 字符串而被本解析器接受或规范化。
  */
 
-const PORTABLE_RESOURCE_PATH_PATTERN = new RegExp(
-  PORTABLE_RESOURCE_PATH_PATTERN_SOURCE,
-  "u",
-);
+const PORTABLE_RESOURCE_PATH_PATTERN = new RegExp(PORTABLE_RESOURCE_PATH_PATTERN_SOURCE, "u");
 
 declare const PORTABLE_RESOURCE_PATH_BRAND: unique symbol;
 
@@ -36,7 +33,7 @@ export type PortableResourcePathErrorReason =
   | "unicode-normalization";
 
 const ERROR_MESSAGES = {
-  "format": "Portable resource path must use one canonical root-relative slash-separated form.",
+  format: "Portable resource path must use one canonical root-relative slash-separated form.",
   "unicode-well-formed": "Portable resource path must contain well-formed Unicode text.",
   "unicode-normalization": "Portable resource path must already use Unicode NFC.",
 } as const satisfies Readonly<Record<PortableResourcePathErrorReason, string>>;
@@ -63,17 +60,11 @@ function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(
-  reason: PortableResourcePathErrorReason,
-  path: string,
-): never {
+function fail(reason: PortableResourcePathErrorReason, path: string): never {
   throw new PortableResourcePathError(reason, path);
 }
 
-function parsePath(
-  value: unknown,
-  path: string,
-): PortableResourcePath {
+function parsePath(value: unknown, path: string): PortableResourcePath {
   if (typeof value !== "string") fail("format", path);
   if (!value.isWellFormed()) fail("unicode-well-formed", path);
   if (value.normalize("NFC") !== value) {

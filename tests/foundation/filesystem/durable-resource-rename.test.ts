@@ -14,13 +14,13 @@ import { test } from "node:test";
 
 import {
   DurableResourceRenameError,
-  renameResourceDurably,
   type DurableResourceRenameErrorReason,
   type DurableResourceRenameOptions,
+  renameResourceDurably,
 } from "../../../src/foundation/filesystem/durable-resource-rename.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
@@ -62,12 +62,9 @@ test("same-parent file rename preserves exact inode, bytes, and mode", async () 
     const source = parsePortableResourcePath("source");
     const destination = parsePortableResourcePath("destination");
     const expected = await root.inspectExistingResource(source);
-    const result = await renameResourceDurably(
-      root,
-      source,
-      destination,
-      { expectedSourceNode: expected.node },
-    );
+    const result = await renameResourceDurably(root, source, destination, {
+      expectedSourceNode: expected.node,
+    });
 
     equal(result.kind, "file");
     equal(result.sourceResourcePath, source);
@@ -94,23 +91,14 @@ test("cross-parent directory rename preserves its complete subtree", async () =>
     const source = parsePortableResourcePath("from/tree");
     const destination = parsePortableResourcePath("to/tree");
     const expected = await root.inspectExistingResource(source);
-    const result = await renameResourceDurably(
-      root,
-      source,
-      destination,
-      { expectedSourceNode: expected.node },
-    );
+    const result = await renameResourceDurably(root, source, destination, {
+      expectedSourceNode: expected.node,
+    });
 
     equal(result.kind, "directory");
     equal(result.node.inodeId, expected.node.inodeId);
-    equal(
-      readFileSync(path.join(rootPath, "to", "tree", "nested", "file"), "utf8"),
-      "value",
-    );
-    equal(
-      statSync(path.join(rootPath, "from", "tree"), { throwIfNoEntry: false }),
-      undefined,
-    );
+    equal(readFileSync(path.join(rootPath, "to", "tree", "nested", "file"), "utf8"), "value");
+    equal(statSync(path.join(rootPath, "from", "tree"), { throwIfNoEntry: false }), undefined);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -126,20 +114,15 @@ test("existing destination is never intentionally overwritten", async () => {
     const source = parsePortableResourcePath("source");
     const expected = await root.inspectExistingResource(source);
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        renameResourceDurably(root, source, parsePortableResourcePath("destination"), {
+          expectedSourceNode: expected.node,
+        }),
       "destination-exists",
       "$destinationResourcePath",
     );
     equal(readFileSync(path.join(rootPath, "source"), "utf8"), "source");
-    equal(
-      readFileSync(path.join(rootPath, "destination"), "utf8"),
-      "destination",
-    );
+    equal(readFileSync(path.join(rootPath, "destination"), "utf8"), "destination");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -156,20 +139,15 @@ test("stale source expectation prevents rename", async () => {
     const expected = await root.inspectExistingResource(source);
     writeFileSync(sourcePath, "after-change");
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        renameResourceDurably(root, source, parsePortableResourcePath("destination"), {
+          expectedSourceNode: expected.node,
+        }),
       "source-changed",
       "$sourceResourcePath",
     );
     equal(readFileSync(sourcePath, "utf8"), "after-change");
-    equal(
-      statSync(path.join(rootPath, "destination"), { throwIfNoEntry: false }),
-      undefined,
-    );
+    equal(statSync(path.join(rootPath, "destination"), { throwIfNoEntry: false }), undefined);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -183,54 +161,52 @@ test("missing, symlink, and descendant source shapes fail closed", async () => {
   symlinkSync("target", path.join(rootPath, "link"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const fileNode = (await root.inspectExistingResource(
-      parsePortableResourcePath("target"),
-    )).node;
+    const fileNode = (await root.inspectExistingResource(parsePortableResourcePath("target"))).node;
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        parsePortableResourcePath("missing"),
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: fileNode },
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          parsePortableResourcePath("missing"),
+          parsePortableResourcePath("destination"),
+          { expectedSourceNode: fileNode },
+        ),
       "source-not-found",
       "$sourceResourcePath",
     );
 
-    const link = await root.inspectExistingResource(
-      parsePortableResourcePath("link"),
-    );
+    const link = await root.inspectExistingResource(parsePortableResourcePath("link"));
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        parsePortableResourcePath("link"),
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: link.node },
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          parsePortableResourcePath("link"),
+          parsePortableResourcePath("destination"),
+          { expectedSourceNode: link.node },
+        ),
       "source-symlink",
       "$sourceResourcePath",
     );
 
-    const directory = await root.inspectExistingResource(
-      parsePortableResourcePath("directory"),
-    );
+    const directory = await root.inspectExistingResource(parsePortableResourcePath("directory"));
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        parsePortableResourcePath("directory"),
-        parsePortableResourcePath("directory/inside"),
-        { expectedSourceNode: directory.node },
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          parsePortableResourcePath("directory"),
+          parsePortableResourcePath("directory/inside"),
+          { expectedSourceNode: directory.node },
+        ),
       "input",
       "$destinationResourcePath",
     );
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        parsePortableResourcePath("directory"),
-        asPortableResourcePath(null),
-        { expectedSourceNode: directory.node },
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          parsePortableResourcePath("directory"),
+          asPortableResourcePath(null),
+          { expectedSourceNode: directory.node },
+        ),
       "input",
       "$destinationResourcePath",
     );
@@ -257,12 +233,10 @@ test("destination requires an existing real parent", async () => {
     ];
     for (const [candidate, reason] of cases) {
       await expectRenameError(
-        () => renameResourceDurably(
-          root,
-          source,
-          parsePortableResourcePath(candidate),
-          { expectedSourceNode: expected.node },
-        ),
+        () =>
+          renameResourceDurably(root, source, parsePortableResourcePath(candidate), {
+            expectedSourceNode: expected.node,
+          }),
         reason,
         "$destinationResourcePath",
       );
@@ -290,12 +264,13 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
     ];
     for (const [options, expectedPath] of invalid) {
       await expectRenameError(
-        () => renameResourceDurably(
-          root,
-          source,
-          parsePortableResourcePath("destination"),
-          asOptions(options),
-        ),
+        () =>
+          renameResourceDurably(
+            root,
+            source,
+            parsePortableResourcePath("destination"),
+            asOptions(options),
+          ),
         "input",
         expectedPath,
       );
@@ -311,24 +286,26 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
       enumerable: true,
     });
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        asOptions(accessor),
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          source,
+          parsePortableResourcePath("destination"),
+          asOptions(accessor),
+        ),
       "input",
       "$options",
     );
     equal(getterCalls, 0);
 
     await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        asPortableResourcePath("../escape"),
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        renameResourceDurably(
+          root,
+          asPortableResourcePath("../escape"),
+          parsePortableResourcePath("destination"),
+          { expectedSourceNode: expected.node },
+        ),
       "input",
       "$sourceResourcePath",
     );
@@ -336,15 +313,11 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
     const controller = new AbortController();
     controller.abort("private-rename-reason");
     const error = await expectRenameError(
-      () => renameResourceDurably(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        {
+      () =>
+        renameResourceDurably(root, source, parsePortableResourcePath("destination"), {
           expectedSourceNode: expected.node,
           signal: controller.signal,
-        },
-      ),
+        }),
       "aborted",
       "$signal",
     );

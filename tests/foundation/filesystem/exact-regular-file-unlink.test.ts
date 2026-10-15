@@ -15,13 +15,13 @@ import { test } from "node:test";
 
 import {
   ExactRegularFileUnlinkError,
-  unlinkRegularFileExactly,
   type ExactRegularFileUnlinkErrorReason,
   type ExactRegularFileUnlinkOptions,
+  unlinkRegularFileExactly,
 } from "../../../src/foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { countFsyncs } from "./fsync-count-probe.js";
@@ -105,17 +105,21 @@ test("last pathname removal proves the exact 1 to 0 transition", async () => {
   }
 });
 
-test("per-call durability none skips every sync with the same receipt", { concurrency: false }, async () => {
+test("per-call durability none skips every sync with the same receipt", {
+  concurrency: false,
+}, async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-nosync-"));
   writeFileSync(path.join(rootPath, "only"), "no-sync");
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("only");
     const expected = await root.inspectExistingResource(resourcePath);
-    const counted = await countFsyncs(() => unlinkRegularFileExactly(root, resourcePath, {
-      expectedNode: expected.node,
-      durability: "none",
-    }));
+    const counted = await countFsyncs(() =>
+      unlinkRegularFileExactly(root, resourcePath, {
+        expectedNode: expected.node,
+        durability: "none",
+      }),
+    );
     equal(counted.syncCount, 0);
     equal(counted.result.replacementObserved, false);
     equal(counted.result.nodeAfterUnlink.linkCount, 0n);
@@ -155,9 +159,10 @@ test("stale expected node never removes a changed file", async () => {
     const expected = await root.inspectExistingResource(resourcePath);
     writeFileSync(target, "after-change");
     await expectUnlinkError(
-      () => unlinkRegularFileExactly(root, resourcePath, {
-        expectedNode: expected.node,
-      }),
+      () =>
+        unlinkRegularFileExactly(root, resourcePath, {
+          expectedNode: expected.node,
+        }),
       "source-changed",
       "$resourcePath",
     );
@@ -175,15 +180,12 @@ test("missing, directory, and symlink sources are not unlink candidates", async 
   symlinkSync("target", path.join(rootPath, "link"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const fileNode = (await root.inspectExistingResource(
-      parsePortableResourcePath("target"),
-    )).node;
+    const fileNode = (await root.inspectExistingResource(parsePortableResourcePath("target"))).node;
     await expectUnlinkError(
-      () => unlinkRegularFileExactly(
-        root,
-        parsePortableResourcePath("missing"),
-        { expectedNode: fileNode },
-      ),
+      () =>
+        unlinkRegularFileExactly(root, parsePortableResourcePath("missing"), {
+          expectedNode: fileNode,
+        }),
       "source-not-found",
       "$resourcePath",
     );
@@ -192,15 +194,12 @@ test("missing, directory, and symlink sources are not unlink candidates", async 
       ["directory", "source-not-file"],
       ["link", "source-symlink"],
     ] as const) {
-      const inspected = await root.inspectExistingResource(
-        parsePortableResourcePath(name),
-      );
+      const inspected = await root.inspectExistingResource(parsePortableResourcePath(name));
       await expectUnlinkError(
-        () => unlinkRegularFileExactly(
-          root,
-          parsePortableResourcePath(name),
-          { expectedNode: inspected.node },
-        ),
+        () =>
+          unlinkRegularFileExactly(root, parsePortableResourcePath(name), {
+            expectedNode: inspected.node,
+          }),
         reason,
         "$resourcePath",
       );
@@ -219,9 +218,7 @@ test("source requires an existing real parent chain", async () => {
   symlinkSync(outside, path.join(rootPath, "link-parent"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const expected = await root.inspectExistingResource(
-      parsePortableResourcePath("target"),
-    );
+    const expected = await root.inspectExistingResource(parsePortableResourcePath("target"));
     const cases: readonly [string, ExactRegularFileUnlinkErrorReason][] = [
       ["missing/source", "parent-not-found"],
       ["file-parent/source", "parent-not-directory"],
@@ -229,11 +226,10 @@ test("source requires an existing real parent chain", async () => {
     ];
     for (const [candidate, reason] of cases) {
       await expectUnlinkError(
-        () => unlinkRegularFileExactly(
-          root,
-          parsePortableResourcePath(candidate),
-          { expectedNode: expected.node },
-        ),
+        () =>
+          unlinkRegularFileExactly(root, parsePortableResourcePath(candidate), {
+            expectedNode: expected.node,
+          }),
         reason,
         "$resourcePath",
       );
@@ -263,11 +259,7 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
     ];
     for (const [options, expectedPath] of invalid) {
       await expectUnlinkError(
-        () => unlinkRegularFileExactly(
-          root,
-          resourcePath,
-          asOptions(options),
-        ),
+        () => unlinkRegularFileExactly(root, resourcePath, asOptions(options)),
         "input",
         expectedPath,
       );
@@ -290,11 +282,10 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
     equal(getterCalls, 0);
 
     await expectUnlinkError(
-      () => unlinkRegularFileExactly(
-        root,
-        asPortableResourcePath("../escape"),
-        { expectedNode: expected.node },
-      ),
+      () =>
+        unlinkRegularFileExactly(root, asPortableResourcePath("../escape"), {
+          expectedNode: expected.node,
+        }),
       "input",
       "$resourcePath",
     );
@@ -302,10 +293,11 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
     const controller = new AbortController();
     controller.abort("private-unlink-reason");
     const error = await expectUnlinkError(
-      () => unlinkRegularFileExactly(root, resourcePath, {
-        expectedNode: expected.node,
-        signal: controller.signal,
-      }),
+      () =>
+        unlinkRegularFileExactly(root, resourcePath, {
+          expectedNode: expected.node,
+          signal: controller.signal,
+        }),
       "aborted",
       "$signal",
     );

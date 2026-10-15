@@ -1,28 +1,19 @@
 import { equal } from "node:assert/strict";
-import {
-  linkSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
   DurableRegularFileSettlementError,
-  settleRegularFileDurability,
   type DurableRegularFileSettlementErrorReason,
   type DurableRegularFileSettlementOptions,
+  settleRegularFileDurability,
 } from "../../../src/foundation/filesystem/durable-regular-file-settlement.js";
+import { sameFileNodeSnapshot } from "../../../src/foundation/filesystem/file-node-snapshot.js";
 import {
-  sameFileNodeSnapshot,
-} from "../../../src/foundation/filesystem/file-node-snapshot.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { countFsyncs } from "./fsync-count-probe.js";
@@ -54,11 +45,10 @@ function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
 
-test("exact linked target settlement 同步 file 与 destination parent", { concurrency: false }, async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-file-settlement-",
-  ));
+test("exact linked target settlement 同步 file 与 destination parent", {
+  concurrency: false,
+}, async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-settlement-"));
   mkdirSync(path.join(rootPath, "candidates"), { mode: 0o700 });
   mkdirSync(path.join(rootPath, "commits"), { mode: 0o700 });
   const candidatePath = path.join(rootPath, "candidates", "candidate.json");
@@ -70,9 +60,11 @@ test("exact linked target settlement 同步 file 与 destination parent", { conc
   try {
     const ref = parsePortableResourcePath("commits/commit.json");
     const expected = await root.inspectExistingResource(ref);
-    const linked = await countFsyncs(() => settleRegularFileDurability(root, ref, {
-      expectedNode: expected.node,
-    }));
+    const linked = await countFsyncs(() =>
+      settleRegularFileDurability(root, ref, {
+        expectedNode: expected.node,
+      }),
+    );
     equal(linked.syncCount, 2);
 
     const settled = await root.inspectExistingResource(ref);
@@ -81,9 +73,11 @@ test("exact linked target settlement 同步 file 与 destination parent", { conc
 
     rmSync(candidatePath);
     const singleLink = await root.inspectExistingResource(ref);
-    const single = await countFsyncs(() => settleRegularFileDurability(root, ref, {
-      expectedNode: singleLink.node,
-    }));
+    const single = await countFsyncs(() =>
+      settleRegularFileDurability(root, ref, {
+        expectedNode: singleLink.node,
+      }),
+    );
     equal(single.syncCount, 2);
     const settledSingleLink = await root.inspectExistingResource(ref);
     equal(settledSingleLink.node.linkCount, 1n);
@@ -95,10 +89,7 @@ test("exact linked target settlement 同步 file 与 destination parent", { conc
 });
 
 test("settlement 拒绝 stale、missing、directory 与 symlink target", async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-file-settlement-policy-",
-  ));
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-settlement-policy-"));
   writeFileSync(path.join(rootPath, "file"), "before");
   mkdirSync(path.join(rootPath, "directory"));
   symlinkSync("file", path.join(rootPath, "link"));
@@ -108,18 +99,18 @@ test("settlement 拒绝 stale、missing、directory 与 symlink target", async (
     const file = await root.inspectExistingResource(fileRef);
     writeFileSync(path.join(rootPath, "file"), "after-change");
     await expectSettlementError(
-      () => settleRegularFileDurability(root, fileRef, {
-        expectedNode: file.node,
-      }),
+      () =>
+        settleRegularFileDurability(root, fileRef, {
+          expectedNode: file.node,
+        }),
       "resource-changed",
       "$resourcePath",
     );
     await expectSettlementError(
-      () => settleRegularFileDurability(
-        root,
-        parsePortableResourcePath("missing"),
-        { expectedNode: file.node },
-      ),
+      () =>
+        settleRegularFileDurability(root, parsePortableResourcePath("missing"), {
+          expectedNode: file.node,
+        }),
       "resource-not-found",
       "$resourcePath",
     );
@@ -131,9 +122,10 @@ test("settlement 拒绝 stale、missing、directory 与 symlink target", async (
       const ref = parsePortableResourcePath(name);
       const resource = await root.inspectExistingResource(ref);
       await expectSettlementError(
-        () => settleRegularFileDurability(root, ref, {
-          expectedNode: resource.node,
-        }),
+        () =>
+          settleRegularFileDurability(root, ref, {
+            expectedNode: resource.node,
+          }),
         reason,
         "$resourcePath",
       );
@@ -145,10 +137,7 @@ test("settlement 拒绝 stale、missing、directory 与 symlink target", async (
 });
 
 test("settlement options、path 与 AbortSignal 使用被动关闭准入", async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-file-settlement-input-",
-  ));
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-settlement-input-"));
   writeFileSync(path.join(rootPath, "file"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
@@ -185,11 +174,10 @@ test("settlement options、path 与 AbortSignal 使用被动关闭准入", async
     equal(getterCalls, 0);
 
     await expectSettlementError(
-      () => settleRegularFileDurability(
-        root,
-        asPortableResourcePath("../escape"),
-        { expectedNode: expected.node },
-      ),
+      () =>
+        settleRegularFileDurability(root, asPortableResourcePath("../escape"), {
+          expectedNode: expected.node,
+        }),
       "input",
       "$resourcePath",
     );
@@ -197,10 +185,11 @@ test("settlement options、path 与 AbortSignal 使用被动关闭准入", async
     const controller = new AbortController();
     controller.abort();
     await expectSettlementError(
-      () => settleRegularFileDurability(root, ref, {
-        expectedNode: expected.node,
-        signal: controller.signal,
-      }),
+      () =>
+        settleRegularFileDurability(root, ref, {
+          expectedNode: expected.node,
+          signal: controller.signal,
+        }),
       "aborted",
       "$signal",
     );

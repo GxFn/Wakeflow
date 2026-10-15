@@ -2,11 +2,11 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  PassiveOwnDataError,
+  type PassiveOwnDataErrorReason,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
   pickOwnDataProperties,
-  type PassiveOwnDataErrorReason,
 } from "../../../src/foundation/data/passive-own-data.js";
 
 function expectPassiveOwnDataError(
@@ -37,31 +37,30 @@ function asSelection(value: unknown): readonly string[] {
 
 test("all public operations reject proxies without invoking traps", () => {
   let trapCalls = 0;
-  const objectProxy = new Proxy({ selected: 1 }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const objectProxy = new Proxy(
+    { selected: 1 },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return null;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
     },
-    getOwnPropertyDescriptor: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return null;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
+  );
 
   expectPassiveOwnDataError(() => parsePlainRecord(objectProxy), "proxy", "$");
-  expectPassiveOwnDataError(
-    () => pickOwnDataProperties(objectProxy, ["selected"]),
-    "proxy",
-    "$",
-  );
+  expectPassiveOwnDataError(() => pickOwnDataProperties(objectProxy, ["selected"]), "proxy", "$");
 
   const arrayProxy = new Proxy([1], {
     get: () => {
@@ -227,10 +226,7 @@ test("property projection ignores unrelated extensions and custom prototypes", (
 });
 
 test("property projection preserves own undefined and omits missing keys", () => {
-  const snapshot = pickOwnDataProperties(
-    { present: undefined },
-    ["present", "missing"] as const,
-  );
+  const snapshot = pickOwnDataProperties({ present: undefined }, ["present", "missing"] as const);
 
   equal(Object.hasOwn(snapshot, "present"), true);
   equal(snapshot.present, undefined);
@@ -318,22 +314,14 @@ test("property selection must itself be passive, dense, unique, and non-empty", 
 test("dense arrays reject non-standard structure and invalid bounds", () => {
   const customPrototype = [1];
   Object.setPrototypeOf(customPrototype, null);
-  expectPassiveOwnDataError(
-    () => parseDenseArray(customPrototype, 1),
-    "array-prototype",
-    "$",
-  );
+  expectPassiveOwnDataError(() => parseDenseArray(customPrototype, 1), "array-prototype", "$");
 
   const sparse = new Array<unknown>(1);
   expectPassiveOwnDataError(() => parseDenseArray(sparse, 1), "array-slot", "$/0");
 
   const withExtra = [1];
   Object.defineProperty(withExtra, "extra", { value: true, enumerable: true });
-  expectPassiveOwnDataError(
-    () => parseDenseArray(withExtra, 1),
-    "array-extra-property",
-    "$/extra",
-  );
+  expectPassiveOwnDataError(() => parseDenseArray(withExtra, 1), "array-extra-property", "$/extra");
 
   const withHiddenIndex = [1];
   Object.defineProperty(withHiddenIndex, "0", { value: 1, enumerable: false });

@@ -1,9 +1,6 @@
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
@@ -57,8 +54,7 @@ export interface BoundedDirectoryTreeEntry {
  * `treeRootResourcePath === null` 只表示 `RootedDirectory` 自身，不是持久化路径。
  */
 export interface BoundedDirectoryTreeScanResult<
-  TreeRootResourcePath extends PortableResourcePath | null =
-    PortableResourcePath | null,
+  TreeRootResourcePath extends PortableResourcePath | null = PortableResourcePath | null,
 > {
   readonly treeRootResourcePath: TreeRootResourcePath;
   readonly treeRootNode: Readonly<FileNodeSnapshot>;
@@ -81,21 +77,19 @@ export type BoundedDirectoryTreeScanErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Bounded directory tree scan input is invalid.",
+  input: "Bounded directory tree scan input is invalid.",
   "root-scope": "Directory tree scan could not establish its rooted scope.",
   "not-found": "Directory tree scan target does not exist.",
-  "symlink": "Directory tree scan target cannot be a symbolic link.",
+  symlink: "Directory tree scan target cannot be a symbolic link.",
   "not-directory": "Directory tree scan target must be a directory.",
   "entry-limit": "Directory tree exceeds the caller total-entry limit.",
   "depth-limit": "Directory tree exceeds the caller relative-depth limit.",
   "entry-path": "Directory tree contains a non-portable resource path.",
   "inspection-failure": "Directory tree node facts could not be inspected safely.",
   "source-changed": "Directory tree changed while it was being traversed.",
-  "aborted": "Bounded directory tree scan was aborted.",
+  aborted: "Bounded directory tree scan was aborted.",
   "close-failure": "A directory tree scan handle could not be closed safely.",
-} as const satisfies Readonly<
-  Record<BoundedDirectoryTreeScanErrorReason, string>
->;
+} as const satisfies Readonly<Record<BoundedDirectoryTreeScanErrorReason, string>>;
 
 /**
  * 通用目录树扫描的稳定错误。
@@ -130,36 +124,35 @@ interface PendingDirectory {
 }
 
 const LOWER_REASON_MAP = {
-  "input": "input",
+  input: "input",
   "unsupported-platform": "root-scope",
   "root-scope": "root-scope",
   "not-found": "not-found",
-  "symlink": "symlink",
+  symlink: "symlink",
   "not-directory": "not-directory",
   "expectation-changed": "source-changed",
   "entry-path": "entry-path",
   "io-failure": "inspection-failure",
   "source-changed": "source-changed",
-  "aborted": "aborted",
+  aborted: "aborted",
   "close-failure": "close-failure",
-} as const satisfies Readonly<Record<
-  Exclude<StableDirectoryReadErrorReason, "too-many-entries">,
-  BoundedDirectoryTreeScanErrorReason
->>;
+} as const satisfies Readonly<
+  Record<
+    Exclude<StableDirectoryReadErrorReason, "too-many-entries">,
+    BoundedDirectoryTreeScanErrorReason
+  >
+>;
 
-function fail(
-  reason: BoundedDirectoryTreeScanErrorReason,
-  path: string,
-): never {
+function fail(reason: BoundedDirectoryTreeScanErrorReason, path: string): never {
   throw new BoundedDirectoryTreeScanError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
@@ -167,19 +160,13 @@ function parseLimit(
   value: unknown,
   path: "$options.maximumEntries" | "$options.maximumDepth",
 ): number {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail("input", path);
   }
   return value;
 }
 
-function parseOptions(
-  value: unknown,
-): Readonly<ParsedBoundedDirectoryTreeScanOptions> {
+function parseOptions(value: unknown): Readonly<ParsedBoundedDirectoryTreeScanOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$options");
@@ -191,38 +178,30 @@ function parseOptions(
   const required = ["maximumDepth", "maximumEntries"] as const;
   const allowed = new Set([...required, "expectedNode", "signal"]);
   if (
-    required.some((field) => !Object.hasOwn(record, field))
-    || Object.keys(record).some((key) => !allowed.has(key))
+    required.some((field) => !Object.hasOwn(record, field)) ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
-  const maximumEntries = parseLimit(
-    record.maximumEntries,
-    "$options.maximumEntries",
-  );
-  const maximumDepth = parseLimit(
-    record.maximumDepth,
-    "$options.maximumDepth",
-  );
+  const maximumEntries = parseLimit(record.maximumEntries, "$options.maximumEntries");
+  const maximumDepth = parseLimit(record.maximumDepth, "$options.maximumDepth");
   if (record.signal !== undefined && !isAbortSignal(record.signal)) {
     fail("input", "$options.signal");
   }
   return Object.freeze({
     maximumEntries,
     maximumDepth,
-    expectedNode: record.expectedNode as
-      | Readonly<FileNodeSnapshot>
-      | undefined,
+    expectedNode: record.expectedNode as Readonly<FileNodeSnapshot> | undefined,
     signal: record.signal,
   });
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -241,9 +220,7 @@ function mapDirectoryReadError(
   limitReason: "entry-limit" | "depth-limit",
 ): never {
   if (error.reason === "too-many-entries") {
-    fail(limitReason, limitReason === "entry-limit"
-      ? "$tree.entries"
-      : "$tree.depth");
+    fail(limitReason, limitReason === "entry-limit" ? "$tree.entries" : "$tree.depth");
   }
   fail(LOWER_REASON_MAP[error.reason], error.path);
 }
@@ -276,12 +253,10 @@ async function readOneDirectory(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (
-        expectedNode !== undefined
-        && (
-          error.reason === "not-found"
-          || error.reason === "symlink"
-          || error.reason === "not-directory"
-        )
+        expectedNode !== undefined &&
+        (error.reason === "not-found" ||
+          error.reason === "symlink" ||
+          error.reason === "not-directory")
       ) {
         fail("source-changed", "$options.expectedNode");
       }
@@ -304,18 +279,18 @@ function createTreeEntry(
   });
 }
 
-async function scanTree<
-  TreeRootResourcePath extends PortableResourcePath | null,
->(
+async function scanTree<TreeRootResourcePath extends PortableResourcePath | null>(
   root: RootedDirectory,
   treeRootResourcePath: TreeRootResourcePath,
   options: Readonly<ParsedBoundedDirectoryTreeScanOptions>,
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<TreeRootResourcePath>>> {
-  const pendingDirectories: PendingDirectory[] = [{
-    resourcePath: treeRootResourcePath,
-    depth: 0,
-    expectedNode: options.expectedNode,
-  }];
+  const pendingDirectories: PendingDirectory[] = [
+    {
+      resourcePath: treeRootResourcePath,
+      depth: 0,
+      expectedNode: options.expectedNode,
+    },
+  ];
   const entries: Readonly<BoundedDirectoryTreeEntry>[] = [];
   let treeRootNode: Readonly<FileNodeSnapshot> | undefined;
 
@@ -343,11 +318,13 @@ async function scanTree<
       const treeEntry = createTreeEntry(pending, child);
       entries.push(treeEntry);
       if (treeEntry.node.kind === "directory") {
-        childDirectories.push(Object.freeze({
-          resourcePath: treeEntry.resourcePath,
-          depth: treeEntry.depth,
-          expectedNode: treeEntry.node,
-        }));
+        childDirectories.push(
+          Object.freeze({
+            resourcePath: treeEntry.resourcePath,
+            depth: treeEntry.depth,
+            expectedNode: treeEntry.node,
+          }),
+        );
       }
     }
     for (let index = childDirectories.length - 1; index >= 0; index -= 1) {
@@ -357,10 +334,7 @@ async function scanTree<
   }
 
   if (treeRootNode === undefined) fail("inspection-failure", "$tree");
-  entries.sort((left, right) => compareText(
-    left.resourcePath,
-    right.resourcePath,
-  ));
+  entries.sort((left, right) => compareText(left.resourcePath, right.resourcePath));
   assertNotAborted(options.signal);
   return Object.freeze({
     treeRootResourcePath,
@@ -385,9 +359,7 @@ export async function scanBoundedResourceDirectoryTree(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   options: BoundedDirectoryTreeScanOptions,
-): Promise<Readonly<
-  BoundedDirectoryTreeScanResult<PortableResourcePath>
->> {
+): Promise<Readonly<BoundedDirectoryTreeScanResult<PortableResourcePath>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
   assertNotAborted(parsed.signal);

@@ -4,36 +4,23 @@ import os from "node:os";
 import nodePath from "node:path";
 import { types } from "node:util";
 
-import {
-  computeSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
   createFileCandidateDurably,
   DurableFileCandidateError,
 } from "../filesystem/durable-file-candidate.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../filesystem/rooted-directory.js";
-import {
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
+import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
+import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 import {
   GitIgnoreObservationError,
-  observeGitIgnorePathsInWorkTree,
   type GitIgnoreObservationOptions,
   type GitIgnorePathObservation,
+  observeGitIgnorePathsInWorkTree,
 } from "./git-ignore-observation.js";
 
 /**
@@ -47,10 +34,7 @@ import {
  * 业务权威，也不决定候选能否发布。临时目录只是进程内验证介质，不是可恢复 stage。
  */
 
-const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
-  2 * 1024 * 1024,
-  "$candidateBytes",
-);
+const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$candidateBytes");
 
 const GITIGNORE_RESOURCE_PATH = parsePortableResourcePath(".gitignore");
 const TEMPORARY_WORK_TREE_PREFIX = "wakeflow-git-ignore-candidate-";
@@ -80,10 +64,7 @@ const ERROR_MESSAGES = {
   "observation-failure": "Git ignore candidate semantics could not be observed.",
   "cleanup-failure": "Git ignore candidate worktree could not be removed exactly.",
   aborted: "Git ignore candidate observation was aborted.",
-} as const satisfies Readonly<Record<
-  GitIgnoreCandidateObservationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<GitIgnoreCandidateObservationErrorReason, string>>;
 
 /** Gitignore 候选隔离观察失败的稳定、脱敏错误。 */
 export class GitIgnoreCandidateObservationError extends Error {
@@ -92,10 +73,7 @@ export class GitIgnoreCandidateObservationError extends Error {
   readonly reason: GitIgnoreCandidateObservationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: GitIgnoreCandidateObservationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: GitIgnoreCandidateObservationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -112,29 +90,28 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: GitIgnoreCandidateObservationErrorReason,
-  path: string,
-): never {
+function fail(reason: GitIgnoreCandidateObservationErrorReason, path: string): never {
   throw new GitIgnoreCandidateObservationError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$repositoryRoot");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -146,8 +123,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -158,12 +135,12 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 
 function snapshotCandidate(value: unknown): Readonly<CandidateInput> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ArrayBuffer.isView(value)
-    || !(value instanceof Uint8Array)
-    || value.buffer instanceof SharedArrayBuffer
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ArrayBuffer.isView(value) ||
+    !(value instanceof Uint8Array) ||
+    value.buffer instanceof SharedArrayBuffer
   ) {
     fail("input", "$candidateBytes");
   }
@@ -195,9 +172,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$options.signal");
 }
 
-async function assertRepositoryRootCurrent(
-  root: RootedDirectory,
-): Promise<void> {
+async function assertRepositoryRootCurrent(root: RootedDirectory): Promise<void> {
   try {
     await root.assertCurrent("$repositoryRoot");
   } catch (error: unknown) {
@@ -208,23 +183,19 @@ async function assertRepositoryRootCurrent(
   }
 }
 
-async function createTemporaryWorkTree(): Promise<Readonly<{
-  readonly root: RootedDirectory;
-}>> {
+async function createTemporaryWorkTree(): Promise<
+  Readonly<{
+    readonly root: RootedDirectory;
+  }>
+> {
   let createdPath: string;
   try {
-    createdPath = await mkdtemp(nodePath.join(
-      os.tmpdir(),
-      TEMPORARY_WORK_TREE_PREFIX,
-    ));
+    createdPath = await mkdtemp(nodePath.join(os.tmpdir(), TEMPORARY_WORK_TREE_PREFIX));
   } catch {
     fail("isolation-failure", "$candidateWorkTree");
   }
   try {
-    const root = await RootedDirectory.open(
-      createdPath,
-      "$candidateWorkTree",
-    );
+    const root = await RootedDirectory.open(createdPath, "$candidateWorkTree");
     return Object.freeze({ root });
   } catch (error: unknown) {
     try {
@@ -245,15 +216,10 @@ async function materializeCandidate(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    await createFileCandidateDurably(
-      workTreeRoot,
-      GITIGNORE_RESOURCE_PATH,
-      candidate.bytes,
-      {
-        mode: 0o600,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    await createFileCandidateDurably(workTreeRoot, GITIGNORE_RESOURCE_PATH, candidate.bytes, {
+      mode: 0o600,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableFileCandidateError) {
       if (error.reason === "aborted") fail("aborted", "$options.signal");
@@ -280,10 +246,7 @@ async function observeCandidate(
     if (error instanceof GitIgnoreObservationError) {
       if (error.reason === "aborted") fail("aborted", "$options.signal");
       if (error.reason === "input") fail("input", error.path);
-      if (
-        error.reason === "root-scope"
-        && error.path === "$repositoryRoot"
-      ) {
+      if (error.reason === "root-scope" && error.path === "$repositoryRoot") {
         fail("root-scope", "$repositoryRoot");
       }
       fail("observation-failure", "$git");

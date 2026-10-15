@@ -16,8 +16,7 @@ import { encodeUtf8 } from "../text/utf8.js";
  */
 
 const UUID_V4_TEXT_LENGTH = 36;
-const UUID_V4_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 declare const UUID_V4_BRAND: unique symbol;
 
@@ -43,10 +42,11 @@ export type UuidV4ErrorReason =
   | "derivation-input";
 
 const ERROR_MESSAGES = {
-  "format": "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
+  format: "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
   "factory-type": "The UUID v4 factory must be a function.",
   "factory-failure": "The UUID v4 factory failed.",
-  "factory-result": "The UUID v4 factory must return one canonical lowercase RFC 9562 UUID version 4 string.",
+  "factory-result":
+    "The UUID v4 factory must return one canonical lowercase RFC 9562 UUID version 4 string.",
   "derivation-input": "UUID v4 derivation needs a non-empty namespace and NUL-free parts.",
 } as const satisfies Readonly<Record<UuidV4ErrorReason, string>>;
 
@@ -79,9 +79,7 @@ function fail(reason: UuidV4ErrorReason, path: string): never {
 
 function isCanonicalUuidV4(value: unknown): value is string {
   return (
-    typeof value === "string"
-    && value.length === UUID_V4_TEXT_LENGTH
-    && UUID_V4_PATTERN.test(value)
+    typeof value === "string" && value.length === UUID_V4_TEXT_LENGTH && UUID_V4_PATTERN.test(value)
   );
 }
 
@@ -91,10 +89,7 @@ function isCanonicalUuidV4(value: unknown): value is string {
  * 版本半字节必须为 `4`，变体高位必须为 RFC `10xx`。大写、空白、URN、花括号、
  * 其他 UUID 版本、NIL 和 MAX 都不会作为等价别名被接受。
  */
-export function parseUuidV4(
-  value: unknown,
-  errorPath?: string,
-): UuidV4 {
+export function parseUuidV4(value: unknown, errorPath?: string): UuidV4 {
   const path = normalizeErrorPath(errorPath);
   if (!isCanonicalUuidV4(value)) fail("format", path);
 
@@ -108,9 +103,7 @@ export function parseUuidV4(
  * 默认生成源是 Node.js `crypto.randomUUID()`。可注入生成源是明确的依赖注入点：
  * 函数恰好调用一次，异常统一映射，返回值仍须重新满足完整 UUIDv4 合同。
  */
-export function createUuidV4(
-  uuidFactory: UuidV4Factory = randomUUID,
-): UuidV4 {
+export function createUuidV4(uuidFactory: UuidV4Factory = randomUUID): UuidV4 {
   if (typeof uuidFactory !== "function") {
     fail("factory-type", "$uuidFactory");
   }
@@ -129,9 +122,7 @@ export function createUuidV4(
 }
 
 function isDerivationText(value: unknown): value is string {
-  return typeof value === "string"
-    && !value.includes("\u0000")
-    && value.isWellFormed();
+  return typeof value === "string" && !value.includes("\u0000") && value.isWellFormed();
 }
 
 /**
@@ -140,19 +131,14 @@ function isDerivationText(value: unknown): value is string {
  * 同一命名空间与同一输入永远得到同一个 UUID，因此重试与重算不会造出第二个身份；
  * 输出仍满足版本位与变体位，与随机分配的 UUID 共用同一词法合同。
  */
-export function deriveUuidV4(
-  namespace: string,
-  ...parts: readonly string[]
-): UuidV4 {
+export function deriveUuidV4(namespace: string, ...parts: readonly string[]): UuidV4 {
   if (!isDerivationText(namespace) || namespace.length === 0) {
     fail("derivation-input", "$namespace");
   }
   for (const [index, part] of parts.entries()) {
     if (!isDerivationText(part)) fail("derivation-input", `$parts/${index}`);
   }
-  const hex = computeSha256Hex(
-    encodeUtf8([namespace, ...parts].join("\u0000")),
-  );
+  const hex = computeSha256Hex(encodeUtf8([namespace, ...parts].join("\u0000")));
   const digits = hex.slice(0, 32).split("");
   digits[12] = "4";
   const variant = Number.parseInt(digits[16] ?? "0", 16);

@@ -10,20 +10,18 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { inspectLoadedArtifactTree } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
+import { materializeLoadedArtifactTreeTransferCandidate } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
 import {
-  materializeLoadedArtifactTreeTransferCandidate,
-} from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
-import {
-  planLoadedArtifactTreeTransfer,
   type LoadedArtifactTreeTransferPlan,
+  planLoadedArtifactTreeTransfer,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-plan.js";
 import {
-  publishLoadedArtifactTreeTransferCandidate,
   LoadedArtifactTreeTransferPublicationError,
   type LoadedArtifactTreeTransferPublicationErrorReason,
+  publishLoadedArtifactTreeTransferCandidate,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-publication.js";
 import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
@@ -36,17 +34,11 @@ interface PublicationFixture {
   readonly destinationRoot: RootedDirectory;
 }
 
-async function fixture(
-  t: TestContext,
-): Promise<Readonly<PublicationFixture>> {
-  const sourcePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-artifact-publish-source-",
-  ));
-  const destinationPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-artifact-publish-destination-",
-  ));
+async function fixture(t: TestContext): Promise<Readonly<PublicationFixture>> {
+  const sourcePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-publish-source-"));
+  const destinationPath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-artifact-publish-destination-"),
+  );
   mkdirSync(path.join(sourcePath, "bin"), { mode: 0o755 });
   writeFileSync(path.join(sourcePath, "README.md"), "# Artifact\n", {
     mode: 0o644,
@@ -133,10 +125,7 @@ test("loaded artifact publication durably renames and reads back final identity"
   equal(published.publication?.destinationResourcePath, finalRef);
   equal(published.finalTree.candidateRootPath, finalRef);
   equal(published.artifactIdentity.artifactDigest, transferPlan.artifactDigest);
-  equal(
-    existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)),
-    false,
-  );
+  equal(existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)), false);
   const finalPath = path.join(current.destinationPath, finalRef);
   equal(existsSync(finalPath), true);
   equal(readFileSync(path.join(finalPath, "README.md"), "utf8"), "# Artifact\n");
@@ -164,11 +153,8 @@ test("loaded artifact publication rejects a conflicting final tree", async (t) =
   });
 
   await expectPublicationError(
-    () => publishLoadedArtifactTreeTransferCandidate(
-      current.destinationRoot,
-      transferPlan,
-      finalRef,
-    ),
+    () =>
+      publishLoadedArtifactTreeTransferCandidate(current.destinationRoot, transferPlan, finalRef),
     "destination-conflict",
     "$destinationResourcePath",
   );
@@ -180,68 +166,48 @@ test("loaded artifact publication keeps current target and candidate residue for
   const transferPlan = await plan(current);
   const finalRef = parsePortableResourcePath("assets/bundle");
   await materialize(current, transferPlan);
-  await publishLoadedArtifactTreeTransferCandidate(
-    current.destinationRoot,
-    transferPlan,
-    finalRef,
-  );
+  await publishLoadedArtifactTreeTransferCandidate(current.destinationRoot, transferPlan, finalRef);
   await materialize(current, transferPlan);
 
   await expectPublicationError(
-    () => publishLoadedArtifactTreeTransferCandidate(
-      current.destinationRoot,
-      transferPlan,
-      finalRef,
-    ),
+    () =>
+      publishLoadedArtifactTreeTransferCandidate(current.destinationRoot, transferPlan, finalRef),
     "candidate-residue",
     "$candidate",
   );
   equal(existsSync(path.join(current.destinationPath, finalRef)), true);
-  equal(
-    existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)),
-    true,
-  );
+  equal(existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)), true);
 });
 
 test("loaded artifact publication rejects incomplete candidate and cancellation", async (t) => {
   const current = await fixture(t);
   const transferPlan = await plan(current);
   const finalRef = parsePortableResourcePath("assets/bundle");
-  await createDirectoryAtomically(
-    current.destinationRoot,
-    transferPlan.candidateRootPath,
-    { mode: transferPlan.directoryPlan.directoryMode },
-  );
+  await createDirectoryAtomically(current.destinationRoot, transferPlan.candidateRootPath, {
+    mode: transferPlan.directoryPlan.directoryMode,
+  });
   await expectPublicationError(
-    () => publishLoadedArtifactTreeTransferCandidate(
-      current.destinationRoot,
-      transferPlan,
-      finalRef,
-    ),
+    () =>
+      publishLoadedArtifactTreeTransferCandidate(current.destinationRoot, transferPlan, finalRef),
     "candidate-conflict",
     "$candidate",
   );
 
-  rmSync(
-    path.join(current.destinationPath, transferPlan.candidateRootPath),
-    { recursive: true, force: true },
-  );
+  rmSync(path.join(current.destinationPath, transferPlan.candidateRootPath), {
+    recursive: true,
+    force: true,
+  });
   await materialize(current, transferPlan);
   const controller = new AbortController();
   controller.abort();
   await expectPublicationError(
-    () => publishLoadedArtifactTreeTransferCandidate(
-      current.destinationRoot,
-      transferPlan,
-      finalRef,
-      { signal: controller.signal },
-    ),
+    () =>
+      publishLoadedArtifactTreeTransferCandidate(current.destinationRoot, transferPlan, finalRef, {
+        signal: controller.signal,
+      }),
     "aborted",
     "$signal",
   );
   equal(existsSync(path.join(current.destinationPath, finalRef)), false);
-  equal(
-    existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)),
-    true,
-  );
+  equal(existsSync(path.join(current.destinationPath, transferPlan.candidateRootPath)), true);
 });

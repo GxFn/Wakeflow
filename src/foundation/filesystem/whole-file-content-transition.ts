@@ -1,15 +1,12 @@
 import { types } from "node:util";
 
+import { computeSha256Digest, type Sha256Digest } from "../crypto/sha256.js";
 import {
-  computeSha256Digest,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
-import { parseByteCount, type ByteCount } from "../numeric/byte-count.js";
+import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 
 /**
  * Wakeflow Foundation / Filesystem：整文件 current→desired 字节转换。
@@ -45,10 +42,7 @@ const ERROR_MESSAGES = {
   input: "Whole-file content transition input is invalid.",
   "duplicate-current": "Whole-file current content is duplicated.",
   "unadmitted-source": "Whole-file source is not an admitted content render.",
-} as const satisfies Readonly<Record<
-  WholeFileContentTransitionErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WholeFileContentTransitionErrorReason, string>>;
 
 /** 整文件字节转换准入失败的稳定、脱敏错误。 */
 export class WholeFileContentTransitionError extends Error {
@@ -72,21 +66,18 @@ interface ContentSnapshot {
 
 const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
 
-function fail(
-  reason: WholeFileContentTransitionErrorReason,
-  path: string,
-): never {
+function fail(reason: WholeFileContentTransitionErrorReason, path: string): never {
   throw new WholeFileContentTransitionError(reason, path);
 }
 
 function snapshotBytes(value: unknown, path: string): Readonly<ContentSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ArrayBuffer.isView(value)
-    || !(value instanceof Uint8Array)
-    || value.buffer instanceof SharedArrayBuffer
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ArrayBuffer.isView(value) ||
+    !(value instanceof Uint8Array) ||
+    value.buffer instanceof SharedArrayBuffer
   ) {
     fail("input", path);
   }
@@ -98,13 +89,12 @@ function snapshotBytes(value: unknown, path: string): Readonly<ContentSnapshot> 
   });
 }
 
-function sameContent(
-  left: Readonly<ContentSnapshot>,
-  right: Readonly<ContentSnapshot>,
-): boolean {
-  return left.byteCount === right.byteCount
-    && left.digest === right.digest
-    && left.bytes.equals(right.bytes);
+function sameContent(left: Readonly<ContentSnapshot>, right: Readonly<ContentSnapshot>): boolean {
+  return (
+    left.byteCount === right.byteCount &&
+    left.digest === right.digest &&
+    left.bytes.equals(right.bytes)
+  );
 }
 
 function parseRequest(value: unknown): Readonly<{
@@ -119,11 +109,7 @@ function parseRequest(value: unknown): Readonly<{
     throw error;
   }
   const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 2
-    || keys[0] !== "currentContents"
-    || keys[1] !== "desiredContent"
-  ) {
+  if (keys.length !== 2 || keys[0] !== "currentContents" || keys[1] !== "desiredContent") {
     fail("input", "$request");
   }
   let currentValues: readonly unknown[];
@@ -137,13 +123,12 @@ function parseRequest(value: unknown): Readonly<{
     if (error instanceof PassiveOwnDataError) fail("input", error.path);
     throw error;
   }
-  const desired = snapshotBytes(
-    record.desiredContent,
-    "$request.desiredContent",
+  const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");
+  const current = Object.freeze(
+    currentValues.map((content, index) =>
+      snapshotBytes(content, `$request.currentContents/${index}`),
+    ),
   );
-  const current = Object.freeze(currentValues.map((content, index) => (
-    snapshotBytes(content, `$request.currentContents/${index}`)
-  )));
   for (let index = 0; index < current.length; index += 1) {
     const entry = current[index];
     if (entry === undefined) continue;
@@ -163,9 +148,7 @@ export function planWholeFileContentTransition(
   requestValue: WholeFileContentTransitionRequest,
 ): Readonly<WholeFileContentTransition> {
   const request = parseRequest(requestValue);
-  const source = sourceValue === null
-    ? null
-    : snapshotBytes(sourceValue, "$source");
+  const source = sourceValue === null ? null : snapshotBytes(sourceValue, "$source");
   if (source === null) {
     return Object.freeze({
       disposition: "create-required",
@@ -184,9 +167,7 @@ export function planWholeFileContentTransition(
       desiredBytes: Buffer.from(request.desired.bytes),
     });
   }
-  const isAdmittedCurrent = request.current.some((content) => (
-    sameContent(source, content)
-  ));
+  const isAdmittedCurrent = request.current.some((content) => sameContent(source, content));
   if (!isAdmittedCurrent) fail("unadmitted-source", "$source");
   return Object.freeze({
     disposition: "replace-required",

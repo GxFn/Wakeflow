@@ -1,31 +1,17 @@
 import { constants as bufferConstants } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  open as openFileHandle,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
-
-import {
-  Sha256Hasher,
-  Sha256HasherError,
-} from "../crypto/sha256-hasher.js";
 import type { Sha256Digest } from "../crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
-  ByteCountError,
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
+import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
@@ -85,17 +71,17 @@ export type StableFileReadErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Stable file read input is invalid.",
+  input: "Stable file read input is invalid.",
   "unsupported-platform": "Stable file read requires Node no-follow file handles.",
   "root-scope": "Stable file read could not establish its rooted resource scope.",
   "not-found": "Stable file read target does not exist.",
-  "symlink": "Stable file read target cannot be a symbolic link.",
+  symlink: "Stable file read target cannot be a symbolic link.",
   "not-file": "Stable file read target must be a regular file.",
   "expectation-changed": "Stable file read target no longer matches its expected node.",
   "too-large": "Stable file read target exceeds the caller or runtime byte limit.",
   "io-failure": "Stable file bytes could not be read and hashed safely.",
   "source-changed": "Stable file target changed while it was being read.",
-  "aborted": "Stable file read was aborted.",
+  aborted: "Stable file read was aborted.",
   "close-failure": "Stable file handle could not be closed safely.",
 } as const satisfies Readonly<Record<StableFileReadErrorReason, string>>;
 
@@ -135,30 +121,25 @@ function fail(reason: StableFileReadErrorReason, path: string): never {
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
-function parseExpectedNode(
-  value: unknown,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$options.expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$options.expectedNode");
     }
   } catch (error: unknown) {
@@ -180,18 +161,15 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
   }
   const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
   if (
-    !Object.hasOwn(record, "maximumBytes")
-    || Object.keys(record).some((key) => !allowed.has(key))
+    !Object.hasOwn(record, "maximumBytes") ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
 
   let maximumBytes: ByteCount;
   try {
-    maximumBytes = parseByteCount(
-      record.maximumBytes,
-      "$options.maximumBytes",
-    );
+    maximumBytes = parseByteCount(record.maximumBytes, "$options.maximumBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
       fail("input", "$options.maximumBytes");
@@ -214,10 +192,10 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -237,10 +215,7 @@ async function inspectInitialResource(
       if (error.reason === "resource-path") {
         fail("input", "$resourcePath");
       }
-      if (
-        error.reason === "resource-changed"
-        || error.reason === "resource-alias"
-      ) {
+      if (error.reason === "resource-changed" || error.reason === "resource-alias") {
         fail("source-changed", "$resourcePath");
       }
       if (error.reason === "unsupported-platform") {
@@ -280,16 +255,11 @@ function assertExpectedNode(
   }
 }
 
-function assertWithinMaximum(
-  byteCount: ByteCount,
-  maximumBytes: ByteCount,
-): void {
+function assertWithinMaximum(byteCount: ByteCount, maximumBytes: ByteCount): void {
   if (byteCount > maximumBytes) fail("too-large", "$resourcePath");
 }
 
-async function snapshotOpenedFile(
-  handle: FileHandle,
-): Promise<Readonly<FileNodeSnapshot>> {
+async function snapshotOpenedFile(handle: FileHandle): Promise<Readonly<FileNodeSnapshot>> {
   let stats: Awaited<ReturnType<FileHandle["stat"]>>;
   try {
     stats = await handle.stat({ bigint: true });
@@ -311,15 +281,12 @@ function requiredOpenFlags(): number {
   if (typeof noFollow !== "number") {
     fail("unsupported-platform", "$resourcePath");
   }
-  const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-    ? fileSystemConstants.O_NONBLOCK
-    : 0;
+  const nonBlocking =
+    typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
   return fileSystemConstants.O_RDONLY | noFollow | nonBlocking;
 }
 
-async function openStableFile(
-  initial: Readonly<RootedResourceSnapshot>,
-): Promise<FileHandle> {
+async function openStableFile(initial: Readonly<RootedResourceSnapshot>): Promise<FileHandle> {
   try {
     return await openFileHandle(initial.physicalPath, requiredOpenFlags());
   } catch (error: unknown) {
@@ -340,10 +307,7 @@ function allocateReadBuffer(byteLength: number): Buffer {
   }
 }
 
-function createCapture(
-  mode: StableFileReadMode,
-  byteCount: ByteCount,
-): Buffer | null {
+function createCapture(mode: StableFileReadMode, byteCount: ByteCount): Buffer | null {
   if (mode === "digest") return null;
   if (byteCount > bufferConstants.MAX_LENGTH) {
     fail("too-large", "$resourcePath");
@@ -356,16 +320,17 @@ async function readExactFile(
   byteCount: ByteCount,
   capture: Buffer | null,
   signal: AbortSignal | undefined,
-): Promise<Readonly<{
-  digest: Sha256Digest;
-  bytes: Uint8Array | null;
-}>> {
+): Promise<
+  Readonly<{
+    digest: Sha256Digest;
+    bytes: Uint8Array | null;
+  }>
+> {
   const hasher = new Sha256Hasher();
-  const scratch = capture === null
-    ? allocateReadBuffer(
-      Math.min(STABLE_FILE_READ_CHUNK_BYTES, byteCount || 1),
-    )
-    : null;
+  const scratch =
+    capture === null
+      ? allocateReadBuffer(Math.min(STABLE_FILE_READ_CHUNK_BYTES, byteCount || 1))
+      : null;
   let position = 0;
 
   while (position < byteCount) {
@@ -442,27 +407,19 @@ async function readStableFileVersion(
   let result: Readonly<InternalStableFileReadResult> | undefined;
   try {
     const opened = await snapshotOpenedFile(handle);
-    if (
-      opened.kind !== "file"
-      || !sameFileNodeSnapshot(initial.node, opened)
-    ) {
+    if (opened.kind !== "file" || !sameFileNodeSnapshot(initial.node, opened)) {
       fail("source-changed", "$resourcePath");
     }
     assertWithinMaximum(opened.byteCount, parsed.maximumBytes);
 
     const capture = createCapture(mode, opened.byteCount);
-    const read = await readExactFile(
-      handle,
-      opened.byteCount,
-      capture,
-      parsed.signal,
-    );
+    const read = await readExactFile(handle, opened.byteCount, capture, parsed.signal);
     const afterHandle = await snapshotOpenedFile(handle);
     const afterPath = await inspectFinalResource(root, resourcePath);
     if (
-      afterPath.node.kind !== "file"
-      || !sameFileNodeSnapshot(opened, afterHandle)
-      || !sameFileNodeSnapshot(afterHandle, afterPath.node)
+      afterPath.node.kind !== "file" ||
+      !sameFileNodeSnapshot(opened, afterHandle) ||
+      !sameFileNodeSnapshot(afterHandle, afterPath.node)
     ) {
       fail("source-changed", "$resourcePath");
     }

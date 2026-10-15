@@ -1,15 +1,12 @@
 import canonicalize from "canonicalize";
 
-import {
-  encodeUtf8,
-  Utf8Error,
-} from "../text/utf8.js";
+import { encodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
   hasPassiveJsonSerializationEnvironment,
-  JsonValueError,
-  parseJsonValue,
   type JsonValue,
+  JsonValueError,
   type JsonValueErrorReason,
+  parseJsonValue,
 } from "./json-value.js";
 
 /**
@@ -24,9 +21,7 @@ import {
  */
 
 /** Canonical JSON 失败分类；JSON 值错误仍保留原有精度。 */
-export type CanonicalJsonErrorReason =
-  | JsonValueErrorReason
-  | "canonicalizer-failure";
+export type CanonicalJsonErrorReason = JsonValueErrorReason | "canonicalizer-failure";
 
 /**
  * Canonical JSON 适配层失败时返回的稳定错误。
@@ -41,9 +36,11 @@ export class CanonicalJsonError extends Error {
   readonly path: string;
 
   constructor(reason: CanonicalJsonErrorReason, path: string) {
-    super(reason === "canonicalizer-failure"
-      ? "The RFC 8785 canonicalizer failed for an admitted JSON value."
-      : "The input is not an admitted JSON value.");
+    super(
+      reason === "canonicalizer-failure"
+        ? "The RFC 8785 canonicalizer failed for an admitted JSON value."
+        : "The input is not an admitted JSON value.",
+    );
     this.reason = reason;
     this.path = path;
   }
@@ -105,10 +102,7 @@ function encodeCanonicalText(text: string, path: string): Uint8Array {
  * 每次调用都先重新完成 JSON 值准入；TypeScript 类型不能作为绕过运行时边界的
  * 授权。返回文本不含额外空白或末尾换行。
  */
-export function canonicalizeJson(
-  value: unknown,
-  errorPath?: string,
-): string {
+export function canonicalizeJson(value: unknown, errorPath?: string): string {
   const basePath = normalizeErrorPath(errorPath);
   return canonicalizeAdmittedValue(admittedJsonValue(value, basePath), basePath);
 }
@@ -119,10 +113,7 @@ export function canonicalizeJson(
  * 每次调用返回新的 Uint8Array；调用方可以持有或修改自己的字节副本。摘要、
  * 换行和文件编码继续由后续基础能力或领域编解码器显式组合。
  */
-export function encodeCanonicalJson(
-  value: unknown,
-  errorPath?: string,
-): Uint8Array {
+export function encodeCanonicalJson(value: unknown, errorPath?: string): Uint8Array {
   const path = normalizeErrorPath(errorPath);
   return encodeCanonicalText(canonicalizeJson(value, path), path);
 }

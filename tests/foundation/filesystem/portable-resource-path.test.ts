@@ -3,11 +3,11 @@ import { test } from "node:test";
 
 import {
   joinPortableResourcePath,
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
   type PortableResourcePathErrorReason,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 
 function expectPortableResourcePathError(
@@ -52,41 +52,24 @@ test("canonical root-relative resource paths receive their brand", () => {
 });
 
 test("splitting preserves exact text and returns a frozen non-empty sequence", () => {
-  const value = parsePortableResourcePath(
-    ".wakeflow-local/runtime/需求 evidence.json",
-  );
+  const value = parsePortableResourcePath(".wakeflow-local/runtime/需求 evidence.json");
   const segments = splitPortableResourcePath(value);
 
-  deepEqual(segments, [
-    ".wakeflow-local",
-    "runtime",
-    "需求 evidence.json",
-  ]);
+  deepEqual(segments, [".wakeflow-local", "runtime", "需求 evidence.json"]);
   equal(Object.isFrozen(segments), true);
 });
 
 test("joining revalidates both branded inputs and the combined path", () => {
   const parent = parsePortableResourcePath("records/evidence");
   const child = parsePortableResourcePath("payload/结果.txt");
-  equal(
-    joinPortableResourcePath(parent, child),
-    "records/evidence/payload/结果.txt",
-  );
+  equal(joinPortableResourcePath(parent, child), "records/evidence/payload/结果.txt");
   expectPortableResourcePathError(
-    () => joinPortableResourcePath(
-      asPortableResourcePath("records/../escape"),
-      child,
-      "$.join",
-    ),
+    () => joinPortableResourcePath(asPortableResourcePath("records/../escape"), child, "$.join"),
     "format",
     "$.join.parent",
   );
   expectPortableResourcePathError(
-    () => joinPortableResourcePath(
-      parent,
-      asPortableResourcePath("payload/../escape"),
-      "$.join",
-    ),
+    () => joinPortableResourcePath(parent, asPortableResourcePath("payload/../escape"), "$.join"),
     "format",
     "$.join.child",
   );
@@ -165,18 +148,16 @@ test("canonically equivalent NFD text is rejected instead of normalized", () => 
 
 test("brand inputs are revalidated before splitting", () => {
   expectPortableResourcePathError(
-    () => splitPortableResourcePath(
-      asPortableResourcePath("folder/../escape"),
-      "$.ref",
-    ),
+    () => splitPortableResourcePath(asPortableResourcePath("folder/../escape"), "$.ref"),
     "format",
     "$.ref",
   );
   expectPortableResourcePathError(
-    () => splitPortableResourcePath(
-      asPortableResourcePath(`folder/${String.fromCharCode(0xd800)}`),
-      "$.ref",
-    ),
+    () =>
+      splitPortableResourcePath(
+        asPortableResourcePath(`folder/${String.fromCharCode(0xd800)}`),
+        "$.ref",
+      ),
     "unicode-well-formed",
     "$.ref",
   );

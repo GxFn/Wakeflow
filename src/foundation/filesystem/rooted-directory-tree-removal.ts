@@ -21,12 +21,12 @@ export type RootedDirectoryTreeRemovalErrorReason =
   | "aborted";
 
 const ERROR_MESSAGES = {
-  "input": "Rooted directory tree removal input is invalid.",
+  input: "Rooted directory tree removal input is invalid.",
   "not-found": "Rooted directory tree does not exist.",
   "not-directory": "Rooted directory tree target is not a directory.",
   "inspection-failure": "Rooted directory tree target could not be inspected.",
   "removal-failure": "Rooted directory tree could not be removed.",
-  "aborted": "Rooted directory tree removal was aborted.",
+  aborted: "Rooted directory tree removal was aborted.",
 } as const satisfies Readonly<Record<RootedDirectoryTreeRemovalErrorReason, string>>;
 
 export class RootedDirectoryTreeRemovalError extends Error {

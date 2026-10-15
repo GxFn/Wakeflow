@@ -15,12 +15,8 @@ export type MarkdownJsonStringLiteralErrorReason = "input" | "unicode";
 
 const ERROR_MESSAGES = {
   input: "Markdown JSON string literal input must be a primitive string.",
-  unicode:
-    "Markdown JSON string literal input must be well-formed NFC Unicode.",
-} as const satisfies Readonly<Record<
-  MarkdownJsonStringLiteralErrorReason,
-  string
->>;
+  unicode: "Markdown JSON string literal input must be well-formed NFC Unicode.",
+} as const satisfies Readonly<Record<MarkdownJsonStringLiteralErrorReason, string>>;
 
 /** Markdown JSON 数据字面量准入失败的稳定、脱敏错误。 */
 export class MarkdownJsonStringLiteralError extends Error {
@@ -49,10 +45,7 @@ function escapeBmpCodeUnit(character: string): string {
 }
 
 /** 把一个严格 Unicode 字符串渲染为不会改变 Markdown 结构的内联 JSON 数据。 */
-export function renderMarkdownJsonStringLiteral(
-  value: unknown,
-  errorPath?: string,
-): string {
+export function renderMarkdownJsonStringLiteral(value: unknown, errorPath?: string): string {
   const path = normalizedPath(errorPath);
   if (typeof value !== "string") {
     throw new MarkdownJsonStringLiteralError("input", path);
@@ -60,9 +53,6 @@ export function renderMarkdownJsonStringLiteral(
   if (!value.isWellFormed() || value.normalize("NFC") !== value) {
     throw new MarkdownJsonStringLiteralError("unicode", path);
   }
-  const literal = JSON.stringify(value).replace(
-    MARKDOWN_LITERAL_ESCAPE_PATTERN,
-    escapeBmpCodeUnit,
-  );
+  const literal = JSON.stringify(value).replace(MARKDOWN_LITERAL_ESCAPE_PATTERN, escapeBmpCodeUnit);
   return `\`${literal}\``;
 }

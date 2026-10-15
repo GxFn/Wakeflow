@@ -4,8 +4,8 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -20,28 +20,24 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { durableAtomicFileStageRefForTest } from "./durable-atomic-file-test-support.js";
 import {
   createFileAtomically,
-  DurableAtomicFileWriteError,
-  replaceFileAtomically,
   type DurableAtomicFileCreateOptions,
   type DurableAtomicFileReplaceOptions,
+  DurableAtomicFileWriteError,
   type DurableAtomicFileWriteErrorReason,
+  replaceFileAtomically,
 } from "../../../src/foundation/filesystem/durable-atomic-file-write.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  RootedResourceParentHandle,
-} from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+import { durableAtomicFileStageRefForTest } from "./durable-atomic-file-test-support.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectAtomicWriteError(
@@ -67,9 +63,7 @@ async function expectAtomicWriteError(
 
 function directoryNames(directory: string): readonly string[] {
   return Object.freeze(
-    readdirSync(directory).filter((name) => (
-      name.startsWith(".wakeflow-atomic-")
-    )),
+    readdirSync(directory).filter((name) => name.startsWith(".wakeflow-atomic-")),
   );
 }
 
@@ -115,14 +109,8 @@ test("atomic create publishes exact bytes, mode, digest, and no stage residue", 
 test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别完全一致", {
   concurrency: false,
 }, async (t) => {
-  const durablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-durability-fsync-",
-  ));
-  const disposablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-durability-none-",
-  ));
+  const durablePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-durability-fsync-"));
+  const disposablePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-durability-none-"));
   t.after(() => {
     rmSync(durablePath, { recursive: true, force: true });
     rmSync(disposablePath, { recursive: true, force: true });
@@ -138,9 +126,7 @@ test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别�
   const bytes = Buffer.from("durability-level\n", "utf8");
 
   function writeCountingSyncs(root: RootedDirectory) {
-    return countFsyncs(() =>
-      createFileAtomically(root, resourcePath, bytes, { mode: 0o640 }),
-    );
+    return countFsyncs(() => createFileAtomically(root, resourcePath, bytes, { mode: 0o640 }));
   }
 
   try {
@@ -162,10 +148,7 @@ test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别�
     deepEqual(directoryNames(disposablePath), []);
     deepEqual(directoryNames(durablePath), []);
     // 回执形状不随级别变化：同样的键集合、同样的冻结、同样的事实字段。
-    deepEqual(
-      Object.keys(disposable.result).sort(),
-      Object.keys(durable.result).sort(),
-    );
+    deepEqual(Object.keys(disposable.result).sort(), Object.keys(durable.result).sort());
     equal(Object.isFrozen(disposable.result), true);
     equal(disposable.result.publication, durable.result.publication);
     equal(disposable.result.resourcePath, durable.result.resourcePath);
@@ -173,10 +156,7 @@ test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别�
     equal(disposable.result.digest, durable.result.digest);
     equal(disposable.result.node.kind, durable.result.node.kind);
     equal(disposable.result.node.linkCount, durable.result.node.linkCount);
-    equal(
-      disposable.result.node.permissionBits,
-      durable.result.node.permissionBits,
-    );
+    equal(disposable.result.node.permissionBits, durable.result.node.permissionBits);
     equal(disposable.result.node.byteCount, durable.result.node.byteCount);
   } finally {
     await durableRoot.close();
@@ -187,14 +167,12 @@ test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别�
 test("替换没有逐次持久化豁免：选项里的 durability 被拒，级别只由根决定", {
   concurrency: false,
 }, async (t) => {
-  const durablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-replace-durability-fsync-",
-  ));
-  const disposablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-replace-durability-none-",
-  ));
+  const durablePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-atomic-replace-durability-fsync-"),
+  );
+  const disposablePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-atomic-replace-durability-none-"),
+  );
   t.after(() => {
     rmSync(durablePath, { recursive: true, force: true });
     rmSync(disposablePath, { recursive: true, force: true });
@@ -230,12 +208,13 @@ test("替换没有逐次持久化豁免：选项里的 durability 被拒，级�
     });
     for (const durability of ["none", "fsync"] as const) {
       await expectAtomicWriteError(
-        () => replaceFileAtomically(
-          durableRoot,
-          resourcePath,
-          bytes,
-          asReplaceOptions({ mode: 0o600, expected, durability }),
-        ),
+        () =>
+          replaceFileAtomically(
+            durableRoot,
+            resourcePath,
+            bytes,
+            asReplaceOptions({ mode: 0o600, expected, durability }),
+          ),
         "input",
         "$options",
       );
@@ -271,10 +250,7 @@ test("替换没有逐次持久化豁免：选项里的 durability 被拒，级�
 test("atomic create 在 stage cleanup 前后分别同步 target parent", {
   concurrency: false,
 }, async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-create-sync-order-",
-  ));
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-create-sync-order-"));
   const root = await RootedDirectory.open(rootPath, "$root", {
     durability: "fsync",
   });
@@ -306,12 +282,9 @@ test("zero-byte files use the same durable publication path", async () => {
   const root = await RootedDirectory.open(rootPath);
   try {
     const bytes = new Uint8Array(0);
-    const result = await createFileAtomically(
-      root,
-      parsePortableResourcePath("empty"),
-      bytes,
-      { mode: 0 },
-    );
+    const result = await createFileAtomically(root, parsePortableResourcePath("empty"), bytes, {
+      mode: 0,
+    });
     equal(result.byteCount, 0);
     equal(result.node.byteCount, 0);
     equal(result.node.permissionBits, 0);
@@ -330,12 +303,10 @@ test("atomic create never replaces an existing file", async () => {
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        parsePortableResourcePath("state"),
-        Buffer.from("replacement"),
-        { mode: 0o600 },
-      ),
+      () =>
+        createFileAtomically(root, parsePortableResourcePath("state"), Buffer.from("replacement"), {
+          mode: 0o600,
+        }),
       "target-exists",
       "$resourcePath",
     );
@@ -379,10 +350,7 @@ test("concurrent creates use OS no-replace publication", async () => {
 });
 
 test("atomic create 自动恢复 inactive partial 与 two-link stage", async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-recovery-",
-  ));
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-recovery-"));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
   const root = await RootedDirectory.open(rootPath);
   try {
@@ -394,17 +362,9 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
       computeSha256Digest(partialBytes),
       0o640,
     );
-    const partialStage = durableAtomicFileStageRefForTest(
-      partialTarget,
-      partialAddress,
-    );
+    const partialStage = durableAtomicFileStageRefForTest(partialTarget, partialAddress);
     try {
-      await createFileCandidateDurably(
-        root,
-        partialStage,
-        Buffer.from("partial"),
-        { mode: 0o600 },
-      );
+      await createFileCandidateDurably(root, partialStage, Buffer.from("partial"), { mode: 0o600 });
     } finally {
       releaseDurableAtomicFileStageAddress(partialAddress);
     }
@@ -413,10 +373,7 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
       mode: 0o640,
     });
     equal(
-      readFileSync(
-        path.join(rootPath, ...partialTarget.split("/")),
-        "utf8",
-      ),
+      readFileSync(path.join(rootPath, ...partialTarget.split("/")), "utf8"),
       "complete-partial-target",
     );
 
@@ -442,9 +399,10 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
     }
 
     await expectAtomicWriteError(
-      () => createFileAtomically(root, linkedTarget, linkedBytes, {
-        mode: 0o600,
-      }),
+      () =>
+        createFileAtomically(root, linkedTarget, linkedBytes, {
+          mode: 0o600,
+        }),
       "target-exists",
       "$resourcePath",
     );
@@ -457,10 +415,7 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
 });
 
 test("atomic write preflight preserves a safe foreign-target stage", async () => {
-  const rootPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-atomic-foreign-stage-",
-  ));
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-foreign-stage-"));
   mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
   const root = await RootedDirectory.open(rootPath);
   const foreignTarget = parsePortableResourcePath("records/foreign.json");
@@ -485,10 +440,7 @@ test("atomic write preflight preserves a safe foreign-target stage", async () =>
       mode: 0o600,
     });
     equal(existsSync(path.join(rootPath, ...foreignStage.split("/"))), true);
-    equal(
-      readFileSync(path.join(rootPath, ...ownTarget.split("/")), "utf8"),
-      "own target",
-    );
+    equal(readFileSync(path.join(rootPath, ...ownTarget.split("/")), "utf8"), "own target");
   } finally {
     if (!released) releaseDurableAtomicFileStageAddress(address);
     await root.close();
@@ -539,15 +491,11 @@ test("stale replace expectation leaves the newer target untouched", async () => 
     writeFileSync(target, "external-change");
 
     await expectAtomicWriteError(
-      () => replaceFileAtomically(
-        root,
-        resourcePath,
-        Buffer.from("ours"),
-        {
+      () =>
+        replaceFileAtomically(root, resourcePath, Buffer.from("ours"), {
           mode: 0o600,
           expected: before,
-        },
-      ),
+        }),
       "expectation-changed",
       "$resourcePath",
     );
@@ -565,12 +513,9 @@ test("input bytes are snapshotted before asynchronous filesystem work", async ()
   try {
     const bytes = Buffer.from("immutable-snapshot");
     const expected = Buffer.from(bytes);
-    const pending = createFileAtomically(
-      root,
-      parsePortableResourcePath("state"),
-      bytes,
-      { mode: 0o600 },
-    );
+    const pending = createFileAtomically(root, parsePortableResourcePath("state"), bytes, {
+      mode: 0o600,
+    });
     bytes.fill(0x78);
     await pending;
     deepEqual(readFileSync(path.join(rootPath, "state")), expected);
@@ -594,12 +539,10 @@ test("missing or unsafe parent chains fail before stage creation", async () => {
     ];
     for (const [candidate, reason] of cases) {
       await expectAtomicWriteError(
-        () => createFileAtomically(
-          root,
-          parsePortableResourcePath(candidate),
-          Buffer.from("value"),
-          { mode: 0o600 },
-        ),
+        () =>
+          createFileAtomically(root, parsePortableResourcePath(candidate), Buffer.from("value"), {
+            mode: 0o600,
+          }),
         reason,
         "$resourcePath",
       );
@@ -628,33 +571,23 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
     ];
     for (const [options, expectedPath] of invalidCreate) {
       await expectAtomicWriteError(
-        () => createFileAtomically(
-          root,
-          resourcePath,
-          Buffer.from("value"),
-          asCreateOptions(options),
-        ),
+        () =>
+          createFileAtomically(root, resourcePath, Buffer.from("value"), asCreateOptions(options)),
         "input",
         expectedPath,
       );
     }
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        resourcePath,
-        "text" as unknown as Uint8Array,
-        { mode: 0o600 },
-      ),
+      () =>
+        createFileAtomically(root, resourcePath, "text" as unknown as Uint8Array, { mode: 0o600 }),
       "input",
       "$bytes",
     );
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        resourcePath,
-        new Uint8Array(new SharedArrayBuffer(1)),
-        { mode: 0o600 },
-      ),
+      () =>
+        createFileAtomically(root, resourcePath, new Uint8Array(new SharedArrayBuffer(1)), {
+          mode: 0o600,
+        }),
       "input",
       "$bytes",
     );
@@ -666,23 +599,16 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       },
     });
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        resourcePath,
-        byteProxy,
-        { mode: 0o600 },
-      ),
+      () => createFileAtomically(root, resourcePath, byteProxy, { mode: 0o600 }),
       "input",
       "$bytes",
     );
     equal(byteTrapCalls, 0);
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        asPortableResourcePath("../escape"),
-        Buffer.from("value"),
-        { mode: 0o600 },
-      ),
+      () =>
+        createFileAtomically(root, asPortableResourcePath("../escape"), Buffer.from("value"), {
+          mode: 0o600,
+        }),
       "input",
       "$resourcePath",
     );
@@ -697,12 +623,8 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       enumerable: true,
     });
     await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        resourcePath,
-        Buffer.from("value"),
-        asCreateOptions(accessor),
-      ),
+      () =>
+        createFileAtomically(root, resourcePath, Buffer.from("value"), asCreateOptions(accessor)),
       "input",
       "$options",
     );
@@ -711,61 +633,56 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
     const controller = new AbortController();
     controller.abort("private-abort");
     const aborted = await expectAtomicWriteError(
-      () => createFileAtomically(
-        root,
-        resourcePath,
-        Buffer.from("value"),
-        { mode: 0o600, signal: controller.signal },
-      ),
+      () =>
+        createFileAtomically(root, resourcePath, Buffer.from("value"), {
+          mode: 0o600,
+          signal: controller.signal,
+        }),
       "aborted",
       "$signal",
     );
     equal(aborted.message.includes("private-abort"), false);
 
-    const stable = await readStableFileDigest(
-      root,
-      parsePortableResourcePath("state"),
-      { maximumBytes: parseByteCount(1024) },
-    );
+    const stable = await readStableFileDigest(root, parsePortableResourcePath("state"), {
+      maximumBytes: parseByteCount(1024),
+    });
     await expectAtomicWriteError(
-      () => replaceFileAtomically(
-        root,
-        parsePortableResourcePath("state"),
-        Buffer.from("after"),
-        asReplaceOptions({
-          mode: 0o600,
-          expected: { ...stable, node: { ...stable.node } },
-        }),
-      ),
+      () =>
+        replaceFileAtomically(
+          root,
+          parsePortableResourcePath("state"),
+          Buffer.from("after"),
+          asReplaceOptions({
+            mode: 0o600,
+            expected: { ...stable, node: { ...stable.node } },
+          }),
+        ),
       "input",
       "$options.expected.node",
     );
     await expectAtomicWriteError(
-      () => replaceFileAtomically(
-        root,
-        parsePortableResourcePath("state"),
-        Buffer.from("after"),
-        {
+      () =>
+        replaceFileAtomically(root, parsePortableResourcePath("state"), Buffer.from("after"), {
           mode: 0o600,
           expected: {
             ...stable,
             resourcePath: parsePortableResourcePath("different"),
           },
-        },
-      ),
+        }),
       "input",
       "$options.expected.resourcePath",
     );
     await expectAtomicWriteError(
-      () => replaceFileAtomically(
-        root,
-        parsePortableResourcePath("state"),
-        Buffer.from("after"),
-        asReplaceOptions({
-          mode: 0o600,
-          expected: { ...stable, byteCount: stable.byteCount + 1 },
-        }),
-      ),
+      () =>
+        replaceFileAtomically(
+          root,
+          parsePortableResourcePath("state"),
+          Buffer.from("after"),
+          asReplaceOptions({
+            mode: 0o600,
+            expected: { ...stable, byteCount: stable.byteCount + 1 },
+          }),
+        ),
       "input",
       "$options.expected.byteCount",
     );

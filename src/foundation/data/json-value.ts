@@ -1,8 +1,8 @@
 import {
-  parseDenseArray,
-  parsePlainRecord,
   PassiveOwnDataError,
   type PassiveOwnDataErrorReason,
+  parseDenseArray,
+  parsePlainRecord,
 } from "./passive-own-data.js";
 
 /**
@@ -59,10 +59,10 @@ const ERROR_MESSAGES = {
   "non-finite-number": "JSON numbers must be finite IEEE 754 values.",
   "negative-zero": "Negative zero is not accepted as Wakeflow JSON data.",
   "lone-surrogate": "JSON strings must not contain lone Unicode surrogates.",
-  "cycle": "JSON values must not contain circular references.",
+  cycle: "JSON values must not contain circular references.",
   "maximum-depth": "The JSON value exceeds the structural depth limit.",
   "invalid-container": "The JSON container is not structurally valid.",
-  "proxy": "Proxy values are not accepted as JSON data.",
+  proxy: "Proxy values are not accepted as JSON data.",
   "record-prototype": "JSON objects require a plain or null prototype.",
   "symbol-key": "JSON containers must not contain symbol-keyed properties.",
   "non-enumerable-property": "JSON containers must not contain hidden properties.",
@@ -73,7 +73,7 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<JsonValueErrorReason, string>>;
 
 const PASSIVE_REASON_MAP = {
-  "proxy": "proxy",
+  proxy: "proxy",
   "value-type": "invalid-container",
   "record-prototype": "record-prototype",
   "symbol-key": "symbol-key",
@@ -84,9 +84,7 @@ const PASSIVE_REASON_MAP = {
   "array-length": "invalid-container",
   "array-slot": "array-slot",
   "array-extra-property": "array-extra-property",
-} as const satisfies Readonly<
-  Record<PassiveOwnDataErrorReason, JsonValueErrorReason>
->;
+} as const satisfies Readonly<Record<PassiveOwnDataErrorReason, JsonValueErrorReason>>;
 
 /**
  * JSON 值准入的稳定错误。
@@ -150,22 +148,17 @@ function parseArrayValue(
   ancestors: Set<object>,
   depth: number,
 ): JsonArray {
-  const source = readPassiveSnapshot(() => parseDenseArray(
-    sourceValue,
-    JAVASCRIPT_MAXIMUM_ARRAY_LENGTH,
-    path,
-  ));
+  const source = readPassiveSnapshot(() =>
+    parseDenseArray(sourceValue, JAVASCRIPT_MAXIMUM_ARRAY_LENGTH, path),
+  );
 
   ancestors.add(sourceValue);
   try {
     const snapshot: JsonValue[] = [];
     for (let index = 0; index < source.length; index += 1) {
-      snapshot.push(parseValue(
-        source[index],
-        appendPropertyPath(path, String(index)),
-        ancestors,
-        depth + 1,
-      ));
+      snapshot.push(
+        parseValue(source[index], appendPropertyPath(path, String(index)), ancestors, depth + 1),
+      );
     }
     return Object.freeze(snapshot);
   } finally {
@@ -187,11 +180,7 @@ function parseObjectValue(
     for (const key of Object.keys(source)) {
       if (!key.isWellFormed()) fail("lone-surrogate", path);
       const childPath = appendPropertyPath(path, key);
-      defineJsonProperty(
-        snapshot,
-        key,
-        parseValue(source[key], childPath, ancestors, depth + 1),
-      );
+      defineJsonProperty(snapshot, key, parseValue(source[key], childPath, ancestors, depth + 1));
     }
     return Object.freeze(snapshot);
   } finally {
@@ -242,11 +231,11 @@ function parseValue(
  */
 export function hasPassiveJsonSerializationEnvironment(): boolean {
   const hasStandardPrototypeChain =
-    Object.getPrototypeOf(Array.prototype) === Object.prototype
-    && Object.getPrototypeOf(Object.prototype) === null;
+    Object.getPrototypeOf(Array.prototype) === Object.prototype &&
+    Object.getPrototypeOf(Object.prototype) === null;
   const hasInheritedToJson =
-    Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
-    || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
+    Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined ||
+    Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
   return hasStandardPrototypeChain && !hasInheritedToJson;
 }
 
@@ -256,9 +245,6 @@ export function hasPassiveJsonSerializationEnvironment(): boolean {
  * 本函数不做字符串、数字或字段语义的隐式转换。共享引用按 JSON 值语义分别
  * 复制，循环引用会失败；调用方提供的 `errorPath` 只作为安全的结构路径前缀。
  */
-export function parseJsonValue(
-  value: unknown,
-  errorPath?: string,
-): JsonValue {
+export function parseJsonValue(value: unknown, errorPath?: string): JsonValue {
   return parseValue(value, normalizeErrorPath(errorPath), new Set<object>(), 0);
 }

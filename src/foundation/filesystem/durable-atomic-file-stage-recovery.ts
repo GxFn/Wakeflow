@@ -2,52 +2,47 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../crypto/sha256.js";
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 import {
-  unlinkRegularFileExactly,
-  ExactRegularFileUnlinkError,
-} from "./exact-regular-file-unlink.js";
-import {
-  sameFileNodeIdentity,
-  sameFileNodeSnapshot,
-  type FileNodeSnapshot,
-} from "./file-node-snapshot.js";
-import {
   computeDurableAtomicFileStageTargetDigest,
+  type DurableAtomicFileStageAddress,
+  DurableAtomicFileStageAddressError,
   hasDurableAtomicFileStagePrefix,
   parseDurableAtomicFileStageFileName,
   readDurableAtomicFileStageOwnerState,
-  DurableAtomicFileStageAddressError,
-  type DurableAtomicFileStageAddress,
 } from "./durable-atomic-file-stage-address.js";
+import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
 import {
-  settleRegularFileDurability,
   DurableRegularFileSettlementError,
+  settleRegularFileDurability,
 } from "./durable-regular-file-settlement.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
+  ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
+} from "./exact-regular-file-unlink.js";
+import {
+  type FileNodeSnapshot,
+  sameFileNodeIdentity,
+  sameFileNodeSnapshot,
+} from "./file-node-snapshot.js";
+import {
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
-  StableDirectoryReadError,
   type StableDirectoryEntry,
+  StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "./stable-directory-read.js";
-import {
-  readStableFileDigest,
-  StableFileReadError,
-} from "./stable-file-read.js";
-import {
-  DURABLE_ATOMIC_FILE_MAXIMUM_BYTES,
-} from "./durable-atomic-file-write-contract.js";
+import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 
 /**
  * Wakeflow Foundation / Filesystem：自描述原子暂存文件的有界崩溃恢复。
@@ -94,22 +89,19 @@ export type DurableAtomicFileStageRecoveryErrorReason =
   | "operation-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable atomic file stage recovery input is invalid.",
+  input: "Durable atomic file stage recovery input is invalid.",
   "root-scope": "Atomic file stage recovery lost its rooted scope.",
-  "directory": "Atomic file stage recovery parent directory is unavailable.",
-  "capacity": "Atomic file stage recovery inventory exceeds its bounded capacity.",
-  "inventory": "Atomic file stage recovery found an invalid reserved stage name.",
+  directory: "Atomic file stage recovery parent directory is unavailable.",
+  capacity: "Atomic file stage recovery inventory exceeds its bounded capacity.",
+  inventory: "Atomic file stage recovery found an invalid reserved stage name.",
   "node-policy": "Atomic file stage recovery found an unsafe stage node.",
   "target-scope": "Atomic file stage recovery found a stage outside its admitted targets.",
   "target-conflict": "Atomic file stage recovery cannot prove its published target.",
-  "busy": "Atomic file stage recovery inventory changed during observation.",
+  busy: "Atomic file stage recovery inventory changed during observation.",
   "cleanup-required": "Atomic file stage recovery could not retire an exact stage.",
-  "aborted": "Atomic file stage recovery was aborted before its next mutation.",
+  aborted: "Atomic file stage recovery was aborted before its next mutation.",
   "operation-failure": "Atomic file stage recovery failed.",
-} as const satisfies Readonly<Record<
-  DurableAtomicFileStageRecoveryErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableAtomicFileStageRecoveryErrorReason, string>>;
 
 export class DurableAtomicFileStageRecoveryError extends Error {
   override readonly name = "DurableAtomicFileStageRecoveryError";
@@ -117,10 +109,7 @@ export class DurableAtomicFileStageRecoveryError extends Error {
   readonly reason: DurableAtomicFileStageRecoveryErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DurableAtomicFileStageRecoveryErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DurableAtomicFileStageRecoveryErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -141,19 +130,16 @@ interface TargetScope {
   readonly targetDigests: ReadonlySet<Sha256Digest>;
 }
 
-function fail(
-  reason: DurableAtomicFileStageRecoveryErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableAtomicFileStageRecoveryErrorReason, path: string): never {
   throw new DurableAtomicFileStageRecoveryError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -168,16 +154,12 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -185,35 +167,26 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function assertCurrentOwner(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    typeof process.geteuid === "function"
-    && node.userId !== BigInt(process.geteuid())
-  ) {
+  if (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid())) {
     fail("node-policy", path);
   }
 }
 
-function assertStageNode(
-  stage: Readonly<StageEntry>,
-  index: number,
-): void {
+function assertStageNode(stage: Readonly<StageEntry>, index: number): void {
   const { address, entry } = stage;
   if (
-    entry.node.kind !== "file"
-    || entry.node.byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES
-    || (entry.node.permissionBits !== 0o600
-      && entry.node.permissionBits !== address.mode)
-    || (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n)
-    || (address.operation === "replace" && entry.node.linkCount !== 1n)
+    entry.node.kind !== "file" ||
+    entry.node.byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES ||
+    (entry.node.permissionBits !== 0o600 && entry.node.permissionBits !== address.mode) ||
+    (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n) ||
+    (address.operation === "replace" && entry.node.linkCount !== 1n)
   ) {
     fail("node-policy", `$stages/${index}`);
   }
   assertCurrentOwner(entry.node, `$stages/${index}`);
 }
 
-function parseDirectoryRef(
-  value: unknown,
-): PortableResourcePath | null {
+function parseDirectoryRef(value: unknown): PortableResourcePath | null {
   if (value === null) return null;
   try {
     return parsePortableResourcePath(value, "$directoryResourcePath");
@@ -225,13 +198,9 @@ function parseDirectoryRef(
   }
 }
 
-function parentDirectoryRef(
-  resourcePath: PortableResourcePath,
-): PortableResourcePath | null {
+function parentDirectoryRef(resourcePath: PortableResourcePath): PortableResourcePath | null {
   const segments = splitPortableResourcePath(resourcePath);
-  return segments.length === 1
-    ? null
-    : parsePortableResourcePath(segments.slice(0, -1).join("/"));
+  return segments.length === 1 ? null : parsePortableResourcePath(segments.slice(0, -1).join("/"));
 }
 
 function parseTargetScope(value: unknown): Readonly<TargetScope> {
@@ -255,10 +224,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
   for (const [index, value] of values.entries()) {
     let resourcePath: PortableResourcePath;
     try {
-      resourcePath = parsePortableResourcePath(
-        value,
-        `$targetResourcePaths/${index}`,
-      );
+      resourcePath = parsePortableResourcePath(value, `$targetResourcePaths/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
         fail("input", `$targetResourcePaths/${index}`);
@@ -279,9 +245,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
       throw error;
     }
   }
-  const directoryResourcePath = parentDirectoryRef(
-    paths[0] as PortableResourcePath,
-  );
+  const directoryResourcePath = parentDirectoryRef(paths[0] as PortableResourcePath);
   if (paths.some((path) => parentDirectoryRef(path) !== directoryResourcePath)) {
     fail("input", "$targetResourcePaths");
   }
@@ -311,9 +275,9 @@ async function readDirectory(
       if (error.reason === "root-scope") fail("root-scope", "$root");
       if (error.reason === "source-changed") fail("busy", "$directory");
       if (
-        error.reason === "not-found"
-        || error.reason === "symlink"
-        || error.reason === "not-directory"
+        error.reason === "not-found" ||
+        error.reason === "symlink" ||
+        error.reason === "not-directory"
       ) {
         fail("directory", "$directory");
       }
@@ -367,10 +331,7 @@ function collectStages(
 function indexTargetsByDigest(
   directory: Readonly<StableDirectoryReadResult>,
 ): ReadonlyMap<Sha256Digest, readonly Readonly<StableDirectoryEntry>[]> {
-  const targets = new Map<
-    Sha256Digest,
-    Readonly<StableDirectoryEntry>[]
-  >();
+  const targets = new Map<Sha256Digest, Readonly<StableDirectoryEntry>[]>();
   for (const entry of directory.entries) {
     if (hasDurableAtomicFileStagePrefix(entry.name)) continue;
     const digest = computeDurableAtomicFileStageTargetDigest(entry.resourcePath);
@@ -382,10 +343,7 @@ function indexTargetsByDigest(
 }
 
 function targetForStage(
-  targetsByDigest: ReadonlyMap<
-    Sha256Digest,
-    readonly Readonly<StableDirectoryEntry>[]
-  >,
+  targetsByDigest: ReadonlyMap<Sha256Digest, readonly Readonly<StableDirectoryEntry>[]>,
   stage: Readonly<StageEntry>,
 ): Readonly<StableDirectoryEntry> {
   const matches = targetsByDigest.get(stage.address.targetResourcePathDigest);
@@ -403,11 +361,11 @@ async function assertPublishedTarget(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   if (
-    target.node.kind !== "file"
-    || target.node.permissionBits !== stage.address.mode
-    || target.node.linkCount !== 2n
-    || !sameFileNodeIdentity(stage.entry.node, target.node)
-    || !sameFileNodeSnapshot(stage.entry.node, target.node)
+    target.node.kind !== "file" ||
+    target.node.permissionBits !== stage.address.mode ||
+    target.node.linkCount !== 2n ||
+    !sameFileNodeIdentity(stage.entry.node, target.node) ||
+    !sameFileNodeSnapshot(stage.entry.node, target.node)
   ) {
     fail("target-conflict", "$target");
   }
@@ -474,22 +432,17 @@ async function recoverDirectoryStages(
   const collected = collectStages(directory, tolerateUnrecognized);
   const observedStages = collected.stages;
   if (
-    targetDigests !== null
-    && foreignStagePolicy === "reject"
-    && observedStages.some((stage) => (
-      !targetDigests.has(stage.address.targetResourcePathDigest)
-    ))
+    targetDigests !== null &&
+    foreignStagePolicy === "reject" &&
+    observedStages.some((stage) => !targetDigests.has(stage.address.targetResourcePathDigest))
   ) {
     fail("target-scope", "$stages");
   }
-  const stages = targetDigests === null
-    ? observedStages
-    : observedStages.filter((stage) => (
-      targetDigests.has(stage.address.targetResourcePathDigest)
-    ));
-  const targetsByDigest = stages.some((stage) => (
-    stage.entry.node.linkCount === 2n
-  ))
+  const stages =
+    targetDigests === null
+      ? observedStages
+      : observedStages.filter((stage) => targetDigests.has(stage.address.targetResourcePathDigest));
+  const targetsByDigest = stages.some((stage) => stage.entry.node.linkCount === 2n)
     ? indexTargetsByDigest(directory)
     : null;
   let retiredStageCount = 0;
@@ -536,13 +489,7 @@ export async function recoverDurableAtomicFileStagesInDirectory(
   assertRoot(root);
   const directoryResourcePath = parseDirectoryRef(directoryResourcePathValue);
   const { signal } = parseOptions(options);
-  return recoverDirectoryStages(
-    root,
-    directoryResourcePath,
-    signal,
-    null,
-    "ignore",
-  );
+  return recoverDirectoryStages(root, directoryResourcePath, signal, null, "ignore");
 }
 
 /**

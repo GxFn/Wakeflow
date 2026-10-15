@@ -1,7 +1,4 @@
-import {
-  decodeUtf8,
-  Utf8Error,
-} from "../text/utf8.js";
+import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import {
@@ -36,11 +33,11 @@ export type StrictTextFileErrorReason =
   | "unicode-normalization";
 
 const ERROR_MESSAGES = {
-  "utf8": "Strict text file must contain valid fatal UTF-8.",
-  "bom": "Strict text file cannot begin with a UTF-8 BOM.",
+  utf8: "Strict text file must contain valid fatal UTF-8.",
+  bom: "Strict text file cannot begin with a UTF-8 BOM.",
   "line-endings": "Strict text file must use LF-only line endings.",
   "final-newline": "Strict text file must end with exactly one LF.",
-  "empty": "Strict text file must contain non-empty logical content.",
+  empty: "Strict text file must contain non-empty logical content.",
   "unicode-normalization": "Strict text file source must use Unicode NFC.",
 } as const satisfies Readonly<Record<StrictTextFileErrorReason, string>>;
 

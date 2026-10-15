@@ -1,14 +1,10 @@
 import { types } from "node:util";
 
+import { type JsonValue, JsonValueError, parseJsonValue } from "../data/json-value.js";
 import {
-  JsonValueError,
-  parseJsonValue,
-  type JsonValue,
-} from "../data/json-value.js";
-import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 
 /**
@@ -51,16 +47,13 @@ export type EventSourcingVersionEvolutionErrorReason =
   | "upcast";
 
 const ERROR_MESSAGES = {
-  "input": "Event Sourcing version evolution input is invalid.",
-  "definition": "Event Sourcing version evolution definition is invalid.",
+  input: "Event Sourcing version evolution input is invalid.",
+  definition: "Event Sourcing version evolution definition is invalid.",
   "unsupported-version": "Persisted Event Sourcing version is unsupported.",
-  "codec": "Persisted Event Sourcing version data is invalid.",
+  codec: "Persisted Event Sourcing version data is invalid.",
   "missing-step": "Event Sourcing version evolution chain is incomplete.",
-  "upcast": "Event Sourcing version upcast failed.",
-} as const satisfies Readonly<Record<
-  EventSourcingVersionEvolutionErrorReason,
-  string
->>;
+  upcast: "Event Sourcing version upcast failed.",
+} as const satisfies Readonly<Record<EventSourcingVersionEvolutionErrorReason, string>>;
 
 export class EventSourcingVersionEvolutionError extends Error {
   override readonly name = "EventSourcingVersionEvolutionError";
@@ -68,10 +61,7 @@ export class EventSourcingVersionEvolutionError extends Error {
   readonly reason: EventSourcingVersionEvolutionErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: EventSourcingVersionEvolutionErrorReason,
-    path: string,
-  ) {
+  constructor(reason: EventSourcingVersionEvolutionErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -84,10 +74,7 @@ interface ParsedDefinition {
   readonly steps: readonly Readonly<EventSourcingVersionUpcastStep>[];
 }
 
-function fail(
-  reason: EventSourcingVersionEvolutionErrorReason,
-  path: string,
-): never {
+function fail(reason: EventSourcingVersionEvolutionErrorReason, path: string): never {
   throw new EventSourcingVersionEvolutionError(reason, path);
 }
 
@@ -98,10 +85,7 @@ function parseVersion(value: unknown, path: string): number {
   return value as number;
 }
 
-function parseFunction(
-  value: unknown,
-  path: string,
-): (...args: never[]) => unknown {
+function parseFunction(value: unknown, path: string): (...args: never[]) => unknown {
   if (typeof value !== "function" || types.isProxy(value)) {
     fail("definition", path);
   }
@@ -122,21 +106,14 @@ function exactRecord(
   }
   const keys = Object.keys(record).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length
-    || keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     fail("definition", path);
   }
   return record;
 }
 
 function parseDefinition(value: unknown): Readonly<ParsedDefinition> {
-  const definition = exactRecord(
-    value,
-    ["codecs", "currentVersion", "steps"],
-    "$definition",
-  );
+  const definition = exactRecord(value, ["codecs", "currentVersion", "steps"], "$definition");
   let codecValues: readonly unknown[];
   let stepValues: readonly unknown[];
   try {
@@ -158,19 +135,9 @@ function parseDefinition(value: unknown): Readonly<ParsedDefinition> {
     });
   });
   const steps = stepValues.map((value, index) => {
-    const record = exactRecord(
-      value,
-      ["fromVersion", "toVersion", "upcast"],
-      `$/steps/${index}`,
-    );
-    const fromVersion = parseVersion(
-      record.fromVersion,
-      `$/steps/${index}/fromVersion`,
-    );
-    const toVersion = parseVersion(
-      record.toVersion,
-      `$/steps/${index}/toVersion`,
-    );
+    const record = exactRecord(value, ["fromVersion", "toVersion", "upcast"], `$/steps/${index}`);
+    const fromVersion = parseVersion(record.fromVersion, `$/steps/${index}/fromVersion`);
+    const toVersion = parseVersion(record.toVersion, `$/steps/${index}/toVersion`);
     if (toVersion !== fromVersion + 1) {
       fail("definition", `$/steps/${index}/toVersion`);
     }
@@ -184,10 +151,7 @@ function parseDefinition(value: unknown): Readonly<ParsedDefinition> {
     });
   });
   return Object.freeze({
-    currentVersion: parseVersion(
-      definition.currentVersion,
-      "$/currentVersion",
-    ),
+    currentVersion: parseVersion(definition.currentVersion, "$/currentVersion"),
     codecs: Object.freeze(codecs),
     steps: Object.freeze(steps),
   });
@@ -228,10 +192,10 @@ export class EventSourcingVersionEvolutionRegistry {
     const steps = new Map<number, Readonly<EventSourcingVersionUpcastStep>>();
     for (const [index, step] of definition.steps.entries()) {
       if (
-        step.toVersion > definition.currentVersion
-        || steps.has(step.fromVersion)
-        || !codecs.has(step.fromVersion)
-        || !codecs.has(step.toVersion)
+        step.toVersion > definition.currentVersion ||
+        steps.has(step.fromVersion) ||
+        !codecs.has(step.fromVersion) ||
+        !codecs.has(step.toVersion)
       ) {
         fail("definition", `$/steps/${index}`);
       }
@@ -243,9 +207,7 @@ export class EventSourcingVersionEvolutionRegistry {
       }
     }
     this.#currentVersion = definition.currentVersion;
-    this.#supportedVersions = Object.freeze([...codecs.keys()].sort(
-      (left, right) => left - right,
-    ));
+    this.#supportedVersions = Object.freeze([...codecs.keys()].sort((left, right) => left - right));
     this.#codecs = codecs;
     this.#steps = steps;
   }
@@ -263,10 +225,7 @@ export class EventSourcingVersionEvolutionRegistry {
     sourceVersionValue: unknown,
     sourceDataValue: unknown,
   ): Readonly<EventSourcingVersionEvolutionResult> {
-    if (
-      !Number.isSafeInteger(sourceVersionValue)
-      || (sourceVersionValue as number) < 1
-    ) {
+    if (!Number.isSafeInteger(sourceVersionValue) || (sourceVersionValue as number) < 1) {
       fail("input", "$sourceVersion");
     }
     const sourceVersion = sourceVersionValue as number;
@@ -293,11 +252,7 @@ export class EventSourcingVersionEvolutionRegistry {
       if (codec === undefined) {
         fail("missing-step", `$/codecs/${step.toVersion}`);
       }
-      const intermediate = snapshotJson(
-        upcasted,
-        `$/steps/${version}`,
-        "upcast",
-      );
+      const intermediate = snapshotJson(upcasted, `$/steps/${version}`, "upcast");
       try {
         parsed = codec.parse(intermediate);
       } catch {

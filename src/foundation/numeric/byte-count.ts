@@ -21,10 +21,7 @@ export type ByteCount = number & {
 export const MAX_SAFE_BYTE_COUNT = Number.MAX_SAFE_INTEGER as ByteCount;
 
 /** 字节数准入或运算失败的稳定分类。 */
-export type ByteCountErrorReason =
-  | "number-range"
-  | "bigint-range"
-  | "addition-overflow";
+export type ByteCountErrorReason = "number-range" | "bigint-range" | "addition-overflow";
 
 const ERROR_MESSAGES = {
   "number-range": "Byte count must be a non-negative safe integer number.",
@@ -64,11 +61,7 @@ function fail(reason: ByteCountErrorReason, path: string): never {
 }
 
 function parseNumberByteCount(value: unknown, path: string): ByteCount {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail("number-range", path);
   }
   return value as ByteCount;
@@ -80,10 +73,7 @@ function parseNumberByteCount(value: unknown, path: string): ByteCount {
  * `Number.MAX_SAFE_INTEGER` 是合法值；具体文件或目录树通常应由领域职责所有者
  * 使用更小的上限。
  */
-export function parseByteCount(
-  value: unknown,
-  errorPath?: string,
-): ByteCount {
+export function parseByteCount(value: unknown, errorPath?: string): ByteCount {
   return parseNumberByteCount(value, normalizeErrorPath(errorPath));
 }
 
@@ -93,16 +83,9 @@ export function parseByteCount(
  * 只有非负且不超过 `Number.MAX_SAFE_INTEGER` 的 `bigint` 才会转换，因此不会丢失
  * 整数精度。`number` 输入必须显式使用 `parseByteCount`，避免混淆数据来源。
  */
-export function byteCountFromBigInt(
-  value: bigint,
-  errorPath?: string,
-): ByteCount {
+export function byteCountFromBigInt(value: bigint, errorPath?: string): ByteCount {
   const path = normalizeErrorPath(errorPath);
-  if (
-    typeof value !== "bigint"
-    || value < 0n
-    || value > BigInt(Number.MAX_SAFE_INTEGER)
-  ) {
+  if (typeof value !== "bigint" || value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
     fail("bigint-range", path);
   }
   return Number(value) as ByteCount;
@@ -113,11 +96,7 @@ export function byteCountFromBigInt(
  *
  * 溢出在执行加法前判断，不允许超过安全整数范围的近似 Number 进入结果。
  */
-export function addByteCounts(
-  left: ByteCount,
-  right: ByteCount,
-  errorPath?: string,
-): ByteCount {
+export function addByteCounts(left: ByteCount, right: ByteCount, errorPath?: string): ByteCount {
   const path = normalizeErrorPath(errorPath);
   const admittedLeft = parseNumberByteCount(left, memberPath(path, "left"));
   const admittedRight = parseNumberByteCount(right, memberPath(path, "right"));

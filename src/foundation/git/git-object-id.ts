@@ -44,10 +44,7 @@ function fail(reason: GitObjectIdErrorReason, path: string): never {
 }
 
 /** 严格解析一个带算法标签的完整Git object ID。 */
-export function parseGitObjectId(
-  value: unknown,
-  path = "$gitObjectId",
-): Readonly<GitObjectId> {
+export function parseGitObjectId(value: unknown, path = "$gitObjectId"): Readonly<GitObjectId> {
   let json;
   try {
     json = parseJsonValue(value, path);
@@ -68,7 +65,6 @@ export function sameGitObjectId(left: unknown, right: unknown): boolean {
   const admittedLeft = parseGitObjectId(left, "$left");
   const admittedRight = parseGitObjectId(right, "$right");
   return (
-    admittedLeft.algorithm === admittedRight.algorithm &&
-    admittedLeft.value === admittedRight.value
+    admittedLeft.algorithm === admittedRight.algorithm && admittedLeft.value === admittedRight.value
   );
 }

@@ -1,21 +1,18 @@
 import { equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 import {
-  readNodeSystemErrorCode,
   type NodeSystemErrorCode,
+  readNodeSystemErrorCode,
 } from "../../../src/foundation/node/node-system-error.js";
 
 test("real Node.js filesystem errors expose their exact errno code", () => {
-  const missing = path.join(
-    os.tmpdir(),
-    `wakeflow-node-system-error-${randomUUID()}`,
-  );
+  const missing = path.join(os.tmpdir(), `wakeflow-node-system-error-${randomUUID()}`);
   let caught: unknown;
   try {
     readFileSync(missing);
@@ -35,8 +32,7 @@ test("native and cross-realm Error objects expose canonical own data codes", () 
     configurable: true,
   });
 
-  const code: NodeSystemErrorCode | undefined =
-    readNodeSystemErrorCode(error);
+  const code: NodeSystemErrorCode | undefined = readNodeSystemErrorCode(error);
   equal(code, "EXDEV");
 
   const crossRealm: unknown = runInNewContext(

@@ -3,27 +3,20 @@ import { types } from "node:util";
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
-  ByteCountError,
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
-import {
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
@@ -66,8 +59,7 @@ export type DurableAtomicFilePublication = "created" | "replaced";
 
 /** 成功结果只描述已经复验并完成父目录同步的最终目标。 */
 export interface DurableAtomicFileWriteResult<
-  Publication extends DurableAtomicFilePublication =
-    DurableAtomicFilePublication,
+  Publication extends DurableAtomicFilePublication = DurableAtomicFilePublication,
 > {
   readonly resourcePath: PortableResourcePath;
   readonly publication: Publication;
@@ -77,8 +69,7 @@ export interface DurableAtomicFileWriteResult<
 }
 
 /** 替换成功后，同时签发已经核验的完整前序源资源。 */
-export interface DurableAtomicFileReplaceResult
-  extends DurableAtomicFileWriteResult<"replaced"> {
+export interface DurableAtomicFileReplaceResult extends DurableAtomicFileWriteResult<"replaced"> {
   readonly previous: Readonly<DurableAtomicFileExpectation>;
 }
 
@@ -109,7 +100,7 @@ export type DurableAtomicFileWriteErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable atomic file write input is invalid.",
+  input: "Durable atomic file write input is invalid.",
   "root-scope": "Atomic file target could not establish its rooted scope.",
   "parent-not-found": "Atomic file target parent directory does not exist.",
   "parent-symlink": "Atomic file target parent chain cannot contain a symbolic link.",
@@ -121,7 +112,7 @@ const ERROR_MESSAGES = {
   "expectation-changed": "Atomic file replace expectation no longer matches the target.",
   "expectation-read-failure": "Atomic file replace target could not be re-read safely.",
   "hash-failure": "Atomic file input digest could not be computed safely.",
-  "capacity": "Atomic file input exceeds the recoverable stage capacity.",
+  capacity: "Atomic file input exceeds the recoverable stage capacity.",
   "stage-create-failure": "Private atomic file stage could not be created safely.",
   "stage-write-failure": "Private atomic file stage could not be written exactly.",
   "stage-sync-failure": "Private atomic file stage could not be synchronized safely.",
@@ -131,12 +122,9 @@ const ERROR_MESSAGES = {
   "durability-failure": "Published atomic file directory entry could not be synchronized.",
   "stage-cleanup-failure": "Private atomic file stage could not be retired safely.",
   "stage-recovery-required": "Private atomic file stage recovery requires explicit intervention.",
-  "aborted": "Durable atomic file write was aborted before publication.",
+  aborted: "Durable atomic file write was aborted before publication.",
   "close-failure": "An atomic file write handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  DurableAtomicFileWriteErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableAtomicFileWriteErrorReason, string>>;
 
 /** 耐久单文件写入的稳定、脱敏错误。 */
 export class DurableAtomicFileWriteError extends Error {
@@ -157,8 +145,7 @@ interface ParsedDurableAtomicFileWriteOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-interface ParsedDurableAtomicFileCreateOptions
-  extends ParsedDurableAtomicFileWriteOptions {
+interface ParsedDurableAtomicFileCreateOptions extends ParsedDurableAtomicFileWriteOptions {
   readonly durability: DurableAtomicFileDurability;
 }
 
@@ -166,8 +153,7 @@ interface ParsedDurableAtomicFileCreateOptions
  * 替换没有逐次豁免：解析结果里根本不带 `durability`，调用方也就无从转发一个
  * 恰好等于 `fsync` 的常量。替换的持久化级别只由根决定。
  */
-interface ParsedDurableAtomicFileReplaceOptions
-  extends ParsedDurableAtomicFileWriteOptions {
+interface ParsedDurableAtomicFileReplaceOptions extends ParsedDurableAtomicFileWriteOptions {
   readonly expected: Readonly<DurableAtomicFileExpectation>;
 }
 
@@ -184,41 +170,34 @@ export function failDurableAtomicFileWrite(
   throw new DurableAtomicFileWriteError(reason, path);
 }
 
-export function assertDurableAtomicFileNotAborted(
-  signal: AbortSignal | undefined,
-): void {
+export function assertDurableAtomicFileNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) {
     failDurableAtomicFileWrite("aborted", "$signal");
   }
 }
 
-export function assertDurableAtomicFileRoot(
-  value: unknown,
-): asserts value is RootedDirectory {
+export function assertDurableAtomicFileRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     failDurableAtomicFileWrite("input", "$root");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseMode(value: unknown): number {
-  if (
-    typeof value !== "number"
-    || !Number.isInteger(value)
-    || value < 0
-    || value > 0o777
-  ) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
     failDurableAtomicFileWrite("input", "$options.mode");
   }
   return value;
@@ -240,8 +219,8 @@ function parseOptionRecord(
   }
   const allowed = new Set([...required, ...optional, "signal"]);
   if (
-    required.some((field) => !Object.hasOwn(record, field))
-    || Object.keys(record).some((key) => !allowed.has(key))
+    required.some((field) => !Object.hasOwn(record, field)) ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     failDurableAtomicFileWrite("input", "$options");
   }
@@ -277,18 +256,15 @@ export function parseDurableAtomicFileCreateOptions(
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     failDurableAtomicFileWrite("input", "$options.expected.node");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       failDurableAtomicFileWrite("input", "$options.expected.node");
     }
   } catch (error: unknown) {
@@ -304,9 +280,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   return node;
 }
 
-function parseExpectation(
-  value: unknown,
-): Readonly<DurableAtomicFileExpectation> {
+function parseExpectation(value: unknown): Readonly<DurableAtomicFileExpectation> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$options.expected");
@@ -318,20 +292,17 @@ function parseExpectation(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 4
-    || keys[0] !== "byteCount"
-    || keys[1] !== "digest"
-    || keys[2] !== "node"
-    || keys[3] !== "resourcePath"
+    keys.length !== 4 ||
+    keys[0] !== "byteCount" ||
+    keys[1] !== "digest" ||
+    keys[2] !== "node" ||
+    keys[3] !== "resourcePath"
   ) {
     failDurableAtomicFileWrite("input", "$options.expected");
   }
   let resourcePath: PortableResourcePath;
   try {
-    resourcePath = parsePortableResourcePath(
-      record.resourcePath,
-      "$options.expected.resourcePath",
-    );
+    resourcePath = parsePortableResourcePath(record.resourcePath, "$options.expected.resourcePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
       failDurableAtomicFileWrite("input", "$options.expected.resourcePath");
@@ -340,10 +311,7 @@ function parseExpectation(
   }
   let byteCount: ByteCount;
   try {
-    byteCount = parseByteCount(
-      record.byteCount,
-      "$options.expected.byteCount",
-    );
+    byteCount = parseByteCount(record.byteCount, "$options.expected.byteCount");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
       failDurableAtomicFileWrite("input", "$options.expected.byteCount");
@@ -381,12 +349,12 @@ export function snapshotDurableAtomicFileInputBytes(
   value: unknown,
 ): Readonly<DurableAtomicFileInputBytes> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ArrayBuffer.isView(value)
-    || !(value instanceof Uint8Array)
-    || value.buffer instanceof SharedArrayBuffer
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ArrayBuffer.isView(value) ||
+    !(value instanceof Uint8Array) ||
+    value.buffer instanceof SharedArrayBuffer
   ) {
     failDurableAtomicFileWrite("input", "$bytes");
   }

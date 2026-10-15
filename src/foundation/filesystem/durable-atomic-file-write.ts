@@ -1,36 +1,17 @@
-import {
-  link,
-  rename,
-} from "node:fs/promises";
+import { link, rename } from "node:fs/promises";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import {
-  type DurableAtomicFileDurability,
-  assertDurableAtomicFileNotAborted,
-  assertDurableAtomicFileRoot,
-  failDurableAtomicFileWrite as fail,
-  parseDurableAtomicFileCreateOptions,
-  parseDurableAtomicFileReplaceOptions,
-  snapshotDurableAtomicFileInputBytes,
-  type DurableAtomicFileCreateOptions,
-  type DurableAtomicFileExpectation,
-  type DurableAtomicFileInputBytes,
-  type DurableAtomicFilePublication,
-  type DurableAtomicFileReplaceOptions,
-  type DurableAtomicFileReplaceResult,
-  type DurableAtomicFileWriteResult,
-} from "./durable-atomic-file-write-contract.js";
 import {
   assertDurableAtomicFileStageCurrent,
   closeDurableAtomicFileStageHandle,
   createExclusiveDurableAtomicFileStage,
+  type OpenDurableAtomicFileStage,
+  type PreparedDurableAtomicFileStage,
   prepareDurableAtomicFileStage,
   recoverDurableAtomicFileStagesBeforeWrite,
   releaseDurableAtomicFileStage,
   unlinkOwnedDurableAtomicFileStage,
   verifyDurableAtomicFileHandleBytes,
-  type OpenDurableAtomicFileStage,
-  type PreparedDurableAtomicFileStage,
 } from "./durable-atomic-file-stage-io.js";
 import {
   assertDurableAtomicFileTargetAbsent,
@@ -42,9 +23,22 @@ import {
   syncDurableAtomicFileTargetParent,
 } from "./durable-atomic-file-target-io.js";
 import {
-  sameFileNodeSnapshot,
-  type FileNodeSnapshot,
-} from "./file-node-snapshot.js";
+  assertDurableAtomicFileNotAborted,
+  assertDurableAtomicFileRoot,
+  type DurableAtomicFileCreateOptions,
+  type DurableAtomicFileDurability,
+  type DurableAtomicFileExpectation,
+  type DurableAtomicFileInputBytes,
+  type DurableAtomicFilePublication,
+  type DurableAtomicFileReplaceOptions,
+  type DurableAtomicFileReplaceResult,
+  type DurableAtomicFileWriteResult,
+  failDurableAtomicFileWrite as fail,
+  parseDurableAtomicFileCreateOptions,
+  parseDurableAtomicFileReplaceOptions,
+  snapshotDurableAtomicFileInputBytes,
+} from "./durable-atomic-file-write-contract.js";
+import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 
@@ -65,9 +59,7 @@ import { RootedDirectory } from "./rooted-directory.js";
  * 的根抬回 `fsync`。
  */
 
-async function performWrite<
-  Publication extends DurableAtomicFilePublication,
->(
+async function performWrite<Publication extends DurableAtomicFilePublication>(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   input: Readonly<DurableAtomicFileInputBytes>,
@@ -77,8 +69,7 @@ async function performWrite<
   expected: Readonly<DurableAtomicFileExpectation> | null,
   requested: DurableAtomicFileDurability,
 ): Promise<Readonly<DurableAtomicFileWriteResult<Publication>>> {
-  const durability: DurableAtomicFileDurability =
-    root.durability === "none" ? "none" : requested;
+  const durability: DurableAtomicFileDurability = root.durability === "none" ? "none" : requested;
   const parent = await openDurableAtomicFileTargetParent(root, resourcePath);
   let openStage: Readonly<OpenDurableAtomicFileStage> | undefined;
   let stage: Readonly<PreparedDurableAtomicFileStage> | undefined;
@@ -93,12 +84,7 @@ async function performWrite<
     if (publication === "created") {
       await assertDurableAtomicFileTargetAbsent(parent);
     } else if (expected !== null) {
-      await assertExpectedDurableAtomicFileTarget(
-        root,
-        resourcePath,
-        expected,
-        signal,
-      );
+      await assertExpectedDurableAtomicFileTarget(root, resourcePath, expected, signal);
     }
 
     openStage = await createExclusiveDurableAtomicFileStage(
@@ -109,13 +95,7 @@ async function performWrite<
       mode,
     );
     stagePathOwned = true;
-    stage = await prepareDurableAtomicFileStage(
-      openStage,
-      input,
-      mode,
-      signal,
-      durability,
-    );
+    stage = await prepareDurableAtomicFileStage(openStage, input, mode, signal, durability);
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
     assertDurableAtomicFileNotAborted(signal);
@@ -123,12 +103,7 @@ async function performWrite<
     if (publication === "created") {
       await assertDurableAtomicFileTargetAbsent(parent);
     } else if (expected !== null) {
-      await assertExpectedDurableAtomicFileTarget(
-        root,
-        resourcePath,
-        expected,
-        signal,
-      );
+      await assertExpectedDurableAtomicFileTarget(root, resourcePath, expected, signal);
     }
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
@@ -207,13 +182,7 @@ async function performWrite<
         undefined,
         "commit-uncertain",
       );
-      finalNode = await inspectCommittedDurableAtomicFileTarget(
-        parent,
-        stage,
-        input,
-        mode,
-        1n,
-      );
+      finalNode = await inspectCommittedDurableAtomicFileTarget(parent, stage, input, mode, 1n);
       if (!sameFileNodeSnapshot(verifiedFinalNode, finalNode)) {
         fail("commit-uncertain", "$resourcePath");
       }
@@ -250,13 +219,7 @@ async function performWrite<
       }
       if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
       await assertDurableAtomicFileTargetParentCurrent(parent);
-      finalNode = await inspectCommittedDurableAtomicFileTarget(
-        parent,
-        stage,
-        input,
-        mode,
-        1n,
-      );
+      finalNode = await inspectCommittedDurableAtomicFileTarget(parent, stage, input, mode, 1n);
       if (!sameFileNodeSnapshot(committedNode, finalNode)) {
         fail("commit-uncertain", "$resourcePath");
       }
@@ -355,12 +318,12 @@ export async function replaceFileAtomically(
 }
 
 export {
-  DurableAtomicFileWriteError,
   type DurableAtomicFileCreateOptions,
   type DurableAtomicFileExpectation,
   type DurableAtomicFilePublication,
   type DurableAtomicFileReplaceOptions,
   type DurableAtomicFileReplaceResult,
+  DurableAtomicFileWriteError,
   type DurableAtomicFileWriteErrorReason,
   type DurableAtomicFileWriteResult,
 } from "./durable-atomic-file-write-contract.js";

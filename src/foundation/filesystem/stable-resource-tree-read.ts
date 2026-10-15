@@ -1,28 +1,22 @@
 import { types } from "node:util";
 import pLimit from "p-limit";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
   addByteCounts,
+  type ByteCount,
   ByteCountError,
   parseByteCount,
-  type ByteCount,
 } from "../numeric/byte-count.js";
 import {
-  BoundedDirectoryTreeScanError,
-  scanBoundedResourceDirectoryTree,
-  scanBoundedRootDirectoryTree,
   type BoundedDirectoryTreeEntry,
+  BoundedDirectoryTreeScanError,
   type BoundedDirectoryTreeScanOptions,
   type BoundedDirectoryTreeScanResult,
+  scanBoundedResourceDirectoryTree,
+  scanBoundedRootDirectoryTree,
 } from "./bounded-directory-tree-scan.js";
-import {
-  sameFileNodeSnapshot,
-  type FileNodeSnapshot,
-} from "./file-node-snapshot.js";
+import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
@@ -76,8 +70,7 @@ export interface StableResourceTreeFile extends StableFileSource {
  * 稳定摘要读取的普通文件，并沿用相同的资源路径确定顺序。
  */
 export interface StableResourceTreeReadResult<
-  TreeRootResourcePath extends PortableResourcePath | null =
-    PortableResourcePath | null,
+  TreeRootResourcePath extends PortableResourcePath | null = PortableResourcePath | null,
 > {
   readonly treeRootResourcePath: TreeRootResourcePath;
   readonly treeRootNode: Readonly<FileNodeSnapshot>;
@@ -104,10 +97,10 @@ export type StableResourceTreeReadErrorReason =
   | "aborted";
 
 const ERROR_MESSAGES = {
-  "input": "Stable resource tree read input is invalid.",
+  input: "Stable resource tree read input is invalid.",
   "root-scope": "Stable resource tree read could not establish its rooted scope.",
   "not-found": "Stable resource tree read target does not exist.",
-  "symlink": "Stable resource tree read target cannot be a symbolic link.",
+  symlink: "Stable resource tree read target cannot be a symbolic link.",
   "not-directory": "Stable resource tree read target must be a directory.",
   "entry-limit": "Stable resource tree exceeds the caller entry limit.",
   "depth-limit": "Stable resource tree exceeds the caller depth limit.",
@@ -117,10 +110,8 @@ const ERROR_MESSAGES = {
   "entry-path": "Stable resource tree contains a non-portable resource path.",
   "io-failure": "Stable resource tree facts could not be observed safely.",
   "source-changed": "Stable resource tree changed while it was being read.",
-  "aborted": "Stable resource tree read was aborted.",
-} as const satisfies Readonly<
-  Record<StableResourceTreeReadErrorReason, string>
->;
+  aborted: "Stable resource tree read was aborted.",
+} as const satisfies Readonly<Record<StableResourceTreeReadErrorReason, string>>;
 
 /**
  * 稳定资源树读取的公共、脱敏错误。
@@ -152,28 +143,21 @@ interface ParsedStableResourceTreeReadOptions {
 
 type TreeRootResourcePath = PortableResourcePath | null;
 
-function fail(
-  reason: StableResourceTreeReadErrorReason,
-  path: string,
-): never {
+function fail(reason: StableResourceTreeReadErrorReason, path: string): never {
   throw new StableResourceTreeReadError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
 function parseCount(value: unknown, path: string): number {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail("input", path);
   }
   return value;
@@ -188,9 +172,7 @@ function parseBytes(value: unknown, path: string): ByteCount {
   }
 }
 
-function parseOptions(
-  value: unknown,
-): Readonly<ParsedStableResourceTreeReadOptions> {
+function parseOptions(value: unknown): Readonly<ParsedStableResourceTreeReadOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$options");
@@ -208,8 +190,8 @@ function parseOptions(
   ] as const);
   const allowed = new Set([...required, "expectedNode", "signal"]);
   if (
-    required.some((field) => !Object.hasOwn(record, field))
-    || Object.keys(record).some((key) => !allowed.has(key))
+    required.some((field) => !Object.hasOwn(record, field)) ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
@@ -217,39 +199,22 @@ function parseOptions(
     fail("input", "$options.signal");
   }
   return Object.freeze({
-    maximumEntries: parseCount(
-      record.maximumEntries,
-      "$options.maximumEntries",
-    ),
-    maximumDepth: parseCount(
-      record.maximumDepth,
-      "$options.maximumDepth",
-    ),
-    maximumFiles: parseCount(
-      record.maximumFiles,
-      "$options.maximumFiles",
-    ),
-    maximumFileBytes: parseBytes(
-      record.maximumFileBytes,
-      "$options.maximumFileBytes",
-    ),
-    maximumTotalBytes: parseBytes(
-      record.maximumTotalBytes,
-      "$options.maximumTotalBytes",
-    ),
-    expectedNode: record.expectedNode as
-      | Readonly<FileNodeSnapshot>
-      | undefined,
+    maximumEntries: parseCount(record.maximumEntries, "$options.maximumEntries"),
+    maximumDepth: parseCount(record.maximumDepth, "$options.maximumDepth"),
+    maximumFiles: parseCount(record.maximumFiles, "$options.maximumFiles"),
+    maximumFileBytes: parseBytes(record.maximumFileBytes, "$options.maximumFileBytes"),
+    maximumTotalBytes: parseBytes(record.maximumTotalBytes, "$options.maximumTotalBytes"),
+    expectedNode: record.expectedNode as Readonly<FileNodeSnapshot> | undefined,
     signal: record.signal,
   });
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -259,22 +224,19 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function mapTreeScanError(
-  error: BoundedDirectoryTreeScanError,
-  phase: "before" | "after",
-): never {
+function mapTreeScanError(error: BoundedDirectoryTreeScanError, phase: "before" | "after"): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") fail("source-changed", "$tree");
   if (phase === "after") {
     if (
-      error.reason === "not-found"
-      || error.reason === "symlink"
-      || error.reason === "not-directory"
-      || error.reason === "entry-limit"
-      || error.reason === "depth-limit"
-      || error.reason === "entry-path"
+      error.reason === "not-found" ||
+      error.reason === "symlink" ||
+      error.reason === "not-directory" ||
+      error.reason === "entry-limit" ||
+      error.reason === "depth-limit" ||
+      error.reason === "entry-path"
     ) {
       fail("source-changed", "$tree");
     }
@@ -291,20 +253,17 @@ function mapTreeScanError(
 
 function mapStableFileReadError(error: StableFileReadError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (
-    error.reason === "root-scope"
-    || error.reason === "unsupported-platform"
-  ) {
+  if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
     fail("root-scope", "$root");
   }
   if (error.reason === "too-large") fail("io-failure", "$tree.files");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (
-    error.reason === "not-found"
-    || error.reason === "symlink"
-    || error.reason === "not-file"
-    || error.reason === "expectation-changed"
-    || error.reason === "source-changed"
+    error.reason === "not-found" ||
+    error.reason === "symlink" ||
+    error.reason === "not-file" ||
+    error.reason === "expectation-changed" ||
+    error.reason === "source-changed"
   ) {
     fail("source-changed", "$tree.files");
   }
@@ -334,11 +293,7 @@ async function scanTree(
     const parsed = scanOptions(options, expectedNode);
     return treeRootResourcePath === null
       ? await scanBoundedRootDirectoryTree(root, parsed)
-      : await scanBoundedResourceDirectoryTree(
-          root,
-          treeRootResourcePath,
-          parsed,
-        );
+      : await scanBoundedResourceDirectoryTree(root, treeRootResourcePath, parsed);
   } catch (error: unknown) {
     if (error instanceof BoundedDirectoryTreeScanError) {
       mapTreeScanError(error, phase);
@@ -347,10 +302,7 @@ async function scanTree(
   }
 }
 
-function addTreeBytes(
-  current: ByteCount,
-  next: ByteCount,
-): ByteCount {
+function addTreeBytes(current: ByteCount, next: ByteCount): ByteCount {
   try {
     return addByteCounts(current, next, "$tree.totalFileBytes");
   } catch (error: unknown) {
@@ -431,18 +383,22 @@ function sameTree(
   left: Readonly<BoundedDirectoryTreeScanResult>,
   right: Readonly<BoundedDirectoryTreeScanResult>,
 ): boolean {
-  return left.treeRootResourcePath === right.treeRootResourcePath
-    && sameFileNodeSnapshot(left.treeRootNode, right.treeRootNode)
-    && left.entries.length === right.entries.length
-    && left.entries.every((entry, index) => {
+  return (
+    left.treeRootResourcePath === right.treeRootResourcePath &&
+    sameFileNodeSnapshot(left.treeRootNode, right.treeRootNode) &&
+    left.entries.length === right.entries.length &&
+    left.entries.every((entry, index) => {
       const other = right.entries[index];
-      return other !== undefined
-        && entry.name === other.name
-        && entry.resourcePath === other.resourcePath
-        && entry.parentResourcePath === other.parentResourcePath
-        && entry.depth === other.depth
-        && sameFileNodeSnapshot(entry.node, other.node);
-    });
+      return (
+        other !== undefined &&
+        entry.name === other.name &&
+        entry.resourcePath === other.resourcePath &&
+        entry.parentResourcePath === other.parentResourcePath &&
+        entry.depth === other.depth &&
+        sameFileNodeSnapshot(entry.node, other.node)
+      );
+    })
+  );
 }
 
 async function readTree<TreeRoot extends TreeRootResourcePath>(
@@ -459,13 +415,7 @@ async function readTree<TreeRoot extends TreeRootResourcePath>(
   );
   const planned = collectFileEntries(before, options);
   const files = await readFiles(root, planned.entries, options);
-  const after = await scanTree(
-    root,
-    treeRootResourcePath,
-    options,
-    before.treeRootNode,
-    "after",
-  );
+  const after = await scanTree(root, treeRootResourcePath, options, before.treeRootNode, "after");
   if (!sameTree(before, after)) fail("source-changed", "$tree");
   assertNotAborted(options.signal);
   return Object.freeze({

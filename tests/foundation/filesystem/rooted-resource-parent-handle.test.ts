@@ -1,19 +1,12 @@
 import { equal } from "node:assert/strict";
-import {
-  mkdirSync,
-  mkdtempSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -109,11 +102,8 @@ test("missing, symlink, and non-directory parents fail distinctly", async () => 
     ];
     for (const [candidate, reason] of cases) {
       await expectParentHandleError(
-        () => RootedResourceParentHandle.open(
-          root,
-          parsePortableResourcePath(candidate),
-          "$.target",
-        ),
+        () =>
+          RootedResourceParentHandle.open(root, parsePortableResourcePath(candidate), "$.target"),
         reason,
         "$.target",
       );
@@ -130,11 +120,7 @@ test("resource and root inputs are revalidated without executing proxies", async
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectParentHandleError(
-      () => RootedResourceParentHandle.open(
-        root,
-        asPortableResourcePath("../escape"),
-        "$.target",
-      ),
+      () => RootedResourceParentHandle.open(root, asPortableResourcePath("../escape"), "$.target"),
       "input",
       "$.target",
     );
@@ -151,10 +137,7 @@ test("resource and root inputs are revalidated without executing proxies", async
       },
     });
     await expectParentHandleError(
-      () => RootedResourceParentHandle.open(
-        proxy,
-        parsePortableResourcePath("target"),
-      ),
+      () => RootedResourceParentHandle.open(proxy, parsePortableResourcePath("target")),
       "input",
       "$root",
     );
@@ -179,22 +162,11 @@ test("parent identity survives sibling mutations but detects pathname replacemen
     equal((await handle.assertCurrent()).kind, "directory");
     await handle.sync();
 
-    renameSync(
-      path.join(rootPath, "parent"),
-      path.join(rootPath, "original-parent"),
-    );
-    await expectParentHandleError(
-      () => handle.assertCurrent(),
-      "parent-changed",
-      "$resourcePath",
-    );
+    renameSync(path.join(rootPath, "parent"), path.join(rootPath, "original-parent"));
+    await expectParentHandleError(() => handle.assertCurrent(), "parent-changed", "$resourcePath");
 
     mkdirSync(path.join(rootPath, "parent"));
-    await expectParentHandleError(
-      () => handle.assertCurrent(),
-      "parent-changed",
-      "$resourcePath",
-    );
+    await expectParentHandleError(() => handle.assertCurrent(), "parent-changed", "$resourcePath");
   } finally {
     await handle.close();
     await root.close();

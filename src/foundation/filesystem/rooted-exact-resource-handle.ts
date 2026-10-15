@@ -1,17 +1,14 @@
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  open as openFileHandle,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
@@ -53,7 +50,7 @@ export type RootedExactResourceHandleErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Rooted exact resource handle input is invalid.",
+  input: "Rooted exact resource handle input is invalid.",
   "root-scope": "Rooted exact resource could not establish its root scope.",
   "resource-not-found": "Rooted exact resource does not exist.",
   "resource-symlink": "Rooted exact resource cannot be a symbolic link.",
@@ -61,12 +58,9 @@ const ERROR_MESSAGES = {
   "resource-open-failure": "Rooted exact resource could not be opened safely.",
   "resource-changed": "Rooted exact resource no longer matches its admission.",
   "sync-failure": "Rooted exact resource could not be synchronized safely.",
-  "closed": "Rooted exact resource handle is already closed.",
+  closed: "Rooted exact resource handle is already closed.",
   "close-failure": "Rooted exact resource handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  RootedExactResourceHandleErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<RootedExactResourceHandleErrorReason, string>>;
 
 /**
  * RootedExactResourceHandle 的稳定错误。
@@ -89,24 +83,19 @@ export class RootedExactResourceHandleError extends Error {
 type ResourceAdmission = "regular-file" | "file-or-directory";
 
 function normalizeErrorPath(value: unknown): string {
-  return typeof value === "string" && value.length > 0
-    ? value
-    : "$resourcePath";
+  return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(
-  reason: RootedExactResourceHandleErrorReason,
-  path: string,
-): never {
+function fail(reason: RootedExactResourceHandleErrorReason, path: string): never {
   throw new RootedExactResourceHandleError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -114,18 +103,15 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$expectedNode");
     }
   } catch (error: unknown) {
@@ -155,15 +141,11 @@ function admitResourceKind(
   return node.kind;
 }
 
-function requiredOpenFlags(
-  kind: RootedExactResourceKind,
-  errorPath: string,
-): number {
+function requiredOpenFlags(kind: RootedExactResourceKind, errorPath: string): number {
   const noFollow: unknown = fileSystemConstants.O_NOFOLLOW;
   if (typeof noFollow !== "number") fail("root-scope", errorPath);
-  const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-    ? fileSystemConstants.O_NONBLOCK
-    : 0;
+  const nonBlocking =
+    typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
   let directory = 0;
   if (kind === "directory") {
     const value: unknown = fileSystemConstants.O_DIRECTORY;
@@ -173,10 +155,7 @@ function requiredOpenFlags(
   return fileSystemConstants.O_RDONLY | noFollow | nonBlocking | directory;
 }
 
-function snapshotOpenedHandle(
-  value: unknown,
-  errorPath: string,
-): Readonly<FileNodeSnapshot> {
+function snapshotOpenedHandle(value: unknown, errorPath: string): Readonly<FileNodeSnapshot> {
   try {
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
@@ -193,10 +172,12 @@ async function inspectInitialResource(
   expectedNode: Readonly<FileNodeSnapshot>,
   admission: ResourceAdmission,
   errorPath: string,
-): Promise<Readonly<{
-  resource: Readonly<RootedResourceSnapshot>;
-  kind: RootedExactResourceKind;
-}>> {
+): Promise<
+  Readonly<{
+    resource: Readonly<RootedResourceSnapshot>;
+    kind: RootedExactResourceKind;
+  }>
+> {
   let resource: Readonly<RootedResourceSnapshot>;
   try {
     resource = await root.inspectExistingResource(resourcePath, errorPath);
@@ -308,10 +289,7 @@ export class RootedExactResourceHandle {
 
     let handle: FileHandle;
     try {
-      handle = await openFileHandle(
-        initial.resource.physicalPath,
-        flags,
-      );
+      handle = await openFileHandle(initial.resource.physicalPath, flags);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
@@ -321,14 +299,8 @@ export class RootedExactResourceHandle {
     }
 
     try {
-      const opened = snapshotOpenedHandle(
-        await handle.stat({ bigint: true }),
-        errorPath,
-      );
-      if (
-        opened.kind !== initial.kind
-        || !sameFileNodeSnapshot(initial.resource.node, opened)
-      ) {
+      const opened = snapshotOpenedHandle(await handle.stat({ bigint: true }), errorPath);
+      if (opened.kind !== initial.kind || !sameFileNodeSnapshot(initial.resource.node, opened)) {
         fail("resource-changed", errorPath);
       }
       const result = new RootedExactResourceHandle(
@@ -377,18 +349,12 @@ export class RootedExactResourceHandle {
     this.#assertOpen();
     let opened: Readonly<FileNodeSnapshot>;
     try {
-      opened = snapshotOpenedHandle(
-        await this.#handle.stat({ bigint: true }),
-        this.#errorPath,
-      );
+      opened = snapshotOpenedHandle(await this.#handle.stat({ bigint: true }), this.#errorPath);
     } catch (error: unknown) {
       if (error instanceof RootedExactResourceHandleError) throw error;
       fail("resource-changed", this.#errorPath);
     }
-    if (
-      opened.kind !== this.#kind
-      || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)
-    ) {
+    if (opened.kind !== this.#kind || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)) {
       fail("resource-changed", this.#errorPath);
     }
     return opened;
@@ -400,10 +366,7 @@ export class RootedExactResourceHandle {
     const opened = await this.inspectOpenedNode();
     let pathResource: Readonly<RootedResourceSnapshot>;
     try {
-      pathResource = await this.#root.inspectExistingResource(
-        this.#resourcePath,
-        this.#errorPath,
-      );
+      pathResource = await this.#root.inspectExistingResource(this.#resourcePath, this.#errorPath);
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
         fail("resource-changed", this.#errorPath);
@@ -411,9 +374,9 @@ export class RootedExactResourceHandle {
       throw error;
     }
     if (
-      pathResource.node.kind !== this.#kind
-      || !sameFileNodeSnapshot(this.#initialNodeSnapshot, opened)
-      || !sameFileNodeSnapshot(opened, pathResource.node)
+      pathResource.node.kind !== this.#kind ||
+      !sameFileNodeSnapshot(this.#initialNodeSnapshot, opened) ||
+      !sameFileNodeSnapshot(opened, pathResource.node)
     ) {
       fail("resource-changed", this.#errorPath);
     }

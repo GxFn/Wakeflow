@@ -1,11 +1,11 @@
 import {
-  parseDurableAtomicFileStageFileName,
   type DurableAtomicFileStageAddress,
+  parseDurableAtomicFileStageFileName,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
+  type PortableResourcePath,
   parsePortableResourcePath,
   splitPortableResourcePath,
-  type PortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 
 /** 仅供测试构造崩溃残留；生产代码不需要把 stage 暴露为逻辑资源引用。 */
@@ -16,7 +16,5 @@ export function durableAtomicFileStageRefForTest(
   const targetResourcePath = parsePortableResourcePath(targetResourcePathValue);
   const address = parseDurableAtomicFileStageFileName(addressValue.fileName);
   const segments = splitPortableResourcePath(targetResourcePath);
-  return parsePortableResourcePath(
-    [...segments.slice(0, -1), address.fileName].join("/"),
-  );
+  return parsePortableResourcePath([...segments.slice(0, -1), address.fileName].join("/"));
 }

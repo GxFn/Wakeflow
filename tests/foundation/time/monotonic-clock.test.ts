@@ -2,11 +2,11 @@ import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  readMonotonicClock,
-  MonotonicClockError,
   type MonotonicClock,
+  MonotonicClockError,
   type MonotonicClockErrorReason,
   type MonotonicMoment,
+  readMonotonicClock,
 } from "../../../src/foundation/time/monotonic-clock.js";
 
 function expectMonotonicClockError(
@@ -81,9 +81,10 @@ test("clock type, execution, and result failures are distinct and sanitized", ()
 
   const privateFailure = new Error("private monotonic failure");
   const executionError = expectMonotonicClockError(
-    () => readMonotonicClock(() => {
-      throw privateFailure;
-    }),
+    () =>
+      readMonotonicClock(() => {
+        throw privateFailure;
+      }),
     "clock-failure",
     "$clock",
   );

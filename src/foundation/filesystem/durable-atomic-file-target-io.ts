@@ -1,17 +1,17 @@
 import {
-  failDurableAtomicFileWrite as fail,
-  DurableAtomicFileWriteError,
-  type DurableAtomicFileExpectation,
-  type DurableAtomicFileInputBytes,
-} from "./durable-atomic-file-write-contract.js";
-import {
-  snapshotDurableAtomicFileHandle,
   type PreparedDurableAtomicFileStage,
+  snapshotDurableAtomicFileHandle,
 } from "./durable-atomic-file-stage-io.js";
 import {
+  type DurableAtomicFileExpectation,
+  type DurableAtomicFileInputBytes,
+  DurableAtomicFileWriteError,
+  failDurableAtomicFileWrite as fail,
+} from "./durable-atomic-file-write-contract.js";
+import {
+  type FileNodeSnapshot,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
@@ -19,10 +19,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import {
-  readStableFileDigest,
-  StableFileReadError,
-} from "./stable-file-read.js";
+import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 
 /** 耐久原子写入中，目标及父目录 I/O 与替换预期的精确复验。 */
 
@@ -33,10 +30,7 @@ function mapParentHandleError(
   if (operation === "sync" && error.reason === "sync-failure") {
     fail("durability-failure", "$resourcePath");
   }
-  if (
-    operation === "inspect"
-    && error.reason === "target-inspection-failure"
-  ) {
+  if (operation === "inspect" && error.reason === "target-inspection-failure") {
     fail("target-inspection-failure", "$resourcePath");
   }
   if (operation === "open") {
@@ -63,11 +57,7 @@ export async function openDurableAtomicFileTargetParent(
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
   try {
-    return await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      "$resourcePath",
-    );
+    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentHandleError(error, "open");
@@ -105,7 +95,7 @@ export async function inspectDurableAtomicFileTarget(
 export async function assertDurableAtomicFileTargetAbsent(
   parent: RootedResourceParentHandle,
 ): Promise<void> {
-  if (await inspectDurableAtomicFileTarget(parent) !== null) {
+  if ((await inspectDurableAtomicFileTarget(parent)) !== null) {
     fail("target-exists", "$resourcePath");
   }
 }
@@ -151,32 +141,33 @@ export async function assertExpectedDurableAtomicFileTarget(
   }
   let current;
   try {
-    current = await readStableFileDigest(root, resourcePath, signal === undefined
-      ? {
-          maximumBytes: expected.byteCount,
-          expectedNode: expected.node,
-        }
-      : {
-          maximumBytes: expected.byteCount,
-          expectedNode: expected.node,
-          signal,
-        });
+    current = await readStableFileDigest(
+      root,
+      resourcePath,
+      signal === undefined
+        ? {
+            maximumBytes: expected.byteCount,
+            expectedNode: expected.node,
+          }
+        : {
+            maximumBytes: expected.byteCount,
+            expectedNode: expected.node,
+            signal,
+          },
+    );
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "input") fail("input", "$resourcePath");
-      if (
-        error.reason === "root-scope"
-        || error.reason === "unsupported-platform"
-      ) {
+      if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
         fail("root-scope", "$resourcePath");
       }
       if (
-        error.reason === "not-found"
-        || error.reason === "symlink"
-        || error.reason === "not-file"
-        || error.reason === "expectation-changed"
-        || error.reason === "source-changed"
+        error.reason === "not-found" ||
+        error.reason === "symlink" ||
+        error.reason === "not-file" ||
+        error.reason === "expectation-changed" ||
+        error.reason === "source-changed"
       ) {
         fail("expectation-changed", "$resourcePath");
       }
@@ -185,10 +176,10 @@ export async function assertExpectedDurableAtomicFileTarget(
     throw error;
   }
   if (
-    current.resourcePath !== expected.resourcePath
-    || current.byteCount !== expected.byteCount
-    || current.digest !== expected.digest
-    || !sameFileNodeSnapshot(current.node, expected.node)
+    current.resourcePath !== expected.resourcePath ||
+    current.byteCount !== expected.byteCount ||
+    current.digest !== expected.digest ||
+    !sameFileNodeSnapshot(current.node, expected.node)
   ) {
     fail("expectation-changed", "$resourcePath");
   }
@@ -209,15 +200,15 @@ export async function inspectCommittedDurableAtomicFileTarget(
     "$resourcePath",
   );
   if (
-    target.kind !== "file"
-    || opened.kind !== "file"
-    || target.byteCount !== input.byteCount
-    || target.permissionBits !== mode
-    || target.linkCount !== expectedLinkCount
-    || opened.linkCount !== expectedLinkCount
-    || !sameFileNodeIdentity(stage.node, opened)
-    || !sameFileNodeIdentity(opened, target)
-    || !sameFileNodeSnapshot(opened, target)
+    target.kind !== "file" ||
+    opened.kind !== "file" ||
+    target.byteCount !== input.byteCount ||
+    target.permissionBits !== mode ||
+    target.linkCount !== expectedLinkCount ||
+    opened.linkCount !== expectedLinkCount ||
+    !sameFileNodeIdentity(stage.node, opened) ||
+    !sameFileNodeIdentity(opened, target) ||
+    !sameFileNodeSnapshot(opened, target)
   ) {
     fail("commit-uncertain", "$resourcePath");
   }

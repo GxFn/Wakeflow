@@ -1,13 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import {
   DeterministicJsonDocumentError,
+  type DeterministicJsonDocumentErrorReason,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-  type DeterministicJsonDocumentErrorReason,
 } from "../../../src/foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 
 function expectDocumentError(
   action: () => unknown,
@@ -36,22 +35,25 @@ test("ECMAScript own-key order renders as 2-space JSON with exactly one LF", () 
     values: [true, null, "文本"],
   };
   const text = renderDeterministicJsonDocument(value);
-  equal(text, [
-    "{",
-    '  "artifactKind": "wakeflow-example",',
-    '  "schemaVersion": 1,',
-    '  "nested": {',
-    '    "second": 2,',
-    '    "first": 1',
-    "  },",
-    '  "values": [',
-    "    true,",
-    "    null,",
-    '    "文本"',
-    "  ]",
-    "}",
-    "",
-  ].join("\n"));
+  equal(
+    text,
+    [
+      "{",
+      '  "artifactKind": "wakeflow-example",',
+      '  "schemaVersion": 1,',
+      '  "nested": {',
+      '    "second": 2,',
+      '    "first": 1',
+      "  },",
+      '  "values": [',
+      "    true,",
+      "    null,",
+      '    "文本"',
+      "  ]",
+      "}",
+      "",
+    ].join("\n"),
+  );
 
   const parsed = parseDeterministicJsonDocument(text);
   deepEqual(parsed, parseJsonValue(value));
@@ -62,10 +64,7 @@ test("ECMAScript own-key order renders as 2-space JSON with exactly one LF", () 
 test("all JSON top-level kinds use the same deterministic document profile", () => {
   for (const value of [null, true, false, 42, "value", [], {}] as const) {
     const text = renderDeterministicJsonDocument(value);
-    deepEqual(
-      parseDeterministicJsonDocument(text),
-      parseJsonValue(value),
-    );
+    deepEqual(parseDeterministicJsonDocument(text), parseJsonValue(value));
     equal(text.endsWith("\n"), true);
     equal(text.endsWith("\n\n"), false);
   }
@@ -81,10 +80,7 @@ test("whitespace, indentation, key order, number spelling, and final-LF drift ar
     '{\n  "b": 1,\n  "1": 2\n}\n',
     '{\n  "a": 1.0\n}\n',
   ]) {
-    expectDocumentError(
-      () => parseDeterministicJsonDocument(text),
-      "non-deterministic",
-    );
+    expectDocumentError(() => parseDeterministicJsonDocument(text), "non-deterministic");
   }
 });
 
@@ -96,14 +92,8 @@ test("duplicate object keys are rejected by representation round-trip", () => {
 });
 
 test("syntax and input type failures remain distinct and sanitized", () => {
-  expectDocumentError(
-    () => parseDeterministicJsonDocument("{not-json}\n"),
-    "json-syntax",
-  );
-  expectDocumentError(
-    () => parseDeterministicJsonDocument(null),
-    "input",
-  );
+  expectDocumentError(() => parseDeterministicJsonDocument("{not-json}\n"), "json-syntax");
+  expectDocumentError(() => parseDeterministicJsonDocument(null), "input");
 });
 
 test("rendering rejects behavior-bearing values without executing them", () => {

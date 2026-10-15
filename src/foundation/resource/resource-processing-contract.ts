@@ -1,7 +1,7 @@
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 
 /**
@@ -27,8 +27,7 @@ export const WAKEFLOW_RESOURCE_ROLES = Object.freeze([
   "transaction-artifact",
 ] as const);
 
-export type WakeflowResourceRole =
-  (typeof WAKEFLOW_RESOURCE_ROLES)[number];
+export type WakeflowResourceRole = (typeof WAKEFLOW_RESOURCE_ROLES)[number];
 
 export const WAKEFLOW_RESOURCE_MUTATION_RECIPES = Object.freeze([
   "no-write",
@@ -40,8 +39,7 @@ export const WAKEFLOW_RESOURCE_MUTATION_RECIPES = Object.freeze([
   "exact-retire",
 ] as const);
 
-export type WakeflowResourceMutationRecipe =
-  (typeof WAKEFLOW_RESOURCE_MUTATION_RECIPES)[number];
+export type WakeflowResourceMutationRecipe = (typeof WAKEFLOW_RESOURCE_MUTATION_RECIPES)[number];
 
 export const WAKEFLOW_RESOURCE_RECOVERY_STRATEGIES = Object.freeze([
   "report-only",
@@ -75,27 +73,23 @@ interface ResourceProcessingContract<
   readonly recoveryStrategy: Recovery;
 }
 
-export type WakeflowExternalReferenceProcessingContract =
-  ResourceProcessingContract<
-    "external-reference",
-    readonly ["no-write"],
-    "report-only"
-  >;
+export type WakeflowExternalReferenceProcessingContract = ResourceProcessingContract<
+  "external-reference",
+  readonly ["no-write"],
+  "report-only"
+>;
 
-export type WakeflowImmutableFactProcessingContract =
-  ResourceProcessingContract<
-    "immutable-fact",
-    readonly ["exclusive-create"],
-    "exact-idempotent-retry"
-  >;
+export type WakeflowImmutableFactProcessingContract = ResourceProcessingContract<
+  "immutable-fact",
+  readonly ["exclusive-create"],
+  "exact-idempotent-retry"
+>;
 
-export type WakeflowMutableSnapshotProcessingContract =
-  ResourceProcessingContract<
-    "mutable-snapshot",
-    | readonly ["exact-source-replace"]
-    | readonly ["exclusive-create", "exact-source-replace"],
-    "owner-forward-recovery"
-  >;
+export type WakeflowMutableSnapshotProcessingContract = ResourceProcessingContract<
+  "mutable-snapshot",
+  readonly ["exact-source-replace"] | readonly ["exclusive-create", "exact-source-replace"],
+  "owner-forward-recovery"
+>;
 
 /**
  * 从权威来源重建的查询投影。
@@ -103,36 +97,32 @@ export type WakeflowMutableSnapshotProcessingContract =
  * 固定身份槽位可选择 `exclusive-create`，单一 current view 可选择
  * `deterministic-rewrite`；声明必须显式选择自身形态，合同不会把两者合成为隐式 upsert。
  */
-export type WakeflowDerivedProjectionProcessingContract =
-  ResourceProcessingContract<
-    "derived-projection",
-    | readonly ["exclusive-create"]
-    | readonly ["deterministic-rewrite"]
-    | readonly ["exclusive-create", "deterministic-rewrite"],
-    "rebuild-from-authority"
-  >;
+export type WakeflowDerivedProjectionProcessingContract = ResourceProcessingContract<
+  "derived-projection",
+  | readonly ["exclusive-create"]
+  | readonly ["deterministic-rewrite"]
+  | readonly ["exclusive-create", "deterministic-rewrite"],
+  "rebuild-from-authority"
+>;
 
 /** 从权威记录重建的不可覆盖检查点；它既不是权威事实，也不是查询投影。 */
-export type WakeflowDerivedCheckpointProcessingContract =
-  ResourceProcessingContract<
-    "derived-checkpoint",
-    readonly ["exclusive-create"] | readonly ["exclusive-create", "exact-retire"],
-    "rebuild-from-authority"
-  >;
+export type WakeflowDerivedCheckpointProcessingContract = ResourceProcessingContract<
+  "derived-checkpoint",
+  readonly ["exclusive-create"] | readonly ["exclusive-create", "exact-retire"],
+  "rebuild-from-authority"
+>;
 
-export type WakeflowManagedIntegrationTextProcessingContract =
-  ResourceProcessingContract<
-    "managed-integration-text",
-    readonly ["exact-source-recompose"],
-    "recompose-owned-content"
-  >;
+export type WakeflowManagedIntegrationTextProcessingContract = ResourceProcessingContract<
+  "managed-integration-text",
+  readonly ["exact-source-recompose"],
+  "recompose-owned-content"
+>;
 
-export type WakeflowManifestedTreeProcessingContract =
-  ResourceProcessingContract<
-    "manifested-tree",
-    readonly ["tree-publish-or-move"],
-    "manifest-closure"
-  >;
+export type WakeflowManifestedTreeProcessingContract = ResourceProcessingContract<
+  "manifested-tree",
+  readonly ["tree-publish-or-move"],
+  "manifest-closure"
+>;
 
 export type WakeflowTransactionArtifactMutationRecipe =
   | "exclusive-create"
@@ -140,15 +130,14 @@ export type WakeflowTransactionArtifactMutationRecipe =
   | "tree-publish-or-move"
   | "exact-retire";
 
-export type WakeflowTransactionArtifactProcessingContract =
-  ResourceProcessingContract<
-    "transaction-artifact",
-    readonly [
-      WakeflowTransactionArtifactMutationRecipe,
-      ...WakeflowTransactionArtifactMutationRecipe[],
-    ],
-    "owner-transaction-recovery"
-  >;
+export type WakeflowTransactionArtifactProcessingContract = ResourceProcessingContract<
+  "transaction-artifact",
+  readonly [
+    WakeflowTransactionArtifactMutationRecipe,
+    ...WakeflowTransactionArtifactMutationRecipe[],
+  ],
+  "owner-transaction-recovery"
+>;
 
 /** 逐段创建的静态结构目录。 */
 export interface WakeflowMaterializedDirectoryContainerProcessingContract {
@@ -209,10 +198,7 @@ const ERROR_MESSAGES = {
   recipe: "Wakeflow resource mutation recipe is invalid.",
   recovery: "Wakeflow resource recovery strategy is invalid.",
   operation: "Wakeflow resource operation is not admitted by its contract.",
-} as const satisfies Readonly<Record<
-  WakeflowResourceProcessingContractErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<WakeflowResourceProcessingContractErrorReason, string>>;
 
 /** 资源处理合同准入失败的稳定、脱敏错误。 */
 export class WakeflowResourceProcessingContractError extends Error {
@@ -221,10 +207,7 @@ export class WakeflowResourceProcessingContractError extends Error {
   readonly reason: WakeflowResourceProcessingContractErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: WakeflowResourceProcessingContractErrorReason,
-    path: string,
-  ) {
+  constructor(reason: WakeflowResourceProcessingContractErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -250,18 +233,12 @@ const ROLE_POLICIES = Object.freeze({
   }),
   "mutable-snapshot": Object.freeze({
     recoveryStrategy: "owner-forward-recovery",
-    allowedRecipes: Object.freeze([
-      "exclusive-create",
-      "exact-source-replace",
-    ] as const),
+    allowedRecipes: Object.freeze(["exclusive-create", "exact-source-replace"] as const),
     requiredRecipes: Object.freeze(["exact-source-replace"] as const),
   }),
   "derived-projection": Object.freeze({
     recoveryStrategy: "rebuild-from-authority",
-    allowedRecipes: Object.freeze([
-      "exclusive-create",
-      "deterministic-rewrite",
-    ] as const),
+    allowedRecipes: Object.freeze(["exclusive-create", "deterministic-rewrite"] as const),
     requiredRecipes: Object.freeze([] as const),
   }),
   "derived-checkpoint": Object.freeze({
@@ -295,12 +272,7 @@ const ROLE_SET = new Set<string>(WAKEFLOW_RESOURCE_ROLES);
 const RECIPE_INDEX = new Map<string, number>(
   WAKEFLOW_RESOURCE_MUTATION_RECIPES.map((recipe, index) => [recipe, index]),
 );
-const RESOURCE_FIELDS = new Set([
-  "kind",
-  "role",
-  "allowedMutationRecipes",
-  "recoveryStrategy",
-]);
+const RESOURCE_FIELDS = new Set(["kind", "role", "allowedMutationRecipes", "recoveryStrategy"]);
 const DIRECTORY_CONTAINER_FIELDS = new Set([
   "kind",
   "materializationRecipe",
@@ -310,10 +282,7 @@ const DIRECTORY_CONTAINER_FIELDS = new Set([
   "recoveryStrategy",
 ]);
 
-function fail(
-  reason: WakeflowResourceProcessingContractErrorReason,
-  path: string,
-): never {
+function fail(reason: WakeflowResourceProcessingContractErrorReason, path: string): never {
   throw new WakeflowResourceProcessingContractError(reason, path);
 }
 
@@ -325,14 +294,13 @@ function assertExactFields(
   record: Readonly<Record<string, unknown>>,
   allowed: ReadonlySet<string>,
 ): void {
-  const unknown = Object.keys(record).sort().find((key) => !allowed.has(key));
+  const unknown = Object.keys(record)
+    .sort()
+    .find((key) => !allowed.has(key));
   if (unknown !== undefined) fail("shape", propertyPath(unknown));
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -343,11 +311,7 @@ function plainRecord(
 
 function denseArray(value: unknown, path: string): readonly unknown[] {
   try {
-    return parseDenseArray(
-      value,
-      WAKEFLOW_RESOURCE_MUTATION_RECIPES.length,
-      path,
-    );
+    return parseDenseArray(value, WAKEFLOW_RESOURCE_MUTATION_RECIPES.length, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", error.path);
     throw error;
@@ -478,27 +442,12 @@ interface ResourceMutationOperation<
 export type WakeflowResourceOperation =
   | ResourceMutationOperation<"external-reference", "no-write">
   | ResourceMutationOperation<"immutable-fact", "exclusive-create">
-  | ResourceMutationOperation<
-      "mutable-snapshot",
-      "exclusive-create" | "exact-source-replace"
-    >
-  | ResourceMutationOperation<
-      "derived-projection",
-      "exclusive-create" | "deterministic-rewrite"
-    >
-  | ResourceMutationOperation<
-      "derived-checkpoint",
-      "exclusive-create" | "exact-retire"
-    >
-  | ResourceMutationOperation<
-      "managed-integration-text",
-      "exact-source-recompose"
-    >
+  | ResourceMutationOperation<"mutable-snapshot", "exclusive-create" | "exact-source-replace">
+  | ResourceMutationOperation<"derived-projection", "exclusive-create" | "deterministic-rewrite">
+  | ResourceMutationOperation<"derived-checkpoint", "exclusive-create" | "exact-retire">
+  | ResourceMutationOperation<"managed-integration-text", "exact-source-recompose">
   | ResourceMutationOperation<"manifested-tree", "tree-publish-or-move">
-  | ResourceMutationOperation<
-      "transaction-artifact",
-      WakeflowTransactionArtifactMutationRecipe
-    >
+  | ResourceMutationOperation<"transaction-artifact", WakeflowTransactionArtifactMutationRecipe>
   | {
       readonly kind: "directory-materialization";
       readonly recipe: "materialize-directory";
@@ -534,13 +483,10 @@ export function admitWakeflowResourceOperation(
       recipe: "materialize-directory",
     });
   }
-  const allowedRecipes: readonly WakeflowResourceMutationRecipe[] =
-    contract.allowedMutationRecipes;
+  const allowedRecipes: readonly WakeflowResourceMutationRecipe[] = contract.allowedMutationRecipes;
   if (
-    typeof recipeValue !== "string"
-    || !allowedRecipes.includes(
-      recipeValue as WakeflowResourceMutationRecipe,
-    )
+    typeof recipeValue !== "string" ||
+    !allowedRecipes.includes(recipeValue as WakeflowResourceMutationRecipe)
   ) {
     fail("operation", "$/recipe");
   }

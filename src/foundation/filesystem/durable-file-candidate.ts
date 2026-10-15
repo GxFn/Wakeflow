@@ -1,34 +1,18 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  open as openFileHandle,
-  unlink,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, open as openFileHandle, unlink } from "node:fs/promises";
 import { types } from "node:util";
 
-import {
-  computeSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import {
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
-import {
-  DURABLE_ATOMIC_FILE_MAXIMUM_BYTES,
-} from "./durable-atomic-file-write-contract.js";
+import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
+import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
@@ -84,11 +68,11 @@ type DurableFileCandidateErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable file candidate input is invalid.",
-  "capacity": "Durable file candidate exceeds its byte capacity.",
+  input: "Durable file candidate input is invalid.",
+  capacity: "Durable file candidate exceeds its byte capacity.",
   "hash-failure": "Durable file candidate bytes could not be hashed.",
   "root-scope": "Durable file candidate lost its rooted scope.",
-  "parent": "Durable file candidate parent is unavailable or unsafe.",
+  parent: "Durable file candidate parent is unavailable or unsafe.",
   "target-exists": "Durable file candidate target already exists.",
   "create-failure": "Durable file candidate could not be created exclusively.",
   "write-failure": "Durable file candidate bytes could not be written exactly.",
@@ -96,12 +80,9 @@ const ERROR_MESSAGES = {
   "candidate-changed": "Durable file candidate changed during preparation.",
   "durability-failure": "Durable file candidate directory entry could not be synchronized.",
   "cleanup-failure": "Failed durable file candidate could not be retired exactly.",
-  "aborted": "Durable file candidate preparation was aborted.",
+  aborted: "Durable file candidate preparation was aborted.",
   "close-failure": "Durable file candidate handle could not be closed.",
-} as const satisfies Readonly<Record<
-  DurableFileCandidateErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableFileCandidateErrorReason, string>>;
 
 export class DurableFileCandidateError extends Error {
   override readonly name = "DurableFileCandidateError";
@@ -137,10 +118,10 @@ function fail(reason: DurableFileCandidateErrorReason, path: string): never {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -155,26 +136,17 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    !Object.hasOwn(record, "mode")
-    || Object.keys(record).some(
-      (key) => key !== "mode" && key !== "signal" && key !== "durability",
-    )
-    || (
-      record.durability !== undefined
-      && record.durability !== "fsync"
-      && record.durability !== "content-only"
-    )
-    || typeof record.mode !== "number"
-    || !Number.isInteger(record.mode)
-    || record.mode < 0
-    || record.mode > 0o777
-    || (
-      record.signal !== undefined
-      && (
-        types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    !Object.hasOwn(record, "mode") ||
+    Object.keys(record).some((key) => key !== "mode" && key !== "signal" && key !== "durability") ||
+    (record.durability !== undefined &&
+      record.durability !== "fsync" &&
+      record.durability !== "content-only") ||
+    typeof record.mode !== "number" ||
+    !Number.isInteger(record.mode) ||
+    record.mode < 0 ||
+    record.mode > 0o777 ||
+    (record.signal !== undefined &&
+      (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -187,12 +159,12 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 
 function snapshotInput(value: unknown): Readonly<InputBytes> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !ArrayBuffer.isView(value)
-    || !(value instanceof Uint8Array)
-    || value.buffer instanceof SharedArrayBuffer
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !ArrayBuffer.isView(value) ||
+    !(value instanceof Uint8Array) ||
+    value.buffer instanceof SharedArrayBuffer
   ) {
     fail("input", "$bytes");
   }
@@ -227,10 +199,9 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 function openFlags(): number {
   const noFollow: unknown = fileSystemConstants.O_NOFOLLOW;
   if (typeof noFollow !== "number") fail("root-scope", "$root");
-  return fileSystemConstants.O_RDWR
-    | fileSystemConstants.O_CREAT
-    | fileSystemConstants.O_EXCL
-    | noFollow;
+  return (
+    fileSystemConstants.O_RDWR | fileSystemConstants.O_CREAT | fileSystemConstants.O_EXCL | noFollow
+  );
 }
 
 function snapshotNode(
@@ -282,9 +253,7 @@ async function inspectParentTarget(
   }
 }
 
-async function syncParent(
-  parent: RootedResourceParentHandle,
-): Promise<void> {
+async function syncParent(parent: RootedResourceParentHandle): Promise<void> {
   try {
     await parent.sync();
   } catch (error: unknown) {
@@ -330,9 +299,7 @@ async function verifyBytes(
   const before = await snapshotHandle(handle, "candidate-changed");
   let scratch: Buffer;
   try {
-    scratch = Buffer.allocUnsafe(
-      Math.min(input.byteCount || 1, 512 * 1024),
-    );
+    scratch = Buffer.allocUnsafe(Math.min(input.byteCount || 1, 512 * 1024));
   } catch {
     fail("candidate-changed", "$candidate");
   }
@@ -359,9 +326,7 @@ async function verifyBytes(
       }
       filled += read;
     }
-    if (!scratch.subarray(0, length).equals(
-      input.bytes.subarray(offset, offset + length),
-    )) {
+    if (!scratch.subarray(0, length).equals(input.bytes.subarray(offset, offset + length))) {
       fail("candidate-changed", "$candidate");
     }
     offset += length;
@@ -398,18 +363,18 @@ function sameRetiredCandidateNode(
   after: Readonly<FileNodeSnapshot>,
 ): boolean {
   return (
-    sameFileNodeIdentity(before, after)
-    && before.kind === "file"
-    && after.kind === "file"
-    && before.rawMode === after.rawMode
-    && before.permissionBits === after.permissionBits
-    && before.linkCount === 1n
-    && after.linkCount === 0n
-    && before.userId === after.userId
-    && before.groupId === after.groupId
-    && before.specialDeviceId === after.specialDeviceId
-    && before.byteCount === after.byteCount
-    && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+    sameFileNodeIdentity(before, after) &&
+    before.kind === "file" &&
+    after.kind === "file" &&
+    before.rawMode === after.rawMode &&
+    before.permissionBits === after.permissionBits &&
+    before.linkCount === 1n &&
+    after.linkCount === 0n &&
+    before.userId === after.userId &&
+    before.groupId === after.groupId &&
+    before.specialDeviceId === after.specialDeviceId &&
+    before.byteCount === after.byteCount &&
+    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
   );
 }
 
@@ -443,19 +408,11 @@ export async function createFileCandidateDurably(
 
   try {
     await assertParentCurrent(parent, "parent", "$resourcePath");
-    if (await inspectParentTarget(
-      parent,
-      "parent",
-      "$resourcePath",
-    ) !== null) {
+    if ((await inspectParentTarget(parent, "parent", "$resourcePath")) !== null) {
       fail("target-exists", "$resourcePath");
     }
     try {
-      handle = await openFileHandle(
-        parent.resourceAbsolutePath,
-        openFlags(),
-        0o600,
-      );
+      handle = await openFileHandle(parent.resourceAbsolutePath, openFlags(), 0o600);
       created = true;
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "EEXIST") {
@@ -472,10 +429,10 @@ export async function createFileCandidateDurably(
     }
     let prepared = await verifyBytes(handle, input, options.signal);
     if (
-      prepared.kind !== "file"
-      || prepared.linkCount !== 1n
-      || prepared.permissionBits !== options.mode
-      || prepared.byteCount !== input.byteCount
+      prepared.kind !== "file" ||
+      prepared.linkCount !== 1n ||
+      prepared.permissionBits !== options.mode ||
+      prepared.byteCount !== input.byteCount
     ) {
       fail("candidate-changed", "$candidate");
     }
@@ -490,28 +447,14 @@ export async function createFileCandidateDurably(
     }
     prepared = await verifyBytes(handle, input, options.signal);
     await assertParentCurrent(parent, "candidate-changed", "$candidate");
-    const pathNode = await inspectParentTarget(
-      parent,
-      "candidate-changed",
-      "$candidate",
-    );
-    if (
-      pathNode === null
-      || !sameFileNodeSnapshot(prepared, pathNode)
-    ) {
+    const pathNode = await inspectParentTarget(parent, "candidate-changed", "$candidate");
+    if (pathNode === null || !sameFileNodeSnapshot(prepared, pathNode)) {
       fail("candidate-changed", "$candidate");
     }
     if (options.durability === "fsync") await syncParent(parent);
     const finalHandle = await verifyBytes(handle, input, options.signal);
-    const finalPath = await inspectParentTarget(
-      parent,
-      "candidate-changed",
-      "$candidate",
-    );
-    if (
-      finalPath === null
-      || !sameFileNodeSnapshot(finalHandle, finalPath)
-    ) {
+    const finalPath = await inspectParentTarget(parent, "candidate-changed", "$candidate");
+    if (finalPath === null || !sameFileNodeSnapshot(finalHandle, finalPath)) {
       fail("candidate-changed", "$candidate");
     }
     result = Object.freeze({
@@ -529,11 +472,11 @@ export async function createFileCandidateDurably(
       const opened = await snapshotHandle(handle, "cleanup-failure");
       const current = await parent.inspectTarget();
       if (
-        current === null
-        || opened.kind !== "file"
-        || current.kind !== "file"
-        || opened.linkCount !== 1n
-        || !sameFileNodeSnapshot(opened, current)
+        current === null ||
+        opened.kind !== "file" ||
+        current.kind !== "file" ||
+        opened.linkCount !== 1n ||
+        !sameFileNodeSnapshot(opened, current)
       ) {
         fail("cleanup-failure", "$candidate");
       }
@@ -544,9 +487,10 @@ export async function createFileCandidateDurably(
       }
       await parent.sync();
     } catch (error: unknown) {
-      primaryError = error instanceof DurableFileCandidateError
-        ? error
-        : new DurableFileCandidateError("cleanup-failure", "$candidate");
+      primaryError =
+        error instanceof DurableFileCandidateError
+          ? error
+          : new DurableFileCandidateError("cleanup-failure", "$candidate");
     }
   }
   if (handle !== undefined) {
@@ -554,10 +498,7 @@ export async function createFileCandidateDurably(
       await handle.close();
     } catch {
       if (primaryError === undefined) {
-        primaryError = new DurableFileCandidateError(
-          "close-failure",
-          "$candidate",
-        );
+        primaryError = new DurableFileCandidateError("close-failure", "$candidate");
       }
     }
   }

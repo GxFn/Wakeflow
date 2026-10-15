@@ -18,13 +18,13 @@ import { test } from "node:test";
 import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
-  materializeDirectoryPath,
   type DurableDirectoryMaterializationErrorReason,
   type DurableDirectoryOptions,
+  materializeDirectoryPath,
 } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
@@ -63,11 +63,7 @@ test("atomic create publishes one exact durable child directory", async () => {
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("parent/child");
-    const result = await createDirectoryAtomically(
-      root,
-      resourcePath,
-      { mode: 0o750 },
-    );
+    const result = await createDirectoryAtomically(root, resourcePath, { mode: 0o750 });
     equal(result.resourcePath, resourcePath);
     equal(result.disposition, "created");
     equal(result.node.kind, "directory");
@@ -85,11 +81,9 @@ test("a zero-permission directory is hardened through its open handle", async ()
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-dir-sealed-"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await createDirectoryAtomically(
-      root,
-      parsePortableResourcePath("sealed"),
-      { mode: 0 },
-    );
+    const result = await createDirectoryAtomically(root, parsePortableResourcePath("sealed"), {
+      mode: 0,
+    });
     equal(result.node.kind, "directory");
     equal(result.node.permissionBits, 0);
     equal(statSync(path.join(rootPath, "sealed")).mode & 0o777, 0);
@@ -185,10 +179,7 @@ test("existing directory modes are observed while only missing segments use mode
       { mode: 0o700 },
     );
     deepEqual(
-      result.segments.map((entry) => [
-        entry.disposition,
-        entry.node.permissionBits,
-      ]),
+      result.segments.map((entry) => [entry.disposition, entry.node.permissionBits]),
       [
         ["existing", 0o755],
         ["created", 0o700],
@@ -215,11 +206,7 @@ test("file and symlink collisions fail without modifying the conflicting node", 
     ];
     for (const [candidate, reason] of cases) {
       await expectDirectoryError(
-        () => materializeDirectoryPath(
-          root,
-          parsePortableResourcePath(candidate),
-          { mode: 0o700 },
-        ),
+        () => materializeDirectoryPath(root, parsePortableResourcePath(candidate), { mode: 0o700 }),
         reason,
         "$resourcePath",
       );
@@ -248,11 +235,8 @@ test("atomic create requires an existing real parent", async () => {
     ];
     for (const [candidate, reason] of cases) {
       await expectDirectoryError(
-        () => createDirectoryAtomically(
-          root,
-          parsePortableResourcePath(candidate),
-          { mode: 0o700 },
-        ),
+        () =>
+          createDirectoryAtomically(root, parsePortableResourcePath(candidate), { mode: 0o700 }),
         reason,
         "$resourcePath",
       );
@@ -278,11 +262,7 @@ test("options and AbortSignal are closed and passively admitted", async () => {
     ];
     for (const [options, expectedPath] of invalid) {
       await expectDirectoryError(
-        () => createDirectoryAtomically(
-          root,
-          resourcePath,
-          asOptions(options),
-        ),
+        () => createDirectoryAtomically(root, resourcePath, asOptions(options)),
         "input",
         expectedPath,
       );
@@ -298,22 +278,14 @@ test("options and AbortSignal are closed and passively admitted", async () => {
       enumerable: true,
     });
     await expectDirectoryError(
-      () => createDirectoryAtomically(
-        root,
-        resourcePath,
-        asOptions(accessor),
-      ),
+      () => createDirectoryAtomically(root, resourcePath, asOptions(accessor)),
       "input",
       "$options",
     );
     equal(getterCalls, 0);
 
     await expectDirectoryError(
-      () => createDirectoryAtomically(
-        root,
-        asPortableResourcePath("../escape"),
-        { mode: 0o700 },
-      ),
+      () => createDirectoryAtomically(root, asPortableResourcePath("../escape"), { mode: 0o700 }),
       "input",
       "$resourcePath",
     );
@@ -321,10 +293,11 @@ test("options and AbortSignal are closed and passively admitted", async () => {
     const controller = new AbortController();
     controller.abort("private-directory-abort");
     const error = await expectDirectoryError(
-      () => materializeDirectoryPath(root, resourcePath, {
-        mode: 0o700,
-        signal: controller.signal,
-      }),
+      () =>
+        materializeDirectoryPath(root, resourcePath, {
+          mode: 0o700,
+          signal: controller.signal,
+        }),
       "aborted",
       "$signal",
     );

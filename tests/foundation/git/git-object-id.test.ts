@@ -2,9 +2,9 @@ import { deepEqual, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  GitObjectIdError,
   parseGitObjectId,
   sameGitObjectId,
-  GitObjectIdError,
 } from "../../../src/foundation/git/git-object-id.js";
 
 test("Git object ID显式区分完整SHA-1与SHA-256格式", () => {
@@ -30,8 +30,7 @@ test("Git object ID拒绝缩写、大写、算法长度错配和额外字段", (
   ]) {
     throws(
       () => parseGitObjectId(value),
-      (error: unknown) =>
-        error instanceof GitObjectIdError && error.reason === "schema",
+      (error: unknown) => error instanceof GitObjectIdError && error.reason === "schema",
     );
   }
 });

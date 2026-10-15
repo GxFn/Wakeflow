@@ -1,12 +1,5 @@
 import { equal } from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { hrtime } from "node:process";
@@ -15,15 +8,15 @@ import { threadId } from "node:worker_threads";
 
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
-import { loadSensitive } from "../../support/load-sensitive.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
-  withRootedExclusiveFileLock,
   type RootedExclusiveFileLockErrorReason,
+  retireRootedExclusiveFileLockResidue,
+  withRootedExclusiveFileLock,
 } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
 
 async function expectLockError(
   action: () => unknown | Promise<unknown>,
@@ -51,19 +44,26 @@ test("concurrent async critical sections are serialized and lock residue is remo
   let maximumActive = 0;
   let completed = 0;
   try {
-    await Promise.all(Array.from({ length: 8 }, async () => (
-      withRootedExclusiveFileLock(root, lockPath, async () => {
-        active += 1;
-        maximumActive = Math.max(maximumActive, active);
-        await new Promise<void>((resolve) => setTimeout(resolve, 2));
-        completed += 1;
-        active -= 1;
-      }, {
-        // 断言的是串行与残留清理，不是延迟：整套测试并行且机器繁忙时 2 s 默认等待会超时（§13.121）。
-        acquireTimeoutMilliseconds: 30_000,
-        retryDelayMilliseconds: 5,
-      })
-    )));
+    await Promise.all(
+      Array.from({ length: 8 }, async () =>
+        withRootedExclusiveFileLock(
+          root,
+          lockPath,
+          async () => {
+            active += 1;
+            maximumActive = Math.max(maximumActive, active);
+            await new Promise<void>((resolve) => setTimeout(resolve, 2));
+            completed += 1;
+            active -= 1;
+          },
+          {
+            // 断言的是串行与残留清理，不是延迟：整套测试并行且机器繁忙时 2 s 默认等待会超时（§13.121）。
+            acquireTimeoutMilliseconds: 30_000,
+            retryDelayMilliseconds: 5,
+          },
+        ),
+      ),
+    );
     equal(maximumActive, 1);
     equal(completed, 8);
     equal(await root.inspectExistingResource(lockPath).catch(() => null), null);
@@ -98,10 +98,7 @@ test("operation failure still releases the exact owned lock", async () => {
       rejectedUndefined = true;
     }
     equal(rejectedUndefined, true);
-    equal(
-      await withRootedExclusiveFileLock(root, lockPath, () => "available"),
-      "available",
-    );
+    equal(await withRootedExclusiveFileLock(root, lockPath, () => "available"), "available");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -140,12 +137,10 @@ test("an invalid correlation UUID factory is mapped to lock acquisition failure"
   const lockPath = parsePortableResourcePath("state/board.lock");
   try {
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        lockPath,
-        () => undefined,
-        { tokenUuidFactory: () => "invalid" },
-      ),
+      () =>
+        withRootedExclusiveFileLock(root, lockPath, () => undefined, {
+          tokenUuidFactory: () => "invalid",
+        }),
       "acquire-failure",
     );
   } finally {
@@ -161,8 +156,12 @@ test("a held or crash-residue lock times out without automatic deletion", async 
   const lockPath = parsePortableResourcePath("state/board.lock");
   let releaseHolder: (() => void) | undefined;
   let markStarted: (() => void) | undefined;
-  const holderGate = new Promise<void>((resolve) => { releaseHolder = resolve; });
-  const holderStarted = new Promise<void>((resolve) => { markStarted = resolve; });
+  const holderGate = new Promise<void>((resolve) => {
+    releaseHolder = resolve;
+  });
+  const holderStarted = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
   try {
     const holder = withRootedExclusiveFileLock(root, lockPath, () => {
       markStarted?.();
@@ -181,22 +180,20 @@ test("a held or crash-residue lock times out without automatic deletion", async 
       );
     }
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        lockPath,
-        () => undefined,
-        { acquireTimeoutMilliseconds: 20, retryDelayMilliseconds: 5 },
-      ),
+      () =>
+        withRootedExclusiveFileLock(root, lockPath, () => undefined, {
+          acquireTimeoutMilliseconds: 20,
+          retryDelayMilliseconds: 5,
+        }),
       "timeout",
     );
     const longRetryStartedAt = hrtime.bigint();
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        lockPath,
-        () => undefined,
-        { acquireTimeoutMilliseconds: 20, retryDelayMilliseconds: 1_000 },
-      ),
+      () =>
+        withRootedExclusiveFileLock(root, lockPath, () => undefined, {
+          acquireTimeoutMilliseconds: 20,
+          retryDelayMilliseconds: 1_000,
+        }),
       "timeout",
     );
     const longRetryElapsedMilliseconds = Number(
@@ -217,18 +214,23 @@ test("a crash-residue lock times out and is not deleted on acquire", async () =>
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-stale-"));
   mkdirSync(path.join(rootPath, "state"));
   const physicalLock = path.join(rootPath, "state", "board.lock");
-  writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "22222222-2222-4222-8222-222222222222",
-  }), { mode: 0o600 });
+  writeFileSync(
+    physicalLock,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "22222222-2222-4222-8222-222222222222",
+    }),
+    { mode: 0o600 },
+  );
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        parsePortableResourcePath("state/board.lock"),
-        () => undefined,
-        { acquireTimeoutMilliseconds: 20, retryDelayMilliseconds: 5 },
-      ),
+      () =>
+        withRootedExclusiveFileLock(
+          root,
+          parsePortableResourcePath("state/board.lock"),
+          () => undefined,
+          { acquireTimeoutMilliseconds: 20, retryDelayMilliseconds: 5 },
+        ),
       "timeout",
     );
     equal(existsSync(physicalLock), true);
@@ -242,9 +244,13 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-residue-"));
   mkdirSync(path.join(rootPath, "state"));
   const physicalLock = path.join(rootPath, "state", "board.lock");
-  writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "11111111-1111-4111-8111-111111111111",
-  }), { mode: 0o600 });
+  writeFileSync(
+    physicalLock,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }),
+    { mode: 0o600 },
+  );
   const root = await RootedDirectory.open(rootPath);
   const lockPath = parsePortableResourcePath("state/board.lock");
   try {
@@ -253,40 +259,33 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
     if (observed.status !== "held") throw new Error("Expected held lock.");
     equal(observed.ownerState, "inactive");
     await expectLockError(
-      () => retireRootedExclusiveFileLockResidue(
-        root,
-        lockPath,
-        observed,
-        { relatedTargetResourcePaths: null as never },
-      ),
+      () =>
+        retireRootedExclusiveFileLockResidue(root, lockPath, observed, {
+          relatedTargetResourcePaths: null as never,
+        }),
       "input",
     );
     await expectLockError(
-      () => retireRootedExclusiveFileLockResidue(
-        root,
-        lockPath,
-        observed,
-        {
-          relatedTargetResourcePaths: [
-            parsePortableResourcePath("other/target.json"),
-          ],
-        },
-      ),
+      () =>
+        retireRootedExclusiveFileLockResidue(root, lockPath, observed, {
+          relatedTargetResourcePaths: [parsePortableResourcePath("other/target.json")],
+        }),
       "input",
     );
     await retireRootedExclusiveFileLockResidue(root, lockPath, observed);
     equal(existsSync(physicalLock), false);
     equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "absent");
 
-    writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
-      pid: process.pid,
-      threadId,
-      tokenUuid: "22222222-2222-4222-8222-222222222222",
-    }), { mode: 0o600 });
-    const sameThreadResidue = await inspectRootedExclusiveFileLock(
-      root,
-      lockPath,
+    writeFileSync(
+      physicalLock,
+      rootedExclusiveFileLockRecordTextForTest({
+        pid: process.pid,
+        threadId,
+        tokenUuid: "22222222-2222-4222-8222-222222222222",
+      }),
+      { mode: 0o600 },
     );
+    const sameThreadResidue = await inspectRootedExclusiveFileLock(root, lockPath);
     equal(sameThreadResidue.status, "held");
     if (sameThreadResidue.status !== "held") {
       throw new Error("Expected same-thread residue.");
@@ -311,21 +310,15 @@ test("unsafe lock nodes and decorated options fail closed", async () => {
   const lockPath = parsePortableResourcePath("state/board.lock");
   try {
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        lockPath,
-        () => undefined,
-        { acquireTimeoutMilliseconds: 10, retryDelayMilliseconds: 1 },
-      ),
+      () =>
+        withRootedExclusiveFileLock(root, lockPath, () => undefined, {
+          acquireTimeoutMilliseconds: 10,
+          retryDelayMilliseconds: 1,
+        }),
       "unsafe-lock",
     );
     await expectLockError(
-      () => withRootedExclusiveFileLock(
-        root,
-        lockPath,
-        () => undefined,
-        null as never,
-      ),
+      () => withRootedExclusiveFileLock(root, lockPath, () => undefined, null as never),
       "input",
     );
     for (const options of [
@@ -333,12 +326,7 @@ test("unsafe lock nodes and decorated options fail closed", async () => {
       { retryDelayMilliseconds: null },
     ]) {
       await expectLockError(
-        () => withRootedExclusiveFileLock(
-          root,
-          lockPath,
-          () => undefined,
-          options as never,
-        ),
+        () => withRootedExclusiveFileLock(root, lockPath, () => undefined, options as never),
         "input",
       );
     }

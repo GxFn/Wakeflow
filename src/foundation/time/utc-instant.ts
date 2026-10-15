@@ -99,8 +99,7 @@ function parseUtcInstantParts(input: unknown, path: string): ParsedUtcInstant {
   return {
     value: input as UtcInstant,
     epochNanoseconds:
-      BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND +
-      fractionalNanoseconds,
+      BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND + fractionalNanoseconds,
   };
 }
 
@@ -109,10 +108,7 @@ function parseUtcInstantParts(input: unknown, path: string): ParsedUtcInstant {
  *
  * 本函数不接受时区偏移、小写 `t`/`z`、空白、闰秒或 `Date` 可自动进位的日期。
  */
-export function parseUtcInstant(
-  value: unknown,
-  errorPath?: string,
-): UtcInstant {
+export function parseUtcInstant(value: unknown, errorPath?: string): UtcInstant {
   return parseUtcInstantParts(value, normalizeErrorPath(errorPath)).value;
 }
 
@@ -120,12 +116,8 @@ export function parseUtcInstant(
  * 将严格 UTC instant 投影为 Unix 纪元纳秒，供领域层执行明确的有界时间差判断。
  * 本函数只暴露时间线坐标，不读取当前时间，也不定义 freshness、TTL 或 Lease 策略。
  */
-export function utcInstantEpochNanoseconds(
-  value: UtcInstant,
-  errorPath?: string,
-): bigint {
-  return parseUtcInstantParts(value, normalizeErrorPath(errorPath))
-    .epochNanoseconds;
+export function utcInstantEpochNanoseconds(value: UtcInstant, errorPath?: string): bigint {
+  return parseUtcInstantParts(value, normalizeErrorPath(errorPath)).epochNanoseconds;
 }
 
 /**
@@ -133,19 +125,9 @@ export function utcInstantEpochNanoseconds(
  *
  * 参数虽然带品牌，仍分别以 `$left` 和 `$right` 重新完成运行时复验。
  */
-export function compareUtcInstants(
-  left: UtcInstant,
-  right: UtcInstant,
-): -1 | 0 | 1 {
+export function compareUtcInstants(left: UtcInstant, right: UtcInstant): -1 | 0 | 1 {
   const leftNanoseconds = parseUtcInstantParts(left, "$left").epochNanoseconds;
-  const rightNanoseconds = parseUtcInstantParts(
-    right,
-    "$right",
-  ).epochNanoseconds;
+  const rightNanoseconds = parseUtcInstantParts(right, "$right").epochNanoseconds;
 
-  return leftNanoseconds < rightNanoseconds
-    ? -1
-    : leftNanoseconds > rightNanoseconds
-      ? 1
-      : 0;
+  return leftNanoseconds < rightNanoseconds ? -1 : leftNanoseconds > rightNanoseconds ? 1 : 0;
 }

@@ -25,13 +25,8 @@ const node24ErrorConstructor = Error as Node24ErrorConstructor;
 /** 已从真实 `Error` 自有数据属性读取、符合规范词法的 Node.js 系统错误代码。 */
 export type NodeSystemErrorCode = `E${string}`;
 
-function isCanonicalNodeSystemErrorCode(
-  value: unknown,
-): value is NodeSystemErrorCode {
-  return (
-    typeof value === "string"
-    && NODE_SYSTEM_ERROR_CODE_PATTERN.test(value)
-  );
+function isCanonicalNodeSystemErrorCode(value: unknown): value is NodeSystemErrorCode {
+  return typeof value === "string" && NODE_SYSTEM_ERROR_CODE_PATTERN.test(value);
 }
 
 /**
@@ -41,9 +36,7 @@ function isCanonicalNodeSystemErrorCode(
  * 因此访问器、原型字段和普通 `{ code: "ENOENT" }` 记录都不能
  * 参与文件系统分支。函数不会抛出，也不会执行候选对象上的用户代码。
  */
-export function readNodeSystemErrorCode(
-  value: unknown,
-): NodeSystemErrorCode | undefined {
+export function readNodeSystemErrorCode(value: unknown): NodeSystemErrorCode | undefined {
   if (types.isProxy(value) || !node24ErrorConstructor.isError(value)) {
     return undefined;
   }
@@ -55,9 +48,9 @@ export function readNodeSystemErrorCode(
     return undefined;
   }
   if (
-    descriptor === undefined
-    || !Object.hasOwn(descriptor, "value")
-    || !isCanonicalNodeSystemErrorCode(descriptor.value)
+    descriptor === undefined ||
+    !Object.hasOwn(descriptor, "value") ||
+    !isCanonicalNodeSystemErrorCode(descriptor.value)
   ) {
     return undefined;
   }

@@ -58,19 +58,17 @@ test("one compiled validator owns local refs, annotations, and regex format", ()
 });
 
 test("validation is non-mutating and exposes only a frozen stable result", () => {
-  const validate = createRuntimeJsonSchemaValidator<{ readonly value: number }>(
-    {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "urn:wakeflow:test:number",
-      type: "object",
-      additionalProperties: false,
-      required: ["value"],
-      properties: {
-        value: { type: "integer", minimum: 1 },
-        defaulted: { type: "string", default: "inserted" },
-      },
+  const validate = createRuntimeJsonSchemaValidator<{ readonly value: number }>({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:number",
+    type: "object",
+    additionalProperties: false,
+    required: ["value"],
+    properties: {
+      value: { type: "integer", minimum: 1 },
+      defaulted: { type: "string", default: "inserted" },
     },
-  );
+  });
   const result = validate(parseJsonValue({ value: 0 }));
   equal(result.ok, false);
   equal(Object.keys(result).sort().join(","), "ok,path");
@@ -185,16 +183,12 @@ test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
   };
   expectSchemaError(
     () =>
-      createRuntimeJsonSchemaValidator(
-        { ...dependency, $id: "urn:wakeflow:test:root" },
-        [dependency, dependency],
-      ),
+      createRuntimeJsonSchemaValidator({ ...dependency, $id: "urn:wakeflow:test:root" }, [
+        dependency,
+        dependency,
+      ]),
     "schema-dependency",
     "$dependencies/1/$id",
   );
-  expectSchemaError(
-    () => createRuntimeJsonSchemaValidator(null),
-    "schema-input",
-    "$schema",
-  );
+  expectSchemaError(() => createRuntimeJsonSchemaValidator(null), "schema-input", "$schema");
 });

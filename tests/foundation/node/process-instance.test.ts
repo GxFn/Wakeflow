@@ -1,7 +1,10 @@
 import { equal, rejects } from "node:assert/strict";
 import { test } from "node:test";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import { observeProcessInstance, recordedProcessIsInactive } from "../../../src/foundation/node/process-instance.js";
+import {
+  observeProcessInstance,
+  recordedProcessIsInactive,
+} from "../../../src/foundation/node/process-instance.js";
 
 test("process birth observations are stable, and PID replacement needs positive evidence", async () => {
   const one = await observeProcessInstance(process.pid);

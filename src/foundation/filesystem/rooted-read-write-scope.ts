@@ -1,22 +1,30 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
-import { createUuidV4 } from "../identity/uuid-v4.js";
 import { parsePlainRecord } from "../data/passive-own-data.js";
+import { createUuidV4 } from "../identity/uuid-v4.js";
 import { readMonotonicClock } from "../time/monotonic-clock.js";
-import { isMonotonicDeadlineReached, monotonicDeadlineAfter, monotonicDeadlineRemaining } from "../time/monotonic-deadline.js";
+import {
+  isMonotonicDeadlineReached,
+  monotonicDeadlineAfter,
+  monotonicDeadlineRemaining,
+} from "../time/monotonic-deadline.js";
 import { monotonicDurationFromMilliseconds } from "../time/monotonic-duration.js";
-import { parsePortableResourcePath, type PortableResourcePath } from "./portable-resource-path.js";
+import {
+  DurableAtomicFileStageAddressError,
+  parseDurableAtomicFileStageFileName,
+  readDurableAtomicFileStageOwnerState,
+} from "./durable-atomic-file-stage-address.js";
+import { unlinkRegularFileExactly } from "./exact-regular-file-unlink.js";
+import { type PortableResourcePath, parsePortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import {
   acquireRootedExclusiveFileLock,
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
   type RootedExclusiveFileLockLease,
+  retireRootedExclusiveFileLockResidue,
 } from "./rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError } from "./stable-directory-read.js";
-import { parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, DurableAtomicFileStageAddressError } from "./durable-atomic-file-stage-address.js";
-import { unlinkRegularFileExactly } from "./exact-regular-file-unlink.js";
 
 /** A caller-owned private directory contains only the latch, writer and reader leases. */
 export type RootedReadWriteMode = "shared" | "exclusive";
@@ -38,7 +46,8 @@ export class RootedReadWriteScopeError extends Error {
   }
 }
 
-const READER = /^reader-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.lock$/u;
+const READER =
+  /^reader-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.lock$/u;
 const MAXIMUM_ENTRIES = 1024;
 const RETRY_MILLISECONDS = 20;
 /** Shared-only workloads never drain readers: retire dead ones once this many leases pile up (§13.161 F4). */
@@ -52,29 +61,55 @@ function fail(reason: RootedReadWriteScopeError["reason"]): never {
 
 function optionsOf(value: RootedReadWriteScopeOptions): RootedReadWriteScopeOptions {
   const record = parsePlainRecord(value, "$options");
-  if (Object.keys(record).some((key) => !["signal", "acquireTimeoutMilliseconds", "beforeEnter"].includes(key))) fail("input");
+  if (
+    Object.keys(record).some(
+      (key) => !["signal", "acquireTimeoutMilliseconds", "beforeEnter"].includes(key),
+    )
+  )
+    fail("input");
   const budget = record.acquireTimeoutMilliseconds ?? 30_000;
-  if (typeof budget !== "number" || !Number.isSafeInteger(budget) || budget <= 0 || budget > 300_000) fail("input");
-  if (record.signal !== undefined && (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal))) fail("input");
-  if (record.beforeEnter !== undefined && (typeof record.beforeEnter !== "function" || types.isProxy(record.beforeEnter))) fail("input");
-  return { acquireTimeoutMilliseconds: budget,
+  if (
+    typeof budget !== "number" ||
+    !Number.isSafeInteger(budget) ||
+    budget <= 0 ||
+    budget > 300_000
+  )
+    fail("input");
+  if (
+    record.signal !== undefined &&
+    (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal))
+  )
+    fail("input");
+  if (
+    record.beforeEnter !== undefined &&
+    (typeof record.beforeEnter !== "function" || types.isProxy(record.beforeEnter))
+  )
+    fail("input");
+  return {
+    acquireTimeoutMilliseconds: budget,
     ...(record.signal === undefined ? {} : { signal: record.signal as AbortSignal }),
-    ...(record.beforeEnter === undefined ? {} : { beforeEnter: record.beforeEnter as () => Promise<void> }) };
+    ...(record.beforeEnter === undefined
+      ? {}
+      : { beforeEnter: record.beforeEnter as () => Promise<void> }),
+  };
 }
 
 /** An unknown owner is reported, never retired: the caller waits on it like a live one (§13.161 F2). */
-async function retireInactive(root: RootedDirectory, ref: PortableResourcePath): Promise<OwnerObservation> {
+async function retireInactive(
+  root: RootedDirectory,
+  ref: PortableResourcePath,
+): Promise<OwnerObservation> {
   try {
     const observed = await inspectRootedExclusiveFileLock(root, ref);
     if (observed.status === "absent") return "absent";
     if (observed.ownerState === "unknown") return "unknown";
     if (observed.ownerState === "active") return "active";
     await retireRootedExclusiveFileLockResidue(root, ref, observed);
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     // Readers release without the admission latch. A changed inspection is not
     // absence or corruption: keep admission closed and inspect again on the next admission attempt.
-    if (error instanceof RootedExclusiveFileLockError && error.reason === "residue-changed") return "active";
+    if (error instanceof RootedExclusiveFileLockError && error.reason === "residue-changed")
+      return "active";
     throw error;
   }
   return "retired";
@@ -82,19 +117,32 @@ async function retireInactive(root: RootedDirectory, ref: PortableResourcePath):
 
 /** No time-based stealing. Only private create stages owned by dead writers are discarded. */
 async function entriesOf(root: RootedDirectory, area: PortableResourcePath) {
-  const listing = await readStableResourceDirectory(root, area, { maximumEntries: MAXIMUM_ENTRIES });
+  const listing = await readStableResourceDirectory(root, area, {
+    maximumEntries: MAXIMUM_ENTRIES,
+  });
   const directory = listing.directoryNode;
-  if (directory.permissionBits !== 0o700 ||
-    (typeof process.geteuid === "function" && directory.userId !== BigInt(process.geteuid()))) fail("unsafe");
+  if (
+    directory.permissionBits !== 0o700 ||
+    (typeof process.geteuid === "function" && directory.userId !== BigInt(process.geteuid()))
+  )
+    fail("unsafe");
   const readers: PortableResourcePath[] = [];
   for (const entry of listing.entries) {
-    if (entry.node.kind !== "file" || entry.node.permissionBits !== 0o600 ||
-      entry.node.userId !== directory.userId) fail("unsafe");
+    if (
+      entry.node.kind !== "file" ||
+      entry.node.permissionBits !== 0o600 ||
+      entry.node.userId !== directory.userId
+    )
+      fail("unsafe");
     if (entry.name === "latch.lock" || entry.name === "writer.lock") continue;
-    if (READER.test(entry.name)) { readers.push(entry.resourcePath); continue; }
+    if (READER.test(entry.name)) {
+      readers.push(entry.resourcePath);
+      continue;
+    }
     let stage;
-    try { stage = parseDurableAtomicFileStageFileName(entry.name); }
-    catch (error: unknown) {
+    try {
+      stage = parseDurableAtomicFileStageFileName(entry.name);
+    } catch (error: unknown) {
       if (error instanceof DurableAtomicFileStageAddressError) fail("unsafe");
       throw error;
     }
@@ -120,10 +168,18 @@ export async function withRootedReadWriteScope<Result>(
   operation: () => Promise<Result>,
   value: RootedReadWriteScopeOptions = {},
 ): Promise<Result> {
-  if ((mode !== "shared" && mode !== "exclusive") || typeof operation !== "function" || types.isProxy(operation)) fail("input");
+  if (
+    (mode !== "shared" && mode !== "exclusive") ||
+    typeof operation !== "function" ||
+    types.isProxy(operation)
+  )
+    fail("input");
   const options = optionsOf(value);
   const budget = options.acquireTimeoutMilliseconds ?? 30_000;
-  const deadline = monotonicDeadlineAfter(readMonotonicClock(), monotonicDurationFromMilliseconds(budget));
+  const deadline = monotonicDeadlineAfter(
+    readMonotonicClock(),
+    monotonicDurationFromMilliseconds(budget),
+  );
   const latchRef = parsePortableResourcePath(`${area}/latch.lock`);
   const writerRef = parsePortableResourcePath(`${area}/writer.lock`);
   const readerRef = parsePortableResourcePath(`${area}/reader-${createUuidV4()}.lock`);
@@ -146,8 +202,9 @@ export async function withRootedReadWriteScope<Result>(
     return owner === "active" || owner === "unknown";
   };
   const acquire = async (ref: PortableResourcePath) => {
-    try { return await acquireRootedExclusiveFileLock(root, ref, lockOptions()); }
-    catch (error: unknown) {
+    try {
+      return await acquireRootedExclusiveFileLock(root, ref, lockOptions());
+    } catch (error: unknown) {
       if (error instanceof RootedExclusiveFileLockError && error.reason === "timeout") {
         check();
         exhausted();
@@ -157,20 +214,33 @@ export async function withRootedReadWriteScope<Result>(
   };
   const wait = async () => {
     check();
-    try { await delay(RETRY_MILLISECONDS, undefined, options.signal === undefined ? {} : { signal: options.signal }); }
-    catch { fail("aborted"); }
+    try {
+      await delay(
+        RETRY_MILLISECONDS,
+        undefined,
+        options.signal === undefined ? {} : { signal: options.signal },
+      );
+    } catch {
+      fail("aborted");
+    }
   };
   const lockOptions = () => {
     check();
     const remaining = monotonicDeadlineRemaining(deadline, readMonotonicClock());
-    return { acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999_999n) / 1_000_000n)),
-      ...(options.signal === undefined ? {} : { signal: options.signal }) };
+    return {
+      acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999_999n) / 1_000_000n)),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    };
   };
   const latched = async <Value>(body: () => Promise<Value>): Promise<Value> => {
     check();
     await held(latchRef);
     const latch = await acquire(latchRef);
-    try { return await body(); } finally { await latch.release(); }
+    try {
+      return await body();
+    } finally {
+      await latch.release();
+    }
   };
   try {
     while (lease === null) {
@@ -217,6 +287,8 @@ export async function withRootedReadWriteScope<Result>(
 }
 
 function transientListing(error: unknown): boolean {
-  return error instanceof StableDirectoryReadError &&
-    (error.reason === "source-changed" || error.reason === "expectation-changed");
+  return (
+    error instanceof StableDirectoryReadError &&
+    (error.reason === "source-changed" || error.reason === "expectation-changed")
+  );
 }

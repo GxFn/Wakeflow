@@ -1,14 +1,11 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   Sha256Hasher,
   Sha256HasherError,
   type Sha256HasherErrorReason,
 } from "../../../src/foundation/crypto/sha256-hasher.js";
-import {
-  computeSha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
 
 const encoder = new TextEncoder();
 
@@ -59,10 +56,7 @@ test("an untouched hasher produces the standard empty SHA-256 digest", () => {
   const result = new Sha256Hasher().digest();
 
   equal(result.byteCount, 0);
-  equal(
-    result.digest,
-    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  );
+  equal(result.digest, "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 });
 
 test("Buffer and offset views contribute only their exact visible bytes", () => {
@@ -82,9 +76,8 @@ test("Buffer and offset views contribute only their exact visible bytes", () => 
 
 test("byte counts accumulate exactly across many chunks", () => {
   const hasher = new Sha256Hasher();
-  const chunks = Array.from(
-    { length: 257 },
-    (_unused, index) => Uint8Array.from({ length: index % 31 }, () => index),
+  const chunks = Array.from({ length: 257 }, (_unused, index) =>
+    Uint8Array.from({ length: index % 31 }, () => index),
   );
   const expectedBytes = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 
@@ -134,11 +127,7 @@ test("Proxy byte views are rejected without invoking traps", () => {
   });
   const hasher = new Sha256Hasher();
 
-  expectSha256HasherError(
-    () => hasher.update(asBytes(proxy), "$.chunk"),
-    "input-type",
-    "$.chunk",
-  );
+  expectSha256HasherError(() => hasher.update(asBytes(proxy), "$.chunk"), "input-type", "$.chunk");
   equal(trapCalls, 0);
   hasher.update(encoder.encode("a"));
   const result = hasher.digest();
@@ -158,26 +147,17 @@ test("digest and update cannot be repeated after finalization", () => {
   );
   equal(updateError.message.includes("abc"), false);
 
-  expectSha256HasherError(
-    () => hasher.digest(),
-    "already-finalized",
-    "$hasher",
-  );
+  expectSha256HasherError(() => hasher.digest(), "already-finalized", "$hasher");
   equal(result.byteCount, 3);
 });
 
 test("large deterministic input hashes without a combined string conversion", () => {
   const hasher = new Sha256Hasher();
-  const chunk = Uint8Array.from(
-    { length: 64 * 1024 },
-    (_unused, index) => index % 251,
-  );
+  const chunk = Uint8Array.from({ length: 64 * 1024 }, (_unused, index) => index % 251);
   const repeats = 16;
 
   for (let index = 0; index < repeats; index += 1) hasher.update(chunk);
-  const expected = Buffer.concat(
-    Array.from({ length: repeats }, () => Buffer.from(chunk)),
-  );
+  const expected = Buffer.concat(Array.from({ length: repeats }, () => Buffer.from(chunk)));
   const result = hasher.digest();
 
   equal(result.byteCount, expected.byteLength);

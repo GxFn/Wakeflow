@@ -1,21 +1,18 @@
 import { link } from "node:fs/promises";
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
@@ -81,7 +78,7 @@ export type DurableRegularFileLinkErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable regular file link input is invalid.",
+  input: "Durable regular file link input is invalid.",
   "root-scope": "Regular file link could not establish its rooted scope.",
   "parent-not-found": "Regular file link parent directory does not exist.",
   "parent-symlink": "Regular file link parent chain cannot contain a symbolic link.",
@@ -99,7 +96,7 @@ const ERROR_MESSAGES = {
   "link-failure": "Regular file hard-link commit could not be executed safely.",
   "commit-uncertain": "Regular file linked-pair commit could not be proven exact.",
   "durability-failure": "Regular file linked pair could not be synchronized safely.",
-  "aborted": "Regular file link was aborted before commit.",
+  aborted: "Regular file link was aborted before commit.",
   "close-failure": "A regular file link handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableRegularFileLinkErrorReason, string>>;
 
@@ -133,10 +130,7 @@ function fail(reason: DurableRegularFileLinkErrorReason, path: string): never {
   throw new DurableRegularFileLinkError(reason, path);
 }
 
-function parseResourcePath(
-  value: unknown,
-  path: ResourceErrorPath,
-): PortableResourcePath {
+function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
@@ -147,10 +141,10 @@ function parseResourcePath(
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
@@ -160,10 +154,10 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -171,18 +165,15 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$options.expectedSourceNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$options.expectedSourceNode");
     }
   } catch (error: unknown) {
@@ -204,8 +195,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   const allowed = new Set(["expectedSourceNode", "signal"]);
   if (
-    !Object.hasOwn(record, "expectedSourceNode")
-    || Object.keys(record).some((key) => !allowed.has(key))
+    !Object.hasOwn(record, "expectedSourceNode") ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
@@ -228,10 +219,7 @@ function mapParentHandleError(
   if (operation === "sync" && error.reason === "sync-failure") {
     fail("durability-failure", errorPath);
   }
-  if (
-    operation === "inspect"
-    && error.reason === "target-inspection-failure"
-  ) {
+  if (operation === "inspect" && error.reason === "target-inspection-failure") {
     fail(inspectionReason ?? "destination-inspection-failure", errorPath);
   }
   if (operation === "open") {
@@ -252,8 +240,8 @@ function mapParentHandleError(
   }
   // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
   if (
-    (operation === "inspect" && inspectionReason === "commit-uncertain")
-    || operation === "sync"
+    (operation === "inspect" && inspectionReason === "commit-uncertain") ||
+    operation === "sync"
   ) {
     fail("commit-uncertain", errorPath);
   }
@@ -266,11 +254,7 @@ async function openResourceParent(
   errorPath: ResourceErrorPath,
 ): Promise<RootedResourceParentHandle> {
   try {
-    return await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      errorPath,
-    );
+    return await RootedResourceParentHandle.open(root, resourcePath, errorPath);
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentHandleError(error, "open", errorPath);
@@ -349,10 +333,7 @@ function mapExactSourceError(
   if (operation === "sync-after-commit" && error.reason === "sync-failure") {
     fail("durability-failure", "$destinationResourcePath");
   }
-  if (
-    operation === "inspect-after-commit"
-    || operation === "sync-after-commit"
-  ) {
+  if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
     fail("commit-uncertain", "$destinationResourcePath");
   }
   if (operation === "current") fail("source-changed", "$sourceResourcePath");
@@ -393,9 +374,7 @@ async function openExactSource(
   }
 }
 
-async function assertSourceCurrent(
-  source: RootedExactResourceHandle,
-): Promise<void> {
+async function assertSourceCurrent(source: RootedExactResourceHandle): Promise<void> {
   try {
     await source.assertPathCurrent();
   } catch (error: unknown) {
@@ -419,9 +398,7 @@ async function inspectCommittedSource(
   }
 }
 
-async function syncCommittedSource(
-  source: RootedExactResourceHandle,
-): Promise<void> {
+async function syncCommittedSource(source: RootedExactResourceHandle): Promise<void> {
   try {
     await source.syncOpenedNode();
   } catch (error: unknown) {
@@ -440,10 +417,7 @@ async function closeSource(
     return undefined;
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
-      return new DurableRegularFileLinkError(
-        "close-failure",
-        "$sourceResourcePath",
-      );
+      return new DurableRegularFileLinkError("close-failure", "$sourceResourcePath");
     }
     throw error;
   }
@@ -455,17 +429,17 @@ function sameLinkedNode(
   expectedLinkCount: bigint,
 ): boolean {
   return (
-    sameFileNodeIdentity(before, after)
-    && before.kind === "file"
-    && after.kind === "file"
-    && before.rawMode === after.rawMode
-    && before.permissionBits === after.permissionBits
-    && after.linkCount === expectedLinkCount
-    && before.userId === after.userId
-    && before.groupId === after.groupId
-    && before.specialDeviceId === after.specialDeviceId
-    && before.byteCount === after.byteCount
-    && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+    sameFileNodeIdentity(before, after) &&
+    before.kind === "file" &&
+    after.kind === "file" &&
+    before.rawMode === after.rawMode &&
+    before.permissionBits === after.permissionBits &&
+    after.linkCount === expectedLinkCount &&
+    before.userId === after.userId &&
+    before.groupId === after.groupId &&
+    before.specialDeviceId === after.specialDeviceId &&
+    before.byteCount === after.byteCount &&
+    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
   );
 }
 
@@ -474,10 +448,12 @@ async function inspectLinkedPair(
   sourceParent: RootedResourceParentHandle,
   destinationParent: RootedResourceParentHandle,
   linkedPairLinkCount: bigint,
-): Promise<Readonly<{
-  sourceNode: Readonly<FileNodeSnapshot>;
-  destinationNode: Readonly<FileNodeSnapshot>;
-}>> {
+): Promise<
+  Readonly<{
+    sourceNode: Readonly<FileNodeSnapshot>;
+    destinationNode: Readonly<FileNodeSnapshot>;
+  }>
+> {
   const sourceNode = await inspectParentTarget(
     sourceParent,
     "$sourceResourcePath",
@@ -496,13 +472,9 @@ async function inspectLinkedPair(
   }
   const opened = await inspectCommittedSource(source);
   if (
-    !sameLinkedNode(
-      source.initialNodeSnapshot,
-      opened,
-      linkedPairLinkCount,
-    )
-    || !sameFileNodeSnapshot(opened, sourceNode)
-    || !sameFileNodeSnapshot(opened, destinationNode)
+    !sameLinkedNode(source.initialNodeSnapshot, opened, linkedPairLinkCount) ||
+    !sameFileNodeSnapshot(opened, sourceNode) ||
+    !sameFileNodeSnapshot(opened, destinationNode)
   ) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
@@ -525,56 +497,35 @@ export async function linkRegularFileWithoutReplacement(
 ): Promise<Readonly<DurableRegularFileLinkResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  const sourcePath = parseResourcePath(
-    sourceResourcePath,
-    "$sourceResourcePath",
-  );
-  const destinationPath = parseResourcePath(
-    destinationResourcePath,
-    "$destinationResourcePath",
-  );
+  const sourcePath = parseResourcePath(sourceResourcePath, "$sourceResourcePath");
+  const destinationPath = parseResourcePath(destinationResourcePath, "$destinationResourcePath");
   if (sourcePath === destinationPath) {
     fail("input", "$destinationResourcePath");
   }
   assertNotAborted(parsed.signal);
 
-  const sourceParent = await openResourceParent(
-    root,
-    sourcePath,
-    "$sourceResourcePath",
-  );
+  const sourceParent = await openResourceParent(root, sourcePath, "$sourceResourcePath");
   let destinationParent: RootedResourceParentHandle | undefined;
   let source: RootedExactResourceHandle | undefined;
   let primaryError: unknown;
   let result: Readonly<DurableRegularFileLinkResult> | undefined;
 
   try {
-    destinationParent = await openResourceParent(
-      root,
-      destinationPath,
-      "$destinationResourcePath",
-    );
+    destinationParent = await openResourceParent(root, destinationPath, "$destinationResourcePath");
 
-    source = await openExactSource(
-      root,
-      sourcePath,
-      parsed.expectedSourceNode,
-    );
+    source = await openExactSource(root, sourcePath, parsed.expectedSourceNode);
     if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
       fail("root-scope", "$sourceResourcePath");
     }
-    if (
-      source.initialNodeSnapshot.deviceId
-      !== destinationParent.parentDeviceId
-    ) {
+    if (source.initialNodeSnapshot.deviceId !== destinationParent.parentDeviceId) {
       fail("cross-device", "$destinationResourcePath");
     }
     if (
-      await inspectParentTarget(
+      (await inspectParentTarget(
         destinationParent,
         "$destinationResourcePath",
         "destination-inspection-failure",
-      ) !== null
+      )) !== null
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
@@ -583,21 +534,18 @@ export async function linkRegularFileWithoutReplacement(
     await assertParentCurrent(destinationParent, "$destinationResourcePath");
     await assertSourceCurrent(source);
     if (
-      await inspectParentTarget(
+      (await inspectParentTarget(
         destinationParent,
         "$destinationResourcePath",
         "destination-inspection-failure",
-      ) !== null
+      )) !== null
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
     assertNotAborted(parsed.signal);
 
     try {
-      await link(
-        sourceParent.resourceAbsolutePath,
-        destinationParent.resourceAbsolutePath,
-      );
+      await link(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "EEXIST") fail("destination-exists", "$destinationResourcePath");
@@ -614,16 +562,8 @@ export async function linkRegularFileWithoutReplacement(
     );
     await syncCommittedSource(source);
     await syncParent(destinationParent, "$destinationResourcePath");
-    await assertParentCurrent(
-      sourceParent,
-      "$sourceResourcePath",
-      true,
-    );
-    await assertParentCurrent(
-      destinationParent,
-      "$destinationResourcePath",
-      true,
-    );
+    await assertParentCurrent(sourceParent, "$sourceResourcePath", true);
+    await assertParentCurrent(destinationParent, "$destinationResourcePath", true);
     const final = await inspectLinkedPair(
       source,
       sourceParent,
@@ -631,11 +571,8 @@ export async function linkRegularFileWithoutReplacement(
       linkedPairLinkCount,
     );
     if (
-      !sameFileNodeSnapshot(linked.sourceNode, final.sourceNode)
-      || !sameFileNodeSnapshot(
-        linked.destinationNode,
-        final.destinationNode,
-      )
+      !sameFileNodeSnapshot(linked.sourceNode, final.sourceNode) ||
+      !sameFileNodeSnapshot(linked.destinationNode, final.destinationNode)
     ) {
       fail("commit-uncertain", "$destinationResourcePath");
     }
@@ -656,18 +593,12 @@ export async function linkRegularFileWithoutReplacement(
     }
   }
   if (destinationParent !== undefined) {
-    const closeError = await closeParent(
-      destinationParent,
-      "$destinationResourcePath",
-    );
+    const closeError = await closeParent(destinationParent, "$destinationResourcePath");
     if (primaryError === undefined && closeError !== undefined) {
       primaryError = closeError;
     }
   }
-  const sourceParentCloseError = await closeParent(
-    sourceParent,
-    "$sourceResourcePath",
-  );
+  const sourceParentCloseError = await closeParent(sourceParent, "$sourceResourcePath");
   if (primaryError === undefined && sourceParentCloseError !== undefined) {
     primaryError = sourceParentCloseError;
   }

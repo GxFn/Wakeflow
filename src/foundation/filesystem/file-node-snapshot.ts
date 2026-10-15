@@ -1,15 +1,15 @@
 import { constants as fileSystemConstants } from "node:fs";
 
 import {
+  PassiveOwnDataError,
   parsePlainRecord,
   pickOwnDataProperties,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 import {
-  byteCountFromBigInt,
-  ByteCountError,
-  parseByteCount,
   type ByteCount,
+  ByteCountError,
+  byteCountFromBigInt,
+  parseByteCount,
 } from "../numeric/byte-count.js";
 
 /**
@@ -145,10 +145,7 @@ function fieldPath(basePath: string, field: string): string {
   return `${basePath}.${field}`;
 }
 
-function fail(
-  reason: FileNodeSnapshotErrorReason,
-  path: string,
-): never {
+function fail(reason: FileNodeSnapshotErrorReason, path: string): never {
   throw new FileNodeSnapshotError(reason, path);
 }
 
@@ -159,10 +156,7 @@ function readBigIntField(
   nonNegative = false,
 ): bigint {
   const value = record[field];
-  if (
-    typeof value !== "bigint"
-    || (nonNegative && value < 0n)
-  ) {
+  if (typeof value !== "bigint" || (nonNegative && value < 0n)) {
     fail("stat-field", fieldPath(basePath, field));
   }
   return value;
@@ -239,19 +233,13 @@ function readSnapshotBigInt(
   nonNegative = false,
 ): bigint {
   const value = record[field];
-  if (
-    typeof value !== "bigint"
-    || (nonNegative && value < 0n)
-  ) {
+  if (typeof value !== "bigint" || (nonNegative && value < 0n)) {
     fail("snapshot-field", fieldPath(path, field));
   }
   return value;
 }
 
-function parseFileNodeSnapshot(
-  value: unknown,
-  path: string,
-): FileNodeSnapshot {
+function parseFileNodeSnapshot(value: unknown, path: string): FileNodeSnapshot {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, path);
@@ -263,8 +251,8 @@ function parseFileNodeSnapshot(
   const keys = Object.keys(record).sort();
   const expectedKeys = [...SNAPSHOT_FIELDS].sort();
   if (
-    keys.length !== expectedKeys.length
-    || keys.some((key, index) => key !== expectedKeys[index])
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
   ) {
     fail("snapshot-shape", path);
   }
@@ -279,29 +267,13 @@ function parseFileNodeSnapshot(
   const linkCount = readSnapshotBigInt(record, "linkCount", path, true);
   const userId = readSnapshotBigInt(record, "userId", path);
   const groupId = readSnapshotBigInt(record, "groupId", path);
-  const specialDeviceId = readSnapshotBigInt(
-    record,
-    "specialDeviceId",
-    path,
-    true,
-  );
-  const modifiedAtNanoseconds = readSnapshotBigInt(
-    record,
-    "modifiedAtNanoseconds",
-    path,
-  );
-  const changedAtNanoseconds = readSnapshotBigInt(
-    record,
-    "changedAtNanoseconds",
-    path,
-  );
+  const specialDeviceId = readSnapshotBigInt(record, "specialDeviceId", path, true);
+  const modifiedAtNanoseconds = readSnapshotBigInt(record, "modifiedAtNanoseconds", path);
+  const changedAtNanoseconds = readSnapshotBigInt(record, "changedAtNanoseconds", path);
 
   let admittedByteCount: ByteCount;
   try {
-    admittedByteCount = parseByteCount(
-      record.byteCount,
-      fieldPath(path, "byteCount"),
-    );
+    admittedByteCount = parseByteCount(record.byteCount, fieldPath(path, "byteCount"));
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
       fail("snapshot-field", fieldPath(path, "byteCount"));
@@ -310,11 +282,11 @@ function parseFileNodeSnapshot(
   }
   const admittedPermissionBits = record.permissionBits;
   if (
-    typeof admittedPermissionBits !== "number"
-    || !Number.isSafeInteger(admittedPermissionBits)
-    || admittedPermissionBits < 0
-    || admittedPermissionBits > Number(PERMISSION_MASK)
-    || admittedPermissionBits !== permissionBits(rawMode)
+    typeof admittedPermissionBits !== "number" ||
+    !Number.isSafeInteger(admittedPermissionBits) ||
+    admittedPermissionBits < 0 ||
+    admittedPermissionBits > Number(PERMISSION_MASK) ||
+    admittedPermissionBits !== permissionBits(rawMode)
   ) {
     fail("snapshot-field", fieldPath(path, "permissionBits"));
   }
@@ -343,39 +315,31 @@ function parseFileNodeSnapshot(
  *
  * 相同结果不证明内容、权限位或时间未变化，也无法排除节点删除后的 inode 复用。
  */
-export function sameFileNodeIdentity(
-  left: FileNodeSnapshot,
-  right: FileNodeSnapshot,
-): boolean {
+export function sameFileNodeIdentity(left: FileNodeSnapshot, right: FileNodeSnapshot): boolean {
   const admittedLeft = parseFileNodeSnapshot(left, "$left");
   const admittedRight = parseFileNodeSnapshot(right, "$right");
   return (
-    admittedLeft.deviceId === admittedRight.deviceId
-    && admittedLeft.inodeId === admittedRight.inodeId
+    admittedLeft.deviceId === admittedRight.deviceId &&
+    admittedLeft.inodeId === admittedRight.inodeId
   );
 }
 
 /** 判断两个节点快照的全部稳定物理事实是否逐项相同。 */
-export function sameFileNodeSnapshot(
-  left: FileNodeSnapshot,
-  right: FileNodeSnapshot,
-): boolean {
+export function sameFileNodeSnapshot(left: FileNodeSnapshot, right: FileNodeSnapshot): boolean {
   const admittedLeft = parseFileNodeSnapshot(left, "$left");
   const admittedRight = parseFileNodeSnapshot(right, "$right");
   return (
-    admittedLeft.kind === admittedRight.kind
-    && admittedLeft.deviceId === admittedRight.deviceId
-    && admittedLeft.inodeId === admittedRight.inodeId
-    && admittedLeft.rawMode === admittedRight.rawMode
-    && admittedLeft.permissionBits === admittedRight.permissionBits
-    && admittedLeft.linkCount === admittedRight.linkCount
-    && admittedLeft.userId === admittedRight.userId
-    && admittedLeft.groupId === admittedRight.groupId
-    && admittedLeft.specialDeviceId === admittedRight.specialDeviceId
-    && admittedLeft.byteCount === admittedRight.byteCount
-    && admittedLeft.modifiedAtNanoseconds
-      === admittedRight.modifiedAtNanoseconds
-    && admittedLeft.changedAtNanoseconds
-      === admittedRight.changedAtNanoseconds
+    admittedLeft.kind === admittedRight.kind &&
+    admittedLeft.deviceId === admittedRight.deviceId &&
+    admittedLeft.inodeId === admittedRight.inodeId &&
+    admittedLeft.rawMode === admittedRight.rawMode &&
+    admittedLeft.permissionBits === admittedRight.permissionBits &&
+    admittedLeft.linkCount === admittedRight.linkCount &&
+    admittedLeft.userId === admittedRight.userId &&
+    admittedLeft.groupId === admittedRight.groupId &&
+    admittedLeft.specialDeviceId === admittedRight.specialDeviceId &&
+    admittedLeft.byteCount === admittedRight.byteCount &&
+    admittedLeft.modifiedAtNanoseconds === admittedRight.modifiedAtNanoseconds &&
+    admittedLeft.changedAtNanoseconds === admittedRight.changedAtNanoseconds
   );
 }

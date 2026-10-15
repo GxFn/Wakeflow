@@ -23,10 +23,7 @@ export type MonotonicMoment = bigint & {
 };
 
 /** monotonic clock 来源失败的稳定分类。 */
-export type MonotonicClockErrorReason =
-  | "clock-type"
-  | "clock-failure"
-  | "clock-result";
+export type MonotonicClockErrorReason = "clock-type" | "clock-failure" | "clock-result";
 
 const ERROR_MESSAGES = {
   "clock-type": "Monotonic clock must be a function.",
@@ -68,9 +65,7 @@ const systemMonotonicClock: MonotonicClock = () => hrtime.bigint();
  *
  * 注入函数恰好调用一次；本层无法也不会凭单个读数证明多次调用的递增关系。
  */
-export function readMonotonicClock(
-  clock: MonotonicClock = systemMonotonicClock,
-): MonotonicMoment {
+export function readMonotonicClock(clock: MonotonicClock = systemMonotonicClock): MonotonicMoment {
   if (typeof clock !== "function") fail("clock-type", "$clock");
 
   let value: unknown;

@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { setImmediate as yieldEventLoop } from "node:timers/promises";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -20,9 +20,7 @@ import {
   DurableFileCopyCandidateError,
   type DurableFileCopyCandidateErrorReason,
 } from "../../../src/foundation/filesystem/durable-file-copy-candidate.js";
-import {
-  parsePortableResourcePath,
-} from "../../../src/foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
@@ -35,14 +33,8 @@ interface CopyFixture {
 }
 
 async function fixture(t: TestContext): Promise<Readonly<CopyFixture>> {
-  const sourcePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-copy-source-",
-  ));
-  const destinationPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-copy-destination-",
-  ));
+  const sourcePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-copy-source-"));
+  const destinationPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-copy-destination-"));
   mkdirSync(path.join(destinationPath, "candidate"), { mode: 0o700 });
   const sourceRoot = await RootedDirectory.open(sourcePath);
   const destinationRoot = await RootedDirectory.open(destinationPath);
@@ -81,7 +73,7 @@ async function expectCopyError(
 
 test("durable file copy streams exact bytes across rooted directories", async (t) => {
   const current = await fixture(t);
-  const bytes = Buffer.alloc((1024 * 1024) + 17);
+  const bytes = Buffer.alloc(1024 * 1024 + 17);
   for (let index = 0; index < bytes.length; index += 1) {
     bytes[index] = index % 251;
   }
@@ -113,14 +105,11 @@ test("durable file copy streams exact bytes across rooted directories", async (t
   equal(result.candidate.node.permissionBits, 0o755);
   equal(result.candidate.node.linkCount, 1n);
   equal(
-    result.source.node.inodeId === result.candidate.node.inodeId
-      && result.source.node.deviceId === result.candidate.node.deviceId,
+    result.source.node.inodeId === result.candidate.node.inodeId &&
+      result.source.node.deviceId === result.candidate.node.deviceId,
     false,
   );
-  deepEqual(
-    readFileSync(path.join(current.destinationPath, candidateRef)),
-    bytes,
-  );
+  deepEqual(readFileSync(path.join(current.destinationPath, candidateRef)), bytes);
   equal(Object.hasOwn(result, "bytes"), false);
   equal(Object.isFrozen(result), true);
 });
@@ -150,26 +139,25 @@ test("durable file copy binds an optional exact source node", async (t) => {
   const candidateRef = parsePortableResourcePath("candidate/source.txt");
   const sourcePath = path.join(current.sourcePath, sourceRef);
   writeFileSync(sourcePath, "first");
-  const observed = await readStableFileDigest(
-    current.sourceRoot,
-    sourceRef,
-    { maximumBytes: parseByteCount(1024) },
-  );
+  const observed = await readStableFileDigest(current.sourceRoot, sourceRef, {
+    maximumBytes: parseByteCount(1024),
+  });
   writeFileSync(sourcePath, "other");
 
   await expectCopyError(
-    () => copyFileToCandidateDurably(
-      current.sourceRoot,
-      current.destinationRoot,
-      sourceRef,
-      candidateRef,
-      {
-        byteCount: observed.byteCount,
-        digest: observed.digest,
-        expectedNode: observed.node,
-      },
-      { maximumBytes: parseByteCount(1024), mode: 0o600 },
-    ),
+    () =>
+      copyFileToCandidateDurably(
+        current.sourceRoot,
+        current.destinationRoot,
+        sourceRef,
+        candidateRef,
+        {
+          byteCount: observed.byteCount,
+          digest: observed.digest,
+          expectedNode: observed.node,
+        },
+        { maximumBytes: parseByteCount(1024), mode: 0o600 },
+      ),
     "source-changed",
     "$source",
   );
@@ -186,41 +174,40 @@ test("durable file copy rejects mismatched content and preserves an existing tar
   writeFileSync(path.join(current.destinationPath, existingRef), "existing");
 
   await expectCopyError(
-    () => copyFileToCandidateDurably(
-      current.sourceRoot,
-      current.destinationRoot,
-      sourceRef,
-      mismatchRef,
-      {
-        byteCount: parseByteCount(bytes.byteLength),
-        digest: computeSha256Digest(Buffer.from("different")),
-      },
-      { maximumBytes: parseByteCount(1024), mode: 0o600 },
-    ),
+    () =>
+      copyFileToCandidateDurably(
+        current.sourceRoot,
+        current.destinationRoot,
+        sourceRef,
+        mismatchRef,
+        {
+          byteCount: parseByteCount(bytes.byteLength),
+          digest: computeSha256Digest(Buffer.from("different")),
+        },
+        { maximumBytes: parseByteCount(1024), mode: 0o600 },
+      ),
     "source-mismatch",
     "$source",
   );
   equal(existsSync(path.join(current.destinationPath, mismatchRef)), false);
 
   await expectCopyError(
-    () => copyFileToCandidateDurably(
-      current.sourceRoot,
-      current.destinationRoot,
-      sourceRef,
-      existingRef,
-      {
-        byteCount: parseByteCount(bytes.byteLength),
-        digest: computeSha256Digest(bytes),
-      },
-      { maximumBytes: parseByteCount(1024), mode: 0o600 },
-    ),
+    () =>
+      copyFileToCandidateDurably(
+        current.sourceRoot,
+        current.destinationRoot,
+        sourceRef,
+        existingRef,
+        {
+          byteCount: parseByteCount(bytes.byteLength),
+          digest: computeSha256Digest(bytes),
+        },
+        { maximumBytes: parseByteCount(1024), mode: 0o600 },
+      ),
     "target-exists",
     "$candidateResourcePath",
   );
-  equal(
-    readFileSync(path.join(current.destinationPath, existingRef), "utf8"),
-    "existing",
-  );
+  equal(readFileSync(path.join(current.destinationPath, existingRef), "utf8"), "existing");
 });
 
 test("durable file copy detects source mutation after candidate creation", {
@@ -309,17 +296,18 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
     writeFileSync(path.join(current.sourcePath, "target"), "content");
     symlinkSync("target", path.join(current.sourcePath, "link"));
     await expectCopyError(
-      () => copyFileToCandidateDurably(
-        current.sourceRoot,
-        current.destinationRoot,
-        parsePortableResourcePath("link"),
-        parsePortableResourcePath("candidate/link"),
-        {
-          byteCount: parseByteCount(7),
-          digest: computeSha256Digest(Buffer.from("content")),
-        },
-        { maximumBytes: parseByteCount(7), mode: 0o600 },
-      ),
+      () =>
+        copyFileToCandidateDurably(
+          current.sourceRoot,
+          current.destinationRoot,
+          parsePortableResourcePath("link"),
+          parsePortableResourcePath("candidate/link"),
+          {
+            byteCount: parseByteCount(7),
+            digest: computeSha256Digest(Buffer.from("content")),
+          },
+          { maximumBytes: parseByteCount(7), mode: 0o600 },
+        ),
       "source-symlink",
       "$source",
     );
@@ -330,17 +318,18 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
     const bytes = Buffer.from("1234");
     writeFileSync(path.join(current.sourcePath, "source"), bytes);
     await expectCopyError(
-      () => copyFileToCandidateDurably(
-        current.sourceRoot,
-        current.destinationRoot,
-        parsePortableResourcePath("source"),
-        parsePortableResourcePath("candidate/source"),
-        {
-          byteCount: parseByteCount(bytes.byteLength),
-          digest: computeSha256Digest(bytes),
-        },
-        { maximumBytes: parseByteCount(3), mode: 0o600 },
-      ),
+      () =>
+        copyFileToCandidateDurably(
+          current.sourceRoot,
+          current.destinationRoot,
+          parsePortableResourcePath("source"),
+          parsePortableResourcePath("candidate/source"),
+          {
+            byteCount: parseByteCount(bytes.byteLength),
+            digest: computeSha256Digest(bytes),
+          },
+          { maximumBytes: parseByteCount(3), mode: 0o600 },
+        ),
       "capacity",
       "$source",
     );
@@ -353,21 +342,22 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
     const controller = new AbortController();
     controller.abort();
     await expectCopyError(
-      () => copyFileToCandidateDurably(
-        current.sourceRoot,
-        current.destinationRoot,
-        parsePortableResourcePath("source"),
-        parsePortableResourcePath("candidate/source"),
-        {
-          byteCount: parseByteCount(bytes.byteLength),
-          digest: computeSha256Digest(bytes),
-        },
-        {
-          maximumBytes: parseByteCount(bytes.byteLength),
-          mode: 0o600,
-          signal: controller.signal,
-        },
-      ),
+      () =>
+        copyFileToCandidateDurably(
+          current.sourceRoot,
+          current.destinationRoot,
+          parsePortableResourcePath("source"),
+          parsePortableResourcePath("candidate/source"),
+          {
+            byteCount: parseByteCount(bytes.byteLength),
+            digest: computeSha256Digest(bytes),
+          },
+          {
+            maximumBytes: parseByteCount(bytes.byteLength),
+            mode: 0o600,
+            signal: controller.signal,
+          },
+        ),
       "aborted",
       "$signal",
     );
@@ -378,24 +368,28 @@ test("durable file copy rejects behavioral expectation input without executing i
   const current = await fixture(t);
   writeFileSync(path.join(current.sourcePath, "source"), "content");
   let trapCalls = 0;
-  const expectation = new Proxy({
-    byteCount: parseByteCount(7),
-    digest: computeSha256Digest(Buffer.from("content")),
-  }, {
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return Object.prototype;
+  const expectation = new Proxy(
+    {
+      byteCount: parseByteCount(7),
+      digest: computeSha256Digest(Buffer.from("content")),
     },
-  });
+    {
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return Object.prototype;
+      },
+    },
+  );
   await expectCopyError(
-    () => copyFileToCandidateDurably(
-      current.sourceRoot,
-      current.destinationRoot,
-      parsePortableResourcePath("source"),
-      parsePortableResourcePath("candidate/source"),
-      expectation,
-      { maximumBytes: parseByteCount(7), mode: 0o600 },
-    ),
+    () =>
+      copyFileToCandidateDurably(
+        current.sourceRoot,
+        current.destinationRoot,
+        parsePortableResourcePath("source"),
+        parsePortableResourcePath("candidate/source"),
+        expectation,
+        { maximumBytes: parseByteCount(7), mode: 0o600 },
+      ),
     "input",
     "$expectation",
   );

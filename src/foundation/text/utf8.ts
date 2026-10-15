@@ -70,10 +70,7 @@ function isUint8Array(value: unknown): value is Uint8Array {
  * `Buffer` 作为 `Uint8Array` 子类可以直接使用；带偏移量的视图只读取可见区间。
  * 解码器不使用流式模式，任何被截断的多字节序列都会在本次调用中失败。
  */
-export function decodeUtf8(
-  bytes: Uint8Array,
-  errorPath?: string,
-): string {
+export function decodeUtf8(bytes: Uint8Array, errorPath?: string): string {
   const path = normalizeErrorPath(errorPath);
   if (!isUint8Array(bytes)) fail("bytes-type", path);
 
@@ -90,10 +87,7 @@ export function decodeUtf8(
  * `TextEncoder` 按标准会把孤立代理项转换为 `U+FFFD`。本函数先使用 ES2024
  * `isWellFormed()` 拒绝该输入，防止 Wakeflow 在生成字节时静默改写文本。
  */
-export function encodeUtf8(
-  text: string,
-  errorPath?: string,
-): Uint8Array {
+export function encodeUtf8(text: string, errorPath?: string): Uint8Array {
   const path = normalizeErrorPath(errorPath);
   if (typeof text !== "string") fail("text-type", path);
   if (!text.isWellFormed()) fail("ill-formed-text", path);

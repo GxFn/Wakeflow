@@ -5,8 +5,8 @@ import {
   createUuidV4,
   deriveUuidV4,
   parseUuidV4,
-  UuidV4Error,
   type UuidV4,
+  UuidV4Error,
   type UuidV4ErrorReason,
   type UuidV4Factory,
 } from "../../../src/foundation/identity/uuid-v4.js";
@@ -79,11 +79,7 @@ test("parsing rejects aliases, other versions, variants, and non-strings", () =>
   ];
 
   for (const value of invalid) {
-    expectUuidV4Error(
-      () => parseUuidV4(value, "$.identity"),
-      "format",
-      "$.identity",
-    );
+    expectUuidV4Error(() => parseUuidV4(value, "$.identity"), "format", "$.identity");
   }
 });
 
@@ -101,17 +97,14 @@ test("custom factories are called once and their valid result is branded", () =>
 });
 
 test("factory boundaries reject invalid sources without coercing results", () => {
-  expectUuidV4Error(
-    () => createUuidV4(asUuidV4Factory(null)),
-    "factory-type",
-    "$uuidFactory",
-  );
+  expectUuidV4Error(() => createUuidV4(asUuidV4Factory(null)), "factory-type", "$uuidFactory");
 
   const sourceFailure = new Error("private source failure");
   const failure = expectUuidV4Error(
-    () => createUuidV4(() => {
-      throw sourceFailure;
-    }),
+    () =>
+      createUuidV4(() => {
+        throw sourceFailure;
+      }),
     "factory-failure",
     "$uuidFactory",
   );
@@ -149,11 +142,7 @@ test("Node.js default generation returns one canonical UUIDv4 value", () => {
 
 test("errors normalize empty paths and do not disclose rejected values", () => {
   const rejected = "private-invalid-uuid";
-  const error = expectUuidV4Error(
-    () => parseUuidV4(rejected, ""),
-    "format",
-    "$",
-  );
+  const error = expectUuidV4Error(() => parseUuidV4(rejected, ""), "format", "$");
 
   equal(error.message.includes(rejected), false);
   equal("cause" in error, false);
@@ -170,24 +159,8 @@ test("derivation is deterministic, distinct per input, and canonical", () => {
 
 test("derivation rejects NUL and ill-formed text at the failing input", () => {
   expectUuidV4Error(() => deriveUuidV4(""), "derivation-input", "$namespace");
-  expectUuidV4Error(
-    () => deriveUuidV4("name\u0000space"),
-    "derivation-input",
-    "$namespace",
-  );
-  expectUuidV4Error(
-    () => deriveUuidV4("\uD800"),
-    "derivation-input",
-    "$namespace",
-  );
-  expectUuidV4Error(
-    () => deriveUuidV4("ns", "ok", "a\u0000b"),
-    "derivation-input",
-    "$parts/1",
-  );
-  expectUuidV4Error(
-    () => deriveUuidV4("ns", "\uDC00"),
-    "derivation-input",
-    "$parts/0",
-  );
+  expectUuidV4Error(() => deriveUuidV4("name\u0000space"), "derivation-input", "$namespace");
+  expectUuidV4Error(() => deriveUuidV4("\uD800"), "derivation-input", "$namespace");
+  expectUuidV4Error(() => deriveUuidV4("ns", "ok", "a\u0000b"), "derivation-input", "$parts/1");
+  expectUuidV4Error(() => deriveUuidV4("ns", "\uDC00"), "derivation-input", "$parts/0");
 });

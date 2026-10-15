@@ -4,10 +4,10 @@ import { test } from "node:test";
 import {
   compareUtcInstants,
   parseUtcInstant,
-  utcInstantEpochNanoseconds,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
   type UtcInstantErrorReason,
+  utcInstantEpochNanoseconds,
 } from "../../../src/foundation/time/utc-instant.js";
 
 function expectUtcInstantError(
@@ -82,11 +82,7 @@ test("lexical parsing rejects aliases, offsets, leap seconds, and non-strings", 
   ];
 
   for (const value of invalid) {
-    expectUtcInstantError(
-      () => parseUtcInstant(value, "$.createdAt"),
-      "format",
-      "$.createdAt",
-    );
+    expectUtcInstantError(() => parseUtcInstant(value, "$.createdAt"), "format", "$.createdAt");
   }
 });
 
@@ -97,11 +93,7 @@ test("calendar parsing rejects Date rollover while preserving Gregorian leap yea
     "2026-02-30T00:00:00Z",
     "2026-04-31T00:00:00Z",
   ]) {
-    expectUtcInstantError(
-      () => parseUtcInstant(value, "$.observedAt"),
-      "calendar",
-      "$.observedAt",
-    );
+    expectUtcInstantError(() => parseUtcInstant(value, "$.observedAt"), "calendar", "$.observedAt");
   }
 
   equal(parseUtcInstant("2000-02-29T00:00:00Z"), "2000-02-29T00:00:00Z");
@@ -142,19 +134,13 @@ test("branded comparison still revalidates both runtime values", () => {
   );
   expectUtcInstantError(
     () =>
-      compareUtcInstants(
-        asUtcInstant("not-an-instant"),
-        parseUtcInstant("2026-08-25T10:20:30Z"),
-      ),
+      compareUtcInstants(asUtcInstant("not-an-instant"), parseUtcInstant("2026-08-25T10:20:30Z")),
     "format",
     "$left",
   );
   expectUtcInstantError(
     () =>
-      compareUtcInstants(
-        parseUtcInstant("2026-08-25T10:20:30Z"),
-        asUtcInstant("not-an-instant"),
-      ),
+      compareUtcInstants(parseUtcInstant("2026-08-25T10:20:30Z"), asUtcInstant("not-an-instant")),
     "format",
     "$right",
   );
@@ -169,16 +155,8 @@ test("parsing is non-coercive and errors do not disclose rejected text", () => {
     },
   };
   const rejected = "private-invalid-instant";
-  expectUtcInstantError(
-    () => parseUtcInstant(executableValue, "$.time"),
-    "format",
-    "$.time",
-  );
-  const error = expectUtcInstantError(
-    () => parseUtcInstant(rejected, ""),
-    "format",
-    "$",
-  );
+  expectUtcInstantError(() => parseUtcInstant(executableValue, "$.time"), "format", "$.time");
+  const error = expectUtcInstantError(() => parseUtcInstant(rejected, ""), "format", "$");
 
   equal(conversionCalls, 0);
   equal(error.message.includes(rejected), false);

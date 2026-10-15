@@ -33,7 +33,8 @@ test("临界区成功后释放失败：没有报告者仍抛 release-failure；�
       vanish();
       return "committed";
     }),
-    (error: unknown) => error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
+    (error: unknown) =>
+      error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
   );
   const reports: string[] = [];
   setRootedExclusiveFileLockReleaseFailureReporter((failure) => {

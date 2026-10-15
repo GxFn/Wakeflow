@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import {
   addByteCounts,
-  byteCountFromBigInt,
+  type ByteCount,
   ByteCountError,
+  type ByteCountErrorReason,
+  byteCountFromBigInt,
   MAX_SAFE_BYTE_COUNT,
   parseByteCount,
-  type ByteCount,
-  type ByteCountErrorReason,
 } from "../../../src/foundation/numeric/byte-count.js";
 
 function expectByteCountError(
@@ -64,11 +64,7 @@ test("number parsing rejects negative, fractional, unsafe, and coerced inputs", 
   ];
 
   for (const value of invalid) {
-    expectByteCountError(
-      () => parseByteCount(value, "$.bytes"),
-      "number-range",
-      "$.bytes",
-    );
+    expectByteCountError(() => parseByteCount(value, "$.bytes"), "number-range", "$.bytes");
   }
 });
 
@@ -87,13 +83,7 @@ test("BigInt conversion is exact across the complete safe integer range", () => 
 });
 
 test("BigInt conversion rejects negative, oversized, and non-BigInt inputs", () => {
-  const invalid: readonly unknown[] = [
-    -1n,
-    BigInt(Number.MAX_SAFE_INTEGER) + 1n,
-    0,
-    "1",
-    null,
-  ];
+  const invalid: readonly unknown[] = [-1n, BigInt(Number.MAX_SAFE_INTEGER) + 1n, 0, "1", null];
 
   for (const value of invalid) {
     expectByteCountError(
@@ -112,18 +102,11 @@ test("checked addition preserves exact values and rejects overflow", () => {
   ] as const;
 
   for (const [left, right, expected] of cases) {
-    equal(
-      addByteCounts(parseByteCount(left), parseByteCount(right)),
-      expected,
-    );
+    equal(addByteCounts(parseByteCount(left), parseByteCount(right)), expected);
   }
 
   const error = expectByteCountError(
-    () => addByteCounts(
-      parseByteCount(Number.MAX_SAFE_INTEGER),
-      parseByteCount(1),
-      "$.treeBytes",
-    ),
+    () => addByteCounts(parseByteCount(Number.MAX_SAFE_INTEGER), parseByteCount(1), "$.treeBytes"),
     "addition-overflow",
     "$.treeBytes",
   );

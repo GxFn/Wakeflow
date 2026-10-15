@@ -1,13 +1,10 @@
 import { types } from "node:util";
 
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
@@ -56,7 +53,7 @@ export type DurableRegularFileSettlementErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable regular file settlement input is invalid.",
+  input: "Durable regular file settlement input is invalid.",
   "root-scope": "Regular file settlement could not establish its rooted scope.",
   "parent-not-found": "Regular file settlement parent directory does not exist.",
   "parent-symlink": "Regular file settlement parent chain cannot contain a symbolic link.",
@@ -70,12 +67,9 @@ const ERROR_MESSAGES = {
   "resource-changed": "Regular file settlement target no longer matches its expectation.",
   "durability-failure": "Regular file and parent could not be synchronized safely.",
   "commit-uncertain": "Regular file settlement result could not be proven exact.",
-  "aborted": "Regular file settlement was aborted before synchronization.",
+  aborted: "Regular file settlement was aborted before synchronization.",
   "close-failure": "A regular file settlement handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  DurableRegularFileSettlementErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableRegularFileSettlementErrorReason, string>>;
 
 /** 指定普通文件持久性结算失败时返回的稳定、脱敏错误。 */
 export class DurableRegularFileSettlementError extends Error {
@@ -96,29 +90,28 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableRegularFileSettlementErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableRegularFileSettlementErrorReason, path: string): never {
   throw new DurableRegularFileSettlementError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
@@ -127,18 +120,15 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$options.expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$options.expectedNode");
     }
   } catch (error: unknown) {
@@ -163,10 +153,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    !Object.hasOwn(record, "expectedNode")
-    || Object.keys(record).some(
-      (key) => key !== "expectedNode" && key !== "signal",
-    )
+    !Object.hasOwn(record, "expectedNode") ||
+    Object.keys(record).some((key) => key !== "expectedNode" && key !== "signal")
   ) {
     fail("input", "$options");
   }
@@ -210,11 +198,7 @@ async function openParent(
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
   try {
-    return await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      "$resourcePath",
-    );
+    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentError(error, "open");
@@ -223,9 +207,7 @@ async function openParent(
   }
 }
 
-async function assertParentCurrent(
-  parent: RootedResourceParentHandle,
-): Promise<void> {
+async function assertParentCurrent(parent: RootedResourceParentHandle): Promise<void> {
   try {
     await parent.assertCurrent();
   } catch (error: unknown) {
@@ -255,10 +237,7 @@ async function closeParent(
     return undefined;
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
-      return new DurableRegularFileSettlementError(
-        "close-failure",
-        "$resourcePath",
-      );
+      return new DurableRegularFileSettlementError("close-failure", "$resourcePath");
     }
     throw error;
   }
@@ -347,10 +326,7 @@ async function closeResource(
     return undefined;
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
-      return new DurableRegularFileSettlementError(
-        "close-failure",
-        "$resourcePath",
-      );
+      return new DurableRegularFileSettlementError("close-failure", "$resourcePath");
     }
     throw error;
   }
@@ -393,8 +369,8 @@ export async function settleRegularFileDurability(
     await assertParentCurrent(parent);
     const finalNode = await assertResourceCurrent(resource, "settled");
     if (
-      !sameFileNodeSnapshot(parsed.expectedNode, finalNode)
-      || !sameFileNodeSnapshot(syncedNode, finalNode)
+      !sameFileNodeSnapshot(parsed.expectedNode, finalNode) ||
+      !sameFileNodeSnapshot(syncedNode, finalNode)
     ) {
       fail("commit-uncertain", "$resourcePath");
     }

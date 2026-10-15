@@ -1,33 +1,22 @@
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  lstat,
-  open as openFileHandle,
-  opendir,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, lstat, opendir, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
 import { types } from "node:util";
 import pLimit from "p-limit";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import {
-  decodeUtf8,
-  Utf8Error,
-} from "../text/utf8.js";
+import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import {
   RootedDirectory,
@@ -68,8 +57,7 @@ export interface StableDirectoryEntry {
  * 路径，也不会用空字符串或 `.` 冒充 `PortableResourcePath`。
  */
 export interface StableDirectoryReadResult<
-  DirectoryResourcePath extends PortableResourcePath | null =
-    PortableResourcePath | null,
+  DirectoryResourcePath extends PortableResourcePath | null = PortableResourcePath | null,
 > {
   readonly directoryResourcePath: DirectoryResourcePath;
   readonly directoryNode: Readonly<FileNodeSnapshot>;
@@ -93,22 +81,20 @@ export type StableDirectoryReadErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Stable directory read input is invalid.",
+  input: "Stable directory read input is invalid.",
   "unsupported-platform": "Stable directory read requires Node no-follow directory handles.",
   "root-scope": "Stable directory read could not establish its rooted scope.",
   "not-found": "Stable directory read target does not exist.",
-  "symlink": "Stable directory read target cannot be a symbolic link.",
+  symlink: "Stable directory read target cannot be a symbolic link.",
   "not-directory": "Stable directory read target must be a directory.",
   "expectation-changed": "Stable directory read target no longer matches its expected node.",
   "too-many-entries": "Directory contains more entries than the caller limit.",
   "entry-path": "Directory entry cannot form a portable rooted resource path.",
   "io-failure": "Directory target and entry facts could not be observed safely.",
   "source-changed": "Directory or one of its entries changed during the read.",
-  "aborted": "Stable directory read was aborted.",
+  aborted: "Stable directory read was aborted.",
   "close-failure": "A directory read handle could not be closed safely.",
-} as const satisfies Readonly<
-  Record<StableDirectoryReadErrorReason, string>
->;
+} as const satisfies Readonly<Record<StableDirectoryReadErrorReason, string>>;
 
 /**
  * 稳定目录读取的公共错误。
@@ -136,9 +122,7 @@ interface ParsedStableDirectoryReadOptions {
   readonly pageAfterName?: string;
 }
 
-interface DirectoryTarget<
-  DirectoryResourcePath extends PortableResourcePath | null,
-> {
+interface DirectoryTarget<DirectoryResourcePath extends PortableResourcePath | null> {
   readonly directoryResourcePath: DirectoryResourcePath;
   readonly physicalPath: string;
   readonly node: Readonly<FileNodeSnapshot>;
@@ -167,39 +151,31 @@ const openRawNameDirectory = opendir as unknown as (
 /** 单次目录项 `lstat` 使用的内部固定并发上限，不属于公开 API。 */
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
-function fail(
-  reason: StableDirectoryReadErrorReason,
-  path: string,
-): never {
+function fail(reason: StableDirectoryReadErrorReason, path: string): never {
   throw new StableDirectoryReadError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
-function parseExpectedNode(
-  value: unknown,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$options.expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$options.expectedNode");
     }
   } catch (error: unknown) {
@@ -222,15 +198,15 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
 
   const allowed = new Set(["expectedNode", "maximumEntries", "signal"]);
   if (
-    !Object.hasOwn(record, "maximumEntries")
-    || Object.keys(record).some((key) => !allowed.has(key))
+    !Object.hasOwn(record, "maximumEntries") ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
   if (
-    typeof record.maximumEntries !== "number"
-    || !Number.isSafeInteger(record.maximumEntries)
-    || record.maximumEntries < 0
+    typeof record.maximumEntries !== "number" ||
+    !Number.isSafeInteger(record.maximumEntries) ||
+    record.maximumEntries < 0
   ) {
     fail("input", "$options.maximumEntries");
   }
@@ -246,10 +222,10 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -264,10 +240,7 @@ function compareText(left: string, right: string): number {
 }
 
 function sameNames(left: readonly string[], right: readonly string[]): boolean {
-  return (
-    left.length === right.length
-    && left.every((name, index) => name === right[index])
-  );
+  return left.length === right.length && left.every((name, index) => name === right[index]);
 }
 
 function assertExpectedNode(
@@ -288,9 +261,7 @@ function requiredOpenFlags(): number {
   return fileSystemConstants.O_RDONLY | directory | noFollow;
 }
 
-async function inspectInitialRoot(
-  root: RootedDirectory,
-): Promise<Readonly<DirectoryTarget<null>>> {
+async function inspectInitialRoot(root: RootedDirectory): Promise<Readonly<DirectoryTarget<null>>> {
   let node: Readonly<FileNodeSnapshot>;
   try {
     node = await root.assertCurrent("$root");
@@ -318,20 +289,14 @@ async function inspectInitialResource(
 ): Promise<Readonly<DirectoryTarget<PortableResourcePath>>> {
   let resource: Readonly<RootedResourceSnapshot>;
   try {
-    resource = await root.inspectExistingResource(
-      resourcePath,
-      "$resourcePath",
-    );
+    resource = await root.inspectExistingResource(resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") {
         fail("not-found", "$resourcePath");
       }
       if (error.reason === "resource-path") fail("input", "$resourcePath");
-      if (
-        error.reason === "resource-changed"
-        || error.reason === "resource-alias"
-      ) {
+      if (error.reason === "resource-changed" || error.reason === "resource-alias") {
         fail("source-changed", "$resourcePath");
       }
       if (error.reason === "unsupported-platform") {
@@ -355,9 +320,7 @@ async function inspectInitialResource(
   });
 }
 
-async function inspectFinalTarget<
-  DirectoryResourcePath extends PortableResourcePath | null,
->(
+async function inspectFinalTarget<DirectoryResourcePath extends PortableResourcePath | null>(
   root: RootedDirectory,
   target: Readonly<DirectoryTarget<DirectoryResourcePath>>,
 ): Promise<Readonly<FileNodeSnapshot>> {
@@ -378,9 +341,7 @@ async function inspectFinalTarget<
   }
 }
 
-async function openStableDirectory<
-  DirectoryResourcePath extends PortableResourcePath | null,
->(
+async function openStableDirectory<DirectoryResourcePath extends PortableResourcePath | null>(
   target: Readonly<DirectoryTarget<DirectoryResourcePath>>,
 ): Promise<FileHandle> {
   const flags = requiredOpenFlags();
@@ -400,10 +361,7 @@ async function snapshotOpenedDirectory(
   errorPath: string,
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
-    return createFileNodeSnapshot(
-      await handle.stat({ bigint: true }),
-      errorPath,
-    );
+    return createFileNodeSnapshot(await handle.stat({ bigint: true }), errorPath);
   } catch {
     fail("source-changed", errorPath);
   }
@@ -501,9 +459,7 @@ function entryResourcePath(
   name: string,
   index: number,
 ): PortableResourcePath {
-  const candidate = directoryResourcePath === null
-    ? name
-    : `${directoryResourcePath}/${name}`;
+  const candidate = directoryResourcePath === null ? name : `${directoryResourcePath}/${name}`;
   try {
     return parsePortableResourcePath(candidate, `$entries/${index}`);
   } catch (error: unknown) {
@@ -522,17 +478,10 @@ async function inspectEntry(
   verification: boolean,
 ): Promise<Readonly<StableDirectoryEntry>> {
   assertNotAborted(signal);
-  const resourcePath = entryResourcePath(
-    target.directoryResourcePath,
-    name,
-    index,
-  );
+  const resourcePath = entryResourcePath(target.directoryResourcePath, name, index);
   let node: Readonly<FileNodeSnapshot>;
   try {
-    const stats = await lstat(
-      nodePath.join(target.physicalPath, name),
-      { bigint: true },
-    );
+    const stats = await lstat(nodePath.join(target.physicalPath, name), { bigint: true });
     node = createFileNodeSnapshot(stats, `$entries/${index}.node`);
   } catch (error: unknown) {
     if (verification) fail("source-changed", `$entries/${index}`);
@@ -551,14 +500,9 @@ async function inspectEntries(
   verification: boolean,
 ): Promise<readonly Readonly<StableDirectoryEntry>[]> {
   const limit = pLimit(STABLE_DIRECTORY_LSTAT_CONCURRENCY);
-  const tasks = names.map((name, index) => limit(
-    inspectEntry,
-    target,
-    name,
-    index,
-    signal,
-    verification,
-  ));
+  const tasks = names.map((name, index) =>
+    limit(inspectEntry, target, name, index, signal, verification),
+  );
   const settled = await Promise.allSettled(tasks);
   const entries: Readonly<StableDirectoryEntry>[] = [];
   for (const result of settled) {
@@ -573,37 +517,30 @@ function sameEntries(
   right: readonly Readonly<StableDirectoryEntry>[],
 ): boolean {
   return (
-    left.length === right.length
-    && left.every((entry, index) => {
+    left.length === right.length &&
+    left.every((entry, index) => {
       const other = right[index];
       return (
-        other !== undefined
-        && entry.name === other.name
-        && entry.resourcePath === other.resourcePath
-        && sameFileNodeSnapshot(entry.node, other.node)
+        other !== undefined &&
+        entry.name === other.name &&
+        entry.resourcePath === other.resourcePath &&
+        sameFileNodeSnapshot(entry.node, other.node)
       );
     })
   );
 }
 
-async function readStableDirectory<
-  DirectoryResourcePath extends PortableResourcePath | null,
->(
+async function readStableDirectory<DirectoryResourcePath extends PortableResourcePath | null>(
   root: RootedDirectory,
   target: Readonly<DirectoryTarget<DirectoryResourcePath>>,
   options: Readonly<ParsedStableDirectoryReadOptions>,
 ): Promise<Readonly<StableDirectoryReadResult<DirectoryResourcePath>>> {
   const handle = await openStableDirectory(target);
   let primaryError: unknown;
-  let result: Readonly<
-    StableDirectoryReadResult<DirectoryResourcePath>
-  > | undefined;
+  let result: Readonly<StableDirectoryReadResult<DirectoryResourcePath>> | undefined;
   try {
     const opened = await snapshotOpenedDirectory(handle, target.errorPath);
-    if (
-      opened.kind !== "directory"
-      || !sameFileNodeSnapshot(target.node, opened)
-    ) {
+    if (opened.kind !== "directory" || !sameFileNodeSnapshot(target.node, opened)) {
       fail("source-changed", target.errorPath);
     }
 
@@ -613,12 +550,7 @@ async function readStableDirectory<
       options.signal,
       options.pageAfterName,
     );
-    const firstEntries = await inspectEntries(
-      target,
-      firstNames,
-      options.signal,
-      false,
-    );
+    const firstEntries = await inspectEntries(target, firstNames, options.signal, false);
     const secondNames = await enumerateNames(
       target.physicalPath,
       options.maximumEntries,
@@ -628,12 +560,7 @@ async function readStableDirectory<
     if (!sameNames(firstNames, secondNames)) {
       fail("source-changed", "$entries");
     }
-    const secondEntries = await inspectEntries(
-      target,
-      secondNames,
-      options.signal,
-      true,
-    );
+    const secondEntries = await inspectEntries(target, secondNames, options.signal, true);
     if (!sameEntries(firstEntries, secondEntries)) {
       fail("source-changed", "$entries");
     }
@@ -641,9 +568,9 @@ async function readStableDirectory<
     const afterHandle = await snapshotOpenedDirectory(handle, target.errorPath);
     const afterPath = await inspectFinalTarget(root, target);
     if (
-      afterPath.kind !== "directory"
-      || !sameFileNodeSnapshot(opened, afterHandle)
-      || !sameFileNodeSnapshot(afterHandle, afterPath)
+      afterPath.kind !== "directory" ||
+      !sameFileNodeSnapshot(opened, afterHandle) ||
+      !sameFileNodeSnapshot(afterHandle, afterPath)
     ) {
       fail("source-changed", target.errorPath);
     }
@@ -696,17 +623,20 @@ export async function readStableResourceDirectory(
   return readStableDirectory(root, target, parsed);
 }
 
-
 export interface StableDirectoryPageOptions extends StableDirectoryReadOptions {
   /** Exclusive UTF-16 name cursor; omit for the first page. */
   readonly afterName?: string;
 }
 
-export interface StableDirectoryPage<DirectoryResourcePath extends PortableResourcePath | null = PortableResourcePath> extends StableDirectoryReadResult<DirectoryResourcePath> {
+export interface StableDirectoryPage<
+  DirectoryResourcePath extends PortableResourcePath | null = PortableResourcePath,
+> extends StableDirectoryReadResult<DirectoryResourcePath> {
   readonly hasMore: boolean;
 }
 
-function parsePageOptions(options: StableDirectoryPageOptions): Readonly<ParsedStableDirectoryReadOptions> {
+function parsePageOptions(
+  options: StableDirectoryPageOptions,
+): Readonly<ParsedStableDirectoryReadOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(options, "$options");
@@ -720,18 +650,30 @@ function parsePageOptions(options: StableDirectoryPageOptions): Readonly<ParsedS
     fail("input", "$options.maximumEntries");
   }
   if (afterName !== undefined) {
-    if (typeof afterName !== "string" || afterName.includes("/")) fail("input", "$options.afterName");
+    if (typeof afterName !== "string" || afterName.includes("/"))
+      fail("input", "$options.afterName");
     try {
       parsePortableResourcePath(afterName, "$options.afterName");
     } catch {
       fail("input", "$options.afterName");
     }
   }
-  return { ...parsed, maximumEntries: parsed.maximumEntries + 1, pageAfterName: (afterName as string | undefined) ?? "" };
+  return {
+    ...parsed,
+    maximumEntries: parsed.maximumEntries + 1,
+    pageAfterName: (afterName as string | undefined) ?? "",
+  };
 }
 
-function directoryPage<Ref extends PortableResourcePath | null>(page: Readonly<StableDirectoryReadResult<Ref>>, maximumEntries: number): Readonly<StableDirectoryPage<Ref>> {
-  return Object.freeze({ ...page, entries: Object.freeze(page.entries.slice(0, maximumEntries - 1)), hasMore: page.entries.length === maximumEntries });
+function directoryPage<Ref extends PortableResourcePath | null>(
+  page: Readonly<StableDirectoryReadResult<Ref>>,
+  maximumEntries: number,
+): Readonly<StableDirectoryPage<Ref>> {
+  return Object.freeze({
+    ...page,
+    entries: Object.freeze(page.entries.slice(0, maximumEntries - 1)),
+    hasMore: page.entries.length === maximumEntries,
+  });
 }
 
 /**

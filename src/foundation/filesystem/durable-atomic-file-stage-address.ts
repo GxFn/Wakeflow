@@ -1,24 +1,20 @@
-import { threadId } from "node:worker_threads";
 import { types } from "node:util";
+import { threadId } from "node:worker_threads";
 
 import {
   computeSha256Digest,
   parseSha256Digest,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "../crypto/sha256.js";
-import {
-  createUuidV4,
-  parseUuidV4,
-  UuidV4Error,
-} from "../identity/uuid-v4.js";
+import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { encodeUtf8 } from "../text/utf8.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "./portable-resource-path.js";
 
 /**
@@ -31,10 +27,7 @@ import {
  */
 
 export type DurableAtomicFileStageOperation = "create" | "replace";
-export type DurableAtomicFileStageOwnerState =
-  | "active"
-  | "inactive"
-  | "unknown";
+export type DurableAtomicFileStageOwnerState = "active" | "inactive" | "unknown";
 
 export interface DurableAtomicFileStageAddress {
   readonly operation: DurableAtomicFileStageOperation;
@@ -54,14 +47,11 @@ export type DurableAtomicFileStageAddressErrorReason =
   | "not-issued";
 
 const ERROR_MESSAGES = {
-  "input": "Durable atomic file stage address input is invalid.",
-  "digest": "Durable atomic file stage address digest is invalid.",
-  "identifier": "Durable atomic file stage owner identity is invalid.",
+  input: "Durable atomic file stage address input is invalid.",
+  digest: "Durable atomic file stage address digest is invalid.",
+  identifier: "Durable atomic file stage owner identity is invalid.",
   "not-issued": "Durable atomic file stage address was not issued by this process.",
-} as const satisfies Readonly<Record<
-  DurableAtomicFileStageAddressErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableAtomicFileStageAddressErrorReason, string>>;
 
 export class DurableAtomicFileStageAddressError extends Error {
   override readonly name = "DurableAtomicFileStageAddressError";
@@ -69,10 +59,7 @@ export class DurableAtomicFileStageAddressError extends Error {
   readonly reason: DurableAtomicFileStageAddressErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DurableAtomicFileStageAddressErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DurableAtomicFileStageAddressErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -82,14 +69,12 @@ export class DurableAtomicFileStageAddressError extends Error {
 const STAGE_PREFIX = ".wakeflow-atomic-";
 const STAGE_FORMAT_VERSION = "v1";
 const MAXIMUM_STAGE_FILE_NAME_LENGTH = 238;
-const STAGE_PATTERN = /^(?:\.wakeflow-atomic-v1-)(?<operation>create|replace)-(?<target>[0-9a-f]{64})-(?<input>[0-9a-f]{64})-m(?<mode>[0-7]{3})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<attempt>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.tmp$/u;
+const STAGE_PATTERN =
+  /^(?:\.wakeflow-atomic-v1-)(?<operation>create|replace)-(?<target>[0-9a-f]{64})-(?<input>[0-9a-f]{64})-m(?<mode>[0-7]{3})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<attempt>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.tmp$/u;
 const ACTIVE_STAGE_TOKENS = new Set<string>();
 const ISSUED_STAGE_ADDRESSES = new WeakSet<object>();
 
-function fail(
-  reason: DurableAtomicFileStageAddressErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableAtomicFileStageAddressErrorReason, path: string): never {
   throw new DurableAtomicFileStageAddressError(reason, path);
 }
 
@@ -101,12 +86,7 @@ function parseOperation(value: unknown): DurableAtomicFileStageOperation {
 }
 
 function parseMode(value: unknown): number {
-  if (
-    typeof value !== "number"
-    || !Number.isInteger(value)
-    || value < 0
-    || value > 0o777
-  ) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
     fail("input", "$mode");
   }
   return value;
@@ -126,28 +106,17 @@ function digestHex(value: Sha256Digest): string {
   return value.slice("sha256:".length);
 }
 
-function parseOwnerInteger(
-  value: string | undefined,
-  allowZero: boolean,
-  path: string,
-): number {
+function parseOwnerInteger(value: string | undefined, allowZero: boolean, path: string): number {
   if (value === undefined) fail("identifier", path);
   const parsed = Number(value);
-  if (
-    !Number.isSafeInteger(parsed)
-    || parsed < (allowZero ? 0 : 1)
-  ) {
+  if (!Number.isSafeInteger(parsed) || parsed < (allowZero ? 0 : 1)) {
     fail("identifier", path);
   }
   return parsed;
 }
 
 function readAddressFileName(value: unknown): string {
-  if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-  ) {
+  if (typeof value !== "object" || value === null || types.isProxy(value)) {
     fail("input", "$address");
   }
   let descriptor: PropertyDescriptor | undefined;
@@ -157,9 +126,9 @@ function readAddressFileName(value: unknown): string {
     fail("input", "$address");
   }
   if (
-    descriptor === undefined
-    || !Object.hasOwn(descriptor, "value")
-    || typeof descriptor.value !== "string"
+    descriptor === undefined ||
+    !Object.hasOwn(descriptor, "value") ||
+    typeof descriptor.value !== "string"
   ) {
     fail("input", "$address");
   }
@@ -167,9 +136,7 @@ function readAddressFileName(value: unknown): string {
 }
 
 /** 计算目标可移植引用的脱敏、稳定暂存路由摘要。 */
-export function computeDurableAtomicFileStageTargetDigest(
-  value: unknown,
-): Sha256Digest {
+export function computeDurableAtomicFileStageTargetDigest(value: unknown): Sha256Digest {
   let resourcePath: PortableResourcePath;
   try {
     resourcePath = parsePortableResourcePath(value, "$resourcePath");
@@ -180,10 +147,7 @@ export function computeDurableAtomicFileStageTargetDigest(
     throw error;
   }
   const resourceName = splitPortableResourcePath(resourcePath).at(-1);
-  if (
-    resourceName === undefined
-    || hasDurableAtomicFileStagePrefix(resourceName)
-  ) {
+  if (resourceName === undefined || hasDurableAtomicFileStagePrefix(resourceName)) {
     fail("input", "$resourcePath");
   }
   return computeSha256Digest(encodeUtf8(resourcePath, "$resourcePath"));
@@ -198,21 +162,14 @@ export function hasDurableAtomicFileStagePrefix(value: unknown): boolean {
 export function parseDurableAtomicFileStageFileName(
   value: unknown,
 ): Readonly<DurableAtomicFileStageAddress> {
-  if (
-    typeof value !== "string"
-    || value.length > MAXIMUM_STAGE_FILE_NAME_LENGTH
-  ) {
+  if (typeof value !== "string" || value.length > MAXIMUM_STAGE_FILE_NAME_LENGTH) {
     fail("input", "$fileName");
   }
   const groups = STAGE_PATTERN.exec(value)?.groups;
   if (groups === undefined) fail("input", "$fileName");
   const operation = parseOperation(groups.operation);
   const pid = parseOwnerInteger(groups.pid, false, "$/pid");
-  const candidateThreadId = parseOwnerInteger(
-    groups.threadId,
-    true,
-    "$/threadId",
-  );
+  const candidateThreadId = parseOwnerInteger(groups.threadId, true, "$/threadId");
   const attempt = groups.attempt;
   if (attempt === undefined) fail("identifier", "$/attempt");
   try {
@@ -242,8 +199,7 @@ export function issueDurableAtomicFileStageAddress(
   modeValue: unknown,
 ): Readonly<DurableAtomicFileStageAddress> {
   const operation = parseOperation(operationValue);
-  const targetResourcePathDigest =
-    computeDurableAtomicFileStageTargetDigest(resourcePathValue);
+  const targetResourcePathDigest = computeDurableAtomicFileStageTargetDigest(resourcePathValue);
   let inputDigest: Sha256Digest;
   try {
     inputDigest = parseSha256Digest(inputDigestValue, "$inputDigest");
@@ -274,11 +230,11 @@ export function releaseDurableAtomicFileStageAddress(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): void {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
-    || !ISSUED_STAGE_ADDRESSES.has(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value) ||
+    !ISSUED_STAGE_ADDRESSES.has(value)
   ) {
     fail("not-issued", "$address");
   }
@@ -290,9 +246,7 @@ export function releaseDurableAtomicFileStageAddress(
 export function readDurableAtomicFileStageOwnerState(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): DurableAtomicFileStageOwnerState {
-  const address = parseDurableAtomicFileStageFileName(
-    readAddressFileName(value),
-  );
+  const address = parseDurableAtomicFileStageFileName(readAddressFileName(value));
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
     return ACTIVE_STAGE_TOKENS.has(address.token) ? "active" : "inactive";

@@ -13,28 +13,25 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
   createDirectoryTreeCandidateDurably,
-  planDirectoryTreeCandidate,
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateResult,
+  planDirectoryTreeCandidate,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import {
-  retireDirectoryTreeCandidateDurably,
-  settleDirectoryTreeCandidateRetirement,
   DurableDirectoryTreeCandidateRetirementError,
   type DurableDirectoryTreeCandidateRetirementErrorReason,
+  retireDirectoryTreeCandidateDurably,
+  settleDirectoryTreeCandidateRetirement,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate-retirement.js";
-import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 
-const STAGE_REF = parsePortableResourcePath(
-  "transactions/.managed-evidence.wakeflow-stage",
-);
+const STAGE_REF = parsePortableResourcePath("transactions/.managed-evidence.wakeflow-stage");
 const FILES = [
   {
     path: "manifest.json",
@@ -69,19 +66,12 @@ interface RetirementFixture {
 }
 
 async function createFixture(): Promise<RetirementFixture> {
-  const rootPath = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-directory-retirement-"),
-  );
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-directory-retirement-"));
   mkdirSync(path.join(rootPath, "transactions"), { mode: 0o700 });
   chmodSync(path.join(rootPath, "transactions"), 0o700);
   const root = await RootedDirectory.open(rootPath);
   const plan = planDirectoryTreeCandidate(FILES, OPTIONS);
-  const candidate = await createDirectoryTreeCandidateDurably(
-    root,
-    STAGE_REF,
-    FILES,
-    OPTIONS,
-  );
+  const candidate = await createDirectoryTreeCandidateDurably(root, STAGE_REF, FILES, OPTIONS);
   return Object.freeze({ rootPath, root, plan, candidate });
 }
 
@@ -107,40 +97,23 @@ async function expectRetirementError(
 }
 
 function stagePath(rootPath: string, suffix = ""): string {
-  return path.join(
-    rootPath,
-    ...STAGE_REF.split("/"),
-    ...suffix.split("/").filter(Boolean),
-  );
+  return path.join(rootPath, ...STAGE_REF.split("/"), ...suffix.split("/").filter(Boolean));
 }
 
 test("完整candidate按精确清单退休且不触碰同级资源", async () => {
   const fixture = await createFixture();
   try {
-    writeFileSync(
-      path.join(fixture.rootPath, "transactions", "keep.json"),
-      "keep\n",
-      {
-        mode: 0o600,
-      },
-    );
-    const receipt = await retireDirectoryTreeCandidateDurably(
-      fixture.root,
-      fixture.candidate,
-    );
+    writeFileSync(path.join(fixture.rootPath, "transactions", "keep.json"), "keep\n", {
+      mode: 0o600,
+    });
+    const receipt = await retireDirectoryTreeCandidateDurably(fixture.root, fixture.candidate);
     equal(receipt.disposition, "retired");
     equal(receipt.candidateRootPath, STAGE_REF);
     equal(receipt.plan.treeDigest, fixture.plan.treeDigest);
     equal(receipt.retiredFileCount, 3);
     equal(receipt.retiredDirectoryCount, 3);
     equal(existsSync(stagePath(fixture.rootPath)), false);
-    equal(
-      readFileSync(
-        path.join(fixture.rootPath, "transactions", "keep.json"),
-        "utf8",
-      ),
-      "keep\n",
-    );
+    equal(readFileSync(path.join(fixture.rootPath, "transactions", "keep.json"), "utf8"), "keep\n");
     equal(Object.isFrozen(receipt), true);
   } finally {
     await cleanupFixture(fixture);
@@ -150,26 +123,15 @@ test("完整candidate按精确清单退休且不触碰同级资源", async () =>
 test("首次退休要求完整candidate，未知或缺失成员不会被吞掉", async () => {
   const unknownFixture = await createFixture();
   try {
-    writeFileSync(
-      stagePath(unknownFixture.rootPath, "unknown.txt"),
-      "unknown\n",
-      {
-        mode: 0o600,
-      },
-    );
+    writeFileSync(stagePath(unknownFixture.rootPath, "unknown.txt"), "unknown\n", {
+      mode: 0o600,
+    });
     await expectRetirementError(
-      () =>
-        retireDirectoryTreeCandidateDurably(
-          unknownFixture.root,
-          unknownFixture.candidate,
-        ),
+      () => retireDirectoryTreeCandidateDurably(unknownFixture.root, unknownFixture.candidate),
       "source-changed",
     );
     equal(existsSync(stagePath(unknownFixture.rootPath)), true);
-    equal(
-      readFileSync(stagePath(unknownFixture.rootPath, "unknown.txt"), "utf8"),
-      "unknown\n",
-    );
+    equal(readFileSync(stagePath(unknownFixture.rootPath, "unknown.txt"), "utf8"), "unknown\n");
   } finally {
     await cleanupFixture(unknownFixture);
   }
@@ -178,18 +140,11 @@ test("首次退休要求完整candidate，未知或缺失成员不会被吞掉",
   try {
     rmSync(stagePath(partialFixture.rootPath, "manifest.json"));
     await expectRetirementError(
-      () =>
-        retireDirectoryTreeCandidateDurably(
-          partialFixture.root,
-          partialFixture.candidate,
-        ),
+      () => retireDirectoryTreeCandidateDurably(partialFixture.root, partialFixture.candidate),
       "source-changed",
     );
     equal(
-      readFileSync(
-        stagePath(partialFixture.rootPath, "payload/content.txt"),
-        "utf8",
-      ),
+      readFileSync(stagePath(partialFixture.rootPath, "payload/content.txt"), "utf8"),
       "evidence\n",
     );
   } finally {
@@ -229,18 +184,12 @@ test("恢复入口只续接原计划的安全子集并对absent保持观察语�
 test("恢复入口拒绝内容漂移与符号链接，不删除其他计划成员", async () => {
   const changedFixture = await createFixture();
   try {
-    writeFileSync(
-      stagePath(changedFixture.rootPath, "payload/content.txt"),
-      "changed\n",
-      { mode: 0o600 },
-    );
+    writeFileSync(stagePath(changedFixture.rootPath, "payload/content.txt"), "changed\n", {
+      mode: 0o600,
+    });
     await expectRetirementError(
       () =>
-        settleDirectoryTreeCandidateRetirement(
-          changedFixture.root,
-          STAGE_REF,
-          changedFixture.plan,
-        ),
+        settleDirectoryTreeCandidateRetirement(changedFixture.root, STAGE_REF, changedFixture.plan),
       "candidate-conflict",
     );
     equal(
@@ -253,17 +202,9 @@ test("恢复入口拒绝内容漂移与符号链接，不删除其他计划成�
 
   const linkFixture = await createFixture();
   try {
-    symlinkSync(
-      "manifest.json",
-      stagePath(linkFixture.rootPath, "unexpected-link"),
-    );
+    symlinkSync("manifest.json", stagePath(linkFixture.rootPath, "unexpected-link"));
     await expectRetirementError(
-      () =>
-        settleDirectoryTreeCandidateRetirement(
-          linkFixture.root,
-          STAGE_REF,
-          linkFixture.plan,
-        ),
+      () => settleDirectoryTreeCandidateRetirement(linkFixture.root, STAGE_REF, linkFixture.plan),
       "candidate-conflict",
     );
     equal(existsSync(stagePath(linkFixture.rootPath, "manifest.json")), true);
@@ -326,22 +267,14 @@ test("恢复入口拒绝伪造计划且不接收recursive删除选项", async ()
       files: fixture.plan.files.slice(1),
     } as DirectoryTreeCandidatePlan;
     await expectRetirementError(
-      () =>
-        settleDirectoryTreeCandidateRetirement(
-          fixture.root,
-          STAGE_REF,
-          forgedPlan,
-        ),
+      () => settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, forgedPlan),
       "input",
     );
     await expectRetirementError(
       () =>
-        settleDirectoryTreeCandidateRetirement(
-          fixture.root,
-          STAGE_REF,
-          fixture.plan,
-          { recursive: true } as never,
-        ),
+        settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, fixture.plan, {
+          recursive: true,
+        } as never),
       "input",
     );
     equal(existsSync(stagePath(fixture.rootPath)), true);
@@ -351,9 +284,7 @@ test("恢复入口拒绝伪造计划且不接收recursive删除选项", async ()
 });
 
 test("部分candidate可由恢复入口退休但不能伪装成首次完整candidate", async () => {
-  const rootPath = mkdtempSync(
-    path.join(os.tmpdir(), "wakeflow-directory-retirement-partial-"),
-  );
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-directory-retirement-partial-"));
   mkdirSync(path.join(rootPath, "transactions"), { mode: 0o700 });
   chmodSync(path.join(rootPath, "transactions"), 0o700);
   const root = await RootedDirectory.open(rootPath);
@@ -378,11 +309,7 @@ test("部分candidate可由恢复入口退休但不能伪装成首次完整candi
     );
     equal(existsSync(stagePath(rootPath)), true);
 
-    const recovered = await settleDirectoryTreeCandidateRetirement(
-      root,
-      STAGE_REF,
-      plan,
-    );
+    const recovered = await settleDirectoryTreeCandidateRetirement(root, STAGE_REF, plan);
     equal(recovered.disposition, "retired");
     equal(recovered.retiredFileCount, 1);
     equal(recovered.retiredDirectoryCount, 1);

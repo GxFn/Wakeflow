@@ -1,17 +1,11 @@
 import { equal } from "node:assert/strict";
 import { test } from "node:test";
-
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   CanonicalJsonError,
   encodeCanonicalJson,
 } from "../../../src/foundation/data/canonical-json.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  type Sha256Digest,
-} from "../../../src/foundation/crypto/sha256.js";
 
 test("existing Wakeflow canonical JSON SHA-256 golden values stay unchanged", () => {
   const value = {
@@ -43,13 +37,9 @@ test("object construction order is irrelevant while a data change changes the di
     z: 3,
   };
 
+  equal(computeCanonicalJsonSha256Digest(first), computeCanonicalJsonSha256Digest(reordered));
   equal(
-    computeCanonicalJsonSha256Digest(first),
-    computeCanonicalJsonSha256Digest(reordered),
-  );
-  equal(
-    computeCanonicalJsonSha256Digest(first)
-      === computeCanonicalJsonSha256Digest(changed),
+    computeCanonicalJsonSha256Digest(first) === computeCanonicalJsonSha256Digest(changed),
     false,
   );
 });
@@ -63,24 +53,27 @@ test("composition is exactly canonical UTF-8 bytes followed by SHA-256", () => {
 
 test("canonical input errors propagate with their original owner, reason, and path", () => {
   let trapCalls = 0;
-  const proxy = new Proxy({ value: true }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const proxy = new Proxy(
+    { value: true },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return null;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
     },
-    getOwnPropertyDescriptor: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return null;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
+  );
 
   let caught: unknown;
   try {

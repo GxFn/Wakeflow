@@ -1,33 +1,34 @@
 import { rmdir } from "node:fs/promises";
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
+  directoryTreeCandidateMaximumPathDepth,
+  joinDirectoryTreeCandidatePath,
+} from "./directory-tree-candidate-plan.js";
+import {
+  type DirectoryTreeCandidatePlan,
+  type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
   parseDirectoryTreeCandidatePlan,
-  DurableDirectoryTreeCandidateError,
-  type DirectoryTreeCandidatePlan,
-  type DirectoryTreeCandidateResult,
 } from "./durable-directory-tree-candidate.js";
 import {
-  joinDirectoryTreeCandidatePath,
-  directoryTreeCandidateMaximumPathDepth,
-} from "./directory-tree-candidate-plan.js";
+  ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
+} from "./exact-regular-file-unlink.js";
 import {
+  type FileNodeSnapshot,
+  FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  FileNodeSnapshotError,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import {
@@ -38,10 +39,6 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import {
-  unlinkRegularFileExactly,
-  ExactRegularFileUnlinkError,
-} from "./exact-regular-file-unlink.js";
 import {
   readStableFileDigest,
   StableFileReadError,
@@ -90,34 +87,23 @@ const ERROR_MESSAGES = {
   "root-scope": "Directory tree candidate retirement lost its root scope.",
   "candidate-conflict":
     "Directory tree candidate retirement found a non-closed or unknown resource.",
-  "source-changed":
-    "Directory tree candidate retirement source changed before removal.",
-  "retirement-failure":
-    "Directory tree candidate retirement could not remove an exact member.",
-  "commit-uncertain":
-    "Directory tree candidate retirement result could not be proven exact.",
+  "source-changed": "Directory tree candidate retirement source changed before removal.",
+  "retirement-failure": "Directory tree candidate retirement could not remove an exact member.",
+  "commit-uncertain": "Directory tree candidate retirement result could not be proven exact.",
   "durability-failure":
     "Directory tree candidate retirement could not synchronize its directory entries.",
-  aborted:
-    "Directory tree candidate retirement was aborted before a commit point.",
-  "close-failure":
-    "Directory tree candidate retirement could not close an exact handle.",
-} as const satisfies Readonly<
-  Record<DurableDirectoryTreeCandidateRetirementErrorReason, string>
->;
+  aborted: "Directory tree candidate retirement was aborted before a commit point.",
+  "close-failure": "Directory tree candidate retirement could not close an exact handle.",
+} as const satisfies Readonly<Record<DurableDirectoryTreeCandidateRetirementErrorReason, string>>;
 
 /** 目录树candidate退休失败时的稳定、脱敏错误。 */
 export class DurableDirectoryTreeCandidateRetirementError extends Error {
   override readonly name = "DurableDirectoryTreeCandidateRetirementError";
-  readonly code =
-    "wakeflow-durable-directory-tree-candidate-retirement" as const;
+  readonly code = "wakeflow-durable-directory-tree-candidate-retirement" as const;
   readonly reason: DurableDirectoryTreeCandidateRetirementErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DurableDirectoryTreeCandidateRetirementErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DurableDirectoryTreeCandidateRetirementErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -142,10 +128,7 @@ interface CapturedCandidateMembers {
   readonly missingFiles: readonly PortableResourcePath[];
 }
 
-function fail(
-  reason: DurableDirectoryTreeCandidateRetirementErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableDirectoryTreeCandidateRetirementErrorReason, path: string): never {
   throw new DurableDirectoryTreeCandidateRetirementError(reason, path);
 }
 
@@ -211,12 +194,7 @@ function parseRootNode(value: unknown): Readonly<FileNodeSnapshot> {
     fail("input", "$candidate/rootNode");
   }
   try {
-    if (
-      !sameFileNodeSnapshot(
-        value as FileNodeSnapshot,
-        value as FileNodeSnapshot,
-      )
-    ) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$candidate/rootNode");
     }
   } catch (error: unknown) {
@@ -300,10 +278,7 @@ async function candidateExists(
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return false;
       if (error.reason === "resource-path") fail("input", "$candidate");
-      if (
-        error.reason === "ancestor-symlink" ||
-        error.reason === "ancestor-type"
-      ) {
+      if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
         fail("candidate-conflict", "$candidate");
       }
       fail("root-scope", "$root");
@@ -320,15 +295,10 @@ async function inspectProgress(
   signal: AbortSignal | undefined,
 ) {
   try {
-    return await inspectDirectoryTreeCandidateProgress(
-      root,
-      candidateRootPath,
-      plan,
-      {
-        ...(expectedRootNode === undefined ? {} : { expectedRootNode }),
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    return await inspectDirectoryTreeCandidateProgress(root, candidateRootPath, plan, {
+      ...(expectedRootNode === undefined ? {} : { expectedRootNode }),
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       mapCandidateError(error);
@@ -343,15 +313,10 @@ async function inspectComplete(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    await inspectDirectoryTreeCandidate(
-      root,
-      candidate.candidateRootPath,
-      candidate.plan,
-      {
-        expectedRootNode: candidate.rootNode,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
+    await inspectDirectoryTreeCandidate(root, candidate.candidateRootPath, candidate.plan, {
+      expectedRootNode: candidate.rootNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       mapCandidateError(error);
@@ -373,13 +338,7 @@ async function captureMembers(
   plan: Readonly<DirectoryTreeCandidatePlan>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedCandidateMembers>> {
-  const progress = await inspectProgress(
-    root,
-    candidateRootPath,
-    plan,
-    undefined,
-    signal,
-  );
+  const progress = await inspectProgress(root, candidateRootPath, plan, undefined, signal);
   const missingDirectories = new Set(progress.missingDirectories);
   const missingFiles = new Set(progress.missingFiles);
   const directories = new Map<PortableResourcePath, FileNodeSnapshot>();
@@ -412,14 +371,10 @@ async function captureMembers(
     if (missingFiles.has(file.path)) continue;
     let read: Readonly<StableFileSource>;
     try {
-      read = await readStableFileDigest(
-        root,
-        memberPath(candidateRootPath, file.path),
-        {
-          maximumBytes: file.byteCount,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
+      read = await readStableFileDigest(root, memberPath(candidateRootPath, file.path), {
+        maximumBytes: file.byteCount,
+        ...(signal === undefined ? {} : { signal }),
+      });
     } catch (error: unknown) {
       if (error instanceof StableFileReadError) {
         if (error.reason === "aborted") fail("aborted", "$signal");
@@ -441,23 +396,14 @@ async function captureMembers(
     files.set(file.path, read);
   }
 
-  const confirmed = await inspectProgress(
-    root,
-    candidateRootPath,
-    plan,
-    progress.rootNode,
-    signal,
-  );
+  const confirmed = await inspectProgress(root, candidateRootPath, plan, progress.rootNode, signal);
   if (
-    confirmed.missingDirectories.length !==
-      progress.missingDirectories.length ||
+    confirmed.missingDirectories.length !== progress.missingDirectories.length ||
     confirmed.missingFiles.length !== progress.missingFiles.length ||
     confirmed.missingDirectories.some(
       (entry, index) => entry !== progress.missingDirectories[index],
     ) ||
-    confirmed.missingFiles.some(
-      (entry, index) => entry !== progress.missingFiles[index],
-    )
+    confirmed.missingFiles.some((entry, index) => entry !== progress.missingFiles[index])
   ) {
     fail("source-changed", "$candidate");
   }
@@ -479,10 +425,7 @@ function mapFileUnlinkError(error: ExactRegularFileUnlinkError): never {
   if (error.reason === "commit-uncertain" || error.reason === "close-failure") {
     fail("commit-uncertain", "$candidate/file");
   }
-  if (
-    error.reason === "source-changed" ||
-    error.reason === "source-not-found"
-  ) {
+  if (error.reason === "source-changed" || error.reason === "source-not-found") {
     fail("source-changed", "$candidate/file");
   }
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
@@ -504,14 +447,10 @@ async function retireFiles(
     if (captured === undefined) continue;
     assertNotAborted(signal);
     try {
-      await unlinkRegularFileExactly(
-        root,
-        memberPath(candidateRootPath, file.path),
-        {
-          expectedNode: captured.node,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
+      await unlinkRegularFileExactly(root, memberPath(candidateRootPath, file.path), {
+        expectedNode: captured.node,
+        ...(signal === undefined ? {} : { signal }),
+      });
     } catch (error: unknown) {
       if (error instanceof ExactRegularFileUnlinkError) {
         mapFileUnlinkError(error);
@@ -523,10 +462,7 @@ async function retireFiles(
   return retired;
 }
 
-function mapParentError(
-  error: RootedResourceParentHandleError,
-  afterCommit: boolean,
-): never {
+function mapParentError(error: RootedResourceParentHandleError, afterCommit: boolean): never {
   if (error.reason === "sync-failure") {
     fail("durability-failure", "$candidate/directory");
   }
@@ -585,11 +521,7 @@ export async function removeEmptyDirectoryExactly(
 
   let parent: RootedResourceParentHandle;
   try {
-    parent = await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      "$directory",
-    );
+    parent = await RootedResourceParentHandle.open(root, resourcePath, "$directory");
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentError(error, false);
@@ -630,10 +562,7 @@ export async function removeEmptyDirectoryExactly(
       fail("commit-uncertain", "$candidate/directory");
     }
     const opened = await source.inspectOpenedNode();
-    if (
-      opened.kind !== "directory" ||
-      !sameFileNodeIdentity(opened, current.node)
-    ) {
+    if (opened.kind !== "directory" || !sameFileNodeIdentity(opened, current.node)) {
       fail("commit-uncertain", "$candidate/directory");
     }
     if (durability === "fsync") {
@@ -746,13 +675,7 @@ async function settleRetirement(
     });
   }
   const captured = await captureMembers(root, candidateRootPath, plan, signal);
-  const retiredFileCount = await retireFiles(
-    root,
-    candidateRootPath,
-    plan,
-    captured.files,
-    signal,
-  );
+  const retiredFileCount = await retireFiles(root, candidateRootPath, plan, captured.files, signal);
   const retiredDirectoryCount = await retireDirectories(
     root,
     candidateRootPath,
@@ -810,10 +733,5 @@ export async function settleDirectoryTreeCandidateRetirement(
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
   const input = parseRecoveryInput(candidateRootPathValue, planValue);
-  return settleRetirement(
-    rootValue,
-    input.candidateRootPath,
-    input.plan,
-    options.signal,
-  );
+  return settleRetirement(rootValue, input.candidateRootPath, input.plan, options.signal);
 }

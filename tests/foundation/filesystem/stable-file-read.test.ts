@@ -1,23 +1,13 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  linkSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  parseByteCount,
-} from "../../../src/foundation/numeric/byte-count.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -27,6 +17,7 @@ import {
   type StableFileReadErrorReason,
   type StableFileReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectStableFileReadError(
   action: () => unknown | Promise<unknown>,
@@ -62,7 +53,7 @@ test("bounded byte read returns exact bytes, digest, and final node facts", asyn
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-read-"));
   const file = path.join(rootPath, "records", "state.json");
   mkdirSync(path.dirname(file));
-  const expected = Buffer.from("{\"state\":\"ready\"}\n", "utf8");
+  const expected = Buffer.from('{"state":"ready"}\n', "utf8");
   writeFileSync(file, expected, { mode: 0o600 });
 
   const root = await RootedDirectory.open(rootPath);
@@ -95,13 +86,9 @@ test("digest-only mode hashes a large file without returning file bytes", async 
 
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await readStableFileDigest(
-      root,
-      parsePortableResourcePath("large.bin"),
-      {
-        maximumBytes: parseByteCount(expected.byteLength),
-      },
-    );
+    const result = await readStableFileDigest(root, parsePortableResourcePath("large.bin"), {
+      maximumBytes: parseByteCount(expected.byteLength),
+    });
 
     equal(Object.hasOwn(result, "bytes"), false);
     equal(result.byteCount, expected.byteLength);
@@ -141,9 +128,10 @@ test("caller maximum is enforced before content allocation or hashing", async ()
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("bounded"), {
-        maximumBytes: parseByteCount(3),
-      }),
+      () =>
+        readStableFile(root, parsePortableResourcePath("bounded"), {
+          maximumBytes: parseByteCount(3),
+        }),
       "too-large",
       "$resourcePath",
     );
@@ -166,10 +154,11 @@ test("expectedNode binds the read to one exact previously observed version", asy
     writeFileSync(physicalPath, "new-version\n");
 
     await expectStableFileReadError(
-      () => readStableFileDigest(root, resourcePath, {
-        maximumBytes: parseByteCount(1024),
-        expectedNode: observed.node,
-      }),
+      () =>
+        readStableFileDigest(root, resourcePath, {
+          maximumBytes: parseByteCount(1024),
+          expectedNode: observed.node,
+        }),
       "expectation-changed",
       "$options.expectedNode",
     );
@@ -187,16 +176,18 @@ test("directories and symlinks are classified without reading their targets", as
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("directory"), {
-        maximumBytes: parseByteCount(1024),
-      }),
+      () =>
+        readStableFile(root, parsePortableResourcePath("directory"), {
+          maximumBytes: parseByteCount(1024),
+        }),
       "not-file",
       "$resourcePath",
     );
     await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("link"), {
-        maximumBytes: parseByteCount(1024),
-      }),
+      () =>
+        readStableFile(root, parsePortableResourcePath("link"), {
+          maximumBytes: parseByteCount(1024),
+        }),
       "symlink",
       "$resourcePath",
     );
@@ -211,16 +202,18 @@ test("missing and forged resource paths map to stable read errors", async () => 
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("missing"), {
-        maximumBytes: parseByteCount(1024),
-      }),
+      () =>
+        readStableFile(root, parsePortableResourcePath("missing"), {
+          maximumBytes: parseByteCount(1024),
+        }),
       "not-found",
       "$resourcePath",
     );
     await expectStableFileReadError(
-      () => readStableFile(root, asPortableResourcePath("../escape"), {
-        maximumBytes: parseByteCount(1024),
-      }),
+      () =>
+        readStableFile(root, asPortableResourcePath("../escape"), {
+          maximumBytes: parseByteCount(1024),
+        }),
       "input",
       "$resourcePath",
     );
@@ -237,11 +230,9 @@ test("hard links remain observable facts rather than a foundation rejection", as
   linkSync(source, path.join(rootPath, "alias"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await readStableFile(
-      root,
-      parsePortableResourcePath("source"),
-      { maximumBytes: parseByteCount(1024) },
-    );
+    const result = await readStableFile(root, parsePortableResourcePath("source"), {
+      maximumBytes: parseByteCount(1024),
+    });
     equal(result.node.linkCount, 2n);
     equal(Buffer.from(result.bytes).toString("utf8"), "shared");
   } finally {
@@ -258,10 +249,11 @@ test("an already-aborted signal stops before reading", async () => {
   controller.abort(new Error("private abort reason"));
   try {
     const error = await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("file"), {
-        maximumBytes: parseByteCount(1024),
-        signal: controller.signal,
-      }),
+      () =>
+        readStableFile(root, parsePortableResourcePath("file"), {
+          maximumBytes: parseByteCount(1024),
+          signal: controller.signal,
+        }),
       "aborted",
       "$signal",
     );
@@ -287,11 +279,7 @@ test("closed options reject accessors, unknown fields, and forged values", async
       enumerable: true,
     });
     await expectStableFileReadError(
-      () => readStableFile(
-        root,
-        parsePortableResourcePath("file"),
-        asOptions(accessor),
-      ),
+      () => readStableFile(root, parsePortableResourcePath("file"), asOptions(accessor)),
       "input",
       "$options",
     );
@@ -304,11 +292,7 @@ test("closed options reject accessors, unknown fields, and forged values", async
       { maximumBytes: 1024, expectedNode: {} },
     ] as const) {
       await expectStableFileReadError(
-        () => readStableFile(
-          root,
-          parsePortableResourcePath("file"),
-          asOptions(options),
-        ),
+        () => readStableFile(root, parsePortableResourcePath("file"), asOptions(options)),
         "input",
         options.maximumBytes === -1
           ? "$options.maximumBytes"

@@ -11,16 +11,15 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../../src/foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
   type RootedDirectoryErrorReason,
 } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../../../src/foundation/filesystem/portable-resource-path.js";
 
 async function expectRootedDirectoryError(
   action: () => unknown | Promise<unknown>,
@@ -116,14 +115,7 @@ test("非法的持久化级别与未知选项键按 root-input 拒绝", async (t
 });
 
 test("root input must be normalized, absolute, non-root, and present", async () => {
-  for (const value of [
-    "relative/root",
-    "/",
-    " /tmp",
-    "/tmp/../tmp",
-    "",
-    null,
-  ] as const) {
+  for (const value of ["relative/root", "/", " /tmp", "/tmp/../tmp", "", null] as const) {
     await expectRootedDirectoryError(
       () => RootedDirectory.open(value, "$.root"),
       "root-input",
@@ -131,10 +123,7 @@ test("root input must be normalized, absolute, non-root, and present", async () 
     );
   }
 
-  const missing = path.join(
-    os.tmpdir(),
-    `wakeflow-missing-root-${process.pid}-${Date.now()}`,
-  );
+  const missing = path.join(os.tmpdir(), `wakeflow-missing-root-${process.pid}-${Date.now()}`);
   await expectRootedDirectoryError(
     () => RootedDirectory.open(missing, "$.root"),
     "root-not-found",
@@ -174,9 +163,7 @@ test("existing nested resources are inspected without reading contents", async (
 
   const rooted = await RootedDirectory.open(rootPath);
   try {
-    const resourcePath = parsePortableResourcePath(
-      "目录/records/state.json",
-    );
+    const resourcePath = parsePortableResourcePath("目录/records/state.json");
     const inspected = await rooted.inspectExistingResource(resourcePath);
 
     equal(inspected.resourcePath, resourcePath);
@@ -220,18 +207,13 @@ test("intermediate symlinks and non-directory ancestors fail closed", async () =
   const rooted = await RootedDirectory.open(rootPath);
   try {
     await expectRootedDirectoryError(
-      () => rooted.inspectExistingResource(
-        parsePortableResourcePath("alias/secret"),
-        "$.ref",
-      ),
+      () => rooted.inspectExistingResource(parsePortableResourcePath("alias/secret"), "$.ref"),
       "ancestor-symlink",
       "$.ref",
     );
     await expectRootedDirectoryError(
-      () => rooted.inspectExistingResource(
-        parsePortableResourcePath("not-directory/child"),
-        "$.ref",
-      ),
+      () =>
+        rooted.inspectExistingResource(parsePortableResourcePath("not-directory/child"), "$.ref"),
       "ancestor-type",
       "$.ref",
     );
@@ -251,9 +233,7 @@ test("a final symlink is observed as a symlink and never followed", async () => 
 
   const rooted = await RootedDirectory.open(rootPath);
   try {
-    const inspected = await rooted.inspectExistingResource(
-      parsePortableResourcePath("link"),
-    );
+    const inspected = await rooted.inspectExistingResource(parsePortableResourcePath("link"));
     equal(inspected.physicalPath, path.join(rooted.absolutePath, "link"));
     equal(inspected.node.kind, "symbolic-link");
     equal(inspected.node.byteCount > 0, true);
@@ -295,10 +275,7 @@ test("resource paths are revalidated at the rooted boundary", async () => {
   const rooted = await RootedDirectory.open(rootPath);
   try {
     await expectRootedDirectoryError(
-      () => rooted.inspectExistingResource(
-        asPortableResourcePath("../escape"),
-        "$.ref",
-      ),
+      () => rooted.inspectExistingResource(asPortableResourcePath("../escape"), "$.ref"),
       "resource-path",
       "$.ref",
     );
@@ -314,15 +291,9 @@ test("close is idempotent and all later I/O is rejected", async () => {
   await rooted.close();
   await rooted.close();
 
+  await expectRootedDirectoryError(() => rooted.assertCurrent(), "closed", "$root");
   await expectRootedDirectoryError(
-    () => rooted.assertCurrent(),
-    "closed",
-    "$root",
-  );
-  await expectRootedDirectoryError(
-    () => rooted.inspectExistingResource(
-      parsePortableResourcePath("missing"),
-    ),
+    () => rooted.inspectExistingResource(parsePortableResourcePath("missing")),
     "closed",
     "$resourcePath",
   );

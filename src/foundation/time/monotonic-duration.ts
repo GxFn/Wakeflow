@@ -21,15 +21,12 @@ export type MonotonicDuration = bigint & {
 };
 
 /** monotonic duration 失败的稳定分类。 */
-export type MonotonicDurationErrorReason =
-  | "moment-type"
-  | "moment-order"
-  | "milliseconds";
+export type MonotonicDurationErrorReason = "moment-type" | "moment-order" | "milliseconds";
 
 const ERROR_MESSAGES = {
   "moment-type": "Monotonic moment must be non-negative nanoseconds as bigint.",
   "moment-order": "Monotonic end moment must not precede the start moment.",
-  "milliseconds": "Monotonic milliseconds must be a non-negative safe integer.",
+  milliseconds: "Monotonic milliseconds must be a non-negative safe integer.",
 } as const satisfies Readonly<Record<MonotonicDurationErrorReason, string>>;
 
 /**
@@ -83,13 +80,9 @@ export function monotonicDurationBetween(
  *
  * 本层不设置领域最大超时时长；每个职责所有者继续定义自己的容量上限。
  */
-export function monotonicDurationFromMilliseconds(
-  milliseconds: number,
-): MonotonicDuration {
+export function monotonicDurationFromMilliseconds(milliseconds: number): MonotonicDuration {
   if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
     fail("milliseconds", "$milliseconds");
   }
-  return (
-    BigInt(milliseconds) * NANOSECONDS_PER_MILLISECOND
-  ) as MonotonicDuration;
+  return (BigInt(milliseconds) * NANOSECONDS_PER_MILLISECOND) as MonotonicDuration;
 }

@@ -1,17 +1,6 @@
-import {
-  deepEqual,
-  equal,
-  notEqual,
-} from "node:assert/strict";
+import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -27,7 +16,7 @@ import {
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
 const FIXTURE_FILES = Object.freeze([
-  ["package.json", "{\"name\":\"fixture\",\"version\":\"1.0.0\"}\n"],
+  ["package.json", '{"name":"fixture","version":"1.0.0"}\n'],
   ["scripts-old.mjs", "export const old = false;\n"],
   ["scripts/entry.mjs", "export const entry = true;\n"],
   ["scripts/lib/value.mjs", "export const value = 1;\n"],
@@ -80,10 +69,7 @@ function createFixture(prefix = "wakeflow-artifact-ts-"): string {
   return rootPath;
 }
 
-async function inspectFixture(
-  rootPath: string,
-  limits?: LoadedArtifactTreeIdentityLimits,
-) {
+async function inspectFixture(rootPath: string, limits?: LoadedArtifactTreeIdentityLimits) {
   const root = await RootedDirectory.open(rootPath);
   try {
     return limits === undefined
@@ -138,10 +124,7 @@ test("file bytes and executable permission both participate in identity", async 
   const rootPath = createFixture();
   try {
     const before = await inspectFixture(rootPath);
-    writeFileSync(
-      path.join(rootPath, "scripts/lib/value.mjs"),
-      "export const value = 2;\n",
-    );
+    writeFileSync(path.join(rootPath, "scripts/lib/value.mjs"), "export const value = 2;\n");
     const contentChanged = await inspectFixture(rootPath);
     notEqual(contentChanged.artifactDigest, before.artifactDigest);
 
@@ -149,9 +132,7 @@ test("file bytes and executable permission both participate in identity", async 
     const permissionChanged = await inspectFixture(rootPath);
     notEqual(permissionChanged.artifactDigest, contentChanged.artifactDigest);
     equal(
-      permissionChanged.manifest.files.find(
-        (file) => file.ref === "scripts/entry.mjs",
-      )?.executable,
+      permissionChanged.manifest.files.find((file) => file.ref === "scripts/entry.mjs")?.executable,
       true,
     );
   } finally {
@@ -166,19 +147,13 @@ test("symlinks and special nodes fail closed", {
   const fifoRoot = createFixture();
   try {
     symlinkSync("package.json", path.join(symlinkRoot, "package-link"));
-    await expectIdentityError(
-      () => inspectFixture(symlinkRoot),
-      "symlink",
-    );
+    await expectIdentityError(() => inspectFixture(symlinkRoot), "symlink");
 
     const fifo = spawnSync("mkfifo", [path.join(fifoRoot, "transport.fifo")], {
       encoding: "utf8",
     });
     equal(fifo.status, 0, fifo.stderr);
-    await expectIdentityError(
-      () => inspectFixture(fifoRoot),
-      "special-node",
-    );
+    await expectIdentityError(() => inspectFixture(fifoRoot), "special-node");
   } finally {
     rmSync(symlinkRoot, { recursive: true, force: true });
     rmSync(fifoRoot, { recursive: true, force: true });
@@ -200,10 +175,11 @@ test("every physical and logical budget is enforced", async () => {
     ] as const;
     for (const [field, limit, reason] of cases) {
       await expectIdentityError(
-        () => inspectFixture(rootPath, {
-          ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-          [field]: limit,
-        }),
+        () =>
+          inspectFixture(rootPath, {
+            ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
+            [field]: limit,
+          }),
         reason,
       );
     }
@@ -225,10 +201,7 @@ test("empty trees, aborted work, and decorated options are rejected", async () =
       () => inspectLoadedArtifactTree(root, { signal: controller.signal }),
       "aborted",
     );
-    await expectIdentityError(
-      () => inspectLoadedArtifactTree(root, null as never),
-      "input",
-    );
+    await expectIdentityError(() => inspectLoadedArtifactTree(root, null as never), "input");
     await expectIdentityError(
       () => inspectLoadedArtifactTree(root, { unknown: true } as never),
       "input",
@@ -252,12 +225,13 @@ test("manifest validator rejects collisions, reordering, and inconsistent totals
       { ...sample, ref: "owner.txt" },
     ];
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        fileCount: 2,
-        files: collisionFiles,
-        totalBytes: sample.bytes * 2,
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest({
+          ...manifest,
+          fileCount: 2,
+          files: collisionFiles,
+          totalBytes: sample.bytes * 2,
+        }),
       "ref-collision",
     );
     const directoryCollisionFiles = [
@@ -265,12 +239,13 @@ test("manifest validator rejects collisions, reordering, and inconsistent totals
       { ...sample, ref: "a/second.txt" },
     ];
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        fileCount: 2,
-        files: directoryCollisionFiles,
-        totalBytes: sample.bytes * 2,
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest({
+          ...manifest,
+          fileCount: 2,
+          files: directoryCollisionFiles,
+          totalBytes: sample.bytes * 2,
+        }),
       "ref-collision",
     );
     const fileParentConflict = [
@@ -278,43 +253,50 @@ test("manifest validator rejects collisions, reordering, and inconsistent totals
       { ...sample, ref: "a/child.txt" },
     ];
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        fileCount: 2,
-        files: fileParentConflict,
-        totalBytes: sample.bytes * 2,
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest({
+          ...manifest,
+          fileCount: 2,
+          files: fileParentConflict,
+          totalBytes: sample.bytes * 2,
+        }),
       "ref-collision",
     );
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        fileCount: 2,
-        files: [
-          { ...sample, ref: "a/first.txt" },
-          { ...sample, ref: "b/second.txt" },
-        ],
-        totalBytes: sample.bytes * 2,
-      }, {
-        limits: {
-          ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-          maxEntries: 3,
-        },
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest(
+          {
+            ...manifest,
+            fileCount: 2,
+            files: [
+              { ...sample, ref: "a/first.txt" },
+              { ...sample, ref: "b/second.txt" },
+            ],
+            totalBytes: sample.bytes * 2,
+          },
+          {
+            limits: {
+              ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
+              maxEntries: 3,
+            },
+          },
+        ),
       "entry-limit",
     );
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        files: [...manifest.files].reverse(),
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest({
+          ...manifest,
+          files: [...manifest.files].reverse(),
+        }),
       "manifest-order",
     );
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest({
-        ...manifest,
-        totalBytes: manifest.totalBytes + 1,
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest({
+          ...manifest,
+          totalBytes: manifest.totalBytes + 1,
+        }),
       "manifest-totals",
     );
     await expectIdentityError(
@@ -337,12 +319,13 @@ test("manifest validation is passive and applies caller limits", async () => {
       "manifest-shape",
     );
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest(manifest, {
-        limits: {
-          ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-          maxFiles: 2,
-        },
-      }),
+      () =>
+        validateLoadedArtifactTreeManifest(manifest, {
+          limits: {
+            ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
+            maxFiles: 2,
+          },
+        }),
       "file-count",
     );
     await expectIdentityError(

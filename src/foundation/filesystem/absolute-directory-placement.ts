@@ -5,13 +5,10 @@ import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
-  FileNodeSnapshotError,
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
 } from "./file-node-snapshot.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "./rooted-directory.js";
+import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的只读物理观察。
@@ -41,8 +38,7 @@ export interface AbsoluteDirectoryPlacementObservation {
   readonly realPath: string | null;
   readonly spellingIsCanonical: boolean | null;
   readonly node: Readonly<FileNodeSnapshot> | null;
-  readonly nearestExistingAncestor:
-    Readonly<AbsoluteDirectoryPlacementAncestorObservation> | null;
+  readonly nearestExistingAncestor: Readonly<AbsoluteDirectoryPlacementAncestorObservation> | null;
 }
 
 export type AbsoluteDirectoryPlacementErrorReason =
@@ -52,14 +48,11 @@ export type AbsoluteDirectoryPlacementErrorReason =
   | "inspection-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Absolute directory placement input is invalid.",
-  "symlink": "Absolute directory placement contains a symbolic link.",
+  input: "Absolute directory placement input is invalid.",
+  symlink: "Absolute directory placement contains a symbolic link.",
   "not-directory": "Absolute directory placement contains a non-directory node.",
   "inspection-failure": "Absolute directory placement could not be inspected safely.",
-} as const satisfies Readonly<Record<
-  AbsoluteDirectoryPlacementErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<AbsoluteDirectoryPlacementErrorReason, string>>;
 
 /** 绝对目录位置观察失败时返回的稳定、脱敏错误。 */
 export class AbsoluteDirectoryPlacementError extends Error {
@@ -77,10 +70,7 @@ export class AbsoluteDirectoryPlacementError extends Error {
 
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 
-function fail(
-  reason: AbsoluteDirectoryPlacementErrorReason,
-  path: string,
-): never {
+function fail(reason: AbsoluteDirectoryPlacementErrorReason, path: string): never {
   throw new AbsoluteDirectoryPlacementError(reason, path);
 }
 
@@ -90,24 +80,21 @@ function normalizeErrorPath(value: unknown): string {
 
 function parseAbsolutePath(value: unknown, path: string): string {
   if (
-    typeof value !== "string"
-    || value.length === 0
-    || value !== value.trim()
-    || !value.isWellFormed()
-    || CONTROL_PATTERN.test(value)
-    || !nodePath.isAbsolute(value)
-    || nodePath.resolve(value) !== value
-    || nodePath.parse(value).root === value
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    !value.isWellFormed() ||
+    CONTROL_PATTERN.test(value) ||
+    !nodePath.isAbsolute(value) ||
+    nodePath.resolve(value) !== value ||
+    nodePath.parse(value).root === value
   ) {
     fail("input", path);
   }
   return value;
 }
 
-function snapshotDirectoryNode(
-  stats: BigIntStats,
-  path: string,
-): Readonly<FileNodeSnapshot> {
+function snapshotDirectoryNode(stats: BigIntStats, path: string): Readonly<FileNodeSnapshot> {
   let node: Readonly<FileNodeSnapshot>;
   try {
     node = createFileNodeSnapshot(stats, path);
@@ -136,10 +123,7 @@ async function inspectOnePath(
   return snapshotDirectoryNode(stats, errorPath);
 }
 
-function mapRootError(
-  error: RootedDirectoryError,
-  path: string,
-): never {
+function mapRootError(error: RootedDirectoryError, path: string): never {
   if (error.reason === "root-input") fail("input", path);
   if (error.reason === "root-symlink") fail("symlink", path);
   if (error.reason === "root-type") fail("not-directory", path);
@@ -155,10 +139,12 @@ function mapRootError(
 async function inspectStablePresentDirectory(
   absolutePath: string,
   path: string,
-): Promise<Readonly<{
-  realPath: string;
-  node: Readonly<FileNodeSnapshot>;
-}>> {
+): Promise<
+  Readonly<{
+    realPath: string;
+    node: Readonly<FileNodeSnapshot>;
+  }>
+> {
   let root: RootedDirectory;
   try {
     root = await RootedDirectory.open(absolutePath, path);
@@ -217,18 +203,14 @@ export async function inspectAbsoluteDirectoryPlacement(
     current = nodePath.join(current, segment);
     finalNode = await inspectOnePath(current, path);
     if (finalNode === null) {
-      let nearestExistingAncestor:
-        Readonly<AbsoluteDirectoryPlacementAncestorObservation> | null = null;
+      let nearestExistingAncestor: Readonly<AbsoluteDirectoryPlacementAncestorObservation> | null =
+        null;
       if (nearestExistingPath !== parsed.root) {
-        const stableAncestor = await inspectStablePresentDirectory(
-          nearestExistingPath,
-          path,
-        );
+        const stableAncestor = await inspectStablePresentDirectory(nearestExistingPath, path);
         nearestExistingAncestor = Object.freeze({
           absolutePath: nearestExistingPath,
           realPath: stableAncestor.realPath,
-          spellingIsCanonical:
-            stableAncestor.realPath === nearestExistingPath,
+          spellingIsCanonical: stableAncestor.realPath === nearestExistingPath,
           node: stableAncestor.node,
         });
       }

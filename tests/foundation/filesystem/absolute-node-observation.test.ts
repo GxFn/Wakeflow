@@ -37,7 +37,8 @@ async function expectError(
   } catch (error: unknown) {
     caught = error;
   }
-  if (!(caught instanceof AbsoluteNodeObservationError)) throw new Error("Expected AbsoluteNodeObservationError.");
+  if (!(caught instanceof AbsoluteNodeObservationError))
+    throw new Error("Expected AbsoluteNodeObservationError.");
   equal(caught.code, "wakeflow-absolute-node-observation");
   equal(caught.reason, reason);
   return caught;
@@ -66,14 +67,20 @@ test("输入必须是规范的绝对路径；无法观察的节点带 errno 的 
   await expectError(() => observeAbsoluteNode("relative/path"), "input");
   await expectError(() => observeAbsoluteNode(`${root}/`), "input");
   await expectError(() => observeAbsoluteNode(" "), "input");
-  await expectError(() => observeAbsoluteNode(path.join(root, "f.txt"), { follow: "yes" as never }), "input");
+  await expectError(
+    () => observeAbsoluteNode(path.join(root, "f.txt"), { follow: "yes" as never }),
+    "input",
+  );
   if (typeof process.getuid === "function" && process.getuid() === 0) return;
   const sealed = path.join(root, "sealed");
   mkdirSync(sealed);
   writeFileSync(path.join(sealed, "inner.txt"), "x\n");
   chmodSync(sealed, 0o000);
   try {
-    const failure = await expectError(() => observeAbsoluteNode(path.join(sealed, "inner.txt")), "inspection-failure");
+    const failure = await expectError(
+      () => observeAbsoluteNode(path.join(sealed, "inner.txt")),
+      "inspection-failure",
+    );
     equal((failure.cause as { code?: string }).code, "EACCES");
   } finally {
     chmodSync(sealed, 0o700);
@@ -94,7 +101,10 @@ test("读绝对路径上的小普通文件：跟随链接、超限与非文件�
   writeFileSync(unreadable, "secret\n");
   chmodSync(unreadable, 0o000);
   try {
-    const failure = await expectError(() => readAbsoluteRegularFileText(unreadable, 64), "read-failure");
+    const failure = await expectError(
+      () => readAbsoluteRegularFileText(unreadable, 64),
+      "read-failure",
+    );
     equal((failure.cause as { code?: string }).code, "EACCES");
   } finally {
     chmodSync(unreadable, 0o600);

@@ -1,26 +1,16 @@
-import {
-  deepEqual,
-  equal,
-  throws,
-} from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
+import { parsePlainRecord } from "../../../src/foundation/data/passive-own-data.js";
 import {
-  EventSourcingVersionEvolutionRegistry,
   EventSourcingVersionEvolutionError,
+  EventSourcingVersionEvolutionRegistry,
 } from "../../../src/foundation/event-sourcing/event-sourcing-version-evolution.js";
-import {
-  parsePlainRecord,
-} from "../../../src/foundation/data/passive-own-data.js";
 
 function exactData(value: unknown, fields: readonly string[]) {
   const record = parsePlainRecord(value, "$data");
   const keys = Object.keys(record).sort();
   const expected = [...fields].sort();
-  if (
-    keys.length !== expected.length
-    || keys.some((key, index) => key !== expected[index])
-  ) {
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     throw new TypeError("Unexpected version data.");
   }
   return record;
@@ -89,10 +79,7 @@ test("Event Sourcing version registry 执行 v1→v2→v3 连续演进", () => {
   });
   deepEqual(source, { label: "legacy" });
   equal(Object.isFrozen(result.data), true);
-  equal(
-    JSON.stringify(registry.evolve(3, result.data).data),
-    JSON.stringify(result.data),
-  );
+  equal(JSON.stringify(registry.evolve(3, result.data).data), JSON.stringify(result.data));
 });
 
 test("Event Sourcing version registry 拒绝未知版本与不闭合定义", () => {
@@ -103,24 +90,21 @@ test("Event Sourcing version registry 拒绝未知版本与不闭合定义", () 
   });
   throws(
     () => registry.evolve(2, {}),
-    (error: unknown) => (
-      error instanceof EventSourcingVersionEvolutionError
-      && error.reason === "unsupported-version"
-    ),
+    (error: unknown) =>
+      error instanceof EventSourcingVersionEvolutionError && error.reason === "unsupported-version",
   );
   throws(
-    () => new EventSourcingVersionEvolutionRegistry({
-      currentVersion: 2,
-      codecs: [
-        { version: 1, parse: (value) => value },
-        { version: 2, parse: (value) => value },
-      ],
-      steps: [],
-    }),
-    (error: unknown) => (
-      error instanceof EventSourcingVersionEvolutionError
-      && error.reason === "missing-step"
-    ),
+    () =>
+      new EventSourcingVersionEvolutionRegistry({
+        currentVersion: 2,
+        codecs: [
+          { version: 1, parse: (value) => value },
+          { version: 2, parse: (value) => value },
+        ],
+        steps: [],
+      }),
+    (error: unknown) =>
+      error instanceof EventSourcingVersionEvolutionError && error.reason === "missing-step",
   );
 });
 
@@ -131,38 +115,40 @@ test("Event Sourcing version registry 区分 codec 与 upcast 失败", () => {
       { version: 1, parse: (value) => value },
       { version: 2, parse: (value) => value },
     ],
-    steps: [{
-      fromVersion: 1,
-      toVersion: 2,
-      upcast: () => undefined,
-    }],
+    steps: [
+      {
+        fromVersion: 1,
+        toVersion: 2,
+        upcast: () => undefined,
+      },
+    ],
   });
   throws(
     () => invalidUpcast.evolve(1, {}),
-    (error: unknown) => (
-      error instanceof EventSourcingVersionEvolutionError
-      && error.reason === "upcast"
-      && error.path === "$/steps/1"
-    ),
+    (error: unknown) =>
+      error instanceof EventSourcingVersionEvolutionError &&
+      error.reason === "upcast" &&
+      error.path === "$/steps/1",
   );
 
   const spoofingCodec = new EventSourcingVersionEvolutionRegistry({
     currentVersion: 1,
-    codecs: [{
-      version: 1,
-      parse: () => {
-        throw new EventSourcingVersionEvolutionError("upcast", "$spoof");
+    codecs: [
+      {
+        version: 1,
+        parse: () => {
+          throw new EventSourcingVersionEvolutionError("upcast", "$spoof");
+        },
       },
-    }],
+    ],
     steps: [],
   });
   throws(
     () => spoofingCodec.evolve(1, {}),
-    (error: unknown) => (
-      error instanceof EventSourcingVersionEvolutionError
-      && error.reason === "codec"
-      && error.path === "$data"
-    ),
+    (error: unknown) =>
+      error instanceof EventSourcingVersionEvolutionError &&
+      error.reason === "codec" &&
+      error.path === "$data",
   );
 });
 
@@ -174,47 +160,108 @@ test("Event Sourcing version registry 以 definition 拒绝畸形定义并给出
     upcast: (value: unknown) => value,
   });
   const cases: readonly (readonly [string, unknown, string])[] = [
-    ["duplicate codec version", {
-      currentVersion: 1, codecs: [codec(1), codec(1)], steps: [],
-    }, "$/codecs/1/version"],
-    ["codec above currentVersion", {
-      currentVersion: 1, codecs: [codec(1), codec(2)], steps: [],
-    }, "$/codecs/1/version"],
-    ["missing currentVersion codec", {
-      currentVersion: 2, codecs: [codec(1)], steps: [],
-    }, "$/currentVersion"],
-    ["non-consecutive step", {
-      currentVersion: 3, codecs: [codec(1), codec(3)], steps: [step(1, 3)],
-    }, "$/steps/0/toVersion"],
-    ["duplicate fromVersion", {
-      currentVersion: 2, codecs: [codec(1), codec(2)], steps: [step(1, 2), step(1, 2)],
-    }, "$/steps/1"],
-    ["step endpoint without codec", {
-      currentVersion: 3, codecs: [codec(2), codec(3)], steps: [step(1, 2), step(2, 3)],
-    }, "$/steps/0"],
-    ["extra codec field", {
-      currentVersion: 1, codecs: [{ ...codec(1), extra: true }], steps: [],
-    }, "$/codecs/0"],
-    ["extra definition field", {
-      currentVersion: 1, codecs: [codec(1)], steps: [], extra: true,
-    }, "$definition"],
-    ["empty codec list", {
-      currentVersion: 1, codecs: [], steps: [],
-    }, "$/codecs"],
-    ["non-function parse", {
-      currentVersion: 1, codecs: [{ version: 1, parse: "parse" }], steps: [],
-    }, "$/codecs/0/parse"],
+    [
+      "duplicate codec version",
+      {
+        currentVersion: 1,
+        codecs: [codec(1), codec(1)],
+        steps: [],
+      },
+      "$/codecs/1/version",
+    ],
+    [
+      "codec above currentVersion",
+      {
+        currentVersion: 1,
+        codecs: [codec(1), codec(2)],
+        steps: [],
+      },
+      "$/codecs/1/version",
+    ],
+    [
+      "missing currentVersion codec",
+      {
+        currentVersion: 2,
+        codecs: [codec(1)],
+        steps: [],
+      },
+      "$/currentVersion",
+    ],
+    [
+      "non-consecutive step",
+      {
+        currentVersion: 3,
+        codecs: [codec(1), codec(3)],
+        steps: [step(1, 3)],
+      },
+      "$/steps/0/toVersion",
+    ],
+    [
+      "duplicate fromVersion",
+      {
+        currentVersion: 2,
+        codecs: [codec(1), codec(2)],
+        steps: [step(1, 2), step(1, 2)],
+      },
+      "$/steps/1",
+    ],
+    [
+      "step endpoint without codec",
+      {
+        currentVersion: 3,
+        codecs: [codec(2), codec(3)],
+        steps: [step(1, 2), step(2, 3)],
+      },
+      "$/steps/0",
+    ],
+    [
+      "extra codec field",
+      {
+        currentVersion: 1,
+        codecs: [{ ...codec(1), extra: true }],
+        steps: [],
+      },
+      "$/codecs/0",
+    ],
+    [
+      "extra definition field",
+      {
+        currentVersion: 1,
+        codecs: [codec(1)],
+        steps: [],
+        extra: true,
+      },
+      "$definition",
+    ],
+    [
+      "empty codec list",
+      {
+        currentVersion: 1,
+        codecs: [],
+        steps: [],
+      },
+      "$/codecs",
+    ],
+    [
+      "non-function parse",
+      {
+        currentVersion: 1,
+        codecs: [{ version: 1, parse: "parse" }],
+        steps: [],
+      },
+      "$/codecs/0/parse",
+    ],
   ];
   for (const [label, definition, path] of cases) {
     throws(
-      () => new EventSourcingVersionEvolutionRegistry(
-        definition as ConstructorParameters<typeof EventSourcingVersionEvolutionRegistry>[0],
-      ),
-      (error: unknown) => (
-        error instanceof EventSourcingVersionEvolutionError
-        && error.reason === "definition"
-        && error.path === path
-      ),
+      () =>
+        new EventSourcingVersionEvolutionRegistry(
+          definition as ConstructorParameters<typeof EventSourcingVersionEvolutionRegistry>[0],
+        ),
+      (error: unknown) =>
+        error instanceof EventSourcingVersionEvolutionError &&
+        error.reason === "definition" &&
+        error.path === path,
       label,
     );
   }

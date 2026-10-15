@@ -1,26 +1,19 @@
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  mkdir,
-  open as openFileHandle,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, mkdir, open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
-  sameFileNodeIdentity,
   type FileNodeSnapshot,
+  sameFileNodeIdentity,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
   RootedDirectory,
@@ -98,7 +91,7 @@ export type DurableDirectoryMaterializationErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Durable directory materialization input is invalid.",
+  input: "Durable directory materialization input is invalid.",
   "root-scope": "Directory target could not establish its rooted scope.",
   "parent-not-found": "Directory target parent does not exist.",
   "parent-symlink": "Directory target parent chain cannot contain a symbolic link.",
@@ -113,12 +106,9 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Created directory target could not be proven exact.",
   "durability-failure": "Created directory and parent could not be synchronized.",
   "path-changed": "Materialized directory path changed during final verification.",
-  "aborted": "Directory materialization was aborted before the next mkdir.",
+  aborted: "Directory materialization was aborted before the next mkdir.",
   "close-failure": "A directory materialization handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  DurableDirectoryMaterializationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableDirectoryMaterializationErrorReason, string>>;
 
 /**
  * 根作用域目录创建与物化的稳定错误。
@@ -132,10 +122,7 @@ export class DurableDirectoryMaterializationError extends Error {
   readonly reason: DurableDirectoryMaterializationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DurableDirectoryMaterializationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DurableDirectoryMaterializationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -147,19 +134,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableDirectoryMaterializationErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableDirectoryMaterializationErrorReason, path: string): never {
   throw new DurableDirectoryMaterializationError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
@@ -169,22 +153,17 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
 }
 
 function parseMode(value: unknown): number {
-  if (
-    typeof value !== "number"
-    || !Number.isInteger(value)
-    || value < 0
-    || value > 0o777
-  ) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
     fail("input", "$options.mode");
   }
   return value;
@@ -199,10 +178,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   const allowed = new Set(["mode", "signal"]);
-  if (
-    !Object.hasOwn(record, "mode")
-    || Object.keys(record).some((key) => !allowed.has(key))
-  ) {
+  if (!Object.hasOwn(record, "mode") || Object.keys(record).some((key) => !allowed.has(key))) {
     fail("input", "$options");
   }
   const signal = record.signal;
@@ -227,10 +203,7 @@ async function snapshotHandle(
   path: string,
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
-    return createFileNodeSnapshot(
-      await handle.stat({ bigint: true }),
-      path,
-    );
+    return createFileNodeSnapshot(await handle.stat({ bigint: true }), path);
   } catch {
     fail(reason, path);
   }
@@ -244,10 +217,7 @@ function mapParentHandleError(
   if (operation === "sync" && error.reason === "sync-failure") {
     fail("durability-failure", "$resourcePath");
   }
-  if (
-    operation === "inspect"
-    && error.reason === "target-inspection-failure"
-  ) {
+  if (operation === "inspect" && error.reason === "target-inspection-failure") {
     fail(inspectReason ?? "target-inspection-failure", "$resourcePath");
   }
   if (operation === "open") {
@@ -274,11 +244,7 @@ async function openResourceParent(
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
   try {
-    return await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      "$resourcePath",
-    );
+    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentHandleError(error, "open");
@@ -287,9 +253,7 @@ async function openResourceParent(
   }
 }
 
-async function assertParentCurrent(
-  parent: RootedResourceParentHandle,
-): Promise<void> {
+async function assertParentCurrent(parent: RootedResourceParentHandle): Promise<void> {
   try {
     await parent.assertCurrent();
   } catch (error: unknown) {
@@ -314,9 +278,7 @@ async function inspectParentTarget(
   }
 }
 
-async function syncParent(
-  parent: RootedResourceParentHandle,
-): Promise<void> {
+async function syncParent(parent: RootedResourceParentHandle): Promise<void> {
   try {
     await parent.sync();
   } catch (error: unknown) {
@@ -351,10 +313,7 @@ async function closeHandle(
     await handle.close();
     return undefined;
   } catch {
-    return new DurableDirectoryMaterializationError(
-      "close-failure",
-      "$resourcePath",
-    );
+    return new DurableDirectoryMaterializationError("close-failure", "$resourcePath");
   }
 }
 
@@ -363,13 +322,13 @@ function sameDirectoryFacts(
   right: Readonly<FileNodeSnapshot>,
 ): boolean {
   return (
-    left.kind === "directory"
-    && right.kind === "directory"
-    && sameFileNodeIdentity(left, right)
-    && left.rawMode === right.rawMode
-    && left.permissionBits === right.permissionBits
-    && left.userId === right.userId
-    && left.groupId === right.groupId
+    left.kind === "directory" &&
+    right.kind === "directory" &&
+    sameFileNodeIdentity(left, right) &&
+    left.rawMode === right.rawMode &&
+    left.permissionBits === right.permissionBits &&
+    left.userId === right.userId &&
+    left.groupId === right.groupId
   );
 }
 
@@ -386,12 +345,7 @@ async function performAtomicCreate(
   try {
     assertNotAborted(options.signal);
     await assertParentCurrent(parent);
-    if (
-      await inspectParentTarget(
-        parent,
-        "target-inspection-failure",
-      ) !== null
-    ) {
+    if ((await inspectParentTarget(parent, "target-inspection-failure")) !== null) {
       fail("target-exists", "$resourcePath");
     }
     assertNotAborted(options.signal);
@@ -417,20 +371,13 @@ async function performAtomicCreate(
     } catch {
       fail("commit-uncertain", "$resourcePath");
     }
-    const opened = await snapshotHandle(
-      targetHandle,
-      "commit-uncertain",
-      "$resourcePath",
-    );
-    const pathBefore = await inspectParentTarget(
-      parent,
-      "commit-uncertain",
-    );
+    const opened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
+    const pathBefore = await inspectParentTarget(parent, "commit-uncertain");
     if (
-      pathBefore === null
-      || opened.kind !== "directory"
-      || pathBefore.kind !== "directory"
-      || !sameFileNodeIdentity(opened, pathBefore)
+      pathBefore === null ||
+      opened.kind !== "directory" ||
+      pathBefore.kind !== "directory" ||
+      !sameFileNodeIdentity(opened, pathBefore)
     ) {
       fail("commit-uncertain", "$resourcePath");
     }
@@ -439,15 +386,11 @@ async function performAtomicCreate(
     } catch {
       fail("commit-uncertain", "$resourcePath");
     }
-    const hardened = await snapshotHandle(
-      targetHandle,
-      "commit-uncertain",
-      "$resourcePath",
-    );
+    const hardened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
     if (
-      hardened.kind !== "directory"
-      || hardened.permissionBits !== options.mode
-      || !sameFileNodeIdentity(opened, hardened)
+      hardened.kind !== "directory" ||
+      hardened.permissionBits !== options.mode ||
+      !sameFileNodeIdentity(opened, hardened)
     ) {
       fail("commit-uncertain", "$resourcePath");
     }
@@ -462,23 +405,16 @@ async function performAtomicCreate(
     }
     await syncParent(parent);
     await assertParentCurrent(parent);
-    const afterHandle = await snapshotHandle(
-      targetHandle,
-      "commit-uncertain",
-      "$resourcePath",
-    );
-    const afterPath = await inspectParentTarget(
-      parent,
-      "commit-uncertain",
-    );
+    const afterHandle = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
+    const afterPath = await inspectParentTarget(parent, "commit-uncertain");
     // 目录一旦发布，其他写入者就可以在里面建立事实；这会改变链接数、大小与时间戳，
     // 但不改变目录本身的身份、类型、权限位与属主。终检只比较这些稳定事实。
     if (
-      afterPath === null
-      || afterPath.kind !== "directory"
-      || afterHandle.permissionBits !== options.mode
-      || !sameDirectoryFacts(hardened, afterHandle)
-      || !sameDirectoryFacts(afterHandle, afterPath)
+      afterPath === null ||
+      afterPath.kind !== "directory" ||
+      afterHandle.permissionBits !== options.mode ||
+      !sameDirectoryFacts(hardened, afterHandle) ||
+      !sameDirectoryFacts(afterHandle, afterPath)
     ) {
       fail("commit-uncertain", "$resourcePath");
     }
@@ -514,10 +450,7 @@ async function inspectExistingDirectoryOrNull(
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   let resource: Readonly<RootedResourceSnapshot>;
   try {
-    resource = await root.inspectExistingResource(
-      resourcePath,
-      "$resourcePath",
-    );
+    resource = await root.inspectExistingResource(resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return null;
@@ -541,9 +474,7 @@ async function inspectExistingDirectoryOrNull(
   return resource.node;
 }
 
-function prefixPaths(
-  resourcePath: PortableResourcePath,
-): readonly PortableResourcePath[] {
+function prefixPaths(resourcePath: PortableResourcePath): readonly PortableResourcePath[] {
   let segments: readonly string[];
   try {
     segments = splitPortableResourcePath(resourcePath, "$resourcePath");
@@ -560,10 +491,7 @@ function prefixPaths(
     if (segment === undefined) fail("input", "$resourcePath");
     current = current.length === 0 ? segment : `${current}/${segment}`;
     try {
-      prefixes.push(parsePortableResourcePath(
-        current,
-        "$resourcePath",
-      ));
+      prefixes.push(parsePortableResourcePath(current, "$resourcePath"));
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
         fail("input", "$resourcePath");
@@ -612,37 +540,39 @@ export async function materializeDirectoryPath(
     assertNotAborted(parsed.signal);
     const existing = await inspectExistingDirectoryOrNull(root, prefix);
     if (existing !== null) {
-      observations.push(Object.freeze({
-        resourcePath: prefix,
-        disposition: "existing" as const,
-        node: existing,
-      }));
+      observations.push(
+        Object.freeze({
+          resourcePath: prefix,
+          disposition: "existing" as const,
+          node: existing,
+        }),
+      );
       continue;
     }
 
     try {
-      const created = await performAtomicCreate(
-        root,
-        prefix,
-        parsed,
+      const created = await performAtomicCreate(root, prefix, parsed);
+      observations.push(
+        Object.freeze({
+          resourcePath: prefix,
+          disposition: created.disposition,
+          node: created.node,
+        }),
       );
-      observations.push(Object.freeze({
-        resourcePath: prefix,
-        disposition: created.disposition,
-        node: created.node,
-      }));
     } catch (error: unknown) {
       if (
-        error instanceof DurableDirectoryMaterializationError
-        && error.reason === "target-exists"
+        error instanceof DurableDirectoryMaterializationError &&
+        error.reason === "target-exists"
       ) {
         const concurrent = await inspectExistingDirectoryOrNull(root, prefix);
         if (concurrent === null) fail("path-changed", "$resourcePath");
-        observations.push(Object.freeze({
-          resourcePath: prefix,
-          disposition: "existing" as const,
-          node: concurrent,
-        }));
+        observations.push(
+          Object.freeze({
+            resourcePath: prefix,
+            disposition: "existing" as const,
+            node: concurrent,
+          }),
+        );
         continue;
       }
       throw error;
@@ -651,21 +581,17 @@ export async function materializeDirectoryPath(
 
   const finalEntries: DirectoryMaterializationEntry[] = [];
   for (const observation of observations) {
-    const current = await inspectExistingDirectoryOrNull(
-      root,
-      observation.resourcePath,
-    );
-    if (
-      current === null
-      || !sameFileNodeIdentity(observation.node, current)
-    ) {
+    const current = await inspectExistingDirectoryOrNull(root, observation.resourcePath);
+    if (current === null || !sameFileNodeIdentity(observation.node, current)) {
       fail("path-changed", "$resourcePath");
     }
-    finalEntries.push(Object.freeze({
-      resourcePath: observation.resourcePath,
-      disposition: observation.disposition,
-      node: current,
-    }));
+    finalEntries.push(
+      Object.freeze({
+        resourcePath: observation.resourcePath,
+        disposition: observation.disposition,
+        node: current,
+      }),
+    );
   }
   const final = finalEntries.at(-1);
   if (final === undefined) fail("path-changed", "$resourcePath");

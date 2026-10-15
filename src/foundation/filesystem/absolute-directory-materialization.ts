@@ -1,31 +1,19 @@
 import nodePath from "node:path";
 import { types } from "node:util";
 
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
-  inspectAbsoluteDirectoryPlacement,
   AbsoluteDirectoryPlacementError,
+  inspectAbsoluteDirectoryPlacement,
 } from "./absolute-directory-placement.js";
 import {
-  materializeDirectoryPath,
-  DurableDirectoryMaterializationError,
   type DirectoryMaterializationDisposition,
+  DurableDirectoryMaterializationError,
+  materializeDirectoryPath,
 } from "./durable-directory-materialization.js";
-import {
-  sameFileNodeIdentity,
-  type FileNodeSnapshot,
-} from "./file-node-snapshot.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-} from "./portable-resource-path.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "./rooted-directory.js";
+import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
+import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的持久化逐级物化。
@@ -54,8 +42,7 @@ interface AbsoluteDirectoryMaterializationEntry {
 interface AbsoluteDirectoryMaterializationResult {
   readonly absolutePath: string;
   readonly node: Readonly<FileNodeSnapshot>;
-  readonly segments:
-    readonly Readonly<AbsoluteDirectoryMaterializationEntry>[];
+  readonly segments: readonly Readonly<AbsoluteDirectoryMaterializationEntry>[];
 }
 
 export type AbsoluteDirectoryMaterializationErrorReason =
@@ -74,19 +61,14 @@ const ERROR_MESSAGES = {
   input: "Absolute directory materialization input is invalid.",
   scope: "Absolute directory materialization requires a non-root safe ancestor.",
   symlink: "Absolute directory materialization path contains a symbolic link.",
-  "not-directory":
-    "Absolute directory materialization path contains a non-directory node.",
+  "not-directory": "Absolute directory materialization path contains a non-directory node.",
   alias: "Absolute directory materialization path is not canonically spelled.",
   "root-open": "Absolute directory materialization root could not be opened.",
   materialization: "Absolute directory path could not be materialized safely.",
   "path-changed": "Absolute directory path changed during materialization.",
   aborted: "Absolute directory materialization was aborted.",
-  "close-failure":
-    "Absolute directory materialization root could not be closed safely.",
-} as const satisfies Readonly<Record<
-  AbsoluteDirectoryMaterializationErrorReason,
-  string
->>;
+  "close-failure": "Absolute directory materialization root could not be closed safely.",
+} as const satisfies Readonly<Record<AbsoluteDirectoryMaterializationErrorReason, string>>;
 
 /** 绝对目录位置物化失败的稳定、脱敏错误。 */
 export class AbsoluteDirectoryMaterializationError extends Error {
@@ -95,10 +77,7 @@ export class AbsoluteDirectoryMaterializationError extends Error {
   readonly reason: AbsoluteDirectoryMaterializationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: AbsoluteDirectoryMaterializationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: AbsoluteDirectoryMaterializationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -110,18 +89,17 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: AbsoluteDirectoryMaterializationErrorReason,
-  path: string,
-): never {
+function fail(reason: AbsoluteDirectoryMaterializationErrorReason, path: string): never {
   throw new AbsoluteDirectoryMaterializationError(reason, path);
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -133,13 +111,13 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    !Object.hasOwn(record, "mode")
-    || Object.keys(record).some((key) => key !== "mode" && key !== "signal")
-    || typeof record.mode !== "number"
-    || !Number.isInteger(record.mode)
-    || record.mode < 0
-    || record.mode > 0o777
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    !Object.hasOwn(record, "mode") ||
+    Object.keys(record).some((key) => key !== "mode" && key !== "signal") ||
+    typeof record.mode !== "number" ||
+    !Number.isInteger(record.mode) ||
+    record.mode < 0 ||
+    record.mode > 0o777 ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -170,18 +148,15 @@ async function inspect(value: unknown, path: string) {
 function relativeResourcePath(ancestor: string, target: string) {
   const relative = nodePath.relative(ancestor, target);
   if (
-    relative.length === 0
-    || relative === ".."
-    || relative.startsWith(`..${nodePath.sep}`)
-    || nodePath.isAbsolute(relative)
+    relative.length === 0 ||
+    relative === ".." ||
+    relative.startsWith(`..${nodePath.sep}`) ||
+    nodePath.isAbsolute(relative)
   ) {
     fail("scope", "$absolutePath");
   }
   try {
-    return parsePortableResourcePath(
-      relative.split(nodePath.sep).join("/"),
-      "$absolutePath",
-    );
+    return parsePortableResourcePath(relative.split(nodePath.sep).join("/"), "$absolutePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
       fail("input", "$absolutePath");
@@ -190,25 +165,20 @@ function relativeResourcePath(ancestor: string, target: string) {
   }
 }
 
-function mapMaterializationError(
-  error: DurableDirectoryMaterializationError,
-): never {
+function mapMaterializationError(error: DurableDirectoryMaterializationError): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-symlink" || error.reason === "parent-symlink") {
     fail("symlink", "$absolutePath");
   }
-  if (
-    error.reason === "target-not-directory"
-    || error.reason === "parent-not-directory"
-  ) {
+  if (error.reason === "target-not-directory" || error.reason === "parent-not-directory") {
     fail("not-directory", "$absolutePath");
   }
   if (error.reason === "close-failure") fail("close-failure", "$root");
   if (
-    error.reason === "root-scope"
-    || error.reason === "parent-changed"
-    || error.reason === "path-changed"
+    error.reason === "root-scope" ||
+    error.reason === "parent-changed" ||
+    error.reason === "path-changed"
   ) {
     fail("path-changed", "$absolutePath");
   }
@@ -225,20 +195,19 @@ export async function materializeAbsoluteDirectoryPlacement(
   const initial = await inspect(value, "$absolutePath");
   const absolutePath = initial.absolutePath;
   if (initial.state === "present") {
-    if (
-      initial.spellingIsCanonical !== true
-      || initial.node === null
-    ) {
+    if (initial.spellingIsCanonical !== true || initial.node === null) {
       fail("alias", "$absolutePath");
     }
     return Object.freeze({
       absolutePath,
       node: initial.node,
-      segments: Object.freeze([Object.freeze({
-        absolutePath,
-        disposition: "existing" as const,
-        node: initial.node,
-      })]),
+      segments: Object.freeze([
+        Object.freeze({
+          absolutePath,
+          disposition: "existing" as const,
+          node: initial.node,
+        }),
+      ]),
     });
   }
 
@@ -258,8 +227,7 @@ export async function materializeAbsoluteDirectoryPlacement(
     if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor");
     throw error;
   }
-  let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>>
-    | undefined;
+  let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>> | undefined;
   let primaryError: unknown;
   try {
     materialized = await materializeDirectoryPath(root, resourcePath, {
@@ -286,22 +254,21 @@ export async function materializeAbsoluteDirectoryPlacement(
 
   const final = await inspect(absolutePath, "$absolutePath");
   if (
-    final.state !== "present"
-    || final.spellingIsCanonical !== true
-    || final.node === null
-    || !sameFileNodeIdentity(materialized.node, final.node)
+    final.state !== "present" ||
+    final.spellingIsCanonical !== true ||
+    final.node === null ||
+    !sameFileNodeIdentity(materialized.node, final.node)
   ) {
     fail("path-changed", "$absolutePath");
   }
-  const segments = Object.freeze(materialized.segments.map((entry) => (
-    Object.freeze({
-      absolutePath: nodePath.join(
-        ancestor,
-        ...entry.resourcePath.split("/"),
-      ),
-      disposition: entry.disposition,
-      node: entry.node,
-    })
-  )));
+  const segments = Object.freeze(
+    materialized.segments.map((entry) =>
+      Object.freeze({
+        absolutePath: nodePath.join(ancestor, ...entry.resourcePath.split("/")),
+        disposition: entry.disposition,
+        node: entry.node,
+      }),
+    ),
+  );
   return Object.freeze({ absolutePath, node: final.node, segments });
 }

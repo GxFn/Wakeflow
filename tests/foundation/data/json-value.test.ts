@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import {
   JSON_VALUE_MAXIMUM_DEPTH,
-  JsonValueError,
-  parseJsonValue,
   type JsonArray,
   type JsonObject,
   type JsonValue,
+  JsonValueError,
   type JsonValueErrorReason,
+  parseJsonValue,
 } from "../../../src/foundation/data/json-value.js";
 
 function expectJsonValueError(
@@ -93,18 +93,10 @@ test("unsupported values, non-finite numbers, and negative zero fail at their ex
   ] as const;
 
   for (const entry of invalid) {
-    expectJsonValueError(
-      () => parseJsonValue({ field: entry.value }),
-      entry.reason,
-      "$/field",
-    );
+    expectJsonValueError(() => parseJsonValue({ field: entry.value }), entry.reason, "$/field");
   }
 
-  expectJsonValueError(
-    () => parseJsonValue([undefined]),
-    "unsupported-type",
-    "$/0",
-  );
+  expectJsonValueError(() => parseJsonValue([undefined]), "unsupported-type", "$/0");
 });
 
 test("strings preserve Unicode exactly and reject lone surrogates", () => {
@@ -115,24 +107,12 @@ test("strings preserve Unicode exactly and reject lone surrogates", () => {
   equal(snapshot.decomposed, decomposed);
   notEqual(snapshot.composed, snapshot.decomposed);
 
-  expectJsonValueError(
-    () => parseJsonValue({ text: "\ud800" }),
-    "lone-surrogate",
-    "$/text",
-  );
-  expectJsonValueError(
-    () => parseJsonValue({ text: "\udc00" }),
-    "lone-surrogate",
-    "$/text",
-  );
+  expectJsonValueError(() => parseJsonValue({ text: "\ud800" }), "lone-surrogate", "$/text");
+  expectJsonValueError(() => parseJsonValue({ text: "\udc00" }), "lone-surrogate", "$/text");
 
   const invalidKey = Object.create(null) as Record<string, unknown>;
   Object.defineProperty(invalidKey, "\ud800", { value: true, enumerable: true });
-  expectJsonValueError(
-    () => parseJsonValue(invalidKey, "$.record"),
-    "lone-surrogate",
-    "$.record",
-  );
+  expectJsonValueError(() => parseJsonValue(invalidKey, "$.record"), "lone-surrogate", "$.record");
 });
 
 test("nested containers become detached, recursively frozen JSON values", () => {
@@ -170,19 +150,11 @@ test("nested containers become detached, recursively frozen JSON values", () => 
 test("cycles are rejected while repeated non-cyclic references are copied independently", () => {
   const cyclicRecord: Record<string, unknown> = {};
   cyclicRecord.self = cyclicRecord;
-  expectJsonValueError(
-    () => parseJsonValue(cyclicRecord),
-    "cycle",
-    "$/self",
-  );
+  expectJsonValueError(() => parseJsonValue(cyclicRecord), "cycle", "$/self");
 
   const cyclicArray: unknown[] = [];
   cyclicArray.push(cyclicArray);
-  expectJsonValueError(
-    () => parseJsonValue(cyclicArray),
-    "cycle",
-    "$/0",
-  );
+  expectJsonValueError(() => parseJsonValue(cyclicArray), "cycle", "$/0");
 
   const repeated = { stable: true };
   const snapshot = requireJsonArray(parseJsonValue([repeated, repeated]));
@@ -200,37 +172,33 @@ test("the depth limit preserves the existing root-at-zero contract", () => {
   parseJsonValue(accepted);
 
   const rejected = [accepted];
-  expectJsonValueError(
-    () => parseJsonValue(rejected),
-    "maximum-depth",
-  );
+  expectJsonValueError(() => parseJsonValue(rejected), "maximum-depth");
 });
 
 test("recursive proxy and accessor inputs execute no behavior", () => {
   let trapCalls = 0;
-  const proxy = new Proxy({ safe: true }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const proxy = new Proxy(
+    { safe: true },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return null;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
     },
-    getOwnPropertyDescriptor: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return null;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
-  expectJsonValueError(
-    () => parseJsonValue({ nested: proxy }),
-    "proxy",
-    "$/nested",
   );
+  expectJsonValueError(() => parseJsonValue({ nested: proxy }), "proxy", "$/nested");
   equal(trapCalls, 0);
 
   let getterCalls = 0;
@@ -256,30 +224,18 @@ test("recursive proxy and accessor inputs execute no behavior", () => {
       return "not-data";
     },
   };
-  expectJsonValueError(
-    () => parseJsonValue(withToJson),
-    "unsupported-type",
-    "$/toJSON",
-  );
+  expectJsonValueError(() => parseJsonValue(withToJson), "unsupported-type", "$/toJSON");
   equal(toJsonCalls, 0);
 
   const revocable = Proxy.revocable({ value: true }, {});
   revocable.revoke();
-  expectJsonValueError(
-    () => parseJsonValue(revocable.proxy),
-    "proxy",
-    "$",
-  );
+  expectJsonValueError(() => parseJsonValue(revocable.proxy), "proxy", "$");
 });
 
 test("non-JSON record and array structure retains precise neutral reasons", () => {
   const customRecord = Object.create({ inherited: true }) as Record<string, unknown>;
   customRecord.value = true;
-  expectJsonValueError(
-    () => parseJsonValue(customRecord),
-    "record-prototype",
-    "$",
-  );
+  expectJsonValueError(() => parseJsonValue(customRecord), "record-prototype", "$");
 
   const withSymbol = { visible: true };
   Object.defineProperty(withSymbol, Symbol("extension"), { value: true });
@@ -287,33 +243,17 @@ test("non-JSON record and array structure retains precise neutral reasons", () =
 
   const withHidden = { visible: true };
   Object.defineProperty(withHidden, "hidden", { value: true, enumerable: false });
-  expectJsonValueError(
-    () => parseJsonValue(withHidden),
-    "non-enumerable-property",
-    "$/hidden",
-  );
+  expectJsonValueError(() => parseJsonValue(withHidden), "non-enumerable-property", "$/hidden");
 
   const customArray = [true];
   Object.setPrototypeOf(customArray, null);
-  expectJsonValueError(
-    () => parseJsonValue(customArray),
-    "array-prototype",
-    "$",
-  );
+  expectJsonValueError(() => parseJsonValue(customArray), "array-prototype", "$");
 
-  expectJsonValueError(
-    () => parseJsonValue(new Array<unknown>(1)),
-    "array-slot",
-    "$/0",
-  );
+  expectJsonValueError(() => parseJsonValue(new Array<unknown>(1)), "array-slot", "$/0");
 
   const withExtra = [true];
   Object.defineProperty(withExtra, "extra", { value: true, enumerable: true });
-  expectJsonValueError(
-    () => parseJsonValue(withExtra),
-    "array-extra-property",
-    "$/extra",
-  );
+  expectJsonValueError(() => parseJsonValue(withExtra), "array-extra-property", "$/extra");
 });
 
 test("special keys remain data and nested paths use JSON Pointer escaping", () => {

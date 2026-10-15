@@ -11,30 +11,22 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { setImmediate as yieldEventLoop } from "node:timers/promises";
 
+import { inspectLoadedArtifactTree } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
 import {
-  inspectLoadedArtifactTree,
-} from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
-import {
-  materializeLoadedArtifactTreeTransferCandidate,
   LoadedArtifactTreeTransferCandidateError,
   type LoadedArtifactTreeTransferCandidateErrorReason,
+  materializeLoadedArtifactTreeTransferCandidate,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-candidate.js";
 import {
-  planLoadedArtifactTreeTransfer,
   type LoadedArtifactTreeTransferPlan,
+  planLoadedArtifactTreeTransfer,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-plan.js";
-import {
-  createDirectoryAtomically,
-} from "../../../src/foundation/filesystem/durable-directory-materialization.js";
-import {
-  createFileCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-file-candidate.js";
-import {
-  joinDirectoryTreeCandidatePath,
-} from "../../../src/foundation/filesystem/directory-tree-candidate-plan.js";
+import { joinDirectoryTreeCandidatePath } from "../../../src/foundation/filesystem/directory-tree-candidate-plan.js";
+import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
+import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
@@ -46,14 +38,8 @@ interface TransferFixture {
 }
 
 async function fixture(t: TestContext): Promise<Readonly<TransferFixture>> {
-  const sourcePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-artifact-source-",
-  ));
-  const destinationPath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-artifact-destination-",
-  ));
+  const sourcePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-source-"));
+  const destinationPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-destination-"));
   mkdirSync(path.join(destinationPath, "stages"), { mode: 0o700 });
   const sourceRoot = await RootedDirectory.open(sourcePath);
   const destinationRoot = await RootedDirectory.open(destinationPath);
@@ -134,15 +120,8 @@ test("loaded artifact transfer materializes and closes a complete candidate", as
   );
   equal(result.sourceIdentity.artifactDigest, plan.artifactDigest);
   equal(result.candidate.plan.treeDigest, plan.directoryPlan.treeDigest);
-  deepEqual(result.copiedFiles, [
-    "README.md",
-    "bin/run.mjs",
-    "nested/data.json",
-  ]);
-  const candidateRoot = path.join(
-    current.destinationPath,
-    plan.candidateRootPath,
-  );
+  deepEqual(result.copiedFiles, ["README.md", "bin/run.mjs", "nested/data.json"]);
+  const candidateRoot = path.join(current.destinationPath, plan.candidateRootPath);
   equal(statSync(candidateRoot).mode & 0o777, 0o755);
   equal(statSync(path.join(candidateRoot, "bin/run.mjs")).mode & 0o777, 0o755);
   equal(statSync(path.join(candidateRoot, "README.md")).mode & 0o777, 0o644);
@@ -155,11 +134,9 @@ test("loaded artifact transfer resumes only missing exact files", async (t) => {
   const current = await fixture(t);
   writeSourceTree(current.sourcePath);
   const plan = await transferPlan(current);
-  await createDirectoryAtomically(
-    current.destinationRoot,
-    plan.candidateRootPath,
-    { mode: plan.directoryPlan.directoryMode },
-  );
+  await createDirectoryAtomically(current.destinationRoot, plan.candidateRootPath, {
+    mode: plan.directoryPlan.directoryMode,
+  });
   const readme = plan.directoryPlan.files[0];
   if (readme === undefined) throw new Error("Expected README descriptor.");
   await createFileCandidateDurably(
@@ -168,11 +145,7 @@ test("loaded artifact transfer resumes only missing exact files", async (t) => {
     readFileSync(path.join(current.sourcePath, readme.path)),
     { mode: readme.mode },
   );
-  const existingPath = path.join(
-    current.destinationPath,
-    plan.candidateRootPath,
-    readme.path,
-  );
+  const existingPath = path.join(current.destinationPath, plan.candidateRootPath, readme.path);
   const existingInode = statSync(existingPath, { bigint: true }).ino;
 
   const resumed = await materializeLoadedArtifactTreeTransferCandidate(
@@ -196,24 +169,19 @@ test("loaded artifact transfer refuses conflicting partial candidates", async (t
   const current = await fixture(t);
   writeSourceTree(current.sourcePath);
   const plan = await transferPlan(current);
-  await createDirectoryAtomically(
-    current.destinationRoot,
-    plan.candidateRootPath,
-    { mode: plan.directoryPlan.directoryMode },
-  );
-  const conflictingPath = path.join(
-    current.destinationPath,
-    plan.candidateRootPath,
-    "README.md",
-  );
+  await createDirectoryAtomically(current.destinationRoot, plan.candidateRootPath, {
+    mode: plan.directoryPlan.directoryMode,
+  });
+  const conflictingPath = path.join(current.destinationPath, plan.candidateRootPath, "README.md");
   writeFileSync(conflictingPath, "different\n", { mode: 0o644 });
 
   await expectCandidateError(
-    () => materializeLoadedArtifactTreeTransferCandidate(
-      current.sourceRoot,
-      current.destinationRoot,
-      plan,
-    ),
+    () =>
+      materializeLoadedArtifactTreeTransferCandidate(
+        current.sourceRoot,
+        current.destinationRoot,
+        plan,
+      ),
     "candidate-conflict",
     "$candidate",
   );
@@ -227,18 +195,16 @@ test("loaded artifact transfer rejects a source changed before materialization",
   writeFileSync(path.join(current.sourcePath, "unexpected.txt"), "unexpected\n");
 
   await expectCandidateError(
-    () => materializeLoadedArtifactTreeTransferCandidate(
-      current.sourceRoot,
-      current.destinationRoot,
-      plan,
-    ),
+    () =>
+      materializeLoadedArtifactTreeTransferCandidate(
+        current.sourceRoot,
+        current.destinationRoot,
+        plan,
+      ),
     "source-changed",
     "$source",
   );
-  equal(
-    existsSync(path.join(current.destinationPath, plan.candidateRootPath)),
-    false,
-  );
+  equal(existsSync(path.join(current.destinationPath, plan.candidateRootPath)), false);
 });
 
 test("loaded artifact transfer detects source drift during tree copy", {
@@ -247,10 +213,7 @@ test("loaded artifact transfer detects source drift during tree copy", {
   const current = await fixture(t);
   writeSourceTree(current.sourcePath, true);
   const plan = await transferPlan(current);
-  const candidateRoot = path.join(
-    current.destinationPath,
-    plan.candidateRootPath,
-  );
+  const candidateRoot = path.join(current.destinationPath, plan.candidateRootPath);
   const pending = materializeLoadedArtifactTreeTransferCandidate(
     current.sourceRoot,
     current.destinationRoot,
@@ -261,10 +224,7 @@ test("loaded artifact transfer detects source drift during tree copy", {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       if (existsSync(candidateRoot)) {
-        writeFileSync(
-          path.join(current.sourcePath, "unexpected.txt"),
-          "unexpected\n",
-        );
+        writeFileSync(path.join(current.sourcePath, "unexpected.txt"), "unexpected\n");
         return true;
       }
       await yieldEventLoop();
@@ -284,28 +244,30 @@ test("loaded artifact transfer rejects cancellation and a tampered plan", async 
   const controller = new AbortController();
   controller.abort();
   await expectCandidateError(
-    () => materializeLoadedArtifactTreeTransferCandidate(
-      current.sourceRoot,
-      current.destinationRoot,
-      plan,
-      { signal: controller.signal },
-    ),
+    () =>
+      materializeLoadedArtifactTreeTransferCandidate(
+        current.sourceRoot,
+        current.destinationRoot,
+        plan,
+        { signal: controller.signal },
+      ),
     "aborted",
     "$signal",
   );
 
   const tampered = {
     ...plan,
-    copies: plan.copies.map((copy, index) => index === 0
-      ? { ...copy, candidateResourcePath: "stages/.bundle.stage/other" }
-      : copy),
+    copies: plan.copies.map((copy, index) =>
+      index === 0 ? { ...copy, candidateResourcePath: "stages/.bundle.stage/other" } : copy,
+    ),
   } as unknown as LoadedArtifactTreeTransferPlan;
   await expectCandidateError(
-    () => materializeLoadedArtifactTreeTransferCandidate(
-      current.sourceRoot,
-      current.destinationRoot,
-      tampered,
-    ),
+    () =>
+      materializeLoadedArtifactTreeTransferCandidate(
+        current.sourceRoot,
+        current.destinationRoot,
+        tampered,
+      ),
     "input",
     "$plan",
   );

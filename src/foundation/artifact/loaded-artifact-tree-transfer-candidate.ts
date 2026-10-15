@@ -1,37 +1,32 @@
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
-  copyFileToCandidateDurably,
-  DurableFileCopyCandidateError,
-} from "../filesystem/durable-file-copy-candidate.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
 } from "../filesystem/durable-directory-materialization.js";
 import {
+  type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
-  DurableDirectoryTreeCandidateError,
-  type DirectoryTreeCandidateResult,
 } from "../filesystem/durable-directory-tree-candidate.js";
 import {
-  joinDirectoryTreeCandidatePath,
-} from "../filesystem/directory-tree-candidate-plan.js";
+  copyFileToCandidateDurably,
+  DurableFileCopyCandidateError,
+} from "../filesystem/durable-file-copy-candidate.js";
 import type { PortableResourcePath } from "../filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../filesystem/rooted-directory.js";
 import {
   inspectLoadedArtifactTree,
-  LoadedArtifactTreeIdentityError,
   type LoadedArtifactTreeIdentity,
+  LoadedArtifactTreeIdentityError,
 } from "./loaded-artifact-tree-identity.js";
 import {
-  parseLoadedArtifactTreeTransferPlan,
-  LoadedArtifactTreeTransferPlanError,
   type LoadedArtifactTreeTransferPlan,
+  LoadedArtifactTreeTransferPlanError,
+  parseLoadedArtifactTreeTransferPlan,
 } from "./loaded-artifact-tree-transfer-plan.js";
 
 /**
@@ -78,10 +73,7 @@ const ERROR_MESSAGES = {
   "copy-failure": "Loaded artifact tree file could not be copied safely.",
   "operation-failure": "Loaded artifact tree candidate could not be materialized safely.",
   aborted: "Loaded artifact tree transfer candidate was aborted.",
-} as const satisfies Readonly<Record<
-  LoadedArtifactTreeTransferCandidateErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<LoadedArtifactTreeTransferCandidateErrorReason, string>>;
 
 /** Loaded Artifact Tree candidate 物化失败的稳定、脱敏错误。 */
 export class LoadedArtifactTreeTransferCandidateError extends Error {
@@ -90,10 +82,7 @@ export class LoadedArtifactTreeTransferCandidateError extends Error {
   readonly reason: LoadedArtifactTreeTransferCandidateErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: LoadedArtifactTreeTransferCandidateErrorReason,
-    path: string,
-  ) {
+  constructor(reason: LoadedArtifactTreeTransferCandidateErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -104,10 +93,7 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: LoadedArtifactTreeTransferCandidateErrorReason,
-  path: string,
-): never {
+function fail(reason: LoadedArtifactTreeTransferCandidateErrorReason, path: string): never {
   throw new LoadedArtifactTreeTransferCandidateError(reason, path);
 }
 
@@ -116,20 +102,22 @@ function assertRoot(
   path: "$sourceRoot" | "$destinationRoot",
 ): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", path);
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -141,8 +129,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -169,12 +157,12 @@ function mapSourceError(error: LoadedArtifactTreeIdentityError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("source-root-scope", "$sourceRoot");
   if (
-    error.reason === "entry-limit"
-    || error.reason === "depth-limit"
-    || error.reason === "file-count"
-    || error.reason === "file-bytes"
-    || error.reason === "total-bytes"
-    || error.reason === "ref-bytes"
+    error.reason === "entry-limit" ||
+    error.reason === "depth-limit" ||
+    error.reason === "file-count" ||
+    error.reason === "file-bytes" ||
+    error.reason === "total-bytes" ||
+    error.reason === "ref-bytes"
   ) {
     fail("capacity", "$source");
   }
@@ -189,10 +177,7 @@ async function inspectSource(
 ): Promise<Readonly<LoadedArtifactTreeIdentity>> {
   let identity: Readonly<LoadedArtifactTreeIdentity>;
   try {
-    identity = await inspectLoadedArtifactTree(
-      root,
-      signal === undefined ? undefined : { signal },
-    );
+    identity = await inspectLoadedArtifactTree(root, signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
     if (error instanceof LoadedArtifactTreeIdentityError) mapSourceError(error);
     throw error;
@@ -213,11 +198,11 @@ function mapDirectoryError(
     fail("destination-root-scope", "$destinationRoot");
   }
   if (
-    error.reason === "target-symlink"
-    || error.reason === "target-not-directory"
-    || error.reason === "parent-symlink"
-    || error.reason === "parent-not-directory"
-    || error.reason === "target-exists"
+    error.reason === "target-symlink" ||
+    error.reason === "target-not-directory" ||
+    error.reason === "parent-symlink" ||
+    error.reason === "parent-not-directory" ||
+    error.reason === "target-exists"
   ) {
     fail("candidate-conflict", "$candidate");
   }
@@ -242,16 +227,11 @@ async function ensureCandidateRoot(
   }
 }
 
-function mapCandidateInspectionError(
-  error: DurableDirectoryTreeCandidateError,
-): never {
+function mapCandidateInspectionError(error: DurableDirectoryTreeCandidateError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "capacity") fail("capacity", "$candidate");
-  if (
-    error.reason === "tree-conflict"
-    || error.reason === "source-changed"
-  ) {
+  if (error.reason === "tree-conflict" || error.reason === "source-changed") {
     fail("candidate-conflict", "$candidate");
   }
   fail("operation-failure", "$candidate");
@@ -311,11 +291,11 @@ function mapCopyError(error: DurableFileCopyCandidateError): never {
     fail("source-root-scope", "$sourceRoot");
   }
   if (
-    error.reason === "source-not-found"
-    || error.reason === "source-symlink"
-    || error.reason === "source-not-file"
-    || error.reason === "source-changed"
-    || error.reason === "source-mismatch"
+    error.reason === "source-not-found" ||
+    error.reason === "source-symlink" ||
+    error.reason === "source-not-file" ||
+    error.reason === "source-changed" ||
+    error.reason === "source-mismatch"
   ) {
     fail("source-changed", "$source");
   }
@@ -323,10 +303,10 @@ function mapCopyError(error: DurableFileCopyCandidateError): never {
     fail("destination-root-scope", "$destinationRoot");
   }
   if (
-    error.reason === "destination-parent"
-    || error.reason === "target-exists"
-    || error.reason === "candidate-changed"
-    || error.reason === "cleanup-failure"
+    error.reason === "destination-parent" ||
+    error.reason === "target-exists" ||
+    error.reason === "candidate-changed" ||
+    error.reason === "cleanup-failure"
   ) {
     fail("candidate-conflict", "$candidate");
   }
@@ -345,10 +325,7 @@ async function copyMissingFiles(
   for (const [index, plannedFile] of plan.directoryPlan.files.entries()) {
     if (!missing.has(plannedFile.path)) continue;
     const copy = plan.copies[index];
-    if (
-      copy === undefined
-      || copy.sourceResourcePath !== plannedFile.path
-    ) {
+    if (copy === undefined || copy.sourceResourcePath !== plannedFile.path) {
       fail("input", "$plan");
     }
     try {
@@ -410,22 +387,14 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
   const plan = parsePlan(planValue);
   await inspectSource(sourceRootValue, plan, options.signal);
   await ensureCandidateRoot(destinationRootValue, plan, options.signal);
-  let progress = await inspectProgress(
-    destinationRootValue,
-    plan,
-    options.signal,
-  );
+  let progress = await inspectProgress(destinationRootValue, plan, options.signal);
   await materializeMissingDirectories(
     destinationRootValue,
     plan,
     progress.missingDirectories,
     options.signal,
   );
-  progress = await inspectProgress(
-    destinationRootValue,
-    plan,
-    options.signal,
-  );
+  progress = await inspectProgress(destinationRootValue, plan, options.signal);
   const copiedFiles = await copyMissingFiles(
     sourceRootValue,
     destinationRootValue,
@@ -433,16 +402,8 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
     progress.missingFiles,
     options.signal,
   );
-  const candidate = await inspectCompleteCandidate(
-    destinationRootValue,
-    plan,
-    options.signal,
-  );
-  const sourceIdentity = await inspectSource(
-    sourceRootValue,
-    plan,
-    options.signal,
-  );
+  const candidate = await inspectCompleteCandidate(destinationRootValue, plan, options.signal);
+  const sourceIdentity = await inspectSource(sourceRootValue, plan, options.signal);
   assertNotAborted(options.signal);
   return Object.freeze({
     plan,

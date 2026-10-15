@@ -15,13 +15,13 @@ import { test } from "node:test";
 
 import {
   DurableRegularFileLinkError,
-  linkRegularFileWithoutReplacement,
   type DurableRegularFileLinkErrorReason,
   type DurableRegularFileLinkOptions,
+  linkRegularFileWithoutReplacement,
 } from "../../../src/foundation/filesystem/durable-regular-file-link.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
@@ -62,12 +62,9 @@ test("same-parent link publishes one exact no-replace linked pair", async () => 
     const source = parsePortableResourcePath("source");
     const destination = parsePortableResourcePath("destination");
     const expected = await root.inspectExistingResource(source);
-    const result = await linkRegularFileWithoutReplacement(
-      root,
-      source,
-      destination,
-      { expectedSourceNode: expected.node },
-    );
+    const result = await linkRegularFileWithoutReplacement(root, source, destination, {
+      expectedSourceNode: expected.node,
+    });
 
     equal(result.sourceNode.inodeId, result.destinationNode.inodeId);
     equal(result.sourceNode.deviceId, result.destinationNode.deviceId);
@@ -94,12 +91,9 @@ test("cross-parent link preserves a pre-existing hard-link count", async () => {
     const source = parsePortableResourcePath("from/source");
     const destination = parsePortableResourcePath("to/destination");
     const expected = await root.inspectExistingResource(source);
-    await linkRegularFileWithoutReplacement(
-      root,
-      source,
-      destination,
-      { expectedSourceNode: expected.node },
-    );
+    await linkRegularFileWithoutReplacement(root, source, destination, {
+      expectedSourceNode: expected.node,
+    });
 
     equal(statSync(sourcePath).nlink, 3);
     equal(statSync(path.join(rootPath, "to", "destination")).nlink, 3);
@@ -131,10 +125,7 @@ test("concurrent links to one destination have exactly one winner", async () => 
     if (!(rejected.reason instanceof DurableRegularFileLinkError)) {
       throw new Error("Expected DurableRegularFileLinkError.");
     }
-    equal(
-      ["destination-exists", "source-changed"].includes(rejected.reason.reason),
-      true,
-    );
+    equal(["destination-exists", "source-changed"].includes(rejected.reason.reason), true);
     equal(statSync(path.join(rootPath, "source")).nlink, 2);
     equal(statSync(path.join(rootPath, "destination")).nlink, 2);
   } finally {
@@ -152,20 +143,15 @@ test("existing destination is never overwritten", async () => {
     const source = parsePortableResourcePath("source");
     const expected = await root.inspectExistingResource(source);
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath("destination"), {
+          expectedSourceNode: expected.node,
+        }),
       "destination-exists",
       "$destinationResourcePath",
     );
     equal(readFileSync(path.join(rootPath, "source"), "utf8"), "source");
-    equal(
-      readFileSync(path.join(rootPath, "destination"), "utf8"),
-      "destination",
-    );
+    equal(readFileSync(path.join(rootPath, "destination"), "utf8"), "destination");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -182,19 +168,14 @@ test("stale source expectation prevents publication", async () => {
     const expected = await root.inspectExistingResource(source);
     writeFileSync(sourcePath, "after-change");
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath("destination"), {
+          expectedSourceNode: expected.node,
+        }),
       "source-changed",
       "$sourceResourcePath",
     );
-    equal(
-      statSync(path.join(rootPath, "destination"), { throwIfNoEntry: false }),
-      undefined,
-    );
+    equal(statSync(path.join(rootPath, "destination"), { throwIfNoEntry: false }), undefined);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -208,16 +189,15 @@ test("missing, directory, and symlink sources fail without following", async () 
   symlinkSync("target", path.join(rootPath, "link"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const fileNode = (await root.inspectExistingResource(
-      parsePortableResourcePath("target"),
-    )).node;
+    const fileNode = (await root.inspectExistingResource(parsePortableResourcePath("target"))).node;
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        parsePortableResourcePath("missing"),
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: fileNode },
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(
+          root,
+          parsePortableResourcePath("missing"),
+          parsePortableResourcePath("destination"),
+          { expectedSourceNode: fileNode },
+        ),
       "source-not-found",
       "$sourceResourcePath",
     );
@@ -226,16 +206,15 @@ test("missing, directory, and symlink sources fail without following", async () 
       ["directory", "source-not-file"],
       ["link", "source-symlink"],
     ] as const) {
-      const inspected = await root.inspectExistingResource(
-        parsePortableResourcePath(name),
-      );
+      const inspected = await root.inspectExistingResource(parsePortableResourcePath(name));
       await expectLinkError(
-        () => linkRegularFileWithoutReplacement(
-          root,
-          parsePortableResourcePath(name),
-          parsePortableResourcePath("destination"),
-          { expectedSourceNode: inspected.node },
-        ),
+        () =>
+          linkRegularFileWithoutReplacement(
+            root,
+            parsePortableResourcePath(name),
+            parsePortableResourcePath("destination"),
+            { expectedSourceNode: inspected.node },
+          ),
         reason,
         "$sourceResourcePath",
       );
@@ -263,12 +242,10 @@ test("destination requires an existing real parent", async () => {
     ];
     for (const [candidate, reason] of cases) {
       await expectLinkError(
-        () => linkRegularFileWithoutReplacement(
-          root,
-          source,
-          parsePortableResourcePath(candidate),
-          { expectedSourceNode: expected.node },
-        ),
+        () =>
+          linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath(candidate), {
+            expectedSourceNode: expected.node,
+          }),
         reason,
         "$destinationResourcePath",
       );
@@ -295,12 +272,13 @@ test("options, paths, and AbortSignal are passively admitted", async () => {
     ];
     for (const [options, expectedPath] of invalid) {
       await expectLinkError(
-        () => linkRegularFileWithoutReplacement(
-          root,
-          source,
-          parsePortableResourcePath("destination"),
-          asOptions(options),
-        ),
+        () =>
+          linkRegularFileWithoutReplacement(
+            root,
+            source,
+            parsePortableResourcePath("destination"),
+            asOptions(options),
+          ),
         "input",
         expectedPath,
       );
@@ -316,34 +294,34 @@ test("options, paths, and AbortSignal are passively admitted", async () => {
       enumerable: true,
     });
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        asOptions(accessor),
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(
+          root,
+          source,
+          parsePortableResourcePath("destination"),
+          asOptions(accessor),
+        ),
       "input",
       "$options",
     );
     equal(getterCalls, 0);
 
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        asPortableResourcePath("../escape"),
-        parsePortableResourcePath("destination"),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(
+          root,
+          asPortableResourcePath("../escape"),
+          parsePortableResourcePath("destination"),
+          { expectedSourceNode: expected.node },
+        ),
       "input",
       "$sourceResourcePath",
     );
     await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        source,
-        asPortableResourcePath(null),
-        { expectedSourceNode: expected.node },
-      ),
+      () =>
+        linkRegularFileWithoutReplacement(root, source, asPortableResourcePath(null), {
+          expectedSourceNode: expected.node,
+        }),
       "input",
       "$destinationResourcePath",
     );
@@ -351,15 +329,11 @@ test("options, paths, and AbortSignal are passively admitted", async () => {
     const controller = new AbortController();
     controller.abort("private-link-reason");
     const error = await expectLinkError(
-      () => linkRegularFileWithoutReplacement(
-        root,
-        source,
-        parsePortableResourcePath("destination"),
-        {
+      () =>
+        linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath("destination"), {
           expectedSourceNode: expected.node,
           signal: controller.signal,
-        },
-      ),
+        }),
       "aborted",
       "$signal",
     );

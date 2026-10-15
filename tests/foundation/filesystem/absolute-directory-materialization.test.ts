@@ -1,8 +1,8 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -12,19 +12,18 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import {
-  materializeAbsoluteDirectoryPlacement,
   AbsoluteDirectoryMaterializationError,
   type AbsoluteDirectoryMaterializationErrorReason,
+  materializeAbsoluteDirectoryPlacement,
 } from "../../../src/foundation/filesystem/absolute-directory-materialization.js";
 
 function fixture(t: TestContext): string {
-  const root = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-absolute-directory-materialization-",
-  )));
+  const root = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-absolute-directory-materialization-")),
+  );
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -56,7 +55,10 @@ test("absolute directory materialization creates nested child or sibling paths",
     mode: 0o755,
   });
   equal(created.absolutePath, child);
-  deepEqual(created.segments.map((entry) => entry.disposition), ["created"]);
+  deepEqual(
+    created.segments.map((entry) => entry.disposition),
+    ["created"],
+  );
   equal(statSync(child).mode & 0o777, 0o755);
 
   const sibling = path.join(root, "Support", "Test");
@@ -73,7 +75,10 @@ test("absolute directory materialization creates nested child or sibling paths",
   const current = await materializeAbsoluteDirectoryPlacement(sibling, {
     mode: 0o700,
   });
-  deepEqual(current.segments.map((entry) => entry.disposition), ["existing"]);
+  deepEqual(
+    current.segments.map((entry) => entry.disposition),
+    ["existing"],
+  );
   equal(statSync(sibling).mode & 0o777, 0o755);
 });
 
@@ -84,9 +89,10 @@ test("absolute directory materialization rejects unsafe paths without mutation",
   mkdirSync(real);
   symlinkSync(real, link);
   await expectMaterializationError(
-    () => materializeAbsoluteDirectoryPlacement(path.join(link, "Design"), {
-      mode: 0o755,
-    }),
+    () =>
+      materializeAbsoluteDirectoryPlacement(path.join(link, "Design"), {
+        mode: 0o755,
+      }),
     "symlink",
     "$absolutePath",
   );
@@ -95,9 +101,10 @@ test("absolute directory materialization rejects unsafe paths without mutation",
   const file = path.join(root, "file");
   writeFileSync(file, "not a directory");
   await expectMaterializationError(
-    () => materializeAbsoluteDirectoryPlacement(path.join(file, "Test"), {
-      mode: 0o755,
-    }),
+    () =>
+      materializeAbsoluteDirectoryPlacement(path.join(file, "Test"), {
+        mode: 0o755,
+      }),
     "not-directory",
     "$absolutePath",
   );
@@ -106,10 +113,11 @@ test("absolute directory materialization rejects unsafe paths without mutation",
   const controller = new AbortController();
   controller.abort();
   await expectMaterializationError(
-    () => materializeAbsoluteDirectoryPlacement(path.join(root, "aborted"), {
-      mode: 0o755,
-      signal: controller.signal,
-    }),
+    () =>
+      materializeAbsoluteDirectoryPlacement(path.join(root, "aborted"), {
+        mode: 0o755,
+        signal: controller.signal,
+      }),
     "aborted",
     "$signal",
   );

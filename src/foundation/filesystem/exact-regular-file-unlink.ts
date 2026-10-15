@@ -1,16 +1,13 @@
 import { unlink } from "node:fs/promises";
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
@@ -76,7 +73,7 @@ export type ExactRegularFileUnlinkErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Exact regular file unlink input is invalid.",
+  input: "Exact regular file unlink input is invalid.",
   "root-scope": "Exact unlink could not establish its rooted scope.",
   "parent-not-found": "Exact unlink parent directory does not exist.",
   "parent-symlink": "Exact unlink parent chain cannot contain a symbolic link.",
@@ -91,12 +88,9 @@ const ERROR_MESSAGES = {
   "unlink-failure": "Exact unlink commit could not be executed safely.",
   "commit-uncertain": "Exact unlink commit result could not be proven safely.",
   "durability-failure": "Exact unlink inode and parent could not be synchronized.",
-  "aborted": "Exact unlink was aborted before commit.",
+  aborted: "Exact unlink was aborted before commit.",
   "close-failure": "An exact unlink handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  ExactRegularFileUnlinkErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<ExactRegularFileUnlinkErrorReason, string>>;
 
 /**
  * 指定普通文件删除失败时返回的稳定错误。
@@ -130,10 +124,10 @@ function fail(reason: ExactRegularFileUnlinkErrorReason, path: string): never {
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return (
-    typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
   );
 }
 
@@ -143,10 +137,10 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -154,18 +148,15 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$options.expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$options.expectedNode");
     }
   } catch (error: unknown) {
@@ -187,8 +178,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   const allowed = new Set(["expectedNode", "settlement", "durability", "signal"]);
   if (
-    !Object.hasOwn(record, "expectedNode")
-    || Object.keys(record).some((key) => !allowed.has(key))
+    !Object.hasOwn(record, "expectedNode") ||
+    Object.keys(record).some((key) => !allowed.has(key))
   ) {
     fail("input", "$options");
   }
@@ -200,9 +191,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   if (signal !== undefined && !isAbortSignal(signal)) {
     fail("input", "$options.signal");
   }
-  const settlement = record.settlement === undefined
-    ? "absent"
-    : record.settlement;
+  const settlement = record.settlement === undefined ? "absent" : record.settlement;
   if (settlement !== "absent" && settlement !== "replacement-allowed") {
     fail("input", "$options.settlement");
   }
@@ -220,10 +209,7 @@ function mapParentHandleError(
   if (operation === "sync" && error.reason === "sync-failure") {
     fail("durability-failure", "$resourcePath");
   }
-  if (
-    operation === "inspect"
-    && error.reason === "target-inspection-failure"
-  ) {
+  if (operation === "inspect" && error.reason === "target-inspection-failure") {
     fail("commit-uncertain", "$resourcePath");
   }
   // inspect 与 sync 只在 unlink 提交之后使用：此后的父目录漂移不能读作路径仍存在。
@@ -254,11 +240,7 @@ async function openResourceParent(
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
   try {
-    return await RootedResourceParentHandle.open(
-      root,
-      resourcePath,
-      "$resourcePath",
-    );
+    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentHandleError(error, "open");
@@ -267,9 +249,7 @@ async function openResourceParent(
   }
 }
 
-async function assertParentCurrent(
-  parent: RootedResourceParentHandle,
-): Promise<void> {
+async function assertParentCurrent(parent: RootedResourceParentHandle): Promise<void> {
   try {
     await parent.assertCurrent();
   } catch (error: unknown) {
@@ -328,10 +308,7 @@ function mapExactSourceError(
   if (operation === "sync-after-commit" && error.reason === "sync-failure") {
     fail("durability-failure", "$resourcePath");
   }
-  if (
-    operation === "inspect-after-commit"
-    || operation === "sync-after-commit"
-  ) {
+  if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
     fail("commit-uncertain", "$resourcePath");
   }
   if (operation === "current") fail("source-changed", "$resourcePath");
@@ -372,9 +349,7 @@ async function openExactSource(
   }
 }
 
-async function assertSourceCurrent(
-  source: RootedExactResourceHandle,
-): Promise<void> {
+async function assertSourceCurrent(source: RootedExactResourceHandle): Promise<void> {
   try {
     await source.assertPathCurrent();
   } catch (error: unknown) {
@@ -398,9 +373,7 @@ async function inspectCommittedSource(
   }
 }
 
-async function syncCommittedSource(
-  source: RootedExactResourceHandle,
-): Promise<void> {
+async function syncCommittedSource(source: RootedExactResourceHandle): Promise<void> {
   try {
     await source.syncOpenedNode();
   } catch (error: unknown) {
@@ -432,10 +405,7 @@ async function observeSettlement(
 ): Promise<boolean> {
   const current = await inspectParentTarget(parent);
   if (current === null) return false;
-  if (
-    settlement === "absent"
-    || sameFileNodeIdentity(current, retiredNode)
-  ) {
+  if (settlement === "absent" || sameFileNodeIdentity(current, retiredNode)) {
     fail("commit-uncertain", "$resourcePath");
   }
   // replacement-allowed 只接纳不同 dev/ino 的 successor；它不证明 successor 内容。
@@ -448,17 +418,17 @@ function sameUnlinkedNode(
   remainingLinkCount: bigint,
 ): boolean {
   return (
-    sameFileNodeIdentity(before, after)
-    && before.kind === "file"
-    && after.kind === "file"
-    && before.rawMode === after.rawMode
-    && before.permissionBits === after.permissionBits
-    && after.linkCount === remainingLinkCount
-    && before.userId === after.userId
-    && before.groupId === after.groupId
-    && before.specialDeviceId === after.specialDeviceId
-    && before.byteCount === after.byteCount
-    && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+    sameFileNodeIdentity(before, after) &&
+    before.kind === "file" &&
+    after.kind === "file" &&
+    before.rawMode === after.rawMode &&
+    before.permissionBits === after.permissionBits &&
+    after.linkCount === remainingLinkCount &&
+    before.userId === after.userId &&
+    before.groupId === after.groupId &&
+    before.specialDeviceId === after.specialDeviceId &&
+    before.byteCount === after.byteCount &&
+    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
   );
 }
 
@@ -484,11 +454,7 @@ export async function unlinkRegularFileExactly(
   let result: Readonly<ExactRegularFileUnlinkReceipt> | undefined;
 
   try {
-    source = await openExactSource(
-      root,
-      resourcePath,
-      parsed.expectedNode,
-    );
+    source = await openExactSource(root, resourcePath, parsed.expectedNode);
     if (source.resourceAbsolutePath !== parent.resourceAbsolutePath) {
       fail("root-scope", "$resourcePath");
     }
@@ -507,11 +473,7 @@ export async function unlinkRegularFileExactly(
 
     const nodeBefore = source.initialNodeSnapshot;
     const remainingLinkCount = nodeBefore.linkCount - 1n;
-    let replacementObserved = await observeSettlement(
-      parent,
-      nodeBefore,
-      parsed.settlement,
-    );
+    let replacementObserved = await observeSettlement(parent, nodeBefore, parsed.settlement);
     const afterUnlink = await inspectCommittedSource(source);
     if (!sameUnlinkedNode(nodeBefore, afterUnlink, remainingLinkCount)) {
       fail("commit-uncertain", "$resourcePath");
@@ -520,9 +482,8 @@ export async function unlinkRegularFileExactly(
       await syncCommittedSource(source);
       await syncParent(parent);
     }
-    replacementObserved = (
-      await observeSettlement(parent, nodeBefore, parsed.settlement)
-    ) || replacementObserved;
+    replacementObserved =
+      (await observeSettlement(parent, nodeBefore, parsed.settlement)) || replacementObserved;
     const settled = await inspectCommittedSource(source);
     if (!sameFileNodeSnapshot(afterUnlink, settled)) {
       fail("commit-uncertain", "$resourcePath");

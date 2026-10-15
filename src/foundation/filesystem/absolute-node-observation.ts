@@ -1,9 +1,13 @@
 import type { BigIntStats } from "node:fs";
-import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import nodePath from "node:path";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { createFileNodeSnapshot, FileNodeSnapshotError, type FileNodeSnapshot } from "./file-node-snapshot.js";
+import {
+  createFileNodeSnapshot,
+  type FileNodeSnapshot,
+  FileNodeSnapshotError,
+} from "./file-node-snapshot.js";
 
 /**
  * Wakeflow Foundation / Filesystem：工作区根之外一个绝对路径节点的只读观察。
@@ -19,13 +23,10 @@ export type AbsoluteNodeObservation =
   | Readonly<{ state: "present"; node: Readonly<FileNodeSnapshot>; realPath: string }>
   | Readonly<{ state: "missing" }>;
 
-export type AbsoluteNodeObservationErrorReason =
-  | "input"
-  | "inspection-failure"
-  | "read-failure";
+export type AbsoluteNodeObservationErrorReason = "input" | "inspection-failure" | "read-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Absolute node observation input is invalid.",
+  input: "Absolute node observation input is invalid.",
   "inspection-failure": "Absolute node could not be inspected safely.",
   "read-failure": "Absolute regular file could not be read safely.",
 } as const satisfies Readonly<Record<AbsoluteNodeObservationErrorReason, string>>;
@@ -56,13 +57,13 @@ function normalizeErrorPath(value: unknown, fallback: string): string {
 
 function parseAbsolutePath(value: unknown, path: string): string {
   if (
-    typeof value !== "string"
-    || value.length === 0
-    || value !== value.trim()
-    || !value.isWellFormed()
-    || CONTROL_PATTERN.test(value)
-    || !nodePath.isAbsolute(value)
-    || nodePath.resolve(value) !== value
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    !value.isWellFormed() ||
+    CONTROL_PATTERN.test(value) ||
+    !nodePath.isAbsolute(value) ||
+    nodePath.resolve(value) !== value
   ) {
     fail("input", path);
   }

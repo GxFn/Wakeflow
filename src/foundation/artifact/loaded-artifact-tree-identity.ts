@@ -6,37 +6,29 @@ import type {
   LoadedArtifactTreeManifest as LoadedArtifactTreeManifestWire,
 } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { type JsonValue, JsonValueError, parseJsonValue } from "../data/json-value.js";
 import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
-  JsonValueError,
-  parseJsonValue,
-  type JsonValue,
-} from "../data/json-value.js";
-import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 import {
-  addByteCounts,
-  ByteCountError,
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../filesystem/rooted-directory.js";
 import {
   readStableRootResourceTree,
   StableResourceTreeReadError,
 } from "../filesystem/stable-resource-tree-read.js";
+import {
+  addByteCounts,
+  type ByteCount,
+  ByteCountError,
+  parseByteCount,
+} from "../numeric/byte-count.js";
 
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
@@ -53,8 +45,7 @@ import {
  */
 
 export const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1 as const;
-export const LOADED_ARTIFACT_TREE_MANIFEST_KIND =
-  "wakeflow-loaded-artifact-tree" as const;
+export const LOADED_ARTIFACT_TREE_MANIFEST_KIND = "wakeflow-loaded-artifact-tree" as const;
 
 /** 与当前支持的清单 v1 保持一致、不得放宽的安全预算。 */
 export const LOADED_ARTIFACT_TREE_IDENTITY_LIMITS = Object.freeze({
@@ -93,15 +84,9 @@ export type LoadedArtifactTreeFile = Readonly<
 >;
 
 export type LoadedArtifactTreeManifest = Readonly<
-  Omit<
-    LoadedArtifactTreeManifestWire,
-    "fileCount" | "files" | "totalBytes"
-  > & {
+  Omit<LoadedArtifactTreeManifestWire, "fileCount" | "files" | "totalBytes"> & {
     readonly fileCount: number;
-    readonly files: readonly [
-      LoadedArtifactTreeFile,
-      ...LoadedArtifactTreeFile[],
-    ];
+    readonly files: readonly [LoadedArtifactTreeFile, ...LoadedArtifactTreeFile[]];
     readonly totalBytes: ByteCount;
   }
 >;
@@ -132,7 +117,7 @@ export type LoadedArtifactTreeIdentityErrorReason =
   | "aborted";
 
 const ERROR_MESSAGES = {
-  "input": "Loaded artifact tree identity input is invalid.",
+  input: "Loaded artifact tree identity input is invalid.",
   "root-scope": "Loaded artifact tree could not establish its root scope.",
   "entry-limit": "Loaded artifact tree exceeds its physical entry budget.",
   "depth-limit": "Loaded artifact tree exceeds its relative depth budget.",
@@ -141,7 +126,7 @@ const ERROR_MESSAGES = {
   "total-bytes": "Loaded artifact tree exceeds its total byte budget.",
   "ref-bytes": "A loaded artifact ref exceeds its UTF-8 byte budget.",
   "ref-collision": "Loaded artifact refs collide under portable comparison.",
-  "symlink": "Loaded artifact tree cannot contain symbolic links.",
+  symlink: "Loaded artifact tree cannot contain symbolic links.",
   "special-node": "Loaded artifact tree can contain only directories and regular files.",
   "empty-tree": "Loaded artifact tree must contain at least one regular file.",
   "source-changed": "Loaded artifact tree changed while it was inspected.",
@@ -149,11 +134,8 @@ const ERROR_MESSAGES = {
   "manifest-shape": "Loaded artifact tree manifest shape is invalid.",
   "manifest-order": "Loaded artifact tree manifest refs are not canonical.",
   "manifest-totals": "Loaded artifact tree manifest totals are inconsistent.",
-  "aborted": "Loaded artifact tree inspection was aborted.",
-} as const satisfies Readonly<Record<
-  LoadedArtifactTreeIdentityErrorReason,
-  string
->>;
+  aborted: "Loaded artifact tree inspection was aborted.",
+} as const satisfies Readonly<Record<LoadedArtifactTreeIdentityErrorReason, string>>;
 
 export class LoadedArtifactTreeIdentityError extends Error {
   override readonly name = "LoadedArtifactTreeIdentityError";
@@ -190,17 +172,9 @@ const MANIFEST_FIELDS = Object.freeze([
   "totalBytes",
 ] as const);
 
-const FILE_FIELDS = Object.freeze([
-  "bytes",
-  "digest",
-  "executable",
-  "ref",
-] as const);
+const FILE_FIELDS = Object.freeze(["bytes", "digest", "executable", "ref"] as const);
 
-function fail(
-  reason: LoadedArtifactTreeIdentityErrorReason,
-  path: string,
-): never {
+function fail(reason: LoadedArtifactTreeIdentityErrorReason, path: string): never {
   throw new LoadedArtifactTreeIdentityError(reason, path);
 }
 
@@ -215,10 +189,7 @@ function assertExactFields(
   reason: "input" | "manifest-shape",
 ): void {
   const keys = Object.keys(record).sort(compareText);
-  if (
-    keys.length !== fields.length
-    || keys.some((key, index) => key !== fields[index])
-  ) {
+  if (keys.length !== fields.length || keys.some((key, index) => key !== fields[index])) {
     fail(reason, path);
   }
 }
@@ -235,11 +206,7 @@ function parseNonNegativeInteger(
   path: string,
   reason: "manifest-shape" | "manifest-totals",
 ): number {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail(reason, path);
   }
   return value;
@@ -255,10 +222,12 @@ function parseLimits(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits>
     throw error;
   }
   assertExactFields(record, LIMIT_FIELDS, "$options.limits", "input");
-  const parsed = Object.fromEntries(LIMIT_FIELDS.map((field) => [
-    field,
-    parsePositiveInteger(record[field], `$options.limits.${field}`),
-  ])) as unknown as LoadedArtifactTreeIdentityLimits;
+  const parsed = Object.fromEntries(
+    LIMIT_FIELDS.map((field) => [
+      field,
+      parsePositiveInteger(record[field], `$options.limits.${field}`),
+    ]),
+  ) as unknown as LoadedArtifactTreeIdentityLimits;
   for (const field of LIMIT_FIELDS) {
     if (parsed[field] > LOADED_ARTIFACT_TREE_IDENTITY_LIMITS[field]) {
       fail("input", `$options.limits.${field}`);
@@ -268,10 +237,12 @@ function parseLimits(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits>
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseIdentityOptions(value: unknown): Readonly<ParsedIdentityOptions> {
@@ -295,9 +266,7 @@ function parseIdentityOptions(value: unknown): Readonly<ParsedIdentityOptions> {
   });
 }
 
-function parseValidationOptions(
-  value: unknown,
-): Readonly<LoadedArtifactTreeIdentityLimits> {
+function parseValidationOptions(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
@@ -311,10 +280,7 @@ function parseValidationOptions(
   return parseLimits(record.limits);
 }
 
-function parseManifestByteCount(
-  value: unknown,
-  path: string,
-): ByteCount {
+function parseManifestByteCount(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
   } catch (error: unknown) {
@@ -388,21 +354,17 @@ function assertManifestTopology(
   limits: Readonly<LoadedArtifactTreeIdentityLimits>,
 ): void {
   const fileRefs = new Set(files.map((file) => file.ref));
-  const resources = new Map<string, Readonly<{
-    kind: "directory" | "file";
-    ref: PortableResourcePath;
-  }>>();
-  const admit = (
-    ref: PortableResourcePath,
-    kind: "directory" | "file",
-    path: string,
-  ): void => {
+  const resources = new Map<
+    string,
+    Readonly<{
+      kind: "directory" | "file";
+      ref: PortableResourcePath;
+    }>
+  >();
+  const admit = (ref: PortableResourcePath, kind: "directory" | "file", path: string): void => {
     const key = ref.toLowerCase();
     const existing = resources.get(key);
-    if (
-      existing !== undefined
-      && (existing.ref !== ref || existing.kind !== kind)
-    ) {
+    if (existing !== undefined && (existing.ref !== ref || existing.kind !== kind)) {
       fail("ref-collision", path);
     }
     if (existing === undefined) {
@@ -440,8 +402,8 @@ function parseManifest(
   }
   assertExactFields(record, MANIFEST_FIELDS, "$manifest", "manifest-shape");
   if (
-    record.artifactKind !== LOADED_ARTIFACT_TREE_MANIFEST_KIND
-    || record.schemaVersion !== LOADED_ARTIFACT_TREE_MANIFEST_VERSION
+    record.artifactKind !== LOADED_ARTIFACT_TREE_MANIFEST_KIND ||
+    record.schemaVersion !== LOADED_ARTIFACT_TREE_MANIFEST_VERSION
   ) {
     fail("manifest-shape", "$manifest");
   }
@@ -464,10 +426,7 @@ function parseManifest(
   let totalBytes = parseByteCount(0, "$manifest.totalBytes");
   for (const [index, value] of values.entries()) {
     const file = parseManifestFile(value, index, limits);
-    if (
-      previousRef !== undefined
-      && compareText(previousRef, file.ref) >= 0
-    ) {
+    if (previousRef !== undefined && compareText(previousRef, file.ref) >= 0) {
       fail("manifest-order", `$manifest.files.${index}.ref`);
     }
     previousRef = file.ref;
@@ -499,10 +458,7 @@ function parseManifest(
   return Object.freeze({
     artifactKind: LOADED_ARTIFACT_TREE_MANIFEST_KIND,
     fileCount: files.length,
-    files: Object.freeze(files) as readonly [
-      LoadedArtifactTreeFile,
-      ...LoadedArtifactTreeFile[],
-    ],
+    files: Object.freeze(files) as readonly [LoadedArtifactTreeFile, ...LoadedArtifactTreeFile[]],
     schemaVersion: LOADED_ARTIFACT_TREE_MANIFEST_VERSION,
     totalBytes,
   });
@@ -521,10 +477,10 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -544,23 +500,14 @@ function mapStableTreeReadError(error: StableResourceTreeReadError): never {
   fail("inspection-failure", "$tree");
 }
 
-async function readArtifactTree(
-  root: RootedDirectory,
-  options: Readonly<ParsedIdentityOptions>,
-) {
+async function readArtifactTree(root: RootedDirectory, options: Readonly<ParsedIdentityOptions>) {
   try {
     return await readStableRootResourceTree(root, {
       maximumEntries: options.limits.maxEntries,
       maximumDepth: options.limits.maxDepth,
       maximumFiles: options.limits.maxFiles,
-      maximumFileBytes: parseByteCount(
-        options.limits.maxFileBytes,
-        "$limits.maxFileBytes",
-      ),
-      maximumTotalBytes: parseByteCount(
-        options.limits.maxTotalBytes,
-        "$limits.maxTotalBytes",
-      ),
+      maximumFileBytes: parseByteCount(options.limits.maxFileBytes, "$limits.maxFileBytes"),
+      maximumTotalBytes: parseByteCount(options.limits.maxTotalBytes, "$limits.maxTotalBytes"),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error: unknown) {
@@ -585,20 +532,26 @@ async function inspectArtifactManifest(
     if (entry.node.kind === "symbolic-link") fail("symlink", "$tree.entries");
     if (entry.node.kind !== "file") fail("special-node", "$tree.entries");
   }
-  const files = tree.files.map((file): LoadedArtifactTreeFile => Object.freeze({
-    bytes: file.byteCount,
-    digest: file.digest,
-    executable: (file.node.permissionBits & 0o111) !== 0,
-    ref: file.resourcePath,
-  }));
+  const files = tree.files.map(
+    (file): LoadedArtifactTreeFile =>
+      Object.freeze({
+        bytes: file.byteCount,
+        digest: file.digest,
+        executable: (file.node.permissionBits & 0o111) !== 0,
+        ref: file.resourcePath,
+      }),
+  );
   if (files.length === 0) fail("empty-tree", "$tree.files");
-  return parseManifest({
-    artifactKind: LOADED_ARTIFACT_TREE_MANIFEST_KIND,
-    fileCount: files.length,
-    files,
-    schemaVersion: LOADED_ARTIFACT_TREE_MANIFEST_VERSION,
-    totalBytes: tree.totalFileBytes,
-  }, options.limits);
+  return parseManifest(
+    {
+      artifactKind: LOADED_ARTIFACT_TREE_MANIFEST_KIND,
+      fileCount: files.length,
+      files,
+      schemaVersion: LOADED_ARTIFACT_TREE_MANIFEST_VERSION,
+      totalBytes: tree.totalFileBytes,
+    },
+    options.limits,
+  );
 }
 
 function manifestJsonValue(manifest: LoadedArtifactTreeManifest): JsonValue {

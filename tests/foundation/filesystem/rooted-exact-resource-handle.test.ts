@@ -13,12 +13,12 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
-  sameFileNodeIdentity,
   type FileNodeSnapshot,
+  sameFileNodeIdentity,
 } from "../../../src/foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -63,16 +63,9 @@ test("regular-file factory admits one exact pathname and opened inode", async ()
   const root = await RootedDirectory.open(rootPath);
   const resourcePath = parsePortableResourcePath("source");
   const expected = await root.inspectExistingResource(resourcePath);
-  const handle = await RootedExactResourceHandle.openRegularFile(
-    root,
-    resourcePath,
-    expected.node,
-  );
+  const handle = await RootedExactResourceHandle.openRegularFile(root, resourcePath, expected.node);
   try {
-    equal(
-      handle.resourceAbsolutePath,
-      path.join(root.absolutePath, "source"),
-    );
+    equal(handle.resourceAbsolutePath, path.join(root.absolutePath, "source"));
     equal(handle.kind, "file");
     deepEqual(handle.initialNodeSnapshot, expected.node);
     deepEqual(await handle.inspectOpenedNode(), expected.node);
@@ -105,12 +98,8 @@ test("file-or-directory factory admits directories while both factories reject s
     equal((await handle.assertPathCurrent()).kind, "directory");
 
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        directoryPath,
-        directory.node,
-        "$.source",
-      ),
+      () =>
+        RootedExactResourceHandle.openRegularFile(root, directoryPath, directory.node, "$.source"),
       "resource-kind",
       "$.source",
     );
@@ -118,18 +107,8 @@ test("file-or-directory factory admits directories while both factories reject s
     const linkPath = parsePortableResourcePath("link");
     const link = await root.inspectExistingResource(linkPath);
     for (const open of [
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        linkPath,
-        link.node,
-        "$.source",
-      ),
-      () => RootedExactResourceHandle.openFileOrDirectory(
-        root,
-        linkPath,
-        link.node,
-        "$.source",
-      ),
+      () => RootedExactResourceHandle.openRegularFile(root, linkPath, link.node, "$.source"),
+      () => RootedExactResourceHandle.openFileOrDirectory(root, linkPath, link.node, "$.source"),
     ]) {
       await expectExactHandleError(open, "resource-symlink", "$.source");
     }
@@ -149,24 +128,21 @@ test("missing resources and stale expectations fail before a handle is issued", 
     const resourcePath = parsePortableResourcePath("source");
     const expected = await root.inspectExistingResource(resourcePath);
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        parsePortableResourcePath("missing"),
-        expected.node,
-        "$.source",
-      ),
+      () =>
+        RootedExactResourceHandle.openRegularFile(
+          root,
+          parsePortableResourcePath("missing"),
+          expected.node,
+          "$.source",
+        ),
       "resource-not-found",
       "$.source",
     );
 
     writeFileSync(physicalPath, "changed-and-longer");
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        resourcePath,
-        expected.node,
-        "$.source",
-      ),
+      () =>
+        RootedExactResourceHandle.openRegularFile(root, resourcePath, expected.node, "$.source"),
       "resource-changed",
       "$.source",
     );
@@ -184,21 +160,23 @@ test("inputs are revalidated without executing root or expectation proxies", asy
   const expected = await root.inspectExistingResource(resourcePath);
   try {
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        asPortableResourcePath("../escape"),
-        expected.node,
-        "$.source",
-      ),
+      () =>
+        RootedExactResourceHandle.openRegularFile(
+          root,
+          asPortableResourcePath("../escape"),
+          expected.node,
+          "$.source",
+        ),
       "input",
       "$.source",
     );
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        resourcePath,
-        asExpectedNode({ ...expected.node }),
-      ),
+      () =>
+        RootedExactResourceHandle.openRegularFile(
+          root,
+          resourcePath,
+          asExpectedNode({ ...expected.node }),
+        ),
       "input",
       "$expectedNode",
     );
@@ -215,11 +193,7 @@ test("inputs are revalidated without executing root or expectation proxies", asy
       },
     });
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        rootProxy,
-        resourcePath,
-        expected.node,
-      ),
+      () => RootedExactResourceHandle.openRegularFile(rootProxy, resourcePath, expected.node),
       "input",
       "$root",
     );
@@ -237,11 +211,7 @@ test("inputs are revalidated without executing root or expectation proxies", asy
       },
     });
     await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(
-        root,
-        resourcePath,
-        expectedProxy,
-      ),
+      () => RootedExactResourceHandle.openRegularFile(root, resourcePath, expectedProxy),
       "input",
       "$expectedNode",
     );
@@ -267,11 +237,7 @@ test("path metadata changes invalidate exact currentness but retain opened ident
   );
   try {
     writeFileSync(physicalPath, "after-and-longer");
-    await expectExactHandleError(
-      () => handle.assertPathCurrent(),
-      "resource-changed",
-      "$.source",
-    );
+    await expectExactHandleError(() => handle.assertPathCurrent(), "resource-changed", "$.source");
     const opened = await handle.inspectOpenedNode();
     equal(sameFileNodeIdentity(handle.initialNodeSnapshot, opened), true);
     equal(opened.byteCount, Buffer.byteLength("after-and-longer"));
@@ -298,11 +264,7 @@ test("opened inode remains observable and synchronizable after rename and unlink
   );
   try {
     renameSync(sourcePath, movedPath);
-    await expectExactHandleError(
-      () => handle.assertPathCurrent(),
-      "resource-changed",
-      "$.source",
-    );
+    await expectExactHandleError(() => handle.assertPathCurrent(), "resource-changed", "$.source");
     const moved = await handle.inspectOpenedNode();
     equal(sameFileNodeIdentity(expected.node, moved), true);
 

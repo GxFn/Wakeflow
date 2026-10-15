@@ -1,32 +1,21 @@
-import {
-  constants as fileSystemConstants,
-  type BigIntStats,
-} from "node:fs";
-import {
-  lstat,
-  open as openFileHandle,
-  realpath,
-  type FileHandle,
-} from "node:fs/promises";
+import { type BigIntStats, constants as fileSystemConstants } from "node:fs";
+import { type FileHandle, lstat, open as openFileHandle, realpath } from "node:fs/promises";
 import nodePath from "node:path";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
+  type PortableResourcePath,
   PortableResourcePathError,
   splitPortableResourcePath,
-  type PortableResourcePath,
 } from "./portable-resource-path.js";
-import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 
 /**
  * Wakeflow Foundation / Filesystem：一次操作范围内的物理目录根。
@@ -103,7 +92,7 @@ const ERROR_MESSAGES = {
   "resource-alias": "Rooted resource resolves through a non-canonical path alias.",
   "resource-changed": "Rooted resource changed while it was being inspected.",
   "inspection-failure": "Rooted resource could not be inspected safely.",
-  "closed": "Rooted directory is already closed.",
+  closed: "Rooted directory is already closed.",
   "close-failure": "Rooted directory handle could not be closed safely.",
 } as const satisfies Readonly<Record<RootedDirectoryErrorReason, string>>;
 
@@ -144,14 +133,14 @@ function fail(reason: RootedDirectoryErrorReason, path: string): never {
 
 function normalizeRootPath(value: unknown, errorPath: string): string {
   if (
-    typeof value !== "string"
-    || value.length === 0
-    || value !== value.trim()
-    || !value.isWellFormed()
-    || CONTROL_PATTERN.test(value)
-    || !nodePath.isAbsolute(value)
-    || nodePath.resolve(value) !== value
-    || nodePath.parse(value).root === value
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    !value.isWellFormed() ||
+    CONTROL_PATTERN.test(value) ||
+    !nodePath.isAbsolute(value) ||
+    nodePath.resolve(value) !== value ||
+    nodePath.parse(value).root === value
   ) {
     fail("root-input", errorPath);
   }
@@ -162,10 +151,7 @@ function normalizeRootPath(value: unknown, errorPath: string): string {
  * 打开选项与本文件族其余解析器走同一条准入：`parsePlainRecord` 负责拒绝代理、
  * 非普通原型（数组正是靠这一条被拒）、符号键与访问器，这里只判定本能力的字段。
  */
-function normalizeDurability(
-  value: unknown,
-  errorPath: string,
-): RootedDirectoryDurability {
+function normalizeDurability(value: unknown, errorPath: string): RootedDirectoryDurability {
   if (value === undefined) return "fsync";
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -194,10 +180,7 @@ function requiredOpenFlags(errorPath: string): number {
   return fileSystemConstants.O_RDONLY | directory | noFollow;
 }
 
-function snapshotNode(
-  value: BigIntStats,
-  errorPath: string,
-): Readonly<FileNodeSnapshot> {
+function snapshotNode(value: BigIntStats, errorPath: string): Readonly<FileNodeSnapshot> {
   try {
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
@@ -211,11 +194,7 @@ function snapshotNode(
 async function inspectPathNode(
   physicalPath: string,
   errorPath: string,
-  missingReason:
-    | "root-not-found"
-    | "root-changed"
-    | "resource-not-found"
-    | "resource-changed",
+  missingReason: "root-not-found" | "root-changed" | "resource-not-found" | "resource-changed",
 ): Promise<Readonly<FileNodeSnapshot>> {
   let stats: BigIntStats;
   try {
@@ -247,10 +226,7 @@ async function inspectCanonicalPath(
   if (canonical !== physicalPath) fail(aliasReason, errorPath);
 }
 
-async function resolveCanonicalRootPath(
-  physicalPath: string,
-  errorPath: string,
-): Promise<string> {
+async function resolveCanonicalRootPath(physicalPath: string, errorPath: string): Promise<string> {
   try {
     return await realpath(physicalPath);
   } catch (error: unknown) {
@@ -269,10 +245,10 @@ function resourcePhysicalPath(
   const candidate = nodePath.join(rootPath, ...segments);
   const relative = nodePath.relative(rootPath, candidate);
   if (
-    relative.length === 0
-    || nodePath.isAbsolute(relative)
-    || relative === ".."
-    || relative.startsWith(`..${nodePath.sep}`)
+    relative.length === 0 ||
+    nodePath.isAbsolute(relative) ||
+    relative === ".." ||
+    relative.startsWith(`..${nodePath.sep}`)
   ) {
     fail("resource-path", errorPath);
   }
@@ -324,19 +300,9 @@ export class RootedDirectory {
     const before = await inspectPathNode(absolutePath, path, "root-not-found");
     if (before.kind === "symbolic-link") fail("root-symlink", path);
     if (before.kind !== "directory") fail("root-type", path);
-    const canonicalRootPath = await resolveCanonicalRootPath(
-      absolutePath,
-      path,
-    );
-    const canonicalBefore = await inspectPathNode(
-      canonicalRootPath,
-      path,
-      "root-changed",
-    );
-    if (
-      canonicalBefore.kind !== "directory"
-      || !sameFileNodeIdentity(before, canonicalBefore)
-    ) {
+    const canonicalRootPath = await resolveCanonicalRootPath(absolutePath, path);
+    const canonicalBefore = await inspectPathNode(canonicalRootPath, path, "root-changed");
+    if (canonicalBefore.kind !== "directory" || !sameFileNodeIdentity(before, canonicalBefore)) {
       fail("root-changed", path);
     }
 
@@ -352,26 +318,14 @@ export class RootedDirectory {
     }
 
     try {
-      const opened = snapshotNode(
-        await handle.stat({ bigint: true }),
-        path,
-      );
-      const after = await inspectPathNode(
-        canonicalRootPath,
-        path,
-        "root-changed",
-      );
-      await inspectCanonicalPath(
-        canonicalRootPath,
-        path,
-        "root-alias",
-        "root-changed",
-      );
+      const opened = snapshotNode(await handle.stat({ bigint: true }), path);
+      const after = await inspectPathNode(canonicalRootPath, path, "root-changed");
+      await inspectCanonicalPath(canonicalRootPath, path, "root-alias", "root-changed");
       if (
-        opened.kind !== "directory"
-        || after.kind !== "directory"
-        || !sameFileNodeIdentity(canonicalBefore, opened)
-        || !sameFileNodeIdentity(opened, after)
+        opened.kind !== "directory" ||
+        after.kind !== "directory" ||
+        !sameFileNodeIdentity(canonicalBefore, opened) ||
+        !sameFileNodeIdentity(opened, after)
       ) {
         fail("root-changed", path);
       }
@@ -409,9 +363,7 @@ export class RootedDirectory {
    *
    * 返回最新节点快照；目录内容变化引起的 `mtime` 或链接数漂移不会被误判为根目录替换。
    */
-  async assertCurrent(
-    errorPath?: string,
-  ): Promise<Readonly<FileNodeSnapshot>> {
+  async assertCurrent(errorPath?: string): Promise<Readonly<FileNodeSnapshot>> {
     const path = normalizeErrorPath(errorPath, "$root");
     this.#assertOpen(path);
 
@@ -422,24 +374,15 @@ export class RootedDirectory {
       if (error instanceof RootedDirectoryError) throw error;
       fail("root-changed", path);
     }
-    const current = await inspectPathNode(
-      this.#absolutePath,
-      path,
-      "root-changed",
-    );
+    const current = await inspectPathNode(this.#absolutePath, path, "root-changed");
     if (current.kind === "symbolic-link") fail("root-changed", path);
     if (current.kind !== "directory" || opened.kind !== "directory") {
       fail("root-changed", path);
     }
-    await inspectCanonicalPath(
-      this.#absolutePath,
-      path,
-      "root-alias",
-      "root-changed",
-    );
+    await inspectCanonicalPath(this.#absolutePath, path, "root-alias", "root-changed");
     if (
-      !sameFileNodeIdentity(this.#initialSnapshot, opened)
-      || !sameFileNodeIdentity(opened, current)
+      !sameFileNodeIdentity(this.#initialSnapshot, opened) ||
+      !sameFileNodeIdentity(opened, current)
     ) {
       fail("root-changed", path);
     }
@@ -469,22 +412,14 @@ export class RootedDirectory {
       throw error;
     }
     await this.assertCurrent("$root");
-    const finalPhysicalPath = resourcePhysicalPath(
-      this.#absolutePath,
-      segments,
-      path,
-    );
+    const finalPhysicalPath = resourcePhysicalPath(this.#absolutePath, segments, path);
 
     const entries: InspectedResourceEntry[] = [];
     let current = this.#absolutePath;
     for (const [index, segment] of segments.entries()) {
       current = nodePath.join(current, segment);
       const isFinal = index === segments.length - 1;
-      const node = await inspectPathNode(
-        current,
-        path,
-        "resource-not-found",
-      );
+      const node = await inspectPathNode(current, path, "resource-not-found");
       if (!isFinal && node.kind === "symbolic-link") {
         fail("ancestor-symlink", path);
       }
@@ -492,49 +427,35 @@ export class RootedDirectory {
         fail("ancestor-type", path);
       }
       if (node.kind !== "symbolic-link") {
-        await inspectCanonicalPath(
-          current,
-          path,
-          "resource-alias",
-          "resource-changed",
-        );
+        await inspectCanonicalPath(current, path, "resource-alias", "resource-changed");
       }
-      entries.push(Object.freeze({
-        physicalPath: current,
-        node,
-        isFinal,
-      }));
+      entries.push(
+        Object.freeze({
+          physicalPath: current,
+          node,
+          isFinal,
+        }),
+      );
     }
 
     await this.assertCurrent("$root");
     let finalNode: Readonly<FileNodeSnapshot> | undefined;
     for (const entry of entries) {
-      const currentNode = await inspectPathNode(
-        entry.physicalPath,
-        path,
-        "resource-changed",
-      );
-      if (
-        currentNode.kind !== entry.node.kind
-        || !sameFileNodeIdentity(entry.node, currentNode)
-      ) {
+      const currentNode = await inspectPathNode(entry.physicalPath, path, "resource-changed");
+      if (currentNode.kind !== entry.node.kind || !sameFileNodeIdentity(entry.node, currentNode)) {
         fail("resource-changed", path);
       }
       if (!entry.isFinal && currentNode.kind !== "directory") {
         fail("resource-changed", path);
       }
       if (currentNode.kind !== "symbolic-link") {
-        await inspectCanonicalPath(
-          entry.physicalPath,
-          path,
-          "resource-alias",
-          "resource-changed",
-        );
+        await inspectCanonicalPath(entry.physicalPath, path, "resource-alias", "resource-changed");
       }
       if (entry.isFinal) {
-        const finalUnchanged = currentNode.kind === "directory"
-          ? sameFileNodeIdentity(entry.node, currentNode)
-          : sameFileNodeSnapshot(entry.node, currentNode);
+        const finalUnchanged =
+          currentNode.kind === "directory"
+            ? sameFileNodeIdentity(entry.node, currentNode)
+            : sameFileNodeSnapshot(entry.node, currentNode);
         if (!finalUnchanged) {
           fail("resource-changed", path);
         }

@@ -1,20 +1,13 @@
 import { equal } from "node:assert/strict";
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
   AbsoluteDirectoryPlacementError,
-  inspectAbsoluteDirectoryPlacement,
   type AbsoluteDirectoryPlacementErrorReason,
+  inspectAbsoluteDirectoryPlacement,
 } from "../../../src/foundation/filesystem/absolute-directory-placement.js";
 
 async function expectPlacementError(
@@ -35,16 +28,11 @@ async function expectPlacementError(
 }
 
 test("present and missing directory placements return bounded physical facts", async () => {
-  const rootPath = realpathSync(
-    mkdtempSync(path.join(os.tmpdir(), "wakeflow-placement-")),
-  );
+  const rootPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-placement-")));
   const present = path.join(rootPath, "present", "nested");
   mkdirSync(present, { recursive: true });
   try {
-    const observed = await inspectAbsoluteDirectoryPlacement(
-      present,
-      "$.placement",
-    );
+    const observed = await inspectAbsoluteDirectoryPlacement(present, "$.placement");
     equal(observed.state, "present");
     equal(observed.realPath, present);
     equal(observed.spellingIsCanonical, true);
@@ -69,26 +57,18 @@ test("present and missing directory placements return bounded physical facts", a
 });
 
 test("symlink and non-directory path segments fail closed", async () => {
-  const rootPath = realpathSync(
-    mkdtempSync(path.join(os.tmpdir(), "wakeflow-placement-shape-")),
-  );
+  const rootPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-placement-shape-")));
   const target = path.join(rootPath, "target");
   mkdirSync(target);
   symlinkSync(target, path.join(rootPath, "alias"), "dir");
   writeFileSync(path.join(rootPath, "file"), "x");
   try {
     await expectPlacementError(
-      () => inspectAbsoluteDirectoryPlacement(
-        path.join(rootPath, "alias", "child"),
-        "$.placement",
-      ),
+      () => inspectAbsoluteDirectoryPlacement(path.join(rootPath, "alias", "child"), "$.placement"),
       "symlink",
     );
     await expectPlacementError(
-      () => inspectAbsoluteDirectoryPlacement(
-        path.join(rootPath, "file", "child"),
-        "$.placement",
-      ),
+      () => inspectAbsoluteDirectoryPlacement(path.join(rootPath, "file", "child"), "$.placement"),
       "not-directory",
     );
   } finally {

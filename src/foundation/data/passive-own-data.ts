@@ -25,7 +25,7 @@ export type PassiveOwnDataErrorReason =
   | "array-extra-property";
 
 const ERROR_MESSAGES = {
-  "proxy": "Proxy values are not accepted by passive data readers.",
+  proxy: "Proxy values are not accepted by passive data readers.",
   "value-type": "The value is not an accepted data container.",
   "record-prototype": "The record does not have an accepted prototype.",
   "symbol-key": "Symbol-keyed properties are not accepted.",
@@ -71,10 +71,7 @@ function appendPropertyPath(basePath: string, key: string): string {
 }
 
 function isObjectOrFunction(value: unknown): value is object {
-  return (
-    (typeof value === "object" && value !== null)
-    || typeof value === "function"
-  );
+  return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
 /**
@@ -138,10 +135,7 @@ function readArrayLength(value: readonly unknown[], path: string): number {
  * 属性名列表也是输入数据，不能用普通数组读取隐式信任它。这里要求标准原型、
  * 稠密索引、可枚举数据属性、非空字符串和唯一值，并忽略所有成员行为。
  */
-function parsePropertySelection(
-  value: unknown,
-  basePath: string,
-): readonly string[] {
+function parsePropertySelection(value: unknown, basePath: string): readonly string[] {
   const selectionPath = `${basePath}.keys`;
   rejectProxy(value, selectionPath, "property-selection");
   if (!Array.isArray(value)) fail("property-selection", selectionPath);
@@ -172,9 +166,9 @@ function parsePropertySelection(
     const indexPath = appendPropertyPath(selectionPath, String(index));
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (
-      descriptor === undefined
-      || !Object.hasOwn(descriptor, "value")
-      || descriptor.enumerable !== true
+      descriptor === undefined ||
+      !Object.hasOwn(descriptor, "value") ||
+      descriptor.enumerable !== true
     ) {
       fail("property-selection", indexPath);
     }
@@ -212,10 +206,7 @@ export function parsePlainRecord(
   for (const ownKey of Reflect.ownKeys(value)) {
     if (typeof ownKey === "symbol") fail("symbol-key", basePath);
     const ownPath = appendPropertyPath(basePath, ownKey);
-    const member = readEnumerableDataValue(
-      Object.getOwnPropertyDescriptor(value, ownKey),
-      ownPath,
-    );
+    const member = readEnumerableDataValue(Object.getOwnPropertyDescriptor(value, ownKey), ownPath);
     defineSnapshotProperty(snapshot, ownKey, member);
   }
   return Object.freeze(snapshot);
@@ -246,9 +237,7 @@ export function pickOwnDataProperties<const Keys extends readonly string[]>(
     defineSnapshotProperty(snapshot, key, member);
   }
   // selection 已经验证为 Keys 的稠密字符串成员；此处只恢复编译器无法保留的键映射。
-  return Object.freeze(snapshot) as Readonly<
-    Partial<Record<Keys[number], unknown>>
-  >;
+  return Object.freeze(snapshot) as Readonly<Partial<Record<Keys[number], unknown>>>;
 }
 
 /**
@@ -283,11 +272,7 @@ export function parseDenseArray(
     const ownPath = appendPropertyPath(basePath, ownKey);
     const index = parseCanonicalArrayIndex(ownKey);
     if (index === undefined || index >= length) fail("array-extra-property", ownPath);
-    readEnumerableDataValue(
-      Object.getOwnPropertyDescriptor(value, ownKey),
-      ownPath,
-      "array-slot",
-    );
+    readEnumerableDataValue(Object.getOwnPropertyDescriptor(value, ownKey), ownPath, "array-slot");
   }
 
   const snapshot: unknown[] = [];

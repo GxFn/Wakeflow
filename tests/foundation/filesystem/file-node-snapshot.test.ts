@@ -13,12 +13,12 @@ import { test } from "node:test";
 
 import {
   createFileNodeSnapshot,
-  FileNodeSnapshotError,
-  sameFileNodeIdentity,
-  sameFileNodeSnapshot,
   type FileNodeKind,
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
   type FileNodeSnapshotErrorReason,
+  sameFileNodeIdentity,
+  sameFileNodeSnapshot,
 } from "../../../src/foundation/filesystem/file-node-snapshot.js";
 
 function expectFileNodeSnapshotError(
@@ -108,18 +108,15 @@ test("mode bits classify every supported node kind without invoking methods", ()
   ];
 
   for (const [mode, expectedKind] of cases) {
-    const snapshot = createFileNodeSnapshot(
-      fakeBigIntStats(mode | 0o754),
-    );
+    const snapshot = createFileNodeSnapshot(fakeBigIntStats(mode | 0o754));
     equal(snapshot.kind, expectedKind);
     equal(snapshot.permissionBits, 0o754);
   }
 });
 
 test("snapshot preserves exact owner, link, device, size, and nanosecond facts", () => {
-  const snapshot = createFileNodeSnapshot(fakeBigIntStats(
-    fileSystemConstants.S_IFREG | 0o600,
-    {
+  const snapshot = createFileNodeSnapshot(
+    fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600, {
       dev: 10n,
       ino: 20n,
       nlink: 2n,
@@ -129,8 +126,8 @@ test("snapshot preserves exact owner, link, device, size, and nanosecond facts",
       size: 4_294_967_296n,
       mtimeNs: -40n,
       ctimeNs: 50n,
-    },
-  ));
+    }),
+  );
 
   deepEqual(snapshot, {
     kind: "file",
@@ -168,10 +165,11 @@ test("missing, accessor, and invalid Stats fields fail without executing getters
     "$.stats.dev",
   );
   expectFileNodeSnapshotError(
-    () => createFileNodeSnapshot(
-      fakeBigIntStats(fileSystemConstants.S_IFREG, { nlink: -1n }),
-      "$.stats",
-    ),
+    () =>
+      createFileNodeSnapshot(
+        fakeBigIntStats(fileSystemConstants.S_IFREG, { nlink: -1n }),
+        "$.stats",
+      ),
     "stat-field",
     "$.stats.nlink",
   );
@@ -215,17 +213,13 @@ test("Proxy Stats are rejected before reflection traps run", () => {
 });
 
 test("node identity and complete snapshot comparisons remain distinct", () => {
-  const base = createFileNodeSnapshot(fakeBigIntStats(
-    fileSystemConstants.S_IFREG | 0o600,
-  ));
-  const contentChanged = createFileNodeSnapshot(fakeBigIntStats(
-    fileSystemConstants.S_IFREG | 0o600,
-    { size: 4n, mtimeNs: 6n, ctimeNs: 7n },
-  ));
-  const replacement = createFileNodeSnapshot(fakeBigIntStats(
-    fileSystemConstants.S_IFREG | 0o600,
-    { ino: 3n },
-  ));
+  const base = createFileNodeSnapshot(fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600));
+  const contentChanged = createFileNodeSnapshot(
+    fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600, { size: 4n, mtimeNs: 6n, ctimeNs: 7n }),
+  );
+  const replacement = createFileNodeSnapshot(
+    fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600, { ino: 3n }),
+  );
 
   equal(sameFileNodeIdentity(base, base), true);
   equal(sameFileNodeSnapshot(base, base), true);
@@ -236,9 +230,7 @@ test("node identity and complete snapshot comparisons remain distinct", () => {
 });
 
 test("comparison revalidates forged snapshot fields", () => {
-  const valid = createFileNodeSnapshot(fakeBigIntStats(
-    fileSystemConstants.S_IFREG | 0o600,
-  ));
+  const valid = createFileNodeSnapshot(fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600));
   const wrongKind = { ...valid, kind: "directory" };
   expectFileNodeSnapshotError(
     () => sameFileNodeIdentity(asFileNodeSnapshot(wrongKind), valid),

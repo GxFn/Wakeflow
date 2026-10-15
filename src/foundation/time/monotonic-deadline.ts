@@ -20,10 +20,7 @@ export type MonotonicDeadline = bigint & {
 };
 
 /** monotonic deadline 失败的稳定分类。 */
-export type MonotonicDeadlineErrorReason =
-  | "moment-type"
-  | "duration-type"
-  | "deadline-type";
+export type MonotonicDeadlineErrorReason = "moment-type" | "duration-type" | "deadline-type";
 
 const ERROR_MESSAGES = {
   "moment-type": "Monotonic moment must be non-negative nanoseconds as bigint.",
@@ -71,16 +68,8 @@ export function monotonicDeadlineAfter(
   start: MonotonicMoment,
   duration: MonotonicDuration,
 ): MonotonicDeadline {
-  const startNanoseconds = parseNonNegativeBigint(
-    start,
-    "moment-type",
-    "$start",
-  );
-  const durationNanoseconds = parseNonNegativeBigint(
-    duration,
-    "duration-type",
-    "$duration",
-  );
+  const startNanoseconds = parseNonNegativeBigint(start, "moment-type", "$start");
+  const durationNanoseconds = parseNonNegativeBigint(duration, "duration-type", "$duration");
   return (startNanoseconds + durationNanoseconds) as MonotonicDeadline;
 }
 
@@ -89,16 +78,8 @@ export function isMonotonicDeadlineReached(
   deadline: MonotonicDeadline,
   now: MonotonicMoment,
 ): boolean {
-  const deadlineNanoseconds = parseNonNegativeBigint(
-    deadline,
-    "deadline-type",
-    "$deadline",
-  );
-  const nowNanoseconds = parseNonNegativeBigint(
-    now,
-    "moment-type",
-    "$now",
-  );
+  const deadlineNanoseconds = parseNonNegativeBigint(deadline, "deadline-type", "$deadline");
+  const nowNanoseconds = parseNonNegativeBigint(now, "moment-type", "$now");
   return nowNanoseconds >= deadlineNanoseconds;
 }
 
@@ -111,19 +92,9 @@ export function monotonicDeadlineRemaining(
   deadline: MonotonicDeadline,
   now: MonotonicMoment,
 ): MonotonicDuration {
-  const deadlineNanoseconds = parseNonNegativeBigint(
-    deadline,
-    "deadline-type",
-    "$deadline",
-  );
-  const nowNanoseconds = parseNonNegativeBigint(
-    now,
-    "moment-type",
-    "$now",
-  );
+  const deadlineNanoseconds = parseNonNegativeBigint(deadline, "deadline-type", "$deadline");
+  const nowNanoseconds = parseNonNegativeBigint(now, "moment-type", "$now");
   return (
-    nowNanoseconds >= deadlineNanoseconds
-      ? 0n
-      : deadlineNanoseconds - nowNanoseconds
+    nowNanoseconds >= deadlineNanoseconds ? 0n : deadlineNanoseconds - nowNanoseconds
   ) as MonotonicDuration;
 }

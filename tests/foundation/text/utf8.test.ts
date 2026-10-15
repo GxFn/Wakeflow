@@ -39,13 +39,7 @@ function asText(value: unknown): string {
 }
 
 test("ASCII, Unicode, NUL, Buffer, and offset views round-trip exactly", () => {
-  const values = [
-    "",
-    "Wakeflow",
-    "Wakeflow 中文 🚀",
-    "a\0b",
-    "𝄞 café",
-  ] as const;
+  const values = ["", "Wakeflow", "Wakeflow 中文 🚀", "a\0b", "𝄞 café"] as const;
 
   for (const value of values) {
     const bytes = encodeUtf8(value);
@@ -99,11 +93,7 @@ test("decoding accepts only Uint8Array inputs and invokes no proxy traps", () =>
     new DataView(new ArrayBuffer(3)),
     new Uint16Array([0x6162]),
   ]) {
-    expectUtf8Error(
-      () => decodeUtf8(asBytes(value), "$.bytes"),
-      "bytes-type",
-      "$.bytes",
-    );
+    expectUtf8Error(() => decodeUtf8(asBytes(value), "$.bytes"), "bytes-type", "$.bytes");
   }
 
   let trapCalls = 0;
@@ -113,11 +103,7 @@ test("decoding accepts only Uint8Array inputs and invokes no proxy traps", () =>
       return Uint8Array.prototype;
     },
   });
-  expectUtf8Error(
-    () => decodeUtf8(asBytes(proxy), "$.bytes"),
-    "bytes-type",
-    "$.bytes",
-  );
+  expectUtf8Error(() => decodeUtf8(asBytes(proxy), "$.bytes"), "bytes-type", "$.bytes");
   equal(trapCalls, 0);
 });
 
@@ -129,24 +115,11 @@ test("encoding rejects non-strings and lone surrogates without coercion", () => 
       return "text";
     },
   };
-  expectUtf8Error(
-    () => encodeUtf8(asText(executableText), "$.text"),
-    "text-type",
-    "$.text",
-  );
+  expectUtf8Error(() => encodeUtf8(asText(executableText), "$.text"), "text-type", "$.text");
   equal(conversionCalls, 0);
 
-  for (const value of [
-    "\ud800",
-    "\udfff",
-    "a\ud800b",
-    "a\udfffb",
-  ]) {
-    expectUtf8Error(
-      () => encodeUtf8(value, "$.text"),
-      "ill-formed-text",
-      "$.text",
-    );
+  for (const value of ["\ud800", "\udfff", "a\ud800b", "a\udfffb"]) {
+    expectUtf8Error(() => encodeUtf8(value, "$.text"), "ill-formed-text", "$.text");
   }
 
   // 一对完整 surrogate 表示一个合法 scalar value。

@@ -1,9 +1,5 @@
 import { equal } from "node:assert/strict";
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -212,10 +208,11 @@ test("expectedNode is delegated to the stable file version boundary", async () =
 
     writeFileSync(physicalPath, "after-version\n");
     await expectStableFileReadError(
-      () => readStrictTextFile(root, resourcePath, {
-        ...DEFAULT_OPTIONS,
-        expectedNode: observed.node,
-      }),
+      () =>
+        readStrictTextFile(root, resourcePath, {
+          ...DEFAULT_OPTIONS,
+          expectedNode: observed.node,
+        }),
       "expectation-changed",
       "$options.expectedNode",
     );
@@ -231,11 +228,12 @@ test("stable file read remains the sole owner of read options", async () => {
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectStableFileReadError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("file"),
-        asOptions({ maximumBytes: parseByteCount(1024), extra: true }),
-      ),
+      () =>
+        readStrictTextFile(
+          root,
+          parsePortableResourcePath("file"),
+          asOptions({ maximumBytes: parseByteCount(1024), extra: true }),
+        ),
       "input",
       "$options",
     );
@@ -250,22 +248,19 @@ test("stable file read remains the sole owner of read options", async () => {
       },
     });
     await expectStableFileReadError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("file"),
-        asOptions(accessor),
-      ),
+      () => readStrictTextFile(root, parsePortableResourcePath("file"), asOptions(accessor)),
       "input",
       "$options",
     );
     equal(getterCalls, 0);
 
     await expectStableFileReadError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("file"),
-        asOptions({ maximumBytes: -1 }),
-      ),
+      () =>
+        readStrictTextFile(
+          root,
+          parsePortableResourcePath("file"),
+          asOptions({ maximumBytes: -1 }),
+        ),
       "input",
       "$options.maximumBytes",
     );

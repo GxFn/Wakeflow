@@ -1,33 +1,36 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  validateLoadedArtifactTreeManifest,
   type LoadedArtifactTreeManifest,
+  validateLoadedArtifactTreeManifest,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
 import {
-  planLoadedArtifactTreeTransfer,
   LoadedArtifactTreeTransferPlanError,
   type LoadedArtifactTreeTransferPlanErrorReason,
+  planLoadedArtifactTreeTransfer,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-transfer-plan.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 
 function manifest(): LoadedArtifactTreeManifest {
-  const files = [{
-    ref: "README.md",
-    content: Buffer.from("# Artifact\n"),
-    executable: false,
-  }, {
-    ref: "bin/run.mjs",
-    content: Buffer.from("export {};\n"),
-    executable: true,
-  }, {
-    ref: "nested/deep/data.json",
-    content: Buffer.from("{}\n"),
-    executable: false,
-  }];
+  const files = [
+    {
+      ref: "README.md",
+      content: Buffer.from("# Artifact\n"),
+      executable: false,
+    },
+    {
+      ref: "bin/run.mjs",
+      content: Buffer.from("export {};\n"),
+      executable: true,
+    },
+    {
+      ref: "nested/deep/data.json",
+      content: Buffer.from("{}\n"),
+      executable: false,
+    },
+  ];
   return validateLoadedArtifactTreeManifest({
     artifactKind: "wakeflow-loaded-artifact-tree",
     fileCount: files.length,
@@ -38,9 +41,7 @@ function manifest(): LoadedArtifactTreeManifest {
       ref: file.ref,
     })),
     schemaVersion: 1,
-    totalBytes: files.reduce((total, file) => (
-      total + file.content.byteLength
-    ), 0),
+    totalBytes: files.reduce((total, file) => total + file.content.byteLength, 0),
   });
 }
 
@@ -74,51 +75,51 @@ test("loaded artifact transfer plan reuses one closed directory plan", () => {
   const candidateRootPath = parsePortableResourcePath(
     ".wakeflow-local/runtime/assets/.bundle.stage",
   );
-  const plan = planLoadedArtifactTreeTransfer(
-    source,
-    candidateRootPath,
-    {
-      directoryMode: 0o755,
-      executableFileMode: 0o755,
-      regularFileMode: 0o644,
-    },
-  );
+  const plan = planLoadedArtifactTreeTransfer(source, candidateRootPath, {
+    directoryMode: 0o755,
+    executableFileMode: 0o755,
+    regularFileMode: 0o644,
+  });
 
   equal(plan.artifactKind, "wakeflow-loaded-artifact-tree-transfer-plan");
   equal(plan.schemaVersion, 1);
   equal(plan.artifactDigest, computeCanonicalJsonSha256Digest(source));
   equal(plan.candidateRootPath, candidateRootPath);
-  deepEqual(plan.directoryPlan.directories, [
-    "bin",
-    "nested",
-    "nested/deep",
+  deepEqual(plan.directoryPlan.directories, ["bin", "nested", "nested/deep"]);
+  deepEqual(
+    plan.directoryPlan.files.map((file) => ({
+      path: file.path,
+      mode: file.mode,
+    })),
+    [
+      {
+        path: "README.md",
+        mode: 0o644,
+      },
+      {
+        path: "bin/run.mjs",
+        mode: 0o755,
+      },
+      {
+        path: "nested/deep/data.json",
+        mode: 0o644,
+      },
+    ],
+  );
+  deepEqual(plan.copies, [
+    {
+      sourceResourcePath: "README.md",
+      candidateResourcePath: ".wakeflow-local/runtime/assets/.bundle.stage/README.md",
+    },
+    {
+      sourceResourcePath: "bin/run.mjs",
+      candidateResourcePath: ".wakeflow-local/runtime/assets/.bundle.stage/bin/run.mjs",
+    },
+    {
+      sourceResourcePath: "nested/deep/data.json",
+      candidateResourcePath: ".wakeflow-local/runtime/assets/.bundle.stage/nested/deep/data.json",
+    },
   ]);
-  deepEqual(plan.directoryPlan.files.map((file) => ({
-    path: file.path,
-    mode: file.mode,
-  })), [{
-    path: "README.md",
-    mode: 0o644,
-  }, {
-    path: "bin/run.mjs",
-    mode: 0o755,
-  }, {
-    path: "nested/deep/data.json",
-    mode: 0o644,
-  }]);
-  deepEqual(plan.copies, [{
-    sourceResourcePath: "README.md",
-    candidateResourcePath:
-      ".wakeflow-local/runtime/assets/.bundle.stage/README.md",
-  }, {
-    sourceResourcePath: "bin/run.mjs",
-    candidateResourcePath:
-      ".wakeflow-local/runtime/assets/.bundle.stage/bin/run.mjs",
-  }, {
-    sourceResourcePath: "nested/deep/data.json",
-    candidateResourcePath:
-      ".wakeflow-local/runtime/assets/.bundle.stage/nested/deep/data.json",
-  }]);
   const basis = {
     artifactKind: plan.artifactKind,
     schemaVersion: plan.schemaVersion,
@@ -140,11 +141,7 @@ test("loaded artifact transfer plan is deterministic across manifest snapshots",
     executableFileMode: 0o700,
     regularFileMode: 0o600,
   } as const;
-  const first = planLoadedArtifactTreeTransfer(
-    source,
-    candidateRootPath,
-    options,
-  );
+  const first = planLoadedArtifactTreeTransfer(source, candidateRootPath, options);
   const second = planLoadedArtifactTreeTransfer(
     structuredClone(source),
     candidateRootPath,
@@ -157,33 +154,35 @@ test("loaded artifact transfer plan is deterministic across manifest snapshots",
 test("loaded artifact transfer plan rejects modes that erase executable semantics", () => {
   const source = manifest();
   const candidateRootPath = parsePortableResourcePath("stages/bundle");
-  for (const options of [{
-    directoryMode: 0o755,
-    executableFileMode: 0o644,
-    regularFileMode: 0o644,
-  }, {
-    directoryMode: 0o755,
-    executableFileMode: 0o755,
-    regularFileMode: 0o744,
-  }, {
-    directoryMode: 0o500,
-    executableFileMode: 0o755,
-    regularFileMode: 0o644,
-  }, {
-    directoryMode: 0o755,
-    executableFileMode: 0o100,
-    regularFileMode: 0o644,
-  }, {
-    directoryMode: 0o755,
-    executableFileMode: 0o755,
-    regularFileMode: 0o200,
-  }]) {
+  for (const options of [
+    {
+      directoryMode: 0o755,
+      executableFileMode: 0o644,
+      regularFileMode: 0o644,
+    },
+    {
+      directoryMode: 0o755,
+      executableFileMode: 0o755,
+      regularFileMode: 0o744,
+    },
+    {
+      directoryMode: 0o500,
+      executableFileMode: 0o755,
+      regularFileMode: 0o644,
+    },
+    {
+      directoryMode: 0o755,
+      executableFileMode: 0o100,
+      regularFileMode: 0o644,
+    },
+    {
+      directoryMode: 0o755,
+      executableFileMode: 0o755,
+      regularFileMode: 0o200,
+    },
+  ]) {
     expectPlanError(
-      () => planLoadedArtifactTreeTransfer(
-        source,
-        candidateRootPath,
-        options,
-      ),
+      () => planLoadedArtifactTreeTransfer(source, candidateRootPath, options),
       "mode",
       "$options",
     );
@@ -203,11 +202,7 @@ test("loaded artifact transfer plan maps manifest and capacity failures", () => 
     files: [...source.files].reverse(),
   } as unknown as LoadedArtifactTreeManifest;
   expectPlanError(
-    () => planLoadedArtifactTreeTransfer(
-      reversed,
-      candidateRootPath,
-      options,
-    ),
+    () => planLoadedArtifactTreeTransfer(reversed, candidateRootPath, options),
     "manifest",
     "$manifest",
   );
@@ -215,18 +210,16 @@ test("loaded artifact transfer plan maps manifest and capacity failures", () => 
   const oversized = {
     ...source,
     fileCount: 1,
-    files: [{
-      ...source.files[0],
-      bytes: (32 * 1024 * 1024) + 1,
-    }],
-    totalBytes: (32 * 1024 * 1024) + 1,
+    files: [
+      {
+        ...source.files[0],
+        bytes: 32 * 1024 * 1024 + 1,
+      },
+    ],
+    totalBytes: 32 * 1024 * 1024 + 1,
   } as unknown as LoadedArtifactTreeManifest;
   expectPlanError(
-    () => planLoadedArtifactTreeTransfer(
-      oversized,
-      candidateRootPath,
-      options,
-    ),
+    () => planLoadedArtifactTreeTransfer(oversized, candidateRootPath, options),
     "capacity",
     "$manifest",
   );
@@ -235,22 +228,22 @@ test("loaded artifact transfer plan maps manifest and capacity failures", () => 
 test("loaded artifact transfer plan rejects behavioral options without traps", () => {
   const source = manifest();
   let trapCalls = 0;
-  const options = new Proxy({
-    directoryMode: 0o755,
-    executableFileMode: 0o755,
-    regularFileMode: 0o644,
-  }, {
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return Object.prototype;
+  const options = new Proxy(
+    {
+      directoryMode: 0o755,
+      executableFileMode: 0o755,
+      regularFileMode: 0o644,
     },
-  });
+    {
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return Object.prototype;
+      },
+    },
+  );
   expectPlanError(
-    () => planLoadedArtifactTreeTransfer(
-      source,
-      parsePortableResourcePath("stages/bundle"),
-      options,
-    ),
+    () =>
+      planLoadedArtifactTreeTransfer(source, parsePortableResourcePath("stages/bundle"), options),
     "input",
     "$options",
   );

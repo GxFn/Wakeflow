@@ -1,8 +1,8 @@
 import {
+  type ByteCount,
   ByteCountError,
   MAX_SAFE_BYTE_COUNT,
   parseByteCount,
-  type ByteCount,
 } from "../numeric/byte-count.js";
 
 /**
@@ -31,10 +31,7 @@ export interface FileByteRange {
 }
 
 /** 文件字节区间准入或算术失败分类。 */
-export type FileByteRangeErrorReason =
-  | "offset-range"
-  | "length-range"
-  | "end-overflow";
+export type FileByteRangeErrorReason = "offset-range" | "length-range" | "end-overflow";
 
 const ERROR_MESSAGES = {
   "offset-range": "File byte offset must be a non-negative safe integer.",
@@ -73,11 +70,7 @@ function fail(reason: FileByteRangeErrorReason, path: string): never {
 }
 
 function parseOffset(value: unknown, path: string): FileByteOffset {
-  if (
-    typeof value !== "number"
-    || !Number.isSafeInteger(value)
-    || value < 0
-  ) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail("offset-range", path);
   }
   return value as FileByteOffset;
@@ -92,11 +85,7 @@ function parseLength(value: unknown, path: string): ByteCount {
   }
 }
 
-function rangeEnd(
-  offset: FileByteOffset,
-  length: ByteCount,
-  path: string,
-): FileByteOffset {
+function rangeEnd(offset: FileByteOffset, length: ByteCount, path: string): FileByteOffset {
   if (length > MAX_SAFE_BYTE_COUNT - offset) {
     fail("end-overflow", path);
   }
@@ -115,14 +104,8 @@ function createRange(
 }
 
 /** 严格解析文件绝对字节偏移量。 */
-export function parseFileByteOffset(
-  value: unknown,
-  errorPath?: string,
-): FileByteOffset {
-  return parseOffset(
-    value,
-    normalizeErrorPath(errorPath, "$offset"),
-  );
+export function parseFileByteOffset(value: unknown, errorPath?: string): FileByteOffset {
+  return parseOffset(value, normalizeErrorPath(errorPath, "$offset"));
 }
 
 /**
@@ -133,9 +116,5 @@ export function createFileByteRange(
   length: ByteCount,
   errorPath?: string,
 ): Readonly<FileByteRange> {
-  return createRange(
-    offset,
-    length,
-    normalizeErrorPath(errorPath, "$range"),
-  );
+  return createRange(offset, length, normalizeErrorPath(errorPath, "$range"));
 }

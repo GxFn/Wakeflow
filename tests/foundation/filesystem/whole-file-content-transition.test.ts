@@ -47,27 +47,33 @@ test("whole-file transition closes absent, current and admitted replacement", ()
 test("whole-file transition rejects unknown, duplicated, or malformed input", () => {
   for (const [action, reason, path] of [
     [
-      () => planWholeFileContentTransition(Buffer.from("unknown\n"), {
-        currentContents: [CURRENT],
-        desiredContent: DESIRED,
-      }),
+      () =>
+        planWholeFileContentTransition(Buffer.from("unknown\n"), {
+          currentContents: [CURRENT],
+          desiredContent: DESIRED,
+        }),
       "unadmitted-source",
       "$source",
     ],
     [
-      () => planWholeFileContentTransition(null, {
-        currentContents: [CURRENT, Buffer.from(CURRENT)],
-        desiredContent: DESIRED,
-      }),
+      () =>
+        planWholeFileContentTransition(null, {
+          currentContents: [CURRENT, Buffer.from(CURRENT)],
+          desiredContent: DESIRED,
+        }),
       "duplicate-current",
       "$request.currentContents/1",
     ],
     [
-      () => planWholeFileContentTransition(null, asRequest({
-        currentContents: [],
-        desiredContent: DESIRED,
-        extra: true,
-      })),
+      () =>
+        planWholeFileContentTransition(
+          null,
+          asRequest({
+            currentContents: [],
+            desiredContent: DESIRED,
+            extra: true,
+          }),
+        ),
       "input",
       "$request",
     ],

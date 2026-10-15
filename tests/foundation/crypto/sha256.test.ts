@@ -7,8 +7,8 @@ import {
   parseSha256Digest,
   parseSha256Hex,
   SHA256_DIGEST_PREFIX,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
   type Sha256ErrorReason,
   type Sha256Hex,
 } from "../../../src/foundation/crypto/sha256.js";
@@ -97,11 +97,7 @@ test("hex and prefixed digest parsing is exact, lowercase, and non-coercive", ()
     `sha256:${hexValue}`,
   ];
   for (const value of invalidHex) {
-    expectSha256Error(
-      () => parseSha256Hex(value, "$.hex"),
-      "hex-format",
-      "$.hex",
-    );
+    expectSha256Error(() => parseSha256Hex(value, "$.hex"), "hex-format", "$.hex");
   }
 
   const invalidDigest: readonly unknown[] = [
@@ -114,11 +110,7 @@ test("hex and prefixed digest parsing is exact, lowercase, and non-coercive", ()
     `sha256:${hexValue}0`,
   ];
   for (const value of invalidDigest) {
-    expectSha256Error(
-      () => parseSha256Digest(value, "$.digest"),
-      "digest-format",
-      "$.digest",
-    );
+    expectSha256Error(() => parseSha256Digest(value, "$.digest"), "digest-format", "$.digest");
   }
 });
 
@@ -131,11 +123,7 @@ test("hashing rejects non-Uint8Array inputs without invoking proxy traps", () =>
     new ArrayBuffer(3),
   ];
   for (const value of invalid) {
-    expectSha256Error(
-      () => computeSha256Hex(asBytes(value), "$.bytes"),
-      "input-type",
-      "$.bytes",
-    );
+    expectSha256Error(() => computeSha256Hex(asBytes(value), "$.bytes"), "input-type", "$.bytes");
   }
 
   let trapCalls = 0;
@@ -145,10 +133,6 @@ test("hashing rejects non-Uint8Array inputs without invoking proxy traps", () =>
       return Uint8Array.prototype;
     },
   });
-  expectSha256Error(
-    () => computeSha256Digest(asBytes(proxy), "$.bytes"),
-    "input-type",
-    "$.bytes",
-  );
+  expectSha256Error(() => computeSha256Digest(asBytes(proxy), "$.bytes"), "input-type", "$.bytes");
   equal(trapCalls, 0);
 });

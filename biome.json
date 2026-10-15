@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "includes": ["src/**", "tests/**", "tooling/**", "!src/contracts/generated/**"]
   },
@@ -24,7 +28,9 @@
       "complexity": {
         "noExcessiveCognitiveComplexity": {
           "level": "error",
-          "options": { "maxAllowedComplexity": 15 }
+          "options": {
+            "maxAllowedComplexity": 15
+          }
         }
       }
     }
@@ -37,7 +43,9 @@
           "complexity": {
             "noExcessiveCognitiveComplexity": {
               "level": "error",
-              "options": { "maxAllowedComplexity": 30 }
+              "options": {
+                "maxAllowedComplexity": 30
+              }
             }
           }
         }
@@ -50,7 +58,9 @@
           "complexity": {
             "noExcessiveCognitiveComplexity": {
               "level": "error",
-              "options": { "maxAllowedComplexity": 45 }
+              "options": {
+                "maxAllowedComplexity": 45
+              }
             }
           }
         }
@@ -61,18 +71,38 @@
         "src/configuration/**",
         "src/workspace/**",
         "src/governance/**",
-        "src/foundation/**",
         "src/hosts/**",
         "tests/configuration/**",
         "tests/workspace/**",
         "tests/governance/**",
-        "tests/foundation/**",
         "tests/hosts/**"
       ],
-      "formatter": { "enabled": false },
+      "formatter": {
+        "enabled": false
+      },
       "linter": {
         "rules": {
-          "complexity": { "noExcessiveCognitiveComplexity": "off" },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
+          "suspicious": {
+            "noImplicitAnyLet": "off",
+            "noControlCharactersInRegex": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off",
+            "useImportType": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/foundation/**", "tests/foundation/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
           "suspicious": {
             "noImplicitAnyLet": "off",
             "noControlCharactersInRegex": "off"

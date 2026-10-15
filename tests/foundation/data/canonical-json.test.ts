@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import {
-  canonicalizeJson,
   CanonicalJsonError,
-  encodeCanonicalJson,
   type CanonicalJsonErrorReason,
+  canonicalizeJson,
+  encodeCanonicalJson,
 } from "../../../src/foundation/data/canonical-json.js";
 
 function expectCanonicalJsonError(
@@ -34,8 +34,8 @@ function expectCanonicalJsonError(
 test("RFC 8785 primitive serialization example is reproduced exactly", () => {
   const value = {
     // biome-ignore lint/correctness/noPrecisionLoss: RFC 8785 示例数值必须原样书写
-    numbers: [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27],
-    string: "€$\u000f\nA'B\"\\\\\"/",
+    numbers: [333333333.33333329, 1e30, 4.5, 2e-3, 1e-27],
+    string: '€$\u000f\nA\'B"\\\\"/',
     literals: [null, true, false],
   };
   const expected = String.raw`{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}`;
@@ -43,7 +43,7 @@ test("RFC 8785 primitive serialization example is reproduced exactly", () => {
   equal(canonicalizeJson(value), expected);
   equal(Buffer.from(encodeCanonicalJson(value)).toString("utf8"), expected);
   equal(canonicalizeJson(null), "null");
-  equal(canonicalizeJson("plain"), "\"plain\"");
+  equal(canonicalizeJson("plain"), '"plain"');
   equal(canonicalizeJson(1e30), "1e+30");
 });
 
@@ -52,7 +52,7 @@ test("property names use recursive raw UTF-16 ordering while arrays keep order",
     "\ufb33": "Hebrew",
     "😀": "Emoji",
     "€": "Euro",
-    "ö": "Latin",
+    ö: "Latin",
     "\u0080": "Control",
     "1": "One",
     "\r": "Carriage Return",
@@ -70,7 +70,7 @@ test("existing Wakeflow golden canonical bytes and digest stay unchanged", () =>
     nested: { beta: 2, alpha: 1 },
     list: [{ y: true, x: null }, "tail"],
   };
-  const expected = "{\"list\":[{\"x\":null,\"y\":true},\"tail\"],\"nested\":{\"alpha\":1,\"beta\":2},\"z\":3}";
+  const expected = '{"list":[{"x":null,"y":true},"tail"],"nested":{"alpha":1,"beta":2},"z":3}';
   const expectedDigest = "04c388804319fd9e79ca995acf88a5be8f47a2e04634aa2dcae809c3514509cc";
   const bytes = encodeCanonicalJson(value);
 
@@ -82,7 +82,7 @@ test("existing Wakeflow golden canonical bytes and digest stay unchanged", () =>
 test("UTF-8 encoding returns independent byte arrays and preserves Unicode", () => {
   const first = encodeCanonicalJson({ decomposed: "e\u0301", composed: "\u00e9" });
   const second = encodeCanonicalJson({ decomposed: "e\u0301", composed: "\u00e9" });
-  const expected = "{\"composed\":\"é\",\"decomposed\":\"é\"}";
+  const expected = '{"composed":"é","decomposed":"é"}';
 
   equal(Buffer.from(first).toString("utf8"), expected);
   equal(Buffer.from(second).toString("utf8"), expected);
@@ -96,11 +96,7 @@ test("invalid input is mapped to one canonical error family without executing be
     "unsupported-type",
     "$/list/0",
   );
-  expectCanonicalJsonError(
-    () => canonicalizeJson({ value: -0 }),
-    "negative-zero",
-    "$/value",
-  );
+  expectCanonicalJsonError(() => canonicalizeJson({ value: -0 }), "negative-zero", "$/value");
   expectCanonicalJsonError(
     () => canonicalizeJson({ value: "\ud800" }),
     "lone-surrogate",
@@ -108,45 +104,45 @@ test("invalid input is mapped to one canonical error family without executing be
   );
 
   let trapCalls = 0;
-  const proxy = new Proxy({ value: true }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const proxy = new Proxy(
+    { value: true },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return null;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return [];
+      },
     },
-    getOwnPropertyDescriptor: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return null;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
-  expectCanonicalJsonError(
-    () => canonicalizeJson({ nested: proxy }),
-    "proxy",
-    "$/nested",
   );
+  expectCanonicalJsonError(() => canonicalizeJson({ nested: proxy }), "proxy", "$/nested");
   equal(trapCalls, 0);
 
   let toJsonCalls = 0;
   expectCanonicalJsonError(
-    () => canonicalizeJson({
-      toJSON: () => {
-        toJsonCalls += 1;
-        return "not-data";
-      },
-    }),
+    () =>
+      canonicalizeJson({
+        toJSON: () => {
+          toJsonCalls += 1;
+          return "not-data";
+        },
+      }),
     "unsupported-type",
     "$/toJSON",
   );
   equal(toJsonCalls, 0);
 
-  equal(canonicalizeJson({ toJSON: "ordinary-data" }), "{\"toJSON\":\"ordinary-data\"}");
+  equal(canonicalizeJson({ toJSON: "ordinary-data" }), '{"toJSON":"ordinary-data"}');
 });
 
 test("inherited toJSON hooks are rejected without execution", () => {

@@ -1,17 +1,16 @@
 import { equal, match } from "node:assert/strict";
 import { test } from "node:test";
-
-import {
-  readUtcWallClock,
-  UtcWallClockError,
-  type UtcWallClock,
-  type UtcWallClockErrorReason,
-} from "../../../src/foundation/time/wall-clock.js";
 import {
   compareUtcInstants,
   parseUtcInstant,
   type UtcInstant,
 } from "../../../src/foundation/time/utc-instant.js";
+import {
+  readUtcWallClock,
+  type UtcWallClock,
+  UtcWallClockError,
+  type UtcWallClockErrorReason,
+} from "../../../src/foundation/time/wall-clock.js";
 
 function expectUtcWallClockError(
   action: () => unknown,
@@ -79,17 +78,14 @@ test("wall clock readings are uncached and may move backwards", () => {
 });
 
 test("clock type, execution, and result failures are distinct and sanitized", () => {
-  expectUtcWallClockError(
-    () => readUtcWallClock(asUtcWallClock(null)),
-    "clock-type",
-    "$clock",
-  );
+  expectUtcWallClockError(() => readUtcWallClock(asUtcWallClock(null)), "clock-type", "$clock");
 
   const privateFailure = new Error("private clock failure");
   const executionError = expectUtcWallClockError(
-    () => readUtcWallClock(() => {
-      throw privateFailure;
-    }),
+    () =>
+      readUtcWallClock(() => {
+        throw privateFailure;
+      }),
     "clock-failure",
     "$clock",
   );
@@ -123,9 +119,7 @@ test("clock results are not coerced through executable object behavior", () => {
 });
 
 test("UtcWallClock requires branded results at compile time", () => {
-  const accepted: UtcWallClock = () => (
-    parseUtcInstant("2026-08-25T10:20:30.000Z")
-  );
+  const accepted: UtcWallClock = () => parseUtcInstant("2026-08-25T10:20:30.000Z");
   equal(readUtcWallClock(accepted), "2026-08-25T10:20:30.000Z");
 
   // @ts-expect-error 普通 string 结果不能充当 UtcWallClock 合同。

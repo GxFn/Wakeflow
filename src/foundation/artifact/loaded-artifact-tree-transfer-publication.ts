@@ -1,36 +1,28 @@
 import { types } from "node:util";
 
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+  type DirectoryTreeCandidateResult,
+  DurableDirectoryTreeCandidateError,
+  inspectDirectoryTreeCandidate,
+} from "../filesystem/durable-directory-tree-candidate.js";
 import {
-  publishDirectoryTreeCandidateDurably,
   DurableDirectoryTreePublicationError,
   type DurableDirectoryTreePublicationResult,
+  publishDirectoryTreeCandidateDurably,
 } from "../filesystem/durable-directory-tree-publication.js";
-import {
-  inspectDirectoryTreeCandidate,
-  DurableDirectoryTreeCandidateError,
-  type DirectoryTreeCandidateResult,
-} from "../filesystem/durable-directory-tree-candidate.js";
 import type { FileNodeSnapshot } from "../filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
+import { type LoadedArtifactTreeIdentity } from "./loaded-artifact-tree-identity.js";
 import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../filesystem/rooted-directory.js";
-import {
-  type LoadedArtifactTreeIdentity,
-} from "./loaded-artifact-tree-identity.js";
-import {
-  parseLoadedArtifactTreeTransferPlan,
-  LoadedArtifactTreeTransferPlanError,
   type LoadedArtifactTreeTransferPlan,
+  LoadedArtifactTreeTransferPlanError,
+  parseLoadedArtifactTreeTransferPlan,
 } from "./loaded-artifact-tree-transfer-plan.js";
 
 /**
@@ -53,8 +45,7 @@ interface LoadedArtifactTreeTransferPublicationOptions {
 interface LoadedArtifactTreeTransferPublicationResult {
   readonly disposition: "current" | "published";
   readonly plan: Readonly<LoadedArtifactTreeTransferPlan>;
-  readonly publication:
-    Readonly<DurableDirectoryTreePublicationResult> | null;
+  readonly publication: Readonly<DurableDirectoryTreePublicationResult> | null;
   readonly finalTree: Readonly<DirectoryTreeCandidateResult>;
   readonly artifactIdentity: Readonly<LoadedArtifactTreeIdentity>;
 }
@@ -84,10 +75,7 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Published loaded artifact tree could not be proven exact.",
   "operation-failure": "Loaded artifact tree candidate could not be published safely.",
   aborted: "Loaded artifact tree publication was aborted before commit.",
-} as const satisfies Readonly<Record<
-  LoadedArtifactTreeTransferPublicationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<LoadedArtifactTreeTransferPublicationErrorReason, string>>;
 
 /** Loaded Artifact Tree 发布失败的稳定、脱敏错误。 */
 export class LoadedArtifactTreeTransferPublicationError extends Error {
@@ -96,10 +84,7 @@ export class LoadedArtifactTreeTransferPublicationError extends Error {
   readonly reason: LoadedArtifactTreeTransferPublicationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: LoadedArtifactTreeTransferPublicationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: LoadedArtifactTreeTransferPublicationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -115,19 +100,16 @@ interface FinalReadback {
   readonly identity: Readonly<LoadedArtifactTreeIdentity>;
 }
 
-function fail(
-  reason: LoadedArtifactTreeTransferPublicationErrorReason,
-  path: string,
-): never {
+function fail(reason: LoadedArtifactTreeTransferPublicationErrorReason, path: string): never {
   throw new LoadedArtifactTreeTransferPublicationError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$destinationRoot");
   }
@@ -156,10 +138,12 @@ function parseDestinationPath(value: unknown): PortableResourcePath {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -171,8 +155,8 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -188,8 +172,7 @@ async function inspectResourceOrNull(
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(resourcePath, "$resourcePath"))
-      .node;
+    return (await root.inspectExistingResource(resourcePath, "$resourcePath")).node;
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return null;
@@ -199,9 +182,7 @@ async function inspectResourceOrNull(
   }
 }
 
-function mapTreeInspectionError(
-  error: DurableDirectoryTreeCandidateError,
-): never {
+function mapTreeInspectionError(error: DurableDirectoryTreeCandidateError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   fail("destination-conflict", "$destinationResourcePath");
@@ -248,9 +229,9 @@ function readPublishedFinal(
   plan: Readonly<LoadedArtifactTreeTransferPlan>,
 ): Readonly<FinalReadback> {
   if (
-    publication.destinationResourcePath !== destinationResourcePath
-    || publication.plan.treeDigest !== plan.directoryPlan.treeDigest
-    || publication.rootNode.kind !== "directory"
+    publication.destinationResourcePath !== destinationResourcePath ||
+    publication.plan.treeDigest !== plan.directoryPlan.treeDigest ||
+    publication.rootNode.kind !== "directory"
   ) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
@@ -264,15 +245,10 @@ function readPublishedFinal(
   });
 }
 
-function mapPublicationError(
-  error: DurableDirectoryTreePublicationError,
-): never {
+function mapPublicationError(error: DurableDirectoryTreePublicationError): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
-  if (
-    error.reason === "source-changed"
-    || error.reason === "source-conflict"
-  ) {
+  if (error.reason === "source-changed" || error.reason === "source-conflict") {
     fail("candidate-conflict", "$candidate");
   }
   if (error.reason === "destination-exists") {
@@ -303,21 +279,14 @@ export async function publishLoadedArtifactTreeTransferCandidate(
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
   const plan = parsePlan(planValue);
-  const destinationResourcePath = parseDestinationPath(
-    destinationResourcePathValue,
-  );
+  const destinationResourcePath = parseDestinationPath(destinationResourcePathValue);
 
   const existingDestination = await inspectResourceOrNull(
     destinationRootValue,
     destinationResourcePath,
   );
   if (existingDestination !== null) {
-    if (
-      await inspectResourceOrNull(
-        destinationRootValue,
-        plan.candidateRootPath,
-      ) !== null
-    ) {
+    if ((await inspectResourceOrNull(destinationRootValue, plan.candidateRootPath)) !== null) {
       fail("candidate-residue", "$candidate");
     }
     const final = await readCurrentFinal(
@@ -365,11 +334,7 @@ export async function publishLoadedArtifactTreeTransferCandidate(
     }
     throw error;
   }
-  const final = readPublishedFinal(
-    publication,
-    destinationResourcePath,
-    plan,
-  );
+  const final = readPublishedFinal(publication, destinationResourcePath, plan);
   return Object.freeze({
     disposition: "published",
     plan,

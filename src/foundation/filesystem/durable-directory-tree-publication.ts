@@ -1,29 +1,23 @@
 import { types } from "node:util";
 
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
+  type DirectoryTreeCandidatePlan,
+  type DirectoryTreeCandidateResult,
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   parseDirectoryTreeCandidatePlan,
-  type DirectoryTreeCandidatePlan,
-  type DirectoryTreeCandidateResult,
 } from "./durable-directory-tree-candidate.js";
+import { DurableResourceRenameError, renameResourceDurably } from "./durable-resource-rename.js";
 import {
-  renameResourceDurably,
-  DurableResourceRenameError,
-} from "./durable-resource-rename.js";
-import {
-  sameFileNodeSnapshot,
-  FileNodeSnapshotError,
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
+  sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 
@@ -73,10 +67,7 @@ const ERROR_MESSAGES = {
   "durability-failure": "Directory tree publication directory entries could not be synchronized.",
   "operation-failure": "Directory tree publication could not cross its commit point safely.",
   aborted: "Directory tree publication was aborted before commit.",
-} as const satisfies Readonly<Record<
-  DurableDirectoryTreePublicationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableDirectoryTreePublicationErrorReason, string>>;
 
 /** 目录树整体发布失败时返回的稳定、脱敏错误。 */
 export class DurableDirectoryTreePublicationError extends Error {
@@ -85,10 +76,7 @@ export class DurableDirectoryTreePublicationError extends Error {
   readonly reason: DurableDirectoryTreePublicationErrorReason;
   readonly path: string;
 
-  constructor(
-    reason: DurableDirectoryTreePublicationErrorReason,
-    path: string,
-  ) {
+  constructor(reason: DurableDirectoryTreePublicationErrorReason, path: string) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -99,17 +87,11 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableDirectoryTreePublicationErrorReason,
-  path: string,
-): never {
+function fail(reason: DurableDirectoryTreePublicationErrorReason, path: string): never {
   throw new DurableDirectoryTreePublicationError(reason, path);
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -128,10 +110,12 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -147,18 +131,15 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     fail("input", "$candidate/rootNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       fail("input", "$candidate/rootNode");
     }
   } catch (error: unknown) {
@@ -172,23 +153,18 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
   return node;
 }
 
-function parseCandidate(
-  value: unknown,
-): Readonly<DirectoryTreeCandidateResult> {
+function parseCandidate(value: unknown): Readonly<DirectoryTreeCandidateResult> {
   const record = plainRecord(value, "$candidate");
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 3
-    || keys[0] !== "candidateRootPath"
-    || keys[1] !== "plan"
-    || keys[2] !== "rootNode"
+    keys.length !== 3 ||
+    keys[0] !== "candidateRootPath" ||
+    keys[1] !== "plan" ||
+    keys[2] !== "rootNode"
   ) {
     fail("input", "$candidate");
   }
-  const candidateRootPath = parsePath(
-    record.candidateRootPath,
-    "$candidate/candidateRootPath",
-  );
+  const candidateRootPath = parsePath(record.candidateRootPath, "$candidate/candidateRootPath");
   let plan: Readonly<DirectoryTreeCandidatePlan>;
   try {
     plan = parseDirectoryTreeCandidatePlan(record.plan);
@@ -209,10 +185,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function mapCandidateError(
-  error: DurableDirectoryTreeCandidateError,
-  afterCommit: boolean,
-): never {
+function mapCandidateError(error: DurableDirectoryTreeCandidateError, afterCommit: boolean): never {
   if (afterCommit) fail("commit-uncertain", "$destinationResourcePath");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
@@ -229,25 +202,19 @@ function mapRenameError(error: DurableResourceRenameError): never {
   if (error.reason === "cross-device") {
     fail("cross-device", "$destinationResourcePath");
   }
-  if (
-    error.reason === "source-not-found"
-    || error.reason === "source-changed"
-  ) {
+  if (error.reason === "source-not-found" || error.reason === "source-changed") {
     fail("source-changed", "$sourceResourcePath");
   }
-  if (
-    error.reason === "source-symlink"
-    || error.reason === "source-not-supported"
-  ) {
+  if (error.reason === "source-symlink" || error.reason === "source-not-supported") {
     fail("source-conflict", "$sourceResourcePath");
   }
   if (error.reason === "durability-failure") {
     fail("durability-failure", "$destinationResourcePath");
   }
   if (
-    error.reason === "commit-uncertain"
-    || error.reason === "rename-failure"
-    || error.reason === "close-failure"
+    error.reason === "commit-uncertain" ||
+    error.reason === "rename-failure" ||
+    error.reason === "close-failure"
   ) {
     fail("commit-uncertain", "$destinationResourcePath");
   }

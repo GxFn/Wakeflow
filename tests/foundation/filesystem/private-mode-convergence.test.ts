@@ -15,8 +15,8 @@ import { test } from "node:test";
 
 import { createFileNodeSnapshot } from "../../../src/foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import {
   classifyPrivateNode,
@@ -102,7 +102,10 @@ test(
     chmodSync(path.join(rootPath, "dir"), 0o755);
     writeFileSync(path.join(rootPath, "file"), "x");
     chmodSync(path.join(rootPath, "file"), 0o644);
-    for (const [name, target] of [["dir", 0o700], ["file", 0o600]] as const) {
+    for (const [name, target] of [
+      ["dir", 0o700],
+      ["file", 0o600],
+    ] as const) {
       const before = await snapshot(root, name);
       equal(await convergePrivateNodeMode(root, ref(name), before), "converged");
       const after = await snapshot(root, name);

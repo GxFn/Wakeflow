@@ -1,21 +1,12 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { createHash } from "node:crypto";
-import {
-  linkSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
-import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -25,6 +16,7 @@ import {
   type StableResourceTreeReadErrorReason,
   type StableResourceTreeReadOptions,
 } from "../../../src/foundation/filesystem/stable-resource-tree-read.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectStableResourceTreeReadError(
   action: () => unknown | Promise<unknown>,
@@ -104,8 +96,7 @@ test("root resource tree binds deterministic structure to stable file digests", 
     );
     equal(result.totalFileBytes, 9);
     equal(
-      result.entries.find((entry) => entry.resourcePath === "outside-link")
-        ?.node.kind,
+      result.entries.find((entry) => entry.resourcePath === "outside-link")?.node.kind,
       "symbolic-link",
     );
     equal(
@@ -115,7 +106,10 @@ test("root resource tree binds deterministic structure to stable file digests", 
     equal(Object.isFrozen(result), true);
     equal(Object.isFrozen(result.entries), true);
     equal(Object.isFrozen(result.files), true);
-    equal(result.files.every((file) => Object.isFrozen(file)), true);
+    equal(
+      result.files.every((file) => Object.isFrozen(file)),
+      true,
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -133,11 +127,7 @@ test("resource tree stays below its start and honors the starting expectation", 
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("records");
-    const observed = await readStableResourceTree(
-      root,
-      resourcePath,
-      treeOptions(),
-    );
+    const observed = await readStableResourceTree(root, resourcePath, treeOptions());
     deepEqual(
       observed.files.map((file) => file.resourcePath),
       ["records/current.json", "records/history/001.json"],
@@ -145,9 +135,14 @@ test("resource tree stays below its start and honors the starting expectation", 
     writeFileSync(path.join(recordsPath, "new.json"), "new");
 
     await expectStableResourceTreeReadError(
-      () => readStableResourceTree(root, resourcePath, treeOptions({
-        expectedNode: observed.treeRootNode,
-      })),
+      () =>
+        readStableResourceTree(
+          root,
+          resourcePath,
+          treeOptions({
+            expectedNode: observed.treeRootNode,
+          }),
+        ),
       "source-changed",
       "$tree",
     );
@@ -195,11 +190,14 @@ test("hard links remain two path facts and do not become a Foundation policy", a
   linkSync(sourcePath, path.join(rootPath, "alias"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await readStableRootResourceTree(root, treeOptions({
-      maximumEntries: 2,
-      maximumDepth: 1,
-      maximumFiles: 2,
-    }));
+    const result = await readStableRootResourceTree(
+      root,
+      treeOptions({
+        maximumEntries: 2,
+        maximumDepth: 1,
+        maximumFiles: 2,
+      }),
+    );
     equal(result.files.length, 2);
     equal(result.files[0]?.node.inodeId, result.files[1]?.node.inodeId);
     equal(result.files[0]?.digest, result.files[1]?.digest);
@@ -278,9 +276,13 @@ test("options are closed and passive, and AbortSignal remains cooperative", asyn
     const controller = new AbortController();
     controller.abort("private-tree-abort");
     const aborted = await expectStableResourceTreeReadError(
-      () => readStableRootResourceTree(root, treeOptions({
-        signal: controller.signal,
-      })),
+      () =>
+        readStableRootResourceTree(
+          root,
+          treeOptions({
+            signal: controller.signal,
+          }),
+        ),
       "aborted",
       "$signal",
     );

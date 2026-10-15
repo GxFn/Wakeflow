@@ -1,24 +1,20 @@
 import { constants as fileSystemConstants } from "node:fs";
-import {
-  lstat,
-  open as openFileHandle,
-  type FileHandle,
-} from "node:fs/promises";
+import { type FileHandle, lstat, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
 import { types } from "node:util";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeIdentity,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
-  splitPortableResourcePath,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
+  splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
   RootedDirectory,
@@ -58,7 +54,7 @@ export type RootedResourceParentHandleErrorReason =
   | "close-failure";
 
 const ERROR_MESSAGES = {
-  "input": "Rooted resource parent handle input is invalid.",
+  input: "Rooted resource parent handle input is invalid.",
   "root-scope": "Rooted resource parent could not establish its root scope.",
   "parent-not-found": "Rooted resource parent directory does not exist.",
   "parent-symlink": "Rooted resource parent chain cannot contain a symbolic link.",
@@ -67,12 +63,9 @@ const ERROR_MESSAGES = {
   "parent-changed": "Rooted resource parent no longer names the opened directory.",
   "target-inspection-failure": "Rooted resource target could not be inspected safely.",
   "sync-failure": "Rooted resource parent could not be synchronized safely.",
-  "closed": "Rooted resource parent handle is already closed.",
+  closed: "Rooted resource parent handle is already closed.",
   "close-failure": "Rooted resource parent handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  RootedResourceParentHandleErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<RootedResourceParentHandleErrorReason, string>>;
 
 /**
  * RootedResourceParentHandle 的稳定错误。
@@ -103,24 +96,19 @@ interface ParentObservation {
 }
 
 function normalizeErrorPath(value: unknown): string {
-  return typeof value === "string" && value.length > 0
-    ? value
-    : "$resourcePath";
+  return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(
-  reason: RootedResourceParentHandleErrorReason,
-  path: string,
-): never {
+function fail(reason: RootedResourceParentHandleErrorReason, path: string): never {
   throw new RootedResourceParentHandleError(reason, path);
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", "$root");
   }
@@ -142,10 +130,7 @@ function parseAddress(
   let parentResourcePath: PortableResourcePath | null = null;
   if (segments.length > 1) {
     try {
-      parentResourcePath = parsePortableResourcePath(
-        segments.slice(0, -1).join("/"),
-        errorPath,
-      );
+      parentResourcePath = parsePortableResourcePath(segments.slice(0, -1).join("/"), errorPath);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) fail("input", errorPath);
       throw error;
@@ -195,10 +180,7 @@ async function inspectInitialParent(
 
   let parent: Readonly<RootedResourceSnapshot>;
   try {
-    parent = await root.inspectExistingResource(
-      address.parentResourcePath,
-      errorPath,
-    );
+    parent = await root.inspectExistingResource(address.parentResourcePath, errorPath);
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") {
@@ -210,10 +192,7 @@ async function inspectInitialParent(
       if (error.reason === "ancestor-type") {
         fail("parent-not-directory", errorPath);
       }
-      if (
-        error.reason === "resource-changed"
-        || error.reason === "resource-alias"
-      ) {
+      if (error.reason === "resource-changed" || error.reason === "resource-alias") {
         fail("parent-changed", errorPath);
       }
       if (error.reason === "resource-path") fail("input", errorPath);
@@ -257,10 +236,7 @@ export class RootedResourceParentHandle {
     this.#root = root;
     this.#parentResourcePath = address.parentResourcePath;
     this.#parentAbsolutePath = parent.absolutePath;
-    this.#resourceAbsolutePath = nodePath.join(
-      parent.absolutePath,
-      address.resourceName,
-    );
+    this.#resourceAbsolutePath = nodePath.join(parent.absolutePath, address.resourceName);
     this.#initialParentSnapshot = opened;
     this.#handle = handle;
     this.#errorPath = errorPath;
@@ -289,25 +265,11 @@ export class RootedResourceParentHandle {
     }
 
     try {
-      const opened = snapshotNode(
-        await handle.stat({ bigint: true }),
-        "parent-changed",
-        path,
-      );
-      if (
-        opened.kind !== "directory"
-        || !sameFileNodeIdentity(parent.node, opened)
-      ) {
+      const opened = snapshotNode(await handle.stat({ bigint: true }), "parent-changed", path);
+      if (opened.kind !== "directory" || !sameFileNodeIdentity(parent.node, opened)) {
         fail("parent-changed", path);
       }
-      const result = new RootedResourceParentHandle(
-        root,
-        address,
-        parent,
-        opened,
-        handle,
-        path,
-      );
+      const result = new RootedResourceParentHandle(root, address, parent, opened, handle, path);
       await result.assertCurrent();
       return result;
     } catch (error: unknown) {
@@ -349,10 +311,8 @@ export class RootedResourceParentHandle {
       if (this.#parentResourcePath === null) {
         return await this.#root.assertCurrent("$root");
       }
-      return (await this.#root.inspectExistingResource(
-        this.#parentResourcePath,
-        this.#errorPath,
-      )).node;
+      return (await this.#root.inspectExistingResource(this.#parentResourcePath, this.#errorPath))
+        .node;
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
         fail("parent-changed", this.#errorPath);
@@ -377,10 +337,10 @@ export class RootedResourceParentHandle {
       fail("parent-changed", this.#errorPath);
     }
     if (
-      pathNode.kind !== "directory"
-      || opened.kind !== "directory"
-      || !sameFileNodeIdentity(this.#initialParentSnapshot, opened)
-      || !sameFileNodeIdentity(opened, pathNode)
+      pathNode.kind !== "directory" ||
+      opened.kind !== "directory" ||
+      !sameFileNodeIdentity(this.#initialParentSnapshot, opened) ||
+      !sameFileNodeIdentity(opened, pathNode)
     ) {
       fail("parent-changed", this.#errorPath);
     }

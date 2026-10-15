@@ -2,15 +2,15 @@ import { createHash, type Hash } from "node:crypto";
 
 import {
   addByteCounts,
+  type ByteCount,
   ByteCountError,
   parseByteCount,
-  type ByteCount,
 } from "../numeric/byte-count.js";
 import {
   parseSha256Digest,
   SHA256_DIGEST_PREFIX,
-  Sha256Error,
   type Sha256Digest,
+  Sha256Error,
 } from "./sha256.js";
 
 /**
@@ -75,10 +75,7 @@ function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$bytes";
 }
 
-function fail(
-  reason: Sha256HasherErrorReason,
-  path: string,
-): never {
+function fail(reason: Sha256HasherErrorReason, path: string): never {
   throw new Sha256HasherError(reason, path);
 }
 
@@ -112,10 +109,7 @@ export class Sha256Hasher {
    * 输入类型错误发生在任何状态改变之前。Node.js 更新失败或累计溢出会把实例永久
    * 标记为失败，避免调用方继续使用结果不确定的部分摘要。
    */
-  update(
-    bytes: Uint8Array,
-    errorPath?: string,
-  ): this {
+  update(bytes: Uint8Array, errorPath?: string): this {
     const path = normalizeErrorPath(errorPath);
     if (this.#state === "finalized") fail("already-finalized", "$hasher");
     if (this.#state === "failed") fail("failed-state", "$hasher");
@@ -166,10 +160,7 @@ export class Sha256Hasher {
 
     let digest: Sha256Digest;
     try {
-      digest = parseSha256Digest(
-        `${SHA256_DIGEST_PREFIX}${value}`,
-        "$hasher.digest",
-      );
+      digest = parseSha256Digest(`${SHA256_DIGEST_PREFIX}${value}`, "$hasher.digest");
     } catch (error: unknown) {
       if (error instanceof Sha256Error) {
         this.#state = "failed";

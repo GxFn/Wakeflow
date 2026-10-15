@@ -1,11 +1,8 @@
-import {
-  deepEqual,
-  equal,
-} from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
@@ -14,18 +11,17 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-
+import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
   createDirectoryTreeCandidateDurably,
+  DurableDirectoryTreeCandidateError,
+  type DurableDirectoryTreeCandidateErrorReason,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
   parseDirectoryTreeCandidatePlan,
   planDirectoryTreeCandidate,
   settleDirectoryTreeCandidateDurably,
-  DurableDirectoryTreeCandidateError,
-  type DurableDirectoryTreeCandidateErrorReason,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
-import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -40,15 +36,18 @@ const OPTIONS = {
   maximumTotalBytes: 4096,
 } as const;
 
-const FILES = [{
-  path: "design/requirement.md",
-  bytes: encodeUtf8("# Requirement\n"),
-  mode: 0o644,
-}, {
-  path: "record.json",
-  bytes: encodeUtf8("{\"kind\":\"record\"}\n"),
-  mode: 0o644,
-}] as const;
+const FILES = [
+  {
+    path: "design/requirement.md",
+    bytes: encodeUtf8("# Requirement\n"),
+    mode: 0o644,
+  },
+  {
+    path: "record.json",
+    bytes: encodeUtf8('{"kind":"record"}\n'),
+    mode: 0o644,
+  },
+] as const;
 
 async function expectCandidateError(
   action: () => unknown | Promise<unknown>,
@@ -74,16 +73,22 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
   try {
     const plan = planDirectoryTreeCandidate(FILES, OPTIONS);
     deepEqual(plan.directories, ["design"]);
-    deepEqual(plan.files.map(({ path: filePath, mode }) => ({
-      path: filePath,
-      mode,
-    })), [{
-      path: "design/requirement.md",
-      mode: 0o644,
-    }, {
-      path: "record.json",
-      mode: 0o644,
-    }]);
+    deepEqual(
+      plan.files.map(({ path: filePath, mode }) => ({
+        path: filePath,
+        mode,
+      })),
+      [
+        {
+          path: "design/requirement.md",
+          mode: 0o644,
+        },
+        {
+          path: "record.json",
+          mode: 0o644,
+        },
+      ],
+    );
     equal(Object.isFrozen(plan), true);
     equal(Object.isFrozen(plan.directories), true);
     equal(Object.isFrozen(plan.files), true);
@@ -98,18 +103,11 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
     equal(created.rootNode.kind, "directory");
     equal(created.rootNode.permissionBits, 0o755);
 
-    const candidatePath = path.join(
-      rootPath,
-      "transactions",
-      ".requirement.stage",
-    );
+    const candidatePath = path.join(rootPath, "transactions", ".requirement.stage");
     equal(statSync(candidatePath).mode & 0o777, 0o755);
     equal(statSync(path.join(candidatePath, "design")).mode & 0o777, 0o755);
-    equal(
-      statSync(path.join(candidatePath, "design/requirement.md")).mode & 0o777,
-      0o644,
-    );
-    equal(readFileSync(path.join(candidatePath, "record.json"), "utf8"), "{\"kind\":\"record\"}\n");
+    equal(statSync(path.join(candidatePath, "design/requirement.md")).mode & 0o777, 0o644);
+    equal(readFileSync(path.join(candidatePath, "record.json"), "utf8"), '{"kind":"record"}\n');
 
     const inspected = await inspectDirectoryTreeCandidate(
       root,
@@ -124,11 +122,7 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
       mode: 0o644,
     });
     await expectCandidateError(
-      () => inspectDirectoryTreeCandidate(
-        root,
-        "transactions/.requirement.stage",
-        plan,
-      ),
+      () => inspectDirectoryTreeCandidate(root, "transactions/.requirement.stage", plan),
       "tree-conflict",
     );
   } finally {
@@ -143,87 +137,117 @@ test("directory tree plan rejects non-canonical and over-budget input", async ()
     "file-order",
   );
   await expectCandidateError(
-    () => planDirectoryTreeCandidate(FILES, {
-      ...OPTIONS,
-      maximumTotalBytes: 1,
-    }),
+    () =>
+      planDirectoryTreeCandidate(FILES, {
+        ...OPTIONS,
+        maximumTotalBytes: 1,
+      }),
     "capacity",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate([{
-      path: "A/first.txt",
-      bytes: encodeUtf8("first\n"),
-      mode: 0o644,
-    }, {
-      path: "a/second.txt",
-      bytes: encodeUtf8("second\n"),
-      mode: 0o644,
-    }], OPTIONS),
+    () =>
+      planDirectoryTreeCandidate(
+        [
+          {
+            path: "A/first.txt",
+            bytes: encodeUtf8("first\n"),
+            mode: 0o644,
+          },
+          {
+            path: "a/second.txt",
+            bytes: encodeUtf8("second\n"),
+            mode: 0o644,
+          },
+        ],
+        OPTIONS,
+      ),
     "path-conflict",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate([{
-      path: `${"a".repeat(1024)}x`,
-      bytes: new Uint8Array(),
-      mode: 0o644,
-    }], OPTIONS),
+    () =>
+      planDirectoryTreeCandidate(
+        [
+          {
+            path: `${"a".repeat(1024)}x`,
+            bytes: new Uint8Array(),
+            mode: 0o644,
+          },
+        ],
+        OPTIONS,
+      ),
     "capacity",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate([{
-      path: "shared.bin",
-      bytes: new Uint8Array(new SharedArrayBuffer(1)),
-      mode: 0o644,
-    }], OPTIONS),
+    () =>
+      planDirectoryTreeCandidate(
+        [
+          {
+            path: "shared.bin",
+            bytes: new Uint8Array(new SharedArrayBuffer(1)),
+            mode: 0o644,
+          },
+        ],
+        OPTIONS,
+      ),
     "input",
   );
 
   const controller = new AbortController();
   controller.abort();
   await expectCandidateError(
-    () => planDirectoryTreeCandidate(FILES, {
-      ...OPTIONS,
-      signal: controller.signal,
-    }),
+    () =>
+      planDirectoryTreeCandidate(FILES, {
+        ...OPTIONS,
+        signal: controller.signal,
+      }),
     "aborted",
   );
 
   const plan = planDirectoryTreeCandidate(FILES, OPTIONS);
   await expectCandidateError(
-    () => parseDirectoryTreeCandidatePlan(plan, {
-      maximumDepth: OPTIONS.maximumDepth,
-      maximumEntries: OPTIONS.maximumEntries,
-      maximumFileBytes: OPTIONS.maximumFileBytes,
-      maximumFiles: OPTIONS.maximumFiles,
-      maximumTotalBytes: 1,
-    }),
+    () =>
+      parseDirectoryTreeCandidatePlan(plan, {
+        maximumDepth: OPTIONS.maximumDepth,
+        maximumEntries: OPTIONS.maximumEntries,
+        maximumFileBytes: OPTIONS.maximumFileBytes,
+        maximumFiles: OPTIONS.maximumFiles,
+        maximumTotalBytes: 1,
+      }),
     "capacity",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate(FILES, {
-      ...OPTIONS,
-      maximumDepth: 65,
-    }),
+    () =>
+      planDirectoryTreeCandidate(FILES, {
+        ...OPTIONS,
+        maximumDepth: 65,
+      }),
     "input",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate(FILES, {
-      ...OPTIONS,
-      directoryMode: 0o500,
-    }),
+    () =>
+      planDirectoryTreeCandidate(FILES, {
+        ...OPTIONS,
+        directoryMode: 0o500,
+      }),
     "input",
   );
 
   await expectCandidateError(
-    () => planDirectoryTreeCandidate([{
-      ...FILES[0],
-      mode: 0o200,
-    }], OPTIONS),
+    () =>
+      planDirectoryTreeCandidate(
+        [
+          {
+            ...FILES[0],
+            mode: 0o200,
+          },
+        ],
+        OPTIONS,
+      ),
     "input",
   );
 });
@@ -235,11 +259,7 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
   const root = await RootedDirectory.open(rootPath);
   try {
     const stageRef = "transactions/.resume.stage";
-    await createDirectoryAtomically(
-      root,
-      parsePortableResourcePath(stageRef),
-      { mode: 0o755 },
-    );
+    await createDirectoryAtomically(root, parsePortableResourcePath(stageRef), { mode: 0o755 });
     await createFileCandidateDurably(
       root,
       parsePortableResourcePath(`${stageRef}/record.json`),
@@ -255,12 +275,7 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
     equal(progress.status, "incomplete");
     deepEqual(progress.missingFiles, ["design/requirement.md"]);
 
-    const settled = await settleDirectoryTreeCandidateDurably(
-      root,
-      stageRef,
-      FILES,
-      OPTIONS,
-    );
+    const settled = await settleDirectoryTreeCandidateDurably(root, stageRef, FILES, OPTIONS);
     equal(settled.plan.files.length, 2);
     equal(
       readFileSync(path.join(rootPath, ...stageRef.split("/"), "design/requirement.md"), "utf8"),
@@ -268,11 +283,7 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
     );
 
     const conflictRef = "transactions/.conflict.stage";
-    await createDirectoryAtomically(
-      root,
-      parsePortableResourcePath(conflictRef),
-      { mode: 0o755 },
-    );
+    await createDirectoryAtomically(root, parsePortableResourcePath(conflictRef), { mode: 0o755 });
     await createFileCandidateDurably(
       root,
       parsePortableResourcePath(`${conflictRef}/record.json`),
@@ -280,12 +291,7 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
       { mode: 0o644 },
     );
     await expectCandidateError(
-      () => settleDirectoryTreeCandidateDurably(
-        root,
-        conflictRef,
-        FILES,
-        OPTIONS,
-      ),
+      () => settleDirectoryTreeCandidateDurably(root, conflictRef, FILES, OPTIONS),
       "tree-conflict",
     );
     equal(

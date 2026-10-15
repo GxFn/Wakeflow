@@ -1,17 +1,16 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
 import {
+  type MonotonicMoment,
+  readMonotonicClock,
+} from "../../../src/foundation/time/monotonic-clock.js";
+import {
+  type MonotonicDuration,
+  MonotonicDurationError,
+  type MonotonicDurationErrorReason,
   monotonicDurationBetween,
   monotonicDurationFromMilliseconds,
-  MonotonicDurationError,
-  type MonotonicDuration,
-  type MonotonicDurationErrorReason,
 } from "../../../src/foundation/time/monotonic-duration.js";
-import {
-  readMonotonicClock,
-  type MonotonicMoment,
-} from "../../../src/foundation/time/monotonic-clock.js";
 
 function expectMonotonicDurationError(
   action: () => unknown,
@@ -69,8 +68,7 @@ test("non-negative safe integer milliseconds convert without loss", () => {
   ] as const;
 
   for (const [milliseconds, expected] of cases) {
-    const duration: MonotonicDuration =
-      monotonicDurationFromMilliseconds(milliseconds);
+    const duration: MonotonicDuration = monotonicDurationFromMilliseconds(milliseconds);
     equal(duration, expected);
   }
 });
@@ -82,20 +80,22 @@ test("moment inputs are revalidated despite their compile-time brand", () => {
     [null, "$start"],
   ] as const) {
     expectMonotonicDurationError(
-      () => monotonicDurationBetween(
-        asMonotonicMoment(value),
-        readMonotonicClock(() => 10n),
-      ),
+      () =>
+        monotonicDurationBetween(
+          asMonotonicMoment(value),
+          readMonotonicClock(() => 10n),
+        ),
       "moment-type",
       pathValue,
     );
   }
 
   expectMonotonicDurationError(
-    () => monotonicDurationBetween(
-      readMonotonicClock(() => 0n),
-      asMonotonicMoment(-1n),
-    ),
+    () =>
+      monotonicDurationBetween(
+        readMonotonicClock(() => 0n),
+        asMonotonicMoment(-1n),
+      ),
     "moment-type",
     "$end",
   );

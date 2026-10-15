@@ -20,7 +20,9 @@ async function fixture(t: TestContext): Promise<{ root: RootedDirectory; directo
   mkdirSync(path.join(directory, "records"), { mode: 0o700 });
   // 两个形状不对的带前缀条目：一个目录、一个名字不合法的普通文件。
   mkdirSync(path.join(directory, "records", ".wakeflow-atomic-invalid-directory"), { mode: 0o700 });
-  writeFileSync(path.join(directory, "records", ".wakeflow-atomic-stray.tmp"), "stray\n", { mode: 0o600 });
+  writeFileSync(path.join(directory, "records", ".wakeflow-atomic-stray.tmp"), "stray\n", {
+    mode: 0o600,
+  });
   const root = await RootedDirectory.open(directory, "$root", { durability: "none" });
   t.after(async () => {
     await root.close();
@@ -42,10 +44,12 @@ test("形状不对的暂存条目不再挡住同目录的写入：按目标匹�
   equal(readFileSync(path.join(directory, "records", "record.json"), "utf8"), '{"ok":true}\n');
   await rejects(
     recoverDurableAtomicFileStagesForTargets(root, [target]),
-    (error: unknown) => error instanceof DurableAtomicFileStageRecoveryError && error.reason === "inventory",
+    (error: unknown) =>
+      error instanceof DurableAtomicFileStageRecoveryError && error.reason === "inventory",
   );
   await rejects(
     recoverDurableAtomicFileStagesInDirectory(root, parsePortableResourcePath("records")),
-    (error: unknown) => error instanceof DurableAtomicFileStageRecoveryError && error.reason === "inventory",
+    (error: unknown) =>
+      error instanceof DurableAtomicFileStageRecoveryError && error.reason === "inventory",
   );
 });

@@ -3,19 +3,16 @@ import { spawn } from "node:child_process";
 import { types } from "node:util";
 
 import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../filesystem/rooted-directory.js";
+import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 
@@ -84,10 +81,7 @@ const ERROR_MESSAGES = {
   "output-limit": "Git ignore observation exceeded its output budget.",
   protocol: "Git ignore observation returned an invalid machine record.",
   aborted: "Git ignore observation was aborted.",
-} as const satisfies Readonly<Record<
-  GitIgnoreObservationErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<GitIgnoreObservationErrorReason, string>>;
 
 /** Git ignore 观察失败的稳定、脱敏错误。 */
 export class GitIgnoreObservationError extends Error {
@@ -112,37 +106,31 @@ interface GitCheckIgnoreResult {
   readonly stdout: Buffer;
 }
 
-function fail(
-  reason: GitIgnoreObservationErrorReason,
-  path: string,
-): never {
+function fail(reason: GitIgnoreObservationErrorReason, path: string): never {
   throw new GitIgnoreObservationError(reason, path);
 }
 
-function assertRoot(
-  value: unknown,
-  path: string,
-): asserts value is RootedDirectory {
+function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     fail("input", path);
   }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
-function parseOptions(
-  value: unknown,
-): Readonly<ParsedGitIgnoreObservationOptions> {
+function parseOptions(value: unknown): Readonly<ParsedGitIgnoreObservationOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
@@ -152,8 +140,8 @@ function parseOptions(
   }
   const keys = Object.keys(record);
   if (
-    keys.some((key) => key !== "signal")
-    || (record.signal !== undefined && !isAbortSignal(record.signal))
+    keys.some((key) => key !== "signal") ||
+    (record.signal !== undefined && !isAbortSignal(record.signal))
   ) {
     fail("input", "$options");
   }
@@ -204,10 +192,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$options.signal");
 }
 
-async function assertRootCurrent(
-  root: RootedDirectory,
-  path: string,
-): Promise<void> {
+async function assertRootCurrent(root: RootedDirectory, path: string): Promise<void> {
   try {
     await root.assertCurrent(path);
   } catch (error: unknown) {
@@ -275,10 +260,7 @@ function runGitCheckIgnore(
   try {
     input = Buffer.from(`${probePaths.join("\u0000")}\u0000`, "utf8");
   } catch {
-    return Promise.reject(new GitIgnoreObservationError(
-      "query-failure",
-      "$git",
-    ));
+    return Promise.reject(new GitIgnoreObservationError("query-failure", "$git"));
   }
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -318,10 +300,8 @@ function runGitCheckIgnore(
     child.stdout.on("data", (chunk: Buffer) => {
       outputByteCount += chunk.byteLength;
       if (
-        outputByteCount
-          > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes
-        || outputChunks.length
-          >= GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputChunks
+        outputByteCount > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes ||
+        outputChunks.length >= GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputChunks
       ) {
         outputExceeded = true;
         terminate();
@@ -331,10 +311,14 @@ function runGitCheckIgnore(
     });
     child.stdout.once("error", () => {
       terminate();
-      finish(() => reject(new GitIgnoreObservationError(
-        outputExceeded ? "output-limit" : "query-failure",
-        outputExceeded ? "$git.stdout" : "$git",
-      )));
+      finish(() =>
+        reject(
+          new GitIgnoreObservationError(
+            outputExceeded ? "output-limit" : "query-failure",
+            outputExceeded ? "$git.stdout" : "$git",
+          ),
+        ),
+      );
     });
     child.stdin.on("error", () => {
       // Git 可能在读取全部输入前退出；最终分类统一由 error/close 事件完成。
@@ -349,14 +333,18 @@ function runGitCheckIgnore(
             : readNodeSystemErrorCode(error) === "ENOENT"
               ? "git-unavailable"
               : "query-failure";
-      finish(() => reject(new GitIgnoreObservationError(
-        reason,
-        reason === "aborted"
-          ? "$options.signal"
-          : reason === "output-limit"
-            ? "$git.stdout"
-            : "$git",
-      )));
+      finish(() =>
+        reject(
+          new GitIgnoreObservationError(
+            reason,
+            reason === "aborted"
+              ? "$options.signal"
+              : reason === "output-limit"
+                ? "$git.stdout"
+                : "$git",
+          ),
+        ),
+      );
     });
     child.once("close", (code) => {
       finish(() => {
@@ -369,10 +357,7 @@ function runGitCheckIgnore(
           return;
         }
         if (outputExceeded) {
-          reject(new GitIgnoreObservationError(
-            "output-limit",
-            "$git.stdout",
-          ));
+          reject(new GitIgnoreObservationError("output-limit", "$git.stdout"));
           return;
         }
         if (code !== 0 && code !== 1) {
@@ -383,10 +368,7 @@ function runGitCheckIgnore(
         try {
           stdout = Buffer.concat(outputChunks, outputByteCount);
         } catch {
-          reject(new GitIgnoreObservationError(
-            "output-limit",
-            "$git.stdout",
-          ));
+          reject(new GitIgnoreObservationError("output-limit", "$git.stdout"));
           return;
         }
         resolve(Object.freeze({ exitCode: code, stdout }));
@@ -405,10 +387,7 @@ function runGitCheckIgnore(
       child.stdin.end(input);
     } catch {
       terminate();
-      finish(() => reject(new GitIgnoreObservationError(
-        "query-failure",
-        "$git",
-      )));
+      finish(() => reject(new GitIgnoreObservationError("query-failure", "$git")));
     }
   });
 }
@@ -425,10 +404,7 @@ function parseOutput(
     throw error;
   }
   const fields = output.split("\u0000");
-  if (
-    fields.length !== (probePaths.length * 4) + 1
-    || fields.at(-1) !== ""
-  ) {
+  if (fields.length !== probePaths.length * 4 + 1 || fields.at(-1) !== "") {
     fail("protocol", "$git.stdout");
   }
 
@@ -440,41 +416,41 @@ function parseOutput(
     const pattern = fields[offset + 2];
     const pathname = fields[offset + 3];
     if (
-      source === undefined
-      || line === undefined
-      || pattern === undefined
-      || pathname !== expectedPath
+      source === undefined ||
+      line === undefined ||
+      pattern === undefined ||
+      pathname !== expectedPath
     ) {
       fail("protocol", "$git.stdout");
     }
     if (source === "" && line === "" && pattern === "") {
-      paths.push(Object.freeze({
-        path: expectedPath,
-        ignored: false,
-        decision: null,
-      }));
+      paths.push(
+        Object.freeze({
+          path: expectedPath,
+          ignored: false,
+          decision: null,
+        }),
+      );
       continue;
     }
-    if (
-      source.length === 0
-      || pattern.length === 0
-      || !/^[1-9][0-9]*$/u.test(line)
-    ) {
+    if (source.length === 0 || pattern.length === 0 || !/^[1-9][0-9]*$/u.test(line)) {
       fail("protocol", "$git.stdout");
     }
     const lineNumber = Number(line);
     if (!Number.isSafeInteger(lineNumber)) fail("protocol", "$git.stdout");
     const negated = pattern.startsWith("!");
-    paths.push(Object.freeze({
-      path: expectedPath,
-      ignored: !negated,
-      decision: Object.freeze({
-        source,
-        lineNumber,
-        pattern,
-        negated,
+    paths.push(
+      Object.freeze({
+        path: expectedPath,
+        ignored: !negated,
+        decision: Object.freeze({
+          source,
+          lineNumber,
+          pattern,
+          negated,
+        }),
       }),
-    }));
+    );
   }
   // `--verbose` 下 Git 把否定的最后匹配模式也计为匹配并以 0 退出。
   const anyMatched = paths.some((entry) => entry.decision !== null);

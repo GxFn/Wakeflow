@@ -1,26 +1,22 @@
 import { types } from "node:util";
-
-import {
-  joinDirectoryTreeCandidatePath,
-  parseDirectoryTreeCandidatePath,
-  prepareDirectoryTreeCandidate,
-  throwDirectoryTreeCandidateError as fail,
-  type DirectoryTreeCandidateFileInput,
-  type DirectoryTreeCandidateOptions,
-  type DirectoryTreeCandidateResult,
-} from "./directory-tree-candidate-plan.js";
 import {
   inspectDirectoryTreeCandidate,
   inspectPartialDirectoryTreeCandidate,
 } from "./directory-tree-candidate-inspection.js";
 import {
+  type DirectoryTreeCandidateFileInput,
+  type DirectoryTreeCandidateOptions,
+  type DirectoryTreeCandidateResult,
+  throwDirectoryTreeCandidateError as fail,
+  joinDirectoryTreeCandidatePath,
+  parseDirectoryTreeCandidatePath,
+  prepareDirectoryTreeCandidate,
+} from "./directory-tree-candidate-plan.js";
+import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
 } from "./durable-directory-materialization.js";
-import {
-  createFileCandidateDurably,
-  DurableFileCandidateError,
-} from "./durable-file-candidate.js";
+import { createFileCandidateDurably, DurableFileCandidateError } from "./durable-file-candidate.js";
 import { RootedDirectory } from "./rooted-directory.js";
 
 /**
@@ -37,16 +33,13 @@ function mapDirectoryError(
 ): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") {
-    fail(
-      target === "candidate-root" ? "target-exists" : "tree-conflict",
-      "$candidateRootPath",
-    );
+    fail(target === "candidate-root" ? "target-exists" : "tree-conflict", "$candidateRootPath");
   }
   if (
-    error.reason === "target-symlink"
-    || error.reason === "target-not-directory"
-    || error.reason === "parent-symlink"
-    || error.reason === "parent-not-directory"
+    error.reason === "target-symlink" ||
+    error.reason === "target-not-directory" ||
+    error.reason === "parent-symlink" ||
+    error.reason === "parent-not-directory"
   ) {
     fail("tree-conflict", "$candidateRootPath");
   }
@@ -79,9 +72,7 @@ export async function createDirectoryTreeCandidateDurably(
   try {
     await createDirectoryAtomically(root, candidateRootPath, {
       mode: prepared.options.directoryMode,
-      ...(prepared.options.signal === undefined
-        ? {}
-        : { signal: prepared.options.signal }),
+      ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
@@ -96,9 +87,7 @@ export async function createDirectoryTreeCandidateDurably(
         joinDirectoryTreeCandidatePath(candidateRootPath, directory),
         {
           mode: prepared.options.directoryMode,
-          ...(prepared.options.signal === undefined
-            ? {}
-            : { signal: prepared.options.signal }),
+          ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         },
       );
     }
@@ -109,9 +98,7 @@ export async function createDirectoryTreeCandidateDurably(
         file.bytes,
         {
           mode: file.mode,
-          ...(prepared.options.signal === undefined
-            ? {}
-            : { signal: prepared.options.signal }),
+          ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         },
       );
     }
@@ -126,9 +113,7 @@ export async function createDirectoryTreeCandidateDurably(
     root,
     candidateRootPath,
     prepared.plan,
-    prepared.options.signal === undefined
-      ? undefined
-      : { signal: prepared.options.signal },
+    prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal },
   );
 }
 
@@ -150,11 +135,7 @@ export async function settleDirectoryTreeCandidateDurably(
     "$candidateRootPath",
   );
   const prepared = prepareDirectoryTreeCandidate(filesValue, optionsValue);
-  const partial = await inspectPartialDirectoryTreeCandidate(
-    root,
-    candidateRootPath,
-    prepared,
-  );
+  const partial = await inspectPartialDirectoryTreeCandidate(root, candidateRootPath, prepared);
   try {
     for (const directory of prepared.plan.directories) {
       if (partial.existingDirectories.has(directory)) continue;
@@ -163,9 +144,7 @@ export async function settleDirectoryTreeCandidateDurably(
         joinDirectoryTreeCandidatePath(candidateRootPath, directory),
         {
           mode: prepared.options.directoryMode,
-          ...(prepared.options.signal === undefined
-            ? {}
-            : { signal: prepared.options.signal }),
+          ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         },
       );
     }
@@ -177,9 +156,7 @@ export async function settleDirectoryTreeCandidateDurably(
         file.bytes,
         {
           mode: file.mode,
-          ...(prepared.options.signal === undefined
-            ? {}
-            : { signal: prepared.options.signal }),
+          ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         },
       );
     }
@@ -194,20 +171,14 @@ export async function settleDirectoryTreeCandidateDurably(
     root,
     candidateRootPath,
     prepared.plan,
-    prepared.options.signal === undefined
-      ? undefined
-      : { signal: prepared.options.signal },
+    prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal },
   );
 }
 
 export {
-  DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND,
-  DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION,
-  DurableDirectoryTreeCandidateError,
-  parseDirectoryTreeCandidatePlan,
-  planDirectoryTreeCandidate,
-  planDirectoryTreeCandidateFromFileDescriptors,
-} from "./directory-tree-candidate-plan.js";
+  inspectDirectoryTreeCandidate,
+  inspectDirectoryTreeCandidateProgress,
+} from "./directory-tree-candidate-inspection.js";
 export type {
   DirectoryTreeCandidateCapacity,
   DirectoryTreeCandidateFileInput,
@@ -220,6 +191,10 @@ export type {
   InspectDirectoryTreeCandidateOptions,
 } from "./directory-tree-candidate-plan.js";
 export {
-  inspectDirectoryTreeCandidate,
-  inspectDirectoryTreeCandidateProgress,
-} from "./directory-tree-candidate-inspection.js";
+  DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND,
+  DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION,
+  DurableDirectoryTreeCandidateError,
+  parseDirectoryTreeCandidatePlan,
+  planDirectoryTreeCandidate,
+  planDirectoryTreeCandidateFromFileDescriptors,
+} from "./directory-tree-candidate-plan.js";

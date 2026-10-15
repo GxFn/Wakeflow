@@ -1,36 +1,28 @@
+import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
 import {
-  computeCanonicalJsonSha256Digest,
-} from "../crypto/canonical-json-sha256.js";
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
+  PassiveOwnDataError,
   parseDenseArray,
   parsePlainRecord,
-  PassiveOwnDataError,
 } from "../data/passive-own-data.js";
+import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import {
-  planDirectoryTreeCandidateFromFileDescriptors,
-  parseDirectoryTreeCandidatePlan,
-  DurableDirectoryTreeCandidateError,
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidatePlanFile,
+  DurableDirectoryTreeCandidateError,
+  parseDirectoryTreeCandidatePlan,
+  planDirectoryTreeCandidateFromFileDescriptors,
 } from "../filesystem/durable-directory-tree-candidate.js";
 import {
-  joinDirectoryTreeCandidatePath,
-} from "../filesystem/directory-tree-candidate-plan.js";
-import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
 import {
   LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
-  validateLoadedArtifactTreeManifest,
   LoadedArtifactTreeIdentityError,
   type LoadedArtifactTreeManifest,
+  validateLoadedArtifactTreeManifest,
 } from "./loaded-artifact-tree-identity.js";
 
 /**
@@ -59,8 +51,7 @@ interface LoadedArtifactTreeTransferCopy {
 
 export interface LoadedArtifactTreeTransferPlan {
   readonly artifactKind: typeof LOADED_ARTIFACT_TREE_TRANSFER_PLAN_KIND;
-  readonly schemaVersion:
-    typeof LOADED_ARTIFACT_TREE_TRANSFER_PLAN_SCHEMA_VERSION;
+  readonly schemaVersion: typeof LOADED_ARTIFACT_TREE_TRANSFER_PLAN_SCHEMA_VERSION;
   readonly artifactDigest: Sha256Digest;
   readonly candidateRootPath: PortableResourcePath;
   readonly manifest: Readonly<LoadedArtifactTreeManifest>;
@@ -82,10 +73,7 @@ const ERROR_MESSAGES = {
   mode: "Loaded artifact tree transfer modes do not preserve executable semantics.",
   capacity: "Loaded artifact tree transfer exceeds its admitted capacity.",
   plan: "Loaded artifact tree transfer could not form one closed candidate plan.",
-} as const satisfies Readonly<Record<
-  LoadedArtifactTreeTransferPlanErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<LoadedArtifactTreeTransferPlanErrorReason, string>>;
 
 /** Loaded Artifact Tree transfer 计划失败的稳定、脱敏错误。 */
 export class LoadedArtifactTreeTransferPlanError extends Error {
@@ -107,20 +95,12 @@ interface ParsedModes {
   readonly regularFileMode: number;
 }
 
-function fail(
-  reason: LoadedArtifactTreeTransferPlanErrorReason,
-  path: string,
-): never {
+function fail(reason: LoadedArtifactTreeTransferPlanErrorReason, path: string): never {
   throw new LoadedArtifactTreeTransferPlanError(reason, path);
 }
 
 function parseMode(value: unknown, path: string): number {
-  if (
-    typeof value !== "number"
-    || !Number.isInteger(value)
-    || value < 0
-    || value > 0o777
-  ) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
     fail("input", path);
   }
   return value;
@@ -136,29 +116,23 @@ function parseModes(value: unknown): Readonly<ParsedModes> {
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 3
-    || keys[0] !== "directoryMode"
-    || keys[1] !== "executableFileMode"
-    || keys[2] !== "regularFileMode"
+    keys.length !== 3 ||
+    keys[0] !== "directoryMode" ||
+    keys[1] !== "executableFileMode" ||
+    keys[2] !== "regularFileMode"
   ) {
     fail("input", "$options");
   }
   const modes = Object.freeze({
     directoryMode: parseMode(record.directoryMode, "$options.directoryMode"),
-    executableFileMode: parseMode(
-      record.executableFileMode,
-      "$options.executableFileMode",
-    ),
-    regularFileMode: parseMode(
-      record.regularFileMode,
-      "$options.regularFileMode",
-    ),
+    executableFileMode: parseMode(record.executableFileMode, "$options.executableFileMode"),
+    regularFileMode: parseMode(record.regularFileMode, "$options.regularFileMode"),
   });
   if (
-    (modes.directoryMode & 0o700) !== 0o700
-    || (modes.regularFileMode & 0o400) !== 0o400
-    || (modes.executableFileMode & 0o500) !== 0o500
-    || (modes.regularFileMode & 0o111) !== 0
+    (modes.directoryMode & 0o700) !== 0o700 ||
+    (modes.regularFileMode & 0o400) !== 0o400 ||
+    (modes.executableFileMode & 0o500) !== 0o500 ||
+    (modes.regularFileMode & 0o111) !== 0
   ) {
     fail("mode", "$options");
   }
@@ -182,12 +156,12 @@ function parseManifest(value: unknown): Readonly<LoadedArtifactTreeManifest> {
   } catch (error: unknown) {
     if (error instanceof LoadedArtifactTreeIdentityError) {
       if (
-        error.reason === "entry-limit"
-        || error.reason === "depth-limit"
-        || error.reason === "file-count"
-        || error.reason === "file-bytes"
-        || error.reason === "total-bytes"
-        || error.reason === "ref-bytes"
+        error.reason === "entry-limit" ||
+        error.reason === "depth-limit" ||
+        error.reason === "file-count" ||
+        error.reason === "file-bytes" ||
+        error.reason === "total-bytes" ||
+        error.reason === "ref-bytes"
       ) {
         fail("capacity", "$manifest");
       }
@@ -201,14 +175,16 @@ function planFiles(
   manifest: Readonly<LoadedArtifactTreeManifest>,
   modes: Readonly<ParsedModes>,
 ): readonly Readonly<DirectoryTreeCandidatePlanFile>[] {
-  return Object.freeze(manifest.files.map((file) => Object.freeze({
-    path: file.ref,
-    byteCount: file.bytes,
-    digest: file.digest,
-    mode: file.executable
-      ? modes.executableFileMode
-      : modes.regularFileMode,
-  })));
+  return Object.freeze(
+    manifest.files.map((file) =>
+      Object.freeze({
+        path: file.ref,
+        byteCount: file.bytes,
+        digest: file.digest,
+        mode: file.executable ? modes.executableFileMode : modes.regularFileMode,
+      }),
+    ),
+  );
 }
 
 function createDirectoryPlan(
@@ -258,9 +234,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parseDirectoryPlan(
-  value: unknown,
-): Readonly<DirectoryTreeCandidatePlan> {
+function parseDirectoryPlan(value: unknown): Readonly<DirectoryTreeCandidatePlan> {
   try {
     return parseDirectoryTreeCandidatePlan(value, {
       maximumDepth: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth,
@@ -298,35 +272,37 @@ function parseCopies(
     if (error instanceof PassiveOwnDataError) fail("plan", "$plan.copies");
     throw error;
   }
-  return Object.freeze(values.map((entry, index) => {
-    let record: Readonly<Record<string, unknown>>;
-    try {
-      record = parsePlainRecord(entry, `$plan.copies.${index}`);
-    } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) {
+  return Object.freeze(
+    values.map((entry, index) => {
+      let record: Readonly<Record<string, unknown>>;
+      try {
+        record = parsePlainRecord(entry, `$plan.copies.${index}`);
+      } catch (error: unknown) {
+        if (error instanceof PassiveOwnDataError) {
+          fail("plan", `$plan.copies.${index}`);
+        }
+        throw error;
+      }
+      const keys = Object.keys(record).sort();
+      if (
+        keys.length !== 2 ||
+        keys[0] !== "candidateResourcePath" ||
+        keys[1] !== "sourceResourcePath"
+      ) {
         fail("plan", `$plan.copies.${index}`);
       }
-      throw error;
-    }
-    const keys = Object.keys(record).sort();
-    if (
-      keys.length !== 2
-      || keys[0] !== "candidateResourcePath"
-      || keys[1] !== "sourceResourcePath"
-    ) {
-      fail("plan", `$plan.copies.${index}`);
-    }
-    return Object.freeze({
-      sourceResourcePath: parseCopyPath(
-        record.sourceResourcePath,
-        `$plan.copies.${index}.sourceResourcePath`,
-      ),
-      candidateResourcePath: parseCopyPath(
-        record.candidateResourcePath,
-        `$plan.copies.${index}.candidateResourcePath`,
-      ),
-    });
-  }));
+      return Object.freeze({
+        sourceResourcePath: parseCopyPath(
+          record.sourceResourcePath,
+          `$plan.copies.${index}.sourceResourcePath`,
+        ),
+        candidateResourcePath: parseCopyPath(
+          record.candidateResourcePath,
+          `$plan.copies.${index}.candidateResourcePath`,
+        ),
+      });
+    }),
+  );
 }
 
 /** 严格重验 transfer plan 的 manifest、目录计划、copy 映射和完整摘要。 */
@@ -342,17 +318,17 @@ export function parseLoadedArtifactTreeTransferPlan(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== 8
-    || keys[0] !== "artifactDigest"
-    || keys[1] !== "artifactKind"
-    || keys[2] !== "candidateRootPath"
-    || keys[3] !== "copies"
-    || keys[4] !== "directoryPlan"
-    || keys[5] !== "manifest"
-    || keys[6] !== "planDigest"
-    || keys[7] !== "schemaVersion"
-    || record.artifactKind !== LOADED_ARTIFACT_TREE_TRANSFER_PLAN_KIND
-    || record.schemaVersion !== LOADED_ARTIFACT_TREE_TRANSFER_PLAN_SCHEMA_VERSION
+    keys.length !== 8 ||
+    keys[0] !== "artifactDigest" ||
+    keys[1] !== "artifactKind" ||
+    keys[2] !== "candidateRootPath" ||
+    keys[3] !== "copies" ||
+    keys[4] !== "directoryPlan" ||
+    keys[5] !== "manifest" ||
+    keys[6] !== "planDigest" ||
+    keys[7] !== "schemaVersion" ||
+    record.artifactKind !== LOADED_ARTIFACT_TREE_TRANSFER_PLAN_KIND ||
+    record.schemaVersion !== LOADED_ARTIFACT_TREE_TRANSFER_PLAN_SCHEMA_VERSION
   ) {
     fail("input", "$plan");
   }
@@ -360,19 +336,13 @@ export function parseLoadedArtifactTreeTransferPlan(
   const candidateRootPath = parseCandidateRootPath(record.candidateRootPath);
   const directoryPlan = parseDirectoryPlan(record.directoryPlan);
   const copies = parseCopies(record.copies, manifest.fileCount);
-  const artifactDigest = parseDigest(
-    record.artifactDigest,
-    "$plan.artifactDigest",
-  );
+  const artifactDigest = parseDigest(record.artifactDigest, "$plan.artifactDigest");
   const planDigest = parseDigest(record.planDigest, "$plan.planDigest");
   if (
-    copies.length !== manifest.files.length
-    || directoryPlan.files.length !== manifest.files.length
-    || directoryPlan.totalBytes !== manifest.totalBytes
-    || artifactDigest !== computeCanonicalJsonSha256Digest(
-      manifest,
-      "$plan.manifest",
-    )
+    copies.length !== manifest.files.length ||
+    directoryPlan.files.length !== manifest.files.length ||
+    directoryPlan.totalBytes !== manifest.totalBytes ||
+    artifactDigest !== computeCanonicalJsonSha256Digest(manifest, "$plan.manifest")
   ) {
     fail("plan", "$plan");
   }
@@ -380,34 +350,22 @@ export function parseLoadedArtifactTreeTransferPlan(
     const plannedFile = directoryPlan.files[index];
     const copy = copies[index];
     if (
-      plannedFile === undefined
-      || copy === undefined
-      || plannedFile.path !== manifestFile.ref
-      || plannedFile.byteCount !== manifestFile.bytes
-      || plannedFile.digest !== manifestFile.digest
-      || (
-        manifestFile.executable
-          ? (plannedFile.mode & 0o500) !== 0o500
-          : (
-            (plannedFile.mode & 0o400) !== 0o400
-            || (plannedFile.mode & 0o111) !== 0
-          )
-      )
-      || copy.sourceResourcePath !== manifestFile.ref
-      || copy.candidateResourcePath !== joinDirectoryTreeCandidatePath(
-        candidateRootPath,
-        manifestFile.ref,
-      )
+      plannedFile === undefined ||
+      copy === undefined ||
+      plannedFile.path !== manifestFile.ref ||
+      plannedFile.byteCount !== manifestFile.bytes ||
+      plannedFile.digest !== manifestFile.digest ||
+      (manifestFile.executable
+        ? (plannedFile.mode & 0o500) !== 0o500
+        : (plannedFile.mode & 0o400) !== 0o400 || (plannedFile.mode & 0o111) !== 0) ||
+      copy.sourceResourcePath !== manifestFile.ref ||
+      copy.candidateResourcePath !==
+        joinDirectoryTreeCandidatePath(candidateRootPath, manifestFile.ref)
     ) {
       fail("plan", `$plan.copies.${index}`);
     }
   }
-  const basis = planDigestBasis(
-    artifactDigest,
-    candidateRootPath,
-    directoryPlan,
-    copies,
-  );
+  const basis = planDigestBasis(artifactDigest, candidateRootPath, directoryPlan, copies);
   if (planDigest !== computeCanonicalJsonSha256Digest(basis, "$plan")) {
     fail("plan", "$plan.planDigest");
   }
@@ -431,23 +389,16 @@ export function planLoadedArtifactTreeTransfer(
   const modes = parseModes(optionsValue);
   const files = planFiles(manifest, modes);
   const directoryPlan = createDirectoryPlan(files, modes);
-  const copies = Object.freeze(manifest.files.map((file) => Object.freeze({
-    sourceResourcePath: file.ref,
-    candidateResourcePath: joinDirectoryTreeCandidatePath(
-      candidateRootPath,
-      file.ref,
+  const copies = Object.freeze(
+    manifest.files.map((file) =>
+      Object.freeze({
+        sourceResourcePath: file.ref,
+        candidateResourcePath: joinDirectoryTreeCandidatePath(candidateRootPath, file.ref),
+      }),
     ),
-  })));
-  const artifactDigest = computeCanonicalJsonSha256Digest(
-    manifest,
-    "$manifest",
   );
-  const basis = planDigestBasis(
-    artifactDigest,
-    candidateRootPath,
-    directoryPlan,
-    copies,
-  );
+  const artifactDigest = computeCanonicalJsonSha256Digest(manifest, "$manifest");
+  const basis = planDigestBasis(artifactDigest, candidateRootPath, directoryPlan, copies);
   return parseLoadedArtifactTreeTransferPlan({
     ...basis,
     manifest,

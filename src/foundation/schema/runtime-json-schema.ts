@@ -1,16 +1,13 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 
 import {
-  JsonValueError,
-  parseJsonValue,
   type JsonArray,
   type JsonObject,
   type JsonValue,
+  JsonValueError,
+  parseJsonValue,
 } from "../data/json-value.js";
-import {
-  parseDenseArray,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parseDenseArray } from "../data/passive-own-data.js";
 
 /**
  * Wakeflow Foundation / Schema：受信任本地 JSON Schema 的一次编译、多次验证入口。
@@ -42,14 +39,12 @@ export type RuntimeJsonSchemaValidator<Value> = (
   value: JsonValue,
 ) => RuntimeJsonSchemaValidation<Value>;
 
-export type RuntimeJsonSchemaErrorReason =
-  "schema-input" | "schema-dependency" | "schema-compile";
+export type RuntimeJsonSchemaErrorReason = "schema-input" | "schema-dependency" | "schema-compile";
 
 const ERROR_MESSAGES = {
   "schema-input": "Runtime JSON Schema input is invalid.",
   "schema-dependency": "Runtime JSON Schema dependency catalog is invalid.",
-  "schema-compile":
-    "Runtime JSON Schema catalog could not be compiled strictly.",
+  "schema-compile": "Runtime JSON Schema catalog could not be compiled strictly.",
 } as const satisfies Readonly<Record<RuntimeJsonSchemaErrorReason, string>>;
 
 /** 运行时 Schema 目录构建或编译失败时返回的稳定、脱敏错误。 */
@@ -82,11 +77,7 @@ function schemaObject(
     if (error instanceof JsonValueError) fail(reason, error.path);
     throw error;
   }
-  if (
-    admitted === null ||
-    Array.isArray(admitted) ||
-    typeof admitted !== "object"
-  ) {
+  if (admitted === null || Array.isArray(admitted) || typeof admitted !== "object") {
     fail(reason, path);
   }
   // 上述准入已经排除原始值和 JsonArray；此处恢复 TypeScript 无法保留的只读类型收窄。
@@ -125,12 +116,7 @@ function validationPath(instancePath: string): string {
 /** 不调用对象方法地比较两个已准入JSON值，成员顺序不影响对象相等性。 */
 function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
   if (left === right) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object"
-  ) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
   const leftIsArray = Array.isArray(left);
@@ -140,9 +126,7 @@ function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
     const rightArray = right as JsonArray;
     return (
       leftArray.length === rightArray.length &&
-      leftArray.every((entry, index) =>
-        sameJsonValue(entry, rightArray[index]!),
-      )
+      leftArray.every((entry, index) => sameJsonValue(entry, rightArray[index]!))
     );
   }
   const leftRecord = left as JsonObject;
@@ -150,9 +134,7 @@ function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
   const leftKeys = Object.keys(leftRecord);
   if (leftKeys.length !== Object.keys(rightRecord).length) return false;
   return leftKeys.every(
-    (key) =>
-      Object.hasOwn(rightRecord, key) &&
-      sameJsonValue(leftRecord[key]!, rightRecord[key]!),
+    (key) => Object.hasOwn(rightRecord, key) && sameJsonValue(leftRecord[key]!, rightRecord[key]!),
   );
 }
 
@@ -182,8 +164,7 @@ export function createRuntimeJsonSchemaValidator<Value>(
 ): RuntimeJsonSchemaValidator<Value> {
   const root = schemaObject(rootSchema, "$schema", "schema-input");
   const admittedDependencies = dependencySchemas(dependencies);
-  let compiled: ((value: JsonValue) => RuntimeJsonSchemaValidation<Value>) | null =
-    null;
+  let compiled: ((value: JsonValue) => RuntimeJsonSchemaValidation<Value>) | null = null;
   return (value: JsonValue): RuntimeJsonSchemaValidation<Value> => {
     if (compiled === null) {
       compiled = compileRuntimeJsonSchemaValidator<Value>(root, admittedDependencies);

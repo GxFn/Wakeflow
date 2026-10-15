@@ -1,21 +1,20 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
 import {
-  isMonotonicDeadlineReached,
-  monotonicDeadlineAfter,
-  monotonicDeadlineRemaining,
-  MonotonicDeadlineError,
-  type MonotonicDeadline,
-  type MonotonicDeadlineErrorReason,
-} from "../../../src/foundation/time/monotonic-deadline.js";
-import {
-  readMonotonicClock,
   type MonotonicMoment,
+  readMonotonicClock,
 } from "../../../src/foundation/time/monotonic-clock.js";
 import {
-  monotonicDurationFromMilliseconds,
+  isMonotonicDeadlineReached,
+  type MonotonicDeadline,
+  MonotonicDeadlineError,
+  type MonotonicDeadlineErrorReason,
+  monotonicDeadlineAfter,
+  monotonicDeadlineRemaining,
+} from "../../../src/foundation/time/monotonic-deadline.js";
+import {
   type MonotonicDuration,
+  monotonicDurationFromMilliseconds,
 } from "../../../src/foundation/time/monotonic-duration.js";
 
 function expectMonotonicDeadlineError(
@@ -77,15 +76,24 @@ test("deadline equality is reached and later moments remain reached", () => {
   );
 
   equal(
-    isMonotonicDeadlineReached(deadline, readMonotonicClock(() => 14n)),
+    isMonotonicDeadlineReached(
+      deadline,
+      readMonotonicClock(() => 14n),
+    ),
     false,
   );
   equal(
-    isMonotonicDeadlineReached(deadline, readMonotonicClock(() => 15n)),
+    isMonotonicDeadlineReached(
+      deadline,
+      readMonotonicClock(() => 15n),
+    ),
     true,
   );
   equal(
-    isMonotonicDeadlineReached(deadline, readMonotonicClock(() => 16n)),
+    isMonotonicDeadlineReached(
+      deadline,
+      readMonotonicClock(() => 16n),
+    ),
     true,
   );
 });
@@ -116,26 +124,25 @@ test("remaining duration is exact before expiry and clamps to zero after", () =>
 
 test("deadline construction revalidates moment and duration brands", () => {
   expectMonotonicDeadlineError(
-    () => monotonicDeadlineAfter(
-      asMonotonicMoment(-1n),
-      monotonicDurationFromMilliseconds(1),
-    ),
+    () => monotonicDeadlineAfter(asMonotonicMoment(-1n), monotonicDurationFromMilliseconds(1)),
     "moment-type",
     "$start",
   );
   expectMonotonicDeadlineError(
-    () => monotonicDeadlineAfter(
-      readMonotonicClock(() => 0n),
-      asMonotonicDuration(-1n),
-    ),
+    () =>
+      monotonicDeadlineAfter(
+        readMonotonicClock(() => 0n),
+        asMonotonicDuration(-1n),
+      ),
     "duration-type",
     "$duration",
   );
   expectMonotonicDeadlineError(
-    () => monotonicDeadlineAfter(
-      readMonotonicClock(() => 0n),
-      asMonotonicDuration(1),
-    ),
+    () =>
+      monotonicDeadlineAfter(
+        readMonotonicClock(() => 0n),
+        asMonotonicDuration(1),
+      ),
     "duration-type",
     "$duration",
   );
@@ -147,11 +154,7 @@ test("deadline queries revalidate deadline and now inputs", () => {
     () => isMonotonicDeadlineReached(asMonotonicDeadline(-1n), now),
     () => monotonicDeadlineRemaining(asMonotonicDeadline(-1n), now),
   ]) {
-    expectMonotonicDeadlineError(
-      operation,
-      "deadline-type",
-      "$deadline",
-    );
+    expectMonotonicDeadlineError(operation, "deadline-type", "$deadline");
   }
 
   const deadline = monotonicDeadlineAfter(

@@ -1,22 +1,13 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../src/foundation/data/deterministic-json-document.js";
-import {
-  parseJsonValue,
-  type JsonObject,
-} from "../../../src/foundation/data/json-value.js";
-import {
-  readDeterministicJsonFile,
-} from "../../../src/foundation/filesystem/deterministic-json-file.js";
+import { type JsonObject, parseJsonValue } from "../../../src/foundation/data/json-value.js";
+import { readDeterministicJsonFile } from "../../../src/foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -54,10 +45,7 @@ test("pretty JSON returns a frozen value with stable physical source facts", asy
     );
     equal(result.text, text);
     equal(result.digest, computeSha256Digest(Buffer.from(text)));
-    equal(
-      Object.keys(result).sort().join(","),
-      "byteCount,digest,node,resourcePath,text,value",
-    );
+    equal(Object.keys(result).sort().join(","), "byteCount,digest,node,resourcePath,text,value");
     equal(Object.isFrozen(result), true);
     equal(Object.isFrozen(result.value), true);
     const record = result.value as JsonObject;
@@ -75,7 +63,7 @@ test("all JSON top-level kinds share the same file profile", async () => {
     null: "null\n",
     boolean: "true\n",
     number: "42\n",
-    string: "\"文本\"\n",
+    string: '"文本"\n',
     array: "[\n  null,\n  false,\n  2\n]\n",
     object: "{}\n",
   } as const;
@@ -84,17 +72,13 @@ test("all JSON top-level kinds share the same file profile", async () => {
   }
   const root = await RootedDirectory.open(rootPath);
   try {
-    const values = await Promise.all(Object.keys(documents).map(async (name) => (
-      await readDeterministicJsonFile(root, parsePortableResourcePath(name), OPTIONS)
-    ).value));
-    deepEqual(values, [
-      null,
-      true,
-      42,
-      "文本",
-      [null, false, 2],
-      parseJsonValue({}),
-    ]);
+    const values = await Promise.all(
+      Object.keys(documents).map(
+        async (name) =>
+          (await readDeterministicJsonFile(root, parsePortableResourcePath(name), OPTIONS)).value,
+      ),
+    );
+    deepEqual(values, [null, true, 42, "文本", [null, false, 2], parseJsonValue({})]);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -104,9 +88,9 @@ test("all JSON top-level kinds share the same file profile", async () => {
 test("JSON representation drift is rejected without repair", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-drift-"));
   const documents = [
-    "{\"a\":1}\n",
-    "{\n    \"a\": 1\n}\n",
-    "{\n  \"a\": 1,\n  \"a\": 2\n}\n",
+    '{"a":1}\n',
+    '{\n    "a": 1\n}\n',
+    '{\n  "a": 1,\n  "a": 2\n}\n',
     "1.0\n",
     "1e+01\n",
   ] as const;
@@ -118,11 +102,7 @@ test("JSON representation drift is rejected without repair", async () => {
     for (const index of documents.keys()) {
       let caught: unknown;
       try {
-        await readDeterministicJsonFile(
-          root,
-          parsePortableResourcePath(String(index)),
-          OPTIONS,
-        );
+        await readDeterministicJsonFile(root, parsePortableResourcePath(String(index)), OPTIONS);
       } catch (error: unknown) {
         caught = error;
       }
@@ -140,7 +120,7 @@ test("JSON representation drift is rejected without repair", async () => {
 test("syntax, JSON value, and strict text failures retain their owning layers", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-errors-"));
   writeFileSync(path.join(rootPath, "syntax"), "{broken}\n");
-  writeFileSync(path.join(rootPath, "surrogate"), "\"\\ud800\"\n");
+  writeFileSync(path.join(rootPath, "surrogate"), '"\\ud800"\n');
   writeFileSync(path.join(rootPath, "crlf"), "null\r\n");
   const root = await RootedDirectory.open(rootPath);
   try {
@@ -194,11 +174,7 @@ test("expectedNode and options remain lower-layer file contracts", async () => {
 
     let caught: unknown;
     try {
-      await readDeterministicJsonFile(
-        root,
-        resourcePath,
-        asOptions({ ...OPTIONS, extra: true }),
-      );
+      await readDeterministicJsonFile(root, resourcePath, asOptions({ ...OPTIONS, extra: true }));
     } catch (error: unknown) {
       caught = error;
     }

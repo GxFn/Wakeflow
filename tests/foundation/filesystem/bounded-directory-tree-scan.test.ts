@@ -1,25 +1,19 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
   BoundedDirectoryTreeScanError,
-  scanBoundedResourceDirectoryTree,
-  scanBoundedRootDirectoryTree,
   type BoundedDirectoryTreeScanErrorReason,
   type BoundedDirectoryTreeScanOptions,
+  scanBoundedResourceDirectoryTree,
+  scanBoundedRootDirectoryTree,
 } from "../../../src/foundation/filesystem/bounded-directory-tree-scan.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 
@@ -77,10 +71,7 @@ test("root tree scan returns every descendant in global portable-path order", as
 
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await scanBoundedRootDirectoryTree(
-      root,
-      treeOptions(),
-    );
+    const result = await scanBoundedRootDirectoryTree(root, treeOptions());
 
     equal(result.treeRootResourcePath, null);
     equal(result.treeRootNode.kind, "directory");
@@ -106,8 +97,7 @@ test("root tree scan returns every descendant in global portable-path order", as
       [null, null, null, "alpha", "alpha/deep", "alpha", null, null],
     );
     equal(
-      result.entries.find((entry) => entry.resourcePath === "outside-link")
-        ?.node.kind,
+      result.entries.find((entry) => entry.resourcePath === "outside-link")?.node.kind,
       "symbolic-link",
     );
     equal(
@@ -116,7 +106,10 @@ test("root tree scan returns every descendant in global portable-path order", as
     );
     equal(Object.isFrozen(result), true);
     equal(Object.isFrozen(result.entries), true);
-    equal(result.entries.every((entry) => Object.isFrozen(entry)), true);
+    equal(
+      result.entries.every((entry) => Object.isFrozen(entry)),
+      true,
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -134,19 +127,11 @@ test("resource tree scan stays below its explicit starting directory", async () 
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("records");
-    const result = await scanBoundedResourceDirectoryTree(
-      root,
-      resourcePath,
-      treeOptions(),
-    );
+    const result = await scanBoundedResourceDirectoryTree(root, resourcePath, treeOptions());
 
     equal(result.treeRootResourcePath, resourcePath);
     deepEqual(
-      result.entries.map((entry) => [
-        entry.resourcePath,
-        entry.parentResourcePath,
-        entry.depth,
-      ]),
+      result.entries.map((entry) => [entry.resourcePath, entry.parentResourcePath, entry.depth]),
       [
         ["records/current.json", "records", 1],
         ["records/history", "records", 1],
@@ -176,14 +161,15 @@ test("starting-directory expectation classifies target replacement as source cha
     symlinkSync(".", recordsPath);
 
     await expectTreeScanError(
-      () => scanBoundedResourceDirectoryTree(
-        root,
-        resourcePath,
-        treeOptions({
-          expectedNode: observed.treeRootNode,
-          maximumEntries: 1,
-        }),
-      ),
+      () =>
+        scanBoundedResourceDirectoryTree(
+          root,
+          resourcePath,
+          treeOptions({
+            expectedNode: observed.treeRootNode,
+            maximumEntries: 1,
+          }),
+        ),
       "source-changed",
       "$options.expectedNode",
     );
@@ -200,17 +186,11 @@ test("maximumEntries is a total descendant bound and never returns a prefix", as
   writeFileSync(path.join(rootPath, "directory", "child"), "child");
   const root = await RootedDirectory.open(rootPath);
   try {
-    const exact = await scanBoundedRootDirectoryTree(
-      root,
-      treeOptions({ maximumEntries: 3 }),
-    );
+    const exact = await scanBoundedRootDirectoryTree(root, treeOptions({ maximumEntries: 3 }));
     equal(exact.entries.length, 3);
 
     await expectTreeScanError(
-      () => scanBoundedRootDirectoryTree(
-        root,
-        treeOptions({ maximumEntries: 2 }),
-      ),
+      () => scanBoundedRootDirectoryTree(root, treeOptions({ maximumEntries: 2 })),
       "entry-limit",
       "$tree.entries",
     );
@@ -226,18 +206,12 @@ test("maximumDepth proves the tree has no hidden descendants beyond the bound", 
   writeFileSync(path.join(rootPath, "one", "two"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
-    const exact = await scanBoundedRootDirectoryTree(
-      root,
-      treeOptions({ maximumDepth: 2 }),
-    );
+    const exact = await scanBoundedRootDirectoryTree(root, treeOptions({ maximumDepth: 2 }));
     equal(exact.entries.length, 2);
 
     for (const maximumDepth of [0, 1] as const) {
       await expectTreeScanError(
-        () => scanBoundedRootDirectoryTree(
-          root,
-          treeOptions({ maximumDepth }),
-        ),
+        () => scanBoundedRootDirectoryTree(root, treeOptions({ maximumDepth })),
         "depth-limit",
         "$tree.depth",
       );
@@ -263,11 +237,7 @@ test("starting target errors are mapped into the tree-scan error family", async 
     ];
     for (const [resourcePath, reason] of cases) {
       await expectTreeScanError(
-        () => scanBoundedResourceDirectoryTree(
-          root,
-          resourcePath,
-          treeOptions(),
-        ),
+        () => scanBoundedResourceDirectoryTree(root, resourcePath, treeOptions()),
         reason,
         "$resourcePath",
       );
@@ -320,10 +290,7 @@ test("options are explicit, passive, and AbortSignal remains cooperative", async
     const controller = new AbortController();
     controller.abort("private-tree-reason");
     const error = await expectTreeScanError(
-      () => scanBoundedRootDirectoryTree(
-        root,
-        treeOptions({ signal: controller.signal }),
-      ),
+      () => scanBoundedRootDirectoryTree(root, treeOptions({ signal: controller.signal })),
       "aborted",
       "$signal",
     );

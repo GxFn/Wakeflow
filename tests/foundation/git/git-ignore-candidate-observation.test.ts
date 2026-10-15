@@ -1,27 +1,21 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  GitIgnoreCandidateObservationError,
-  observeGitIgnoreCandidate,
-  type GitIgnoreCandidateObservationErrorReason,
-} from "../../../src/foundation/git/git-ignore-candidate-observation.js";
-import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  GitIgnoreCandidateObservationError,
+  type GitIgnoreCandidateObservationErrorReason,
+  observeGitIgnoreCandidate,
+} from "../../../src/foundation/git/git-ignore-candidate-observation.js";
 
 const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = 2 * 1024 * 1024;
 
@@ -36,10 +30,7 @@ async function fixture(
   gitignore?: string,
   initializeGit = true,
 ): Promise<Readonly<GitFixture>> {
-  const absolutePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-git-ignore-candidate-test-",
-  ));
+  const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-git-ignore-candidate-test-"));
   if (initializeGit) {
     const initialized = spawnSync("git", ["init", "--quiet"], {
       cwd: absolutePath,
@@ -89,34 +80,23 @@ async function expectCandidateError(
 test("Git ignore candidate is observed in an isolated worktree without changing the repository", async (t) => {
   const current = await fixture(t, "/actual-only/\n");
   const original = readFileSync(current.gitignorePath);
-  const candidate = Buffer.from(
-    "/*.log\n!/keep.log\n/candidate-only/\n",
-  );
+  const candidate = Buffer.from("/*.log\n!/keep.log\n/candidate-only/\n");
   const observed = await observeGitIgnoreCandidate(
     current.root,
     candidate,
-    probes(
-      "actual-only/probe",
-      "candidate-only/probe",
-      "error.log",
-      "keep.log",
-    ),
+    probes("actual-only/probe", "candidate-only/probe", "error.log", "keep.log"),
   );
 
   equal(observed.candidateByteCount, candidate.byteLength);
   equal(observed.candidateDigest, computeSha256Digest(candidate));
-  deepEqual(observed.paths.map((entry) => entry.ignored), [
-    false,
-    true,
-    true,
-    false,
-  ]);
-  deepEqual(observed.paths.map((entry) => entry.decision?.source ?? null), [
-    null,
-    ".gitignore",
-    ".gitignore",
-    ".gitignore",
-  ]);
+  deepEqual(
+    observed.paths.map((entry) => entry.ignored),
+    [false, true, true, false],
+  );
+  deepEqual(
+    observed.paths.map((entry) => entry.decision?.source ?? null),
+    [null, ".gitignore", ".gitignore", ".gitignore"],
+  );
   equal(observed.paths[3]?.decision?.pattern, "!/keep.log");
   deepEqual(readFileSync(current.gitignorePath), original);
 });
@@ -125,11 +105,7 @@ test("Git ignore candidate preserves non-candidate source facts for its caller",
   const current = await fixture(t);
   const infoDirectory = path.join(current.absolutePath, ".git", "info");
   mkdirSync(infoDirectory, { recursive: true });
-  writeFileSync(
-    path.join(infoDirectory, "exclude"),
-    "/local-only/\n",
-    { mode: 0o644 },
-  );
+  writeFileSync(path.join(infoDirectory, "exclude"), "/local-only/\n", { mode: 0o644 });
 
   const observed = await observeGitIgnoreCandidate(
     current.root,
@@ -139,8 +115,7 @@ test("Git ignore candidate preserves non-candidate source facts for its caller",
   equal(observed.paths[0]?.ignored, true);
   const localSource = observed.paths[0]?.decision?.source;
   equal(
-    localSource === ".git/info/exclude"
-      || localSource?.endsWith("/.git/info/exclude") === true,
+    localSource === ".git/info/exclude" || localSource?.endsWith("/.git/info/exclude") === true,
     true,
   );
   equal(observed.paths[1]?.ignored, true);
@@ -167,15 +142,9 @@ test("Git ignore candidate snapshots caller bytes before asynchronous isolation"
 test("Git ignore candidate rejects capacity, cancellation, and invalid repositories", async (t) => {
   await t.test("capacity", async (subtest) => {
     const current = await fixture(subtest);
-    const oversized = Buffer.alloc(
-      GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES + 1,
-    );
+    const oversized = Buffer.alloc(GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES + 1);
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        oversized,
-        probes("safe/path"),
-      ),
+      () => observeGitIgnoreCandidate(current.root, oversized, probes("safe/path")),
       "capacity",
       "$candidateBytes",
     );
@@ -191,11 +160,7 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
       },
     });
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        candidate,
-        probes("safe/path"),
-      ),
+      () => observeGitIgnoreCandidate(current.root, candidate, probes("safe/path")),
       "input",
       "$candidateBytes",
     );
@@ -205,11 +170,12 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
   await t.test("duplicate probes are input errors", async (subtest) => {
     const current = await fixture(subtest);
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        Buffer.from("/safe/\n"),
-        probes("same/path", "same/path"),
-      ),
+      () =>
+        observeGitIgnoreCandidate(
+          current.root,
+          Buffer.from("/safe/\n"),
+          probes("same/path", "same/path"),
+        ),
       "input",
       "$probePaths/1",
     );
@@ -220,12 +186,10 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
     const controller = new AbortController();
     controller.abort();
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        Buffer.from("/safe/\n"),
-        probes("safe/path"),
-        { signal: controller.signal },
-      ),
+      () =>
+        observeGitIgnoreCandidate(current.root, Buffer.from("/safe/\n"), probes("safe/path"), {
+          signal: controller.signal,
+        }),
       "aborted",
       "$options.signal",
     );
@@ -234,11 +198,7 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
   await t.test("non Git repository", async (subtest) => {
     const current = await fixture(subtest, undefined, false);
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        Buffer.from("/safe/\n"),
-        probes("safe/path"),
-      ),
+      () => observeGitIgnoreCandidate(current.root, Buffer.from("/safe/\n"), probes("safe/path")),
       "observation-failure",
       "$git",
     );
@@ -248,11 +208,7 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
     const current = await fixture(subtest);
     await current.root.close();
     await expectCandidateError(
-      () => observeGitIgnoreCandidate(
-        current.root,
-        Buffer.from("/safe/\n"),
-        probes("safe/path"),
-      ),
+      () => observeGitIgnoreCandidate(current.root, Buffer.from("/safe/\n"), probes("safe/path")),
       "root-scope",
       "$repositoryRoot",
     );

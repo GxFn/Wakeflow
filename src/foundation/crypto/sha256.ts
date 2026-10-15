@@ -19,14 +19,8 @@ const SHA256_HEX_LENGTH = 64;
 /** Wakeflow 持久摘要使用的算法前缀。 */
 export const SHA256_DIGEST_PREFIX = "sha256:" as const;
 
-const SHA256_HEX_PATTERN = new RegExp(
-  `^[0-9a-f]{${SHA256_HEX_LENGTH}}$`,
-  "u",
-);
-const SHA256_DIGEST_PATTERN = new RegExp(
-  SHA256_DIGEST_PATTERN_SOURCE,
-  "u",
-);
+const SHA256_HEX_PATTERN = new RegExp(`^[0-9a-f]{${SHA256_HEX_LENGTH}}$`, "u");
+const SHA256_DIGEST_PATTERN = new RegExp(SHA256_DIGEST_PATTERN_SOURCE, "u");
 
 declare const SHA256_HEX_BRAND: unique symbol;
 declare const SHA256_DIGEST_BRAND: unique symbol;
@@ -42,11 +36,7 @@ export type Sha256Digest = `sha256:${string}` & {
 };
 
 /** SHA-256 基础能力失败的稳定分类。 */
-export type Sha256ErrorReason =
-  | "input-type"
-  | "hash-failure"
-  | "hex-format"
-  | "digest-format";
+export type Sha256ErrorReason = "input-type" | "hash-failure" | "hex-format" | "digest-format";
 
 const ERROR_MESSAGES = {
   "input-type": "SHA-256 input must be a Uint8Array byte sequence.",
@@ -92,10 +82,7 @@ function isUint8Array(value: unknown): value is Uint8Array {
  * Buffer 作为 Uint8Array 子类自然被接受；字符串、ArrayBuffer、DataView 和其他
  * TypedArray 必须由调用方先显式转换。计算同步完成，不修改输入视图。
  */
-export function computeSha256Hex(
-  bytes: Uint8Array,
-  errorPath?: string,
-): Sha256Hex {
+export function computeSha256Hex(bytes: Uint8Array, errorPath?: string): Sha256Hex {
   const path = normalizeErrorPath(errorPath);
   if (!isUint8Array(bytes)) fail("input-type", path);
 
@@ -112,19 +99,13 @@ export function computeSha256Hex(
 }
 
 /** 对准确的字节视图计算 `sha256:<hex>` 完整摘要。 */
-export function computeSha256Digest(
-  bytes: Uint8Array,
-  errorPath?: string,
-): Sha256Digest {
+export function computeSha256Digest(bytes: Uint8Array, errorPath?: string): Sha256Digest {
   const hex = computeSha256Hex(bytes, errorPath);
   return `${SHA256_DIGEST_PREFIX}${hex}` as Sha256Digest;
 }
 
 /** 严格解析完整小写 SHA-256 十六进制摘要，不执行字符串强制转换。 */
-export function parseSha256Hex(
-  value: unknown,
-  errorPath?: string,
-): Sha256Hex {
+export function parseSha256Hex(value: unknown, errorPath?: string): Sha256Hex {
   const path = normalizeErrorPath(errorPath);
   if (typeof value !== "string" || !SHA256_HEX_PATTERN.test(value)) {
     fail("hex-format", path);
@@ -133,10 +114,7 @@ export function parseSha256Hex(
 }
 
 /** 严格解析 `sha256:<64 lowercase hex>`，不接受别名、大小写或空白差异。 */
-export function parseSha256Digest(
-  value: unknown,
-  errorPath?: string,
-): Sha256Digest {
+export function parseSha256Digest(value: unknown, errorPath?: string): Sha256Digest {
   const path = normalizeErrorPath(errorPath);
   if (typeof value !== "string" || !SHA256_DIGEST_PATTERN.test(value)) {
     fail("digest-format", path);

@@ -1,35 +1,29 @@
 import { Buffer } from "node:buffer";
 import { types } from "node:util";
 
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import {
   assertDirectoryTreeCandidateNotAborted,
-  directoryTreeCandidateMaximumPathDepth,
-  isDirectoryTreeCandidateAbortSignal,
-  parseDirectoryTreeCandidatePath,
-  parseDirectoryTreeCandidatePlan,
-  throwDirectoryTreeCandidateError as fail,
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateProgress,
   type DirectoryTreeCandidateResult,
+  directoryTreeCandidateMaximumPathDepth,
+  throwDirectoryTreeCandidateError as fail,
   type InspectDirectoryTreeCandidateOptions,
+  isDirectoryTreeCandidateAbortSignal,
   type PreparedDirectoryTreeCandidate,
+  parseDirectoryTreeCandidatePath,
+  parseDirectoryTreeCandidatePlan,
 } from "./directory-tree-candidate-plan.js";
 import {
-  sameFileNodeSnapshot,
-  FileNodeSnapshotError,
   type FileNodeSnapshot,
+  FileNodeSnapshotError,
+  sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
-import {
-  readStableFile,
-  StableFileReadError,
-} from "./stable-file-read.js";
+import { readStableFile, StableFileReadError } from "./stable-file-read.js";
 import {
   readStableResourceTree,
   StableResourceTreeReadError,
@@ -44,10 +38,7 @@ function inspectionLimits(plan: Readonly<DirectoryTreeCandidatePlan>) {
   }
   return Object.freeze({
     maximumEntries: plan.directories.length + plan.files.length,
-    maximumDepth: directoryTreeCandidateMaximumPathDepth(
-      plan.directories,
-      plan.files,
-    ),
+    maximumDepth: directoryTreeCandidateMaximumPathDepth(plan.directories, plan.files),
     maximumFiles: plan.files.length,
     maximumFileBytes: parseByteCount(largestFile, "$plan/maximumFileBytes"),
     maximumTotalBytes: plan.totalBytes,
@@ -56,15 +47,9 @@ function inspectionLimits(plan: Readonly<DirectoryTreeCandidatePlan>) {
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) return false;
-  return Buffer.from(
-    left.buffer,
-    left.byteOffset,
-    left.byteLength,
-  ).equals(Buffer.from(
-    right.buffer,
-    right.byteOffset,
-    right.byteLength,
-  ));
+  return Buffer.from(left.buffer, left.byteOffset, left.byteLength).equals(
+    Buffer.from(right.buffer, right.byteOffset, right.byteLength),
+  );
 }
 
 function relativeFromCandidate(
@@ -98,15 +83,13 @@ function parseInspectionOptions(value: unknown): Readonly<{
   if (signal !== undefined && !isDirectoryTreeCandidateAbortSignal(signal)) {
     fail("input", "$options/signal");
   }
-  const expectedRootNode = record.expectedRootNode as
-    | Readonly<FileNodeSnapshot>
-    | undefined;
+  const expectedRootNode = record.expectedRootNode as Readonly<FileNodeSnapshot> | undefined;
   if (expectedRootNode !== undefined) {
     if (
-      typeof expectedRootNode !== "object"
-      || expectedRootNode === null
-      || types.isProxy(expectedRootNode)
-      || !Object.isFrozen(expectedRootNode)
+      typeof expectedRootNode !== "object" ||
+      expectedRootNode === null ||
+      types.isProxy(expectedRootNode) ||
+      !Object.isFrozen(expectedRootNode)
     ) {
       fail("input", "$options/expectedRootNode");
     }
@@ -164,16 +147,10 @@ export async function inspectDirectoryTreeCandidateProgress(
   const plan = parseDirectoryTreeCandidatePlan(planValue);
   const { expectedRootNode, signal } = parseInspectionOptions(optionsValue);
   assertDirectoryTreeCandidateNotAborted(signal);
-  const tree = await readCandidateTree(
-    root,
-    candidateRootPath,
-    plan,
-    expectedRootNode,
-    signal,
-  );
+  const tree = await readCandidateTree(root, candidateRootPath, plan, expectedRootNode, signal);
   if (
-    tree.treeRootNode.kind !== "directory"
-    || tree.treeRootNode.permissionBits !== plan.directoryMode
+    tree.treeRootNode.kind !== "directory" ||
+    tree.treeRootNode.permissionBits !== plan.directoryMode
   ) {
     fail("tree-conflict", "$candidate");
   }
@@ -184,10 +161,7 @@ export async function inspectDirectoryTreeCandidateProgress(
   for (const entry of tree.entries) {
     const relative = relativeFromCandidate(candidateRootPath, entry.resourcePath);
     if (entry.node.kind === "directory") {
-      if (
-        !expectedDirectories.has(relative)
-        || entry.node.permissionBits !== plan.directoryMode
-      ) {
+      if (!expectedDirectories.has(relative) || entry.node.permissionBits !== plan.directoryMode) {
         fail("tree-conflict", "$candidate");
       }
       observedDirectories.add(relative);
@@ -195,10 +169,10 @@ export async function inspectDirectoryTreeCandidateProgress(
     }
     const expected = expectedFiles.get(relative);
     if (
-      expected === undefined
-      || entry.node.kind !== "file"
-      || entry.node.permissionBits !== expected.mode
-      || entry.node.linkCount !== 1n
+      expected === undefined ||
+      entry.node.kind !== "file" ||
+      entry.node.permissionBits !== expected.mode ||
+      entry.node.linkCount !== 1n
     ) {
       fail("tree-conflict", "$candidate");
     }
@@ -208,29 +182,27 @@ export async function inspectDirectoryTreeCandidateProgress(
     const relative = relativeFromCandidate(candidateRootPath, file.resourcePath);
     const expected = expectedFiles.get(relative);
     if (
-      expected === undefined
-      || file.byteCount !== expected.byteCount
-      || file.digest !== expected.digest
-      || file.node.permissionBits !== expected.mode
-      || file.node.linkCount !== 1n
+      expected === undefined ||
+      file.byteCount !== expected.byteCount ||
+      file.digest !== expected.digest ||
+      file.node.permissionBits !== expected.mode ||
+      file.node.linkCount !== 1n
     ) {
       fail("tree-conflict", "$candidate");
     }
   }
-  const missingDirectories = Object.freeze(plan.directories.filter(
-    (directory) => !observedDirectories.has(directory),
-  ));
-  const missingFiles = Object.freeze(plan.files
-    .filter((file) => !observedFiles.has(file.path))
-    .map((file) => file.path));
+  const missingDirectories = Object.freeze(
+    plan.directories.filter((directory) => !observedDirectories.has(directory)),
+  );
+  const missingFiles = Object.freeze(
+    plan.files.filter((file) => !observedFiles.has(file.path)).map((file) => file.path),
+  );
   const complete = missingDirectories.length === 0 && missingFiles.length === 0;
   if (
-    complete
-    && (
-      tree.entries.length !== plan.directories.length + plan.files.length
-      || tree.files.length !== plan.files.length
-      || tree.totalFileBytes !== plan.totalBytes
-    )
+    complete &&
+    (tree.entries.length !== plan.directories.length + plan.files.length ||
+      tree.files.length !== plan.files.length ||
+      tree.totalFileBytes !== plan.totalBytes)
   ) {
     fail("tree-conflict", "$candidate");
   }
@@ -271,26 +243,26 @@ export async function inspectPartialDirectoryTreeCandidate(
   root: RootedDirectory,
   candidateRootPath: PortableResourcePath,
   prepared: Readonly<PreparedDirectoryTreeCandidate>,
-): Promise<Readonly<{
-  readonly existingDirectories: ReadonlySet<PortableResourcePath>;
-  readonly existingFiles: ReadonlySet<PortableResourcePath>;
-}>> {
+): Promise<
+  Readonly<{
+    readonly existingDirectories: ReadonlySet<PortableResourcePath>;
+    readonly existingFiles: ReadonlySet<PortableResourcePath>;
+  }>
+> {
   const progress = await inspectDirectoryTreeCandidateProgress(
     root,
     candidateRootPath,
     prepared.plan,
-    prepared.options.signal === undefined
-      ? undefined
-      : { signal: prepared.options.signal },
+    prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal },
   );
   const missingDirectories = new Set(progress.missingDirectories);
   const missingFiles = new Set(progress.missingFiles);
-  const existingDirectories = new Set(prepared.plan.directories.filter(
-    (directory) => !missingDirectories.has(directory),
-  ));
-  const existingFiles = new Set(prepared.plan.files
-    .filter((file) => !missingFiles.has(file.path))
-    .map((file) => file.path));
+  const existingDirectories = new Set(
+    prepared.plan.directories.filter((directory) => !missingDirectories.has(directory)),
+  );
+  const existingFiles = new Set(
+    prepared.plan.files.filter((file) => !missingFiles.has(file.path)).map((file) => file.path),
+  );
   const expectedFiles = new Map(prepared.files.map((file) => [file.path, file]));
   for (const filePath of existingFiles) {
     const expected = expectedFiles.get(filePath);
@@ -299,15 +271,10 @@ export async function inspectPartialDirectoryTreeCandidate(
     try {
       read = await readStableFile(
         root,
-        parseDirectoryTreeCandidatePath(
-          `${candidateRootPath}/${filePath}`,
-          "$candidate/file",
-        ),
+        parseDirectoryTreeCandidatePath(`${candidateRootPath}/${filePath}`, "$candidate/file"),
         {
           maximumBytes: expected.byteCount,
-          ...(prepared.options.signal === undefined
-            ? {}
-            : { signal: prepared.options.signal }),
+          ...(prepared.options.signal === undefined ? {} : { signal: prepared.options.signal }),
         },
       );
     } catch (error: unknown) {
@@ -320,10 +287,7 @@ export async function inspectPartialDirectoryTreeCandidate(
       }
       throw error;
     }
-    if (
-      read.digest !== expected.digest
-      || !sameBytes(read.bytes, expected.bytes)
-    ) {
+    if (read.digest !== expected.digest || !sameBytes(read.bytes, expected.bytes)) {
       fail("tree-conflict", "$candidate");
     }
   }

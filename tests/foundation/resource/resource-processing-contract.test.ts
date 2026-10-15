@@ -6,10 +6,10 @@ import {
   parseWakeflowResourceProcessingContract,
   WAKEFLOW_DIRECTORY_CONTAINER_RECIPES,
   WAKEFLOW_RESOURCE_ROLES,
-  WakeflowResourceProcessingContractError,
   type WakeflowDerivedCheckpointProcessingContract,
   type WakeflowDerivedProjectionProcessingContract,
   type WakeflowMutableSnapshotProcessingContract,
+  WakeflowResourceProcessingContractError,
   type WakeflowResourceProcessingContractErrorReason,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
 
@@ -65,10 +65,7 @@ test("resource processing contract closes all roles and directory containers", (
     {
       kind: "resource",
       role: "mutable-snapshot",
-      allowedMutationRecipes: [
-        "exclusive-create",
-        "exact-source-replace",
-      ],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
       recoveryStrategy: "owner-forward-recovery",
     },
     {
@@ -128,10 +125,7 @@ test("resource processing contract closes all roles and directory containers", (
   equal(parsedMutable.kind, "resource");
   if (parsedMutable.kind === "resource") {
     equal(parsedMutable.role, "mutable-snapshot");
-    deepEqual(parsedMutable.allowedMutationRecipes, [
-      "exclusive-create",
-      "exact-source-replace",
-    ]);
+    deepEqual(parsedMutable.allowedMutationRecipes, ["exclusive-create", "exact-source-replace"]);
   }
 
   const container = parseWakeflowResourceProcessingContract({
@@ -155,27 +149,29 @@ test("resource processing contract closes all roles and directory containers", (
 
 test("resource processing contract rejects behavioral, open, and contradictory input", () => {
   expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "resource",
-      role: "immutable-fact",
-      allowedMutationRecipes: ["exclusive-create"],
-      recoveryStrategy: "exact-idempotent-retry",
-      unexpected: true,
-    }),
+    () =>
+      parseWakeflowResourceProcessingContract({
+        kind: "resource",
+        role: "immutable-fact",
+        allowedMutationRecipes: ["exclusive-create"],
+        recoveryStrategy: "exact-idempotent-retry",
+        unexpected: true,
+      }),
     "shape",
     "$/unexpected",
   );
 
   expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "observe-without-mode-change",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-      role: "immutable-fact",
-    }),
+    () =>
+      parseWakeflowResourceProcessingContract({
+        kind: "directory-container",
+        materializationRecipe: "materialize-directory",
+        existingDirectoryPolicy: "observe-without-mode-change",
+        collisionPolicy: "reject-non-directory",
+        descendantAuthority: "separate-declaration-required",
+        recoveryStrategy: "report-only",
+        role: "immutable-fact",
+      }),
     "shape",
     "$/role",
   );
@@ -185,12 +181,13 @@ test("resource processing contract rejects behavioral, open, and contradictory i
     [["exact-source-replace", "exclusive-create"], "$/allowedMutationRecipes/1"],
   ] as const) {
     expectResourceProcessingError(
-      () => parseWakeflowResourceProcessingContract({
-        kind: "resource",
-        role: "mutable-snapshot",
-        allowedMutationRecipes: recipes,
-        recoveryStrategy: "owner-forward-recovery",
-      }),
+      () =>
+        parseWakeflowResourceProcessingContract({
+          kind: "resource",
+          role: "mutable-snapshot",
+          allowedMutationRecipes: recipes,
+          recoveryStrategy: "owner-forward-recovery",
+        }),
       "recipe",
       path,
     );
@@ -202,62 +199,64 @@ test("resource processing contract rejects behavioral, open, and contradictory i
     ["immutable-fact", [], "exact-idempotent-retry"],
   ] as const) {
     expectResourceProcessingError(
-      () => parseWakeflowResourceProcessingContract({
-        kind: "resource",
-        role,
-        allowedMutationRecipes: recipes,
-        recoveryStrategy,
-      }),
+      () =>
+        parseWakeflowResourceProcessingContract({
+          kind: "resource",
+          role,
+          allowedMutationRecipes: recipes,
+          recoveryStrategy,
+        }),
       "recipe",
       "$/allowedMutationRecipes",
     );
   }
 
   expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "resource",
-      role: "mutable-snapshot",
-      allowedMutationRecipes: ["no-write"],
-      recoveryStrategy: "owner-forward-recovery",
-    }),
+    () =>
+      parseWakeflowResourceProcessingContract({
+        kind: "resource",
+        role: "mutable-snapshot",
+        allowedMutationRecipes: ["no-write"],
+        recoveryStrategy: "owner-forward-recovery",
+      }),
     "recipe",
     "$/allowedMutationRecipes/0",
   );
   expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "resource",
-      role: "immutable-fact",
-      allowedMutationRecipes: ["exclusive-create"],
-      recoveryStrategy: "owner-forward-recovery",
-    }),
+    () =>
+      parseWakeflowResourceProcessingContract({
+        kind: "resource",
+        role: "immutable-fact",
+        allowedMutationRecipes: ["exclusive-create"],
+        recoveryStrategy: "owner-forward-recovery",
+      }),
     "recovery",
     "$/recoveryStrategy",
   );
 
   let trapCalls = 0;
-  const proxy = new Proxy({ kind: "resource" }, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
+  const proxy = new Proxy(
+    { kind: "resource" },
+    {
+      get: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getOwnPropertyDescriptor: () => {
+        trapCalls += 1;
+        return undefined;
+      },
+      getPrototypeOf: () => {
+        trapCalls += 1;
+        return Object.prototype;
+      },
+      ownKeys: () => {
+        trapCalls += 1;
+        return ["kind"];
+      },
     },
-    getOwnPropertyDescriptor: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return Object.prototype;
-    },
-    ownKeys: () => {
-      trapCalls += 1;
-      return ["kind"];
-    },
-  });
-  expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract(proxy),
-    "input",
-    "$",
   );
+  expectResourceProcessingError(() => parseWakeflowResourceProcessingContract(proxy), "input", "$");
   equal(trapCalls, 0);
 });
 
@@ -265,21 +264,12 @@ test("one operation admits exactly one recipe from the resource contract", () =>
   const mutableSnapshot = {
     kind: "resource",
     role: "mutable-snapshot",
-    allowedMutationRecipes: [
-      "exclusive-create",
-      "exact-source-replace",
-    ],
+    allowedMutationRecipes: ["exclusive-create", "exact-source-replace"],
     recoveryStrategy: "owner-forward-recovery",
   } as const satisfies WakeflowMutableSnapshotProcessingContract;
 
-  const creation = admitWakeflowResourceOperation(
-    mutableSnapshot,
-    "exclusive-create",
-  );
-  const replacement = admitWakeflowResourceOperation(
-    mutableSnapshot,
-    "exact-source-replace",
-  );
+  const creation = admitWakeflowResourceOperation(mutableSnapshot, "exclusive-create");
+  const replacement = admitWakeflowResourceOperation(mutableSnapshot, "exact-source-replace");
   deepEqual(creation, {
     kind: "resource-mutation",
     role: "mutable-snapshot",
@@ -299,10 +289,8 @@ test("one operation admits exactly one recipe from the resource contract", () =>
     "$/recipe",
   );
   expectResourceProcessingError(
-    () => admitWakeflowResourceOperation(
-      mutableSnapshot,
-      ["exclusive-create", "exact-source-replace"],
-    ),
+    () =>
+      admitWakeflowResourceOperation(mutableSnapshot, ["exclusive-create", "exact-source-replace"]),
     "operation",
     "$/recipe",
   );
@@ -315,13 +303,10 @@ test("one operation admits exactly one recipe from the resource contract", () =>
     descendantAuthority: "separate-declaration-required",
     recoveryStrategy: "report-only",
   };
-  deepEqual(
-    admitWakeflowResourceOperation(container, "materialize-directory"),
-    {
-      kind: "directory-materialization",
-      recipe: "materialize-directory",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(container, "materialize-directory"), {
+    kind: "directory-materialization",
+    recipe: "materialize-directory",
+  });
   expectResourceProcessingError(
     () => admitWakeflowResourceOperation(container, "exclusive-create"),
     "operation",
@@ -342,20 +327,14 @@ test("derived checkpoint remains distinct from mutable and immutable projections
   if (checkpoint.kind === "resource") {
     equal(Object.isFrozen(checkpoint.allowedMutationRecipes), true);
   }
-  deepEqual(
-    admitWakeflowResourceOperation(checkpoint, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "derived-checkpoint",
-      recipe: "exclusive-create",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(checkpoint, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "derived-checkpoint",
+    recipe: "exclusive-create",
+  });
 
   expectResourceProcessingError(
-    () => admitWakeflowResourceOperation(
-      checkpoint,
-      "deterministic-rewrite",
-    ),
+    () => admitWakeflowResourceOperation(checkpoint, "deterministic-rewrite"),
     "operation",
     "$/recipe",
   );
@@ -376,12 +355,13 @@ test("derived checkpoint remains distinct from mutable and immutable projections
     "$/recipe",
   );
   expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "resource",
-      role: "derived-checkpoint",
-      allowedMutationRecipes: ["deterministic-rewrite"],
-      recoveryStrategy: "rebuild-from-authority",
-    }),
+    () =>
+      parseWakeflowResourceProcessingContract({
+        kind: "resource",
+        role: "derived-checkpoint",
+        allowedMutationRecipes: ["deterministic-rewrite"],
+        recoveryStrategy: "rebuild-from-authority",
+      }),
     "recipe",
     "$/allowedMutationRecipes/0",
   );
@@ -391,19 +371,13 @@ test("derived checkpoint remains distinct from mutable and immutable projections
     allowedMutationRecipes: ["exclusive-create"],
     recoveryStrategy: "rebuild-from-authority",
   } as const satisfies WakeflowDerivedProjectionProcessingContract;
-  deepEqual(
-    admitWakeflowResourceOperation(immutableProjection, "exclusive-create"),
-    {
-      kind: "resource-mutation",
-      role: "derived-projection",
-      recipe: "exclusive-create",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(immutableProjection, "exclusive-create"), {
+    kind: "resource-mutation",
+    role: "derived-projection",
+    recipe: "exclusive-create",
+  });
   expectResourceProcessingError(
-    () => admitWakeflowResourceOperation(
-      immutableProjection,
-      "deterministic-rewrite",
-    ),
+    () => admitWakeflowResourceOperation(immutableProjection, "deterministic-rewrite"),
     "operation",
     "$/recipe",
   );
@@ -427,13 +401,10 @@ test("directory processing separates static materialization from exact publicati
     recoveryStrategy: "owner-forward-recovery",
   });
   equal(Object.isFrozen(publication), true);
-  deepEqual(
-    admitWakeflowResourceOperation(publication, "exact-directory-publish"),
-    {
-      kind: "directory-publication",
-      recipe: "exact-directory-publish",
-    },
-  );
+  deepEqual(admitWakeflowResourceOperation(publication, "exact-directory-publish"), {
+    kind: "directory-publication",
+    recipe: "exact-directory-publish",
+  });
   expectResourceProcessingError(
     () => admitWakeflowResourceOperation(publication, "materialize-directory"),
     "operation",
@@ -441,30 +412,39 @@ test("directory processing separates static materialization from exact publicati
   );
 
   for (const [input, path] of [
-    [{
-      kind: "directory-container",
-      materializationRecipe: "materialize-directory",
-      existingDirectoryPolicy: "owner-validate-existing-target",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    }, "$/existingDirectoryPolicy"],
-    [{
-      kind: "directory-container",
-      materializationRecipe: "exact-directory-publish",
-      existingDirectoryPolicy: "owner-validate-existing-target",
-      collisionPolicy: "reject-non-directory",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "owner-forward-recovery",
-    }, "$/collisionPolicy"],
-    [{
-      kind: "directory-container",
-      materializationRecipe: "exact-directory-publish",
-      existingDirectoryPolicy: "owner-validate-existing-target",
-      collisionPolicy: "reject-unowned-target",
-      descendantAuthority: "separate-declaration-required",
-      recoveryStrategy: "report-only",
-    }, "$/recoveryStrategy"],
+    [
+      {
+        kind: "directory-container",
+        materializationRecipe: "materialize-directory",
+        existingDirectoryPolicy: "owner-validate-existing-target",
+        collisionPolicy: "reject-non-directory",
+        descendantAuthority: "separate-declaration-required",
+        recoveryStrategy: "report-only",
+      },
+      "$/existingDirectoryPolicy",
+    ],
+    [
+      {
+        kind: "directory-container",
+        materializationRecipe: "exact-directory-publish",
+        existingDirectoryPolicy: "owner-validate-existing-target",
+        collisionPolicy: "reject-non-directory",
+        descendantAuthority: "separate-declaration-required",
+        recoveryStrategy: "owner-forward-recovery",
+      },
+      "$/collisionPolicy",
+    ],
+    [
+      {
+        kind: "directory-container",
+        materializationRecipe: "exact-directory-publish",
+        existingDirectoryPolicy: "owner-validate-existing-target",
+        collisionPolicy: "reject-unowned-target",
+        descendantAuthority: "separate-declaration-required",
+        recoveryStrategy: "report-only",
+      },
+      "$/recoveryStrategy",
+    ],
   ] as const) {
     expectResourceProcessingError(
       () => parseWakeflowResourceProcessingContract(input),

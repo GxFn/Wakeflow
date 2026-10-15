@@ -7,15 +7,14 @@ import {
 } from "../../../src/foundation/text/markdown-json-string-literal.js";
 
 test("Markdown JSON string literal keeps external text inside one data span", () => {
-  const value =
-    "line one\n## forged <!-- marker --> `code` & | \u0085 \u202e next";
+  const value = "line one\n## forged <!-- marker --> `code` & | \u0085 \u202e next";
   const rendered = renderMarkdownJsonStringLiteral(value);
   equal(
     rendered,
-    "`\"line one\\n## forged \\u003c!-- marker --\\u003e \\u0060code\\u0060 \\u0026 \\u007c \\u0085 \\u202e next\"`",
+    '`"line one\\n## forged \\u003c!-- marker --\\u003e \\u0060code\\u0060 \\u0026 \\u007c \\u0085 \\u202e next"`',
   );
   equal(JSON.parse(rendered.slice(1, -1)), value);
-  equal(renderMarkdownJsonStringLiteral("简体中文"), "`\"简体中文\"`");
+  equal(renderMarkdownJsonStringLiteral("简体中文"), '`"简体中文"`');
 });
 
 test("Markdown JSON string literal rejects coercion and non-canonical Unicode", () => {

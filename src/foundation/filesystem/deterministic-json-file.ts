@@ -1,14 +1,9 @@
-import {
-  parseDeterministicJsonDocument,
-} from "../data/deterministic-json-document.js";
+import { parseDeterministicJsonDocument } from "../data/deterministic-json-document.js";
 import type { JsonValue } from "../data/json-value.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileReadOptions } from "./stable-file-read.js";
-import {
-  readStrictTextFile,
-  type StrictTextFileResult,
-} from "./strict-text-file.js";
+import { readStrictTextFile, type StrictTextFileResult } from "./strict-text-file.js";
 
 /**
  * Wakeflow Foundation / Filesystem：确定性格式化 JSON 文件读取。

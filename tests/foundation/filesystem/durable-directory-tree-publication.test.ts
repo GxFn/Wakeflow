@@ -2,8 +2,8 @@ import { equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -12,13 +12,11 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { createDirectoryTreeCandidateDurably } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import {
-  createDirectoryTreeCandidateDurably,
-} from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
-import {
-  publishDirectoryTreeCandidateDurably,
   DurableDirectoryTreePublicationError,
   type DurableDirectoryTreePublicationErrorReason,
+  publishDirectoryTreeCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -32,15 +30,18 @@ const OPTIONS = {
   maximumTotalBytes: 4096,
 } as const;
 
-const FILES = [{
-  path: "design/requirement.md",
-  bytes: encodeUtf8("# Requirement\n"),
-  mode: 0o644,
-}, {
-  path: "record.json",
-  bytes: encodeUtf8("{\"kind\":\"record\"}\n"),
-  mode: 0o644,
-}] as const;
+const FILES = [
+  {
+    path: "design/requirement.md",
+    bytes: encodeUtf8("# Requirement\n"),
+    mode: 0o644,
+  },
+  {
+    path: "record.json",
+    bytes: encodeUtf8('{"kind":"record"}\n'),
+    mode: 0o644,
+  },
+] as const;
 
 async function fixture() {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-directory-publication-"));
@@ -73,17 +74,8 @@ test("closed directory tree candidate publishes through one durable rename", asy
   try {
     const sourceRef = "transactions/.requirement.stage";
     const finalRef = "requirements/requirement_11111111-1111-4111-8111-111111111111";
-    const candidate = await createDirectoryTreeCandidateDurably(
-      root,
-      sourceRef,
-      FILES,
-      OPTIONS,
-    );
-    const published = await publishDirectoryTreeCandidateDurably(
-      root,
-      candidate,
-      finalRef,
-    );
+    const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
+    const published = await publishDirectoryTreeCandidateDurably(root, candidate, finalRef);
 
     equal(published.sourceResourcePath, sourceRef);
     equal(published.destinationResourcePath, finalRef);
@@ -115,11 +107,7 @@ test("publication preserves a candidate when final exists or source drifted", as
     );
     mkdirSync(path.join(rootPath, ...existingFinal.split("/")), { mode: 0o755 });
     await expectPublicationError(
-      () => publishDirectoryTreeCandidateDurably(
-        root,
-        existingCandidate,
-        existingFinal,
-      ),
+      () => publishDirectoryTreeCandidateDurably(root, existingCandidate, existingFinal),
       "destination-exists",
     );
     equal(existsSync(path.join(rootPath, ...existingSource.split("/"))), true);
@@ -132,17 +120,11 @@ test("publication preserves a candidate when final exists or source drifted", as
       FILES,
       OPTIONS,
     );
-    writeFileSync(
-      path.join(rootPath, ...changedSource.split("/"), "unexpected.txt"),
-      "changed\n",
-      { mode: 0o644 },
-    );
+    writeFileSync(path.join(rootPath, ...changedSource.split("/"), "unexpected.txt"), "changed\n", {
+      mode: 0o644,
+    });
     await expectPublicationError(
-      () => publishDirectoryTreeCandidateDurably(
-        root,
-        changedCandidate,
-        changedFinal,
-      ),
+      () => publishDirectoryTreeCandidateDurably(root, changedCandidate, changedFinal),
       "source-changed",
     );
     equal(existsSync(path.join(rootPath, ...changedSource.split("/"))), true);
@@ -158,21 +140,14 @@ test("publication cancellation before commit preserves the complete candidate", 
   try {
     const sourceRef = "transactions/.cancelled.stage";
     const finalRef = "requirements/requirement_44444444-4444-4444-8444-444444444444";
-    const candidate = await createDirectoryTreeCandidateDurably(
-      root,
-      sourceRef,
-      FILES,
-      OPTIONS,
-    );
+    const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
     const controller = new AbortController();
     controller.abort();
     await expectPublicationError(
-      () => publishDirectoryTreeCandidateDurably(
-        root,
-        candidate,
-        finalRef,
-        { signal: controller.signal },
-      ),
+      () =>
+        publishDirectoryTreeCandidateDurably(root, candidate, finalRef, {
+          signal: controller.signal,
+        }),
       "aborted",
     );
     equal(existsSync(path.join(rootPath, ...sourceRef.split("/"))), true);
@@ -188,18 +163,14 @@ test("publication reports a malformed candidate plan as publication input", asyn
   try {
     const sourceRef = "transactions/.malformed.stage";
     const finalRef = "requirements/requirement_55555555-5555-4555-8555-555555555555";
-    const candidate = await createDirectoryTreeCandidateDurably(
-      root,
-      sourceRef,
-      FILES,
-      OPTIONS,
-    );
+    const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
     await expectPublicationError(
-      () => publishDirectoryTreeCandidateDurably(
-        root,
-        { ...candidate, plan: { unexpected: true } } as unknown as typeof candidate,
-        finalRef,
-      ),
+      () =>
+        publishDirectoryTreeCandidateDurably(
+          root,
+          { ...candidate, plan: { unexpected: true } } as unknown as typeof candidate,
+          finalRef,
+        ),
       "input",
     );
     equal(existsSync(path.join(rootPath, ...sourceRef.split("/"))), true);

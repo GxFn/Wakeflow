@@ -1,29 +1,18 @@
 import { types } from "node:util";
 
-import {
-  parseSha256Digest,
-  Sha256Error,
-  type Sha256Digest,
-} from "../crypto/sha256.js";
-import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
-  ByteCountError,
-  parseByteCount,
-  type ByteCount,
-} from "../numeric/byte-count.js";
+import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
+import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
   createFileNodeSnapshot,
+  type FileNodeSnapshot,
   FileNodeSnapshotError,
   sameFileNodeSnapshot,
-  type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
-  PortableResourcePathError,
   type PortableResourcePath,
+  PortableResourcePathError,
+  parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
@@ -95,10 +84,7 @@ const ERROR_MESSAGES = {
   "cleanup-failure": "Failed durable file copy candidate could not be retired exactly.",
   aborted: "Durable file copy candidate was aborted before completion.",
   "close-failure": "Durable file copy candidate handle could not be closed safely.",
-} as const satisfies Readonly<Record<
-  DurableFileCopyCandidateErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DurableFileCopyCandidateErrorReason, string>>;
 
 /** 跨根流式文件候选失败的稳定、脱敏错误。 */
 export class DurableFileCopyCandidateError extends Error {
@@ -138,19 +124,16 @@ export function assertDurableFileCopyRoot(
   path: "$sourceRoot" | "$destinationRoot",
 ): asserts value is RootedDirectory {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof RootedDirectory)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof RootedDirectory)
   ) {
     failDurableFileCopyCandidate("input", path);
   }
 }
 
-export function parseDurableFileCopyPath(
-  value: unknown,
-  path: string,
-): PortableResourcePath {
+export function parseDurableFileCopyPath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
@@ -161,10 +144,7 @@ export function parseDurableFileCopyPath(
   }
 }
 
-function plainRecord(
-  value: unknown,
-  path: string,
-): Readonly<Record<string, unknown>> {
+function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
@@ -175,23 +155,18 @@ function plainRecord(
   }
 }
 
-function parseExpectedNode(
-  value: unknown,
-): Readonly<FileNodeSnapshot> | undefined {
+function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
   ) {
     failDurableFileCopyCandidate("input", "$expectation.expectedNode");
   }
   try {
-    if (!sameFileNodeSnapshot(
-      value as FileNodeSnapshot,
-      value as FileNodeSnapshot,
-    )) {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
       failDurableFileCopyCandidate("input", "$expectation.expectedNode");
     }
   } catch (error: unknown) {
@@ -213,20 +188,17 @@ export function parseDurableFileCopyExpectation(
   const record = plainRecord(value, "$expectation");
   const keys = Object.keys(record).sort();
   if (
-    (keys.length !== 2 && keys.length !== 3)
-    || keys[0] !== "byteCount"
-    || keys[1] !== "digest"
-    || (keys.length === 3 && keys[2] !== "expectedNode")
+    (keys.length !== 2 && keys.length !== 3) ||
+    keys[0] !== "byteCount" ||
+    keys[1] !== "digest" ||
+    (keys.length === 3 && keys[2] !== "expectedNode")
   ) {
     failDurableFileCopyCandidate("input", "$expectation");
   }
   let byteCount: ByteCount;
   let digest: Sha256Digest;
   try {
-    byteCount = parseByteCount(
-      record.byteCount,
-      "$expectation.byteCount",
-    );
+    byteCount = parseByteCount(record.byteCount, "$expectation.byteCount");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
       failDurableFileCopyCandidate("input", "$expectation.byteCount");
@@ -249,19 +221,16 @@ export function parseDurableFileCopyExpectation(
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object"
-    && value !== null
-    && !types.isProxy(value)
-    && value instanceof AbortSignal;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof AbortSignal
+  );
 }
 
 function parseMode(value: unknown): number {
-  if (
-    typeof value !== "number"
-    || !Number.isInteger(value)
-    || value < 0
-    || value > 0o777
-  ) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
     failDurableFileCopyCandidate("input", "$options.mode");
   }
   return value;
@@ -273,19 +242,16 @@ export function parseDurableFileCopyOptions(
   const record = plainRecord(value, "$options");
   const keys = Object.keys(record).sort();
   if (
-    (keys.length !== 2 && keys.length !== 3)
-    || keys[0] !== "maximumBytes"
-    || keys[1] !== "mode"
-    || (keys.length === 3 && keys[2] !== "signal")
+    (keys.length !== 2 && keys.length !== 3) ||
+    keys[0] !== "maximumBytes" ||
+    keys[1] !== "mode" ||
+    (keys.length === 3 && keys[2] !== "signal")
   ) {
     failDurableFileCopyCandidate("input", "$options");
   }
   let maximumBytes: ByteCount;
   try {
-    maximumBytes = parseByteCount(
-      record.maximumBytes,
-      "$options.maximumBytes",
-    );
+    maximumBytes = parseByteCount(record.maximumBytes, "$options.maximumBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
       failDurableFileCopyCandidate("input", "$options.maximumBytes");
@@ -302,9 +268,7 @@ export function parseDurableFileCopyOptions(
   });
 }
 
-export function assertDurableFileCopyNotAborted(
-  signal: AbortSignal | undefined,
-): void {
+export function assertDurableFileCopyNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) {
     failDurableFileCopyCandidate("aborted", "$signal");
   }

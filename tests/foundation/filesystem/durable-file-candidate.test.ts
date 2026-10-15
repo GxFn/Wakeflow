@@ -1,15 +1,5 @@
-import {
-  deepEqual,
-  equal,
-  rejects,
-} from "node:assert/strict";
-import {
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { deepEqual, equal, rejects } from "node:assert/strict";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -28,12 +18,9 @@ test("durable file candidate 直接创建具名非权威文件且不产生匿名
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const ref = parsePortableResourcePath("candidate.json");
-    const created = await createFileCandidateDurably(
-      root,
-      ref,
-      encodeUtf8("candidate\n"),
-      { mode: 0o600 },
-    );
+    const created = await createFileCandidateDurably(root, ref, encodeUtf8("candidate\n"), {
+      mode: 0o600,
+    });
     equal(created.resourcePath, ref);
     equal(created.node.permissionBits, 0o600);
     equal(created.node.linkCount, 1n);
@@ -43,10 +30,8 @@ test("durable file candidate 直接创建具名非权威文件且不产生匿名
       createFileCandidateDurably(root, ref, encodeUtf8("other\n"), {
         mode: 0o600,
       }),
-      (error: unknown) => (
-        error instanceof DurableFileCandidateError
-        && error.reason === "target-exists"
-      ),
+      (error: unknown) =>
+        error instanceof DurableFileCandidateError && error.reason === "target-exists",
     );
   } finally {
     await root.close();
@@ -66,36 +51,19 @@ test("durable file candidate 在任何写入前拒绝取消和共享字节", asy
         mode: 0o600,
         signal: controller.signal,
       }),
-      (error: unknown) => (
-        error instanceof DurableFileCandidateError
-        && error.reason === "aborted"
-      ),
+      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "aborted",
     );
 
     await rejects(
-      createFileCandidateDurably(
-        root,
-        ref,
-        new Uint8Array(new SharedArrayBuffer(1)),
-        { mode: 0o600 },
-      ),
-      (error: unknown) => (
-        error instanceof DurableFileCandidateError
-        && error.reason === "input"
-      ),
+      createFileCandidateDurably(root, ref, new Uint8Array(new SharedArrayBuffer(1)), {
+        mode: 0o600,
+      }),
+      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
     );
 
     await rejects(
-      createFileCandidateDurably(
-        root,
-        ref,
-        new Proxy(new Uint8Array([1]), {}),
-        { mode: 0o600 },
-      ),
-      (error: unknown) => (
-        error instanceof DurableFileCandidateError
-        && error.reason === "input"
-      ),
+      createFileCandidateDurably(root, ref, new Proxy(new Uint8Array([1]), {}), { mode: 0o600 }),
+      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
     );
     equal(readdirSync(fixtureRoot).length, 0);
   } finally {
@@ -115,10 +83,7 @@ test("durable file candidate 将缺失父目录稳定映射为 parent", async ()
         new Uint8Array([1]),
         { mode: 0o600 },
       ),
-      (error: unknown) => (
-        error instanceof DurableFileCandidateError
-        && error.reason === "parent"
-      ),
+      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "parent",
     );
     equal(readdirSync(fixtureRoot).length, 0);
   } finally {
@@ -130,14 +95,12 @@ test("durable file candidate 将缺失父目录稳定映射为 parent", async ()
 test("根的持久化级别与候选自己的 content-only 取更弱的一档", {
   concurrency: false,
 }, async (t) => {
-  const durablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-file-candidate-durability-fsync-",
-  ));
-  const disposablePath = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-file-candidate-durability-none-",
-  ));
+  const durablePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-file-candidate-durability-fsync-"),
+  );
+  const disposablePath = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-file-candidate-durability-none-"),
+  );
   t.after(() => {
     rmSync(durablePath, { recursive: true, force: true });
     rmSync(disposablePath, { recursive: true, force: true });
@@ -167,11 +130,7 @@ test("根的持久化级别与候选自己的 content-only 取更弱的一档", 
   try {
     // 两个名字不同的持久化选项组合在一起：内容同步归根管，父目录条目同步归选项管。
     const both = await createCountingSyncs(durableRoot, "both.json");
-    const contentOnly = await createCountingSyncs(
-      durableRoot,
-      "content-only.json",
-      "content-only",
-    );
+    const contentOnly = await createCountingSyncs(durableRoot, "content-only.json", "content-only");
     const noneDefault = await createCountingSyncs(disposableRoot, "both.json");
     const noneContentOnly = await createCountingSyncs(
       disposableRoot,
@@ -200,10 +159,7 @@ test("根的持久化级别与候选自己的 content-only 取更弱的一档", 
     }
     equal(noneDefault.result.node.linkCount, both.result.node.linkCount);
     equal(noneDefault.result.digest, both.result.digest);
-    deepEqual(
-      readdirSync(disposablePath).sort(),
-      readdirSync(durablePath).sort(),
-    );
+    deepEqual(readdirSync(disposablePath).sort(), readdirSync(durablePath).sort());
   } finally {
     await durableRoot.close();
     await disposableRoot.close();

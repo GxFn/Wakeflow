@@ -1,9 +1,9 @@
 import {
   hasPassiveJsonSerializationEnvironment,
-  JsonValueError,
-  parseJsonValue,
   type JsonValue,
+  JsonValueError,
   type JsonValueErrorReason,
+  parseJsonValue,
 } from "./json-value.js";
 
 /**
@@ -28,7 +28,7 @@ export type DeterministicJsonDocumentErrorReason =
   | JsonValueErrorReason;
 
 const ERROR_MESSAGES = {
-  "input": "Deterministic JSON document input is invalid.",
+  input: "Deterministic JSON document input is invalid.",
   "json-syntax": "Deterministic JSON document syntax is invalid.",
   "non-deterministic": "JSON text does not use the deterministic pretty representation.",
   "render-failure": "Deterministic JSON document rendering failed after JSON admission.",
@@ -36,10 +36,10 @@ const ERROR_MESSAGES = {
   "non-finite-number": "Deterministic JSON numbers must be finite.",
   "negative-zero": "Deterministic JSON does not accept negative zero.",
   "lone-surrogate": "Deterministic JSON text contains invalid Unicode.",
-  "cycle": "Deterministic JSON values cannot contain cycles.",
+  cycle: "Deterministic JSON values cannot contain cycles.",
   "maximum-depth": "Deterministic JSON exceeds its structural depth limit.",
   "invalid-container": "Deterministic JSON contains an invalid container.",
-  "proxy": "Deterministic JSON does not accept Proxy values.",
+  proxy: "Deterministic JSON does not accept Proxy values.",
   "record-prototype": "Deterministic JSON objects require a plain prototype.",
   "symbol-key": "Deterministic JSON objects cannot contain symbol keys.",
   "non-enumerable-property": "Deterministic JSON cannot contain hidden properties.",
@@ -47,10 +47,7 @@ const ERROR_MESSAGES = {
   "array-prototype": "Deterministic JSON arrays require the standard prototype.",
   "array-slot": "Deterministic JSON arrays must be dense.",
   "array-extra-property": "Deterministic JSON arrays cannot contain extra properties.",
-} as const satisfies Readonly<Record<
-  DeterministicJsonDocumentErrorReason,
-  string
->>;
+} as const satisfies Readonly<Record<DeterministicJsonDocumentErrorReason, string>>;
 
 /** 确定性格式化 JSON 准入或渲染失败时返回的稳定、脱敏错误。 */
 export class DeterministicJsonDocumentError extends Error {
@@ -66,10 +63,7 @@ export class DeterministicJsonDocumentError extends Error {
   }
 }
 
-function fail(
-  reason: DeterministicJsonDocumentErrorReason,
-  path: string,
-): never {
+function fail(reason: DeterministicJsonDocumentErrorReason, path: string): never {
   throw new DeterministicJsonDocumentError(reason, path);
 }
 
@@ -109,10 +103,7 @@ function renderAdmitted(value: JsonValue, path: string): string {
  * 字典序、Schema 的 `properties` 或历史输入顺序替调用方决定领域表示；最终键顺序
  * 仍遵循 ECMAScript 的自有键枚举规则。
  */
-export function renderDeterministicJsonDocument(
-  value: unknown,
-  errorPath?: string,
-): string {
+export function renderDeterministicJsonDocument(value: unknown, errorPath?: string): string {
   const path = normalizePath(errorPath);
   return renderAdmitted(admitJsonValue(value, path), path);
 }
@@ -123,10 +114,7 @@ export function renderDeterministicJsonDocument(
  * 成功结果是与输入容器解除引用关系、递归冻结的 `JsonValue`。重复键会在重新渲染
  * 时消失，因此与其他表示漂移一样被拒绝；本函数不执行自动格式化或兼容修复。
  */
-export function parseDeterministicJsonDocument(
-  text: unknown,
-  errorPath?: string,
-): JsonValue {
+export function parseDeterministicJsonDocument(text: unknown, errorPath?: string): JsonValue {
   const path = normalizePath(errorPath);
   if (typeof text !== "string") fail("input", path);
   let decoded: unknown;

@@ -166,6 +166,18 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title:
       "reported 单元带 resumption 被拒；blocked 后 Route 前沿为评审阻塞、投影 resumptionBasis 为 condition-cleared；缺 resumption、指错前一决定、basis 错各被拒；带 condition-cleared 的 accept 直接进入完成预检",
   },
+  {
+    scenarioId: "card-07/test-rerun",
+    card: "07-results-and-review",
+    title:
+      "flaky 失败步骤只允许 request-another-attempt 与 escalate（accept 被拒、范围外步骤被拒）；重跑投递只带失败子集，投影给出 attemptScope 与上一轮基线；再重跑被拒；accept 后 attemptCount 2，Demand 完成归档",
+  },
+  {
+    scenarioId: "card-07/product-defect-remediation",
+    card: "07-results-and-review",
+    title:
+      "product-defect 失败步骤只允许 escalate；escalate{product-defect} 同一提交追加修复授权并把实现目标送回返工，修复投递 prompt 带修复依据；接受后复测合同必须带 retest 谱系；复测通过接受，Demand 完成归档",
+  },
 ]);
 
 /** 产品仓库相对工作区根的位置：`sibling` 是兄弟目录（`../ProductA`），`nested` 嵌套在根下面（`ProductA`）。 */

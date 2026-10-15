@@ -119,7 +119,7 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   run next (schema build, artifact rebuild, focused or full gate, smoke).
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
-  end-to-end scenario chain (23 scenarios, run once per host), the Schema
+  end-to-end scenario chain (25 scenarios, run once per host), the Schema
   drift check, and `build:check` against the committed artifacts. Run it
   before declaring a change complete.
 - After a change that reaches the artifacts (runtime, skills, commands,

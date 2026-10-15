@@ -49,7 +49,7 @@ docs/
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.174（2026-10-14）；§13.174 为技术债务批次 7 的 Target 阶段表（未提交），§13.173 为批次 6 的 workspace 与 governance 目录（已提交 fe203bca、428f2ae9、ae3ab43c），§13.172 为 hosts 与 configuration（已提交 f2226217、2a72c3e8、7b4f3956），§13.171 为 foundation 目录（已提交 0d079753、a9b75a0f、e39555db），§13.170 为批次 4 的不依赖裁决部分（已提交 d0bc73bf、2fadde3d），§13.169 为批次 5（已提交 6e2c00e0、1fd8114a），§13.168 为批次 3（已提交 27986c41、2551ceb1），§13.167 为批次 2（已提交 34445a04、f75a0228），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.175（2026-10-14）；§13.175 为批次 5 补遗的两条测试修复闭环场景（未提交），§13.174 为批次 7 的 Target 阶段表（已提交 1c877b82、58d60c63），§13.173 为批次 6 的 workspace 与 governance 目录（已提交 fe203bca、428f2ae9、ae3ab43c），§13.172 为 hosts 与 configuration（已提交 f2226217、2a72c3e8、7b4f3956），§13.171 为 foundation 目录（已提交 0d079753、a9b75a0f、e39555db），§13.170 为批次 4 的不依赖裁决部分（已提交 d0bc73bf、2fadde3d），§13.169 为批次 5（已提交 6e2c00e0、1fd8114a），§13.168 为批次 3（已提交 27986c41、2551ceb1），§13.167 为批次 2（已提交 34445a04、f75a0228），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
@@ -65,7 +65,7 @@ docs/
 | [references/legacy-alignment-ledger.md](./references/legacy-alignment-ledger.md) | 旧 JavaScript 模块逐个核对代码逻辑在新 TypeScript 里的 owner 的对齐台账 | active；按旧模块判定 covered / 其它，参考对象为旁路只读副本 |
 | [references/legacy-js-scenario-closure-audit.md](./references/legacy-js-scenario-closure-audit.md) | 旧 JavaScript 产品全场景闭包审查 | 只读审计，E3 对比证据 |
 | [references/capability-map.md](./references/capability-map.md) | 能力映射矩阵：31 项旧工具、内部能力、宿主差异、D1 到 D41 与 I3 逐行判定 | active，重切或已落地 27、缺席 0、放弃 4（2026-09-18） |
-| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，23 个场景在 Codex 与 Claude Code 两个宿主组合上各 pass 一遍（§13.169） |
+| [references/scenario-acceptance.md](./references/scenario-acceptance.md) | 场景验收清单与骨架运行入口 `npm run scenario:acceptance` | active，25 个场景在 Codex 与 Claude Code 两个宿主组合上各 pass 一遍（§13.169、§13.175） |
 | [references/open-items.md](./references/open-items.md) | 未决问题登记：缺陷、风险、验证缺口与待裁决事项的唯一登记处，编号与 2026-09-26 深度分析一致 | active，累计 134 项、8 项待裁决；包含已解决和历史条目。§13.141 修复主要取消/恢复/并发/验收问题，§13.142 修复 hook 读取断点与部分升级边界，§13.143 修复 DD-F01/02/03，§13.144 修复绑定/投影局部并发，§13.147 按 ADR-0018 使用新环境与当前格式首基线，撤回旧配置升级；工作区作用域与运行证据修复保留；Q3/Q6/Q8 已裁决；Codex 宿主边界见 §13.139 |
 | [archive/README.md](./archive/README.md) | 归档索引 | 16 份历史文档 |
 

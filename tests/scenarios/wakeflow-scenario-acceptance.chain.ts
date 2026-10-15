@@ -223,7 +223,16 @@ interface ReviewInspection {
       readonly escalationEventId?: string;
       readonly answered?: boolean;
     } | null;
-    readonly testSteps: readonly unknown[] | null;
+    readonly testSteps:
+      | readonly {
+          readonly stepId: string;
+          readonly observed: string | null;
+          readonly verdict: string | null;
+          readonly failure: { readonly classification: string } | null;
+          readonly baseline: { readonly attemptOrdinal: number } | null;
+        }[]
+      | null;
+    readonly attemptScope: { readonly ordinal: number; readonly stepIds: readonly string[] } | null;
   };
 }
 
@@ -235,7 +244,11 @@ interface DecisionResult {
     readonly callbackLanding: string;
     readonly targetCompletion: string;
   };
-  readonly target: { readonly phase: string; readonly reworkCount: number };
+  readonly target: {
+    readonly phase: string;
+    readonly reworkCount?: number;
+    readonly attemptCount?: number;
+  };
   readonly attached: {
     readonly escalationEventId: string | null;
     readonly productDefectRemediationId?: string | null;
@@ -2149,11 +2162,19 @@ async function scenarioEscalateAndResume(context: ScenarioContext): Promise<stri
  * 测试投递、逐步证据导入与 Controller 测试审查走同一批公共工具，接受后 Route 到完成预检。
  */
 /** 真实环境测试任务包：两步合同都绑定需求包的验收条目。 */
-function realEnvironmentTestTaskPackage(context: ScenarioContext) {
-  if (!context.memberRefs || !context.recordDigest) {
+function realEnvironmentTestTaskPackage(
+  context: ScenarioContext,
+  overrides: Readonly<{
+    readonly recordDigest?: string;
+    readonly memberRefs?: readonly string[];
+    readonly maxAttempts?: number;
+  }> = {},
+) {
+  const recordDigest = overrides.recordDigest ?? context.recordDigest;
+  const memberRefs = overrides.memberRefs ?? context.memberRefs;
+  if (!memberRefs || !recordDigest) {
     throw new Error("scenario ordering: create-demand must run first");
   }
-  const recordDigest = context.recordDigest;
   const requirementRef = (itemId: string) => ({
     recordDigest,
     sectionAnchor: "acceptance-criteria",
@@ -2163,7 +2184,7 @@ function realEnvironmentTestTaskPackage(context: ScenarioContext) {
     workType: "test",
     objective: "在已确认真实环境中验证已接受实现",
     confirmedContext: ["全部实现目标已被 Controller 接受", "测试环境由需求包 landing 成员描述"],
-    selectedAuthorityMemberRefs: [...context.memberRefs],
+    selectedAuthorityMemberRefs: [...memberRefs],
     boundaries: {
       inScope: ["执行测试合同的批准步骤"],
       outOfScope: ["修改产品代码"],
@@ -2191,7 +2212,7 @@ function realEnvironmentTestTaskPackage(context: ScenarioContext) {
       ],
       allowedSkills: [],
       setupPolicy: "reuse-existing",
-      maxAttempts: 1,
+      maxAttempts: overrides.maxAttempts ?? 1,
       stopConditions: ["环境与冻结 Authority 不一致时立即停止"],
     },
     lineage: null,
@@ -2813,7 +2834,23 @@ async function podApply(context: ScenarioContext, intent: Readonly<Record<string
 }
 
 /** 再发布一个需求包：同一份草稿、不同标题得到不同的需求标识。 */
-async function publishScenarioPackage(context: ScenarioContext, title: string) {
+const CONTROLLER_ONLY_TESTING = Object.freeze({
+  mode: "controller-only",
+  summary: "Controller validates focused checks.",
+});
+const REAL_ENVIRONMENT_TESTING = Object.freeze({
+  mode: "real-environment",
+  summary: "Controller validates focused checks, then a test window runs the test contract.",
+});
+
+async function publishScenarioPackage(
+  context: ScenarioContext,
+  title: string,
+  testingDecision: Readonly<{
+    readonly mode: string;
+    readonly summary: string;
+  }> = CONTROLLER_ONLY_TESTING,
+) {
   const root = context.workspace.workspacePath;
   if (!context.designSurfaceId || !context.designWindowId) {
     throw new Error("scenario ordering: requirement-package must run first");
@@ -2824,7 +2861,7 @@ async function publishScenarioPackage(context: ScenarioContext, title: string) {
     demandType: "requirement",
     priority: "P2",
     originWindowId: context.designWindowId,
-    testingDecision: { mode: "controller-only", summary: "Controller validates focused checks." },
+    testingDecision,
     requirementPath: "drafts/requirement.md",
     landingPath: "drafts/landing.md",
     confirmation: { confirmedAt: new Date().toISOString() },
@@ -4080,24 +4117,46 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
   return `evidence→4 files current; handwritten→zero-write, status=unsafe/handwritten, gate=pass(${projectionGate.code}); restored→current; pod section=2 pods`;
 }
 
+/** primary pod 上新建的 Demand：需求包、唯一的实现目标与包的权威摘要（评审分支与测试分支场景共用）。 */
+interface PrimaryDemandBranch {
+  readonly demandId: string;
+  readonly targetTaskId: string;
+  readonly taskPackageId: string;
+  readonly recordDigest: string;
+  readonly memberRefs: readonly string[];
+}
+
 /**
- * 评审分支（open-items D4）共用的 Demand：在 primary pod 上发布第三个需求包并认领，规划唯一的实现目标。
- * card-04 的原 Demand 已取消归档、card-10 已证明 primary 仍可认领，这里不再重走那些断言。
+ * 在 primary pod 上发布需求包并认领，规划唯一的实现目标（open-items D4 的评审 / 测试分支场景共用）。
+ * card-04 的原 Demand 已取消归档、card-10 已证明 primary 可认领；调用方保证上一个 Demand 已完成。
  */
-async function createReviewBranchDemand(context: ScenarioContext): Promise<ReviewBranchState> {
+async function createPrimaryDemand(
+  context: ScenarioContext,
+  options: Readonly<{
+    readonly title: string;
+    readonly keyPrefix: string;
+    readonly objective: string;
+    readonly anchorId: string;
+    readonly testingDecision?: Readonly<{ readonly mode: string; readonly summary: string }>;
+  }>,
+): Promise<PrimaryDemandBranch> {
   const root = context.workspace.workspacePath;
   if (!context.repositoryId || !context.productWindowId) {
     throw new Error("scenario ordering: window-replace must run first");
   }
-  const requirement = await publishScenarioPackage(context, "Review branch requirement");
+  const requirement = await publishScenarioPackage(
+    context,
+    options.title,
+    options.testingDecision ?? CONTROLLER_ONLY_TESTING,
+  );
   const demandRequest = {
     root,
     requirementId: requirement.requirementId,
     demand: {
-      title: "Review branch demand",
-      goal: "Drive one implementation target through the rearm, rework and blocked branches.",
+      title: `${options.title} demand`,
+      goal: "Drive one implementation target through the branch this scenario exercises.",
       completionDefinition:
-        "The reworked implementation result is accepted after the blocked review resumes.",
+        "The implementation result is accepted and the testing decision is closed.",
     },
   };
   const preview = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
@@ -4123,12 +4182,12 @@ async function createReviewBranchDemand(context: ScenarioContext): Promise<Revie
   const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
     root,
     demandId,
-    idempotencyKey: "scenario-branch-plan-1",
+    idempotencyKey: `${options.keyPrefix}-plan-1`,
     expectedStreamRevision: 1,
     taskPackage: {
       assignment: { repositoryId: context.repositoryId, windowId: context.productWindowId },
       workType: "implementation",
-      objective: "实现评审分支场景的最小切片",
+      objective: options.objective,
       confirmedContext: ["Demand 权威已发布"],
       selectedAuthorityMemberRefs: requirement.memberRefs,
       boundaries: {
@@ -4138,19 +4197,18 @@ async function createReviewBranchDemand(context: ScenarioContext): Promise<Revie
       },
       completionExpectations: ["聚焦检查通过"],
       commitExpectation: "leave-uncommitted",
-      acceptanceAnchors: [
-        {
-          anchorId: "branch-slice",
-          claim: "最小切片满足需求设计",
-          probe: "运行聚焦检查",
-          expected: "检查通过",
-          requirementRef: {
-            recordDigest: requirement.recordDigest,
-            sectionAnchor: "acceptance-criteria",
-            itemId: "ac-1",
-          },
+      // 两条验收标准都由实现锚点覆盖：controller-only 的 Demand 完成预检按已接受实现的锚点算覆盖（Q8）。
+      acceptanceAnchors: ["ac-1", "ac-2"].map((itemId, index) => ({
+        anchorId: `${options.anchorId}-${index + 1}`,
+        claim: `最小切片满足需求设计（${itemId}）`,
+        probe: "运行聚焦检查",
+        expected: "检查通过",
+        requirementRef: {
+          recordDigest: requirement.recordDigest,
+          sectionAnchor: "acceptance-criteria",
+          itemId,
         },
-      ],
+      })),
       lineage: null,
       sectionAnchors: ["goal"],
     },
@@ -4161,7 +4219,598 @@ async function createReviewBranchDemand(context: ScenarioContext): Promise<Revie
       readonly targetTask: { readonly targetTaskId: string; readonly taskPackageId: string };
     }
   ).targetTask;
-  return { demandId, targetTaskId: target.targetTaskId, taskPackageId: target.taskPackageId };
+  return {
+    demandId,
+    targetTaskId: target.targetTaskId,
+    taskPackageId: target.taskPackageId,
+    recordDigest: requirement.recordDigest,
+    memberRefs: requirement.memberRefs,
+  };
+}
+
+/** 评审分支三条场景共用的 Demand（controller-only 测试决策）。 */
+async function createReviewBranchDemand(context: ScenarioContext): Promise<ReviewBranchState> {
+  return {
+    ...(await createPrimaryDemand(context, {
+      title: "Review branch requirement",
+      keyPrefix: "scenario-branch",
+      objective: "实现评审分支场景的最小切片",
+      anchorId: "branch-slice",
+    })),
+  };
+}
+
+/**
+ * 实现目标走到接受：投递、落地、本 Demand 的受管证据、导入、回调落地与完成记录、accept。返回证据供测试报告引用；
+ * `inspectPrompt` 让调用方核对本轮 prompt 的内容（例如缺陷修复依据）。
+ */
+async function acceptImplementation(
+  context: ScenarioContext,
+  branch: PrimaryDemandBranch,
+  keyPrefix: string,
+  inspectPrompt?: (prompt: string) => void,
+): Promise<ScenarioEvidence> {
+  if (!context.controllerWindowId)
+    throw new Error("scenario ordering: import-and-review must run first");
+  const prepared = await prepareDelivery(
+    context,
+    `${keyPrefix}-prepare`,
+    await currentStreamRevision(context),
+    branch.targetTaskId,
+  );
+  equal(prepared.status, "committed");
+  inspectPrompt?.(prepared.permit.prompt);
+  await landPrompt(context, prepared.permit.prompt);
+  const outcome = await recordOutcome(context, prepared.permit, `${keyPrefix}-outcome`);
+  equal(outcome.outcome.disposition, "accepted");
+  const evidence = await recordEvidence(context);
+  const taskPackage = await loadTaskPackage(context, branch.taskPackageId);
+  const content = createImplementationTargetResultReportContentFixture(taskPackage, evidence);
+  const imported = (
+    await call(
+      context,
+      WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+      importRequest(
+        context,
+        prepared.permit,
+        `${keyPrefix}-import`,
+        await currentStreamRevision(context),
+        content,
+      ),
+    )
+  ).structuredContent as ImportResult;
+  equal(imported.status, "committed");
+  await landPrompt(
+    context,
+    imported.callback.permit.prompt,
+    context.controllerWindowId,
+    context.controllerHandle,
+  );
+  await recordSessionEvent(context, context.productWindowId, context.productHandle, "stop");
+  const inspection = await inspectReview(context, branch.targetTaskId);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
+  const accepted = (
+    await call(
+      context,
+      WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      implementationDecisionRequest(
+        context,
+        inspection,
+        "accept",
+        `${keyPrefix}-accept`,
+        await currentStreamRevision(context),
+      ),
+    )
+  ).structuredContent as DecisionResult;
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "accepted");
+  return evidence;
+}
+
+interface PlannedTestTarget {
+  readonly targetTaskId: string;
+  readonly taskPackageId: string;
+  /** test 目标的谱系：复测时带授权身份；首次合同为 null。 */
+  readonly lineage: { readonly kind: string; readonly productDefectRemediationId: string } | null;
+}
+
+/** 规划本 Demand 的真实环境测试合同（两步、可配 maxAttempts 与 retest 谱系）。 */
+async function planTestContract(
+  context: ScenarioContext,
+  branch: PrimaryDemandBranch,
+  idempotencyKey: string,
+  options: Readonly<{
+    readonly maxAttempts?: number;
+    readonly testLineageRequest?: Readonly<{
+      readonly kind: "retest";
+      readonly retestsTargetTaskId: string;
+    }>;
+  }> = {},
+): Promise<PlannedTestTarget> {
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision: await currentStreamRevision(context),
+    // test 包的 `lineage` 就是复测谱系（retest），没有待消费复测时为 null。
+    taskPackage: {
+      ...realEnvironmentTestTaskPackage(context, {
+        recordDigest: branch.recordDigest,
+        memberRefs: branch.memberRefs,
+        ...(options.maxAttempts === undefined ? {} : { maxAttempts: options.maxAttempts }),
+      }),
+      lineage: options.testLineageRequest ?? null,
+    },
+  });
+  assertNoPrivatePath(context, planned);
+  const result = planned.structuredContent as {
+    readonly status: string;
+    readonly targetTask: PlannedTestTarget & { readonly workType: string };
+  };
+  equal(result.status, "committed");
+  equal(result.targetTask.workType, "test");
+  return result.targetTask;
+}
+
+/** 测试会话的逐步报告：通过步骤与带失败分类的步骤。 */
+function passingTestStep(stepId: string, evidence: ScenarioEvidence) {
+  return {
+    stepId,
+    observed: `${stepId} 在已确认环境中观察到合同所述行为。`,
+    evidence: { ref: evidence.ref, digest: evidence.digest },
+    verdict: "pass",
+  };
+}
+
+function failingTestStep(
+  stepId: string,
+  evidence: ScenarioEvidence,
+  classification: "flaky" | "product-defect",
+) {
+  return {
+    stepId,
+    observed: `${stepId} 在已确认环境中没有观察到合同所述行为。`,
+    evidence: { ref: evidence.ref, digest: evidence.digest },
+    verdict: "fail",
+    failure: {
+      classification,
+      likelyOwner: classification === "flaky" ? "environment" : "implementation",
+      recommendedAction:
+        classification === "flaky" ? "在同一环境重跑该步骤确认。" : "按失败步骤返工实现后复测。",
+    },
+  };
+}
+
+/** 导入一份 test 结果（逐步记录），再让测试会话留下 Stop 记录。 */
+async function importTestResult(
+  context: ScenarioContext,
+  permit: DeliveryPermit,
+  idempotencyKey: string,
+  evidence: ScenarioEvidence,
+  steps: readonly Readonly<Record<string, unknown>>[],
+): Promise<ImportResult> {
+  const imported = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision: await currentStreamRevision(context),
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
+    report: {
+      workType: "test",
+      content: {
+        outcome: "completed",
+        summary: "已按测试合同执行并返回逐步证据。",
+        evidenceLocators: [{ kind: "test-output", ref: evidence.ref, digest: evidence.digest }],
+        verification: ["逐项复验 Evidence ref 与 digest。"],
+        risks: ["结果仍需 Controller 独立审查。"],
+        steps,
+      },
+    },
+  });
+  assertNoPrivatePath(context, imported);
+  const result = imported.structuredContent as ImportResult;
+  equal(result.status, "committed");
+  await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
+  return result;
+}
+
+type TestJudgment = Readonly<{
+  readonly decision: "accept" | "request-another-attempt" | "blocked" | "escalate";
+  readonly assessment: Readonly<{
+    readonly conclusion: string;
+    readonly evidenceSufficiency: string;
+  }>;
+  readonly outcome: "passed" | "failed" | "inconclusive";
+  readonly stepIds?: readonly string[];
+  readonly escalation?: Readonly<Record<string, unknown>>;
+}>;
+
+/** 测试评审决定请求：基线来自刚读取的检查投影。 */
+function testDecisionRequest(
+  context: ScenarioContext,
+  inspection: ReviewInspection,
+  idempotencyKey: string,
+  expectedStreamRevision: number,
+  judgment: TestJudgment,
+): Readonly<Record<string, unknown>> {
+  return {
+    root: context.workspace.workspacePath,
+    demandId: context.demandId,
+    idempotencyKey,
+    expectedStreamRevision,
+    targetResultId: inspection.reviewUnit.targetResult.targetResultId,
+    snapshotDigest: inspection.snapshotDigest,
+    reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
+    decision: judgment.decision,
+    assessment: judgment.assessment,
+    independentChecks: [
+      {
+        checkId: `controller-${judgment.decision}`,
+        method: "重读逐步证据并对照合同 then。",
+        outcome: judgment.outcome,
+        observation:
+          judgment.outcome === "passed"
+            ? "全部合同步骤的证据闭合。"
+            : judgment.outcome === "failed"
+              ? "失败步骤在真实环境复现，与实现有关。"
+              : "失败与产品行为无关，需重跑确认。",
+      },
+    ],
+    rationale: `Controller 完成独立检查并决定 ${judgment.decision}。`,
+    blockingReasons: [],
+    residualRisks: ["该决定不替代后续 Demand completion 检查。"],
+    ...(judgment.stepIds === undefined ? {} : { stepIds: judgment.stepIds }),
+    ...(judgment.escalation === undefined ? {} : { escalation: judgment.escalation }),
+  };
+}
+
+/** 一次 test 投递：准备、落地到 test 窗口、结局 accepted。 */
+async function deliverTest(
+  context: ScenarioContext,
+  targetTaskId: string,
+  idempotencyKey: string,
+): Promise<DeliveryPermit> {
+  const prepared = await prepareDelivery(
+    context,
+    `${idempotencyKey}-prepare`,
+    await currentStreamRevision(context),
+    targetTaskId,
+  );
+  equal(prepared.status, "committed");
+  await landPrompt(context, prepared.permit.prompt, context.testWindowId, context.testHandle);
+  const outcome = await recordOutcome(context, prepared.permit, `${idempotencyKey}-outcome`);
+  equal(outcome.outcome.disposition, "accepted");
+  return prepared.permit;
+}
+
+/**
+ * 卡 7 测试重跑：flaky 失败步骤只允许 request-another-attempt 与 escalate；accept 被拒（verdict），范围外步骤被拒
+ * （step-scope）；重跑投递只带失败子集，检查投影给出 attemptScope 与上一轮的通过基线；再重跑被拒
+ * （no-failed-step）；accept 后 attemptCount 为 2，Demand 完成归档。
+ */
+async function scenarioTestRerun(context: ScenarioContext): Promise<string> {
+  if (!context.testWindowId || !context.testHandle) {
+    throw new Error("scenario ordering: test-contract must run first");
+  }
+  // 上一场景的 controller-only Demand 停在完成预检：完成归档，primary pod 才能认领下一个。
+  const previous = await completeDemand(context);
+  const branch = await createPrimaryDemand(context, {
+    title: "Test rerun requirement",
+    keyPrefix: "scenario-rerun",
+    objective: "实现测试重跑场景的最小切片",
+    anchorId: "rerun-slice",
+    testingDecision: REAL_ENVIRONMENT_TESTING,
+  });
+  const evidence = await acceptImplementation(context, branch, "scenario-rerun-impl");
+  equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "test-task-planning");
+  const testTarget = await planTestContract(context, branch, "scenario-rerun-test-plan", {
+    maxAttempts: 2,
+  });
+  const permit = await deliverTest(context, testTarget.targetTaskId, "scenario-rerun-test-1");
+  await importTestResult(context, permit, "scenario-rerun-test-import-1", evidence, [
+    passingTestStep("ts-1", evidence),
+    failingTestStep("ts-2", evidence, "flaky"),
+  ]);
+  const inspection = await inspectReview(context, testTarget.targetTaskId);
+  deepEqual([...inspection.reviewUnit.allowedDecisions], ["request-another-attempt", "escalate"]);
+  equal(inspection.reviewUnit.testSteps?.[1]?.failure?.classification, "flaky");
+  const rejected = async (
+    label: string,
+    request: Readonly<Record<string, unknown>>,
+    code: string,
+  ) => {
+    const result = await context.connection.client.callTool({
+      name: WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      arguments: request,
+    });
+    equal(result.isError, true, label);
+    equal(
+      scenarioToolText(result).includes(code),
+      true,
+      `${label}: ${scenarioToolText(result).slice(0, 200)}`,
+    );
+  };
+  const revision = await currentStreamRevision(context);
+  const rerunJudgment: TestJudgment = {
+    decision: "request-another-attempt",
+    assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
+    outcome: "inconclusive",
+  };
+  await rejected(
+    "a failed step cannot be accepted",
+    testDecisionRequest(context, inspection, "scenario-rerun-accept-early", revision, {
+      decision: "accept",
+      assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
+      outcome: "passed",
+    }),
+    "verdict",
+  );
+  await rejected(
+    "the rerun scope must be the failed steps",
+    testDecisionRequest(context, inspection, "scenario-rerun-scope", revision, {
+      ...rerunJudgment,
+      stepIds: ["ts-1"],
+    }),
+    "step-scope",
+  );
+  const rerunCall = await call(
+    context,
+    WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    testDecisionRequest(context, inspection, "scenario-rerun-decision", revision, {
+      ...rerunJudgment,
+      stepIds: ["ts-2"],
+    }),
+  );
+  assertNoPrivatePath(context, rerunCall);
+  const rerun = rerunCall.structuredContent as DecisionResult;
+  equal(rerun.status, "committed");
+  equal(rerun.target.phase, "test-another-attempt-requested");
+  equal(rerun.target.attemptCount, 1);
+  equal(rerun.next.frontier, "test-delivery-rerun-planning");
+  equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "test-delivery-rerun-planning");
+
+  const rerunPermit = await deliverTest(context, testTarget.targetTaskId, "scenario-rerun-test-2");
+  equal(rerunPermit.prompt.includes("ts-2"), true, "the rerun prompt names the failed step");
+  await importTestResult(context, rerunPermit, "scenario-rerun-test-import-2", evidence, [
+    passingTestStep("ts-2", evidence),
+  ]);
+  const second = await inspectReview(context, testTarget.targetTaskId);
+  deepEqual(second.reviewUnit.attemptScope, { ordinal: 2, stepIds: ["ts-2"] });
+  equal(second.reviewUnit.testSteps?.[0]?.verdict, null);
+  equal(second.reviewUnit.testSteps?.[0]?.baseline?.attemptOrdinal, 1);
+  equal(second.reviewUnit.testSteps?.[1]?.verdict, "pass");
+  equal(second.reviewUnit.priorReviewHistory.length, 1);
+  deepEqual([...second.reviewUnit.allowedDecisions], ["accept", "escalate"]);
+  const secondRevision = await currentStreamRevision(context);
+  await rejected(
+    "nothing failed in the rerun, so no further rerun",
+    testDecisionRequest(context, second, "scenario-rerun-again", secondRevision, {
+      ...rerunJudgment,
+      stepIds: ["ts-2"],
+    }),
+    "no-failed-step",
+  );
+  const accepted = (
+    await call(
+      context,
+      WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      testDecisionRequest(context, second, "scenario-rerun-accept", secondRevision, {
+        decision: "accept",
+        assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
+        outcome: "passed",
+      }),
+    )
+  ).structuredContent as DecisionResult;
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "test-accepted");
+  equal(accepted.target.attemptCount, 2);
+  equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "demand-completion-preflight");
+  const completed = await completeDemand(context);
+  return `previous=${previous}; flaky=request-another-attempt only; early-accept=verdict; scope=step-scope; rerun=${rerun.status}/${rerun.target.phase}; attempt2=ts-2 with baseline; rerun-again=no-failed-step; accept=attemptCount ${accepted.target.attemptCount}; demand=${completed}`;
+}
+
+/**
+ * 卡 7 产品缺陷修复闭环：product-defect 失败步骤只允许 escalate；escalate{product-defect} 在同一提交追加修复授权，
+ * 实现目标回到 product-defect-rework-requested；修复投递的 prompt 带缺陷修复依据；导入接受后待消费复测要求测试合同
+ * 带 retest 谱系；复测通过接受，Demand 完成归档。
+ */
+async function scenarioProductDefectRemediation(context: ScenarioContext): Promise<string> {
+  if (!context.testWindowId || !context.testHandle) {
+    throw new Error("scenario ordering: test-rerun must run first");
+  }
+  const branch = await createPrimaryDemand(context, {
+    title: "Product defect requirement",
+    keyPrefix: "scenario-defect",
+    objective: "实现缺陷修复场景的最小切片",
+    anchorId: "defect-slice",
+    testingDecision: REAL_ENVIRONMENT_TESTING,
+  });
+  const evidence = await acceptImplementation(context, branch, "scenario-defect-impl");
+  const testTarget = await planTestContract(context, branch, "scenario-defect-test-plan", {
+    maxAttempts: 2,
+  });
+  const permit = await deliverTest(context, testTarget.targetTaskId, "scenario-defect-test-1");
+  await importTestResult(context, permit, "scenario-defect-test-import-1", evidence, [
+    passingTestStep("ts-1", evidence),
+    failingTestStep("ts-2", evidence, "product-defect"),
+  ]);
+  const inspection = await inspectReview(context, testTarget.targetTaskId);
+  deepEqual([...inspection.reviewUnit.allowedDecisions], ["escalate"]);
+  equal(inspection.reviewUnit.testSteps?.[1]?.failure?.classification, "product-defect");
+  const rejected = async (
+    label: string,
+    request: Readonly<Record<string, unknown>>,
+    code: string,
+  ) => {
+    const result = await context.connection.client.callTool({
+      name: WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      arguments: request,
+    });
+    equal(result.isError, true, label);
+    equal(
+      scenarioToolText(result).includes(code),
+      true,
+      `${label}: ${scenarioToolText(result).slice(0, 200)}`,
+    );
+  };
+  const revision = await currentStreamRevision(context);
+  await rejected(
+    "a product defect cannot be rerun away",
+    testDecisionRequest(context, inspection, "scenario-defect-rerun", revision, {
+      decision: "request-another-attempt",
+      assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
+      outcome: "inconclusive",
+      stepIds: ["ts-2"],
+    }),
+    "classification",
+  );
+  const escalateJudgment: TestJudgment = {
+    decision: "escalate",
+    assessment: { conclusion: "defect-observed", evidenceSufficiency: "sufficient" },
+    outcome: "failed",
+  };
+  const remediation = (failedStepIds: readonly string[]) => ({
+    classification: "product-defect",
+    remediation: {
+      affectedTargets: [
+        {
+          targetTaskId: branch.targetTaskId,
+          failedStepIds,
+          correctionObjective: "修复入口在真实环境下的返回状态。",
+        },
+      ],
+      authorizationRationale: "测试证据指向实现缺陷，授权按失败步骤返工。",
+    },
+  });
+  await rejected(
+    "the remediation must name the failed step",
+    testDecisionRequest(context, inspection, "scenario-defect-escalate-wrong-step", revision, {
+      ...escalateJudgment,
+      escalation: remediation(["ts-1"]),
+    }),
+    "remediation-step",
+  );
+  const escalateRequest = testDecisionRequest(
+    context,
+    inspection,
+    "scenario-defect-escalate",
+    revision,
+    {
+      ...escalateJudgment,
+      escalation: remediation(["ts-2"]),
+    },
+  );
+  const escalatedCall = await call(
+    context,
+    WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    escalateRequest,
+  );
+  assertNoPrivatePath(context, escalatedCall);
+  const escalated = escalatedCall.structuredContent as DecisionResult;
+  equal(escalated.status, "committed");
+  equal(escalated.target.phase, "test-product-defect");
+  equal(escalated.attached.escalationEventId, null);
+  const remediationId = escalated.attached.productDefectRemediationId;
+  if (typeof remediationId !== "string") throw new Error("escalate must attach the remediation");
+  equal(escalated.next.frontier, "implementation-delivery-planning");
+  const replay = (
+    await call(context, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, escalateRequest)
+  ).structuredContent as DecisionResult;
+  equal(replay.status, "idempotent");
+  equal(replay.attached.productDefectRemediationId, remediationId);
+  const route = await inspectRoute(context);
+  equal(route.route?.frontiers[0]?.kind, "implementation-delivery-planning");
+
+  // 修复投递：同一 TaskPackage、prompt 带缺陷修复依据（授权身份与失败步骤）；接受后待消费复测。
+  await acceptImplementation(context, branch, "scenario-defect-fix", (prompt) => {
+    equal(
+      prompt.includes("Product-defect remediation basis"),
+      true,
+      "prompt carries the remediation",
+    );
+    equal(prompt.includes(remediationId), true, "prompt names the remediation authorization");
+    equal(prompt.includes("ts-2"), true, "prompt names the failed step");
+  });
+  equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "test-task-planning");
+  const noLineage = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: context.workspace.workspacePath,
+      demandId: context.demandId,
+      idempotencyKey: "scenario-defect-retest-no-lineage",
+      expectedStreamRevision: await currentStreamRevision(context),
+      taskPackage: realEnvironmentTestTaskPackage(context, {
+        recordDigest: branch.recordDigest,
+        memberRefs: branch.memberRefs,
+        maxAttempts: 2,
+      }),
+    },
+  });
+  equal(noLineage.isError, true, "a retest without lineage must be rejected");
+  equal(
+    scenarioToolText(noLineage).includes("lineage-retest-required"),
+    true,
+    scenarioToolText(noLineage),
+  );
+  const wrongLineage = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: context.workspace.workspacePath,
+      demandId: context.demandId,
+      idempotencyKey: "scenario-defect-retest-wrong-lineage",
+      expectedStreamRevision: await currentStreamRevision(context),
+      taskPackage: {
+        ...realEnvironmentTestTaskPackage(context, {
+          recordDigest: branch.recordDigest,
+          memberRefs: branch.memberRefs,
+          maxAttempts: 2,
+        }),
+        lineage: { kind: "retest", retestsTargetTaskId: branch.targetTaskId },
+      },
+    },
+  });
+  equal(wrongLineage.isError, true, "the retest lineage must point at the defective test target");
+  equal(
+    scenarioToolText(wrongLineage).includes("lineage-retest-target"),
+    true,
+    scenarioToolText(wrongLineage),
+  );
+  const retest = await planTestContract(context, branch, "scenario-defect-retest-plan", {
+    maxAttempts: 2,
+    testLineageRequest: { kind: "retest", retestsTargetTaskId: testTarget.targetTaskId },
+  });
+  equal(retest.lineage?.kind, "retest");
+  equal(retest.lineage?.productDefectRemediationId, remediationId);
+  const retestPermit = await deliverTest(context, retest.targetTaskId, "scenario-defect-retest");
+  await importTestResult(context, retestPermit, "scenario-defect-retest-import", evidence, [
+    passingTestStep("ts-1", evidence),
+    passingTestStep("ts-2", evidence),
+  ]);
+  const retestInspection = await inspectReview(context, retest.targetTaskId);
+  equal(retestInspection.reviewUnit.allowedDecisions.includes("accept"), true);
+  const accepted = (
+    await call(
+      context,
+      WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      testDecisionRequest(
+        context,
+        retestInspection,
+        "scenario-defect-retest-accept",
+        await currentStreamRevision(context),
+        {
+          decision: "accept",
+          assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
+          outcome: "passed",
+        },
+      ),
+    )
+  ).structuredContent as DecisionResult;
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "test-accepted");
+  equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "demand-completion-preflight");
+  const completed = await completeDemand(context);
+  return `product-defect=escalate only; rerun=classification; wrong-step=remediation-step; escalate=${escalated.status}/${escalated.target.phase} remediation attached; replay=${replay.status}; fix prompt=remediation basis; retest=lineage required+target checked, planned with remediation; accept=${accepted.target.phase}; demand=${completed}`;
 }
 
 /**
@@ -4589,6 +5238,8 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-06/rejected-before-send-rearm": scenarioRejectedBeforeSendRearm,
     "card-07/rework-loop": scenarioReworkLoop,
     "card-07/blocked-and-resume": scenarioBlockedAndResume,
+    "card-07/test-rerun": scenarioTestRerun,
+    "card-07/product-defect-remediation": scenarioProductDefectRemediation,
   });
 
 /**

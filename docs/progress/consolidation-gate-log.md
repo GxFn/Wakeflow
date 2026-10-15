@@ -4769,3 +4769,24 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 深挖 §10 跟踪指标：能力层对旧域的导入条数不变（decide 新增的是对 contracts 的导入）；其余指标不动。
 
 本批改动 src/（contracts 新增词表；delivery decide 与 Controller Route 改为派生）、tests（新增 1 份）、docs/（gate-log、登记 L1、深挖批次表、docs README）、耗时表与两个制品（8 份）；未提交，main 领先 origin/main 24 个提交。
+
+### 13.175 技术债务批次 5 补遗：测试失败的修复闭环与重跑场景（D4 余项）（2026-10-14）
+
+批次 5（§13.169）把评审分支接线到 rearm、rework、blocked 三条，登记 D4 还剩"测试失败 → 修复 → 复测"这条最关键的链没有经公开工具端到端跑过——用户的现场验收恰恰靠它。本节补两条场景，两个宿主各跑一遍。
+
+- **共用骨架。** `createPrimaryDemand` 取代评审分支专用的建 Demand 函数：在 primary pod 上发布需求包（测试决策可选 controller-only / real-environment）、认领、规划唯一的实现目标；实现锚点覆盖两条验收标准（controller-only 的 Demand 完成预检按已接受实现的锚点算覆盖，Q8——第一次运行就被 `requirement-coverage` 挡住，说明 §13.169 的三条场景里没有一条走到完成）。`acceptImplementation` 把投递、落地、证据、导入、回调落地、完成记录与 accept 收成一步并允许核对本轮 prompt；`planTestContract`、`deliverTest`、`importTestResult`、`testDecisionRequest` 与两种逐步记录构造器把测试侧的公开工具调用收成可复用的小步。`publishScenarioPackage` 与 `realEnvironmentTestTaskPackage` 各加可选参数（测试决策；权威摘要、成员与 `maxAttempts`）。
+- **`card-07/test-rerun`。** 先完成评审分支的 Demand（归档），再以 real-environment 决策建 Demand：实现接受后 Route 到 `test-task-planning`；合同两步、`maxAttempts` 2；导入 `ts-1` pass、`ts-2` flaky，允许集合恰为 request-another-attempt 与 escalate，accept 被 `verdict` 拒、范围外步骤被 `step-scope` 拒；重跑决定 committed、`attemptCount` 1、前沿 `test-delivery-rerun-planning`；重跑投递的 prompt 只点名 `ts-2`，导入子集后投影给出 `attemptScope{2, [ts-2]}` 与 `ts-1` 的上一轮基线、历史一条、允许 accept/escalate；再重跑被 `no-failed-step` 拒；accept 为 `test-accepted`、`attemptCount` 2，完成归档。
+- **`card-07/product-defect-remediation`。** 导入 `ts-2` product-defect：只允许 escalate，重跑被 `classification` 拒；修复授权点名未失败步骤被 `remediation-step` 拒；正确的 escalate 在同一提交附带修复授权（`productDefectRemediationId`），实现目标回到 `product-defect-rework-requested`、前沿回到投递规划，重放幂等；修复投递的 prompt 带 "Product-defect remediation basis"、授权身份与 `ts-2`；接受后 Route 回到 `test-task-planning`，但不带谱系规划测试被 `lineage-retest-required` 拒、谱系指向实现目标被 `lineage-retest-target` 拒——test 包的 `lineage` 字段就是复测谱系（我第一版把它放在请求根上，被 Schema 的 `$` 级拒绝抓住）；正确谱系规划 committed 且结果 `lineage.productDefectRemediationId` 等于授权身份；复测两步 pass、accept、完成归档。
+- **没做的：** bug 与 research 类型的 Demand、超预算的重跑（`attempt-capacity`）、多仓库 Demand 与 `commitExpectation: commit`（后两项需要现场）。
+
+文档：`scenario-acceptance.md`（25 行、§2 余项）、登记 D4、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：Claude Code 组合的链单跑五轮——第一轮 `test-rerun` 在完成评审分支 Demand 时被 `requirement-coverage` 挡住（见上，补第二条锚点），第二轮 `product-defect-remediation` 把复测谱系放在请求根上被 Schema 拒，第三轮读错结果字段名（`testLineage` → `lineage`），第四、五轮 25/25；两个宿主合跑 50/50。制品未改（只有测试与文档），不需要重建与 smoke。
+- 完整门一次即过：run-o6pt2g（03:26–03:47，21.4 分钟）1511/1511 全通过、317 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-o6pt2g/receipt.json`：317 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-W4OjDj）：七项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话（真实测试窗口的失败步骤、真实修复投递都未在现场发生）、lab/live、远端 CI；图谱指纹漂移未刷新。
+
+本批改动 tests/scenarios（链与清单夹具）、docs/（gate-log、scenario-acceptance、登记 D4、docs README、plan §13 E3 的计数）、仓库 README 与 CLAUDE.md/AGENTS.md 的场景计数、耗时表；未提交，main 领先 origin/main 26 个提交。

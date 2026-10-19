@@ -219,7 +219,6 @@ export async function publishWakeflowSupportMemory(
 }
 
 export {
-  type WakeflowSupportMemoryPublicationEffect,
   WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationErrorReason,
   type WakeflowSupportMemoryPublicationOptions,

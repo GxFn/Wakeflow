@@ -61,10 +61,7 @@ import {
  * 或修复文件；全局 excludes 与 `.git/info/exclude` 不替代 tracked `.gitignore` 证据。
  */
 
-export const WAKEFLOW_GITIGNORE_MAXIMUM_BYTES = parseByteCount(
-  2 * 1024 * 1024,
-  "$gitignore.maximumBytes",
-);
+const WAKEFLOW_GITIGNORE_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$gitignore.maximumBytes");
 
 const GIT_DIRECTORY_PROBE_NAME = ".wakeflow-ignore-probe";
 

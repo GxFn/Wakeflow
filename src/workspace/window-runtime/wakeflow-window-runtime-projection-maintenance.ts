@@ -89,9 +89,9 @@ import {
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND =
   "window-runtime-projection" as const;
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID = "window-runtime-projection" as const;
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER =
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER =
   "window-runtime-projection-unsafe" as const;
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER =
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER =
   "window-runtime-projection-unavailable" as const;
 
 export interface PlanWakeflowWindowRuntimeProjectionMaintenanceRequest {

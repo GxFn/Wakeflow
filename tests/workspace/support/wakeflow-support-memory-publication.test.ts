@@ -1,6 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -19,11 +18,6 @@ import {
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import {
-  issueDurableAtomicFileStageAddress,
-  releaseDurableAtomicFileStageAddress,
-} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
@@ -34,9 +28,7 @@ import {
   WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationErrorReason,
 } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
-import { recoverWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-recovery.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 
 const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
 
@@ -192,50 +184,4 @@ test("Support memory publication preserves unknown whole-file bytes", async (t) 
     readdirSync(workspace.supportPath).some((name) => name.startsWith(".wakeflow-atomic-")),
     false,
   );
-});
-
-test("Support memory recovery retires an inactive stage and republishes", async (t) => {
-  const workspace = await fixture(t);
-  const current = config("en");
-  const desired = config("zh-Hans");
-  const currentAuthority = createWakeflowSupportMemoryAuthority(
-    current,
-    codexWorkspaceHostResourceProfile,
-    DESIGN_ID,
-  );
-  const desiredAuthority = createWakeflowSupportMemoryAuthority(
-    desired,
-    codexWorkspaceHostResourceProfile,
-    DESIGN_ID,
-  );
-  writeFileSync(workspace.memoryPath, currentAuthority.body, { mode: 0o644 });
-  const desiredBytes = Buffer.from(desiredAuthority.body);
-  const address = issueDurableAtomicFileStageAddress(
-    "replace",
-    "AGENTS.md",
-    computeSha256Digest(desiredBytes),
-    0o644,
-  );
-  const stageRef = durableAtomicFileStageRefForTest("AGENTS.md", address);
-  let released = false;
-  try {
-    await createFileCandidateDurably(workspace.supportRoot, stageRef, desiredBytes, {
-      mode: 0o644,
-    });
-    releaseDurableAtomicFileStageAddress(address);
-    released = true;
-
-    const recovered = await recoverWakeflowSupportMemory(
-      workspace.workspaceRoot,
-      workspace.supportRoot,
-      request(current, desired),
-    );
-    equal(recovered.disposition, "recovered");
-    equal(recovered.stageRecovery.retiredStageCount, 1);
-    equal(recovered.publication.disposition, "replaced");
-    equal(existsSync(path.join(workspace.supportPath, stageRef)), false);
-    equal(readFileSync(workspace.memoryPath, "utf8"), desiredAuthority.body);
-  } finally {
-    if (!released) releaseDurableAtomicFileStageAddress(address);
-  }
 });

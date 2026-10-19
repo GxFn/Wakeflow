@@ -306,7 +306,7 @@ function reworkCheckId(value: unknown, path: string): string {
 }
 
 /** 严格解析一份有界返工投影，不读取完整Decision或TargetResult。 */
-export function parseTargetDeliveryReworkContext(
+function parseTargetDeliveryReworkContext(
   value: unknown,
   path = "$rework",
 ): Readonly<TargetDeliveryReworkContext> {
@@ -487,7 +487,7 @@ function remediationStepId(value: unknown, path: string): string {
 }
 
 /** 严格解析一份有界产品缺陷修复投影，不读取完整Authorization。 */
-export function parseTargetDeliveryProductDefectRemediationContext(
+function parseTargetDeliveryProductDefectRemediationContext(
   value: unknown,
   path = "$productDefectRemediation",
 ): Readonly<TargetDeliveryProductDefectRemediationContext> {

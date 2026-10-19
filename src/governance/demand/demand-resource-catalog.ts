@@ -6,7 +6,6 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { streamIndexRef } from "../../kernel/event-stream/stream-index.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -376,26 +375,6 @@ export function createDemandEventSourcingSnapshotResourceDeclaration(
     `demand.event-sourcing.${demandId}.snapshot-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,
     demandChildRef(demandId, demandEventSourcingSnapshotRef(commitSequence)),
-    {
-      kind: "resource",
-      role: "derived-checkpoint",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "rebuild-from-authority",
-    },
-  );
-}
-
-/** 为一个提交序号生成事件流索引检查点声明；索引与快照同为可退休的派生检查点。 */
-export function createDemandEventStreamIndexResourceDeclaration(
-  demandValue: unknown,
-  commitSequenceValue: unknown,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
-  return privateFileDeclaration(
-    `demand.event-sourcing.${demandId}.index-${commitSequence}`,
-    DEMAND_EVENT_SOURCING_OWNER_ID,
-    demandChildRef(demandId, streamIndexRef(DEMAND_EVENT_STREAM_INDEX_ROOT_REF, commitSequence)),
     {
       kind: "resource",
       role: "derived-checkpoint",

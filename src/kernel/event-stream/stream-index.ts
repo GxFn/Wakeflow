@@ -10,17 +10,17 @@ import {
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectoryError,
   type RootedDirectory,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -405,7 +405,7 @@ function streamIndexFileName(sequence: number): string {
   return `${String(sequence).padStart(16, "0")}.json`;
 }
 
-export function streamIndexRef(
+function streamIndexRef(
   directoryRef: PortableResourcePath,
   sequence: number,
 ): PortableResourcePath {

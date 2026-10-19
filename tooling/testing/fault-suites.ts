@@ -21,7 +21,6 @@ const SUITES = [
     files: [
       "tests/foundation/filesystem/durable-atomic-file-stage-recovery.test.ts",
       "tests/capabilities/workspace/demand-runtime-recovery.test.ts",
-      "tests/workspace/maintenance/wakeflow-prepared-maintenance-recovery.test.ts",
     ],
   },
   {

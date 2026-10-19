@@ -149,16 +149,6 @@ export interface PreparedDemandEventStreamCommit {
   readonly sourceExpectation: Readonly<DemandEventStreamAppendSourceExpectation>;
 }
 
-export interface PrepareDemandEventStreamCommitInput {
-  readonly commitId: WakeflowDurableId<"demand-event-commit">;
-  readonly commandDigest: Sha256Digest;
-  readonly events: readonly [
-    Readonly<DemandUncommittedEvent>,
-    ...Readonly<DemandUncommittedEvent>[],
-  ];
-  readonly idempotency?: Readonly<DemandEventStreamCommitIdempotency>;
-}
-
 export type DemandEventStreamCommitErrorReason =
   | "input"
   | "json"

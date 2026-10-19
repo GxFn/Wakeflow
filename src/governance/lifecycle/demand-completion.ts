@@ -317,7 +317,3 @@ export function createDemandCompletion(
     completionDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }
-
-export function computeDemandCompletionDigest(value: unknown): Sha256Digest {
-  return parseDemandCompletion(value).completionDigest;
-}

@@ -201,7 +201,7 @@ function optionalProperty(
 
 const FRESH_SELECTION_ID_NAMESPACE = "wakeflow-fresh-config-selection";
 /** 初始化生成的 primary pod 名称；worktree pod 不得复用（配置 codec 保证名称唯一）。 */
-export const WAKEFLOW_PRIMARY_POD_NAME = "main" as const;
+const WAKEFLOW_PRIMARY_POD_NAME = "main" as const;
 
 /**
  * 分配 typed ID。没有注入 factory 时，ID 由 selection 的规范摘要、种类与 selection key

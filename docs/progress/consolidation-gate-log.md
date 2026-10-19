@@ -4885,3 +4885,24 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新（图谱策略按裁决绑定发布候选，见后续节）。
 
 本批改动 tooling（plugin-metadata、handoff）、src/hosts/codex（信任步骤）、assets/agent-text 两份 README、assets/release/version.json、.claude-plugin/marketplace.json、仓库 README、CLAUDE.md/AGENTS.md、tests/tooling/handoff、plugins/（重建）、docs/；未提交。
+
+### 13.180 裁决落地第二批：架构目标重定基线（Q12：删无调用者模块、knip 全覆盖、tools/list 预算）（2026-10-19）
+
+Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/configuration 作为永久领域层保留，foundation 规模按当前目录接受，tools/list 预算按实测重定，8 个只有测试在调用的模块删除。本节落地这三件。
+
+- **删八个无调用者模块（L3）。** managed-evidence-reading-service（457 行）、wakeflow-prepared-maintenance-recovery（403）、loaded-artifact-tree-transfer-publication（380）、wakeflow-maintenance-orphan-gate-recovery（223）、wakeflow-config-authority-replacement-recovery（222）、gitignore 与 program-instruction 两个 recomposition recovery（196、192）、wakeflow-support-memory-recovery（71）连同五份专属测试删除；共享测试里只删恢复用例（journal-store 三条与一条的恢复尾段、config replacement 三条、program instruction 两条、support memory 一条），evidence 服务测试改为直接读清单文件核对种类与来源。内核遗留错误码族表去掉四个随模块消失的 code（该表的测试要求与源码里声明的 code 集合一字不差），`ADMITTED_PRODUCTION_ROOTS` 从 16 收到 8（只剩入口与宿主画像）。制品闭包不含被删的模块，但去掉 `export` 会改变编译后的 lib 字节：重建后 `plugins/` 有 131 份 lib 文件变化（无新增无删除），所以本批也要重建与 smoke。
+- **knip 全覆盖（L2 余项）。** `knip.json` 的 `ignore` 收缩到 `.build/**` 与 `src/contracts/generated/**`；收缩后 knip 报 84 份文件 136 个未使用导出与 25 个未使用类型（删模块后的口径），按位置脚本化处理：只在本文件使用的去掉 `export`，随后由 `noUnusedLocals` 指出的死声明与孤儿导入逐轮删除（七轮脚本加两轮手工：十来个单名导入、一个被脚本漏掉的 re-export 列表、五个随恢复模块死掉的类型、八个走 `export { … }` 列表的名字），最终 knip 零报告；`tests/foundation` 进扫描后 `mkfifo` 按 `ignoreBinaries` 登记。变更集 107 份文件、+191/−4,059 行。
+- **tools/list 预算（K3）。** 实测工具数组 94,146 B，预算定为 102 KiB（实测加一成）并锁住不回退；`INTERIM` 与"L1 复测"字样退役；ADR-0004 加重定基线一行。按宿主/角色的子集预算归 K4（Q5 之后）。
+- **没做的：** 两条 `transitional-*` 架构规则改名（L7 的附带建议，另起小批）；按工具的结果预算（K7 余项）；smoke 里的 tools/list 大小断言。
+
+文档：登记 L3/K3/L2/L7、复审 Q12 行、ADR-0004 补注、file-review-ledger 三行标删除、docs README 指针；另起 `references/live-test-plan-2026-10.md`（1.1.0 第一轮现场测试计划：前提、九个场景的做法/取证/通过标准、要带回的证据、结束条件），用户或 Claude 在新的 WakeflowTestWorkspace 里执行。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：typecheck 零错误；`check:architecture` 通过（productionRoots 16 → 8）；knip 零报告；Biome 格式化 17 份文件。`test:typescript:focused -- --changed` 不是该运行器的参数（`wf verify quick --changed` 才是），本批直接跑完整门。
+- 完整门第一次 run-AmsDST（03:33–04:02 UTC，28.7 分钟）1492 测试败 2：耗时表仍列着被删的 `loaded-artifact-tree-transfer-publication.test.ts`（`test-schedule-order` 要求表里每条都指向存在的文件），固定故障矩阵 `recovery` 套件仍引用被删的 `wakeflow-prepared-maintenance-recovery.test.ts`（`fault-suites` 要求文件存在）——删测试文件要同时清这两处登记；清掉五条耗时与一条矩阵引用后两测试 7/7。第二次 run-l0QG5O（04:03–04:28 UTC，25.3 分钟）1492/1492 全通过，却在 build:check 失败：`wakeflow-artifact-check-drift`——去掉 `export` 改变了编译后的 lib 字节，而我以为"闭包不含被删模块所以制品不变"；重建制品（131 份 lib 文件）、smoke exit 0、tests/artifacts + tests/tooling/handoff 44/44。第三次 run-2H0Rsj（04:30–04:56 UTC，26.3 分钟）1492/1492 全通过、313 份文件（少了五份专属测试）、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-2H0Rsj/receipt.json`：313 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-GMdBIT）：八项通过；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱随发布候选刷新（§13.179 裁决）。
+
+本批改动 src（八个模块删除、kernel 错误族表）、tests（五份专属测试删除、五份共享测试裁剪、目录预算、未使用导出清理）、tooling/architecture（admitted roots）、knip.json、docs/；未提交。

@@ -73,7 +73,7 @@ import {
  * 它不创建 Support 根、不写 memory，也不决定 maintenance action 或旧根清理政策。
  */
 
-export const WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES = parseByteCount(
+const WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES = parseByteCount(
   256 * 1024,
   "$supportMemory.maximumBytes",
 );

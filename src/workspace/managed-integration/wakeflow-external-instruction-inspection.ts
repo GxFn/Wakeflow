@@ -52,7 +52,7 @@ import {
  * 本模块不取得锁、不发布，也不把传入 Config 证明成已提交的 workspace authority。
  */
 
-export const WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
+const WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
   2 * 1024 * 1024,
   "$externalInstruction.maximumBytes",
 );

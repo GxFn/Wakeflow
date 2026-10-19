@@ -255,8 +255,6 @@ export async function recomposeWakeflowProgramInstruction(
 }
 
 export {
-  WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS,
-  type WakeflowProgramInstructionRecompositionEffect,
   WakeflowProgramInstructionRecompositionError,
   type WakeflowProgramInstructionRecompositionErrorReason,
   type WakeflowProgramInstructionRecompositionOptions,

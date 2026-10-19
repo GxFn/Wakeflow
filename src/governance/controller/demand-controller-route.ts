@@ -181,7 +181,7 @@ const ERROR_MESSAGES = {
   relation: "Demand Controller Route sources are inconsistent.",
 } as const satisfies Readonly<Record<DemandControllerRouteErrorReason, string>>;
 
-export class DemandControllerRouteError extends Error {
+class DemandControllerRouteError extends Error {
   override readonly name = "DemandControllerRouteError";
   readonly code = "wakeflow-demand-controller-route" as const;
   readonly reason: DemandControllerRouteErrorReason;

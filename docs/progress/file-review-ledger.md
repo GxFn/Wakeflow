@@ -109,7 +109,7 @@ Foundation Data
 | `FND-ART-001` | Foundation / Artifact | `loaded-artifact-tree-identity.ts` | implemented / verified | 保留file-set v1 identity；补derived-entry、directory collision与空目录明示 |
 | `FND-ART-002` | Foundation / Artifact | `loaded-artifact-tree-transfer-plan.ts` | implemented / verified | 保留manifest→copy/tree纯计划；补candidate可遍历mode不变量并收窄类型 |
 | `FND-ART-003` | Foundation / Artifact | `loaded-artifact-tree-transfer-candidate.ts` | implemented / verified | 保留source→partial candidate编排；missing dirs exact create并先处理取消 |
-| `FND-ART-004` | Foundation / Artifact | `loaded-artifact-tree-transfer-publication.ts` | implemented / verified | 保留current/publish恢复；复用exact tree proof删除重复全树hash/read |
+| `FND-ART-004` | Foundation / Artifact | `loaded-artifact-tree-transfer-publication.ts` | implemented / verified | 保留current/publish恢复；复用exact tree proof删除重复全树hash/read；2026-10-19 Q12：恢复/发布模块无生产调用者，已删除（§13.180） |
 | `FND-GIT-001` | Foundation / Git | `git-ignore-observation.ts`、`git-ignore-candidate-observation.ts` | implemented / verified | 保留官方check-ignore协议；闭合process预算、candidate snapshot与临时根清理 |
 | `FND-RES-001` | Foundation / Resource | `resource-processing-contract.ts` | accepted / verified | 保留显式role/recipe/recovery联合；不恢复Owner–Capability Binding或通用dispatcher |
 | `FND-ES-001` | Foundation / Event Sourcing | `event-sourcing-version-evolution.ts` | implemented / verified | 保留逐版本read-time upcast；区分step/codec失败并统一稳定路径 |
@@ -118,7 +118,7 @@ Foundation Data
 | `CFG-003` | Configuration | `wakeflow-config-authority-snapshot.ts` | implemented / verified | 绑定strict bytes/model/placements；统一current-user single-link exact 0644策略 |
 | `CFG-004` | Configuration | `wakeflow-config-authority-publication.ts` | implemented / verified | 保留absent atomic create＋Snapshot readback；提交后忽略取消并精简receipt |
 | `CFG-005` | Configuration | `wakeflow-config-authority-replacement-contract.ts`、`wakeflow-config-authority-replacement.ts` | implemented / verified | 保留lock内CAS replace；提交后忽略取消并移除Publication常量依赖 |
-| `CFG-006` | Configuration | `wakeflow-config-authority-replacement-recovery.ts` | implemented / verified | 保留dead-owner显式恢复；直接返回正常replacement receipt并精简surface |
+| `CFG-006` | Configuration | `wakeflow-config-authority-replacement-recovery.ts` | implemented / verified | 保留dead-owner显式恢复；直接返回正常replacement receipt并精简surface；2026-10-19 Q12：恢复/发布模块无生产调用者，已删除（§13.180） |
 | `CFG-007` | Configuration | `wakeflow-fresh-config-selection.ts`、`wakeflow-config-resource-catalog.ts` | implemented / verified | Fresh先完整snapshot/validate再分配ID；Catalog保持两项真实资源 |
 | `WS-DECL-001` | Workspace / Resource Declaration | `workspace-resource-declaration.ts` | accepted / verified | 保留family/root/tracking/node/processing静态联合；零effect与零router |
 | `WS-CAT-001` | Workspace / Host Profile-Catalog | `workspace-host-resource-profile.ts`、`workspace-host-resource-catalog.ts` | accepted / verified | host差异只来自严格Profile；共享Catalog零hostId分支、零动态实例 |
@@ -145,7 +145,7 @@ Foundation Data
 | `MNT-013` | Workspace / Maintenance | `wakeflow-maintenance-journal-store.ts` | implemented / verified | 0600 create/CAS/retire生命周期；source返回统一、容量前置与post-commit分类 |
 | `MNT-014` | Workspace / Maintenance | `wakeflow-maintenance-gate.ts`＋gate-bound preview revalidation | implemented / verified | exact lock、Core bootstrap重验与锁内完整plan CAS；关闭pre-lock TOCTOU |
 | `MNT-015` | Workspace / Maintenance | `wakeflow-maintenance-execution-transaction.ts` | implemented / verified | 双重plan CAS＋Intent/Journal单调事务；统一取消、错误恢复指针与receipt判别 |
-| `MNT-016` | Workspace / Maintenance | `wakeflow-maintenance-orphan-gate-recovery.ts`、`wakeflow-prepared-maintenance-recovery.ts` | implemented / verified | 明确区分pre-intent orphan与checkpoint-0 cancellation；保留显式运维恢复 |
+| `MNT-016` | Workspace / Maintenance | `wakeflow-maintenance-orphan-gate-recovery.ts`、`wakeflow-prepared-maintenance-recovery.ts` | implemented / verified | 明确区分pre-intent orphan与checkpoint-0 cancellation；保留显式运维恢复；2026-10-19 Q12：恢复/发布模块无生产调用者，已删除（§13.180） |
 | `MNT-017` | Workspace / Maintenance | `wakeflow-maintenance-resource-catalog.ts`、`wakeflow-workspace-core-layout-inspection.ts` | implemented / verified | 五项私有资源＋Active/Local稳定分类；修正Lock错误映射并收窄exports |
 | `MNT-018` | Workspace / Maintenance | `wakeflow-static-materialization-step-executor.ts` | implemented / verified | 12种shared step闭合dispatcher；options前置、错误/close语义与exhaustive分派 |
 | `TODO-001` | Governance / TODO | `todo-item-id.ts`、`todo-paths.ts` | implemented / verified | 可读opaque ID与SHA-256 storage key分离；key品牌化并补词法边界 |

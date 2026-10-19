@@ -27,7 +27,7 @@ import {
 export const FIXTURE_REQUIREMENT_ID = "requirement_77777777-7777-4777-8777-777777777777" as const;
 export const FIXTURE_PROGRAM_ID = "program_11111111-1111-4111-8111-111111111111" as const;
 export const FIXTURE_ORIGIN_WINDOW_ID = "window_66666666-6666-4666-8666-666666666666" as const;
-export const FIXTURE_CONFIRMED_AT = parseUtcInstant("2026-09-04T10:00:00.000Z");
+const FIXTURE_CONFIRMED_AT = parseUtcInstant("2026-09-04T10:00:00.000Z");
 export const FIXTURE_RECORDED_AT = parseUtcInstant("2026-09-04T10:05:00.000Z");
 
 export const FIXTURE_REQUIREMENT_MARKDOWN = `# 示例需求

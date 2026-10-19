@@ -58,7 +58,7 @@ import {
  * 专用Evidence Reader在读取具体记录时负责该份payload的完整或定向内容复验。
  */
 
-export const MANAGED_EVIDENCE_RECORD_SET_MAXIMUM_RECORDS = 10_000;
+const MANAGED_EVIDENCE_RECORD_SET_MAXIMUM_RECORDS = 10_000;
 
 export interface ManagedEvidenceRecordInventoryEntry {
   readonly evidenceId: WakeflowDurableId<"evidence">;

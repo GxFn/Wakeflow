@@ -159,9 +159,7 @@ function instant(value: unknown, path: string): UtcInstant {
 }
 
 /** 处置对声明的处理是派生事实：只有 rejected-before-send 释放声明。 */
-export function deliveryClaimHandling(
-  disposition: DeliveryDisposition,
-): DeliveryOutcome["claimHandling"] {
+function deliveryClaimHandling(disposition: DeliveryDisposition): DeliveryOutcome["claimHandling"] {
   return disposition === "rejected-before-send" ? "release-authorized" : "retain";
 }
 

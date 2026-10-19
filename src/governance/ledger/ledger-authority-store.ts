@@ -224,13 +224,11 @@ export class LedgerAuthorityStore {
 
 export type {
   InitializeLedgerAuthorityStoreOptions,
-  LedgerAuthorityFileSource,
   LedgerAuthorityMemberInput,
   LedgerAuthorityMemberReference,
   LedgerAuthorityPublicationResult,
   LedgerAuthorityStoreErrorReason,
   LedgerAuthorityStoreOptions,
-  LoadedLedgerAuthorityDocument,
   LoadedLedgerAuthorityRecord,
   ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";

@@ -14,7 +14,6 @@ import {
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   type Sha256Digest,
@@ -450,10 +449,4 @@ export function parseDemandEventSourcingPublicationTransactionDocument(
     fail("representation", "$transaction");
   }
   return transaction;
-}
-
-export function computeDemandEventSourcingPublicationTransactionDigest(
-  value: unknown,
-): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingPublicationTransaction(value));
 }

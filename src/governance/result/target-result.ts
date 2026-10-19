@@ -49,7 +49,6 @@ import {
   ImplementationTargetResultReportError,
   parseImplementationTargetResultReport,
 } from "./implementation-target-result-report.js";
-import type { TargetResultOutcome } from "./target-result-report-contract.js";
 import {
   parseTestTargetResultReport,
   type TestTargetResultReport,
@@ -413,8 +412,4 @@ export function parseTargetResultDocument(textValue: unknown): Readonly<TargetRe
     fail("representation", "$result");
   }
   return result;
-}
-
-export function targetResultOutcome(value: unknown): TargetResultOutcome {
-  return parseTargetResult(value).report.outcome;
 }

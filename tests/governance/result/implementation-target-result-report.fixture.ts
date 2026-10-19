@@ -5,7 +5,7 @@ import type { TaskPackage } from "../../../src/governance/tasking/task-package.j
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 
 export const TARGET_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T09:55:00.000Z");
-export const TARGET_RESULT_EVIDENCE_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
+const TARGET_RESULT_EVIDENCE_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 
 /** 纯记录测试用的定位符只查形状；导入切片解析真实受管证据时由调用方传入真实定位符。 */
 export const TARGET_RESULT_EVIDENCE_REF = {

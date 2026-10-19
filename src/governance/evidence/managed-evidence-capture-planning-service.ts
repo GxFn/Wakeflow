@@ -335,7 +335,7 @@ function mapArtifactError(error: LoadedArtifactTreeIdentityError): never {
 }
 
 /** 隐私白名单：工作区根、ledger 根与配置里的全部仓库与支撑面真实路径（能力卡 8 Q1）。 */
-export function managedEvidencePrivacyPolicy(
+function managedEvidencePrivacyPolicy(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   worktreePaths: readonly string[] = [],

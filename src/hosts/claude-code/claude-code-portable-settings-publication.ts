@@ -483,12 +483,3 @@ export async function settleClaudeCodePortableSettingsPublicationStages(
     }
   }
 }
-
-/** 显式结算 stage 后幂等恢复 portable settings 发布。 */
-export async function recoverClaudeCodePortableSettingsPublication(
-  rootValue: RootedDirectory,
-  optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
-): Promise<Readonly<ClaudeCodePortableSettingsPublicationResult>> {
-  await settleClaudeCodePortableSettingsPublicationStages(rootValue, optionsValue);
-  return publishClaudeCodePortableSettings(rootValue, optionsValue);
-}

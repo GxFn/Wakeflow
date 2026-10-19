@@ -68,9 +68,9 @@ import {
  * 不是第二份 TaskPackage 权威，也不证明任务已经 Delivery、Claim 或完成。
  */
 
-export const TASK_PACKAGE_PROJECTION_DIRECTORY_MODE = 0o700;
-export const TASK_PACKAGE_PROJECTION_FILE_MODE = 0o600;
-export const TASK_PACKAGE_PROJECTION_MAXIMUM_BYTES = parseByteCount(
+const TASK_PACKAGE_PROJECTION_DIRECTORY_MODE = 0o700;
+const TASK_PACKAGE_PROJECTION_FILE_MODE = 0o600;
+const TASK_PACKAGE_PROJECTION_MAXIMUM_BYTES = parseByteCount(
   16 * 1024 * 1024,
   "$taskPackageProjection.maximumBytes",
 );

@@ -241,7 +241,7 @@ function planDigestBasis(value: Omit<WakeflowMaintenanceExecutionPlan, "planDige
 }
 
 /** 计算不包含自身摘要字段的聚合执行计划语义摘要。 */
-export function computeWakeflowMaintenanceExecutionPlanDigest(
+function computeWakeflowMaintenanceExecutionPlanDigest(
   value: Omit<WakeflowMaintenanceExecutionPlan, "planDigest">,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(planDigestBasis(value));

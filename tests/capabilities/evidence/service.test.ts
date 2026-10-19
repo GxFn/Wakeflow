@@ -7,7 +7,6 @@ import { deriveEvidenceEventIdentity } from "../../../src/capabilities/evidence/
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -16,7 +15,6 @@ import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/e
 import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
 import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
 import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
-import { ManagedEvidenceReadingService } from "../../../src/governance/evidence/managed-evidence-reading-service.js";
 import { DemandResultReviewSnapshotError } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
@@ -89,6 +87,20 @@ function demandRootPath(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspac
   return path.join(
     fixture.publication.workspacePath,
     ...demandFinalRootRef(fixture.demandId).split("/"),
+  );
+}
+
+/** 托管证据记录的清单文件：`artifacts/managed-evidence/<evidenceId>/manifest.json`。 */
+function evidenceManifestPath(
+  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
+  evidenceId: string,
+) {
+  return path.join(
+    demandRootPath(fixture),
+    "artifacts",
+    "managed-evidence",
+    evidenceId,
+    "manifest.json",
   );
 }
 
@@ -238,7 +250,6 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
         contentReview: "reject",
       },
     ];
-    const reading = new ManagedEvidenceReadingService(fixture.publication.workspaceRoot);
     for (const [index, selection] of selections.entries()) {
       const previewed = await preview(fixture, selection);
       equal(previewed.status, "ready", previewed.blockers.join(","));
@@ -260,18 +271,23 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
       );
       equal(content.includes("codex-host-thread:evidence-service"), false);
       equal(content.includes(fixture.publication.workspacePath), false);
-      const member = await reading.readPayloadMember(fixture.demandId, evidenceId, "content", {
-        maximumBytes: parseByteCount(4096),
-      });
-      equal(member.manifest.kind, selection.kind);
-      equal(member.manifest.source.kind, selection.source.kind);
-      equal(member.opaque, false);
+      // Q12：读取服务随 L3 删除，直接读清单文件核对种类与来源。
+      const recordedManifest = JSON.parse(
+        readFileSync(evidenceManifestPath(fixture, evidenceId), "utf8"),
+      ) as { kind: string; source: { kind: string } };
+      equal(recordedManifest.kind, selection.kind);
+      equal(recordedManifest.source.kind, selection.source.kind);
     }
-    const manifest = await reading.readManifest(
-      fixture.demandId,
-      (await preview(fixture, selections[0])).plan?.evidenceId as string,
-    );
-    const source = manifest.manifest.source;
+    const manifest = JSON.parse(
+      readFileSync(
+        evidenceManifestPath(
+          fixture,
+          (await preview(fixture, selections[0])).plan?.evidenceId as string,
+        ),
+        "utf8",
+      ),
+    ) as { source: { kind: string; event?: string; promptDigest?: string; transcript?: string } };
+    const source = manifest.source;
     if (source.kind !== "observation") throw new Error("Expected an observation source.");
     equal(source.event, "user-prompt-submit");
     equal(source.promptDigest, `sha256:${"7".repeat(64)}`);

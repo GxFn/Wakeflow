@@ -37,7 +37,7 @@ export const TEST_RESULT_REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z
 export const TEST_TARGET_STOPPED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
 export const TEST_REVIEW_INSPECTED_AT = parseUtcInstant("2026-08-29T12:36:00.000Z");
 export const TEST_REVIEW_DECIDED_AT = parseUtcInstant("2026-08-29T12:37:00.000Z");
-export const TEST_REVIEW_DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
+const TEST_REVIEW_DECISION_UUID = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5";
 
 export type TestStepFailureContent = Readonly<{
   readonly classification:

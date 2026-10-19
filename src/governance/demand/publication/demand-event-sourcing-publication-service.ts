@@ -492,8 +492,6 @@ export async function recoverDemandPublication(
 }
 
 export {
-  type DemandEventSourcingPublicationClaimResult,
-  type DemandEventSourcingPublicationEffectAuthority,
   type DemandEventSourcingPublicationResult,
   DemandEventSourcingPublicationServiceError,
 } from "./demand-event-sourcing-publication-contract.js";

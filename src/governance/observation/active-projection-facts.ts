@@ -106,7 +106,7 @@ function resolvedAway(
  * 判定；分支已删除即不再列出。仓库未观察、或分支清单读不全时都无法核对，条目保留且
  * `repositoryObserved` 为 false——读不出引用绝不能让未合并的分支悄悄消失。
  */
-export function acceptedBranchFacts(
+function acceptedBranchFacts(
   demandId: string,
   snapshot: Readonly<DemandResultReviewSnapshot>,
   repositories: ReadonlyMap<string, Readonly<RepositoryBranchTips>> | null,

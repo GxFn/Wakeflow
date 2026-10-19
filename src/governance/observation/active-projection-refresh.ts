@@ -136,7 +136,7 @@ export async function refreshActiveProjection(
  * 会让投影器自己的缺陷永远不被发现；已归类的失败（io-failure、precondition-failed、
  * capacity-exceeded 等）都是环境事实，下一次刷新或 `wakeflow_status` 会自愈。
  */
-export async function refreshActiveProjectionQuietly(
+async function refreshActiveProjectionQuietly(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<void> {

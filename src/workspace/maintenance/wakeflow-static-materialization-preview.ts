@@ -1516,12 +1516,7 @@ export async function previewWakeflowStaticMaterialization(
 export {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
-  WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS,
-  type WakeflowStaticMaterializationAction,
   type WakeflowStaticMaterializationPreview,
   WakeflowStaticMaterializationPreviewError,
-  type WakeflowStaticMaterializationPreviewErrorReason,
   type WakeflowStaticMaterializationPreviewRequest,
-  type WakeflowStaticMaterializationStep,
-  type WakeflowStaticMaterializationStepKind,
 } from "./wakeflow-static-materialization-preview-contract.js";

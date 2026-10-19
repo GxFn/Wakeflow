@@ -434,7 +434,7 @@ function sourceKindOf(value: unknown, path: string): string {
 }
 
 /** 解析调用方选择里的来源：observation 只带记录身份，link 的摘要可省略。 */
-export function parseManagedEvidenceSelectionSource(
+function parseManagedEvidenceSelectionSource(
   value: unknown,
   path = "$/source",
 ): ManagedEvidenceSelectionSource {

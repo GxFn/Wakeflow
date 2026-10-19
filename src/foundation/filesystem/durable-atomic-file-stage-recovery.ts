@@ -53,7 +53,7 @@ import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js
  * 目标持久性，再退休暂存文件。职责所有者仍在活动或状态未知时，只报告而不删除。
  */
 
-export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
+const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
 
 export interface DurableAtomicFileStageRecoveryOptions {

@@ -256,7 +256,7 @@ function stringArray(value: unknown, path: string, maximumItems = 64): readonly 
 }
 
 /** 准入不含时钟和摘要的Agent业务陈述，并返回独立冻结快照。 */
-export function parseImplementationTargetResultReportContent(
+function parseImplementationTargetResultReportContent(
   value: unknown,
 ): Readonly<ImplementationTargetResultReportContent> {
   const record = jsonRecord(

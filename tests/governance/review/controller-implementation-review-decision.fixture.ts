@@ -17,19 +17,19 @@ import type { DemandResultReviewSnapshot } from "../../../src/governance/review/
 import { createTargetResultFixture } from "../result/target-result.fixture.js";
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 
-export const CONTROLLER_REVIEW_WINDOW_ID = parseWakeflowDurableIdOfKind(
+const CONTROLLER_REVIEW_WINDOW_ID = parseWakeflowDurableIdOfKind(
   "window_77777777-7777-4777-8777-777777777777",
   "window",
 );
-export const CONTROLLER_REVIEW_SNAPSHOT_DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
-export const CONTROLLER_REVIEW_UNIT_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
-export const CONTROLLER_REVIEW_STATE_DIGEST = parseSha256Digest(`sha256:${"3".repeat(64)}`);
+const CONTROLLER_REVIEW_SNAPSHOT_DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
+const CONTROLLER_REVIEW_UNIT_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
+const CONTROLLER_REVIEW_STATE_DIGEST = parseSha256Digest(`sha256:${"3".repeat(64)}`);
 export const CONTROLLER_REVIEW_DECIDED_AT = parseUtcInstant("2026-08-29T12:15:00.000Z");
 export const CONTROLLER_REVIEW_DECISION_UUID = "dededede-dede-4ded-8ded-dededededede";
-export const CONTROLLER_REVIEW_COMPLETION_RECORD_ID = "20260829T121000000Z-stop-fixture";
+const CONTROLLER_REVIEW_COMPLETION_RECORD_ID = "20260829T121000000Z-stop-fixture";
 
 /** 目标会话在结果之后的 Stop 记录；accept 决定必须携带（§13.87 D2）。 */
-export function controllerReviewTargetCompletionFixture(): Readonly<ControllerReviewTargetCompletion> {
+function controllerReviewTargetCompletionFixture(): Readonly<ControllerReviewTargetCompletion> {
   return Object.freeze({
     recordId: CONTROLLER_REVIEW_COMPLETION_RECORD_ID,
     event: "stop" as const,
@@ -69,7 +69,7 @@ type ImplementationReviewJudgmentWire = Readonly<
 >;
 
 /** 公共请求线格式的同一份升级内容：生成的线类型要求可变数组，因此不与治理夹具共享对象。 */
-export function implementationReviewEscalationWire(): NonNullable<
+function implementationReviewEscalationWire(): NonNullable<
   ImplementationReviewJudgmentWire["escalation"]
 > {
   return {
@@ -101,7 +101,7 @@ export function implementationReviewJudgmentWire(
 }
 
 /** 请求里的判断字段：与决定记录共享同一词汇，`escalation` 只在 escalate 时出现。 */
-export function implementationReviewJudgment(
+function implementationReviewJudgment(
   decision: ControllerImplementationReviewDecisionType = "accept",
 ): Readonly<
   Pick<

@@ -59,11 +59,11 @@ export const CODEX_REVIEW_FACADE: Readonly<ResultReviewHostFacade> = Object.free
 });
 
 /** 最小配置里的 Controller 窗口；回调许可指向它。 */
-export const REVIEW_CONTROLLER_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
-export const REVIEW_EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-08-29T12:08:00.000Z");
+const REVIEW_CONTROLLER_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
+const REVIEW_EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-08-29T12:08:00.000Z");
 export const REVIEW_FIXTURE_REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
-export const REVIEW_TARGET_STOPPED_AT = parseUtcInstant("2026-08-29T12:11:00.000Z");
-export const REVIEW_CALLBACK_LANDED_AT = parseUtcInstant("2026-08-29T12:12:00.000Z");
+const REVIEW_TARGET_STOPPED_AT = parseUtcInstant("2026-08-29T12:11:00.000Z");
+const REVIEW_CALLBACK_LANDED_AT = parseUtcInstant("2026-08-29T12:12:00.000Z");
 export const REVIEW_INSPECTED_AT = parseUtcInstant("2026-08-29T12:13:00.000Z");
 export const REVIEW_DECIDED_AT = parseUtcInstant("2026-08-29T12:15:00.000Z");
 export const REVIEW_DECISION_UUID = "d3d3d3d3-d3d3-43d3-83d3-d3d3d3d3d3d3";

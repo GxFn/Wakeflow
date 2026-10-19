@@ -30,8 +30,6 @@ export const PUBLICATION_SECOND_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
   "requirement",
 );
 export const PUBLICATION_RECORDED_AT = parseUtcInstant("2026-09-01T12:00:00.000Z");
-/** 需求包全部成员按引用位置排序后的角色序列（`landing.md` 先于 `requirement.md`）。 */
-export const PUBLICATION_PACKAGE_ROLES = ["landing", "requirement"] as const;
 
 export interface DemandEventSourcingPublicationWorkspaceFixture {
   readonly fixtureRoot: string;
@@ -128,20 +126,4 @@ export function demandEventSourcingPublicationAuthoredDemand() {
     goal: "从看板上的需求包与Ledger生成完整revision 1计划",
     completionDefinition: "计划可精确Apply并支持前向Recovery",
   };
-}
-
-export function demandEventSourcingPublicationUuidFactory(
-  values: readonly string[],
-  calls: { value: number },
-) {
-  return () => {
-    const value = values[calls.value];
-    calls.value += 1;
-    if (value === undefined) throw new Error("Unexpected UUID allocation.");
-    return value;
-  };
-}
-
-export function demandEventSourcingPublicationPhysicalPath(root: string, ref: string): string {
-  return path.join(root, ...ref.split("/"));
 }

@@ -261,9 +261,6 @@ export async function recomposeWakeflowWorkspaceGitignore(
 }
 
 export {
-  WAKEFLOW_GITIGNORE_FILE_MODE,
-  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS,
-  type WakeflowGitignoreRecompositionEffect,
   WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionErrorReason,
   type WakeflowGitignoreRecompositionOptions,

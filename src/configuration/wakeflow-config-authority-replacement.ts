@@ -207,7 +207,6 @@ export async function replaceWakeflowConfigAuthority(
 
 export {
   WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementErrorReason,
   type WakeflowConfigAuthorityReplacementOptions,

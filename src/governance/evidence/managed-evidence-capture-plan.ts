@@ -230,7 +230,3 @@ export function parseManagedEvidenceCapturePlan(
   }
   return Object.freeze({ ...basis, planDigest });
 }
-
-export function computeManagedEvidenceCapturePlanDigest(value: unknown): Sha256Digest {
-  return parseManagedEvidenceCapturePlan(value).planDigest;
-}

@@ -180,7 +180,6 @@ export {
   inspectDirectoryTreeCandidateProgress,
 } from "./directory-tree-candidate-inspection.js";
 export type {
-  DirectoryTreeCandidateCapacity,
   DirectoryTreeCandidateFileInput,
   DirectoryTreeCandidateOptions,
   DirectoryTreeCandidatePlan,
@@ -188,11 +187,8 @@ export type {
   DirectoryTreeCandidateProgress,
   DirectoryTreeCandidateResult,
   DurableDirectoryTreeCandidateErrorReason,
-  InspectDirectoryTreeCandidateOptions,
 } from "./directory-tree-candidate-plan.js";
 export {
-  DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND,
-  DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION,
   DurableDirectoryTreeCandidateError,
   parseDirectoryTreeCandidatePlan,
   planDirectoryTreeCandidate,

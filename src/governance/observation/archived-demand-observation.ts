@@ -22,7 +22,7 @@ import { locateLatestDemandArchive } from "./demand-archive-locator.js";
  */
 
 export const ARCHIVED_DEMAND_SCAN_MAXIMUM = 64;
-export const ARCHIVED_DEMAND_MANIFEST_SCAN_MAXIMUM = 1024;
+const ARCHIVED_DEMAND_MANIFEST_SCAN_MAXIMUM = 1024;
 
 /** 看板上一条终态（归档或因取消撤回）的需求包指向的 Demand 与终态时间（排序用）。 */
 export interface ArchivedDemandCandidate {

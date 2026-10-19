@@ -62,7 +62,7 @@ import {
  * 后续 maintenance confirmed plan 仍须绑定这些语义摘要与执行顺序。
  */
 
-export const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
+const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
   2 * 1024 * 1024,
   "$programInstruction.maximumBytes",
 );

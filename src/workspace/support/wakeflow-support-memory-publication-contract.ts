@@ -1,7 +1,6 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import type { DurableAtomicFileStageRecoveryReceipt } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -33,12 +32,6 @@ export interface WakeflowSupportMemoryPublicationReceipt {
   readonly disposition: "current" | "created" | "replaced";
   readonly effect: Readonly<WakeflowSupportMemoryPublicationEffect> | null;
   readonly inspection: Readonly<WakeflowSupportMemoryInspection>;
-}
-
-export interface WakeflowSupportMemoryRecoveryReceipt {
-  readonly disposition: "recovered";
-  readonly stageRecovery: Readonly<DurableAtomicFileStageRecoveryReceipt>;
-  readonly publication: Readonly<WakeflowSupportMemoryPublicationReceipt>;
 }
 
 export type WakeflowSupportMemoryPublicationErrorReason =

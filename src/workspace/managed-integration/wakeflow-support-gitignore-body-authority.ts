@@ -25,8 +25,8 @@ export const WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME = parsePortableResourcePath(
   ".gitignore",
   "$supportGitignore.fileName",
 );
-export const WAKEFLOW_SUPPORT_GITIGNORE_COMPONENT = "support-ignore" as const;
-export const WAKEFLOW_SUPPORT_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
+const WAKEFLOW_SUPPORT_GITIGNORE_COMPONENT = "support-ignore" as const;
+const WAKEFLOW_SUPPORT_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
 export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1 as const;
 
 export interface WakeflowSupportGitignoreBodyAuthority {

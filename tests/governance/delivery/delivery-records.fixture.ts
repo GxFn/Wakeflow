@@ -60,14 +60,13 @@ export const DELIVERY_BINDING_ID = parseWakeflowWindowHostBindingId(
   "window_binding_99999999-9999-4999-8999-999999999999",
 );
 export const DELIVERY_BINDING_DIGEST = parseSha256Digest(`sha256:${"9".repeat(64)}`);
-export const DELIVERY_CLAIMED_AT = parseUtcInstant("2026-08-29T09:57:00.000Z");
-export const DELIVERY_PREPARED_AT = parseUtcInstant("2026-08-29T09:59:00.000Z");
-export const DELIVERY_OUTCOME_OBSERVED_AT = parseUtcInstant("2026-08-29T10:01:00.000Z");
-export const DELIVERY_REARMED_AT = parseUtcInstant("2026-08-29T10:02:00.000Z");
-export const DELIVERY_EXPECTED_STREAM_REVISION = 2;
-export const DELIVERY_PORTABLE_PROMPT =
+const DELIVERY_CLAIMED_AT = parseUtcInstant("2026-08-29T09:57:00.000Z");
+const DELIVERY_PREPARED_AT = parseUtcInstant("2026-08-29T09:59:00.000Z");
+const DELIVERY_OUTCOME_OBSERVED_AT = parseUtcInstant("2026-08-29T10:01:00.000Z");
+const DELIVERY_REARMED_AT = parseUtcInstant("2026-08-29T10:02:00.000Z");
+const DELIVERY_EXPECTED_STREAM_REVISION = 2;
+const DELIVERY_PORTABLE_PROMPT =
   "# Wakeflow delivery\n\nGoal: implement the confirmed slice.\n\nReturn: wakeflow_import_target_result.";
-export const DELIVERY_PROMPT_DIGEST = computeDeliveryPromptDigest(DELIVERY_PORTABLE_PROMPT);
 
 export interface WorkClaimFixtureOptions {
   readonly claimId?: WorkClaim["claimId"];

@@ -44,8 +44,8 @@ import {
  * 不能替代发布来源证明、宿主激活证明或迁移授权。
  */
 
-export const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1 as const;
-export const LOADED_ARTIFACT_TREE_MANIFEST_KIND = "wakeflow-loaded-artifact-tree" as const;
+const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1 as const;
+const LOADED_ARTIFACT_TREE_MANIFEST_KIND = "wakeflow-loaded-artifact-tree" as const;
 
 /** 与当前支持的清单 v1 保持一致、不得放宽的安全预算。 */
 export const LOADED_ARTIFACT_TREE_IDENTITY_LIMITS = Object.freeze({

@@ -54,15 +54,11 @@ import {
 export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF = parsePortableResourcePath(
   ".wakeflow-config-authority.lock",
 );
-export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export interface WakeflowConfigAuthorityReplacementOptions {
   readonly acquireTimeoutMilliseconds?: number;
   readonly retryDelayMilliseconds?: number;
-  readonly signal?: AbortSignal;
-}
-
-export interface WakeflowConfigAuthorityReplacementRecoveryOptions {
   readonly signal?: AbortSignal;
 }
 
@@ -133,10 +129,6 @@ export class WakeflowConfigAuthorityReplacementError extends Error {
 export interface ParsedWakeflowConfigAuthorityReplacementOptions {
   readonly acquireTimeoutMilliseconds: number;
   readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
-interface ParsedWakeflowConfigAuthorityRecoveryOptions {
   readonly signal: AbortSignal | undefined;
 }
 
@@ -231,16 +223,6 @@ export function parseWakeflowConfigAuthorityReplacementOptions(
           ),
     signal: parseSignal(record.signal),
   });
-}
-
-export function parseWakeflowConfigAuthorityRecoveryOptions(
-  value: unknown,
-): Readonly<ParsedWakeflowConfigAuthorityRecoveryOptions> {
-  const record = optionRecord(value);
-  if (Object.keys(record).some((key) => key !== "signal")) {
-    failWakeflowConfigAuthorityReplacement("input", "$options");
-  }
-  return Object.freeze({ signal: parseSignal(record.signal) });
 }
 
 export function assertWakeflowConfigAuthorityNotAborted(signal: AbortSignal | undefined): void {

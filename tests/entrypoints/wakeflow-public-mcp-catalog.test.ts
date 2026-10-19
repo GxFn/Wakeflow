@@ -1,23 +1,17 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
-import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
-import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import {
-  createWakeflowPublicMcpServer,
-  WakeflowPublicMcpServerConfigurationError,
-} from "../../src/entrypoints/wakeflow-public-mcp-server.js";
+  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
+  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+} from "../../src/capabilities/delivery/contract.js";
 import {
   WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME,
   WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/demand/contract.js";
-import {
-  WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
-  WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
-} from "../../src/capabilities/delivery/contract.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/evidence/contract.js";
 import {
   WAKEFLOW_STATUS_PUBLIC_TOOL_NAME,
@@ -36,12 +30,17 @@ import {
 } from "../../src/capabilities/result-review/contract.js";
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
+import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
+import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
+import {
+  createWakeflowPublicMcpServer,
+  WakeflowPublicMcpServerConfigurationError,
+} from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 import {
   findWakeflowToolRegistration,
   measureWakeflowToolCatalogBytes,
 } from "../../src/kernel/tool-registry.js";
-import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/capabilities/endpoint/contract.js";
 import {
   connectWakeflowMcpServerForTest,
   connectWakeflowMcpTestClient,
@@ -198,7 +197,8 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   ),
 ] satisfies readonly Readonly<ExpectedPublicTool>[]);
 
-const WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES = 128 * 1024;
+/** Q12（2026-10-18）：tools/list 预算按实测 94,146 B 加一成定为 102 KiB；按宿主/角色的子集预算归 K4。 */
+const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 102 * 1024;
 
 function unavailableExecutor(): Promise<never> {
   return Promise.reject(new Error("Catalog test executors must not run."));
@@ -313,12 +313,12 @@ test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
       equal(actual?.description?.includes(fragment), true, `${expected.name}: ${fragment}`);
     }
   }
-  // 体积预算：ADR-0004 的 60 KB 目标在 L1 合同收敛后复测；这里先锁住不回退。
+  // 体积预算（Q12）：ADR-0004 的 60 KB 目标改为按实测重定基线并锁住不回退。
   const listBytes = Buffer.byteLength(JSON.stringify(listed.tools), "utf8");
-  equal(listBytes <= WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES, true);
+  equal(listBytes <= WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES, true);
   equal(
     measureWakeflowToolCatalogBytes(WAKEFLOW_PUBLIC_TOOL_CATALOG) <=
-      WAKEFLOW_PUBLIC_TOOL_LIST_INTERIM_BUDGET_BYTES,
+      WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES,
     true,
   );
 });

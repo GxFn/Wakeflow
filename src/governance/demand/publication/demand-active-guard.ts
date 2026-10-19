@@ -101,7 +101,7 @@ async function identityPodId(
 }
 
 /** 一个已认领包对应的 Demand 根存在、属于目标 pod 且聚合未到终态即为该 pod 的活动 Demand。 */
-export async function demandIsActive(
+async function demandIsActive(
   root: RootedDirectory,
   state: RequirementClaimState,
   signal: AbortSignal | undefined,

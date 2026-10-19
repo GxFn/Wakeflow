@@ -54,7 +54,7 @@ export interface VerifyInput {
 
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$manifest.maximumBytes");
 
-export function computeVerifyObservationDigest(gates: readonly VerifyGateOutcome[]): Sha256Digest {
+function computeVerifyObservationDigest(gates: readonly VerifyGateOutcome[]): Sha256Digest {
   return computeCanonicalJsonSha256Digest(parseJsonValue({ gates }, "$verify"));
 }
 

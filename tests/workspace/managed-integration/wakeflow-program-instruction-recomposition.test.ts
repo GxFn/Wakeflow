@@ -28,11 +28,9 @@ import {
   WakeflowProgramInstructionRecompositionError,
   type WakeflowProgramInstructionRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
-import { recoverWakeflowProgramInstructionRecomposition } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { wakeflowProgramInstructionRecompositionLockRef } from "../../../src/workspace/workspace-host-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 interface Fixture {
   readonly absolutePath: string;
@@ -85,16 +83,6 @@ function request(
     desiredConfig,
     expectedDesiredConfigDigest: computeWakeflowConfigDigest(desiredConfig),
   });
-}
-
-function writeInactiveLock(lockPath: string): void {
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "11111111-1111-4111-8111-111111111111",
-    }),
-    { mode: 0o600 },
-  );
 }
 
 async function expectRecompositionError(
@@ -214,80 +202,4 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
     await holder;
   }
   equal(existsSync(contended.lockPath), false);
-});
-
-test("Program Instruction recovery retires only an inactive safe lock", async (t) => {
-  const desired = config("en");
-  const operation = request(null, desired);
-  const workspace = await fixture(t);
-  writeInactiveLock(workspace.lockPath);
-
-  const recovered = await recoverWakeflowProgramInstructionRecomposition(workspace.root, operation);
-  equal(recovered.disposition, "recovered");
-  equal(/^sha256:[0-9a-f]{64}$/u.test(recovered.retiredLockDigest), true);
-  equal(recovered.stageRecovery.observedStageCount, 0);
-  equal(recovered.recomposition.disposition, "created");
-  equal(recovered.recomposition.inspection.status, "managed-current");
-  equal(existsSync(workspace.lockPath), false);
-
-  const absent = await fixture(t);
-  await expectRecompositionError(
-    () => recoverWakeflowProgramInstructionRecomposition(absent.root, operation),
-    "recovery-not-required",
-    "$lock",
-  );
-
-  // 锁仍由活着的持有者占用：恢复拒绝且不退役锁。
-  const active = await fixture(t);
-  let enter: (() => void) | undefined;
-  let release: (() => void) | undefined;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const holder = withRootedExclusiveFileLock(
-    active.root,
-    wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile),
-    async () => {
-      enter?.();
-      await released;
-    },
-  );
-  await entered;
-  try {
-    await expectRecompositionError(
-      () => recoverWakeflowProgramInstructionRecomposition(active.root, operation),
-      "recovery-required",
-      "$lock",
-    );
-    equal(existsSync(active.lockPath), true);
-  } finally {
-    release?.();
-    await holder;
-  }
-  equal(existsSync(active.lockPath), false);
-});
-
-test("Program Instruction recovery preserves unknown managed content", async (t) => {
-  const desired = config("en");
-  const authority = createWakeflowProgramInstructionBodyAuthority(
-    desired,
-    codexWorkspaceHostResourceProfile,
-  );
-  const unknown = recomposeWakeflowManagedTextEnvelope(new Uint8Array(), {
-    ...authority.envelopeTarget,
-    body: "## Unknown marker-consistent content\n",
-  }).bytes;
-  const workspace = await fixture(t, unknown);
-  writeInactiveLock(workspace.lockPath);
-
-  await expectRecompositionError(
-    () => recoverWakeflowProgramInstructionRecomposition(workspace.root, request(desired, desired)),
-    "recovery-required",
-    "$source",
-  );
-  equal(existsSync(workspace.lockPath), true);
-  deepEqual(readFileSync(workspace.instructionPath), unknown);
 });

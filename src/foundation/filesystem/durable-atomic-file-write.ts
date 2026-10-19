@@ -319,8 +319,6 @@ export async function replaceFileAtomically(
 
 export {
   type DurableAtomicFileCreateOptions,
-  type DurableAtomicFileExpectation,
-  type DurableAtomicFilePublication,
   type DurableAtomicFileReplaceOptions,
   type DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteError,

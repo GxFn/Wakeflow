@@ -681,12 +681,9 @@ export class DemandFileEventStore {
 export {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
   type DemandFileEventStoreAppendReceipt,
   type DemandFileEventStoreCandidateRecoveryReceipt,
-  type DemandFileEventStoreCursor,
   DemandFileEventStoreError,
   type DemandFileEventStoreReadResult,
   type DemandFileEventStoreTailReadResult,

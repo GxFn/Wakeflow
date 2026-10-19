@@ -63,9 +63,9 @@ export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & {
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });
 
-export const DELIVERY_PREPARED_AT = parseUtcInstant("2026-08-29T12:05:00.000Z");
-export const DELIVERY_LANDED_AT = parseUtcInstant("2026-08-29T12:05:30.000Z");
-export const DELIVERY_OUTCOME_AT = parseUtcInstant("2026-08-29T12:06:00.000Z");
+const DELIVERY_PREPARED_AT = parseUtcInstant("2026-08-29T12:05:00.000Z");
+const DELIVERY_LANDED_AT = parseUtcInstant("2026-08-29T12:05:30.000Z");
+const DELIVERY_OUTCOME_AT = parseUtcInstant("2026-08-29T12:06:00.000Z");
 export const DELIVERY_AUTHORED = Object.freeze({
   goal: "按任务包完成本轮实现并回写结果。",
   focus: Object.freeze(["先读任务包与需求锚点", "只改分配仓库"]),

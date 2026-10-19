@@ -72,7 +72,7 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
  * 必须只含intent+journal。Intent先退休后，prepared/terminal journal才能最终退休。
  */
 
-export const WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES = parseByteCount(
+const WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES = parseByteCount(
   64 * 1024,
   "$maintenanceJournal.maximumBytes",
 );

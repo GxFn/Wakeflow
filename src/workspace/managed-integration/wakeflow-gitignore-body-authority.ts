@@ -38,8 +38,8 @@ import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-
 
 export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND = "WakeflowGitignoreBodyAuthority" as const;
 export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1 as const;
-export const WAKEFLOW_GITIGNORE_COMPONENT = "workspace-ignore" as const;
-export const WAKEFLOW_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
+const WAKEFLOW_GITIGNORE_COMPONENT = "workspace-ignore" as const;
+const WAKEFLOW_GITIGNORE_OWNER = "workspace-ignore-integration" as const;
 
 declare const WAKEFLOW_GITIGNORE_RULE_BRAND: unique symbol;
 

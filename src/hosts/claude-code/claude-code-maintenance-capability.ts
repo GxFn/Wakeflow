@@ -57,7 +57,7 @@ import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-i
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  */
 
-export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance" as const;
+const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance" as const;
 
 export type ClaudeCodeMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner";
 
@@ -68,7 +68,7 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<ClaudeCodeMaintenanceCapabilityErrorReason, string>>;
 
 /** Claude Code maintenance capability 失败的稳定、脱敏错误。 */
-export class ClaudeCodeMaintenanceCapabilityError extends Error {
+class ClaudeCodeMaintenanceCapabilityError extends Error {
   override readonly name = "ClaudeCodeMaintenanceCapabilityError";
   readonly code = "wakeflow-claude-code-maintenance-capability" as const;
   readonly reason: ClaudeCodeMaintenanceCapabilityErrorReason;

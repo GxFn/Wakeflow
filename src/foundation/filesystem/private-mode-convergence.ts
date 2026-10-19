@@ -25,8 +25,8 @@ import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
  * 本模块不决定哪些目录是私有的，那是调用方的布局知识。
  */
 
-export const PRIVATE_DIRECTORY_MODE = 0o700;
-export const PRIVATE_FILE_MODE = 0o600;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
 
 const GROUP_OTHER_WRITE = 0o022;
 const SPECIAL_BITS = 0o7000n;
@@ -72,7 +72,7 @@ function currentUserId(): bigint | null {
 }
 
 /** 目录 0700、文件 0600；其余类型没有私有模式。 */
-export function privateModeOf(node: Readonly<FileNodeSnapshot>): number | null {
+function privateModeOf(node: Readonly<FileNodeSnapshot>): number | null {
   if (node.kind === "directory") return PRIVATE_DIRECTORY_MODE;
   if (node.kind === "file") return PRIVATE_FILE_MODE;
   return null;

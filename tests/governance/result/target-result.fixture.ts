@@ -46,8 +46,8 @@ export function deliveryBindingFromOutcome(
   });
 }
 
-export const TARGET_RESULT_CALLBACK_ISSUED_AT = parseUtcInstant("2026-08-29T09:56:00.000Z");
-export const TARGET_RESULT_CALLBACK_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
+const TARGET_RESULT_CALLBACK_ISSUED_AT = parseUtcInstant("2026-08-29T09:56:00.000Z");
+const TARGET_RESULT_CALLBACK_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
 
 /** 与结果同时进入事件的 wake-controller 回调记录（纯记录测试用；prompt 是固定文本）。 */
 export function createTargetResultCallbackFixture(

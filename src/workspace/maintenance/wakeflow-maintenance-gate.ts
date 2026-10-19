@@ -391,7 +391,7 @@ async function runCorrelatedGate<Result>(
 /**
  * 在调用方已经验证 prepared journal / recovery evidence 后，以原 operation ID 取得 gate。
  */
-export function parseWakeflowExistingMaintenanceGateOptions(
+function parseWakeflowExistingMaintenanceGateOptions(
   value: unknown,
 ): Readonly<WakeflowExistingMaintenanceGateOptions> {
   let record: Readonly<Record<string, unknown>>;

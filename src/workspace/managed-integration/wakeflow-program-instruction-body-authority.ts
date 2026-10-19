@@ -57,8 +57,8 @@ import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-
 export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_KIND =
   "WakeflowProgramInstructionBodyAuthority" as const;
 export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_SCHEMA_VERSION = 1 as const;
-export const WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT = "program-instruction" as const;
-export const WAKEFLOW_PROGRAM_INSTRUCTION_OWNER = "host-instruction-integration" as const;
+const WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT = "program-instruction" as const;
+const WAKEFLOW_PROGRAM_INSTRUCTION_OWNER = "host-instruction-integration" as const;
 
 export interface WakeflowProgramInstructionBodyAuthority {
   readonly kind: typeof WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_KIND;

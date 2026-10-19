@@ -1,8 +1,6 @@
 import { types } from "node:util";
 
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import type { DurableAtomicFileStageRecoveryReceipt } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -36,7 +34,7 @@ import {
  * 指令文件、不生成正文、不取得锁，也不发布或恢复任何资源。
  */
 
-export const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export type WakeflowProgramInstructionRecompositionRequest = Omit<
   WakeflowProgramInstructionInspectionRequest,
@@ -49,10 +47,6 @@ export interface WakeflowProgramInstructionRecompositionOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface WakeflowProgramInstructionRecompositionRecoveryOptions {
-  readonly signal?: AbortSignal;
-}
-
 export type WakeflowProgramInstructionRecompositionEffect =
   | Readonly<DurableAtomicFileWriteResult<"created">>
   | Readonly<DurableAtomicFileReplaceResult>;
@@ -61,13 +55,6 @@ export interface WakeflowProgramInstructionRecompositionReceipt {
   readonly disposition: "current" | "created" | "replaced";
   readonly effect: Readonly<WakeflowProgramInstructionRecompositionEffect> | null;
   readonly inspection: Readonly<WakeflowProgramInstructionInspection>;
-}
-
-export interface WakeflowProgramInstructionRecompositionRecoveryReceipt {
-  readonly disposition: "recovered";
-  readonly retiredLockDigest: Sha256Digest;
-  readonly stageRecovery: Readonly<DurableAtomicFileStageRecoveryReceipt>;
-  readonly recomposition: Readonly<WakeflowProgramInstructionRecompositionReceipt>;
 }
 
 export type WakeflowProgramInstructionRecompositionErrorReason =
@@ -123,10 +110,6 @@ export class WakeflowProgramInstructionRecompositionError extends Error {
 export interface ParsedWakeflowProgramInstructionRecompositionOptions {
   readonly acquireTimeoutMilliseconds: number;
   readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
-export interface ParsedWakeflowProgramInstructionRecompositionRecoveryOptions {
   readonly signal: AbortSignal | undefined;
 }
 
@@ -219,19 +202,6 @@ export function parseWakeflowProgramInstructionRecompositionOptions(
         : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
     signal: record.signal as AbortSignal | undefined,
   });
-}
-
-export function parseWakeflowProgramInstructionRecompositionRecoveryOptions(
-  value: unknown,
-): Readonly<ParsedWakeflowProgramInstructionRecompositionRecoveryOptions> {
-  const record = plainRecord(value === undefined ? {} : value, "$options");
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    failWakeflowProgramInstructionRecomposition("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
 export function assertWakeflowProgramInstructionRecompositionNotAborted(

@@ -276,7 +276,7 @@ function stepIdList(
  * product-defect 要求 defect-observed/sufficient 且有失败检查，needs-decision 不能是 satisfied；
  * blocked 要求阻塞原因。分类到决定的路由由切片按逐步记录判定。
  */
-export function assertControllerTestReviewJudgment(
+function assertControllerTestReviewJudgment(
   judgment: Readonly<ControllerTestReviewJudgment>,
   resultOutcome: ControllerReviewedTargetResult["targetResultOutcome"],
   targetCompletion: Readonly<ControllerReviewTargetCompletion> | null,

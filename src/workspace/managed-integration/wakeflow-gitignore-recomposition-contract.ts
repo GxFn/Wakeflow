@@ -10,7 +10,6 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
-import type { DurableAtomicFileStageRecoveryReceipt } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -53,7 +52,7 @@ import type { WakeflowGitignoreInspection } from "./wakeflow-gitignore-inspectio
  */
 
 export const WAKEFLOW_GITIGNORE_FILE_MODE = 0o644;
-export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export interface WakeflowGitignoreRecompositionRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
@@ -67,10 +66,6 @@ export interface WakeflowGitignoreRecompositionOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface WakeflowGitignoreRecompositionRecoveryOptions {
-  readonly signal?: AbortSignal;
-}
-
 export type WakeflowGitignoreRecompositionEffect =
   | Readonly<DurableAtomicFileWriteResult<"created">>
   | Readonly<DurableAtomicFileReplaceResult>;
@@ -79,13 +74,6 @@ export interface WakeflowGitignoreRecompositionReceipt {
   readonly disposition: "current" | "created" | "replaced";
   readonly effect: Readonly<WakeflowGitignoreRecompositionEffect> | null;
   readonly inspection: Readonly<WakeflowGitignoreInspection>;
-}
-
-export interface WakeflowGitignoreRecompositionRecoveryReceipt {
-  readonly disposition: "recovered";
-  readonly retiredLockDigest: Sha256Digest;
-  readonly stageRecovery: Readonly<DurableAtomicFileStageRecoveryReceipt>;
-  readonly recomposition: Readonly<WakeflowGitignoreRecompositionReceipt>;
 }
 
 export type WakeflowGitignoreRecompositionErrorReason =
@@ -147,10 +135,6 @@ export interface ParsedWakeflowGitignoreRecompositionRequest {
 export interface ParsedWakeflowGitignoreRecompositionOptions {
   readonly acquireTimeoutMilliseconds: number;
   readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
-export interface ParsedWakeflowGitignoreRecompositionRecoveryOptions {
   readonly signal: AbortSignal | undefined;
 }
 
@@ -314,19 +298,6 @@ export function parseWakeflowGitignoreRecompositionOptions(
         : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
     signal: record.signal as AbortSignal | undefined,
   });
-}
-
-export function parseWakeflowGitignoreRecompositionRecoveryOptions(
-  value: unknown,
-): Readonly<ParsedWakeflowGitignoreRecompositionRecoveryOptions> {
-  const record = plainRecord(value === undefined ? {} : value, "$options");
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    failWakeflowGitignoreRecomposition("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
 export function assertWakeflowGitignoreRecompositionNotAborted(

@@ -94,31 +94,30 @@ export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = direc
   WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
 );
 
-export const WAKEFLOW_MAINTENANCE_GATE_RESOURCE_DECLARATION =
-  parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: "maintenance.gate",
-    family: "maintenance",
-    ownerId: "workspace-maintenance",
-    scope: "host-neutral",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath: WAKEFLOW_MAINTENANCE_GATE_REF,
-    },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "file",
-      mode: "0600",
-      linkPolicy: "single-link",
-      executablePolicy: "forbidden",
-    },
-    processing: {
-      kind: "resource",
-      role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "owner-transaction-recovery",
-    },
-  });
+const WAKEFLOW_MAINTENANCE_GATE_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
+  kind: "WakeflowWorkspaceResourceDeclaration",
+  declarationId: "maintenance.gate",
+  family: "maintenance",
+  ownerId: "workspace-maintenance",
+  scope: "host-neutral",
+  placement: {
+    root: { kind: "workspace" },
+    relativePath: WAKEFLOW_MAINTENANCE_GATE_REF,
+  },
+  tracking: { disposition: "ignored", privacy: "runtime-private" },
+  nodePolicy: {
+    kind: "file",
+    mode: "0600",
+    linkPolicy: "single-link",
+    executablePolicy: "forbidden",
+  },
+  processing: {
+    kind: "resource",
+    role: "transaction-artifact",
+    allowedMutationRecipes: ["exclusive-create", "exact-retire"],
+    recoveryStrategy: "owner-transaction-recovery",
+  },
+});
 
 /** Workspace Maintenance 的确定性静态资源目录。 */
 export const WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG = Object.freeze([

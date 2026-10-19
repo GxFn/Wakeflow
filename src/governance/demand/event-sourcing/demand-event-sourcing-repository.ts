@@ -18,7 +18,6 @@ import type {
   DecisionRecordedUncommittedEvent,
   DeliveryOutcomeRecordedUncommittedEvent,
   DeliveryPreparedUncommittedEvent,
-  DeliveryRearmedUncommittedEvent,
   DemandEscalatedUncommittedEvent,
   DemandUncommittedEvent,
   ProductDefectRemediationAuthorizedUncommittedEvent,
@@ -156,11 +155,6 @@ export interface LocatedDeliveryPreparedEvent {
 export interface LocatedDeliveryOutcomeRecordedEvent {
   readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
   readonly event: Readonly<DeliveryOutcomeRecordedUncommittedEvent>;
-}
-
-export interface LocatedDeliveryRearmedEvent {
-  readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
-  readonly event: Readonly<DeliveryRearmedUncommittedEvent>;
 }
 
 export interface LocatedTargetResultRecordedEvent {

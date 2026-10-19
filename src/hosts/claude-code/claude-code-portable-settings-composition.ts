@@ -136,7 +136,7 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<ClaudeCodePortableSettingsCompositionErrorReason, string>>;
 
 /** Claude portable settings composition 失败的稳定、脱敏错误。 */
-export class ClaudeCodePortableSettingsCompositionError extends Error {
+class ClaudeCodePortableSettingsCompositionError extends Error {
   override readonly name = "ClaudeCodePortableSettingsCompositionError";
   readonly code = "wakeflow-claude-code-portable-settings-composition" as const;
   readonly reason: ClaudeCodePortableSettingsCompositionErrorReason;

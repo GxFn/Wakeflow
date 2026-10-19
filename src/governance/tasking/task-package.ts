@@ -60,7 +60,6 @@ import {
 const TASK_PACKAGE_ARTIFACT_KIND = "wakeflow-task-package" as const;
 const TASK_PACKAGE_SCHEMA_VERSION = 1 as const;
 
-export type TaskPackageWorkType = "implementation" | "test";
 export type TaskPackageCommitExpectation = "commit" | "leave-uncommitted";
 
 export interface ImplementationTaskPackageAssignment {
@@ -206,30 +205,6 @@ export interface CreateTaskPackageOptions {
   readonly clock?: UtcWallClock;
 }
 
-/** 公共 Planning preview 允许调用方填写、但不允许控制身份/权威/时间的字段。 */
-export type TaskPackageContentDraft = Readonly<
-  Pick<
-    ImplementationTaskPackage,
-    | "acceptanceAnchors"
-    | "assignment"
-    | "boundaries"
-    | "commitExpectation"
-    | "completionExpectations"
-    | "confirmedContext"
-    | "lineage"
-    | "objective"
-    | "planReview"
-    | "sectionAnchors"
-    | "selectedAuthorityRefs"
-    | "workType"
-  >
->;
-
-/** 尚未由 Planning owner 解析 Authority member 选择的调用方内容字段。 */
-export type TaskPackageAuthoredContentDraft = Readonly<
-  Omit<TaskPackageContentDraft, "selectedAuthorityRefs">
->;
-
 export type TaskPackageErrorReason =
   | "input"
   | "json"
@@ -319,74 +294,10 @@ const TEST_DRAFT_FIELDS = Object.freeze([
   "testContract",
   "workType",
 ] as const);
-const CONTENT_DRAFT_FIELDS = Object.freeze([
-  "acceptanceAnchors",
-  "assignment",
-  "boundaries",
-  "commitExpectation",
-  "completionExpectations",
-  "confirmedContext",
-  "lineage",
-  "objective",
-  "planReview",
-  "sectionAnchors",
-  "selectedAuthorityRefs",
-  "workType",
-] as const);
-const AUTHORED_CONTENT_DRAFT_FIELDS = Object.freeze([
-  "acceptanceAnchors",
-  "assignment",
-  "boundaries",
-  "commitExpectation",
-  "completionExpectations",
-  "confirmedContext",
-  "lineage",
-  "objective",
-  "planReview",
-  "sectionAnchors",
-  "workType",
-] as const);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
 );
-const CONTENT_DRAFT_VALIDATION_DIGEST = parseSha256Digest(
-  `sha256:${"0".repeat(64)}`,
-  "$contentDraftValidationDigest",
-);
-const CONTENT_DRAFT_PROGRAM_ID = parseWakeflowDurableIdOfKind(
-  "program_00000000-0000-4000-8000-000000000000",
-  "program",
-  "$contentDraftProgramId",
-);
-const CONTENT_DRAFT_DEMAND_ID = parseWakeflowDurableIdOfKind(
-  "demand_00000000-0000-4000-8000-000000000001",
-  "demand",
-  "$contentDraftDemandId",
-);
-const CONTENT_DRAFT_TASK_PACKAGE_ID = parseWakeflowDurableIdOfKind(
-  "task-package_00000000-0000-4000-8000-000000000002",
-  "task-package",
-  "$contentDraftTaskPackageId",
-);
-const CONTENT_DRAFT_TARGET_TASK_ID = parseWakeflowDurableIdOfKind(
-  "target-task_00000000-0000-4000-8000-000000000003",
-  "target-task",
-  "$contentDraftTargetTaskId",
-);
-const AUTHORED_CONTENT_DRAFT_REFERENCE = parseLedgerAuthorityMemberReference({
-  artifactKind: "wakeflow-ledger-authority-member-reference",
-  schemaVersion: 1,
-  family: "requirement",
-  recordId: "requirement_00000000-0000-4000-8000-000000000010",
-  recordRef: "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
-  recordDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-  memberPath: "requirement.md",
-  memberRef: "requirements/requirement_00000000-0000-4000-8000-000000000010/requirement.md",
-  memberDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-  role: "requirement",
-  mediaType: "text/markdown",
-});
 
 function fail(reason: TaskPackageErrorReason, path: string): never {
   throw new TaskPackageError(reason, path);
@@ -862,118 +773,6 @@ export function createTaskPackage(
   return Object.freeze({
     ...admitted,
     createdAt: readCreationTime(options),
-  });
-}
-
-/**
- * 解析 Controller 可填写的 TaskPackage 内容草稿。
- *
- * 受控的 Program/Demand/Config/Authority/Task/Event 时间字段由 Planning owner 注入；
- * 本函数使用固定内部值复用完整 TaskPackage parser，随后只投影调用方拥有的字段。
- */
-export function parseTaskPackageContentDraft(value: unknown): TaskPackageContentDraft {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$contentDraft");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$contentDraft");
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== CONTENT_DRAFT_FIELDS.length ||
-    keys.some((key, index) => key !== CONTENT_DRAFT_FIELDS[index])
-  ) {
-    fail("input", "$contentDraft");
-  }
-  const parsed = parseTaskPackage({
-    artifactKind: TASK_PACKAGE_ARTIFACT_KIND,
-    schemaVersion: TASK_PACKAGE_SCHEMA_VERSION,
-    programId: CONTENT_DRAFT_PROGRAM_ID,
-    configDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-    demandId: CONTENT_DRAFT_DEMAND_ID,
-    demandAuthorityDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-    taskPackageId: CONTENT_DRAFT_TASK_PACKAGE_ID,
-    targetTaskId: CONTENT_DRAFT_TARGET_TASK_ID,
-    createdAt: DRAFT_VALIDATION_INSTANT,
-    assignment: record.assignment,
-    workType: record.workType,
-    objective: record.objective,
-    confirmedContext: record.confirmedContext,
-    selectedAuthorityRefs: record.selectedAuthorityRefs,
-    boundaries: record.boundaries,
-    completionExpectations: record.completionExpectations,
-    commitExpectation: record.commitExpectation,
-    acceptanceAnchors: record.acceptanceAnchors,
-    lineage: record.lineage,
-    planReview: record.planReview,
-    sectionAnchors: record.sectionAnchors,
-  });
-  if (parsed.workType !== "implementation") {
-    fail("relation", "$/workType");
-  }
-  return Object.freeze({
-    assignment: parsed.assignment,
-    workType: parsed.workType,
-    objective: parsed.objective,
-    confirmedContext: parsed.confirmedContext,
-    selectedAuthorityRefs: parsed.selectedAuthorityRefs,
-    boundaries: parsed.boundaries,
-    completionExpectations: parsed.completionExpectations,
-    commitExpectation: parsed.commitExpectation,
-    acceptanceAnchors: parsed.acceptanceAnchors,
-    lineage: parsed.lineage,
-    planReview: parsed.planReview,
-    sectionAnchors: parsed.sectionAnchors,
-  });
-}
-
-/** 解析尚未绑定完整 Ledger 引用的 Controller authored content。 */
-export function parseTaskPackageAuthoredContentDraft(
-  value: unknown,
-): TaskPackageAuthoredContentDraft {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$authoredContentDraft");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      fail("input", "$authoredContentDraft");
-    }
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== AUTHORED_CONTENT_DRAFT_FIELDS.length ||
-    keys.some((key, index) => key !== AUTHORED_CONTENT_DRAFT_FIELDS[index])
-  ) {
-    fail("input", "$authoredContentDraft");
-  }
-  const parsed = parseTaskPackageContentDraft({
-    assignment: record.assignment,
-    workType: record.workType,
-    objective: record.objective,
-    confirmedContext: record.confirmedContext,
-    selectedAuthorityRefs: [AUTHORED_CONTENT_DRAFT_REFERENCE],
-    boundaries: record.boundaries,
-    completionExpectations: record.completionExpectations,
-    commitExpectation: record.commitExpectation,
-    acceptanceAnchors: record.acceptanceAnchors,
-    lineage: record.lineage,
-    planReview: record.planReview,
-    sectionAnchors: record.sectionAnchors,
-  });
-  return Object.freeze({
-    assignment: parsed.assignment,
-    workType: parsed.workType,
-    objective: parsed.objective,
-    confirmedContext: parsed.confirmedContext,
-    boundaries: parsed.boundaries,
-    completionExpectations: parsed.completionExpectations,
-    commitExpectation: parsed.commitExpectation,
-    acceptanceAnchors: parsed.acceptanceAnchors,
-    lineage: parsed.lineage,
-    planReview: parsed.planReview,
-    sectionAnchors: parsed.sectionAnchors,
   });
 }
 

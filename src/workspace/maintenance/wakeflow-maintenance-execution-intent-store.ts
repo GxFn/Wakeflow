@@ -66,7 +66,7 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
  * 每次目录形状检查都只接受同operation的 intent 或 intent+journal；它不是第二状态机。
  */
 
-export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(
+const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(
   2 * 1024 * 1024,
   "$maintenanceIntent.maximumBytes",
 );

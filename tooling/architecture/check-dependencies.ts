@@ -35,23 +35,15 @@ interface DependencyCruiseReport {
  * consumer，也必须从这里删除，避免测试把遗留实现伪装成运行时骨干。
  */
 const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
-  "src/configuration/wakeflow-config-authority-replacement-recovery.ts",
   "src/entrypoints/claude-code-wakeflow-mcp.ts",
   "src/entrypoints/codex-wakeflow-mcp.ts",
   "src/entrypoints/wakeflow-hook-observer.ts",
-  "src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts",
-  "src/governance/evidence/managed-evidence-reading-service.ts",
   "src/hosts/claude-code/claude-code-agent-text-profile.ts",
   "src/hosts/claude-code/claude-code-hook-fragment.ts",
   // 制品构建器动态读取的宿主 MCP 配置；不是运行时内部依赖。
   "src/hosts/claude-code/claude-code-mcp-configuration.ts",
   "src/hosts/codex/codex-agent-text-profile.ts",
   "src/hosts/codex/codex-hook-fragment.ts",
-  "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",
-  "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
-  "src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.ts",
-  "src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.ts",
-  "src/workspace/support/wakeflow-support-memory-recovery.ts",
 ]);
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

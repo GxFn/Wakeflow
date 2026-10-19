@@ -7,7 +7,6 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,23 +22,8 @@ import {
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-replacement.js";
-import { recoverWakeflowConfigAuthorityReplacement } from "../../src/configuration/wakeflow-config-authority-replacement-recovery.js";
-import {
-  readWakeflowConfigAuthoritySnapshot,
-  WAKEFLOW_CONFIG_FILE_REF,
-} from "../../src/configuration/wakeflow-config-authority-snapshot.js";
-import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
-import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
-import {
-  issueDurableAtomicFileStageAddress,
-  releaseDurableAtomicFileStageAddress,
-} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { createFileCandidateDurably } from "../../src/foundation/filesystem/durable-file-candidate.js";
+import { readWakeflowConfigAuthoritySnapshot } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
-import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
 interface WorkspaceFixture {
@@ -86,16 +70,6 @@ async function expectReplacementError(
   }
   equal(caught.code, "wakeflow-config-authority-replacement");
   equal(caught.reason, reason);
-}
-
-function writeInactiveLock(lockPath: string): void {
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "11111111-1111-4111-8111-111111111111",
-    }),
-    { mode: 0o600 },
-  );
 }
 
 test("Config authority replacement 在exact source下替换并支持旧请求幂等重试", async () => {
@@ -249,127 +223,6 @@ test("Config authority replacement 拒绝不满足P1的current source", async ()
     equal(readFileSync(fixture.configPath, "utf8"), before);
     equal(existsSync(fixture.lockPath), false);
   } finally {
-    await root.close();
-    rmSync(fixture.temporaryRoot, { recursive: true, force: true });
-  }
-});
-
-test("Config replacement recovery 只接纳同一desired stage并前向完成", async () => {
-  const fixture = createWorkspace();
-  const root = await RootedDirectory.open(fixture.workspaceRoot);
-  try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
-    const desired = changedConfig("Recovered replacement");
-    const desiredBytes = encodeUtf8(renderWakeflowConfig(desired));
-    const address = issueDurableAtomicFileStageAddress(
-      "replace",
-      WAKEFLOW_CONFIG_FILE_REF,
-      computeSha256Digest(desiredBytes),
-      0o644,
-    );
-    const stageRef = durableAtomicFileStageRefForTest(WAKEFLOW_CONFIG_FILE_REF, address);
-    try {
-      await createFileCandidateDurably(root, stageRef, desiredBytes, {
-        mode: 0o644,
-      });
-    } finally {
-      releaseDurableAtomicFileStageAddress(address);
-    }
-    writeInactiveLock(fixture.lockPath);
-
-    const recovered = await recoverWakeflowConfigAuthorityReplacement(
-      root,
-      desired,
-      source.authority,
-    );
-    equal(recovered.disposition, "replaced");
-    equal(existsSync(fixture.lockPath), false);
-    equal(existsSync(path.join(fixture.workspaceRoot, ...stageRef.split("/"))), false);
-    equal(
-      recovered.authority.configDigest,
-      computeWakeflowConfigDigest(parseWakeflowConfig(desired)),
-    );
-  } finally {
-    await root.close();
-    rmSync(fixture.temporaryRoot, { recursive: true, force: true });
-  }
-});
-
-test("Config replacement recovery 保留不同desired的lock与stage现场", async () => {
-  const fixture = createWorkspace();
-  const root = await RootedDirectory.open(fixture.workspaceRoot);
-  try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
-    const desired = changedConfig("Requested replacement");
-    const otherBytes = encodeUtf8(renderWakeflowConfig(changedConfig("Other replacement")));
-    const address = issueDurableAtomicFileStageAddress(
-      "replace",
-      WAKEFLOW_CONFIG_FILE_REF,
-      computeSha256Digest(otherBytes),
-      0o644,
-    );
-    const stageRef = durableAtomicFileStageRefForTest(WAKEFLOW_CONFIG_FILE_REF, address);
-    try {
-      await createFileCandidateDurably(root, stageRef, otherBytes, {
-        mode: 0o644,
-      });
-    } finally {
-      releaseDurableAtomicFileStageAddress(address);
-    }
-    writeInactiveLock(fixture.lockPath);
-
-    await expectReplacementError(
-      () => recoverWakeflowConfigAuthorityReplacement(root, desired, source.authority),
-      "recovery-required",
-    );
-    equal(existsSync(fixture.lockPath), true);
-    equal(existsSync(path.join(fixture.workspaceRoot, ...stageRef.split("/"))), true);
-    equal(
-      readFileSync(fixture.configPath, "utf8"),
-      renderWakeflowConfig(createMinimalWakeflowConfig()),
-    );
-  } finally {
-    await root.close();
-    rmSync(fixture.temporaryRoot, { recursive: true, force: true });
-  }
-});
-
-test("Config replacement recovery 区分无残留与active lock", async () => {
-  const fixture = createWorkspace();
-  const root = await RootedDirectory.open(fixture.workspaceRoot);
-  let releaseHolder: (() => void) | undefined;
-  let holder: Promise<void> | undefined;
-  const holderGate = new Promise<void>((resolve) => {
-    releaseHolder = resolve;
-  });
-  let markStarted: (() => void) | undefined;
-  const holderStarted = new Promise<void>((resolve) => {
-    markStarted = resolve;
-  });
-  try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
-    const desired = changedConfig("Recovery state distinction");
-    await expectReplacementError(
-      () => recoverWakeflowConfigAuthorityReplacement(root, desired, source.authority),
-      "recovery-not-required",
-    );
-
-    holder = withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, async () => {
-      markStarted?.();
-      await holderGate;
-    });
-    await holderStarted;
-    await expectReplacementError(
-      () => recoverWakeflowConfigAuthorityReplacement(root, desired, source.authority),
-      "recovery-required",
-    );
-    equal(existsSync(fixture.lockPath), true);
-    releaseHolder?.();
-    await holder;
-    equal(existsSync(fixture.lockPath), false);
-  } finally {
-    releaseHolder?.();
-    await holder?.catch(() => undefined);
     await root.close();
     rmSync(fixture.temporaryRoot, { recursive: true, force: true });
   }

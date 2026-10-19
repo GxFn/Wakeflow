@@ -6,7 +6,7 @@ import { createTaskPackage } from "../../../src/governance/tasking/task-package.
 
 /** Tasking 与 Demand Event Sourcing 聚焦测试共享的一份固定、无文件副作用合同。 */
 
-export const TASKING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
+const TASKING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
   "program",
 );

@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreExportsUsedInFile": { "interface": true, "type": true },
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  },
   "workspaces": {
     ".": {
       "entry": [
@@ -25,19 +28,21 @@
         "tests/**/*.manual.ts",
         "tests/scenarios/*.ts"
       ],
-      "project": ["src/**/*.ts", "tooling/**/*.ts", "tests/**/*.ts"],
+      "project": [
+        "src/**/*.ts",
+        "tooling/**/*.ts",
+        "tests/**/*.ts"
+      ],
       "ignore": [
         ".build/**",
-        "src/contracts/generated/**",
-        "src/configuration/**",
-        "src/workspace/**",
-        "src/governance/**",
-        "src/foundation/**",
-        "src/hosts/**",
-        "tests/governance/**",
-        "tests/foundation/**"
+        "src/contracts/generated/**"
       ],
-      "ignoreDependencies": ["@swc/core"]
+      "ignoreDependencies": [
+        "@swc/core"
+      ],
+      "ignoreBinaries": [
+        "mkfifo"
+      ]
     }
   }
 }

@@ -27,7 +27,7 @@ import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js
  * 错误与普查结果不回显绝对路径，只含工作区内的可移植资源路径。
  */
 
-export const WAKEFLOW_PRIVATE_TREE_REFS: readonly PortableResourcePath[] = Object.freeze([
+const WAKEFLOW_PRIVATE_TREE_REFS: readonly PortableResourcePath[] = Object.freeze([
   parsePortableResourcePath(".wakeflow-local"),
   parsePortableResourcePath(".wakeflow-active"),
 ]);

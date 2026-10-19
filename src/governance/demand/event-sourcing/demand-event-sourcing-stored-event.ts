@@ -1,11 +1,5 @@
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../../foundation/data/deterministic-json-document.js";
-import type { JsonValue } from "../../../foundation/data/json-value.js";
-import {
   computeDemandAggregateStateDigest,
   type DemandAggregateState,
   DemandAggregateStateError,
@@ -151,29 +145,6 @@ export function createDemandEventSourcingStoredEvent(
     resultingStateModelVersion: DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
     resultingStateDigest: computeDemandAggregateStateDigest(state),
   });
-}
-
-export function renderDemandEventSourcingStoredEvent(value: unknown): string {
-  return renderDeterministicJsonDocument(parseDemandEventSourcingStoredEvent(value), "$event");
-}
-
-export function parseDemandEventSourcingStoredEventDocument(
-  text: unknown,
-): Readonly<DemandEventSourcingStoredEvent> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$event");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$event");
-    }
-    throw error;
-  }
-  const event = parseDemandEventSourcingStoredEvent(json);
-  if (renderDemandEventSourcingStoredEvent(event) !== text) {
-    fail("representation", "$event");
-  }
-  return event;
 }
 
 export function computeDemandEventSourcingStoredEventDigest(value: unknown): Sha256Digest {

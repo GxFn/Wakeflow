@@ -27,7 +27,7 @@ import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-pro
  * 共享层不依赖本模块；唯一的 operationKind 在这里显式分派，不注册动态 handler。
  */
 
-export const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance" as const;
+const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance" as const;
 
 export type CodexMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner";
 

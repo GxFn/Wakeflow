@@ -49,11 +49,11 @@ import {
   publishFixtureRequirement,
 } from "../ledger/requirement-package.fixture.js";
 
-export const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
+const PLANNING_PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
   "program",
 );
-export const PLANNING_DEMAND_ID = parseWakeflowDurableIdOfKind(
+const PLANNING_DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_22222222-2222-4222-8222-222222222222",
   "demand",
 );
@@ -83,13 +83,6 @@ const PUBLICATION_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit",
 );
 export const PLANNING_RECORDED_AT = parseUtcInstant("2026-08-29T12:00:00.000Z");
-
-export const PLANNING_UUIDS = Object.freeze([
-  "66666666-6666-4666-8666-666666666666",
-  "77777777-7777-4777-8777-777777777777",
-  "88888888-8888-4888-8888-888888888888",
-  "99999999-9999-4999-8999-999999999999",
-] as const);
 
 /** 切片请求里 Controller 拥有的部分：Demand 与任务包草稿；根、幂等键与修订由 `planFixtureTargetTask` 补。 */
 export interface TargetTaskPlanningFixtureRequest {
@@ -143,16 +136,6 @@ export function targetTaskPlanningWorkspaceBaselineKey(
   )
     return null;
   return `${options.testingMode ?? "controller-only"}|${options.taskPlanReview ?? "controller"}|${options.coverAllCriteria === true}`;
-}
-
-export function planningUuidFactory(): () => string {
-  let index = 0;
-  return () => {
-    const value = PLANNING_UUIDS[index];
-    index += 1;
-    if (value === undefined) throw new Error("Unexpected UUID allocation.");
-    return value;
-  };
 }
 
 /**

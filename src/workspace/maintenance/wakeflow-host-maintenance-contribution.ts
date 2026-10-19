@@ -211,7 +211,7 @@ function contributionDigestBasis(
 }
 
 /** 计算不包含自身摘要字段的宿主 contribution 语义摘要。 */
-export function computeWakeflowHostMaintenanceContributionDigest(
+function computeWakeflowHostMaintenanceContributionDigest(
   value: Omit<WakeflowHostMaintenanceContribution, "contributionDigest">,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(contributionDigestBasis(value));

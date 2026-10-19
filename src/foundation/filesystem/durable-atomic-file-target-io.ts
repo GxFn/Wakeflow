@@ -79,7 +79,7 @@ export async function assertDurableAtomicFileTargetParentCurrent(
   }
 }
 
-export async function inspectDurableAtomicFileTarget(
+async function inspectDurableAtomicFileTarget(
   parent: RootedResourceParentHandle,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {

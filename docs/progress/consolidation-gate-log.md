@@ -4986,3 +4986,26 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 未运行：lab/live、远端 CI；图谱随发布候选刷新。F-L1-10 的工具修正（`wf cache refresh` 核对加载位置）在下一节。
 
 本批改动 `assets/agent-text`（windows 参考、两份 README、init 命令）、`src/hosts/claude-code/claude-code-agent-text-profile.ts`（`windowLaunch`、`hostTrustSteps` 中英）、`tests/artifacts/agent-text-live-guidance.test.ts`、`tooling/testing/test-durations.json`、docs（capability card 01、live-test-plan、README 指针、本节）；分两次提交：源码与制品。
+
+### 13.184 `wf cache refresh` 核对宿主实际加载的位置（F-L1-10 的工具修正）（2026-10-19）
+
+§13.183 的 F-L1-10：本机 `gxfn` marketplace 是指向这个检出的 `directory` 源，Claude Code 从检出的 `plugins/claude-code-wakeflow` 就地加载插件（八个现场会话的 MCP 服务进程路径与 hook 观察器摘要都证明这一点），而 `installed_plugins.json` 与 `claude plugin list --json` 报的 `installPath` 是缓存目录。`wf cache refresh` 之前只比对缓存副本的清单（`matchesCommitted`），与 CLAUDE.md"不验证宿主实际加载的制品不得宣称刷新成功"相悖。
+
+修法（`tooling/release/cache-refresh.ts`，开发支持，不进制品）：
+
+- 结果新增 `loadPath {kind, path, manifestDigest, matchesCommitted, reason}`。读 `~/.claude/plugins/known_marketplaces.json`（测试用 `knownMarketplaces` 注入夹具）里本 marketplace 的源：`directory` → 加载位置 = 该目录加 marketplace.json 里插件的相对 `source`（就地加载，kind `directory-marketplace`）；其他源 → 缓存目录（kind `cache`）；文件读不到或没有本 marketplace 的登记 → `unknown`（`known-marketplaces-unreadable` / `marketplace-unregistered`）。
+- `--yes` 的 `passed` 从此要求加载位置的清单与已提交一致；副本一致只说明登记正确。`unknown` 一律 `failed`。不带 `--yes` 的计划也报告 `loadPath`。
+- `nextSteps` 在 directory 源时写明：重建已经换掉现场字节（会话报 `runtime-artifact-outdated`），卸载再安装只刷新副本与登记版本。
+- 测试：`cache-refresh.test.ts` 的夹具缺省把 `gxfn` 登记为指向本检出的 directory 源（本机形态），新增一条覆盖 directory / github / 登记缺失三种形态与不带 `--yes` 的报告。
+- 文档：maintainer-tools §18 写明加载位置语义；live-test-plan §1.1 加"注意加载位置"：现场轮次里不想更新环境就不要重建（用 `smoke:candidate`），要更新就在重建后把它当成一次插件更新。
+
+**本批用的级别：第 1 级**（`impact report`：tooling、tests、docs；不进制品）。
+
+验证与观察（本地）：
+
+- 第 0 级（`wf verify quick --files tests/tooling/release/cache-refresh.test.ts`）：第一轮 typecheck 拦住测试漏引的 `ok`；第二轮静态检查全过、3/3。
+- 本机干跑 `wf cache refresh --host claude-code`（不带 `--yes`，不调宿主 CLI）：`loadPath.kind = directory-marketplace`，路径是检出里的 `plugins/claude-code-wakeflow`，与已提交一致；而缓存副本（02:08 装的）已经与已提交不一致——正是 F-L1-10 说的副本与加载位置分离，旧工具会把这种状态误报。
+- `wf handoff`（含真实 build:check）：八项通过；`git diff --check` 干净。
+- 未运行：完整门（本批不触及 foundation/kernel/contracts，不进制品）；lab/live、远端 CI。
+
+本批改动 `tooling/release/cache-refresh.ts`、`tests/tooling/release/cache-refresh.test.ts`、docs（maintainer-tools §18、live-test-plan §1.1、README 指针、本节）；一次提交，不改制品。

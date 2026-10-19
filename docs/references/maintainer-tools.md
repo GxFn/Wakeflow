@@ -400,7 +400,7 @@ npm run --silent wf -- cache refresh --host claude-code
 npm run --silent wf -- cache refresh --host claude-code --yes
 ```
 
-`claude plugin update` 在版本号不变时报告"已是最新"，所以刷新是 `claude plugin uninstall wakeflow@gxfn` 再 `claude plugin install wakeflow@gxfn` 两步。不带 `--yes` 只给计划与缓存现状；`--yes` 才执行宿主 CLI，前后各核对一次 `~/.claude/plugins/cache/<marketplace>/wakeflow/<version>/` 里的制品清单摘要并与已提交制品比较（`--installed DIR` 覆盖目录，`--cli PATH` 供测试注入桩）。刷新只在用户明确要求时运行；缓存更新不等于窗口已重载——hook 立即用新字节，MCP 服务与技能要等窗口重启或 resume，之后用 `wakeflow_status` 的 `runtime.artifactManifestDigest` 核对。Codex 的缓存路径未在本仓库确认，按 unavailable 报告。
+`claude plugin update` 在版本号不变时报告"已是最新"，所以刷新是 `claude plugin uninstall wakeflow@gxfn` 再 `claude plugin install wakeflow@gxfn` 两步。不带 `--yes` 只给计划与缓存现状；`--yes` 才执行宿主 CLI，前后各核对一次 `~/.claude/plugins/cache/<marketplace>/wakeflow/<version>/` 里的制品清单摘要并与已提交制品比较（`--installed DIR` 覆盖目录，`--cli PATH` 供测试注入桩）。结果的 `loadPath` 说宿主实际从哪里加载（§13.183 F-L1-10）：`known_marketplaces.json` 里本 marketplace 是 `directory` 源时，Claude Code 从该目录里的 `plugins/claude-code-wakeflow` **就地**加载——MCP 服务与 hook 的进程路径都在检出里，缓存目录只是登记用的副本，所以一次 `build:artifacts:committed` 就已经换掉了现场的插件字节（现场会话随即报 `runtime-artifact-outdated`，要走"After a plugin update"流程），卸载再安装只刷新副本与登记版本；`github`/`git` 源才从缓存加载；登记读不到即 `unknown`。`passed` 以加载位置的清单与已提交一致为准。刷新只在用户明确要求时运行；缓存更新不等于窗口已重载——hook 立即用新字节，MCP 服务与技能要等窗口重启或 resume，之后用 `wakeflow_status` 的 `runtime.artifactManifestDigest` 核对。Codex 的缓存路径未在本仓库确认，按 unavailable 报告。
 
 ## 19. 偶发失败分诊
 

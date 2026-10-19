@@ -9,7 +9,7 @@
 
 ## 1. 前提
 
-1. **安装的插件就是这次构建。** 2026-10-19 时 Claude Code 装的还是 `wakeflow@gxfn 1.0.0`；`npm run --silent wf -- cache refresh --host claude-code --yes` 把 `plugins/claude-code-wakeflow`（版本 `1.1.0`）装进 Claude Code（卸载再安装两步，缓存目录 `~/.claude/plugins/cache/gxfn/wakeflow/1.1.0`）；装完用 `claude plugin list` 核对版本与来源。刷新缓存是独立动作，需要明确授权。
+1. **安装的插件就是这次构建。** 2026-10-19 时 Claude Code 装的还是 `wakeflow@gxfn 1.0.0`；`npm run --silent wf -- cache refresh --host claude-code --yes` 把 `plugins/claude-code-wakeflow`（版本 `1.1.0`）装进 Claude Code（卸载再安装两步，缓存目录 `~/.claude/plugins/cache/gxfn/wakeflow/1.1.0`）；装完用 `claude plugin list` 核对版本与来源。刷新缓存是独立动作，需要明确授权。**注意加载位置**（§13.183 F-L1-10）：本机的 `gxfn` marketplace 是指向这个检出的 `directory` 源，Claude Code 从检出的 `plugins/claude-code-wakeflow` 就地加载——每次 `build:artifacts:committed` 都会立刻换掉现场正在运行的插件字节（所有会话报 `runtime-artifact-outdated`，Controller 要走"After a plugin update"流程），卸载再安装只刷新缓存副本与登记版本。现场轮次里不想更新环境就不要重建（用 `smoke:candidate`），要更新就在重建后把它当成一次插件更新。
 2. **测试工作区是新的，仓库是真的。** 用 `WakeflowTestWorkspace` 系列里尚不存在的目录（2026-10-19 起用 `WakeflowTestWorkspace7`），里面放五个 Alembic 系列仓库的克隆（`Alembic`、`AlembicAgent`、`AlembicCore`、`AlembicDashboard`、`AlembicPlugin`，来源 `https://github.com/GxFn/<repo>.git`），像 WakeflowTestWorkspace 一样做真实的多仓库调度：Controller、Design、Test 加五个产品窗口在 primary pod，账本在工作区内，仓库一律 owner-managed，语言 zh-Hans。这些测试环境可以随意删除重建；AlembicWorkspace 里的原仓库不碰。
 3. **助手副本与文本同代。** 工作区已经存在时，先按 Controller 技能"After a plugin update"一节让维护重写 `.wakeflow-local/runtime` 里的助手副本；否则新文本会向旧助手传 `--prompt-ref`，被拒为 `argument-unknown`。新建的工作区不需要这一步。
 4. **宿主前提。** macOS、Node 24.19+（<25）在 Claude Code 启动的 PATH 上、`git`、`tmux`；Claude Code 账号已登录。

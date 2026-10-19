@@ -107,7 +107,10 @@ delivers prompts through the same helper. Maintenance also writes precise allow 
 that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,
 and every window the helper launches or resumes is started with those two tools allowed,
 so product and test windows do not stop at a permission prompt for them either; nothing
-broader such as `Bash(tmux *)` is written.
+broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow wrote
+therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a `..`
+directory in that list is 0.9.x residue or the repository's own settings: delete or review
+it before accepting, because accepting activates it.
 
 By default every window the helper launches runs in Claude Code's `auto` permission mode:
 Claude Code reviews routine actions itself instead of asking you. A window may still ask
@@ -154,7 +157,10 @@ additional directory in `.claude/settings*.json`, the `workspace.config.json`,
 `.workspace-active` and `.wakeflow-publish` root markers, `.wakeflow-stage*`,
 `.wakeflow-maintenance-*` and `.wakeflow-create-stage-*` directories, and a
 `wakeflow-ledger` directory. Archive or remove them by hand, then initialize
-again; 0.9.x Demand history is not migrated.
+again; 0.9.x Demand history is not migrated. A product repository that an 0.9.x
+workspace used carries the same `.claude/settings.json` rules and scope block;
+`wakeflow_status` lists them per repository root, and they are deleted before a
+window is launched there.
 
 ## Checking that it works
 

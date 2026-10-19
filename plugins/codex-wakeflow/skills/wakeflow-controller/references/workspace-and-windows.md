@@ -140,6 +140,11 @@ public result.
 
 Before the first launch: reuse the current chat as Controller only when its outer workspace project membership and workspace-root SessionStart are established. A source-maintenance chat in another project is not that Controller. With the user's existing authorization, create the Controller in the workspace project first, verify and register it, then handle the other roles in that same project. Do not ask again for authorization already given. If this chat is not that Controller, tell the user which chat is and continue there instead of running the Controller flow from here.
 
+Permissions are explicit: Wakeflow pre-approves only its own tools, per role, and its helper -
+at the roots it writes and on every window it launches - never a shell-wide rule or a
+parent-directory grant. Do not launch into a root that `legacyResidue` lists with `broad-permission`
+or `additional-directories` until the user has deleted those entries or chosen to keep them.
+
 Launching and registering:
 
 1. Take the window id from the maintenance or pod result, then call

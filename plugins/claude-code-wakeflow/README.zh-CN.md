@@ -79,7 +79,9 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
 建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任
 对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个
 助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品
-窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。
+窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，
+其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，
+那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。
 
 助手启动的每个窗口缺省以 Claude Code 的 `auto` 权限模式运行：常规操作由 Claude Code 自己审，
 不再逐条问你。窗口第一次仍可能问你一个一次性的问题（例如是否允许读取工作目录之外的文件），
@@ -113,7 +115,8 @@ Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wa
 `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)` 规则与 `..` 附加目录、`workspace.config.json`、
 `.workspace-active`、`.wakeflow-publish` 根标记、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、
 `.wakeflow-create-stage-*` 目录，以及 `wakeflow-ledger` 目录。手工归档或删除后重新初始化；
-0.9.x 的 Demand 历史不迁移。
+0.9.x 的 Demand 历史不迁移。0.9.x 工作区用过的产品仓库带着同样的 `.claude/settings.json` 规则与
+scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之前先删掉。
 
 ## 怎么确认它在工作
 

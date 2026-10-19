@@ -101,7 +101,8 @@ Codex 上的同伴窗口保持 `unverified`，这不是失败。
 `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)` 规则与 `..` 附加目录、`workspace.config.json`、
 `.workspace-active`、`.wakeflow-publish` 根标记、`.wakeflow-stage*`、`.wakeflow-maintenance-*`、
 `.wakeflow-create-stage-*` 目录，以及 `wakeflow-ledger` 目录。手工归档或删除后重新初始化；
-0.9.x 的 Demand 历史不迁移。
+0.9.x 的 Demand 历史不迁移。0.9.x 工作区用过的产品仓库带着同样的 `.claude/settings.json` 规则与
+scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之前先删掉。
 
 ## 怎么确认它在工作
 

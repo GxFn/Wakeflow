@@ -19,8 +19,9 @@ repositories.
   records which is which.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
-- **Pods** - a second complete window set working in its own worktree, for
-  running two pieces of work at once without them colliding.
+- **Pods** - a second complete window set working in its own worktree (and,
+  on Claude Code, in its own tmux session), for running two pieces of work at
+  once without them colliding.
 
 ## The flow
 
@@ -102,7 +103,8 @@ You never set tmux up by hand. Start `claude` in the workspace directory and run
 `/wakeflow:init`: the Controller creates the tmux session and every window itself through
 the helper maintenance installs at
 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact
-`tmux attach` command once the windows are up, and which trust dialogs to accept. It
+`tmux attach` command once the windows are up (a worktree pod gets its own session,
+`<session>-<pod name>`, with its own attach command), and which trust dialogs to accept. It
 delivers prompts through the same helper. Maintenance also writes precise allow rules for
 that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,
 and every window the helper launches or resumes is started with those two tools allowed,

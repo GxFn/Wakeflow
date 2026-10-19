@@ -15,8 +15,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
   窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
-- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集，用来并行推进两件事而
-  互不干扰。
+- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上还在自己的
+  tmux 会话里），用来并行推进两件事而互不干扰。
 
 ## 主流程
 
@@ -76,7 +76,8 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
 
 你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过
 维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己
-建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任
+建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令（worktree pod 各有
+自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任
 对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个
 助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品
 窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，

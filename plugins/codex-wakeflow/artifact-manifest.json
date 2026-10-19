@@ -110,13 +110,13 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 8664,
-      "sha256": "sha256:a86851bdea228e641b56c794ed40e7667b486837d14aa8b674970a0a053561b3"
+      "bytes": 8713,
+      "sha256": "sha256:41bef77e0e9a6d43f71e555e7301508ac338e4c2189b52e8d7d755e19fa5067e"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 7976,
-      "sha256": "sha256:937a1979ffbb19c8659dcf68c46ac5fe2b69d292b4c2a00498803b53e9d4b2ef"
+      "bytes": 8026,
+      "sha256": "sha256:c06c059f1d0ed053f2e4cdbd2cf3df02cb2e7edd600eb0e292b5db0b6d22ff63"
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
@@ -193,15 +193,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 8664,
-      "sha256": "sha256:a86851bdea228e641b56c794ed40e7667b486837d14aa8b674970a0a053561b3",
+      "bytes": 8713,
+      "sha256": "sha256:41bef77e0e9a6d43f71e555e7301508ac338e4c2189b52e8d7d755e19fa5067e",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 7976,
-      "sha256": "sha256:937a1979ffbb19c8659dcf68c46ac5fe2b69d292b4c2a00498803b53e9d4b2ef",
+      "bytes": 8026,
+      "sha256": "sha256:c06c059f1d0ed053f2e4cdbd2cf3df02cb2e7edd600eb0e292b5db0b6d22ff63",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -564,8 +564,8 @@
     },
     {
       "path": "lib/contracts/generated/configuration/wakeflow-config.generated.js",
-      "bytes": 36529,
-      "sha256": "sha256:67240163e3a6d08d3e111a1ee5a71db6c813b841092f0fec075f69e518a17cb4",
+      "bytes": 36706,
+      "sha256": "sha256:d56eebbb8837da35f12b32a01575f4bd16a2f938331596a0f1e73de3f13c4afd",
       "mode": "0644",
       "scope": "shared"
     },

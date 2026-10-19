@@ -19,7 +19,9 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *
  * - `preflight`：node、tmux 与 claude 是否可用及其版本、配置的会话是否已存在、当前是否在 tmux 里。
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
- *   （或其 `launchIntent`；意图里的 `role` 决定 MCP 许可规则，缺省时取结果顶层的 `role`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
+ *   （或其 `launchIntent`；意图里的 `role` 决定 MCP 许可规则，缺省时取结果顶层的 `role`）。窗口开在意图
+ *   `execution.tmux.sessionName` 指定的会话里（primary pod 是配置的会话，worktree pod 各有 `<配置名>-<pod>`，
+ *   §13.186），会话不存在就新建并在结果里给出 `attach`。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
  *   `session-start` hook 记录，打印登记用的 creation observation。launch 与 resume 都在意图参数之后加
  *   `--allowedTools`：Wakeflow MCP 规则与按助手绝对路径的 `Bash(node <path> *)`（路径只进启动命令）。意图带 `local-head` 的 worktree
  *   意图且参数里有 `--worktree <name>` 时（§13.130 H4），先在意图根（仓库主检出）准备检出：
@@ -924,8 +926,14 @@ function promptMarker(prompt) {
   return line.length < MARKER_MINIMUM ? null : line.slice(0, MARKER_MAXIMUM);
 }
 
-function attachCommand(context) {
-  return (context.socketName === null ? "tmux" : "tmux -L " + context.socketName) + " attach -t " + context.sessionName;
+function attachCommand(context, sessionName = context.sessionName) {
+  return (context.socketName === null ? "tmux" : "tmux -L " + context.socketName) + " attach -t " + sessionName;
+}
+
+// 窗口所属的 tmux 会话：意图里的 execution.tmux.sessionName（worktree pod 各有自己的会话），缺省配置的会话。
+function intentSessionName(execution, context) {
+  const name = execution?.tmux?.sessionName;
+  return typeof name === "string" && name.length > 0 && name.length <= 128 ? name : context.sessionName;
 }
 
 function commandPreflight(config) {
@@ -1044,10 +1052,11 @@ function intentWindowName(launchIntent, execution) {
 function openTmuxWindow(config, context, windowId, launchIntent, execution, resolvedArguments) {
   const placement = intentPlacement(launchIntent, execution);
   const windowName = intentWindowName(launchIntent, execution);
+  const sessionName = intentSessionName(execution, context);
   const command = claudePaneCommand(resolvedArguments, launchIntent.role);
-  const exists = tmux(context, ["has-session", "-t", "=" + context.sessionName]).ok;
+  const exists = tmux(context, ["has-session", "-t", "=" + sessionName]).ok;
   const creation = tmux(context, [
-    ...(exists ? ["new-window", "-d", "-t", "=" + context.sessionName] : ["new-session", "-d", "-s", context.sessionName]),
+    ...(exists ? ["new-window", "-d", "-t", "=" + sessionName] : ["new-session", "-d", "-s", sessionName]),
     ...paneEnvironmentArguments(),
     "-n", windowName,
     "-c", placement.absolute,
@@ -1058,7 +1067,7 @@ function openTmuxWindow(config, context, windowId, launchIntent, execution, reso
   const coordinates = parseCreatedCoordinate(creation.stdout);
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
-  return { coordinates, windowName, placement, exists };
+  return { coordinates, windowName, placement, exists, sessionName };
 }
 
 function assertExecution(execution) {
@@ -1226,13 +1235,13 @@ function commandResume(config, options) {
     resumed: true,
     observation: creationObservation(sessionId, launchIntent.intentDigest, {
       socketName: context.socketName,
-      sessionName: context.sessionName,
+      sessionName: opened.sessionName,
       windowId: opened.coordinates.windowId,
       paneId: opened.coordinates.paneId,
     }, null),
     hook: { sessionStart: hook.status },
     window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
-    ...(opened.exists ? {} : { attach: attachCommand(context) }),
+    ...(opened.exists ? {} : { attach: attachCommand(context, opened.sessionName) }),
   };
 }
 
@@ -1360,13 +1369,13 @@ function commandLaunch(config, options) {
     windowId,
     observation: creationObservation(sessionId, launchIntent.intentDigest, {
       socketName: context.socketName,
-      sessionName: context.sessionName,
+      sessionName: opened.sessionName,
       windowId: opened.coordinates.windowId,
       paneId: opened.coordinates.paneId,
     }, worktree),
     hook: { sessionStart: hook.status },
     window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
-    ...(opened.exists ? {} : { attach: attachCommand(context) }),
+    ...(opened.exists ? {} : { attach: attachCommand(context, opened.sessionName) }),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
     worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,
     ...(prepared === null ? {} : { worktreeBranch: prepared.branch, worktreeExclude: prepared.exclude }),
@@ -1402,7 +1411,7 @@ function commandSelf(config, options) {
       windowId: tmuxWindowId,
       paneId,
     }, null),
-    ...(sessionName === context.sessionName ? {} : { note: "controller-outside-configured-session" }),
+    ...(sessionName === intentSessionName(launchIntent.execution, context) ? {} : { note: "controller-outside-configured-session" }),
   };
 }
 

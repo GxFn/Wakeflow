@@ -19,8 +19,9 @@ repositories.
   records which is which.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
-- **Pods** - a second complete window set working in its own worktree, for
-  running two pieces of work at once without them colliding.
+- **Pods** - a second complete window set working in its own worktree (and,
+  on Claude Code, in its own tmux session), for running two pieces of work at
+  once without them colliding.
 
 ## The flow
 

@@ -14,10 +14,13 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
 import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
 import {
@@ -235,6 +238,12 @@ interface HelperRun {
   readonly json: Record<string, unknown>;
 }
 
+/** 去掉意图里的 role：早期 inspect 结果只在顶层带 role（§13.182 F-L1-8）。 */
+function withoutRole(intent: Record<string, unknown>): Record<string, unknown> {
+  const { role: _role, ...rest } = intent;
+  return rest;
+}
+
 function runHelper(
   current: Fixture,
   args: readonly string[],
@@ -438,6 +447,31 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
   }
 });
 
+test("the launch intent fixture is the public launchIntent the server emits, role included（§13.182 F-L1-8）", () => {
+  // 现场 F-L1-8：夹具带 role、服务端结果不带，助手测试全绿而真实开窗被拒。夹具从此按公共 Schema 校验。
+  const schema = WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA as {
+    readonly $id: string;
+  };
+  const validate = createRuntimeJsonSchemaValidator<unknown>(
+    {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "urn:wakeflow:test:tmux-asset:launch-intent",
+      $ref: `${schema.$id}#/$defs/inspectionResult/properties/launchIntent`,
+    },
+    [WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA],
+  );
+  for (const intent of [
+    launchIntent("Controller", "."),
+    launchIntent("Product A", "../ProductA"),
+  ]) {
+    const admitted = validate(parseJsonValue(intent));
+    equal(admitted.ok, true, JSON.stringify(admitted));
+  }
+  const rejected = validate(parseJsonValue(withoutRole(launchIntent("Controller", "."))));
+  equal(rejected.ok, false);
+  if (!rejected.ok) equal(rejected.detail, "required:role");
+});
+
 test("panes resolves an npm-installed claude: a node process whose argv names the Claude CLI entry is claude, other node processes are not（A5，§13.167）", async (t) => {
   const current = await fixture(t);
   writeLocator(current, PRODUCT_WINDOW_ID);
@@ -590,10 +624,13 @@ test("launch and resume grant the Wakeflow MCP tools and the helper by its absol
   const current = await fixture(t, "wakeflow tmux asset ");
   ok(current.assetPath.includes(" "));
   const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
+  // inspect 结果的形状：role 在顶层；这里故意不在意图里给 role，证明助手回退到顶层（§13.182 F-L1-8）。
   const launched = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
     input: JSON.stringify({
+      kind: "WakeflowWindowBindingInspection",
       windowId: PRODUCT_WINDOW_ID,
-      launchIntent: launchIntent("Product A", "../ProductA"),
+      role: "product",
+      launchIntent: withoutRole(launchIntent("Product A", "../ProductA")),
     }),
     env: hooks,
   });
@@ -732,6 +769,12 @@ test("launch refuses malformed intents before touching tmux", async (t) => {
     input: JSON.stringify({ ...launchIntent("Controller", "."), intentDigest: "nope" }),
   });
   equal(badDigest.json.reason, "intent-invalid");
+  // 意图与顶层都没有 role：许可规则无从选择（§13.182 F-L1-8）。
+  const roleless = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
+    input: JSON.stringify(withoutRole(launchIntent("Controller", "."))),
+  });
+  equal(roleless.json.reason, "intent-invalid");
+  equal(roleless.json.field, "role");
   const codex = launchIntent("Controller", ".");
   (codex.execution as Record<string, unknown>).kind = "codex";
   equal(

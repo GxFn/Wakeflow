@@ -78,8 +78,7 @@
       "required": ["selection"],
       "properties": {
         "selection": {
-          "$ref": "#/$defs/jsonValue",
-          "description": "Fresh user selection compiled by the Configuration owner into a typed Config model."
+          "$ref": "#/$defs/freshSelection"
         }
       }
     },
@@ -235,6 +234,217 @@
         },
         "operationId": {
           "$ref": "#/$defs/maintenanceOperationId"
+        }
+      }
+    },
+    "freshSelectionKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$",
+      "description": "Selection-local logical key; unique across repositories, surfaces and windows."
+    },
+    "freshRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectionKey", "path", "displayName", "instructionManagement"],
+      "properties": {
+        "selectionKey": {
+          "$ref": "#/$defs/freshSelectionKey"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Repository root relative to the workspace root; it must already be its own Git repository."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "instructionManagement": {
+          "enum": ["owner-managed", "managed-block"],
+          "description": "owner-managed leaves the repository's instruction files alone; managed-block lets Wakeflow keep one bounded block there."
+        }
+      }
+    },
+    "freshSupportSurface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectionKey", "capability", "path", "displayName", "ownership"],
+      "properties": {
+        "selectionKey": {
+          "$ref": "#/$defs/freshSelectionKey"
+        },
+        "capability": {
+          "enum": ["design", "test"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Surface root relative to the workspace root (inside it for wakeflow-managed, anywhere for external-owned)."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "ownership": {
+          "enum": ["wakeflow-managed", "external-owned"]
+        },
+        "instructionManagement": {
+          "enum": ["owner-managed", "managed-block"],
+          "description": "Only for external-owned surfaces."
+        }
+      }
+    },
+    "freshWindowRoot": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "program"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "selectionKey"],
+          "properties": {
+            "kind": {
+              "enum": ["repository", "support-surface"]
+            },
+            "selectionKey": {
+              "$ref": "#/$defs/freshSelectionKey"
+            }
+          }
+        }
+      ]
+    },
+    "freshWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectionKey", "role", "displayName", "root"],
+      "properties": {
+        "selectionKey": {
+          "$ref": "#/$defs/freshSelectionKey"
+        },
+        "role": {
+          "enum": ["controller", "design", "test", "product"]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "root": {
+          "$ref": "#/$defs/freshWindowRoot",
+          "description": "Where the window works: the program root, one repository (by its selectionKey) or one support surface (by its selectionKey)."
+        }
+      }
+    },
+    "freshSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program", "presentation", "topology", "storage", "governance", "hosts"],
+      "description": "The fresh-initialize selection: six parts, compiled by the Configuration owner into the typed Config. Every repository and window keeps its own selectionKey; windows reference repositories and surfaces by those keys. A refusal names the failing path in details.at and the rule in details.selection.",
+      "properties": {
+        "program": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["displayName"],
+          "properties": {
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        },
+        "presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "language": {
+              "enum": ["en", "zh-Hans"],
+              "description": "Language of Wakeflow-generated text; en when omitted."
+            }
+          }
+        },
+        "topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repositories", "supportSurfaces", "windows"],
+          "properties": {
+            "repositories": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/freshRepository"
+              }
+            },
+            "supportSurfaces": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/freshSupportSurface"
+              }
+            },
+            "windows": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/freshWindow"
+              }
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ledgerRoot"],
+          "properties": {
+            "ledgerRoot": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "description": "Ledger placement relative to the workspace root, inside it (ledger) or beside it (../<name>-ledger)."
+            }
+          }
+        },
+        "governance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "description": "Reserved; must be an empty object."
+        },
+        "hosts": {
+          "type": "object",
+          "description": "Optional launch and container preferences by host (claude-code, codex); the empty object inherits the tested profile. Its shape is the Config schema's hosts object."
         }
       }
     }

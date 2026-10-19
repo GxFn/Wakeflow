@@ -42,6 +42,8 @@ L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 �
 
 L1 停在 fresh-initialize 的预览，五个发现（F-L1-1 到 F-L1-5，详见 gate-log §13.181）：selection 形状没地方学、拒绝不点名规则、问答表推荐 managed-block、兄弟 `wakeflow-ledger`（工作区 2 的现役账本）被当成遗留物、拒绝不带残留物种类。修复批落地后重跑 L1。环境侧：Claude Code 启动时自动升级到 2.1.303；用户的全局 `cc-status` hook 让每次工具调用多等 45 s 到 3.5 分钟，现场期间建议临时关掉。遗留物（旧测试工作区与它们的账本）由用户自己清理：Claude 在 auto 模式下不能移动或删除别的工作区的目录。
 
+第二次（2026-10-19，`1b6a816f`，五个 Alembic 克隆）：§13.181 的修复都在现场成立，预览 `ready`，apply 完成，新会话 `self` 登记成功；停在第 1 步给 Design 开窗——助手拒绝 `intent-invalid/role`（F-L1-8：公共 inspect 结果的 `launchIntent` 不带 `role`，助手夹具却带着）。同批记下 F-L1-6（selection 形状进请求 Schema，编译器拒绝带 `details.at`）与 F-L1-7（第一次初始化后必经一次重启，I6 路径）。详见 gate-log §13.182。修复批落地并刷新缓存后，从"After a plugin update"一节换代助手副本，再从第 1 步继续。
+
 ## 5. 结束条件与后续
 
 - 全部场景按"什么算过"通过 → 打 `v1.1.0` tag、推送、`release:check` 真跑一次（各需授权，ADR-0021 规则 3），同时刷新图谱。

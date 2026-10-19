@@ -848,6 +848,8 @@ function inspectionResult(context: EndpointContext, loaded: LoadedState): Window
       podId: context.intent.podId,
       podName: context.intent.podName,
       podPlacement: context.intent.podPlacement,
+      // 宿主助手按意图里的 role 选 --allowedTools；顶层 role 只是窗口身份（§13.182 F-L1-8）。
+      role: context.intent.role,
       displayTitle: context.intent.displayTitle,
       root: {
         kind: context.intent.root.kind,

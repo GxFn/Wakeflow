@@ -4933,3 +4933,29 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 未运行：L1 重跑在提交并刷新缓存之后（见下一节）；lab/live、远端 CI；图谱随发布候选刷新。
 
 本批改动 src/foundation/schema、src/workspace（残留物扫描、预览）、src/capabilities 十处 contract 与 maintain-workspace、src/entrypoints、assets/agent-text（init 命令、Controller SKILL 第 0/1 步、windows 参考）、tooling/impact、tests（残留物、Schema、预览、impact）、CLAUDE.md/AGENTS.md、docs/；未提交。
+
+### 13.182 现场 L1 第二次：F-L1-6 到 F-L1-8 与第二修复批（2026-10-19）
+
+`1b6a816f` 装进 Claude Code 后在 `WakeflowTestWorkspace7` 重跑 L1，这次按用户要求用五个 Alembic 系列仓库的真实克隆（`Alembic`、`AlembicAgent`、`AlembicCore`、`AlembicDashboard`、`AlembicPlugin`）做多仓库调度，Controller、Design、Test 加五个产品窗口都在 primary pod，账本在工作区内，仓库一律 owner-managed；遗留物由用户事先清理。§13.181 的五个修复在现场得到确认：Controller 不再读插件源码、直接进入问答并推荐 owner-managed，Schema 拒绝带 `details.schema`，兄弟账本不再误报。预览 `ready` 无 blocker，apply 写出配置、账本、Design/Test、设置与助手副本，新会话里 `self` 登记成功。L1 走到第 1 步给 Design 开窗，停在助手的拒绝。三个新发现：
+
+- **F-L1-6 selection 的形状仍要靠手写。** Controller 读到了"按工具输入 Schema 组 selection"，但请求 Schema 里 `freshInitializeBody.selection` 只是 `domainObject`，三次预览被编译器拒为 `invalid-request/selection`（原因 `shape`，路径只到 `$request.request.selection`），最后由人手工给出 selection 才通过。修法：请求 Schema 新增 `$defs.freshSelection`（六部分 program / presentation / topology{repositories, supportSurfaces, windows} / storage / governance / hosts，窗口根是 program 或 repository / support-surface 加 selectionKey 的 oneOf，键形 `^[a-z][a-z0-9-]{0,63}$`），`selection` 引用它。缺部分现在在工具输入校验就被拒，Agent 看到的是 `Wakeflow tool input is invalid at $request/request/selection (required:storage)`（服务端自己的 `parseRequest` 走同一份 Schema，直接调用时给 `details.schema`），只有语义错误（悬空引用）才到编译器，编译器的拒绝带 `details.selection`（原因）与 `details.at`（点路径，如 `topology.windows.3.root.selectionKey`）。新增 `maintain-workspace-selection-detail.test.ts` 锁住两层。副作用：lab 的"错误码稳定"测试原来靠 `selection: {}` 换服务端信封，如今形状错误在 SDK 层就被拒、没有信封，改为送形状合法、引用悬空的 selection 取编译器的 `invalid-request/selection`。
+
+- **F-L1-7 初始化后要重启会话（可用性观察）。** apply 之后，设置会话自己的 `self` 登记被拒 `hook-evidence-missing`（会话先于工作区，没有 session-start 记录），再给 Controller 开窗被拒 `adopt-unproven`（pane 里已有一个无法证明会话的 claude）。文本写明了这条引导路径（I6：/exit、同一 pane 重启 claude、/wakeflow:init），Controller 也照做了，用户照做后登记成功。不改行为，记为第一次初始化必经的一次重启。
+
+- **F-L1-8 真实开窗被拒 `intent-invalid/role`（阻断）。** `tmux.mjs launch --window <design>` 对完整 inspect 结果与其 `launchIntent` 都拒绝。根因：助手按意图里的 `role` 选 `--allowedTools` 的 MCP 规则，而公共 inspect 结果把 `role` 放在顶层、`launchIntent` 里没有；助手测试的夹具却在意图里带着 `role`，所以测试全绿——open-items D5 说的"夹具自造形状、测试照样全绿"第一次在现场兑现。修法：公共结果 Schema 的 `launchIntent` 新增必填 `role`（枚举同顶层），endpoint 投影从编译器意图带出；助手在意图没有 `role` 时回退到结果顶层的 `role`（两处都没有仍拒 `intent-invalid/role`）；助手测试新增"夹具按公共 Schema 校验"（用 `$ref` 到 `#/$defs/inspectionResult/properties/launchIntent`，去掉 role 即 `required:role`），第一条 launch 测试改喂真实 inspect 形状（role 只在顶层）证明回退，resume 仍喂带 role 的意图证明主路径；endpoint 测试在 Codex 与 Claude 两条路径上断言意图 role 等于顶层 role。
+
+环境与观察：Claude Code 2.1.303 会在 Controller 提问后把一条建议回复预填进输入框（不是用户输入，之前"你来改名吧"那行也是）；Controller 在 tmux 会话 `wf7` 而配置的会话名不同时，`self` 的 `controller-outside-configured-session` 提示正确，其余窗口会开到配置的会话。五个 Alembic 仓库内部带着 0.9.x 的遗留物（`CLAUDE.md`/`AGENTS.md` 里的 scope-block、宽许可、`..` 形式的 additionalDirectories），是用户仓库里提交过的内容，`status` 作为信息列出，不阻断 owner-managed 仓库的调度，清理归用户。
+
+**本批用的级别：第 2 级**（改了 `src/contracts/schemas` 两份公共 Schema）。
+
+验证与观察（本地）：
+
+- 第 0 级（`wf verify quick --files`，五份测试）：第一轮 format:check 拦住新测试的两行长表达式；第二轮 39 测试败 1——助手的 role 拒绝发生在 pane 清单之后，与"接纳意图前不碰 tmux"的既有断言冲突，于是把 role 检查移进 `unwrapIntent`（`knownRole()`，`Object.hasOwn`）；第三轮助手测试 25/25。
+- `schema:check` 通过；制品重建 11 份文件变化；`smoke:artifacts` exit 0。
+- 第一次完整门（`npm run locked -- npm test`，00:21–00:44 本地，22.8 分钟；机器上另一个会话在循环跑 AlembicAgent 的 vitest，负载 17–21）：1496 测试 1492 过、2 败 2 取消。三条是负载敏感的超时（lab worktree 清理 240 s、hook 记录按龄退役 120 s、rooted read/write scope 准入 timeout），四份文件单独以并发 2 重跑 42/43——那三条 35/35 全过；剩下一条是真回归：lab 的"错误码稳定"测试靠 `selection: {}` 换服务端信封，如今被 SDK 输入校验先拒、没有信封（见 F-L1-6），改送悬空引用的 selection；改后该文件 8/8。
+- 第二次完整门（`wf verify gate`，run-5aWFWo，07:52–08:14 UTC，22.6 分钟）忘了设 `WAKEFLOW_TEST_CONCURRENCY=2`，以 8 worker 跑在负载 15–18 的机器上：1492 过、1 败 3 取消，全是同一族负载敏感项（两条 lab worktree 实验 240 s 超时、hook 记录退役 120 s 超时、rooted scope 准入 timeout），没有新回归。
+- 第三次完整门（`WAKEFLOW_TEST_CONCURRENCY=2 wf verify gate`，run-TczLZY，08:15–09:06 UTC，50.8 分钟，负载 10–18）：**1496/1496 全通过**、314 份文件、零失败/取消/skip/todo。`wf timings apply --receipt` 写回 314 份文件、并发 2。
+- `wf handoff`（含真实 build:check）：八项通过（whitespace、private-content、artifacts、version-bytes、docs-pointers、test-durations、instructions-parity、git）；`git diff --check` 干净。
+- 未运行：L1 第三次在提交并刷新缓存之后（见下一节）；lab/live、远端 CI；图谱随发布候选刷新。
+
+本批改动 `src/contracts/schemas` 两份公共 Schema（与生成物）、`src/capabilities/endpoint`（投影）与 `workspace`（selection 拒绝细节）、`src/hosts/claude-code`（助手）、tests（助手、endpoint、lab、新增 selection-detail）、`tooling/testing/test-durations.json`、docs/（open-items D5、live-test-plan、README 指针）；分两次提交：源码与制品。

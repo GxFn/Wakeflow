@@ -265,8 +265,14 @@ function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }
     return Object.freeze({ desiredConfig: null, compilation: null });
   } catch (error: unknown) {
     if (error instanceof WakeflowFreshConfigSelectionError) {
+      // §13.181 F-L1-6：点名选择里出问题的位置与规则（`$/topology/windows/0/root` → `topology.windows.0.root`），
+      // Agent 不必猜也不必读实现。
       fail("invalid-request", "selection", "$request.request.selection", {
         cause: error,
+        details: {
+          selection: error.reason,
+          at: error.path.replace(/^\$\/?/u, "").replace(/\//gu, ".") || "selection",
+        },
       });
     }
     if (error instanceof WakeflowConfigError) {

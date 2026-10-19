@@ -170,6 +170,7 @@
             "podId",
             "podName",
             "podPlacement",
+            "role",
             "displayTitle",
             "root",
             "worktree",
@@ -189,6 +190,9 @@
             },
             "podPlacement": {
               "enum": ["primary", "worktree"]
+            },
+            "role": {
+              "$ref": "#/$defs/role"
             },
             "displayTitle": {
               "type": "string",

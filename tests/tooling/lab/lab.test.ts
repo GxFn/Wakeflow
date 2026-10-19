@@ -19,6 +19,7 @@ import { inventoryDigest, snapshotLabTree } from "../../../tooling/lab/inventory
 import { createLab, disposeLab, inspectLab, runLab } from "../../../tooling/lab/lab.js";
 import { type LabToolObservation, withLabMcp } from "../../../tooling/lab/mcp-session.js";
 import { sha256 } from "../../../tooling/verification/files.js";
+import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { killChildProcess, waitForChildPid } from "../../support/child-process.js";
 
 function fixture(t: TestContext) {
@@ -163,6 +164,12 @@ test("lab MCP observations keep stable error codes while excluding arbitrary err
   const { root } = fixture(t);
   mkdirSync(root);
   const observations: LabToolObservation[] = [];
+  // §13.182 F-L1-6：selection 的形状进了请求 Schema，`{}` 这类形状错误在 SDK 的输入校验就被拒、没有
+  // Wakeflow 错误信封；要拿服务端的稳定错误码，得送形状合法、引用悬空的 selection，让编译器拒绝。
+  const selection = createMinimalWakeflowFreshConfigSelection();
+  const windows = (selection.topology as { windows: Record<string, unknown>[] }).windows;
+  const product = windows.find((entry) => entry.role === "product") as Record<string, unknown>;
+  product.root = { kind: "repository", selectionKey: "missing-repository" };
   await rejects(
     withLabMcp(
       path.join(process.cwd(), "plugins/codex-wakeflow"),
@@ -173,7 +180,7 @@ test("lab MCP observations keep stable error codes while excluding arbitrary err
           root,
           action: "fresh-initialize",
           mode: "preview",
-          request: { selection: {} },
+          request: { selection },
         });
       },
     ),
@@ -182,6 +189,7 @@ test("lab MCP observations keep stable error codes while excluding arbitrary err
   equal(observations.length, 1);
   equal(observations[0]?.status, "failed");
   equal(observations[0]?.mcpError?.code, "invalid-request");
+  equal(observations[0]?.mcpError?.reason, "selection");
   equal(JSON.stringify(observations).includes(root), false);
 });
 

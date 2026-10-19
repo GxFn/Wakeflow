@@ -200,6 +200,8 @@ test("Codex：inspect 给出启动意图与执行参数，register 需要 hook �
   equal(inspected.claim.status, "absent");
   equal(inspected.locator.status, "not-applicable");
   equal(inspected.launchIntent.intentDigest, intent.intentDigest);
+  // 意图里的 role 与顶层一致：宿主助手据此选许可规则（§13.182 F-L1-8）。
+  equal(inspected.launchIntent.role, inspected.role);
   equal((inspected.launchIntent.execution as { kind: string }).kind, "codex");
   equal(inspected.next.frontier, "window-registration");
   equal(JSON.stringify(inspected).includes(root), false, "inspection leaked the workspace path");
@@ -662,6 +664,7 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
     throw new Error("Expected an inspection.");
   equal(inspected.locator.status, "present");
   equal((inspected.launchIntent.execution as { kind: string }).kind, "claude-code");
+  equal(inspected.launchIntent.role, inspected.role);
 
   const pane = {
     ...tmux,

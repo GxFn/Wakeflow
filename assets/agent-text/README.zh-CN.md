@@ -46,7 +46,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
    代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux`；
-   支持 macOS 与 Linux 的本地文件系统，不支持 Windows。Claude Code 可以是原生
+   只支持 macOS 的本地文件系统，不支持 Linux 与 Windows。Claude Code 可以是原生
    二进制，也可以是 npm 安装的 `claude` 脚本，两者都能识别。
 3. 完成下面这一节的一次性宿主动作。
 4. 在你想作为工作区的目录里打开 Agent，说"初始化一个 Wakeflow 工作区"。该目录

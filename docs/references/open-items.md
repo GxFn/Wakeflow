@@ -149,7 +149,7 @@
   - 证据：withRootedExclusiveFileLock（:813-830）在 finally 里 release，没有 catch：release 抛错会丢掉成功结果，或者覆盖原本的操作错误；requirement-board.ts:132-137 把它映射成可重试的 concurrency-conflict
   - 建议：操作成功时照常返回结果，释放失败单独报告（警告加残留检查），或者至少标记为 committed-but-lock-residue，避免调用方盲目重试。
   - 2026-10-05 后续（§13.161）：pod 锁的失败映射改为只有 timeout / owner-active / residue-changed 可重试，不安全锁记录、父目录与根作用域问题和释放失败不再标成可重试；释放失败覆盖成功结果这一点本身仍开放。
-- **B11** [低 / 待决] 平台范围（Windows、网络文件系统）没有对用户声明，锁机制依赖 POSIX 的 pid、link 和权限语义（计划阶段 2；状态：开放）
+- **B11** [低 / 待决] 平台范围（Windows、网络文件系统）没有对用户声明，锁机制依赖 POSIX 的 pid、link 和权限语义（计划阶段 2；状态：声明部分关闭 2026-10-18（ADR-0021：仅 macOS 本地文件系统，`package.json` 的 `os: ["darwin"]`、两份 README、仓库 README、插件描述与需求总览 §4 写明）；非本地文件系统的预检阻塞仍开放）
   - 说明：在 NFS/SMB 上，或者工作区跨机器、跨容器共享时，kill(pid,0) 查的是错误的 PID 命名空间，远端还活着的持锁者会被当作 inactive 退役，或者反过来。Windows 会被早早拒绝，但用户文档没有写。需求文档还声称已经声明过。
   - 证据：plugins/*/package.json 没有 "os" 字段；README 里没有平台说明；docs/requirements/README.md:37 声称“制品与 README 明确声明不支持 Windows”，但实际没有；验证者更正：至少十个 geteuid helper 在 win32 下以 unsupported-platform 失败，fresh-initialize 第一次写配置时就能早早拒绝 Windows；网络文件系统只在源码注释里排除（rooted-exclusive-file-lock.ts:79），没有 statfs 检查
   - 建议：确定并写明支持的平台（macOS/Linux、本地文件系统），在两份 README 和 package.json 的 os 字段里声明，并修正 requirements/README.md:37。fresh-initialize 预览在非本地文件系统上以明确的码阻塞。
@@ -178,6 +178,7 @@
   - 2026-10-02 实施（§13.146）：status/verify v2 将 observer 摘要与窗口 runtime 分开；后者缺少可信宿主关联时为 unverified，完整门报 unavailable，skills 不再据此循环重启或重建。生成 MCP 新旧并存复测单独记录，不冒充真实桌面事件证据。
 
 - **C1** [高 / 缺陷] 1.0.0 从未打 tag，却已作为 main 安装渠道持续变更；同一版本号对应多份不同字节，安装缓存按版本号键控（计划阶段 3；状态：开放，2026-10-09 改写：版本输入已是 1.1.0-rc.5 且五个版本源一致，本地 `install:check` 拒绝同版本不同字节覆盖（§13.146）；仍没有 v1.x tag，`release:check` 的 Git 门从未通过，main 上同一 rc.5 对应多套制品字节，没有“字节变了版本必须变”的门；归 Q2 与技术债务批次 4）
+  - 2026-10-18（ADR-0021）：停用 rc.N，版本输入改为 `1.1.0`；`wf handoff` 新增 `version-bytes`：当前版本的 tag 存在时制品字节必须与 tag 一致，否则先 bump。本项在 `v1.1.0` 打上之后关闭。
   - 说明：每次 push 到 main 实际上都是一次发布，但版本号一直不动。Claude Code 按 <marketplace>/<plugin>/<version> 缓存插件，09-20 之后从 GitHub 安装的用户很可能停在他们最初拿到的那份 1.0.0 上，包括没有 387 项评审修复的构建，而且收不到任何信号（按版本号键控时的更新行为属于推断）。README 描述的发布流程在 TS 系列里从未真正执行过。
   - 证据：assets/release/version.json 为 1.0.0，最后一次修改在 629e79c5（2026-09-20）；此后 plugins/ 有 29 次提交；git tag 最新为 v0.9.4；check-release-consistency.ts:296-302 要求 v<version> 指向 HEAD，所以 release:check 现在无法通过；README.md:95-96 让用户从 GxFn/Wakeflow 安装；HEAD == origin/main == 0ef5defa；installed_plugins.json 中 wakeflow@gxfn 为 1.0.0，缓存在 cache/gxfn/wakeflow/1.0.0，manifest 166f580c，仓库是 2075d916，两者都叫 1.0.0；gate-log §13.113 在无 upcaster 的情况下删除了配置字段；§13.131 原地放宽 v1 事件数据；runtime-artifact gate（observation/decide.ts:622-631）只比较 manifest 摘要；没有“字节变了版本就必须变”的检查
   - 建议：先选定渠道模型：要么每次改动 plugins/ 的 push 都 bump 补丁版本并打 tag，要么在开发分支开发、main 只通过发布流程前进；tag 之前的构建可以用 1.0.0-rc.N。在 gate 中加一条检查：plugins/ 与最近 v* tag 不同时，version.json 也必须不同。真正发布一次 v1.0.x，并把 release:check 实际跑通。
@@ -315,7 +316,7 @@
 
 §13.137–§13.139 已完成 main 与 worktree pod 的真实需求闭环，并通过新增八窗口、五个 Git worktree 的登记、隔离检查、归档、退役、解锁与回收。已在绑定后的交互 CLI 中观测四类真实 hook。worktree 使用普通 Git 与官方 Codex CLI/app-server 启动接口，未走 App 的 create_thread(worktree) 原生创建入口；原生 Windows、根外检出与部分宿主合同仍未验证。发送返回摘要的约定、宿主文本及发布定位仍有缺口。
 
-- **E1** [高 / 缺口] Codex 闭环与 worktree 生命周期已验证，原生创建入口、平台及发布验证范围提示仍有缺口（计划阶段 6；状态：部分，§13.139 已完成工作区内 Git worktree 实测；App 原生工作树创建入口与原生 Windows 仍未验证）
+- **E1** [高 / 缺口] Codex 闭环与 worktree 生命周期已验证，原生创建入口、平台及发布验证范围提示仍有缺口（计划阶段 6；状态：部分，§13.139 已完成工作区内 Git worktree 实测；App 原生工作树创建入口仍未验证；2026-10-18 标注部分关闭：Codex 版在插件描述、仓库 README 宿主表与宿主信任步骤开头标为 preview（ADR-0021），Windows 按 Q11 不再支持）
   - 说明：SessionStart 身份、插件路径、信任门及绑定后的四类 hook 已在现场验证。新增 pod 的五个 worktree 和八窗口完成三步 Test、归档与两阶段关闭；八聊天已归档、五检出和临时分支已回收，最终仅 main 8/8 ready、idle、verify 15/15。测试严格留在指定根内，而当前保存项目没有测试副本且 App 创建工具不接受自选检出目录，因此采用 Git 与官方 CLI/app-server；不能把此路径写成原生 create_thread(worktree) 已验证。下面未装 CLI 等判断是早期历史，不再代表当前现场。
   - 证据：gate-log §13.130 表第 16 行（L3801）：Codex 宿主全程没有真实会话测试，标为不做；§13.119、§13.122-§13.131 的残留中反复出现；L3379 本机没有 codex CLI；`which codex` 找不到；codex-hook-fragment.ts:3-20 假设 hooks/hooks.json 会被加载、${PLUGIN_ROOT} 会展开、async/timeout 键被接受、/hooks 按定义哈希信任；codex-agent-text-profile.ts:46-63 假设 Controller 知道自己的 thread id（没有给出获取方法）、存在 create_thread 和 set_thread_title、worktree 环境从 detached HEAD 开始；场景中 handle 值与 hook session_id 用的是同一个字符串（test.ts:588-595、2686-2694），thread id 等于 session_id 是构造出来的假设；hostTrustSteps（codex :80-86）没有说明：信任之前启动的线程不会有 session-start 记录；README.md:102 的 `npx codex-marketplace add ...` 从未执行过；§13.115 只用外部 stdio 脚本碰过 Codex MCP server；README.md、plugins/codex-wakeflow/README.md 和 manifest 都没有 experimental 标记；Codex 没有 resume/relocate 路径（§13.125 残留）
   - 建议：在跑通一次真实 Codex 会话（安装、/hooks 信任、init、Controller 自注册、一个产品窗口、一次落地的投递、回调、pod checkout、归档）之前，在 README、Codex README 和 marketplace 描述中把 Codex 标为 experimental/unverified，或者暂不发布。把真实 hook payload 录成夹具供测试回放；在 scenario-acceptance.md §3 增加 Codex 现场清单，逐条列出基于文档的假设。Codex 文本需要说明如何取得自己的 handle，以及“信任之后要新开线程”。
@@ -599,7 +600,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 中。Wakeflow 自身的调用很便宜（每次 1 到 3 秒），真正的成本在模型回合上。一个 Controller 会话累积到约 95 万 token，读了 1.2 亿缓存 token，经历一次 4.5 分钟的压缩。宿主观察被模型逐字转抄。工具目录超出 ADR 预算却无人量测。精简结果从未实现，Controller 还要读内部事件文件来喂 prompt。
 
-- **K1** [中 / 缺口] 主要运行成本来自长期存活的 Controller 会话，而 Wakeflow 没有任何限制或轮换它的机制（计划阶段 8；状态：部分（§13.165 批次 0）：Controller 技能与 /wakeflow:next 写明任何步骤边界换新会话都安全、建议每个 Demand 与 pod 开关后换会话；是否强制归 Q10，每轮 token 记录未做）
+- **K1** [中 / 缺口] 主要运行成本来自长期存活的 Controller 会话，而 Wakeflow 没有任何限制或轮换它的机制（计划阶段 8；状态：部分（§13.165 批次 0）：Controller 技能与 /wakeflow:next 写明任何步骤边界换新会话都安全、建议每个 Demand 与 pod 开关后换会话；Q10 于 2026-10-18 裁决不强制轮换，指引即为定稿；每轮 token 记录未做）
   - 说明：Wakeflow 的状态是持久化、事件溯源的，每一步都从 status 开始，所以一个新的 Controller 会话可以接手任何 Demand。实际上一个会话跨了好几轮、好几个 Demand 和一个 pod 生命周期，之后每个回合都要重读 60 万到 90 万缓存 token。成本和延迟是实打实的；可靠性方面的论据弱，而且宿主会自动压缩。
   - 证据：transcript 80580357（Controller，09-24 23:03 至 09-25 18:26）：276 次调用，483,729 个输出 token，1.2149 亿缓存读取，峰值上下文 954,628；09-25 08:57 自动压缩 965,862 → 16,449，耗时 271,898 ms；第六轮 Demand（44 字节文件，74 分钟）：Controller 输出 148,147 token，产品窗口只有 5,293（约 2.3%）；各窗口首回合上下文只有 4 到 5 万 token，增长来自累积的历史；验证者更正：断连分别发生在 05:09、07:18、08:49 和压缩后的 08:59（此时上下文仅 72,852），与上下文大小的相关性很弱；assets/agent-text 里没有任何关于 compact、/clear 或会话轮换的内容
   - 建议：把 Controller 上下文的生命周期写进 skill 和命令：建议每个 Demand、每次 pod create/close 之后开一个新 Controller 会话（status 是权威，不会丢任何东西）；在 /wakeflow:next 和 status 里加一句“在任何步骤边界开新会话都是安全的”；Controller 跑了很多步之后主动提醒用户。每轮现场在 gate-log 里记录每个 Demand 的 token 数和回合数。

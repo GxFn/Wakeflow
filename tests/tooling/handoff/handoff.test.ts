@@ -43,7 +43,7 @@ function check(report: Awaited<ReturnType<typeof checkHandoff>>, name: string) {
   return found;
 }
 
-test("干净的检出：七项检查通过，不运行 build:check 时该项为 unavailable 但整体仍通过", async (t) => {
+test("干净的检出：八项检查通过，不运行 build:check 时该项为 unavailable 但整体仍通过", async (t) => {
   const root = fixture(t);
   const report = await checkHandoff(root, { artifacts: false });
   equal(report.status, "passed");
@@ -54,12 +54,16 @@ test("干净的检出：七项检查通过，不运行 build:check 时该项为 
       ["whitespace", "passed"],
       ["private-content", "passed"],
       ["artifacts", "unavailable"],
+      ["version-bytes", "passed"],
       ["docs-pointers", "passed"],
       ["test-durations", "passed"],
       ["instructions-parity", "passed"],
       ["git", "passed"],
     ],
   );
+  deepEqual(check(report, "version-bytes").details, [
+    "no assets/release/version.json; nothing to compare",
+  ]);
   deepEqual(check(report, "test-durations").details, ["no tooling/testing/test-durations.json"]);
   deepEqual(check(report, "instructions-parity").details, ["no instruction files"]);
   match(check(report, "git").details.join("\n"), /modified, 0 untracked/u);
@@ -213,4 +217,52 @@ test("build:check 在构建锁下真实运行：失败的脚本让制品项失�
     delete process.env.HANDOFF_FIXTURE_FAIL;
   }
   ok(check(passed, "git").details.some((line) => line.startsWith("branch ")));
+});
+
+test("version-bytes（ADR-0021）：当前版本的 tag 存在时比较两份制品清单的文件摘要，同版本改字节必须先 bump；没有 tag 只记录未比较", async (t) => {
+  const root = fixture(t);
+  const manifest = (sha: string) =>
+    `${JSON.stringify({ kind: "WakeflowPluginArtifactManifest", version: "1.2.3", files: [{ path: "lib/a.js", sha256: sha }] })}\n`;
+  const versionInput = (version: string) =>
+    `${JSON.stringify({ kind: "WakeflowReleaseVersion", schemaVersion: 1, version })}\n`;
+  write(root, "assets/release/version.json", versionInput("1.2.3"));
+  write(
+    root,
+    "plugins/codex-wakeflow/artifact-manifest.json",
+    manifest(`sha256:${"a".repeat(64)}`),
+  );
+  write(
+    root,
+    "plugins/claude-code-wakeflow/artifact-manifest.json",
+    manifest(`sha256:${"b".repeat(64)}`),
+  );
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "release bytes"]);
+  const untagged = check(await checkHandoff(root, { artifacts: false }), "version-bytes");
+  equal(untagged.status, "passed");
+  match(untagged.details.join("\n"), /tag v1\.2\.3 is absent locally/u);
+
+  git(root, ["tag", "v1.2.3"]);
+  deepEqual(check(await checkHandoff(root, { artifacts: false }), "version-bytes"), {
+    name: "version-bytes",
+    status: "passed",
+    details: ["artifact bytes match v1.2.3"],
+  });
+
+  // 同一版本号下改了一个文件的字节：失败并点名清单、文件与要做的 bump。
+  write(
+    root,
+    "plugins/codex-wakeflow/artifact-manifest.json",
+    manifest(`sha256:${"c".repeat(64)}`),
+  );
+  const changed = check(await checkHandoff(root, { artifacts: false }), "version-bytes");
+  equal(changed.status, "failed");
+  match(
+    changed.details.join("\n"),
+    /plugins\/codex-wakeflow\/artifact-manifest\.json: 1 file\(s\) differ from v1\.2\.3 \(lib\/a\.js\); bump assets\/release\/version\.json/u,
+  );
+
+  // bump 之后当前版本没有 tag：回到"未比较"，新字节可以继续提交。
+  write(root, "assets/release/version.json", versionInput("1.2.4"));
+  equal(check(await checkHandoff(root, { artifacts: false }), "version-bytes").status, "passed");
 });

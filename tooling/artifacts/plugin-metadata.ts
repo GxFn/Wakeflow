@@ -162,12 +162,18 @@ function pluginDescription(hostId: PluginHostId): string {
     hostId === "codex"
       ? "a fleet of Codex threads"
       : "a tmux-resident fleet of Claude Code sessions";
+  // Q11（2026-10-18）：只支持 macOS 本地文件系统；Q1/E1：Codex 版标为 preview，直到真实 Codex 会话跑通原生创建入口。
+  const scope =
+    hostId === "codex"
+      ? " Codex edition: preview - the native project-creation entry has not been exercised in a real Codex session yet. Supports macOS only (local file system); Linux and Windows are not supported."
+      : " Supports macOS only (local file system); Linux and Windows are not supported.";
   return (
     `A disciplined control loop for multi-window agent work across ${windows}: ` +
     "a Controller window claims requirement packages, plans task packages, prepares deliveries, " +
     "imports immutable target results, obtains independent Test validation and reviews the " +
     "evidence before completing and archiving a Demand. Explicit on-disk state roots keep every " +
-    "step auditable; Agents perform the host actions, Wakeflow owns the content and the verification."
+    "step auditable; Agents perform the host actions, Wakeflow owns the content and the verification." +
+    scope
   );
 }
 
@@ -245,6 +251,7 @@ export function renderPackageJson(
     bin: { "wakeflow-mcp": "./mcp/server.mjs" },
     scripts: { mcp: "node ./mcp/server.mjs" },
     engines: { node: PLUGIN_ENGINES_NODE },
+    os: ["darwin"],
     dependencies,
   };
 }

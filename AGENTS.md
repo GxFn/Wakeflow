@@ -113,7 +113,8 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   build lock: `npm run locked -- npm test`. `wf verify` and `wf handoff`
   hold that lock themselves.
 - `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
-  private content, `build:check`, docs pointers, Git state); run it before
+  private content, `build:check`, version-bytes, docs pointers, Git state); run
+  it before
   reporting completion and fix what it names. `npm run wf -- impact report`
   classifies the current change set by ownership and lists the commands to
   run next (schema build, artifact rebuild, focused or full gate, smoke).

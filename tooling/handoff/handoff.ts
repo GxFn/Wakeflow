@@ -9,8 +9,10 @@ import { npmCommand, runLoggedCommand } from "../verification/process.js";
 /**
  * Wakeflow Tooling / Handoff：交接前的只读检查单，把 CLAUDE.md 的交接规则变成一条命令。
  *
- * 七项检查各自给出 passed / failed / unavailable：空白错误（`git diff --check`）、私有内容
- * （本机家目录与临时目录路径、凭证样式）、制品新鲜度（`npm run build:check`）、文档指针
+ * 八项检查各自给出 passed / failed / unavailable：空白错误（`git diff --check`）、私有内容
+ * （本机家目录与临时目录路径、凭证样式）、制品新鲜度（`npm run build:check`）、版本字节
+ * （ADR-0021：当前版本的 `v<version>` tag 存在时两份制品清单的文件摘要必须与 tag 一致，
+ * 字节变了先 bump；tag 不存在只记录未比较）、文档指针
  * （docs/README 的"最新节点"是否指向 gate-log 最后一节，reviews/references 是否都被索引，
  * 脚手架的"验证待填"占位与 README 的"待填"是否还留着，最后一节写"未提交"而树里只有 docs
  * 改动时按 review 点名）、耗时表覆盖（tests 下的每个 `.test.ts` 在 `test-durations.json` 里
@@ -24,6 +26,7 @@ export interface HandoffCheck {
     | "whitespace"
     | "private-content"
     | "artifacts"
+    | "version-bytes"
     | "docs-pointers"
     | "test-durations"
     | "instructions-parity"
@@ -432,6 +435,113 @@ function instructionsParityCheck(root: string): HandoffCheck {
   };
 }
 
+const VERSION_INPUT_PATH = "assets/release/version.json";
+const ARTIFACT_MANIFEST_PATHS: readonly string[] = Object.freeze([
+  "plugins/codex-wakeflow/artifact-manifest.json",
+  "plugins/claude-code-wakeflow/artifact-manifest.json",
+]);
+const MAXIMUM_MANIFEST_BYTES = 8 * 1024 * 1024;
+
+interface ManifestFiles {
+  readonly version: string | null;
+  readonly files: ReadonlyMap<string, string>;
+}
+
+/** 制品清单里的版本与 `files[]` 的 path → sha256；形状不对返回 null，交由调用方点名。 */
+function parseManifestFiles(text: string): ManifestFiles | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const record = parsed as { version?: unknown; files?: unknown };
+  if (!Array.isArray(record.files)) return null;
+  const files = new Map<string, string>();
+  for (const entry of record.files) {
+    if (entry === null || typeof entry !== "object") return null;
+    const { path: filePath, sha256 } = entry as { path?: unknown; sha256?: unknown };
+    if (typeof filePath !== "string" || typeof sha256 !== "string") return null;
+    files.set(filePath, sha256);
+  }
+  return { version: typeof record.version === "string" ? record.version : null, files };
+}
+
+function changedManifestFiles(
+  atTag: ReadonlyMap<string, string>,
+  current: ReadonlyMap<string, string>,
+): string[] {
+  const changed = new Set<string>();
+  for (const [filePath, sha256] of current)
+    if (atTag.get(filePath) !== sha256) changed.add(filePath);
+  for (const filePath of atTag.keys()) if (!current.has(filePath)) changed.add(filePath);
+  return [...changed].sort();
+}
+
+/** ADR-0021 规则 2：tag 已存在的版本不得再换字节；同一版本下制品清单的文件摘要变了就得先 bump。 */
+function versionBytesCheck(root: string): HandoffCheck {
+  const name = "version-bytes" as const;
+  let version: string;
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(root, VERSION_INPUT_PATH), "utf8")) as {
+      version?: unknown;
+    };
+    if (typeof parsed.version !== "string" || parsed.version.length === 0)
+      throw new Error("version");
+    version = parsed.version;
+  } catch {
+    return { name, status: "passed", details: [`no ${VERSION_INPUT_PATH}; nothing to compare`] };
+  }
+  const tag = `v${version}`;
+  const resolved = git(root, ["rev-parse", "-q", "--verify", `refs/tags/${tag}^{commit}`]);
+  if (resolved.status !== 0) {
+    return {
+      name,
+      status: "passed",
+      details: [`tag ${tag} is absent locally; artifact bytes were not compared`],
+    };
+  }
+  const details: string[] = [];
+  for (const manifest of ARTIFACT_MANIFEST_PATHS) {
+    const tagged = git(root, ["show", `${tag}:${manifest}`]);
+    if (tagged.status !== 0) {
+      details.push(`${manifest} is missing at ${tag}`);
+      continue;
+    }
+    const atTag = parseManifestFiles(tagged.stdout);
+    let currentText: string;
+    try {
+      const stat = lstatSync(path.join(root, manifest));
+      if (!stat.isFile() || stat.size > MAXIMUM_MANIFEST_BYTES) throw new Error("manifest");
+      currentText = readFileSync(path.join(root, manifest), "utf8");
+    } catch {
+      details.push(`${manifest} is unreadable in the working tree`);
+      continue;
+    }
+    const current = parseManifestFiles(currentText);
+    if (atTag === null || current === null) {
+      details.push(`${manifest} is not a readable artifact manifest (working tree or ${tag})`);
+      continue;
+    }
+    if (current.version !== version) {
+      details.push(
+        `${manifest} says ${current.version ?? "no version"}; ${VERSION_INPUT_PATH} says ${version}`,
+      );
+    }
+    const changed = changedManifestFiles(atTag.files, current.files);
+    if (changed.length > 0) {
+      const sample = changed.slice(0, 5).join(", ") + (changed.length > 5 ? ", …" : "");
+      details.push(
+        `${manifest}: ${changed.length} file(s) differ from ${tag} (${sample}); bump ${VERSION_INPUT_PATH} before shipping new bytes under ${version}`,
+      );
+    }
+  }
+  return details.length === 0
+    ? { name, status: "passed", details: [`artifact bytes match ${tag}`] }
+    : { name, status: "failed", details: bounded(details) };
+}
+
 function gitCheck(root: string): HandoffCheck {
   const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (branch.error !== undefined || branch.status !== 0)
@@ -459,6 +569,7 @@ export async function checkHandoff(
   const checks: HandoffCheck[] = [whitespaceCheck(root), privateContentCheck(root)];
   checks.push(
     await artifactsCheck(root, options),
+    versionBytesCheck(root),
     docsPointersCheck(root),
     testDurationsCheck(root),
     instructionsParityCheck(root),

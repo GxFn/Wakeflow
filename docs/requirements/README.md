@@ -34,5 +34,5 @@
 
 ## 4. 平台与版本边界
 
-- 不支持 Windows。运行时依赖 POSIX 的 `O_NOFOLLOW`、`O_DIRECTORY` 与 euid，制品与 README 明确声明。（能力卡 1 Q8）
+- 只支持 macOS 的本地文件系统；Linux 与 Windows 不支持（Q11，2026-10-18 裁决）。运行时依赖 POSIX 的 `O_NOFOLLOW`、`O_DIRECTORY` 与 euid；两个制品的 `package.json` 以 `os: ["darwin"]` 声明，两份插件 README、仓库 README 与插件描述写明。Codex 版标为 preview，直到真实 Codex 会话跑通原生创建入口（Q1/E1）。
 - 新 TS 是全新版本序列，配置 schema 从 v1 起版，不识别、不迁移、不兼容任何历史版本的布局或配置；TS 之前的工作区一律重新初始化。（[ADR-0008](../decisions/0008-discard-legacy-and-new-version-series.md)）

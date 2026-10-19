@@ -4861,3 +4861,27 @@ receipt保存完整导入请求/返回的原始字节，同时明确文件摘要
 - 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新。
 
 本批改动 assets/agent-text（Controller SKILL 第 1 步）、src/hosts 两个取值表（`hostEffectRule`）、tests/artifacts（渲染预算）、CLAUDE.md/AGENTS.md/README 的占位符数、plugins/（重建）、docs/；未提交，main 领先 origin/main 31 个提交。
+
+### 13.179 裁决落地第一批：平台范围、Codex 预览标注与正式版本号（Q11、Q1/E1、Q2、Q5、Q10）（2026-10-18）
+
+用户于 2026-10-18 裁决：只支持 macOS；停用 rc.N，启用正式版本号并按测试需要推进小版本；其余按技术债务复审 §9 的建议执行。本节落地其中不依赖现场的部分，规则写进 ADR-0021（发布模型与平台范围），ADR-0020（威胁模型）改为 accepted。
+
+- **平台范围（Q11，B11 的声明部分）。** 两个制品的 `package.json` 加 `os: ["darwin"]`（`plugin-metadata.ts` 渲染）；插件描述、两份插件 README（en/zh）、仓库 README 的环境要求与宿主表、需求总览 §4 都改为"只支持 macOS 本地文件系统，Linux 与 Windows 不支持"。运行时不加平台硬拒绝：Ubuntu 的 CI 门仍跑同一套测试；B11 要求的非本地文件系统预检留待现场后。
+- **Codex 预览（Q1，E1 的标注部分）。** Codex 版的插件描述、仓库 README 宿主表与宿主信任步骤（en/zh）开头都写明"原生项目创建入口尚未在真实 Codex 会话里跑通"；跑通一次再摘。
+- **正式版本号（Q2）。** `wf release bump --version 1.1.0 --apply`：版本输入与 Claude marketplace 条目改为 `1.1.0`，重建后两份 `package.json` 与清单跟上；marketplace 条目的描述按 `expectedClaudeMarketplaceEntry` 重新同步（它是手工维护的第二处，描述变了要跟着改）。一版本一字节由 `wf handoff` 的第八项 `version-bytes` 强制：本地存在 `v<version>` tag 时比较两份清单的 `files[]` 摘要，变了点名文件并要求先 bump；tag 不存在只记录未比较。远端 CI 不做发布动作（`ci-workflow` 测试本就禁止 `release:check` 进工作流），tag 与 `release:check` 的真跑等用户在现场测试后授权。
+- **Q5、Q10。** ADR-0020 接受（F1/F2/F5 的剩余控制与 K4 角色子集排在第一轮现场之后）；Q10 裁决不强制会话轮换，批次 0 的指引即定稿，K1 只剩每轮 token 记录。
+- **Q9、图谱策略。** 核实 `instructionManagement` 的缺省早已是 owner-managed（配置 Schema 与两份 README 都写明 managed-block 只在显式选择时写入），J2 的"缺省"部分无需改动；退出路径 J1（detach-repository / detach-workspace）与 J4（退役规则清单）是新的维护意图，排在第一轮现场之后。图谱按裁决改为随发布候选刷新（打 `v1.1.0` tag 前刷新一次），原始审阅包不再进 Git，旧轮次裁剪另起一节。
+- **没做的：** `v1.1.0` 的 tag、推送、`release:check`、缓存刷新（各需授权）；非本地文件系统预检；Codex 原生入口的现场验证。
+
+文档：ADR-0021 新增、ADR-0020 与索引、需求总览 §4、登记 B11/C1/E1/K1、复审 §9 四行标为已裁决、maintainer-tools 的 handoff 段、CLAUDE.md/AGENTS.md 的 handoff 行、docs README 指针。
+
+验证与观察（本地，2 worker）：
+
+- 聚焦：tests/tooling/handoff + tests/tooling/release + tests/artifacts + tests/hosts + tests/tooling/verification 129/129（含新的 version-bytes 四段用例：无 tag、同字节、同版本改字节、bump 后）。
+- 制品重建 exit 0（版本 1.1.0、`os` 字段、描述与信任步骤）；`smoke:artifacts` exit 0（两宿主 hookObserver landed）。
+- 完整门第一次 run-FbVxfv（01:40–02:26 UTC，45.7 分钟）1517 测试败 2、取消 1：两个 lab worktree 实验 `inspection-unavailable`、operation-scope 的"等待在飞投影"超时——都是 load-sensitive 用例，而我在门跑到一半时又起了一次全源 knip 扫描（Q12 预研）抢 CPU；三条单独重跑 11/11（worktree 实验 158–185 s，仍在 240 s 预算内）。教训：门在跑时不要再起任何编译、扫描或测试。第二次 run-ZBRwVN（02:35–03:24 UTC，48.8 分钟，本机整体偏慢：lab 实验单跑也要 158–185 s）1517/1517 全通过、318 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-ZBRwVN/receipt.json`：318 份文件、并发 2（偏慢的一轮写进耗时表，只影响调度顺序）。
+- `wf handoff`（含真实 build:check，run-dpnqWZ）：八项通过（whitespace、private-content、artifacts、version-bytes、docs-pointers、test-durations、instructions-parity、git；version-bytes 记录 `v1.1.0` 尚无 tag、未比较）；`git diff --check` 干净。
+- 未运行：原生宿主会话、lab/live、远端 CI；图谱指纹漂移未刷新（图谱策略按裁决绑定发布候选，见后续节）。
+
+本批改动 tooling（plugin-metadata、handoff）、src/hosts/codex（信任步骤）、assets/agent-text 两份 README、assets/release/version.json、.claude-plugin/marketplace.json、仓库 README、CLAUDE.md/AGENTS.md、tests/tooling/handoff、plugins/（重建）、docs/；未提交。

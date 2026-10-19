@@ -42,14 +42,14 @@ docs/
 | 文档 | 职责 | 状态 |
 | --- | --- | --- |
 | [plan/typescript-reimplementation-plan.md](./plan/typescript-reimplementation-plan.md) | TypeScript 能力重构的阶段、约束 TSD-01 到 TSD-16、执行顺序 P0 与 L0 到 L3、完成定义 | E0 到 E4 全部 `complete`（2026-09-20，gate-log §13.104）；真实宿主进展见 §13.139，Codex main 与 CLI/Git worktree 闭环、关闭已通过；App 原生工作树创建入口、Windows 及发布仍待验证或完成 |
-| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0019 已接受，ADR-0020（威胁模型）proposed 待 Q5 裁决；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
+| [decisions/README.md](./decisions/README.md) | 决策索引 | ADR-0001 到 ADR-0021 已接受（ADR-0020 威胁模型于 2026-10-18 按 Q5 接受；ADR-0021 发布模型与平台范围：正式版本号、一版本一字节、仅 macOS、Codex 为 preview）；ADR-0003 于 09-03 修订；ADR-0009 两处调整、ADR-0010 的 pod 模型、ADR-0011 需求包均于 09-04 确认；ADR-0010 未决三项于 09-18 关闭 |
 | [requirements/capabilities/](./requirements/capabilities/) | 能力卡，按能力组逐项确认的场景、不变量、宿主差异与实现判断 | 第 1 到 10 组全部已确认（2026-09-04） |
 | [requirements/wakeflow-functions-and-scenarios.md](./requirements/wakeflow-functions-and-scenarios.md) | 自顶向下的功能与场景总览：定位、核心对象、主流程直线、F1 到 F11 功能清单、宿主差异、明确不做 | draft，待用户确认理解一致 |
 | [requirements/typescript-dual-artifact-build.md](./requirements/typescript-dual-artifact-build.md) | 单一源码、双宿主制品、轻量测试需求 | 已确认 |
 | [requirements/README.md](./requirements/README.md) | 需求锚点索引，含归档中仍被引用的 D1 到 D41 与 Pod 需求 | active |
 | [standards/resource-handling-standard.md](./standards/resource-handling-standard.md) | 资源处理归一标准与收敛矩阵 | 已确认，RH-1 到 RH-3 已实现 |
 | [standards/documentation-standard.md](./standards/documentation-standard.md) | 文档编写标准 | active |
-| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.178（2026-10-14）；§13.178 为批次 8 的 I4 技能瘦身与渲染预算（未提交），§13.177 为批次 8 的 K6 许可按引用投递（已提交 26e49849、e3065449），§13.176 为批次 8 的 K5 评审投影 summary 档（已提交 619ee587、b3314fc7），§13.175 为批次 5 补遗的两条测试修复闭环场景（已提交 d862efca），§13.174 为批次 7 的 Target 阶段表（已提交 1c877b82、58d60c63），§13.173 为批次 6 的 workspace 与 governance 目录（已提交 fe203bca、428f2ae9、ae3ab43c），§13.172 为 hosts 与 configuration（已提交 f2226217、2a72c3e8、7b4f3956），§13.171 为 foundation 目录（已提交 0d079753、a9b75a0f、e39555db），§13.170 为批次 4 的不依赖裁决部分（已提交 d0bc73bf、2fadde3d），§13.169 为批次 5（已提交 6e2c00e0、1fd8114a），§13.168 为批次 3（已提交 27986c41、2551ceb1），§13.167 为批次 2（已提交 34445a04、f75a0228），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
+| [progress/consolidation-gate-log.md](./progress/consolidation-gate-log.md) | 业务骨干核实门日志，第 13 节为当前结论 | active，最新节点 §13.179（2026-10-18）；§13.179 为裁决落地第一批：平台范围、Codex 预览标注与正式版本号 1.1.0（未提交），§13.178 为批次 8 的 I4 技能瘦身与渲染预算（已提交 cdd01199、690e93e2），§13.177 为批次 8 的 K6 许可按引用投递（已提交 26e49849、e3065449），§13.176 为批次 8 的 K5 评审投影 summary 档（已提交 619ee587、b3314fc7），§13.175 为批次 5 补遗的两条测试修复闭环场景（已提交 d862efca），§13.174 为批次 7 的 Target 阶段表（已提交 1c877b82、58d60c63），§13.173 为批次 6 的 workspace 与 governance 目录（已提交 fe203bca、428f2ae9、ae3ab43c），§13.172 为 hosts 与 configuration（已提交 f2226217、2a72c3e8、7b4f3956），§13.171 为 foundation 目录（已提交 0d079753、a9b75a0f、e39555db），§13.170 为批次 4 的不依赖裁决部分（已提交 d0bc73bf、2fadde3d），§13.169 为批次 5（已提交 6e2c00e0、1fd8114a），§13.168 为批次 3（已提交 27986c41、2551ceb1），§13.167 为批次 2（已提交 34445a04、f75a0228），§13.166 为批次 1（已提交 aa7cbb3e、17093efb），§13.165 为批次 0（已提交 010fb611、fd1f2201）；§13.161–§13.164 为 Codex 阶段复审修复与开发便捷脚本三批，已提交；原生会话未执行，图谱指纹漂移未刷新 |
 | [progress/file-review-ledger.md](./progress/file-review-ledger.md) | 逐文件审阅台账 | active |
 | [reviews/2026-09-03-typescript-checkpoint-review.md](./reviews/2026-09-03-typescript-checkpoint-review.md) | 关键节点架构与实现评估、缺口分析、建设计划建议 | 评估建议，待讨论 |
 | [reviews/2026-09-04-flow-optimization-analysis.md](./reviews/2026-09-04-flow-optimization-analysis.md) | 回传、调用形状、完成留痕、测试记录对比、重设计边界的旧代码事实、业界对照与设计建议 | 评估建议，已由 ADR-0012 接受 |
@@ -93,5 +93,5 @@ docs/
 ## 6. 与其他文档位置的关系
 
 - 根目录 `README.md` 与 `README.zh-CN.md` 面向使用者，只链接本系统中的现行文档或归档索引。
-- `wakeflow-architecture-atlas/` 是独立的只读图谱子项目，以 `maps/` 为正典，刷新触发器引用本系统的 `progress/` 文档。
+- `wakeflow-architecture-atlas/` 是独立的只读图谱子项目，以 `maps/` 为正典，刷新触发器引用本系统的 `progress/` 文档。刷新节奏（2026-10-18 裁决）：绑定发布候选——每个正式版本号在打 tag 前刷新一次，而不是每个技术债务批次；新一轮的原始审阅包不再进 Git，`plans/` 里的旧轮次按同一裁决裁剪，`maps/` 与当前轮次的来源指纹保留。
 - 插件内的 `README`、`CLAUDE.md`、`AGENTS.md`、skills、commands 是产品输入和测试面，不属于本系统。

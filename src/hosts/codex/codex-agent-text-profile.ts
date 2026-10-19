@@ -119,6 +119,8 @@ const COMMAND_SURFACE_ZH =
   "本宿主不发 slash 命令。直接说人话即可，已加载的技能会把它路由到对应工具。";
 
 const HOST_TRUST_STEPS_EN = [
+  "The Codex edition is a preview: its native project-creation entry has not been exercised",
+  "in a real Codex session yet, so expect to report what you see rather than assume it works.",
   "Codex desktop uses the Node runtime supplied by the app. In the CLI, ensure Node 24",
   "is on PATH when the host does not supply a runtime.",
   "Open `/hooks` and trust Wakeflow's four hooks after reviewing them by their",
@@ -130,6 +132,7 @@ const HOST_TRUST_STEPS_EN = [
 ].join("\n");
 
 const HOST_TRUST_STEPS_ZH = [
+  "Codex 版目前是预览版：原生项目创建入口尚未在真实 Codex 会话里跑通，遇到情况请如实报告，不要假设它能用。",
   "Codex 桌面应用使用宿主自带的 Node。CLI 未提供宿主运行时时，需要 PATH 中有 Node 24。",
   "在 `/hooks` 里按定义哈希审阅并信任 Wakeflow 的四个 hook。信任之前四个 hook 全部被",
   "跳过：没有会话被观察到，窗口无法登记，投递也拿不到落地证据。插件更新改变了 hook 定义",

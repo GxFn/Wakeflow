@@ -80,14 +80,17 @@ Requirements on the machine that runs the agent host:
   find it fails silently.
 - `git`.
 - For the Claude Code edition, `tmux`: the fleet lives in tmux windows.
+- macOS with a local file system. Linux and Windows are not supported; the
+  plugins declare `os: ["darwin"]` and the runtime relies on POSIX file
+  semantics that are only exercised on macOS.
 
 The repository root is the development workspace; the installable plugins are
 the two generated directories under `plugins/`:
 
-| Host | Artifact | Catalog |
-| --- | --- | --- |
-| Codex | `plugins/codex-wakeflow/` | `.agents/plugins/marketplace.json` |
-| Claude Code | `plugins/claude-code-wakeflow/` | `.claude-plugin/marketplace.json` |
+| Host | Artifact | Catalog | Status |
+| --- | --- | --- | --- |
+| Codex | `plugins/codex-wakeflow/` | `.agents/plugins/marketplace.json` | Preview: the native project-creation entry has not been exercised in a real Codex session yet |
+| Claude Code | `plugins/claude-code-wakeflow/` | `.claude-plugin/marketplace.json` | Supported on macOS |
 
 Claude Code, from inside Claude Code:
 

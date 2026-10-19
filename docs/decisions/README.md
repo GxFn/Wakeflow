@@ -45,7 +45,8 @@
 | [0017](./0017-operation-scope-and-runtime-evidence.md) | 工作区操作作用域与运行证据主体 | `accepted` | 2026-10-02 | 共享/独占准入、当前配置与维护目标分离、运行身份拆分及版本化启用 |
 | [0018](./0018-current-workspace-baseline.md) | 当前工作区结构作为首个支持基线；新建测试环境，不实现旧本地格式迁移 | `accepted` | 2026-10-02 | 取代 ADR-0017 的旧工作区迁移部分；保留并发、证据和同格式恢复 |
 | [0019](./0019-codex-project-chats-and-execution-roots.md) | Codex 外层项目聊天、宿主启动根与角色执行根分离 | `accepted` | 2026-10-03 | 项目创建/回读、绑定准入、独立 Git worktree 与技能 |
-| [0020](./0020-threat-model-and-trust-boundaries.md) | 威胁模型与信任边界：三类对手的立场、证据分级、状态转移归属表、ledger 禁入内容与已接受残余风险 | `proposed` | 2026-10-11 | Q5 的建议裁决；批次 3 的 F1/F2/F4/E2 按它落地，`--add-dir` 收窄、角色令牌、hook 记录链式摘要、工具子集待裁决 |
+| [0020](./0020-threat-model-and-trust-boundaries.md) | 威胁模型与信任边界：三类对手的立场、证据分级、状态转移归属表、ledger 禁入内容与已接受残余风险 | `accepted` | 2026-10-18 | Q5 的建议裁决；批次 3 的 F1/F2/F4/E2 按它落地，`--add-dir` 收窄、角色令牌、hook 记录链式摘要、工具子集待裁决 |
+| [0021](./0021-release-model-and-platform-scope.md) | 发布模型与平台范围：正式版本号、一版本一字节、tag 打在 bump 提交上；只支持 macOS；Codex 版为 preview | `accepted` | 2026-10-18 | Q2/Q11/Q1 的裁决；`wf handoff` 新增 version-bytes 检查，制品 `package.json` 声明 `os: ["darwin"]`，三处描述与两份 README 写明范围 |
 
 ## 4. 已在其他文档中确认、尚未转为 ADR 的决定
 

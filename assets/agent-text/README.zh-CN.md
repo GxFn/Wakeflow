@@ -15,8 +15,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
   窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
-- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集，用来并行推进两件事而
-  互不干扰。
+- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上还在自己的
+  tmux 会话里），用来并行推进两件事而互不干扰。
 
 ## 主流程
 

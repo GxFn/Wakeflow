@@ -5033,3 +5033,25 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **收尾状态**：工作区 7 只剩 main pod，8/8 绑定，严格校验 15/15；看板三个需求包均 archived；三份归档包（0000000036、pod 的 Demand、0000000011）带校验报告。留给用户的：AlembicCore/AlembicDashboard/AlembicPlugin 工作树里未提交的三处实现改动与 `Test/pod-live-closure/` 下保存的 AlembicAgent 补丁；五个仓库的 `worktree-wakeflow-live` 分支（无新增提交）、`.git/info/exclude` 行与空的 `.claude/worktrees/`；三个仓库里被忽略的 `node_modules/`、`dist/`；`Test/controller-checks/`、`Test/fixtures/` 的核对与运行记录副本；被暂停的应用宝。
 
 验证（本批只改 docs/：第 0 级静态检查与 `wf handoff`）。未运行：lab/live、远端 CI；图谱随发布候选刷新。按 live-test-plan §5，结束条件已满足，`v1.1.0` 打 tag、推送与 `release:check` 各需用户授权（ADR-0021 规则 3）；下一批先处理观察 A（drifted 噪音）与 B（worktree 布局下的 `file:` 依赖），再做 D5/L6/L4、C6/C11、F1/F2/F5/K4、J1/J4。
+
+### 13.186 每个 worktree pod 一个 tmux 会话（用户要求，1.1.0 内）（2026-10-19）
+
+现场 L8 之后用户提出：pod 的并行 worktree 窗口挤在同一个 tmux 会话里（main pod 8 个加 pod 8 个），难以观察；希望 pod 用新开一套 tmux 的方式。核对现状：启动意图早已带 `execution.tmux.sessionName`，助手也已按会话名记录定位器，只是 Claude 的启动指令渲染把配置的会话名原样抄给每个窗口，助手开窗时也只看配置的会话。改法不加配置字段：
+
+- `claude-code-window-launch-instructions.ts`：新增 `claudeCodeTmuxSessionNameFor(configured, intent)`——primary pod 用配置名，worktree pod 用 `<配置名>-<pod 名>`（pod 名形如 `^[a-z][a-z0-9-]{0,31}$`；拼接超过登记合同的 128 上限时截断配置名那一段）。
+- 助手 `tmux.mjs`：`launch`/`resume` 按意图的 `execution.tmux.sessionName` 做 `has-session`/`new-window`/`new-session`（缺省仍是配置的会话），observation 与首次建会话时的 `attach` 命令都带实际会话；`self` 的 `controller-outside-configured-session` 改为与意图里的会话比较（pod Controller 在自己的会话里不再误报）。pod 的最后一个窗口退役后，空会话由 tmux 自行销毁。
+- 配置 Schema 的两处 `sessionName` 描述写明规则（生成物随 `schema:build` 更新）。
+- 文本：Claude 的 `worktreeLaunch` 取值写明 pod 会话与 attach；`hostTrustSteps` 中英各加一句；两份 README 的 pod 条目加"（Claude Code 上还在自己的 tmux 会话里）"。
+- 测试：助手测试的 tmux 桩改为按名字记会话（`has-session -t =NAME` / `new-session -s NAME` / `new-window -t =NAME`），新增"pod 窗口开在意图自己的会话里、observation 与 attach 带它、第二个窗口 new-window 进同一会话、无会话名时回到配置会话"；Claude profile 测试新增命名规则单元；场景链的 pod 窗口 inspect 在 Claude 面断言 `execution.tmux.sessionName === wakeflow-<pod>`、Codex 面没有 tmux。
+
+**本批用的级别：第 2 级**（`impact report`：配置 Schema 与生成物、场景链、agent-text）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级（`wf verify quick --changed`，17 份测试含场景链）：151 测试败 1——teardown 测试以旧名字 `session` 播种桩的会话标记，改为按名字的 `session-wakeflow` 后助手测试 26/26。
+- `schema:check` 通过；制品重建；`smoke:artifacts` exit 0。
+- 完整门 run-GVgWZt（23:04–23:28 UTC，24.1 分钟）：**1500/1500 全通过**、314 份文件。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+- 现场核对：提交并走完更新流程后，在工作区 7 新建一个 pod，核对 `tmux list-sessions` 出现 `wakeflow-<pod>`、窗口都在其中，关闭 pod 后该会话消失（结果记在下一节）。
+
+本批改动 `src/hosts/claude-code`（启动指令渲染、助手、文本取值）、`src/contracts/schemas/configuration`（描述）与生成物、`assets/agent-text`（两份 README）、tests（助手、profile、场景链）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。

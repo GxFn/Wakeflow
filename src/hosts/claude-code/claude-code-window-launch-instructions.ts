@@ -19,6 +19,24 @@ function claudeAddDirArguments(
   return arguments_;
 }
 
+/** tmux 会话名的上限（登记请求 Schema 的 `tmux.sessionName` maxLength）。 */
+const TMUX_SESSION_NAME_MAXIMUM = 128;
+
+/**
+ * 窗口的 tmux 会话名（§13.186）：primary pod 用配置的会话名；worktree pod 各开一个自己的会话
+ * `<配置名>-<pod 名>`，窗口不再挤在一个会话里。pod 名形如 `^[a-z][a-z0-9-]{0,31}$`，配置名最长 128，
+ * 拼接超长时截断配置名那一段，保证整体不超过登记合同的上限。
+ */
+export function claudeCodeTmuxSessionNameFor(
+  configured: string,
+  intent: Readonly<{ readonly podPlacement: string; readonly podName: string }>,
+): string {
+  if (intent.podPlacement !== "worktree") return configured;
+  const suffix = `-${intent.podName}`;
+  const base = configured.slice(0, Math.max(1, TMUX_SESSION_NAME_MAXIMUM - suffix.length));
+  return `${base}${suffix}`;
+}
+
 /** Claude owns its CLI, tmux and attached-directory arguments. */
 export function renderClaudeCodeWindowLaunchInstructions(
   input: WakeflowWindowLaunchInstructionInput,
@@ -52,7 +70,10 @@ export function renderClaudeCodeWindowLaunchInstructions(
     kind: profile.hostId,
     tmux: {
       socketName: host?.tmux?.socketName ?? null,
-      sessionName: host?.tmux?.sessionName ?? template.sessionName,
+      sessionName: claudeCodeTmuxSessionNameFor(
+        host?.tmux?.sessionName ?? template.sessionName,
+        intent,
+      ),
       windowName: intent.displayTitle,
       cwd: intent.root.configuredPlacement,
     },

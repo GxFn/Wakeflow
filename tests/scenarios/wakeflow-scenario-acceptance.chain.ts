@@ -2998,8 +2998,23 @@ async function registerPodWindow(
   });
   assertNoPrivatePath(context, inspected);
   const inspection = inspected.structuredContent as {
-    readonly launchIntent: { readonly intentDigest: string; readonly podName: string };
+    readonly launchIntent: {
+      readonly intentDigest: string;
+      readonly podName: string;
+      readonly podPlacement: string;
+      readonly execution: { readonly tmux?: { readonly sessionName?: string } };
+    };
   };
+  // §13.186：Claude 上 worktree pod 的窗口开在自己的 tmux 会话 `<配置名>-<pod 名>` 里；Codex 没有 tmux。
+  if (context.driver.hostId === "claude-code") {
+    equal(inspection.launchIntent.podPlacement, "worktree");
+    equal(
+      inspection.launchIntent.execution.tmux?.sessionName,
+      `wakeflow-${inspection.launchIntent.podName}`,
+    );
+  } else {
+    equal(inspection.launchIntent.execution.tmux, undefined);
+  }
   // 与另外两个辅助函数同一条路：session-start 由观察入口按 Codex payload 落地，不绕开入口直接写内核
   // （§13.97 D9）。项目聊天在工作区根启动，产品执行检出由 worktree.executionRoot 单独登记。
   // 项目聊天宿主在工作区根启动、检出以 executionRoot 登记；会话宿主直接在窗口根或检出里启动。

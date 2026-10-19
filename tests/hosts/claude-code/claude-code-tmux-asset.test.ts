@@ -71,9 +71,10 @@ if [ -n "\${WAKEFLOW_STUB_ENV:-}" ]; then env > "$WAKEFLOW_STUB_ENV"; fi
 if [ "\${WAKEFLOW_STUB_FAIL:-}" = "$cmd" ]; then echo "stub: $cmd failed at /private/stub/path" >&2; exit 1; fi
 case "$cmd" in
   -V) echo "tmux 3.6b" ;;
-  has-session) [ -e "$state/session" ] ;;
+  has-session) name=""; prev=""; for arg in "$@"; do if [ "$prev" = "-t" ]; then name="\${arg#=}"; fi; prev="$arg"; done; [ -e "$state/session-$name" ] ;;
   new-session|new-window)
-    touch "$state/session"
+    name=""; prev=""; for arg in "$@"; do if [ "$prev" = "-s" ] || [ "$prev" = "-t" ]; then name="\${arg#=}"; fi; prev="$arg"; done
+    touch "$state/session-$name"
     n=$(cat "$state/counter" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$state/counter"
     if [ -n "\${WAKEFLOW_STUB_HOOKS:-}" ]; then
       cwd=""; prev=""
@@ -756,6 +757,58 @@ test("launch opens the session or a window from the intent, freezes the title, w
   ok(worktree !== undefined, "worktree launch must observe the checkout");
   equal(worktree.porcelain.startsWith("worktree "), true);
   equal(worktree.commonDir, "/stub/common/.git");
+});
+
+test("a worktree pod's window opens in the intent's own tmux session, the observation and attach command carry it, and self in that session is not outside-configured（§13.186）", async (t) => {
+  const current = await fixture(t);
+  const hooks = { WAKEFLOW_STUB_HOOKS: current.hooks };
+  const podIntent = launchIntent("live _ Product A", "../ProductA");
+  (podIntent.execution as { tmux: { sessionName: string } }).tmux.sessionName = "wakeflow-live";
+  const first = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+    input: JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: podIntent }),
+    env: hooks,
+  });
+  equal(first.status, 0, JSON.stringify(first.json));
+  const creation = tmuxLog(current).filter(
+    (entry) =>
+      entry[0] === "has-session" || entry[0] === "new-session" || entry[0] === "new-window",
+  );
+  // 配置的会话是 wakeflow，但意图说 wakeflow-live：先查它、再新建它，窗口不进配置的会话。
+  deepEqual(creation[0], ["has-session", "-t", "=wakeflow-live"]);
+  deepEqual(creation[1]?.slice(0, 4), ["new-session", "-d", "-s", "wakeflow-live"]);
+  equal(
+    (first.json.observation as { tmux: { sessionName: string } }).tmux.sessionName,
+    "wakeflow-live",
+  );
+  equal(first.json.attach, "tmux attach -t wakeflow-live");
+  // 第二个窗口进同一个 pod 会话（new-window -t =wakeflow-live），不再打印 attach。
+  const second = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], {
+    input: JSON.stringify({
+      windowId: CONTROLLER_WINDOW_ID,
+      launchIntent: {
+        ...launchIntent("live _ Controller", "."),
+        execution: {
+          ...(podIntent.execution as object),
+          windowName: "live _ Controller",
+          cwd: ".",
+        },
+      },
+    }),
+    env: hooks,
+  });
+  equal(second.status, 0, JSON.stringify(second.json));
+  const later = tmuxLog(current).filter((entry) => entry[0] === "new-window");
+  deepEqual(later.at(-1)?.slice(0, 4), ["new-window", "-d", "-t", "=wakeflow-live"]);
+  equal("attach" in second.json, false);
+  // 意图没有会话名时仍回到配置的会话。
+  const plain = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: JSON.stringify({
+      windowId: PRODUCT_WINDOW_ID,
+      launchIntent: launchIntent("Product A", "../ProductA"),
+    }),
+    env: hooks,
+  });
+  equal((plain.json.observation as { tmux: { sessionName: string } }).tmux.sessionName, "wakeflow");
 });
 
 test("launch refuses malformed intents before touching tmux", async (t) => {
@@ -1461,7 +1514,7 @@ test("the helper resolves the workspace from its own location and refuses to run
 
 test("teardown kills the configured session only when nothing is registered, unless forced", async (t) => {
   const current = await fixture(t);
-  writeFileSync(path.join(current.state, "session"), "");
+  writeFileSync(path.join(current.state, "session-wakeflow"), "");
   const killed = runHelper(current, ["teardown"]);
   equal(killed.status, 0, JSON.stringify(killed.json));
   deepEqual(killed.json, {
@@ -1475,7 +1528,7 @@ test("teardown kills the configured session only when nothing is registered, unl
     ["has-session", "kill-session"],
   );
   deepEqual(tmuxLog(current)[1], ["kill-session", "-t", "=wakeflow"]);
-  rmSync(path.join(current.state, "session"));
+  rmSync(path.join(current.state, "session-wakeflow"));
   deepEqual(runHelper(current, ["teardown"]).json, {
     ok: true,
     command: "teardown",
@@ -1484,7 +1537,7 @@ test("teardown kills the configured session only when nothing is registered, unl
   });
   // 有登记窗口时拒绝，--force 才杀：引导重来不能悄悄丢掉活着的绑定。
   writeLocator(current, PRODUCT_WINDOW_ID);
-  writeFileSync(path.join(current.state, "session"), "");
+  writeFileSync(path.join(current.state, "session-wakeflow"), "");
   const refused = runHelper(current, ["teardown"]);
   equal(refused.status, 1);
   equal(refused.json.reason, "windows-registered");

@@ -529,7 +529,7 @@ permissionMode?: ("auto" | "acceptEdits" | "bypassPermissions")
  */
 export interface ClaudeTmux {
 /**
- * Desired bounded, control-free tmux session name; omission inherits the Claude host profile.
+ * Desired bounded, control-free tmux session name of the primary pod; omission inherits the Claude host profile. Worktree pods open their own session named <this name>-<pod name>.
  */
 sessionName?: string
 /**

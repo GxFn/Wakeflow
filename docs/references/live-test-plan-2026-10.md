@@ -26,7 +26,7 @@
 | L5 | **摘要评审（K5）** | Controller 用 `wakeflow_inspect_target_result_review` 传 `detail: "summary"` 后记录 accept | 检查投影、决策结果 | summary 投影的 `snapshotDigest`/`reviewUnitDigest` 被决策接受；没有 `review-unit-stale` |
 | L6 | 测试目标、重跑与修复闭环（D4） | real-environment 决策的 Demand：合同两步，第一次让一步 flaky 失败→重跑子集→通过；再来一次 product-defect→escalate 带修复授权→返工→复测 | 测试窗口的逐步记录、`allowedDecisions`、Route 前沿 | 与 `card-07/test-rerun`、`card-07/product-defect-remediation` 的自动化断言一致，但由真实测试窗口产生证据 |
 | L7 | 静默回调重发（D7） | 让回调在 Controller 窗口静默超过阈值（比如先把窗口挂起），再 `rearm_delivery` 回调 | 回调代际、`landing` | 第二代落地；超过四代被拒；这是从未现场触发过的路径 |
-| L8 | pod 开闭（多仓库） | 创建一个 worktree pod（五个仓库各一个 worktree），在 pod 里跑 L2–L5 的缩短版，归档 Demand，两阶段关闭 pod | `wakeflow_pod` 预览/应用、`git worktree list` | 关闭后 worktree 与临时分支回收，主检出不变 |
+| L8 | pod 开闭（多仓库） | 创建一个 worktree pod（五个仓库各一个 worktree），在 pod 里跑 L2–L5 的缩短版，归档 Demand，两阶段关闭 pod | `wakeflow_pod` 预览/应用、`git worktree list`、`tmux list-sessions` | 关闭后 worktree 与临时分支回收，主检出不变；自 §13.186 起 pod 的窗口开在自己的 tmux 会话 `<会话名>-<pod 名>` 里，关闭后该会话消失 |
 | L9 | 插件更新流程（C9/C16） | 在工作区存在的状态下再刷新一次缓存，按"After a plugin update"一节让 Controller 自己换代 | `status` 的 `server-outdated`/`windows-stale`、助手 `resume --in-place` | Controller 先告知再就地重启，其他窗口逐个换代，没有循环重启、没有读插件实现 |
 
 L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 的关闭条件。

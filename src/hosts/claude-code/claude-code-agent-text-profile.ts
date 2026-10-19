@@ -183,7 +183,11 @@ const DELIVERY_ACTION =
   "helper finds the workspace from its own location.";
 
 const WORKTREE_LAUNCH =
-  "the helper's `launch` prepares it when it starts the product window with " +
+  "a worktree pod's windows open in their own tmux session named " +
+  "`<configured session>-<pod name>` (the launch intents carry it as `execution.tmux.sessionName`); " +
+  "the first `launch` into that session creates it and prints the `attach` command to give the user, " +
+  "and retiring the pod's last window removes the session. " +
+  "The helper's `launch` prepares the worktree when it starts the product window with " +
   "`claude --worktree <name>` from a `local-head` worktree intent: it creates " +
   "`<repository>/.claude/worktrees/<name>` from the repository's local HEAD on branch " +
   "`worktree-<name>`, reuses the checkout only when this repository's worktree list has it, " +
@@ -224,7 +228,8 @@ const HOST_TRUST_STEPS_EN = [
   "`/wakeflow:init`: the Controller creates the tmux session and every window itself through",
   "the helper maintenance installs at",
   "`.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact",
-  "`tmux attach` command once the windows are up, and which trust dialogs to accept. It",
+  "`tmux attach` command once the windows are up (a worktree pod gets its own session,",
+  "`<session>-<pod name>`, with its own attach command), and which trust dialogs to accept. It",
   "delivers prompts through the same helper. Maintenance also writes precise allow rules for",
   "that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,",
   "and every window the helper launches or resumes is started with those two tools allowed,",
@@ -251,7 +256,8 @@ const HOST_TRUST_STEPS_ZH = [
   "",
   "你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过",
   "维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己",
-  "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任",
+  "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令（worktree pod 各有",
+  "自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任",
   "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个",
   "助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品",
   "窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，",

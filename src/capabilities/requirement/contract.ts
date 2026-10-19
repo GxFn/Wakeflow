@@ -15,9 +15,9 @@ import {
   type WakeflowRequirementPublicationResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-requirement-publication-result.generated.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { fail } from "../../kernel/error.js";
@@ -66,7 +66,10 @@ function requestJson(value: unknown): JsonValue {
 
 export function parseRequirementPublicationRequest(value: unknown): RequirementPublicationRequest {
   const result = validatePublicationRequest(requestJson(value));
-  if (!result.ok) fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+  if (!result.ok)
+    fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+      details: { schema: result.detail },
+    });
   return result.value;
 }
 
@@ -78,7 +81,10 @@ export function admitRequirementPublicationResult(value: unknown): RequirementPu
 
 export function parseBoardInspectionRequest(value: unknown): BoardInspectionRequest {
   const result = validateBoardRequest(requestJson(value));
-  if (!result.ok) fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+  if (!result.ok)
+    fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+      details: { schema: result.detail },
+    });
   return result.value;
 }
 

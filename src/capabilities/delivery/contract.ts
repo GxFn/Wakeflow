@@ -23,9 +23,9 @@ import {
   type WakeflowRecordDeliveryOutcomeResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-record-delivery-outcome-result.generated.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
@@ -90,7 +90,10 @@ function parseRequest<Request>(
   value: unknown,
 ): Request {
   const result = validate(requestJson(value));
-  if (!result.ok) fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+  if (!result.ok)
+    fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+      details: { schema: result.detail },
+    });
   return result.value;
 }
 

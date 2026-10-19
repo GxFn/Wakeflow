@@ -1,28 +1,18 @@
-import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import path from "node:path";
-import {
-  readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
-} from "../../configuration/wakeflow-config-authority-snapshot.js";
-import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
-import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
-import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
-import {
-  applyDemandRuntimeRecovery,
-  inspectDemandRuntimeRecovery,
-  type DemandRuntimeRecoveryPlan,
-} from "../../governance/demand/demand-runtime-recovery.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
-import {
-  compileWakeflowFreshConfigSelection,
-  WakeflowFreshConfigSelectionError,
-  type WakeflowFreshConfigCompilation,
-} from "../../configuration/wakeflow-fresh-config-selection.js";
 import {
   parseWakeflowConfig,
   WakeflowConfigError,
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
+import {
+  readWakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
+} from "../../configuration/wakeflow-config-authority-snapshot.js";
+import {
+  compileWakeflowFreshConfigSelection,
+  type WakeflowFreshConfigCompilation,
+  WakeflowFreshConfigSelectionError,
+} from "../../configuration/wakeflow-fresh-config-selection.js";
 import {
   WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA,
   type WakeflowMaintenancePublicRequestV1,
@@ -31,23 +21,33 @@ import {
   WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
   type WakeflowMaintenancePublicResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
+import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
+import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
+import {
+  applyDemandRuntimeRecovery,
+  type DemandRuntimeRecoveryPlan,
+  inspectDemandRuntimeRecovery,
+} from "../../governance/demand/demand-runtime-recovery.js";
+import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
-  runPublicationTransaction,
   type PublicationTransactionEnvelope,
   type PublicationTransactionPhase,
   type PublicationTransactionPlan,
+  runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import {
@@ -57,22 +57,22 @@ import {
 } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
   parseWakeflowMaintenanceOperationId,
-  WakeflowMaintenanceOperationIdError,
   type WakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
 } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import type { WakeflowMaintenancePublicHostFacade } from "../../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
 import {
   convergeWakeflowPrivateModes,
   inspectWakeflowPrivateModes,
-  wakeflowPrivateModeAreas,
-  WakeflowPrivateModeCensusError,
   type WakeflowPrivateModeCensus,
+  WakeflowPrivateModeCensusError,
   type WakeflowPrivateModeConvergenceReceipt,
+  wakeflowPrivateModeAreas,
 } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import {
   parseWakeflowStaticMaterializationPreviewRequest,
-  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationAction,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import {
@@ -200,7 +200,9 @@ function parseWakeflowMaintenancePublicRequest(value: unknown): WakeflowMaintena
   }
   const result = validateRequest(json);
   if (!result.ok) {
-    fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+    fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+      details: { schema: result.detail },
+    });
   }
   return result.value;
 }

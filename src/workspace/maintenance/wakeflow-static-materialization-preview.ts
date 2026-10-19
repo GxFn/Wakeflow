@@ -1124,7 +1124,13 @@ export async function previewWakeflowStaticMaterialization(
     const residue = await scanWakeflowLegacyResidue([
       { key: "workspace.root", absolutePath: rootValue.absolutePath },
     ]);
-    if (residue.items.length > 0) addBlocker(blockers, "fresh-legacy-residue-present");
+    if (residue.items.length > 0) {
+      addBlocker(blockers, "fresh-legacy-residue-present");
+      // 按种类点名（§13.181 F-L1-5）：Controller 不必读实现就知道是指令块、宽权限、根标记还是旁边的账本目录。
+      for (const kind of new Set(residue.items.map((item) => item.kind))) {
+        addBlocker(blockers, `fresh-legacy-residue-${kind}`);
+      }
+    }
   } else {
     if (current === null) addBlocker(blockers, "current-config-unavailable");
     // 活动布局缺失或不完整由维护 ensure 补齐（能力卡 1 §1.4 自动修复）；节点政策冲突只报告。

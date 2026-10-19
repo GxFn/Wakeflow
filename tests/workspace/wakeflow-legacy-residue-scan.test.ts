@@ -1,10 +1,17 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
+  LEDGER_ARCHIVES_ROOT_REF,
+  LEDGER_REQUIREMENTS_ROOT_REF,
+  LEDGER_TRANSACTIONS_ROOT_REF,
+} from "../../src/governance/ledger/ledger-authority-paths.js";
+
+import {
   scanWakeflowLegacyResidue,
+  WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES,
   WAKEFLOW_LEGACY_RESIDUE_MAXIMUM_ITEMS,
 } from "../../src/workspace/wakeflow-legacy-residue-scan.js";
 import { disposableRoot } from "../support/temp-root.js";
@@ -137,4 +144,30 @@ test("legacy residue scan caps at 64 items and counts the rest, and counts a van
     true,
   );
   equal(scan.unreadable, 1);
+});
+
+test("a sibling wakeflow-ledger that carries the current ledger layout is another workspace's live ledger, not residue（§13.181 F-L1-4）", async (t) => {
+  const parent = disposableRoot(t, "wakeflow-legacy-residue-ledger-");
+  const workspace = path.join(parent, "Workspace");
+  mkdirSync(workspace);
+  const ledger = path.join(parent, "wakeflow-ledger");
+  mkdirSync(ledger);
+  for (const name of WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES) mkdirSync(path.join(ledger, name));
+  const current = await scanWakeflowLegacyResidue([
+    { key: "workspace.root", absolutePath: workspace },
+  ]);
+  deepEqual(current.items, []);
+  // 少一个顶层目录就不是现役账本：仍按 0.9.x 残留报告。
+  rmSync(path.join(ledger, "transactions"), { recursive: true });
+  const partial = await scanWakeflowLegacyResidue([
+    { key: "workspace.root", absolutePath: workspace },
+  ]);
+  deepEqual(
+    partial.items.map((item) => [item.kind, item.path]),
+    [["ledger-directory", "../wakeflow-ledger"]],
+  );
+  deepEqual(
+    [...WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES],
+    [LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF],
+  );
 });

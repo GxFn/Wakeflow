@@ -31,9 +31,9 @@ import {
   type WakeflowDemandPublicationResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.js";
 import {
+  type JsonValue,
   JsonValueError,
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
@@ -79,7 +79,10 @@ function requestParser<Request>(
 ): (value: unknown) => Readonly<Request> {
   return (value) => {
     const result = validate(requestJson(value));
-    if (!result.ok) fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+    if (!result.ok)
+      fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+        details: { schema: result.detail },
+      });
     return result.value;
   };
 }

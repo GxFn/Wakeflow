@@ -29,6 +29,11 @@ export interface RuntimeJsonSchemaValidationSuccess<Value> {
 export interface RuntimeJsonSchemaValidationFailure {
   readonly ok: false;
   readonly path: string;
+  /**
+   * 第一条失败的规则，令牌形：`required:storage`、`additional:extra`、`enum`、`type:string`、`oneOf`…
+   * 只含 `[A-Za-z0-9_.:-]`、不超过 128 字符，可以直接进公共错误的 details（§13.181 F-L1-1）。
+   */
+  readonly detail: string;
 }
 
 export type RuntimeJsonSchemaValidation<Value> =
@@ -107,6 +112,37 @@ function dependencySchemas(value: unknown): readonly JsonObject[] {
     result.push(schema);
   }
   return Object.freeze(result);
+}
+
+const DETAIL_PATTERN = /[^A-Za-z0-9_.:-]+/gu;
+const DETAIL_MAXIMUM = 128;
+
+function detailToken(value: unknown): string {
+  return String(value)
+    .replace(DETAIL_PATTERN, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
+/** 每个关键字最能定位的参数名：缺的属性、多出的属性、期望的类型或常量。 */
+const DETAIL_PARAMETER_KEYS: Readonly<Record<string, string>> = Object.freeze({
+  required: "missingProperty",
+  additionalProperties: "additionalProperty",
+  type: "type",
+  const: "allowedValue",
+});
+
+/** 把 Ajv 的第一条错误压成一个令牌：关键字加上最能定位的参数。 */
+function validationDetail(
+  error: Readonly<{ keyword?: string; params?: unknown }> | undefined,
+): string {
+  if (error === undefined) return "unknown";
+  const keyword = detailToken(error.keyword ?? "unknown") || "unknown";
+  const parameterKey = DETAIL_PARAMETER_KEYS[keyword];
+  const params = (error.params ?? {}) as Readonly<Record<string, unknown>>;
+  const parameter = parameterKey === undefined ? undefined : params[parameterKey];
+  const label = keyword === "additionalProperties" ? "additional" : keyword;
+  const token = parameter === undefined ? label : `${label}:${detailToken(parameter)}`;
+  return token.slice(0, DETAIL_MAXIMUM) || "unknown";
 }
 
 function validationPath(instancePath: string): string {
@@ -237,6 +273,7 @@ function compileRuntimeJsonSchemaValidator<Value>(
     return Object.freeze({
       ok: false,
       path: validationPath(first?.instancePath ?? ""),
+      detail: validationDetail(first),
     });
   };
 }

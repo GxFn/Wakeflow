@@ -519,6 +519,8 @@ test("fresh-initialize refuses while the workspace root carries old-plugin marke
     true,
     JSON.stringify(preview.blockerCodes),
   );
+  // 种类级代码让 Controller 不读实现也知道残留是什么（§13.181 F-L1-5）。
+  equal(preview.blockerCodes.includes("fresh-legacy-residue-root-marker"), true);
   deepEqual(
     readdirSync(workspace.absolutePath).sort(),
     [".git", ".workspace-active"],

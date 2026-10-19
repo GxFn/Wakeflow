@@ -4906,3 +4906,30 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 未运行：原生宿主会话、lab/live、远端 CI；图谱随发布候选刷新（§13.179 裁决）。
 
 本批改动 src（八个模块删除、kernel 错误族表）、tests（五份专属测试删除、五份共享测试裁剪、目录预算、未使用导出清理）、tooling/architecture（admitted roots）、knip.json、docs/；未提交。
+
+### 13.181 现场 L1 第一次：五个发现、L1 修复批与分级验证（2026-10-19）
+
+1.1.0 装进 Claude Code（缓存摘要与提交一致）后，在新建的 `WakeflowTestWorkspace7`（根仓库加合成 `ProductA`）里按 [live-test-plan-2026-10](../references/live-test-plan-2026-10.md) 跑 L1：Controller（Opus 5.5，auto 模式，tmux）加载 init 与 Controller 技能、判定 fresh-initialize，走到预览就停下。五个发现：
+
+- **F-L1-1 selection 形状没地方学。** 两次预览被拒后 Controller 说"工具不说哪个字段错、文档没写格式"，去源码仓库的 `plugins/claude-code-wakeflow/lib` 里 grep 编译后的 Schema，还在本地跑了遗留物扫描函数。修法：init 命令、Controller 第 0 步与 windows 参考写明 selection 的六部分、"形状就是工具列表里的输入 Schema，绝不读插件文件"、拒绝时按 `details.schema` 改字段。
+- **F-L1-2 拒绝不点名规则。** `invalid-request/schema` 只给路径；根级 `required`/`additionalProperties` 失败时路径只是 `$request`。修法：`runtime-json-schema` 的失败结果加令牌形 `detail`（`required:storage`、`additional:extra`、`type:string`、`enum`、`oneOf`…，限 `[A-Za-z0-9_.:-]` 128 字符），十一处 `parseRequest` 把它放进 `details.schema`，MCP 入口的 `errorMessage` 也带上。
+- **F-L1-3 问答表推荐 managed-block。** 与 owner-managed 缺省相反（J2/Q9）。修法：三处文本改为推荐 owner-managed，并说明提交后每个克隆都会看到那个块。
+- **F-L1-4 遗留物扫描误报兄弟账本。** `fresh-legacy-residue-present` 的残留物是 `../wakeflow-ledger`，而它是 WakeflowTestWorkspace2 配置里的现役账本（1.x 布局）；Controller 建议改名，改了就毁掉工作区 2。修法：旁边的 `wakeflow-ledger` 带齐 `archives/`、`requirements/`、`transactions/` 时按现役账本对待、不报告（常量与 governance 的布局常量由测试交叉核对，workspace 层不能导入 governance）。隔离/删除由用户自己做——auto 模式的分类器拒绝了我移动它。
+- **F-L1-5 拒绝不带残留物种类。** 修法：预览在 `fresh-legacy-residue-present` 之外按种类追加 `fresh-legacy-residue-<kind>`（预览合同的 blocker 码只允许连字符分段），文本解释每种是什么、由用户清理。
+
+环境两条：Claude Code 启动时自动升到 2.1.303（A3 的现场样本）；用户的全局 hook `~/.config/iterm2/cc-status` 挂在 10 个事件上且无超时，PostToolUse 跑过 45 s / 1m42s / 3m29s，现场比插件本身慢 3–5 倍，与 Wakeflow 的五个 hook（5 s 超时）无关。
+
+**分级验证（用户裁决）。** 完整门从此只在三种情况强制：推送或打 tag 前、改到 `src/foundation`、`src/kernel`、`src/contracts`、`tests/scenarios`、`tooling/testing` 或 Biome/knip/tsconfig、每天收尾一次；其余改动提交前跑第 1 级（`verify quick --changed` 加 `impact report` 点名的套件与 handoff），改完即跑第 0 级。`impact report` 新增 `tier` 字段给出级别与理由，并把原来并不存在的 `test:typescript:focused -- --changed` 建议改成 `wf verify quick --changed`。CLAUDE.md/AGENTS.md 的 Verification 一节重写，maintainer-tools 第 1、23 节同步。今天之前三批共跑了 8 次完整门（含重跑），其中三次失败在第 1 级就能抓住。
+
+**本批用的级别：第 2 级**（改了 `src/foundation/schema`，且这是分级规则生效的第一批）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级（`wf verify quick --changed`，变更集触达 123 份测试文件，静态检查全过）：第一轮 lint 拦住新函数的认知复杂度 17（改成查表）；第二轮 627 测试败 3——预览合同的 blocker 码不许冒号（改为 `fresh-legacy-residue-<kind>`）、Schema 校验失败对象多了 `detail` 键（测试的冻结键断言更新）、honesty 测试把文本里反引号的 `wakeflow-ledger` 当成技能名（改写成 `../wakeflow-ledger` 目录）；第三轮 627 测试败 1——同一测试还断言失败结果里不出现 Schema 关键字 `minimum`，而 `detail` 现在正是要说出关键字；改为只禁止 Schema 里的值（上限、默认值）外泄；第四轮只跑该文件（`verify quick --files`）通过。
+- 制品重建（35 份 lib 文件变化）与 `smoke:artifacts` 均 exit 0。
+- 完整门（第 2 级）一次即过：run-5ExQ7g（06:12–06:39 UTC，26.9 分钟）1494/1494 全通过、313 份文件、零失败/取消/skip/todo，schema:check 与 build:check 通过。
+- `wf timings apply --receipt .build/verification/run-5ExQ7g/receipt.json`：313 份文件、并发 2。
+- `wf handoff`（含真实 build:check，run-6dEang）：八项通过；`git diff --check` 干净。
+- 未运行：L1 重跑在提交并刷新缓存之后（见下一节）；lab/live、远端 CI；图谱随发布候选刷新。
+
+本批改动 src/foundation/schema、src/workspace（残留物扫描、预览）、src/capabilities 十处 contract 与 maintain-workspace、src/entrypoints、assets/agent-text（init 命令、Controller SKILL 第 0/1 步、windows 参考）、tooling/impact、tests（残留物、Schema、预览、impact）、CLAUDE.md/AGENTS.md、docs/；未提交。

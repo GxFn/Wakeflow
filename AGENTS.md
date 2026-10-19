@@ -102,32 +102,42 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 
 ## Verification
 
-- Run focused tests for the changed behavior while iterating:
-  `npm run test:typescript:focused -- <test files or tests/ directories>`, or
-  `-- --changed` to run the tests reached by the current Git change set.
-  `npm run wf -- verify quick --files <test files>` (or `--changed`) runs the
-  same tests with the static checks and leaves a receipt under
-  `.build/verification/`.
+- Verification is tiered; `npm run wf -- impact report` names the tier the
+  current change set needs and the commands to run (gate-log §13.181).
+  - Tier 0, after every edit (1–3 min): `npm run wf -- verify quick --changed`
+    (or `--files <tests>`): typecheck, Biome on the changed files and the tests
+    reached by the change set, with a receipt under `.build/verification/`.
+  - Tier 1, before every commit (5–12 min): tier 0 plus what the impact report
+    names - `schema:build` and `schema:check` for schema changes; the artifact
+    rebuild, `tests/artifacts` and `smoke:artifacts` for anything that reaches
+    the artifacts; the owning slice's tests and one host's scenario chain for
+    capability or governance changes - then `npm run wf -- handoff`.
+  - Tier 2, the full gate `npm test` (21–26 min): before a push or a tag, after
+    any change under `src/foundation`, `src/kernel`, `src/contracts`,
+    `tests/scenarios` or `tooling/testing`, after a Biome, knip or tsconfig
+    change, and once per day of work. Only tier 2 receipts feed
+    `wf timings apply`. A push runs the same gate remotely (`verify.yml`), so
+    the push itself needs no second local run.
+- Each gate-log section states which tier ran and why.
 - When another session or agent may be compiling or testing in this tree,
   run every `.build/`- or `plugins/`-writing command under the repository
   build lock: `npm run locked -- npm test`. `wf verify` and `wf handoff`
-  hold that lock themselves.
+  hold that lock themselves. Never start another build, scan or test run while
+  a tier 2 gate is running: its load-sensitive tests fail under contention.
 - `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
   private content, `build:check`, version-bytes, docs pointers, Git state); run
-  it before
-  reporting completion and fix what it names. `npm run wf -- impact report`
-  classifies the current change set by ownership and lists the commands to
-  run next (schema build, artifact rebuild, focused or full gate, smoke).
+  it before reporting completion and fix what it names.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
   end-to-end scenario chain (25 scenarios, run once per host), the Schema
-  drift check, and `build:check` against the committed artifacts. Run it
-  before declaring a change complete.
+  drift check, and `build:check` against the committed artifacts.
 - After a change that reaches the artifacts (runtime, skills, commands,
   READMEs, hooks, metadata), run `npm run build:artifacts:committed` before
-  `npm test`, and `npm run smoke:artifacts` before handoff. The smoke is not
-  part of `npm test` on purpose; `npm run smoke:candidate` runs it against a
-  fresh candidate build without touching `plugins/`.
+  the tests of tier 1 or 2, and `npm run smoke:artifacts` before handoff. Any
+  `src/` edit changes compiled bytes under `plugins/*/lib`, so it reaches the
+  artifacts. The smoke is not part of `npm test` on purpose;
+  `npm run smoke:candidate` runs it against a fresh candidate build without
+  touching `plugins/`.
 - Run `git diff --check` before handoff and report any test that could not be
   run. Do not present an unavailable real-host session as a passing test.
 - Host account or login availability may limit a real session test, but it

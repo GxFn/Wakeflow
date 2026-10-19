@@ -72,6 +72,10 @@ test("变更影响：按所有权规则分类，运行时改动要求重建制�
     "npm run wf -- handoff",
   ]);
   deepEqual(report.warnings, []);
+  // kernel 与 contracts 是公共形状：第 2 级（完整门）。
+  equal(report.tier.level, 2);
+  ok(report.tier.reasons.includes("owner contracts changed"));
+  ok(report.tier.reasons.includes("owner kernel changed"));
 });
 
 test("变更影响：手改生成目录与制品给出警告；只改 tooling 与测试不触及制品；未分类路径点名", (t) => {
@@ -99,6 +103,16 @@ test("变更影响：手改生成目录与制品给出警告；只改 tooling �
   const focused = reportChangeImpact(root);
   equal(focused.tests.fullGateRecommended, false);
   equal(focused.tests.count, 1);
-  ok(focused.recommended.includes("npm run test:typescript:focused -- --changed"));
+  ok(focused.recommended.includes("npm run wf -- verify quick --changed"));
   equal(focused.artifactsAffected, false);
+  // 只改 tooling 与测试：第 1 级；只改文档：第 0 级；改场景链或运行器：第 2 级。
+  equal(focused.tier.level, 1);
+  deepEqual(reportChangeImpact(fixture(t)).tier, {
+    level: 0,
+    reasons: ["only docs or repository files changed"],
+  });
+  write(root, "tests/scenarios/chain.ts", "export const chain = 1;\n");
+  const chain = reportChangeImpact(root);
+  equal(chain.tier.level, 2);
+  ok(chain.tier.reasons.includes("tests/scenarios/chain.ts is gate infrastructure"));
 });

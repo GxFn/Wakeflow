@@ -56,9 +56,10 @@ command syntax: the references and the tool descriptions hold it.
 
 ### Step 0 - Initialize or maintain the workspace
 
-Collect the user's choices first (program identity, repositories, surfaces,
-storage root), preview `wakeflow_maintain_workspace`, show the plan and its
-blockers, and apply only after they confirm. Depth: `references/workspace-and-windows.md`.
+Collect the user's choices (program identity, repositories as owner-managed
+unless they opt in, surfaces, storage root), build the selection from the tool's
+input schema - never from plugin files - preview `wakeflow_maintain_workspace`,
+show the plan and blockers, apply only after they confirm. Depth: `references/workspace-and-windows.md`.
 
 ### Step 1 - Open windows and register their bindings
 
@@ -68,8 +69,7 @@ root), open it exactly as "Step 1 - Windows and bindings" in
 `references/workspace-and-windows.md` says (bootstrap once, one launch per
 window), then register the handle you observed with the same tool: it needs a
 real `session-start` at the host startup root, and a refusal names the missing
-evidence - re-inspect the window and the host's hook trust before retrying.
-{{hostEffectRule}}
+evidence - re-inspect the window and the host's hook trust before retrying. {{hostEffectRule}}
 
 ### Step 5 - Claim a requirement package into a Demand
 

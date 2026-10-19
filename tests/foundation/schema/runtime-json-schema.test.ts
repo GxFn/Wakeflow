@@ -71,8 +71,11 @@ test("validation is non-mutating and exposes only a frozen stable result", () =>
   });
   const result = validate(parseJsonValue({ value: 0 }));
   equal(result.ok, false);
-  equal(Object.keys(result).sort().join(","), "ok,path");
-  equal(JSON.stringify(result).includes("minimum"), false);
+  equal(Object.keys(result).sort().join(","), "detail,ok,path");
+  // detail 只说失败的关键字，不带 Schema 里的值（上限 1、默认值 "inserted"）。
+  if (!result.ok) equal(result.detail, "minimum");
+  equal(JSON.stringify(result).includes("inserted"), false);
+  equal(JSON.stringify(result).includes("limit"), false);
   equal(Object.isFrozen(result), true);
 
   const admitted = parseJsonValue({ value: "1", unexpected: true });
@@ -191,4 +194,30 @@ test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
     "$dependencies/1/$id",
   );
   expectSchemaError(() => createRuntimeJsonSchemaValidator(null), "schema-input", "$schema");
+});
+
+test("a rejection carries a token-shaped detail: the failing keyword plus the property or type it names（§13.181 F-L1-1）", () => {
+  const validate = createRuntimeJsonSchemaValidator<unknown>({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:detail:v1",
+    type: "object",
+    additionalProperties: false,
+    required: ["storage"],
+    properties: { storage: { type: "string" }, mode: { enum: ["a", "b"] } },
+  });
+  const cases: ReadonlyArray<readonly [unknown, string, string]> = [
+    [{}, "$", "required:storage"],
+    [{ storage: "x", extra: 1 }, "$", "additional:extra"],
+    [{ storage: 1 }, "$/storage", "type:string"],
+    [{ storage: "x", mode: "c" }, "$/mode", "enum"],
+  ];
+  for (const [value, expectedPath, expectedDetail] of cases) {
+    const rejected = validate(parseJsonValue(value));
+    equal(rejected.ok, false);
+    if (!rejected.ok) {
+      equal(rejected.path, expectedPath);
+      equal(rejected.detail, expectedDetail);
+      equal(/^[A-Za-z0-9_.:-]{1,128}$/u.test(rejected.detail), true);
+    }
+  }
 });

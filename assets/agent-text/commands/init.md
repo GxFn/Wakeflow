@@ -12,7 +12,17 @@ maintain the workspace" section; the depth is in its
 First tool call: `wakeflow_maintain_workspace` in preview, after you have asked
 the user for the choices the intent needs (program identity, repositories,
 surfaces, storage root) - on an existing workspace, preview the reconcile
-intent instead and report what it found. When the user wants to add a product
+intent instead and report what it found. The fresh-initialize `selection` has
+six parts - `program`, `presentation`, `topology` (repositories, support
+surfaces, windows), `storage`, `governance`, `hosts` - and its exact shape is
+the tool's input schema in your tool list: build the request from that schema,
+never from plugin files on disk. A refusal names the failing path and rule
+(`details.schema`, for example `required:storage`); fix that field and preview
+again. Recommend `owner-managed` for every repository unless the user asks for
+Wakeflow's managed block, and say that a committed block is seen by every
+clone. `fresh-legacy-residue-present` lists what it found as
+`fresh-legacy-residue-<kind>` codes; the user removes residue themselves - a
+sibling `../wakeflow-ledger` directory that is another workspace's live ledger is not residue. When the user wants to add a product
 repository to an existing workspace, preview the reconfigure intent the
 reference describes for that. The directory must already be a Git repository
 of its own; if the preview reports `gitignore-git-repository`, tell the user,

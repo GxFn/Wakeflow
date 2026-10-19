@@ -28,7 +28,24 @@ current. Read it back through a tool.
 - **fresh-initialize** - a new workspace in an empty or non-workspace
   directory that is itself a Git repository (when it is not, run `git init`
   there yourself once the user agrees; the preview reports
-  `gitignore-git-repository` until it is).
+  `gitignore-git-repository` until it is). The `selection` you send has six
+  parts: `program` (identity and display), `presentation` (language),
+  `topology` (repositories with their `instructionManagement`, support
+  surfaces, windows), `storage` (ledger root), `governance`, `hosts` (launch
+  preferences by host); its exact shape is the tool's input schema in your
+  tool list, so build the request from that schema and never from plugin
+  files on disk. A refusal names the failing path and the rule in
+  `details.schema` (`required:storage`, `additional:foo`, `type:string`,
+  `enum`): fix that field and preview again. Default repositories to
+  `owner-managed`; offer `managed-block` only when the user wants Wakeflow's
+  bounded block in the repository's instruction file, and tell them a
+  committed block is seen by every clone. `fresh-legacy-residue-present` means
+  the scan found 0.9.x leftovers; the codes `fresh-legacy-residue-<kind>`
+  say which (`scope-block`, `broad-permission`, `additional-directories`,
+  `root-marker`, `ledger-directory`). Residue is cleaned by the user, never by
+  you; a sibling `../wakeflow-ledger` directory that is another workspace's live ledger
+  (it carries `archives/`, `requirements/`, `transactions/`) is not residue and
+  is not reported.
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, the
   support surfaces cannot change, and a change to the pod set is not a

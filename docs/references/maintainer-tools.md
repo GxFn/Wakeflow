@@ -23,6 +23,8 @@ npm run wf -- verify artifact
 
 验证不会隐式执行 `build:artifacts:committed` 来修复漂移。需要重建时仍明确运行原命令。
 
+分级（CLAUDE.md Verification，§13.181）：第 0 级每次改完跑 `verify quick --changed`；第 1 级提交前再加 `impact report` 点名的套件与 `handoff`；第 2 级完整门只在推送或打 tag 前、改到 `src/foundation`、`src/kernel`、`src/contracts`、`tests/scenarios`、`tooling/testing` 或 Biome/knip/tsconfig 时、以及每天收尾一次。`impact report` 的 `tier` 字段给出当前变更集的级别与理由；只有第 2 级的回执写回耗时表。门在跑时不要再起任何编译、扫描或测试。
+
 测试文件由官方 `node:test.run({files})` 接收既有耗时队列，保持每文件一个进程。Node 24 CLI会重新排序显式文件参数，因此本轮改用程序化入口；真实进程回归同时检查实际执行顺序与选择记录，终端和JSONL仍来自同一原生事件流。见[Node 24.19测试入口](https://nodejs.org/download/release/v24.19.0/docs/api/test.html#runoptions)。
 
 并发度是文件 worker 数，仍复用既有调度器。整门示例从 2 worker 开始；4 worker 曾完成整门，但本轮同样出现准备阶段和慢场景超时，6 worker 也曾出现初始化超时（§13.153）。并发适用性必须随实际负载判断，不能仅凭一次通过就当作稳定上限。调整并发不改变用例、断言、fsync 或测试自己的超时；每轮结果分别保存。
@@ -445,7 +447,7 @@ npm run --silent wf -- impact report
 npm run --silent wf -- impact report --since HEAD~1
 ```
 
-把 Git 变更集（相对 `--since`，缺省 HEAD，加未跟踪文件）按 CLAUDE.md 的所有权规则分类：Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并给出警告，分不进任何规则的路径点名。随后给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §14 的选择）与按顺序排好的建议命令：`schema:build`/`schema:check`、`build:artifacts:committed`、聚焦或完整门、`smoke:artifacts`、`wf handoff`。它是开发建议，不替代完整门；静态图说明不了的影响仍由 `fullGateRecommended` 兜底。
+把 Git 变更集（相对 `--since`，缺省 HEAD，加未跟踪文件）按 CLAUDE.md 的所有权规则分类，并给出 `tier`（0/1/2 与理由，见第 1 节的分级）：Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并给出警告，分不进任何规则的路径点名。随后给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §14 的选择）与按顺序排好的建议命令：`schema:build`/`schema:check`、`build:artifacts:committed`、聚焦或完整门、`smoke:artifacts`、`wf handoff`。它是开发建议，不替代完整门；静态图说明不了的影响仍由 `fullGateRecommended` 兜底。
 
 ## 24. 脚手架：需求包草稿
 

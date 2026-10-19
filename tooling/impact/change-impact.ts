@@ -52,6 +52,52 @@ export interface ChangeImpactReport {
     fullGateReasons: readonly string[];
   }>;
   readonly recommended: readonly string[];
+  /** 分级验证（CLAUDE.md Verification，§13.181）：0 只改文档，1 提交前的聚焦验证，2 完整门。 */
+  readonly tier: Readonly<{ level: 0 | 1 | 2; reasons: readonly string[] }>;
+}
+
+const TIER_TWO_OWNERS: ReadonlySet<string> = new Set(["foundation", "kernel", "contracts"]);
+const TIER_TWO_FILE_PATTERN =
+  /^(?:tests\/scenarios\/|tooling\/testing\/|biome\.json$|knip\.json$|tsconfig[^/]*\.json$|tests\/tsconfig\.json$|tooling\/tsconfig\.json$)/u;
+const TIER_ONE_CATEGORIES: readonly ImpactCategory[] = [
+  "runtime",
+  "hosts",
+  "entrypoints",
+  "agent-text",
+  "release-metadata",
+  "tooling",
+  "tests",
+  "generated-edited",
+  "artifacts-edited",
+];
+
+/** 变更集需要的验证级：完整门只在公共形状、场景链、运行器或门配置变动时强制。 */
+function verificationTier(
+  categories: Readonly<Record<ImpactCategory, readonly string[]>>,
+  owners: Readonly<Record<string, readonly string[]>>,
+  tests: Readonly<ImpactedTestSelection>,
+  changed: readonly string[],
+): Readonly<{ level: 0 | 1 | 2; reasons: readonly string[] }> {
+  const reasons: string[] = [];
+  for (const owner of Object.keys(owners).sort()) {
+    if (TIER_TWO_OWNERS.has(owner)) reasons.push(`owner ${owner} changed`);
+  }
+  if (categories.schemas.length > 0) reasons.push("schemas changed");
+  if (categories.toolchain.length > 0) reasons.push("toolchain changed");
+  if (categories.ci.length > 0) reasons.push("ci workflow changed");
+  for (const file of changed) {
+    if (TIER_TWO_FILE_PATTERN.test(file)) reasons.push(`${file} is gate infrastructure`);
+  }
+  if (tests.fullGateRecommended) reasons.push(...tests.fullGateReasons.map((r) => `tests: ${r}`));
+  if (reasons.length > 0) return Object.freeze({ level: 2, reasons: Object.freeze(reasons) });
+  const touched = TIER_ONE_CATEGORIES.filter((category) => categories[category].length > 0);
+  if (touched.length > 0) {
+    return Object.freeze({ level: 1, reasons: Object.freeze(touched.map((c) => `${c} changed`)) });
+  }
+  return Object.freeze({
+    level: 0,
+    reasons: Object.freeze(["only docs or repository files changed"]),
+  });
 }
 
 const RULES: readonly Readonly<{ pattern: RegExp; category: ImpactCategory }>[] = [
@@ -114,7 +160,7 @@ function recommendations(
   if (categories.schemas.length > 0) steps.push("npm run schema:build", "npm run schema:check");
   if (artifactsAffected) steps.push("npm run build:artifacts:committed");
   if (tests.tests.length > 0 && !tests.fullGateRecommended)
-    steps.push("npm run test:typescript:focused -- --changed");
+    steps.push("npm run wf -- verify quick --changed");
   if (tests.fullGateRecommended || artifactsAffected || categories.toolchain.length > 0)
     steps.push("npm run locked -- npm test");
   else if (tests.tests.length > 0) steps.push("npm run locked -- npm test (before handoff)");
@@ -202,5 +248,6 @@ export function reportChangeImpact(
       fullGateReasons: tests.fullGateReasons,
     },
     recommended: recommendations(categories, tests, artifactsAffected),
+    tier: verificationTier(categories, owners, tests, changed),
   });
 }

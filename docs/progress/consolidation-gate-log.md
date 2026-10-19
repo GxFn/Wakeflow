@@ -5052,6 +5052,6 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `schema:check` 通过；制品重建；`smoke:artifacts` exit 0。
 - 完整门 run-GVgWZt（23:04–23:28 UTC，24.1 分钟）：**1500/1500 全通过**、314 份文件。`wf timings apply --receipt` 写回。
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
-- 现场核对：提交并走完更新流程后，在工作区 7 新建一个 pod，核对 `tmux list-sessions` 出现 `wakeflow-<pod>`、窗口都在其中，关闭 pod 后该会话消失（结果记在下一节）。
+- 现场核对（提交 `7f7ae342` 之后，工作区 7）：现场的 tmux 服务器在此前已被关闭（未重启机器，没有 claude 进程存活），于是在配置的会话 `wakeflow` 里重开一个 Controller，它以 `self`/`replace` 接管绑定（`mark --all` 对另外 7 扇 main pod 窗口报 `pane-missing`，按指示暂不恢复）。创建 pod `view`：`tmux list-sessions` 显示 `wakeflow: 1 windows` 与 `wakeflow-view: 8 windows`（view 的 Controller、Design、五个产品窗口、Test 全部在 pod 自己的会话里并已登记）。两阶段关闭（五个分支 `abandoned`，5 条 worktree 记录清理，`next: none`）之后 `tmux list-sessions` 只剩 `wakeflow: 1 windows`——pod 会话随最后一个窗口退役自动消失。留给用户：五个仓库里的 `worktree-wakeflow-view` 与 `worktree-wakeflow-live` 分支（无独有提交）、`.git/info/exclude` 行、空的 `.claude/worktrees/`；main pod 另外 7 扇窗口仍 stale、待 `resume` 恢复。
 
 本批改动 `src/hosts/claude-code`（启动指令渲染、助手、文本取值）、`src/contracts/schemas/configuration`（描述）与生成物、`assets/agent-text`（两份 README）、tests（助手、profile、场景链）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。

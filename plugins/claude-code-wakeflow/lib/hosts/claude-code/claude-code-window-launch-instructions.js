@@ -27,6 +27,17 @@ export function claudeCodeTmuxSessionNameFor(configured, intent) {
     const base = configured.slice(0, Math.max(1, TMUX_SESSION_NAME_MAXIMUM - suffix.length));
     return `${base}${suffix}`;
 }
+/**
+ * 窗口在 tmux 里的名字（§13.186）：worktree pod 的窗口已经在 pod 自己的会话里，显示名里的
+ * `<pod 名> · ` 前缀（能力卡 9 Q6 的逻辑显示名，保持不变）在会话内是冗余的，tmux 窗口名去掉它；
+ * primary pod 与没有前缀的显示名原样使用。
+ */
+export function claudeCodeTmuxWindowNameFor(intent) {
+    const prefix = `${intent.podName} · `;
+    return intent.podPlacement === "worktree" && intent.displayTitle.startsWith(prefix)
+        ? intent.displayTitle.slice(prefix.length)
+        : intent.displayTitle;
+}
 /** Claude owns its CLI, tmux and attached-directory arguments. */
 export function renderClaudeCodeWindowLaunchInstructions(input) {
     const { model, intent, profile, attachedWorktrees: attached } = input;
@@ -57,7 +68,7 @@ export function renderClaudeCodeWindowLaunchInstructions(input) {
         tmux: {
             socketName: host?.tmux?.socketName ?? null,
             sessionName: claudeCodeTmuxSessionNameFor(host?.tmux?.sessionName ?? template.sessionName, intent),
-            windowName: intent.displayTitle,
+            windowName: claudeCodeTmuxWindowNameFor(intent),
             cwd: intent.root.configuredPlacement,
         },
         command: "claude",

@@ -2712,8 +2712,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-window-launch-instructions.js",
-      "bytes": 4335,
-      "sha256": "sha256:d9bb67df5b10405a84abf3ad6949dd32ec1d0874e4122d662f76204a585e4d6a",
+      "bytes": 4940,
+      "sha256": "sha256:87f3be03e42591157c7cde19f5b9cc861fd13f311c0a241d22fb3d4ed68aae67",
       "mode": "0644",
       "scope": "current-host"
     },

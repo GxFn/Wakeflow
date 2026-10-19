@@ -19,7 +19,7 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *
  * - `preflight`：node、tmux 与 claude 是否可用及其版本、配置的会话是否已存在、当前是否在 tmux 里。
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
- *   （或其 `launchIntent`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
+ *   （或其 `launchIntent`；意图里的 `role` 决定 MCP 许可规则，缺省时取结果顶层的 `role`）。生成 session id，按启动意图开窗口并启动 `claude`，等目标会话的
  *   `session-start` hook 记录，打印登记用的 creation observation。launch 与 resume 都在意图参数之后加
  *   `--allowedTools`：Wakeflow MCP 规则与按助手绝对路径的 `Bash(node <path> *)`（路径只进启动命令）。意图带 `local-head` 的 worktree
  *   意图且参数里有 `--worktree <name>` 时（§13.130 H4），先在意图根（仓库主检出）准备检出：
@@ -597,14 +597,25 @@ function primaryControllerWindowId(config) {
 }
 
 function unwrapIntent(input, options) {
-  const launchIntent = typeof input.launchIntent === "object" && input.launchIntent !== null ? input.launchIntent : input;
+  const wrapped = typeof input.launchIntent === "object" && input.launchIntent !== null;
+  const intent = wrapped ? input.launchIntent : input;
+  // inspect 结果的意图自带 role；更早的结果只在顶层带 role，仍接受（§13.182 F-L1-8）。意图里的优先。
+  const launchIntent = typeof intent.role !== "string" && wrapped && typeof input.role === "string"
+    ? Object.freeze({ ...intent, role: input.role })
+    : intent;
   const windowId = options.window ?? (typeof input.windowId === "string" ? input.windowId : null);
   if (windowId === null) refuse("window-required");
   parseWindowId(windowId, "--window");
   if (typeof launchIntent.intentDigest !== "string" || !DIGEST_PATTERN.test(launchIntent.intentDigest)) {
     refuse("intent-invalid", { field: "intentDigest" });
   }
+  // role 决定许可规则，属于意图接纳：在任何 tmux 调用之前拒绝。
+  if (!knownRole(launchIntent.role)) refuse("intent-invalid", { field: "role" });
   return Object.freeze({ windowId, launchIntent });
+}
+
+function knownRole(role) {
+  return typeof role === "string" && Object.hasOwn(ROLE_MCP_PERMISSION_RULES, role);
 }
 
 function resolvePlacement(placement) {
@@ -1009,9 +1020,8 @@ function assertPaneAlive(context, command, coordinates) {
 
 // 绝对路径只在助手进程里算出、只进 tmux 的启动命令，不进任何输出。
 function sessionPermissionRules(role) {
-  const mcpRules = ROLE_MCP_PERMISSION_RULES[role];
-  if (mcpRules === undefined) refuse("intent-invalid", { field: "role" });
-  return [...mcpRules, "Bash(node " + ASSET_PATH + " *)"];
+  if (!knownRole(role)) refuse("intent-invalid", { field: "role" });
+  return [...ROLE_MCP_PERMISSION_RULES[role], "Bash(node " + ASSET_PATH + " *)"];
 }
 
 // pane 里启动 claude 的整条命令：--allowedTools 是变长参数，必须放在意图自己的参数之后、作为最后一个选项，只加一次。

@@ -280,7 +280,7 @@
   - 说明：凡是对“仓库在根下”敏感的逻辑，比如路径隐私扫描、嵌套仓库的 .gitignore、hook observer 的放置位置、worktree 准入、5 个产品窗口的多仓库 pod，都只在用户不会用的布局下测过。发现的那一个 bug 修了，这一类问题没有覆盖。
   - 证据：wakeflow-scenario-acceptance.fixture.ts:171-182：Workspace 和 ProductA 是兄弟目录；真实测试工作区：5 个仓库嵌套在已 git 初始化的根下，worktree 位于 repo/.claude/worktrees/；gate-log §13.128 L3724：第一次真实 pod 的 5 个产品窗口全部注册失败，单元测试和场景测试都没发现；只补了 pod/service.test.ts:334-337 一个回归测试，而且放在 root/.wakeflow-test-worktrees；card-10 甚至断言投递 prompt 里是兄弟相对路径 `../Workspace/`
   - 建议：增加一个嵌套、多仓库的夹具变体（仓库在根下、worktree 在 repo/.claude/worktrees 下），至少让 pod、status/verify、delivery 场景在它上面运行。
-- **D4** [中 / 缺口] 测试失败的修复闭环和多数评审分支从未通过公开工具端到端运行（计划阶段 1；状态：部分，§13.169 接线 rejected-before-send → rearm、rework 闭环、blocked → condition-cleared 三条；§13.175 接线 flaky → `request-another-attempt` → 子集重跑 → accept（`card-07/test-rerun`）与 product-defect → `escalate{product-defect}` 修复授权 → 实现返工（prompt 带修复依据）→ 带 retest 谱系的复测 → accept → 完成（`card-07/product-defect-remediation`），两个宿主各跑一遍；仍开放：bug 与 research 类型 Demand、超预算的 request-another-attempt（`attempt-capacity`）、多仓库 Demand 与 `commitExpectation: commit`——后两项需要现场）
+- **D4** [中 / 缺口] 测试失败的修复闭环和多数评审分支从未通过公开工具端到端运行（计划阶段 1；状态：部分，§13.169 接线 rejected-before-send → rearm、rework 闭环、blocked → condition-cleared 三条；§13.175 接线 flaky → `request-another-attempt` → 子集重跑 → accept（`card-07/test-rerun`）与 product-defect → `escalate{product-defect}` 修复授权 → 实现返工（prompt 带修复依据）→ 带 retest 谱系的复测 → accept → 完成（`card-07/product-defect-remediation`），两个宿主各跑一遍；仍开放：bug 与 research 类型 Demand、超预算的 request-another-attempt（`attempt-capacity`）、多仓库 Demand 与 `commitExpectation: commit`——后两项需要现场） **现场 2026-10-19（§13.185）**：rerun-subset（测试工装问题 → `request-another-attempt` 只重跑一步）、flaky 判定（负载超时 → 等负载后第 3 次通过）、blocked → `condition-cleared` 三条在真实仓库上走通；product-defect → escalate → 返工闭环现场仍未触发（没有真实缺陷）。
   - 说明：真实环境测试窗口的价值在于发现缺陷并推动修复，但“测试失败 → escalate{product-defect} → 授权 → 重新实现投递 → import → 带基线重测 → 接受 → 完成”从未作为一条链运行过。测试目标的代际、重测谱系、continue 之后的 historicalTestTargetIds、路由前沿在事件交互上可能有错，而任何切片测试都不会失败。§13.131 的 continue 缺陷就是这一类。
   - 证据：scenario-acceptance.md card-05/test-contract 只覆盖全部通过加 accept；card-07 escalate 的是实现，不是测试失败；场景测试里 request-another-attempt、product-defect、rejected-before-send、bug、research、supplement、taskPlanReview user 都是 0 次命中；这些分支只有切片测试：result-review/service.test.ts:677（flaky）、:803（product-defect）、:229（blocked）；现场 Demand 都只改了很小的文件（§13.126 一个 44 字节文件、未跟踪的冒烟文件），没有 commitExpectation commit，也没有多仓库 Demand；验证者更正：窗口 decommission 已由 card-10 覆盖
   - 建议：新增场景：rework 到 accept、rework 刹车（escalate、record-decision、替换）、预算内和超预算的 request-another-attempt、product-defect 修复加重测、blocked 后恢复、rejected-before-send 后 rearm、一个 bug Demand 和一个 research Demand。下次现场发布一个第一次实现故意让某个真实环境步骤失败的需求，并跑一个 commitExpectation: commit 的多仓库 Demand。
@@ -293,7 +293,7 @@
   - 说明：剩下的风险是 src 与构建后 lib/ 在运行时路径上的差异：投递和 hook 用到的 import.meta.url 产物身份、经产物启动器触发的 UserPromptSubmit、物化出来的 helper。
   - 证据：smoke-plugin-artifacts.ts:25-37、:365-520：工具列表、fresh-initialize、reconcile、status/verify、pod create 预览、一次 SessionStart hook；场景测试直接调用 src，不经过产物的 mcp/server.mjs；验证者更正：src 没有动态 import，工具列表已经会加载整个静态模块闭包；dependency-closure 测试另有校验
   - 建议：增加一个模式：通过 stdio 对每个构建产物的 MCP server 和 hook 启动器跑投递到完成的一个子集；在 smoke 里用假 tmux 运行 helper 的 preflight 和 panes。
-- **D7** [低 / 未验证] 与时间相关的行为只用注入时钟验证：回调静默后的 rearm 从未在现场触发（计划阶段 1；状态：开放）
+- **D7** [低 / 已现场触发] 与时间相关的行为只用注入时钟验证：回调静默后的 rearm 从未在现场触发（计划阶段 1；状态：**已现场触发 2026-10-19，§13.185 L7**——Controller 会话退出、回调发不出；静默窗口内 rearm 被拒 `callback-pending`；窗口一过 rearm 第二代许可、Controller 自投回调、hook 记录落地、accept。约 1 万条记录的 soak 测试仍未做）
   - 说明：对永远到不了的回调，基于静默的 rearm 是唯一的恢复手段，但它在现实中从未触发过；一个月、8 个窗口使用量下 helper 线性扫描的延迟也是推算出来的。
   - 证据：scenario-acceptance.md card-06/wake-controller：10 分钟静默后重发、三次上限、重放，只在 result-review/service.test.ts:143 用注入时钟测试；helper 每次轮询都要线性扫描并解析所有 user-prompt-submit 和 session-start 记录（tmux-asset.ts:465-481、:1105-1115）
   - 建议：下一次现场里故意让一次回调静默超过 10 分钟，然后做一次 rearm；配合上面提到的约 1 万条记录的 soak 测试。
@@ -312,6 +312,12 @@
   - 说明：在全局开启 commit.gpgsign 或 core.hooksPath 的机器上，临时仓库的提交会失败或弹出提示，pod 和场景测试会因与 Wakeflow 无关的原因失败，也会挡住以后接入 CI。
   - 证据：9 个测试文件设置了 GIT_AUTHOR_* 和 GIT_COMMITTER_*，但没有设置 GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM（例如 pod/service.test.ts:44、scenario test:2561）；只有 check-release-consistency.test.ts:54-55 和 tmux asset 测试做了隔离
   - 建议：集中一个测试用的 git 环境 helper（GIT_CONFIG_GLOBAL=/dev/null、GIT_CONFIG_NOSYSTEM=1、作者和提交者身份），所有需要 spawn git 的测试都用它。
+- **D11** [低 / 噪音] 新增或移除 pod 的配置事务让 main pod 的全部窗口显示 `launchIntent: drifted`（计划阶段 2；状态：开放，§13.185 观察 A）
+  - 说明：意图摘要把整份配置的变化都算了进去，而这些窗口的参数、启动目录、tmux 名称都没变；没有门因此失败，但 Design 与 Controller 都把它当成需要处理的事反复提及。
+  - 建议：意图摘要只覆盖该窗口自己的启动参数与根，或在 status 里把"仅摘要变化"与"参数变化"分开标注。
+- **D12** [中 / 缺口] 相对 `file:` 依赖在 `<repo>/.claude/worktrees/<name>` 布局下解析不到（计划阶段 2；状态：开放，§13.185 观察 B）
+  - 说明：AlembicAgent 的 `@alembic/core` 指向 `../AlembicCore`，在 worktree 里成了悬空链接，仓库自带的 `npm run test` 跑不起来；实现窗口只能用仓库外的临时别名验证。pod 文本没有提醒这类依赖，worktree 位置也不可配置。
+  - 建议：pod 文本写明相对路径依赖在 worktree 里的解析方式；评估把 pod 的 worktree 放到与主检出并列的目录（保持 `../X` 关系），或在创建 pod 时对 `file:` 依赖发出预警。
 
 ## E. Codex main 与 worktree 闭环已实机通过，原生入口和宿主合同仍有缺口
 

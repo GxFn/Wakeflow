@@ -63,7 +63,15 @@ const WINDOW_LAUNCH =
   "The helper opens " +
   "the tmux window at the intent's root, starts `claude` with the listed parameters and a " +
   "fresh session id, waits for the session-start hook record, and prints the creation " +
-  "observation to register verbatim. After each registration run `mark --window <windowId>` " +
+  "observation to register verbatim. The window starts with `--allowedTools` for its role's " +
+  "Wakeflow tools and the helper, in the permission mode from step 0; the workspace root's " +
+  "`.claude/settings.json` carries those two rules, Design and Test carry only their role's " +
+  "tools, and a product repository's `.claude/settings.json` is never written, so a trust " +
+  "dialog for a Wakeflow-written root lists only those rules. Entries it lists beyond them - " +
+  "`Bash(git *)`, `Bash(node *)`, `Bash(tmux *)`, a `..` directory - are 0.9.x residue " +
+  "(`broad-permission`, `additional-directories`) or the repository's own settings: accepting " +
+  "activates them, so the user deletes or confirms them before you launch, never you. " +
+  "After each registration run `mark --window <windowId>` " +
   "so the tmux window " +
   "carries the five Wakeflow options; `panes` prints the tmux-panes observation, and " +
   "`close --window <windowId>` prints the closure evidence a decommission needs. When a " +
@@ -221,7 +229,10 @@ const HOST_TRUST_STEPS_EN = [
   "that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,",
   "and every window the helper launches or resumes is started with those two tools allowed,",
   "so product and test windows do not stop at a permission prompt for them either; nothing",
-  "broader such as `Bash(tmux *)` is written.",
+  "broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow wrote",
+  "therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a `..`",
+  "directory in that list is 0.9.x residue or the repository's own settings: delete or review",
+  "it before accepting, because accepting activates it.",
   "",
   "By default every window the helper launches runs in Claude Code's `auto` permission mode:",
   "Claude Code reviews routine actions itself instead of asking you. A window may still ask",
@@ -243,7 +254,9 @@ const HOST_TRUST_STEPS_ZH = [
   "建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令、要接受哪些信任",
   "对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个",
   "助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品",
-  "窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。",
+  "窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，",
+  "其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，",
+  "那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。",
   "",
   "助手启动的每个窗口缺省以 Claude Code 的 `auto` 权限模式运行：常规操作由 Claude Code 自己审，",
   "不再逐条问你。窗口第一次仍可能问你一个一次性的问题（例如是否允许读取工作目录之外的文件），",

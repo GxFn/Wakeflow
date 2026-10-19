@@ -4959,3 +4959,30 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 未运行：L1 第三次在提交并刷新缓存之后（见下一节）；lab/live、远端 CI；图谱随发布候选刷新。
 
 本批改动 `src/contracts/schemas` 两份公共 Schema（与生成物）、`src/capabilities/endpoint`（投影）与 `workspace`（selection 拒绝细节）、`src/hosts/claude-code`（助手）、tests（助手、endpoint、lab、新增 selection-detail）、`tooling/testing/test-durations.json`、docs/（open-items D5、live-test-plan、README 指针）；分两次提交：源码与制品。
+
+### 13.183 现场 L1 第三次：F-L1-8 闭环、权限显式化与产品仓库残留清理（F-L1-9）（2026-10-19）
+
+`86ae6708` 刷进缓存后手工重启 wf7 里的 Controller 会话。它自己走完了换代：reconcile 预览一步（重装 tmux 助手副本）并应用，`self` 把 Controller 绑定换到新会话并打标，严格校验 15 过 0 败（`window-runtime-unverified:1` 为提示），Design 经助手开窗、登记、打标——**F-L1-8 现场闭环**。随后它以 `--wait 0` 开了五个产品窗口与 Test，五个产品窗口停在 Claude Code 的"是否信任此文件夹"对话框，Controller 正确地拒绝代按，并把对话框列出的预放行报给用户。
+
+- **F-L1-9 产品仓库的 0.9.x 残留会随信任对话框一并生效。** 五个 Alembic 克隆带着旧插件写进去并提交的 `.claude/settings.json`（`permissions.allow` 为 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)`、整服务器 MCP 规则，`additionalDirectories: [".."]`）与 CLAUDE.md/AGENTS.md 第 3–54 行的 `wakeflow:scope` 块。`status` 的 `legacyResidue` 已按仓库根列出它们，但文本只说"报告并由用户删除"，没有把"先删再开窗"定成顺序，信任对话框于是提出要激活这些放行。用户确认这三条是权限隐患（`Bash(git *)` 让 `push --force`、`reset --hard` 绕过 auto 模式的审查；`Bash(node *)` 放行任意脚本；`Bash(tmux *)` 让产品窗口能 send-keys 到 Controller 的窗格，打穿投递隔离；`..` 让产品窗口改兄弟仓库与工作区根），并要求由 Claude 清理、把权限设置写明确、同步各处文本。
+  - 清理：五个克隆各删 `.claude/settings.json`（只含上述条目，目录随之删除）与两份指令文件里的 scope 块，每仓库 119 行删除；只改工作树，未提交回上游（由用户决定是否提交；不提交则新克隆与 worktree 会再带出来）。停在对话框上的五个产品窗口以 Esc 退出（未授予任何权限）；Test 窗口没有对话框，仍在运行、未登记。
+  - 权限模型写明（代码本来就是这样，§13.117 D5、ADR-0020 决定 3）：工作区根 `.claude/settings.json` 两条——Wakeflow MCP 服务器与按路径限定的助手调用；Design/Test 根只写该角色的工具；产品仓库的 settings 不写；每个窗口启动时另带 `--allowedTools`（角色工具加助手），缺省 `auto` 模式。因此 Wakeflow 写过的根的信任对话框只应列出这几条，多出来的就是残留或仓库自己的设置。
+  - 文本：windows 参考第 1 步新增"权限显式"段与顺序规则（仓库根带 `broad-permission` / `additional-directories` 时，用户删除或明确选择保留之后才开窗）；Claude 的 `windowLaunch` 取值写明启动放行、三类根的 settings 内容与对话框应列内容；`hostTrustSteps` 中英两面写明"对话框只列这些；多出的三条宽规则或 `..` 是残留，先删再接受"；两份 README 的残留段补上产品仓库一句；init 命令补一句。capability card 01 的 settings 行从"写 4 条"改为现状并把 Q3 记为已裁决；live-test-plan 前提第 5 条。`agent-text-live-guidance` 新增 F-L1-9 测试钉住这些句子、钉住顺序（权限段在"Launching and registering"之前）、Codex 面不提 `--allowedTools`，并禁止任何一面把三条宽规则说成 Wakeflow 现在写的东西。
+
+环境：Test 支撑面在工作区内，没有弹信任对话框（父目录已信任）；五个产品克隆各自需要一次信任确认，这是 Claude Code 的每目录确认，与 Wakeflow 无关。清理后重开的五个产品窗口的对话框不再列出任何预放行；用户点了四个"信任"，AlembicPlugin 误点"No, exit"——那只是退出该窗口的 Claude 进程，不记录任何"不信任"状态，Controller 重新 launch 一个新会话即可。
+
+- **F-L1-10 插件是从仓库目录就地加载的，重建即刷新。** 本机的 `gxfn` marketplace 是 `directory` 源，指向这个检出；`claude plugin list --json` 把 `installPath` 报成缓存目录 `~/.claude/plugins/cache/gxfn/wakeflow/1.1.0`，但现场每个会话（Controller、Design、Test、四个产品窗口）的 MCP 服务进程跑的都是 `<检出>/plugins/claude-code-wakeflow/mcp/server.mjs`，hook 也从那里运行。于是 02:32 的 `build:artifacts:committed` 直接换掉了正在运行的插件字节：所有会话的服务报 `runtime-artifact-outdated`、拒绝写操作，新 hook 记录已由新观察器（f81e212e…）写入，Controller 停下来问"磁盘上的插件又变了，是有意的吗"——这是正确的行为。推论：（1）`wf cache refresh` 的"卸载再安装"并没有换掉加载路径，它比对的 `matchesCommitted` 看的是缓存副本，不是宿主实际加载的目录——与 CLAUDE.md"不验证宿主实际加载的制品不得宣称刷新成功"相悖，要改成按 `claude plugin list` 的读取路径（或进程路径）比对并点明 directory 源；（2）现场轮次里，每次重建都是一次插件更新，之后必须走"After a plugin update"流程；不想更新现场就不要重建，或先 `smoke:candidate`。本节只记录发现；工具与 maintainer-tools §18、live-test-plan §1.1 的修正放到下一批（tooling 变更，第 1 级）。
+
+**L1 通过（02:47 本地，磁盘制品 f81e212e…）。** 本批文本制品重建后，Controller 自己走完了更新流程：原地重启自己；Design、Test 与三个在旧观察器下启动的产品会话，助手以 `resume-never-conversed` 拒绝原地恢复（从未有过对话的会话无内容可恢复），Controller 按参考改走"关闭、新会话、`replace`、打标"；AlembicDashboard 与 AlembicPlugin 用保存的观测登记。结果：pod `main` ready，8/8 已绑定，`artifactOnDisk: same`，无残留，严格校验通过（`window-runtime-unverified:8` 为提示）。第 1 步全程只按参考开窗，没有读插件实现。L1 的三条"什么算过"全部满足；接下来 L2 在 Design 窗口起草跨 AlembicCore / AlembicDashboard 的需求包。
+
+**本批用的级别：第 2 级**（`impact report` 把 agent-text 与宿主文本取值的变更归为需要完整门：`tests: agent-text` / `agent-text-profile`）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级（`wf verify quick --changed`）：第一轮 11 测试败 1——新测试里"不得把三条宽规则说成 Wakeflow 现在写的"的正则把否定句"不会写 `Bash(tmux *)`"也算成了声称，改为排除"不/没"前缀后 11/11。
+- 制品重建（文本与宿主取值进入两份制品）、`smoke:artifacts` exit 0。
+- 完整门 run-erimT0（09:33–10:01 UTC，27.8 分钟；负载从 19 回落到 4）：**1497/1497 全通过**、314 份文件、零失败/取消。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：八项通过；`git diff --check` 干净。
+- 未运行：lab/live、远端 CI；图谱随发布候选刷新。F-L1-10 的工具修正（`wf cache refresh` 核对加载位置）在下一节。
+
+本批改动 `assets/agent-text`（windows 参考、两份 README、init 命令）、`src/hosts/claude-code/claude-code-agent-text-profile.ts`（`windowLaunch`、`hostTrustSteps` 中英）、`tests/artifacts/agent-text-live-guidance.test.ts`、`tooling/testing/test-durations.json`、docs（capability card 01、live-test-plan、README 指针、本节）；分两次提交：源码与制品。

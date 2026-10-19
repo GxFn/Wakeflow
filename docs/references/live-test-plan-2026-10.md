@@ -13,6 +13,7 @@
 2. **测试工作区是新的，仓库是真的。** 用 `WakeflowTestWorkspace` 系列里尚不存在的目录（2026-10-19 起用 `WakeflowTestWorkspace7`），里面放五个 Alembic 系列仓库的克隆（`Alembic`、`AlembicAgent`、`AlembicCore`、`AlembicDashboard`、`AlembicPlugin`，来源 `https://github.com/GxFn/<repo>.git`），像 WakeflowTestWorkspace 一样做真实的多仓库调度：Controller、Design、Test 加五个产品窗口在 primary pod，账本在工作区内，仓库一律 owner-managed，语言 zh-Hans。这些测试环境可以随意删除重建；AlembicWorkspace 里的原仓库不碰。
 3. **助手副本与文本同代。** 工作区已经存在时，先按 Controller 技能"After a plugin update"一节让维护重写 `.wakeflow-local/runtime` 里的助手副本；否则新文本会向旧助手传 `--prompt-ref`，被拒为 `argument-unknown`。新建的工作区不需要这一步。
 4. **宿主前提。** macOS、Node 24.19+（<25）在 Claude Code 启动的 PATH 上、`git`、`tmux`；Claude Code 账号已登录。
+5. **产品仓库里没有 0.9.x 残留。** 五个克隆带着旧插件写进去并提交的 `.claude/settings.json`（`Bash(git *)`、`Bash(node *)`、`Bash(tmux *)`、`..`）与 `wakeflow:scope` 块；`wakeflow_status` 的 `legacyResidue` 按仓库根列出它们。开窗之前删掉——信任对话框会把列出的预放行一并生效，Wakeflow 写过的根只应列出它自己的规则。2026-10-19 已在工作区 7 的五个克隆里删除（工作树改动，未提交回上游）。
 
 ## 2. 场景与通过标准
 

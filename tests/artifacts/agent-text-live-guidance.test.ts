@@ -250,6 +250,68 @@ test("I6：tmux 里的 Controller 用 launch 收编引导会话没登记的窗�
   );
 });
 
+test("F-L1-9：权限显式——只预放行自己的工具与助手，信任对话框只列这些；仓库根带 broad-permission 残留时先让用户删再开窗（§13.183）", () => {
+  // 现场：五个产品克隆带着 0.9.x 写进去的 Bash(git *)/Bash(node *)/Bash(tmux *) 与 `..`，信任对话框要把它们一并生效。
+  const windows = flat(claude(WINDOWS));
+  includesAll(
+    windows,
+    [
+      "Permissions are explicit: Wakeflow pre-approves only its own tools, per role, and its helper",
+      "never a shell-wide rule or a parent-directory grant",
+      "Do not launch into a root that `legacyResidue` lists with `broad-permission` or `additional-directories` until the user has deleted those entries or chosen to keep them",
+      "The window starts with `--allowedTools` for its role's Wakeflow tools and the helper",
+      "a product repository's `.claude/settings.json` is never written",
+      "so a trust dialog for a Wakeflow-written root lists only those rules",
+      "so the user deletes or confirms them before you launch, never you",
+    ],
+    "windows reference",
+  );
+  // 规则在开窗步骤之前，Controller 读到它时还没有调用助手。
+  ok(
+    indexOfRequired(windows, "Permissions are explicit") <
+      indexOfRequired(windows, "Launching and registering:"),
+  );
+  const readme = flat(claude("README.md"));
+  includesAll(
+    readme,
+    [
+      "nothing broader such as `Bash(tmux *)` is written",
+      "A trust dialog for a root Wakeflow wrote therefore lists only those rules",
+      "delete or review it before accepting, because accepting activates it",
+      "they are deleted before a window is launched there",
+    ],
+    "README",
+  );
+  includesAll(
+    flat(claude("README.zh-CN.md", "zh")),
+    [
+      "不会写 `Bash(tmux *)` 之类更宽的规则",
+      "其信任对话框只会列出这几条",
+      "往那里开窗口之前先删掉",
+    ],
+    "README.zh-CN",
+  );
+  ok(
+    flat(source("commands/init.md")).includes(
+      "Residue listed under a repository root is removed by the user before a window is launched there",
+    ),
+  );
+  // Codex 没有 settings.json 与信任对话框：它的窗口文本不提 --allowedTools。
+  equal(codex(WINDOWS).includes("--allowedTools"), false);
+  // 任何一面的文本都不得把三条宽规则说成 Wakeflow 现在写的东西（否定句"不会写"、"is never written"是在陈述现状）。
+  for (const relative of shippedSources()) {
+    for (const text of renderedForBothHosts(relative)) {
+      equal(
+        /(?:\bwrites?\b|(?<![不没])(?:写入|写进|会写))[^.。\n]{0,80}`Bash\((git|node|tmux) \*\)`/u.test(
+          flat(text),
+        ),
+        false,
+        `${relative} claims Wakeflow writes a broad rule`,
+      );
+    }
+  }
+});
+
 test("Q4：窗口缺省以 auto 权限模式启动；没有 auto 的账号经维护改成 acceptEdits", () => {
   includesAll(
     claude("README.md"),

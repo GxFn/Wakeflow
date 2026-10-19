@@ -119,7 +119,10 @@ additional directory in `.claude/settings*.json`, the `workspace.config.json`,
 `.workspace-active` and `.wakeflow-publish` root markers, `.wakeflow-stage*`,
 `.wakeflow-maintenance-*` and `.wakeflow-create-stage-*` directories, and a
 `wakeflow-ledger` directory. Archive or remove them by hand, then initialize
-again; 0.9.x Demand history is not migrated.
+again; 0.9.x Demand history is not migrated. A product repository that an 0.9.x
+workspace used carries the same `.claude/settings.json` rules and scope block;
+`wakeflow_status` lists them per repository root, and they are deleted before a
+window is launched there.
 
 ## Checking that it works
 

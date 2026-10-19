@@ -140,6 +140,11 @@ public result.
 
 Before the first launch: {{windowBootstrap}}
 
+Permissions are explicit: Wakeflow pre-approves only its own tools, per role, and its helper -
+at the roots it writes and on every window it launches - never a shell-wide rule or a
+parent-directory grant. Do not launch into a root that `legacyResidue` lists with `broad-permission`
+or `additional-directories` until the user has deleted those entries or chosen to keep them.
+
 Launching and registering:
 
 1. Take the window id from the maintenance or pod result, then call

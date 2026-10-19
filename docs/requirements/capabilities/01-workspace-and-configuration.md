@@ -46,7 +46,7 @@
 | --- | --- | --- |
 | 指令文件 | `AGENTS.md` | `CLAUDE.md` |
 | 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods）、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs 与 assets/tmux.mjs（2026-09-24 §13.117 D4）、activity-monitor、temp/prompts |
-| settings | 不适用 | `permissions.allow` 写 4 条：`mcp__plugin_wakeflow_wakeflow`、`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`；`settings.local.json` 只写 statusLine 命令；`.claude/` 目录 0700 |
+| settings | 不适用 | 工作区根的 `permissions.allow` 只写两条：`mcp__plugin_wakeflow_wakeflow` 与按路径限定的 tmux 助手调用；支撑面根只写该角色工具的 MCP 规则；产品仓库的 settings 不写；不写 `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`（§13.117 D5、ADR-0020 决定 3；0.9.x 留下的宽规则由残留扫描报成 `broad-permission`，开窗前由用户删除，§13.183）；`settings.local.json` 只写 statusLine 命令；`.claude/` 目录 0700 |
 | statusline | 不适用 | 安装 `statusline.mjs` 0600，命令带 base64url 编码的根路径；规划前做一次有界 smoke 并检查敏感内容 |
 | 激活范围 | 永远 `unknown`，无人值守 `forbidden`，Codex 没有安装覆盖范围 API | 按 settings 来源分 per-workspace、host-wide、unknown |
 | 窗口创建 | `create_thread`，Agent 原生工具 | `wakeflow-claude-host launch-window`，旧为 CLI，新边界下由 Agent 调用维护发布的 tmux 助手资产执行（§13.117 D4） |
@@ -64,7 +64,7 @@
 
 - Q1 工作区根的 `AGENTS.md` 或 `CLAUDE.md`：整文件 Wakeflow 所有，还是用户文件内的托管块？建议托管块，因为用户通常有自己的内容；支撑面保持整文件。
 - Q2 fresh-initialize 是否增加祖先目录扫描，发现上级已有 `wakeflow.config.json` 即拒绝？建议增加。
-- Q3 Claude Code 的 `permissions.allow`：新边界下 Agent 自己执行 tmux，是否仍由 Wakeflow 写入 `Bash(tmux *)` 等三条宽泛规则，还是只写 MCP 规则、把 tmux 权限交给用户在 Claude Code 里自行授予？建议只写 MCP 规则，skills 提示用户授予 tmux。
+- Q3（已裁决，§13.117 D5；现场确认 §13.183）Claude Code 的 `permissions.allow`：只写 MCP 规则与按路径限定的助手调用，不写 `Bash(tmux *)` 等三条宽泛规则；窗口以 `auto` 权限模式启动，其余命令由 Claude Code 自己审。用户在 2026-10-19 确认这三条是权限隐患。
 - Q4 statusline 资产：它是唯一在宿主进程内运行的 Wakeflow 代码，属于只读展示。保留还是放弃？建议保留，列入 L1 后期切片。
 
 ## 1.2 配置权威 wakeflow.config.json v3

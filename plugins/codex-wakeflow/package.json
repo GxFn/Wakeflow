@@ -1,8 +1,8 @@
 {
   "name": "wakeflow",
-  "version": "1.1.0-rc.5",
+  "version": "1.1.0",
   "type": "module",
-  "description": "A disciplined control loop for multi-window agent work across a fleet of Codex threads: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification.",
+  "description": "A disciplined control loop for multi-window agent work across a fleet of Codex threads: a Controller window claims requirement packages, plans task packages, prepares deliveries, imports immutable target results, obtains independent Test validation and reviews the evidence before completing and archiving a Demand. Explicit on-disk state roots keep every step auditable; Agents perform the host actions, Wakeflow owns the content and the verification. Codex edition: preview - the native project-creation entry has not been exercised in a real Codex session yet. Supports macOS only (local file system); Linux and Windows are not supported.",
   "license": "MIT",
   "homepage": "https://github.com/GxFn/Wakeflow#readme",
   "repository": {
@@ -26,6 +26,9 @@
   "engines": {
     "node": ">=24.19.0 <25"
   },
+  "os": [
+    "darwin"
+  ],
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
     "ajv": "8.20.0",

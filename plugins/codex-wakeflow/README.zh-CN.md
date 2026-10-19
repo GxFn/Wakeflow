@@ -46,7 +46,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
    代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux`；
-   支持 macOS 与 Linux 的本地文件系统，不支持 Windows。Claude Code 可以是原生
+   只支持 macOS 的本地文件系统，不支持 Linux 与 Windows。Claude Code 可以是原生
    二进制，也可以是 npm 安装的 `claude` 脚本，两者都能识别。
 3. 完成下面这一节的一次性宿主动作。
 4. 在你想作为工作区的目录里打开 Agent，说"初始化一个 Wakeflow 工作区"。该目录
@@ -69,6 +69,7 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
 
 ## 安装后的一次性宿主动作
 
+Codex 版目前是预览版：原生项目创建入口尚未在真实 Codex 会话里跑通，遇到情况请如实报告，不要假设它能用。
 Codex 桌面应用使用宿主自带的 Node。CLI 未提供宿主运行时时，需要 PATH 中有 Node 24。
 在 `/hooks` 里按定义哈希审阅并信任 Wakeflow 的四个 hook。信任之前四个 hook 全部被
 跳过：没有会话被观察到，窗口无法登记，投递也拿不到落地证据。插件更新改变了 hook 定义

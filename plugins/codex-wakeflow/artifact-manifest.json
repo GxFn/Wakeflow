@@ -4,7 +4,7 @@
   "hostId": "codex",
   "pluginName": "wakeflow",
   "packageName": "wakeflow",
-  "version": "1.1.0-rc.5",
+  "version": "1.1.0",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/codex-wakeflow-mcp.ts",
@@ -110,13 +110,13 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 8242,
-      "sha256": "sha256:ffc1a886dbf09da1f880ab5d371cd2fd6ee846bc95fb95f57b02536f74a51e3d"
+      "bytes": 8444,
+      "sha256": "sha256:69d968f2a7d3464f86bf85c167e4ef50bcacc18592e9878620f36f172cefa6d1"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 7645,
-      "sha256": "sha256:5dbafa09ab39cebbd7a39d9042060d7476b0178c6181c8a1d9d661831b31f808"
+      "bytes": 7797,
+      "sha256": "sha256:06f77835f9c00fdb435dd433acb4e9499a50ca8209de922a8adaeb5bd5270c5e"
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
@@ -172,8 +172,8 @@
   "files": [
     {
       "path": ".codex-plugin/plugin.json",
-      "bytes": 2133,
-      "sha256": "sha256:ad618d8ff007246bd2419ba69a6f6a3fe7f5632e6e706c43ec513af78f4989ef",
+      "bytes": 2317,
+      "sha256": "sha256:aa145be5abcfed19e588152943b2b785e1a0d2901a5189fec677d5819b21bf2b",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -193,15 +193,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 8242,
-      "sha256": "sha256:ffc1a886dbf09da1f880ab5d371cd2fd6ee846bc95fb95f57b02536f74a51e3d",
+      "bytes": 8444,
+      "sha256": "sha256:69d968f2a7d3464f86bf85c167e4ef50bcacc18592e9878620f36f172cefa6d1",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 7645,
-      "sha256": "sha256:5dbafa09ab39cebbd7a39d9042060d7476b0178c6181c8a1d9d661831b31f808",
+      "bytes": 7797,
+      "sha256": "sha256:06f77835f9c00fdb435dd433acb4e9499a50ca8209de922a8adaeb5bd5270c5e",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -3266,8 +3266,8 @@
     },
     {
       "path": "mcp/server.mjs",
-      "bytes": 1731,
-      "sha256": "sha256:f2addb07fe6171039a4d72a084c427311d6e8dc251e0e7492cf490599c1acc4e",
+      "bytes": 1726,
+      "sha256": "sha256:06f74572e5fe0a24fe2cd1fa7811cec99844106c4456f9f81b46008134b80397",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -6514,8 +6514,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 1151,
-      "sha256": "sha256:de3e60def6b115f9cc2534e75f9754ffe57861b37182874b66b09705b0de2875",
+      "bytes": 1363,
+      "sha256": "sha256:752802f42dc57ee45ca205dd8f8c2464079dd29d9273100d5a6fb322eb606f10",
       "mode": "0644",
       "scope": "metadata"
     },

@@ -36,7 +36,7 @@ process.on("unhandledRejection", (error) => reportIncident("unhandled-rejection"
 try {
   const server = await import("../lib/entrypoints/codex-wakeflow-mcp.js");
   if (typeof server.runCodexWakeflowMcpStdio !== "function") throw new TypeError("runCodexWakeflowMcpStdio");
-  await server.runCodexWakeflowMcpStdio("1.1.0-rc.5");
+  await server.runCodexWakeflowMcpStdio("1.1.0");
 } catch (error) {
   reportIncident("launcher", error);
 }

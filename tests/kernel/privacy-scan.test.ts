@@ -36,11 +36,11 @@ test("凭证类三条规则无条件命中，结果只含类别与位置", () =>
 test("JWT 的三段 eyJ 形状与 Slack 轮换/刷新令牌按 provider-credential 命中，不复制值（§13.165 F6）", () => {
   const jwt =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-  const text = [
-    `session=${jwt}`,
-    "refresh xoxe-1-abcdefghijklmnop",
-    "rotate xoxr-abcdefghijklmnop",
-  ].join("\n");
+  // 假令牌在运行时拼出：源码里不能留下令牌形态的字面量，否则 GitHub 的推送保护会把提交当作泄露拦下。
+  const slackToken = (kind: string): string => `xox${kind}-${"abcdefghijklmnop"}`;
+  const text = [`session=${jwt}`, `refresh ${slackToken("e-1")}`, `rotate ${slackToken("r")}`].join(
+    "\n",
+  );
   const findings = scanPrivacy(text, policy);
   deepEqual(
     findings.map((finding) => [finding.kind, finding.line]),

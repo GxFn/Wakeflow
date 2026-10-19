@@ -10,7 +10,7 @@ import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-pro
  * 与 Binding inventory 重建缺失或过期的窗口运行投影（需要 Codex 的 identity profile）。
  * 共享层不依赖本模块；唯一的 operationKind 在这里显式分派，不注册动态 handler。
  */
-export const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance";
+const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance";
 const ERROR_MESSAGES = {
     gate: "Codex maintenance capability requires the active matching gate.",
     operation: "Codex maintenance capability operation is invalid.",

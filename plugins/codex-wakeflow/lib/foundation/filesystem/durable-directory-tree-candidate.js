@@ -116,4 +116,4 @@ export async function settleDirectoryTreeCandidateDurably(root, candidateRootPat
     return inspectDirectoryTreeCandidate(root, candidateRootPath, prepared.plan, prepared.options.signal === undefined ? undefined : { signal: prepared.options.signal });
 }
 export { inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "./directory-tree-candidate-inspection.js";
-export { DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND, DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION, DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidate, planDirectoryTreeCandidateFromFileDescriptors, } from "./directory-tree-candidate-plan.js";
+export { DurableDirectoryTreeCandidateError, parseDirectoryTreeCandidatePlan, planDirectoryTreeCandidate, planDirectoryTreeCandidateFromFileDescriptors, } from "./directory-tree-candidate-plan.js";

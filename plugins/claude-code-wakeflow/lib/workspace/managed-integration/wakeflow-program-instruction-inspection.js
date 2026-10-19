@@ -22,7 +22,7 @@ import { createWakeflowProgramInstructionBodyAuthority, WakeflowProgramInstructi
  * 本模块不取得锁、不发布文件，也不把传入 Config 证明成已提交的 workspace authority；
  * 后续 maintenance confirmed plan 仍须绑定这些语义摘要与执行顺序。
  */
-export const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$programInstruction.maximumBytes");
+const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$programInstruction.maximumBytes");
 export const WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE = 0o644;
 const ERROR_MESSAGES = {
     input: "Wakeflow Program Instruction inspection input is invalid.",

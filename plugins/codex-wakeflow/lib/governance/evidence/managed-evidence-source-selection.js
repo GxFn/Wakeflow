@@ -281,7 +281,7 @@ function sourceKindOf(value, path) {
     return base.kind;
 }
 /** 解析调用方选择里的来源：observation 只带记录身份，link 的摘要可省略。 */
-export function parseManagedEvidenceSelectionSource(value, path = "$/source") {
+function parseManagedEvidenceSelectionSource(value, path = "$/source") {
     switch (sourceKindOf(value, path)) {
         case "managed-path":
             return parseManagedPath(value, path);

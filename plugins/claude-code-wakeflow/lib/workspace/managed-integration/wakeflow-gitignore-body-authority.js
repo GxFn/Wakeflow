@@ -17,8 +17,8 @@ import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS,
  */
 export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND = "WakeflowGitignoreBodyAuthority";
 export const WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1;
-export const WAKEFLOW_GITIGNORE_COMPONENT = "workspace-ignore";
-export const WAKEFLOW_GITIGNORE_OWNER = "workspace-ignore-integration";
+const WAKEFLOW_GITIGNORE_COMPONENT = "workspace-ignore";
+const WAKEFLOW_GITIGNORE_OWNER = "workspace-ignore-integration";
 const ERROR_MESSAGES = {
     input: "Wakeflow Gitignore body authority input is invalid.",
     "profile-set": "Wakeflow Gitignore body authority requires one complete host profile set.",

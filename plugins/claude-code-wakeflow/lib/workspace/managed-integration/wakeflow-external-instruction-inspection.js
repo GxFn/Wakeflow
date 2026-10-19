@@ -18,7 +18,7 @@ import { historicalWakeflowManagedTextTargets, WAKEFLOW_EXTERNAL_INSTRUCTION_BOD
  * 该 target 不是 managed-block 时没有可准入的前序正文，等价于 fresh 的空 current。
  * 本模块不取得锁、不发布，也不把传入 Config 证明成已提交的 workspace authority。
  */
-export const WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$externalInstruction.maximumBytes");
+const WAKEFLOW_EXTERNAL_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$externalInstruction.maximumBytes");
 export const WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE = 0o644;
 const ERROR_MESSAGES = {
     input: "Wakeflow external instruction inspection input is invalid.",

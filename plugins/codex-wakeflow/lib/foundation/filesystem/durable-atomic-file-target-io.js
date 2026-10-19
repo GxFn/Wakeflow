@@ -53,7 +53,7 @@ export async function assertDurableAtomicFileTargetParentCurrent(parent) {
         throw error;
     }
 }
-export async function inspectDurableAtomicFileTarget(parent) {
+async function inspectDurableAtomicFileTarget(parent) {
     try {
         return await parent.inspectTarget();
     }

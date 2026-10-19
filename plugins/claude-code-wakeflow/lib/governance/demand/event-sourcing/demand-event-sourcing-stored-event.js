@@ -1,4 +1,3 @@
-import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { computeDemandAggregateStateDigest, DemandAggregateStateError, parseDemandAggregateState, } from "../model/demand-aggregate-state.js";
 import { DemandEventSourcingEventError, parseDemandUncommittedEvent, } from "./demand-event-sourcing-event.js";
 import { encodeCurrentDemandEventVersion } from "./demand-event-sourcing-event-version-codec.js";
@@ -109,26 +108,6 @@ export function createDemandEventSourcingStoredEvent(eventValue, streamRevisionV
         resultingStateModelVersion: DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
         resultingStateDigest: computeDemandAggregateStateDigest(state),
     });
-}
-export function renderDemandEventSourcingStoredEvent(value) {
-    return renderDeterministicJsonDocument(parseDemandEventSourcingStoredEvent(value), "$event");
-}
-export function parseDemandEventSourcingStoredEventDocument(text) {
-    let json;
-    try {
-        json = parseDeterministicJsonDocument(text, "$event");
-    }
-    catch (error) {
-        if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$event");
-        }
-        throw error;
-    }
-    const event = parseDemandEventSourcingStoredEvent(json);
-    if (renderDemandEventSourcingStoredEvent(event) !== text) {
-        fail("representation", "$event");
-    }
-    return event;
 }
 export function computeDemandEventSourcingStoredEventDigest(value) {
     // 门面先维持自己的稳定错误合同，再委托事件封装摘要计算。

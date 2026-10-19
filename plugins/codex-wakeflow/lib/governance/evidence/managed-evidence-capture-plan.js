@@ -157,6 +157,3 @@ export function parseManagedEvidenceCapturePlan(value) {
     }
     return Object.freeze({ ...basis, planDigest });
 }
-export function computeManagedEvidenceCapturePlanDigest(value) {
-    return parseManagedEvidenceCapturePlan(value).planDigest;
-}

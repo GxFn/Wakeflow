@@ -187,7 +187,7 @@ function mapArtifactError(error) {
     fail("source", error);
 }
 /** 隐私白名单：工作区根、ledger 根与配置里的全部仓库与支撑面真实路径（能力卡 8 Q1）。 */
-export function managedEvidencePrivacyPolicy(workspaceRoot, config, worktreePaths = []) {
+function managedEvidencePrivacyPolicy(workspaceRoot, config, worktreePaths = []) {
     const roots = new Set([
         workspaceRoot.absolutePath,
         config.placements.workspaceRoot,

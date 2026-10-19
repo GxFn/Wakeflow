@@ -22,7 +22,7 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
  * Journal只能在同operation immutable intent已经精确发布后创建；checkpoint期间目录
  * 必须只含intent+journal。Intent先退休后，prepared/terminal journal才能最终退休。
  */
-export const WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$maintenanceJournal.maximumBytes");
+const WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$maintenanceJournal.maximumBytes");
 /** 对一个 exact journal target 执行关闭作用域的 Foundation stage 恢复。 */
 export async function recoverWakeflowMaintenanceJournalStages(root, operationIdValue) {
     const operationId = admittedOperationId(operationIdValue);

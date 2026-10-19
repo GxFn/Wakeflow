@@ -126,7 +126,7 @@ function planDigestBasis(value) {
     };
 }
 /** 计算不包含自身摘要字段的聚合执行计划语义摘要。 */
-export function computeWakeflowMaintenanceExecutionPlanDigest(value) {
+function computeWakeflowMaintenanceExecutionPlanDigest(value) {
     return computeCanonicalJsonSha256Digest(planDigestBasis(value));
 }
 function buildPlan(hostId, preview, contribution) {

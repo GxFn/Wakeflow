@@ -424,11 +424,6 @@ export function productDefectRemediationAuthorizedEventId(value) {
     const authorization = parseControllerProductDefectRemediationAuthorization(value);
     return createWakeflowDurableId("demand-event", uuidFromAuthorizationId(authorization.productDefectRemediationId));
 }
-/** 同一Authorization UUID在Demand Event Commit命名空间中的确定性身份。 */
-export function productDefectRemediationAuthorizedCommitId(value) {
-    const authorization = parseControllerProductDefectRemediationAuthorization(value);
-    return createWakeflowDurableId("demand-event-commit", uuidFromAuthorizationId(authorization.productDefectRemediationId));
-}
 export function renderControllerProductDefectRemediationAuthorization(value) {
     return renderDeterministicJsonDocument(parseControllerProductDefectRemediationAuthorization(value), "$authorization");
 }

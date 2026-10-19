@@ -63,7 +63,7 @@ async function identityPodId(demandRoot, signal) {
     }
 }
 /** 一个已认领包对应的 Demand 根存在、属于目标 pod 且聚合未到终态即为该 pod 的活动 Demand。 */
-export async function demandIsActive(root, state, signal, podId = null) {
+async function demandIsActive(root, state, signal, podId = null) {
     if (state.claim === null)
         return false;
     let demandId;

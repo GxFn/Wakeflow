@@ -10,7 +10,7 @@ import { parseWakeflowProgramInstructionInspectionRequest, WakeflowProgramInstru
  * 本模块只准入 current/desired Config 请求、根目录、短锁 recipe 与有界选项；不读取
  * 指令文件、不生成正文、不取得锁，也不发布或恢复任何资源。
  */
-export const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 const ERROR_MESSAGES = {
     input: "Wakeflow Program Instruction recomposition input is invalid.",
     "unsupported-platform": "Wakeflow Program Instruction recomposition requires POSIX ownership facts.",
@@ -104,14 +104,6 @@ export function parseWakeflowProgramInstructionRecompositionOptions(value) {
             : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
         signal: record.signal,
     });
-}
-export function parseWakeflowProgramInstructionRecompositionRecoveryOptions(value) {
-    const record = plainRecord(value === undefined ? {} : value, "$options");
-    if (Object.keys(record).some((key) => key !== "signal") ||
-        (record.signal !== undefined && !isAbortSignal(record.signal))) {
-        failWakeflowProgramInstructionRecomposition("input", "$options");
-    }
-    return Object.freeze({ signal: record.signal });
 }
 export function assertWakeflowProgramInstructionRecompositionNotAborted(signal) {
     if (signal?.aborted === true) {

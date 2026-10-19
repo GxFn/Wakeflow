@@ -20,7 +20,7 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
  * Intent 以0600 absent-only原子发布一次，随后只读并由mutable journal的intentDigest绑定。
  * 每次目录形状检查都只接受同operation的 intent 或 intent+journal；它不是第二状态机。
  */
-export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$maintenanceIntent.maximumBytes");
+const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$maintenanceIntent.maximumBytes");
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance execution intent store input is invalid.",
     gate: "Wakeflow maintenance execution intent store requires the active matching gate.",

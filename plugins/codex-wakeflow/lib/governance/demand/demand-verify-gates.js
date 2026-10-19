@@ -9,7 +9,7 @@ import { inspectLedgerAuthorityLayout } from "../ledger/ledger-authority-layout.
 import { readDemandAcceptanceCoverage } from "./demand-acceptance-coverage.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$manifest.maximumBytes");
-export function computeVerifyObservationDigest(gates) {
+function computeVerifyObservationDigest(gates) {
     return computeCanonicalJsonSha256Digest(parseJsonValue({ gates }, "$verify"));
 }
 /** 本 Demand 曾派工的全部窗口，去重排序；工作声明按窗口检查与释放。 */

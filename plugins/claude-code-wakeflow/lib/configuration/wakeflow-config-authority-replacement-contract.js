@@ -19,7 +19,7 @@ import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError,
  * 形成不同的 Config 权威记录准入规则。
  */
 export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF = parsePortableResourcePath(".wakeflow-config-authority.lock");
-export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 const ERROR_MESSAGES = {
     input: "Wakeflow config authority replacement input is invalid.",
     "unsupported-platform": "Wakeflow config authority replacement requires reliable local POSIX ownership semantics.",
@@ -106,13 +106,6 @@ export function parseWakeflowConfigAuthorityReplacementOptions(value) {
             : parsePositiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
         signal: parseSignal(record.signal),
     });
-}
-export function parseWakeflowConfigAuthorityRecoveryOptions(value) {
-    const record = optionRecord(value);
-    if (Object.keys(record).some((key) => key !== "signal")) {
-        failWakeflowConfigAuthorityReplacement("input", "$options");
-    }
-    return Object.freeze({ signal: parseSignal(record.signal) });
 }
 export function assertWakeflowConfigAuthorityNotAborted(signal) {
     if (signal?.aborted === true) {

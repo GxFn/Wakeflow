@@ -1,7 +1,7 @@
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import { unlinkRegularFileExactly, ExactRegularFileUnlinkError, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -270,7 +270,7 @@ function streamIndexFileName(sequence) {
         fail("invalid-request", "index-sequence", "$sequence");
     return `${String(sequence).padStart(16, "0")}.json`;
 }
-export function streamIndexRef(directoryRef, sequence) {
+function streamIndexRef(directoryRef, sequence) {
     return parsePortableResourcePath(`${directoryRef}/${streamIndexFileName(sequence)}`);
 }
 async function listIndexFiles(root, directoryRef, signal) {

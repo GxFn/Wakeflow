@@ -30,8 +30,8 @@ import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, WakeflowWindowRu
  */
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND = "window-runtime-projection";
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID = "window-runtime-projection";
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER = "window-runtime-projection-unsafe";
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER = "window-runtime-projection-unavailable";
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER = "window-runtime-projection-unsafe";
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER = "window-runtime-projection-unavailable";
 function operationFor(entry, sourceDigest) {
     return {
         operationId: `window-runtime-projection:${entry.windowId}`,

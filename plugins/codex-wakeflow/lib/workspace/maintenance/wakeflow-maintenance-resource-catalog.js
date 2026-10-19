@@ -48,7 +48,7 @@ export const WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION = directoryDeclaration("lo
 export const WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION = directoryDeclaration("local.runtime-root", "local-core", "maintenance-bootstrap", WAKEFLOW_RUNTIME_ROOT_REF);
 export const WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION = directoryDeclaration("maintenance.root", "maintenance", "workspace-maintenance", WAKEFLOW_MAINTENANCE_ROOT_REF);
 export const WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = directoryDeclaration("maintenance.transactions-root", "maintenance", "workspace-maintenance", WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF);
-export const WAKEFLOW_MAINTENANCE_GATE_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
+const WAKEFLOW_MAINTENANCE_GATE_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: "maintenance.gate",
     family: "maintenance",

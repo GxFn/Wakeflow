@@ -15,7 +15,7 @@ const ERROR_MESSAGES = {
     "post-acceptance-route": "Demand Controller Route could not rebuild its Post-Acceptance source.",
     relation: "Demand Controller Route sources are inconsistent.",
 };
-export class DemandControllerRouteError extends Error {
+class DemandControllerRouteError extends Error {
     name = "DemandControllerRouteError";
     code = "wakeflow-demand-controller-route";
     reason;

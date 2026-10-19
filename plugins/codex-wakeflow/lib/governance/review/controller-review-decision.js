@@ -59,6 +59,3 @@ function decisionUuid(value) {
 export function controllerReviewDecisionEventId(value) {
     return createWakeflowDurableId("demand-event", decisionUuid(value));
 }
-export function controllerReviewDecisionCommitId(value) {
-    return createWakeflowDurableId("demand-event-commit", decisionUuid(value));
-}

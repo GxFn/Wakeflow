@@ -243,7 +243,7 @@ async function runCorrelatedGate(root, operationId, options, operation, prepare)
 /**
  * 在调用方已经验证 prepared journal / recovery evidence 后，以原 operation ID 取得 gate。
  */
-export function parseWakeflowExistingMaintenanceGateOptions(value) {
+function parseWakeflowExistingMaintenanceGateOptions(value) {
     let record;
     try {
         record = parsePlainRecord(value, "$options");

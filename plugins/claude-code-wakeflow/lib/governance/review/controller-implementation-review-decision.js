@@ -130,7 +130,7 @@ function textList(values, path) {
  * 决定与升级、恢复依据的最小一致性：escalate 当且仅当携带升级内容；accept 必须有目标
  * 会话完成证据。决定准入的其余规则（结果 completed、锚点全映射、rework 计数）由切片与聚合承担。
  */
-export function assertControllerImplementationReviewJudgment(judgment, targetCompletion) {
+function assertControllerImplementationReviewJudgment(judgment, targetCompletion) {
     const { decision, assessment, blockingReasons, escalation } = judgment;
     if ((decision === "escalate") !== (escalation !== null) ||
         (decision === "accept" &&

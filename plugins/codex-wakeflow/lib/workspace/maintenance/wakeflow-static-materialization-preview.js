@@ -1226,4 +1226,4 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         planDigest: computeWakeflowStaticMaterializationPreviewDigest(plan),
     }));
 }
-export { computeWakeflowStaticMaterializationPreviewDigest, parseWakeflowStaticMaterializationPreview, WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+export { computeWakeflowStaticMaterializationPreviewDigest, parseWakeflowStaticMaterializationPreview, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";

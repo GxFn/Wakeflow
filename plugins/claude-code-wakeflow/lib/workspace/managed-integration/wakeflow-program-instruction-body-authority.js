@@ -21,8 +21,8 @@ import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS,
  */
 export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_KIND = "WakeflowProgramInstructionBodyAuthority";
 export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_SCHEMA_VERSION = 1;
-export const WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT = "program-instruction";
-export const WAKEFLOW_PROGRAM_INSTRUCTION_OWNER = "host-instruction-integration";
+const WAKEFLOW_PROGRAM_INSTRUCTION_COMPONENT = "program-instruction";
+const WAKEFLOW_PROGRAM_INSTRUCTION_OWNER = "host-instruction-integration";
 const ERROR_MESSAGES = {
     input: "Wakeflow Program Instruction authority input is invalid.",
     config: "Wakeflow Program Instruction config source is invalid.",

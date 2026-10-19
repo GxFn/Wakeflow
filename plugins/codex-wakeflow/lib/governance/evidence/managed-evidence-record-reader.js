@@ -3,7 +3,6 @@ import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../con
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { joinPortableResourcePath, PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
@@ -138,23 +137,6 @@ function parseMemberOptions(value) {
     }
     return Object.freeze({
         maximumBytes,
-        signal: parseSignal(record.signal, "$/signal"),
-    });
-}
-function parseVerifyOptions(value) {
-    let record;
-    try {
-        record = parsePlainRecord(value === undefined ? {} : value, "$options");
-    }
-    catch (error) {
-        if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
-        throw error;
-    }
-    if (Object.keys(record).some((key) => key !== "signal")) {
-        fail("input", "$options");
-    }
-    return Object.freeze({
         signal: parseSignal(record.signal, "$/signal"),
     });
 }
@@ -438,38 +420,5 @@ export async function readManagedEvidencePayloadMember(rootValue, recordValue, m
         opaque: current.manifest.contentReview.opaqueFileRefs.includes(member.ref),
         bytes: read.bytes,
         payloadVerification: "member",
-    });
-}
-function mapTreeVerificationError(error) {
-    if (error.reason === "aborted")
-        fail("aborted", "$signal");
-    if (error.reason === "source-changed") {
-        fail("source-changed", "$record");
-    }
-    fail("content-mismatch", "$record/payload");
-}
-/** 验证Manifest与全部payload成员形成exact、内容匹配的完整record tree。 */
-export async function verifyManagedEvidenceRecord(rootValue, recordValue, optionsValue = {}) {
-    assertRoot(rootValue);
-    assertRecordCapability(recordValue);
-    const options = parseVerifyOptions(optionsValue);
-    if (options.signal?.aborted === true)
-        fail("aborted", "$signal");
-    const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
-    try {
-        await inspectDirectoryTreeCandidate(rootValue, before.recordTreePlan.destinationRootPath, before.recordTreePlan.directoryPlan, {
-            expectedRootNode: before.rootNode,
-            ...(options.signal === undefined ? {} : { signal: options.signal }),
-        });
-    }
-    catch (error) {
-        if (error instanceof DurableDirectoryTreeCandidateError) {
-            mapTreeVerificationError(error);
-        }
-        throw error;
-    }
-    return Object.freeze({
-        record: await requireCurrentRecord(rootValue, before, options.signal),
-        payloadVerification: "complete",
     });
 }

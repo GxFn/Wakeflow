@@ -276,6 +276,3 @@ export function parseTargetResultDocument(textValue) {
     }
     return result;
 }
-export function targetResultOutcome(value) {
-    return parseTargetResult(value).report.outcome;
-}

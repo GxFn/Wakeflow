@@ -16,7 +16,7 @@ import { locateLatestDemandArchive } from "./demand-archive-locator.js";
  * 读不出的归档只计数，从不抛出；中止照常上抛。本模块只读。
  */
 export const ARCHIVED_DEMAND_SCAN_MAXIMUM = 64;
-export const ARCHIVED_DEMAND_MANIFEST_SCAN_MAXIMUM = 1024;
+const ARCHIVED_DEMAND_MANIFEST_SCAN_MAXIMUM = 1024;
 const NOTHING_TO_SCAN = Object.freeze({
     demands: Object.freeze([]),
     scanned: 0,

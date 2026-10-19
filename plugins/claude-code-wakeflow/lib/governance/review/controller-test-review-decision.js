@@ -140,7 +140,7 @@ function stepIdList(values, path) {
  * product-defect 要求 defect-observed/sufficient 且有失败检查，needs-decision 不能是 satisfied；
  * blocked 要求阻塞原因。分类到决定的路由由切片按逐步记录判定。
  */
-export function assertControllerTestReviewJudgment(judgment, resultOutcome, targetCompletion) {
+function assertControllerTestReviewJudgment(judgment, resultOutcome, targetCompletion) {
     const { decision, assessment, independentChecks: checks, blockingReasons, stepIds, escalation, } = judgment;
     const escalates = decision === "escalate";
     if (escalates !== (escalation !== null) ||

@@ -184,4 +184,4 @@ export async function recomposeWakeflowWorkspaceGitignore(rootValue, requestValu
         fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
     }
 }
-export { WAKEFLOW_GITIGNORE_FILE_MODE, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, WakeflowGitignoreRecompositionError, } from "./wakeflow-gitignore-recomposition-contract.js";
+export { WakeflowGitignoreRecompositionError, } from "./wakeflow-gitignore-recomposition-contract.js";

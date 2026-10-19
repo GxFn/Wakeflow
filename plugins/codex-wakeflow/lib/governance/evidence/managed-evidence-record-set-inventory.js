@@ -22,7 +22,7 @@ import { MANAGED_EVIDENCE_ROOT_REF, ManagedEvidenceResourcePathError, parseManag
  * 也不判断Event是否已经提交；后者由Demand Root Authority与恢复Application闭合。
  * 专用Evidence Reader在读取具体记录时负责该份payload的完整或定向内容复验。
  */
-export const MANAGED_EVIDENCE_RECORD_SET_MAXIMUM_RECORDS = 10_000;
+const MANAGED_EVIDENCE_RECORD_SET_MAXIMUM_RECORDS = 10_000;
 const ERROR_MESSAGES = {
     input: "Managed evidence record-set inventory input is invalid.",
     "root-scope": "Managed evidence record-set inventory escaped its root scope.",

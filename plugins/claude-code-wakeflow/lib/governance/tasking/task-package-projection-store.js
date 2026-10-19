@@ -26,9 +26,9 @@ import { TASK_PACKAGE_PROJECTIONS_ROOT_REF, taskPackageProjectionRef, } from "./
  * `load` 是带事件派生摘要预期的快速读取入口。投影文件始终是 disposable read model，
  * 不是第二份 TaskPackage 权威，也不证明任务已经 Delivery、Claim 或完成。
  */
-export const TASK_PACKAGE_PROJECTION_DIRECTORY_MODE = 0o700;
-export const TASK_PACKAGE_PROJECTION_FILE_MODE = 0o600;
-export const TASK_PACKAGE_PROJECTION_MAXIMUM_BYTES = parseByteCount(16 * 1024 * 1024, "$taskPackageProjection.maximumBytes");
+const TASK_PACKAGE_PROJECTION_DIRECTORY_MODE = 0o700;
+const TASK_PACKAGE_PROJECTION_FILE_MODE = 0o600;
+const TASK_PACKAGE_PROJECTION_MAXIMUM_BYTES = parseByteCount(16 * 1024 * 1024, "$taskPackageProjection.maximumBytes");
 const ERROR_MESSAGES = {
     input: "TaskPackage projection store input is invalid.",
     "projection-not-found": "TaskPackage projection does not exist.",

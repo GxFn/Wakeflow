@@ -10,12 +10,9 @@ import { AbsoluteNodeObservationError, listAbsoluteDirectoryEntryNames, observeA
  * `.wakeflow-create-stage-*`）与各仓库旁边的 `wakeflow-ledger/` 目录。本模块只读：按根报告发现，给出
  * 相对路径与行号，让用户自己删；绝不写任何根。读不出的文件只计数，不当作"没有"。
  */
-export const WAKEFLOW_LEGACY_SCOPE_MARKER = "<!-- wakeflow:scope:start -->";
-export const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze([
-    "CLAUDE.md",
-    "AGENTS.md",
-]);
-export const WAKEFLOW_LEGACY_SETTINGS_FILE_PATHS = Object.freeze([
+const WAKEFLOW_LEGACY_SCOPE_MARKER = "<!-- wakeflow:scope:start -->";
+const WAKEFLOW_LEGACY_INSTRUCTION_FILE_NAMES = Object.freeze(["CLAUDE.md", "AGENTS.md"]);
+const WAKEFLOW_LEGACY_SETTINGS_FILE_PATHS = Object.freeze([
     ".claude/settings.json",
     ".claude/settings.local.json",
 ]);
@@ -25,18 +22,18 @@ export const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = Object.freeze([
     "Bash(tmux *)",
     "Bash(git *)",
 ]);
-export const WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY = "..";
-export const WAKEFLOW_LEGACY_ROOT_MARKER_NAMES = Object.freeze([
+const WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY = "..";
+const WAKEFLOW_LEGACY_ROOT_MARKER_NAMES = Object.freeze([
     "workspace.config.json",
     ".workspace-active",
     ".wakeflow-publish",
 ]);
-export const WAKEFLOW_LEGACY_ROOT_MARKER_PREFIXES = Object.freeze([
+const WAKEFLOW_LEGACY_ROOT_MARKER_PREFIXES = Object.freeze([
     ".wakeflow-stage",
     ".wakeflow-maintenance-",
     ".wakeflow-create-stage-",
 ]);
-export const WAKEFLOW_LEGACY_LEDGER_DIRECTORY_NAME = "wakeflow-ledger";
+const WAKEFLOW_LEGACY_LEDGER_DIRECTORY_NAME = "wakeflow-ledger";
 export const WAKEFLOW_LEGACY_RESIDUE_MAXIMUM_ITEMS = 64;
 const TEXT_MAXIMUM_BYTES = 1024 * 1024;
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;

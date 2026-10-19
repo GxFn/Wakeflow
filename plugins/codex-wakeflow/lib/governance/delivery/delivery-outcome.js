@@ -84,7 +84,7 @@ function instant(value, path) {
     }
 }
 /** 处置对声明的处理是派生事实：只有 rejected-before-send 释放声明。 */
-export function deliveryClaimHandling(disposition) {
+function deliveryClaimHandling(disposition) {
     return disposition === "rejected-before-send" ? "release-authorized" : "retain";
 }
 function outcomeBasis(value) {

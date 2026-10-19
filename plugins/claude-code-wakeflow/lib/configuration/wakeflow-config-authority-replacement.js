@@ -132,4 +132,4 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
         fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath");
     }
 }
-export { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS, WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";
+export { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";

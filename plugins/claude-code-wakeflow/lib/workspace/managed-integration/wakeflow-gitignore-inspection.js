@@ -19,7 +19,7 @@ import { historicalWakeflowManagedTextBodies, WAKEFLOW_GITIGNORE_BODY_HISTORY, }
  * envelope 与 Git 自身的 ignore 判定。它只返回当前结论和候选目标，不创建、替换、删除
  * 或修复文件；全局 excludes 与 `.git/info/exclude` 不替代 tracked `.gitignore` 证据。
  */
-export const WAKEFLOW_GITIGNORE_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$gitignore.maximumBytes");
+const WAKEFLOW_GITIGNORE_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$gitignore.maximumBytes");
 const GIT_DIRECTORY_PROBE_NAME = ".wakeflow-ignore-probe";
 const ERROR_MESSAGES = {
     input: "Wakeflow Gitignore inspection input is invalid.",

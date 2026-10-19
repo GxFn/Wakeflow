@@ -24,7 +24,7 @@ import { createWakeflowSupportMemoryAuthority, WakeflowSupportMemoryAuthorityErr
  *
  * 它不创建 Support 根、不写 memory，也不决定 maintenance action 或旧根清理政策。
  */
-export const WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$supportMemory.maximumBytes");
+const WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$supportMemory.maximumBytes");
 export const WAKEFLOW_SUPPORT_MEMORY_FILE_MODE = 0o644;
 const ERROR_MESSAGES = {
     input: "Wakeflow support memory inspection input is invalid.",

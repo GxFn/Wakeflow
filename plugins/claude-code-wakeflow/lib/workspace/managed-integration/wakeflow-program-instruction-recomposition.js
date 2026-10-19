@@ -180,4 +180,4 @@ export async function recomposeWakeflowProgramInstruction(rootValue, requestValu
         fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
     }
 }
-export { WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS, WakeflowProgramInstructionRecompositionError, } from "./wakeflow-program-instruction-recomposition-contract.js";
+export { WakeflowProgramInstructionRecompositionError, } from "./wakeflow-program-instruction-recomposition-contract.js";

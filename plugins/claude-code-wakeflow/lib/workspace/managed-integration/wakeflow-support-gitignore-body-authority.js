@@ -14,8 +14,8 @@ import { parseWakeflowGitignoreHostProfileSet, renderWakeflowGitignoreRootRule, 
  * null，什么也不写。正文与工作区 `.gitignore` 共用同一根锚定字面规则词法。
  */
 export const WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME = parsePortableResourcePath(".gitignore", "$supportGitignore.fileName");
-export const WAKEFLOW_SUPPORT_GITIGNORE_COMPONENT = "support-ignore";
-export const WAKEFLOW_SUPPORT_GITIGNORE_OWNER = "workspace-ignore-integration";
+const WAKEFLOW_SUPPORT_GITIGNORE_COMPONENT = "support-ignore";
+const WAKEFLOW_SUPPORT_GITIGNORE_OWNER = "workspace-ignore-integration";
 export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1;
 /**
  * 从完整宿主画像集合生成支撑面 `.gitignore` 托管块权威；没有宿主本机设置路径时返回 null。

@@ -21,8 +21,8 @@ import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-
  * 底层稳定目录树能力负责证明结构预算、文件预算和观察期间的来源未漂移。本结果
  * 不能替代发布来源证明、宿主激活证明或迁移授权。
  */
-export const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1;
-export const LOADED_ARTIFACT_TREE_MANIFEST_KIND = "wakeflow-loaded-artifact-tree";
+const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1;
+const LOADED_ARTIFACT_TREE_MANIFEST_KIND = "wakeflow-loaded-artifact-tree";
 /** 与当前支持的清单 v1 保持一致、不得放宽的安全预算。 */
 export const LOADED_ARTIFACT_TREE_IDENTITY_LIMITS = Object.freeze({
     maxDepth: 64,

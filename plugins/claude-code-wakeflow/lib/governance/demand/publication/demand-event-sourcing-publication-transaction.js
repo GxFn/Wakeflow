@@ -9,7 +9,6 @@ import { WAKEFLOW_DEMAND_IDENTITY_SCHEMA } from "../../../contracts/generated/go
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
-import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../../../foundation/data/deterministic-json-document.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
@@ -344,7 +343,4 @@ export function parseDemandEventSourcingPublicationTransactionDocument(text) {
         fail("representation", "$transaction");
     }
     return transaction;
-}
-export function computeDemandEventSourcingPublicationTransactionDigest(value) {
-    return computeCanonicalJsonSha256Digest(parseDemandEventSourcingPublicationTransaction(value));
 }

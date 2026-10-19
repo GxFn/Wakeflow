@@ -197,6 +197,3 @@ export function createDemandCompletion(input, options = {}) {
         completionDigest: computeCanonicalJsonSha256Digest(basis),
     });
 }
-export function computeDemandCompletionDigest(value) {
-    return parseDemandCompletion(value).completionDigest;
-}

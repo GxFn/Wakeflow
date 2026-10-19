@@ -157,7 +157,7 @@ function stringArray(value, path, maximumItems = 64) {
     return Object.freeze(result);
 }
 /** 准入不含时钟和摘要的Agent业务陈述，并返回独立冻结快照。 */
-export function parseImplementationTargetResultReportContent(value) {
+function parseImplementationTargetResultReportContent(value) {
     const record = jsonRecord(value, [
         "anchorEvidence",
         "evidenceLocators",

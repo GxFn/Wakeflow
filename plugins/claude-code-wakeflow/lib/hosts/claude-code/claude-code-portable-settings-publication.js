@@ -338,8 +338,3 @@ export async function settleClaudeCodePortableSettingsPublicationStages(rootValu
         }
     }
 }
-/** 显式结算 stage 后幂等恢复 portable settings 发布。 */
-export async function recoverClaudeCodePortableSettingsPublication(rootValue, optionsValue = {}) {
-    await settleClaudeCodePortableSettingsPublicationStages(rootValue, optionsValue);
-    return publishClaudeCodePortableSettings(rootValue, optionsValue);
-}

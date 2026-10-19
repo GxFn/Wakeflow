@@ -13,7 +13,7 @@ import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityErr
  * 和锁 recipe 准入；不读取 `.gitignore`、不取得锁、不发布字节或退休恢复残留。
  */
 export const WAKEFLOW_GITIGNORE_FILE_MODE = 0o644;
-export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 const ERROR_MESSAGES = {
     input: "Wakeflow Gitignore recomposition input is invalid.",
     "unsupported-platform": "Wakeflow Gitignore recomposition requires reliable local POSIX ownership semantics.",
@@ -173,14 +173,6 @@ export function parseWakeflowGitignoreRecompositionOptions(value) {
             : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
         signal: record.signal,
     });
-}
-export function parseWakeflowGitignoreRecompositionRecoveryOptions(value) {
-    const record = plainRecord(value === undefined ? {} : value, "$options");
-    if (Object.keys(record).some((key) => key !== "signal") ||
-        (record.signal !== undefined && !isAbortSignal(record.signal))) {
-        failWakeflowGitignoreRecomposition("input", "$options");
-    }
-    return Object.freeze({ signal: record.signal });
 }
 export function assertWakeflowGitignoreRecompositionNotAborted(signal) {
     if (signal?.aborted === true) {

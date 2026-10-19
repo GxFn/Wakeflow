@@ -30,7 +30,7 @@ const ERROR_MESSAGES = {
     aborted: "Claude portable settings composition was aborted.",
 };
 /** Claude portable settings composition 失败的稳定、脱敏错误。 */
-export class ClaudeCodePortableSettingsCompositionError extends Error {
+class ClaudeCodePortableSettingsCompositionError extends Error {
     name = "ClaudeCodePortableSettingsCompositionError";
     code = "wakeflow-claude-code-portable-settings-composition";
     reason;

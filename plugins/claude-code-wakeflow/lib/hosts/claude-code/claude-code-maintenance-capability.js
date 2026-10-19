@@ -18,14 +18,14 @@ import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-i
  * 资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  */
-export const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance";
+const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance";
 const ERROR_MESSAGES = {
     gate: "Claude Code maintenance capability requires the active matching gate.",
     operation: "Claude Code maintenance capability operation is invalid.",
     owner: "Claude Code maintenance capability owner failed.",
 };
 /** Claude Code maintenance capability 失败的稳定、脱敏错误。 */
-export class ClaudeCodeMaintenanceCapabilityError extends Error {
+class ClaudeCodeMaintenanceCapabilityError extends Error {
     name = "ClaudeCodeMaintenanceCapabilityError";
     code = "wakeflow-claude-code-maintenance-capability";
     reason;

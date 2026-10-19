@@ -41,15 +41,15 @@ function projectionDeclaration(declarationId, ownerId, relativePath) {
         },
     });
 }
-export const WAKEFLOW_ACTIVE_ROOT_RESOURCE_DECLARATION = directoryDeclaration("active.root", "active-layout", WAKEFLOW_ACTIVE_ROOT_REF);
-export const WAKEFLOW_ACTIVE_CURRENT_ROOT_RESOURCE_DECLARATION = directoryDeclaration("active.current-root", "active-layout", WAKEFLOW_ACTIVE_CURRENT_ROOT_REF);
-export const WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG = Object.freeze([
+const WAKEFLOW_ACTIVE_ROOT_RESOURCE_DECLARATION = directoryDeclaration("active.root", "active-layout", WAKEFLOW_ACTIVE_ROOT_REF);
+const WAKEFLOW_ACTIVE_CURRENT_ROOT_RESOURCE_DECLARATION = directoryDeclaration("active.current-root", "active-layout", WAKEFLOW_ACTIVE_CURRENT_ROOT_REF);
+const WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG = Object.freeze([
     WAKEFLOW_ACTIVE_ROOT_RESOURCE_DECLARATION,
     WAKEFLOW_ACTIVE_CURRENT_ROOT_RESOURCE_DECLARATION,
 ]);
-export const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-index", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF);
-export const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-status", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF);
-export const WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
+const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-index", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF);
+const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-status", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF);
+const WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: "active.workspace-projection-lock",
     family: "active",
@@ -82,7 +82,7 @@ export const WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST = computeCanonicalJsonSha25
     schemaVersion: 1,
     declarations: WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG,
 });
-export const REQUIREMENT_BOARD_RESOURCE_OWNER_ID = "requirement-board";
+const REQUIREMENT_BOARD_RESOURCE_OWNER_ID = "requirement-board";
 /** 需求看板 owner 的确定性静态资源目录：目录与人读索引。 */
 export const WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG = Object.freeze([
     directoryDeclaration("active.board.root", REQUIREMENT_BOARD_RESOURCE_OWNER_ID, REQUIREMENT_BOARD_ROOT_REF),

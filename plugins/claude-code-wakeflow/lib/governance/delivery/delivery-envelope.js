@@ -118,7 +118,7 @@ function reworkCheckId(value, path) {
     return value;
 }
 /** 严格解析一份有界返工投影，不读取完整Decision或TargetResult。 */
-export function parseTargetDeliveryReworkContext(value, path = "$rework") {
+function parseTargetDeliveryReworkContext(value, path = "$rework") {
     const record = exactRecord(value, ["decision", "previousResult", "rationaleSummary", "requiredCorrections"], path);
     const decision = exactRecord(record.decision, ["targetReviewDecisionId", "decisionDigest"], `${path}/decision`);
     const previousResult = exactRecord(record.previousResult, ["targetResultId", "resultDigest"], `${path}/previousResult`);
@@ -237,7 +237,7 @@ function remediationStepId(value, path) {
     return value;
 }
 /** 严格解析一份有界产品缺陷修复投影，不读取完整Authorization。 */
-export function parseTargetDeliveryProductDefectRemediationContext(value, path = "$productDefectRemediation") {
+function parseTargetDeliveryProductDefectRemediationContext(value, path = "$productDefectRemediation") {
     const record = remediationRecord(value, [
         "authorization",
         "testReviewDecision",

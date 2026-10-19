@@ -70,7 +70,7 @@ function declaration(value) {
     }
 }
 /** 每个角色在自己的 surface 根下拥有的 scaffold 目录；内容归角色，Wakeflow 只保证目录存在。 */
-export const WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES = Object.freeze({
+const WAKEFLOW_MANAGED_SUPPORT_SCAFFOLD_DIRECTORIES = Object.freeze({
     design: Object.freeze(["drafts"]),
     test: Object.freeze(["harnesses", "fixtures"]),
 });

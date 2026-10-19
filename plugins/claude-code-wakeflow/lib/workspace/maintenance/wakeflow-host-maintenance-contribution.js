@@ -117,7 +117,7 @@ function contributionDigestBasis(value) {
     };
 }
 /** 计算不包含自身摘要字段的宿主 contribution 语义摘要。 */
-export function computeWakeflowHostMaintenanceContributionDigest(value) {
+function computeWakeflowHostMaintenanceContributionDigest(value) {
     return computeCanonicalJsonSha256Digest(contributionDigestBasis(value));
 }
 function assertOrderedOperations(operations, basePath) {

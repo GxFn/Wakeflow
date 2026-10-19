@@ -16,8 +16,8 @@ import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
  * 句柄仍是那个节点 → `fchmod` → 复验。已经是私有模式为 `current`（幂等，中断后重跑即可）。
  * 本模块不决定哪些目录是私有的，那是调用方的布局知识。
  */
-export const PRIVATE_DIRECTORY_MODE = 0o700;
-export const PRIVATE_FILE_MODE = 0o600;
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
 const GROUP_OTHER_WRITE = 0o022;
 const SPECIAL_BITS = 3584n;
 const ERROR_MESSAGES = {
@@ -46,7 +46,7 @@ function currentUserId() {
     return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
 /** 目录 0700、文件 0600；其余类型没有私有模式。 */
-export function privateModeOf(node) {
+function privateModeOf(node) {
     if (node.kind === "directory")
         return PRIVATE_DIRECTORY_MODE;
     if (node.kind === "file")

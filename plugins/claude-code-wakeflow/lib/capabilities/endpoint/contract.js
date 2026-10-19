@@ -25,7 +25,9 @@ export function parseWindowBindingRequest(value) {
     }
     const result = validateRequest(json);
     if (!result.ok)
-        fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+        fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+            details: { schema: result.detail },
+        });
     return result.value;
 }
 export function admitWindowBindingResult(value) {

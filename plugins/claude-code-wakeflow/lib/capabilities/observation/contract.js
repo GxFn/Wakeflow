@@ -29,7 +29,9 @@ function requestParser(validate) {
     return (value) => {
         const result = validate(requestJson(value));
         if (!result.ok)
-            fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+            fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+                details: { schema: result.detail },
+            });
         return result.value;
     };
 }

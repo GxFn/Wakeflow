@@ -162,7 +162,7 @@ const WAKEFLOW_JSON_SCHEMA_VALIDATOR = Object.freeze({
                 : {
                     valid: false,
                     data: undefined,
-                    errorMessage: `Wakeflow tool input is invalid at ${result.path}.`,
+                    errorMessage: `Wakeflow tool input is invalid at ${result.path} (${result.detail}).`,
                 };
         };
     },

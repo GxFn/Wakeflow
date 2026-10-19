@@ -34,6 +34,15 @@ const WAKEFLOW_LEGACY_ROOT_MARKER_PREFIXES = Object.freeze([
     ".wakeflow-create-stage-",
 ]);
 const WAKEFLOW_LEGACY_LEDGER_DIRECTORY_NAME = "wakeflow-ledger";
+/**
+ * 当前（1.x）账本根的三个顶层目录；与 governance/ledger 的布局常量一致（测试交叉核对，本层不能导入它）。
+ * 旁边同名目录带着这三项时是别的工作区的现役账本，不是本工作区的 0.9.x 残留（§13.181 F-L1-4）。
+ */
+export const WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES = Object.freeze([
+    "archives",
+    "requirements",
+    "transactions",
+]);
 export const WAKEFLOW_LEGACY_RESIDUE_MAXIMUM_ITEMS = 64;
 const TEXT_MAXIMUM_BYTES = 1024 * 1024;
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
@@ -160,6 +169,8 @@ async function scanLedgerSibling(collector, root) {
     try {
         const observed = await observeAbsoluteNode(sibling, { follow: false, errorPath: "$residue" });
         if (observed.state === "present" && observed.node.kind === "directory") {
+            if (await isCurrentLedgerRoot(sibling))
+                return;
             push(collector, {
                 root: root.key,
                 kind: "ledger-directory",
@@ -176,6 +187,25 @@ async function scanLedgerSibling(collector, root) {
         }
         throw error;
     }
+}
+/** 旁边的 `wakeflow-ledger` 带齐当前账本的三个顶层目录时，按现役账本对待（不读内容）。 */
+async function isCurrentLedgerRoot(ledgerPath) {
+    for (const name of WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES) {
+        try {
+            const entry = await observeAbsoluteNode(nodePath.join(ledgerPath, name), {
+                follow: false,
+                errorPath: "$residue",
+            });
+            if (entry.state !== "present" || entry.node.kind !== "directory")
+                return false;
+        }
+        catch (error) {
+            if (error instanceof AbsoluteNodeObservationError)
+                return false;
+            throw error;
+        }
+    }
+    return true;
 }
 /** 只读扫描给定根：按根的给定顺序、根内按指令文件、设置文件、根标记、旁边 ledger 的顺序报告。 */
 export async function scanWakeflowLegacyResidue(roots) {

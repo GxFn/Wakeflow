@@ -31,7 +31,9 @@ function requestJson(value) {
 export function parseRequirementPublicationRequest(value) {
     const result = validatePublicationRequest(requestJson(value));
     if (!result.ok)
-        fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+        fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+            details: { schema: result.detail },
+        });
     return result.value;
 }
 export function admitRequirementPublicationResult(value) {
@@ -43,7 +45,9 @@ export function admitRequirementPublicationResult(value) {
 export function parseBoardInspectionRequest(value) {
     const result = validateBoardRequest(requestJson(value));
     if (!result.ok)
-        fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+        fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+            details: { schema: result.detail },
+        });
     return result.value;
 }
 export function admitBoardInspectionResult(value) {

@@ -1,23 +1,23 @@
-import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import path from "node:path";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
-import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
-import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
-import { applyDemandRuntimeRecovery, inspectDemandRuntimeRecovery, } from "../../governance/demand/demand-runtime-recovery.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
-import { compileWakeflowFreshConfigSelection, WakeflowFreshConfigSelectionError, } from "../../configuration/wakeflow-fresh-config-selection.js";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
+import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { compileWakeflowFreshConfigSelection, WakeflowFreshConfigSelectionError, } from "../../configuration/wakeflow-fresh-config-selection.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
+import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
+import { applyDemandRuntimeRecovery, inspectDemandRuntimeRecovery, } from "../../governance/demand/demand-runtime-recovery.js";
+import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
+import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceExecutionTransactionError, } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import { convergeWakeflowPrivateModes, inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, WakeflowPrivateModeCensusError, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
+import { convergeWakeflowPrivateModes, inspectWakeflowPrivateModes, WakeflowPrivateModeCensusError, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { compileWakeflowWindowLaunchIntents, WakeflowWindowLaunchIntentError, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 /**
@@ -45,7 +45,9 @@ function parseWakeflowMaintenancePublicRequest(value) {
     }
     const result = validateRequest(json);
     if (!result.ok) {
-        fail("invalid-request", "schema", `$request${result.path.slice(1)}`);
+        fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
+            details: { schema: result.detail },
+        });
     }
     return result.value;
 }

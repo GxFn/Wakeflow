@@ -5,7 +5,10 @@ import {
   CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
   CLAUDE_CODE_TMUX_ASSET_REF,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
-import { claudeCodeTmuxSessionNameFor } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import {
+  claudeCodeTmuxSessionNameFor,
+  claudeCodeTmuxWindowNameFor,
+} from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../../src/workspace/workspace-host-resource-catalog.js";
 
@@ -90,4 +93,31 @@ test("每个 worktree pod 的窗口开在自己的 tmux 会话里：`<配置名>
   equal(named.length, 128);
   equal(named.endsWith("-pod-with-a-long-name"), true);
   equal(claudeCodeTmuxSessionNameFor(long, { podPlacement: "primary", podName: "main" }), long);
+});
+
+test("worktree pod 的 tmux 窗口名去掉显示名里的 `<pod> · ` 前缀，显示名本身与 primary pod 的窗口名不变（§13.186）", () => {
+  equal(
+    claudeCodeTmuxWindowNameFor({
+      podPlacement: "worktree",
+      podName: "view",
+      displayTitle: "view · Controller",
+    }),
+    "Controller",
+  );
+  equal(
+    claudeCodeTmuxWindowNameFor({
+      podPlacement: "worktree",
+      podName: "view",
+      displayTitle: "AlembicCore",
+    }),
+    "AlembicCore",
+  );
+  equal(
+    claudeCodeTmuxWindowNameFor({
+      podPlacement: "primary",
+      podName: "main",
+      displayTitle: "main · Controller",
+    }),
+    "main · Controller",
+  );
 });

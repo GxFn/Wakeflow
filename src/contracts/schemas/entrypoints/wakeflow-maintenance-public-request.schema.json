@@ -443,10 +443,179 @@
           "description": "Reserved; must be an empty object."
         },
         "hosts": {
-          "type": "object",
-          "description": "Optional launch and container preferences by host (claude-code, codex); the empty object inherits the tested profile. Its shape is the Config schema's hosts object."
+          "$ref": "#/$defs/hosts",
+          "description": "Optional launch and container preferences by host, keyed `claude-code` and `codex`; the empty object inherits the tested profile. Models and reasoning efforts sit under `<host>.launch.modelByRole` and `<host>.launch.reasoningEffortByRole` (by role or `default`), Claude Code's permission mode under `claude-code.launch.permissionMode`, and the Claude Code tmux session name under `claude-code.tmux.sessionName` (worktree pods open `<name>-<pod name>`). This is the Config schema's hosts object mirrored here, so the request is built from this schema alone - never from another workspace's config."
         }
       }
+    },
+    "hosts": {
+      "description": "Optional durable launch/container preferences for the two supported hosts. Omission inherits the tested host profile and never means disabled, registered, or live.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex": {
+          "$ref": "#/$defs/codexHost"
+        },
+        "claude-code": {
+          "$ref": "#/$defs/claudeHost"
+        }
+      }
+    },
+    "codexHost": {
+      "description": "Codex-specific durable launch preferences; real thread handles and live model observations are forbidden.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "launch": {
+          "$ref": "#/$defs/codexLaunch"
+        }
+      }
+    },
+    "claudeHost": {
+      "description": "Claude Code durable launch and desired tmux-container preferences; actual socket/session/window/pane locators remain host-local runtime facts.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "launch": {
+          "$ref": "#/$defs/claudeLaunch"
+        },
+        "tmux": {
+          "$ref": "#/$defs/claudeTmux"
+        }
+      }
+    },
+    "codexLaunch": {
+      "description": "Optional Codex model and reasoning-effort pins by protocol role; missing keys inherit the current tested profile.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelByRole": {
+          "$ref": "#/$defs/modelByRole"
+        },
+        "reasoningEffortByRole": {
+          "$ref": "#/$defs/reasoningEffortByRole"
+        }
+      }
+    },
+    "claudeLaunch": {
+      "description": "Optional Claude model, reasoning-effort, and permission-mode preferences by protocol role; missing values inherit the tested profile.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelByRole": {
+          "$ref": "#/$defs/modelByRole"
+        },
+        "reasoningEffortByRole": {
+          "$ref": "#/$defs/reasoningEffortByRole"
+        },
+        "permissionMode": {
+          "enum": ["auto", "acceptEdits", "bypassPermissions"],
+          "description": "Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice."
+        }
+      }
+    },
+    "modelByRole": {
+      "description": "Optional non-empty host model identifiers keyed only by supported protocol roles or default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controller": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Controller launches."
+        },
+        "design": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Design launches."
+        },
+        "test": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Test launches."
+        },
+        "product": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for product-window launches."
+        },
+        "default": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional fallback host model identifier when a role-specific value is absent."
+        }
+      }
+    },
+    "reasoningEffortByRole": {
+      "description": "Optional tested reasoning-effort preferences keyed only by supported protocol roles or default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controller": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Controller launches."
+        },
+        "design": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Design launches."
+        },
+        "test": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Test launches."
+        },
+        "product": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for product-window launches."
+        },
+        "default": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional fallback reasoning effort when a role-specific value is absent."
+        }
+      }
+    },
+    "reasoningEffort": {
+      "enum": ["medium", "high", "xhigh", "max"],
+      "description": "A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter."
+    },
+    "claudeTmux": {
+      "description": "Desired Claude tmux container names only; actual live locator identity is intentionally excluded from durable config.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionName": {
+          "$ref": "#/$defs/claudeTmuxSessionName",
+          "description": "Desired bounded, control-free tmux session name of the primary pod; omission inherits the Claude host profile. Worktree pods open their own session named <this name>-<pod name>."
+        },
+        "socketName": {
+          "$ref": "#/$defs/claudeTmuxSocketName",
+          "description": "Optional safe tmux -L socket name; omission uses the adapter's tested default container."
+        }
+      }
+    },
+    "claudeTmuxSessionName": {
+      "type": "string",
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "description": "Desired Claude tmux session name for the primary pod, bounded to 128 control-free characters before any host effect; every worktree pod opens its own session named <this name>-<pod name>."
+    },
+    "claudeTmuxSocketName": {
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,128}$",
+      "description": "Safe tmux -L socket name shared with the Claude locator contract; slash, whitespace, controls, and dot-only aliases are rejected."
+    },
+    "nonEmptyString": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "description": "Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields."
+    },
+    "trimmedNonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$",
+      "description": "A non-empty string whose first and last characters are not whitespace; this mirrors the strict loader's trim check."
     }
   }
 }

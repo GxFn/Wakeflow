@@ -32,9 +32,10 @@ current. Read it back through a tool.
   parts: `program` (identity and display), `presentation` (language),
   `topology` (repositories with their `instructionManagement`, support
   surfaces, windows), `storage` (ledger root), `governance`, `hosts` (launch
-  preferences by host); its exact shape is the tool's input schema in your
-  tool list, so build the request from that schema and never from plugin
-  files on disk. A refusal names the failing path and the rule in
+  preferences by host); its exact shape, `hosts` included, is the tool's input
+  schema in your tool list, so build the request from that schema and never
+  from plugin files on disk or another workspace's config. A refusal names
+  the failing path and the rule in
   `details.schema` (`required:storage`, `additional:foo`, `type:string`,
   `enum`): fix that field and preview again. Default repositories to
   `owner-managed`; offer `managed-block` only when the user wants Wakeflow's

@@ -515,3 +515,46 @@ test("F10：recordedBy 是登记权威（Controller 窗口与配置），不是�
     TEST,
   );
 });
+
+test("§13.190 I12/I13：引导会话先登记、按 hook-evidence-missing 判断谁在等对话框；selection 只从工具 Schema 构造，不读别的工作区", () => {
+  const bootstrap = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.windowBootstrap.en);
+  includesAll(
+    bootstrap,
+    [
+      "register each window from the observation you kept, in launch order, without waiting for the user",
+      "A registration refused `hook-evidence-missing` means that window has not started",
+      "A trusted directory shows no dialog",
+      "ask them to accept the dialog where one is shown",
+      "register those windows again when they say so",
+    ],
+    "windowBootstrap",
+  );
+  equal(
+    bootstrap.includes("accept the trust dialog in every window"),
+    false,
+    "the trust dialog is no longer a step every window goes through",
+  );
+  ok(
+    indexOfRequired(bootstrap, "without waiting for the user") <
+      indexOfRequired(bootstrap, "`hook-evidence-missing`"),
+    "register first; the refusal names who is waiting",
+  );
+  const firstRun = flat(claude("skills/wakeflow-controller/references/first-run.md"));
+  includesAll(
+    firstRun,
+    [
+      "register each window from the observation you kept as soon as its launch has returned",
+      "accept a trust dialog where one is shown",
+      "Only a window whose registration is refused for a missing record is waiting",
+      "`hosts.claude-code.tmux.sessionName`",
+      "never from another workspace's config or from plugin files",
+    ],
+    "first-run reference (Claude)",
+  );
+  equal(firstRun.includes("accept each window's trust dialog"), false);
+  equal(firstRun.includes("exactly two things"), false);
+  ok(
+    claude(WINDOWS).includes("never from plugin files on disk or another workspace's config"),
+    "the daily reference forbids reading another workspace's config too",
+  );
+});

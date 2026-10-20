@@ -146,12 +146,18 @@ const WINDOW_BOOTSTRAP =
   "`sessionProven: false` or `null` means this session started before the workspace's hooks " +
   "existed - every first run, inside tmux or not: it only bootstraps and must never register " +
   "itself or mark its pane. `launch` the Controller window's own intent so a fresh Controller " +
-  "starts inside the configured tmux session, launch every other window with `--wait 0`, then " +
-  "give the user the exact command the helper printed - `attach` when they are outside tmux, " +
-  "`switch` when this session already runs inside it - ask them to accept the trust dialog in " +
-  "every window (`Ctrl-b n` moves to the next one), to keep this session open until you have " +
-  "registered the windows, and to tell you when the dialogs are done; only then register each " +
-  "window from the observations you kept, run `mark --all` once every window is registered, " +
+  "starts inside the configured tmux session, launch every other window with `--wait 0` (its " +
+  "result says `hook.sessionStart: pending` only because it did not wait; the record usually " +
+  "lands within seconds), give the user the exact command the helper printed - `attach` when " +
+  "they are outside tmux, `switch` when this session already runs inside it - and register " +
+  "each window from the observation you kept, in launch order, without waiting for the user. " +
+  "A registration refused `hook-evidence-missing` means that window has not started: it is " +
+  "still showing its trust dialog (a directory the user has not trusted yet, or a repository " +
+  "with its own settings) or is still starting. A trusted directory shows no dialog, so never " +
+  "send the user to look for one: name the windows that are waiting, ask them to accept the " +
+  "dialog where one is shown (`Ctrl-b n` moves to the next window) and to keep this session " +
+  "open until you have registered the windows, and register those windows again when they " +
+  "say so; then run `mark --all` once every window is registered, " +
   "show the handover card from `references/first-run.md`, and tell the user to continue in the " +
   "tmux Controller and close this session with `/exit`. A window that a setup session started " +
   "but never registered (it was closed too early) is still running: `launch` it as below and " +

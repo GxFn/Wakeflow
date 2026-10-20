@@ -45,25 +45,33 @@ user decides; you do not pick silently.
 4. Storage: the ledger root, inside the workspace (`ledger`) unless the user
    wants it beside the workspace.
 5. Presentation: the language of generated text, `en` or `zh-Hans`.
-6. Hosts: launch preferences by host and role - model, reasoning effort,
-   permission mode. The empty object inherits the tested profile; mention it
-   once and move on unless the user has a preference.
+6. Hosts: launch preferences under `hosts`, keyed `claude-code` and `codex`:
+   `hosts.<host>.launch.modelByRole` and `reasoningEffortByRole` (by role or
+   `default`), Claude Code's `launch.permissionMode`, and the Claude Code tmux
+   session name `hosts.claude-code.tmux.sessionName` (worktree pods open
+   `<name>-<pod name>`). The empty object inherits the tested profile; mention
+   it once and move on unless the user has a preference.
 
-Build the `selection` from the tool's input schema, preview, show the plan and
-every blocker in the user's terms, and apply only after they say to. A refusal
-names the failing field and rule: fix that field and preview again instead of
-asking the user to interpret it.
+Build the `selection` from the tool's input schema - it spells out every part,
+`hosts` included - never from another workspace's config or from plugin files.
+Preview, show the plan and every blocker in the user's terms, and apply only
+after they say to. A refusal names the failing field and rule: fix that field
+and preview again instead of asking the user to interpret it.
 
 ## The bootstrap
 
 After apply there are windows but nothing running. Follow "Step 1 - Windows
 and bindings" in `references/workspace-and-windows.md`; its bootstrap paragraph
 is the host procedure. In a first run the setup session is never proven, so
-you launch the Controller window first and every other window after it, and
-the user does exactly two things: open the host's container with the one
-command you give them, and accept each window's trust dialog. Say which
-windows are waiting, wait for their word, then register every window from the
-observations you kept and mark them.
+you launch the Controller window first and every other window after it, then
+register each window from the observation you kept as soon as its launch has
+returned: a window in a directory the user already trusts starts at once and
+needs no word from them. The user does at most two things: open the host's
+container with the one command you give them, and accept a trust dialog where
+one is shown - a directory they have not trusted yet, or a repository with its
+own settings. Only a window whose registration is refused for a missing record
+is waiting on such a dialog (or still starting): name it, wait for their word,
+and register it again. Mark the windows once all are registered.
 
 Explain while you wait, do not only report: a trust dialog lists what that
 root's own settings pre-approve - nothing, when Wakeflow wrote the root; a

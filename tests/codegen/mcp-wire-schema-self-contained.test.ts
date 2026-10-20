@@ -731,3 +731,58 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     ["generation", "hostAction", "issuedAt", "prompt", "promptDigest", "promptRef"],
   );
 });
+
+/** 去掉 examples 后的核心：请求侧的镜像不带示例（tools/list 预算），其余关键词必须一字不差。 */
+function withoutExamples(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutExamples);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as JsonObject)
+        .filter(([key]) => key !== "examples")
+        .map(([key, entry]) => [key, withoutExamples(entry)]),
+    );
+  }
+  return value;
+}
+
+/** Config Schema 的 hosts 子树在请求 Schema 里的镜像定义名（I12，§13.190）。 */
+const FRESH_SELECTION_HOST_DEFINITIONS = [
+  "hosts",
+  "codexHost",
+  "claudeHost",
+  "codexLaunch",
+  "claudeLaunch",
+  "modelByRole",
+  "reasoningEffortByRole",
+  "reasoningEffort",
+  "claudeTmux",
+  "claudeTmuxSessionName",
+  "claudeTmuxSocketName",
+  "nonEmptyString",
+  "trimmedNonEmptyString",
+] as const;
+
+test("I12（§13.190）：fresh-initialize 的 selection.hosts 镜像 Config Schema 的 hosts 子树，请求只凭自己的 Schema 就能构造", () => {
+  const request = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-maintenance-public-request.schema.json",
+  );
+  const config = readSchema("src/contracts/schemas/configuration/wakeflow-config.schema.json");
+  const hosts = (definition(request, "freshSelection").properties as JsonObject)
+    .hosts as JsonObject;
+  equal(hosts.$ref, "#/$defs/hosts");
+  // 描述点名 tmux 会话名与权限模式的键路径：现场的引导会话正是为这两个键去读了别的工作区的配置。
+  equal(
+    typeof hosts.description === "string" &&
+      hosts.description.includes("`claude-code.tmux.sessionName`") &&
+      hosts.description.includes("`claude-code.launch.permissionMode`") &&
+      hosts.description.includes("never from another workspace's config"),
+    true,
+  );
+  for (const name of FRESH_SELECTION_HOST_DEFINITIONS) {
+    deepEqual(
+      withoutExamples(definition(request, name)),
+      withoutExamples(definition(config, name)),
+      `request wire definition ${name} must mirror the Config authority`,
+    );
+  }
+});

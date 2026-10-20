@@ -5103,3 +5103,24 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **工作区 8 当前**：会话 `wakeflow8` 八个窗口全部登记并打标记，Controller 空闲等需求；会话 `wf8` 只剩一个 shell（引导会话已退出），由用户关闭；五个克隆的工作树里残留删除未提交（与工作区 7 的处理一致，是否提交由用户决定）。
 
 **本节用的级别：第 0 级**（只改 docs：本节、live-test-plan §4/§5、open-items I12/I13、README 指针；`wf verify quick --changed` 与 `wf handoff`）。
+
+### 13.190 I12、I13 修复：selection.hosts 进请求 Schema，引导会话先登记再按拒绝判断对话框（2026-10-19）
+
+来源：§13.189 现场 L10 新开的两条 open-items；都是文本与合同层的修法，编译器与助手不改。
+
+- **I12（请求 Schema）**：`wakeflow-maintenance-public-request.schema.json` 的 `$defs.freshSelection.properties.hosts` 从"只有一句描述的 object"改为 `$ref: #/$defs/hosts`，并把 Config Schema 的 13 个定义（`hosts`、`codexHost`、`claudeHost`、`codexLaunch`、`claudeLaunch`、`modelByRole`、`reasoningEffortByRole`、`reasoningEffort`、`claudeTmux`、`claudeTmuxSessionName`、`claudeTmuxSocketName`、`nonEmptyString`、`trimmedNonEmptyString`）镜像进请求 Schema——去掉 `examples` 省 tools/list 字节，其余关键词一字不差（wire Schema 必须自包含，不能跨文件 `$ref`）。`hosts` 的描述点名四条键路径（`<host>.launch.modelByRole` / `reasoningEffortByRole`、`claude-code.launch.permissionMode`、`claude-code.tmux.sessionName` 与 `<name>-<pod name>`）并写明"只凭本 Schema 构造，不读别的工作区的配置"。效果：写错的键在请求层就被拒且点名字段——`{"claude-code":{"session":…}}` → `$/request/selection/hosts/claude-code` + `additional:session`，带前导空格的会话名 → `…/tmux/sessionName` + `pattern`，`permissionMode: yolo` → `…/launch/permissionMode` + `enum`——不再是编译器那句只到 `hosts.claude-code` 的 `invalid-request`。`schema:build` 重生成请求的 generated.ts（`hosts: Hosts` 有了类型），`schema:check` 一致；请求 Schema 紧凑序列化约 15.2 KB，tools/list 预算测试（102 KiB）通过。`compileWakeflowFreshConfigSelection` 不改：它仍是 `hosts` 的权威，请求 Schema 只是让 Controller 能从工具列表学到形状。
+- **I13（引导文本）**：Claude 的 `windowBootstrap` 把"让用户依次接受每个窗口的信任对话框、告诉你对话框都点完了、然后才登记"改为：其余窗口 `--wait 0` 开出后（结果里 `hook.sessionStart: pending` 只是因为没等；记录通常几秒内落地）按启动顺序立即从留下的 observation 登记，不等用户；登记被拒 `hook-evidence-missing` 才说明那个窗口没启动——还在信任对话框上（用户没信任过的目录，或自带 settings 的仓库）或刚在起；已信任的目录不会有对话框，不叫用户去找；点名在等的窗口，让用户在有对话框的地方接受（`Ctrl-b n` 换窗）、保持引导会话打开，等用户回话后再登记那几个；全部登记后 `mark --all`。`first-run.md` 的 bootstrap 一节同改："用户最多做两件事"（打开容器；有对话框就接受）、"只有登记因缺记录被拒的窗口在等对话框"；Hosts 一题写出四条键路径；"从工具的输入 Schema 构造 selection——它写出了每一部分，`hosts` 在内——不读别的工作区的配置，也不读插件文件"。windows 参考的 fresh-initialize 一条加"或别的工作区的配置"（399 行）。Codex 的 bootstrap 没有对话框一说，不改。
+- **测试**：`tests/codegen/mcp-wire-schema-self-contained.test.ts` 新增 I12 镜像测试（13 个定义去掉 examples 后与 Config Schema 逐个 deepEqual；`hosts.$ref` 与描述里的键路径）；新文件 `tests/entrypoints/wakeflow-maintenance-request-hosts.test.ts`（用服务端同一个 `createRuntimeJsonSchemaValidator` 跑生成的请求 Schema：空对象与完整的 hosts 通过，三个写错的键各自点名到路径与规则）；`tests/artifacts/agent-text-live-guidance.test.ts` 新增 §13.190 测试（bootstrap 的五句新话、"accept the trust dialog in every window"不再出现、"先登记再解释拒绝"的顺序；first-run 的五句、"exactly two things"与"accept each window's trust dialog"不再出现；windows 参考那句）。honesty 的预算与链接闭合自动覆盖（first-run 108 行，windows 参考 399 行）。
+- **文档**：open-items I12、I13 已修；live-test-plan §4 第四次补一句；README 指针。
+
+**本批用的级别：第 2 级**（`impact report`：owner contracts changed、schemas changed；agent-text、agent-text-profile、schema-or-generated-contract 三类测试）。
+
+验证与观察（本地，2 worker）：
+
+- `schema:build` / `schema:check` 一致（95 个 Schema）。
+- 第 0 级 run-8uuFYp：typecheck、architecture、lint、format、unused，加 12 个被触及的测试文件 99/99（含 tools/list 预算、两条场景链与新增的三处测试）。第一次 quick 在 format:check 停下：新追加的两个测试与 profile 的字符串拼接要按 Biome 重排；格式化后重跑通过。
+- 制品重建两次（第二次在 Biome 重排 profile 之后，编译字节随源码排版变），`smoke:artifacts` exit 0（20 个工具，fresh-initialize completed，hook observer landed）。
+- 完整门 run-r0ERLX（21:38–22:00 本地，约 22 分钟）：**1507/1507 全通过**（比 §13.188 的 1503 多 4 个：镜像 1、请求校验 2、live-guidance 1）。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+
+本批改动 `src/contracts/schemas/entrypoints`（请求 Schema）与其 generated、`src/hosts/claude-code/claude-code-agent-text-profile.ts`（bootstrap 文本）、`assets/agent-text`（first-run、windows 参考）、tests（codegen 镜像、新请求校验文件、live-guidance）、`tooling/testing/test-durations.json`、docs（open-items、live-test-plan、README 指针、本节）；分两次提交：源码与制品。现场复核留给下一个新工作区的首次引导（L10 再跑一次时顺带）。

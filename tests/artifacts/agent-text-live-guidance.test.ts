@@ -539,20 +539,36 @@ test("§13.190 I12/I13：引导会话先登记、按 hook-evidence-missing 判�
       indexOfRequired(bootstrap, "`hook-evidence-missing`"),
     "register first; the refusal names who is waiting",
   );
+  // 共享的 bootstrap 一节是宿主中立的：launch、信任对话框、mark 只在 Claude 的占位符里；两个宿主渲染出同一段。
   const firstRun = flat(claude("skills/wakeflow-controller/references/first-run.md"));
-  includesAll(
-    firstRun,
-    [
-      "register each window from the observation you kept as soon as its launch has returned",
-      "accept a trust dialog where one is shown",
-      "Only a window whose registration is refused for a missing record is waiting",
-      "`hosts.claude-code.tmux.sessionName`",
-      "never from another workspace's config or from plugin files",
-    ],
-    "first-run reference (Claude)",
-  );
-  equal(firstRun.includes("accept each window's trust dialog"), false);
-  equal(firstRun.includes("exactly two things"), false);
+  const codexFirstRunBootstrap = flat(codex("skills/wakeflow-controller/references/first-run.md"));
+  for (const [rendered, label] of [
+    [firstRun, "first-run reference (Claude)"],
+    [codexFirstRunBootstrap, "first-run reference (Codex)"],
+  ] as const) {
+    includesAll(
+      rendered,
+      [
+        "register each window from the observation you kept as soon as the host has started it",
+        "answer a host prompt where one is shown",
+        "Only a window whose registration is refused for a missing record is waiting",
+        "finish the host procedure's last step before the card",
+        "`hosts.claude-code.tmux.sessionName`",
+        "never from another workspace's config or from plugin files",
+      ],
+      label,
+    );
+    for (const claudeOnly of [
+      "accept each window's trust dialog",
+      "exactly two things",
+      "trust dialog",
+      "launch has returned",
+      "Mark the windows",
+      "with the one command",
+    ]) {
+      equal(rendered.includes(claudeOnly), false, `${label} must not say "${claudeOnly}"`);
+    }
+  }
   ok(
     claude(WINDOWS).includes("never from plugin files on disk or another workspace's config"),
     "the daily reference forbids reading another workspace's config too",

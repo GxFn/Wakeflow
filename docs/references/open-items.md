@@ -582,7 +582,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：`$defs.freshSelection.hosts` 只有一句描述（"形状同 Config Schema 的 hosts 对象"），没有 `properties`；编译器拒绝时只给 `invalid-request`（`details.at: hosts.claude-code`，`selection: config`）。引导会话两次被拒后自述"Schema 没写 tmux 会话名放在 hosts 的哪里"，去 `ls` 了工作区 7 的 `.wakeflow-local` 并读了它的配置，才试出 `hosts.claude-code.tmux.sessionName`。那是别的工作区的配置，不在 Wakeflow 的任何面上（I11 同类）。
   - 证据：工作区 8 重启前的引导会话（§13.189）。
   - 建议：把 Config Schema 的 `hosts` 子树（`claude-code.tmux.sessionName` 等）放进 `freshSelection.hosts`，SDK 输入校验与编译器同形；技能文本写明不读别的工作区的配置。
-- **I13** [低 / 缺口] 引导会话把信任对话框写成开窗后的必经步骤：目录已被信任、产品仓库又没有自己的 settings 时一个对话框都不弹，`launch --wait 0` 的结果已带 `observation`，却仍让用户"依次接受每个窗口的对话框"并等用户回话（计划阶段 7；状态：已修 2026-10-19（§13.190）：bootstrap 改为开窗后立即按启动顺序登记，`hook-evidence-missing` 才说明哪个窗口在等对话框（未信任的目录或自带 settings 的仓库），对话框有就接受；first-run 的"只做两件事"改成"最多两件"；§13.189 现场 L10）
+- **I13** [低 / 缺口] 引导会话把信任对话框写成开窗后的必经步骤：目录已被信任、产品仓库又没有自己的 settings 时一个对话框都不弹，`launch --wait 0` 的结果已带 `observation`，却仍让用户"依次接受每个窗口的对话框"并等用户回话（计划阶段 7；状态：已修 2026-10-19（§13.190）：bootstrap 改为开窗后立即按启动顺序登记，`hook-evidence-missing` 才说明哪个窗口在等对话框（未信任的目录或自带 settings 的仓库），对话框有就接受；first-run 的"只做两件事"改成"最多两件"，§13.191 再把这一共享段改成宿主中立（对话框、launch、mark 只留在 Claude 占位符）；§13.189 现场 L10）
   - 说明：`windowBootstrap` 要求"ask them to accept the trust dialog in every window … only then register"，`first-run.md` 的"用户只做两件事"也把对话框写成必然。工作区 8 重启后，八次 launch 的结果都带 session-start 观测，引导会话却说"每个窗口要等你接受信任对话框后才会写下启动记录"，31 分钟后才登记。
   - 证据：工作区 8 重启后的引导会话（§13.189）。
   - 建议：launch 结果已带 observation 的窗口直接登记；对话框只在目录未被信任或仓库自带 settings 时出现，文本改成"有就接受"，并说明怎么从 launch 结果看出要不要等。

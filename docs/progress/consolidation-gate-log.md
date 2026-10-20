@@ -5124,3 +5124,22 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
 
 本批改动 `src/contracts/schemas/entrypoints`（请求 Schema）与其 generated、`src/hosts/claude-code/claude-code-agent-text-profile.ts`（bootstrap 文本）、`assets/agent-text`（first-run、windows 参考）、tests（codegen 镜像、新请求校验文件、live-guidance）、`tooling/testing/test-durations.json`、docs（open-items、live-test-plan、README 指针、本节）；分两次提交：源码与制品。现场复核留给下一个新工作区的首次引导（L10 再跑一次时顺带）。
+
+### 13.191 first-run 的 bootstrap 一节改为宿主中立；§13.190 已同步进 Codex 制品（2026-10-19）
+
+用户问"最近的修改是否同步到 Codex 版本"。核对：§13.190 的两次提交里 Codex 制品改了 4 个文件——清单、请求 Schema 的 generated lib（hosts 镜像在）、`first-run.md`、`workspace-and-windows.md`——因为 `assets/agent-text` 是两个宿主的单一源，构建同时渲染两份；I13 改的 `windowBootstrap` 是 Claude 的占位符，Codex 自己的 bootstrap 段落（在工作区项目里先建 Controller 线程、核实并登记、再处理其他角色）本来没有对话框一步，不用改。发现一处不贴切：`first-run.md` 共享的 "The bootstrap" 一节带着 Claude 的措辞渲染进了 Codex——"launch the Controller window"、"as soon as its launch has returned"、"open the host's container with the one command you give them"、"accept a trust dialog"、"Mark the windows"；其中容器命令、对话框与 mark 在 §13.190 之前就在，§13.190 又加了 launch 返回与已信任目录两句。用户裁决改成宿主中立。
+
+- **改法**：共享段只说宿主中立的事——宿主启动每个窗口后，立即从留下的 observation 登记；"用户最多做两件事：按宿主段落说的方式打开宿主的容器，有宿主提示就回答"；只有登记因缺记录被拒的窗口在等那个提示（或刚在起）；全部登记后"先做完宿主步骤的最后一步再出卡"（Claude 的 `mark --all` 由它的占位符说）；"Explain while you wait" 一段的"信任对话框"改为"要求用户信任或允许的宿主提示"，"launched again"改为"started again"。launch、`--wait 0`、信任对话框、`Ctrl-b n`、mark 仍只在 Claude 的 `windowBootstrap` 里。Hosts 一题里"Claude Code 的 `launch.permissionMode`、tmux 会话名"是按宿主限定的键路径，两个宿主的 selection 都有这两个键，不改。
+- **测试**：live-guidance 的 §13.190 测试改为对 Claude 与 Codex 两份渲染各钉同一组中立句子（"as soon as the host has started it"、"answer a host prompt where one is shown"、"finish the host procedure's last step before the card"…），并断言两份里都不再出现 "trust dialog"、"launch has returned"、"Mark the windows"、"with the one command"、"exactly two things"（Claude 交接卡里的"the one command to get there"不在其列）。
+- **文档**：open-items I13 补一句；README 指针；本节。
+
+**本批用的级别：第 2 级**（`impact report`：tests: agent-text；只改一份共享参考与一个测试）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级 run-4bpNgo：live-guidance 13/13；first-run 109 行。
+- 制品重建（两份 `first-run.md` 与清单变）、`smoke:artifacts` 两宿主各 20 个工具、hook observer landed。
+- 完整门 run-yse04T（22:11–22:38 本地，约 27 分钟）：**1507/1507 全通过**。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+
+本批只改 `assets/agent-text/skills/wakeflow-controller/references/first-run.md`、live-guidance 测试、`tooling/testing/test-durations.json` 与 docs（open-items I13、README 指针、本节）；分两次提交：源码与制品。

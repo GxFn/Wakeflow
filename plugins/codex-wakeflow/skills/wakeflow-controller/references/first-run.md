@@ -62,22 +62,23 @@ and preview again instead of asking the user to interpret it.
 
 After apply there are windows but nothing running. Follow "Step 1 - Windows
 and bindings" in `references/workspace-and-windows.md`; its bootstrap paragraph
-is the host procedure. In a first run the setup session is never proven, so
-you launch the Controller window first and every other window after it, then
-register each window from the observation you kept as soon as its launch has
-returned: a window in a directory the user already trusts starts at once and
-needs no word from them. The user does at most two things: open the host's
-container with the one command you give them, and accept a trust dialog where
-one is shown - a directory they have not trusted yet, or a repository with its
-own settings. Only a window whose registration is refused for a missing record
-is waiting on such a dialog (or still starting): name it, wait for their word,
-and register it again. Mark the windows once all are registered.
+is the host procedure and names the host's own steps and prompts. In a first
+run the setup session is never proven, so you start the Controller window
+first and every other window after it, then register each window from the
+observation you kept as soon as the host has started it: a window the host
+starts without asking needs no word from the user. The user does at most two
+things: open the host's container the way that paragraph says, and answer a
+host prompt where one is shown. Only a window whose registration is refused
+for a missing record is waiting on such a prompt (or still starting): name
+it, wait for their word, and register it again. When every window is
+registered, finish the host procedure's last step before the card.
 
-Explain while you wait, do not only report: a trust dialog lists what that
-root's own settings pre-approve - nothing, when Wakeflow wrote the root; a
-product window only ever waits for a delivery; registration proves a window
-by the host's own record, which is why a window that started too early is not
-registered but launched again.
+Explain while you wait, do not only report: a host prompt that asks the user
+to trust or allow something lists only what that root's own settings
+pre-approve - nothing, when Wakeflow wrote the root; a product window only
+ever waits for a delivery; registration proves a window by the host's own
+record, which is why a window that started before the hooks existed is not
+registered but started again.
 
 ## The handover card
 

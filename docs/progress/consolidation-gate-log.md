@@ -5087,6 +5087,19 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 制品重建（第十二个占位符与新 reference 进入两份制品）、`smoke:artifacts` exit 0。
 - 完整门 run-u2x5Op（01:10–01:33 UTC 次日，23.5 分钟）：**1503/1503 全通过**。`wf timings apply --receipt` 写回。
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
-- 现场核对（L10，工作区 8）：提交后在下一节记录。
+- 现场核对（L10，工作区 8）：通过，见 §13.189。
 
 本批改动 `src/hosts/claude-code`（助手、文本取值、启动指令无改）、`src/hosts/codex`（占位符）、`src/capabilities/observation/decide.ts`、`assets/agent-text`（新 reference、SKILL、两份 README、init/status、目标与测试技能、三份参考）、tests（助手、decide、live-guidance、profile）、`tooling/testing/test-durations.json`、docs（ADR-0022、决策索引、open-items、live-test-plan、README 指针、本节）、CLAUDE.md/AGENTS.md/README.md（占位符数）；分两次提交：源码与制品。
+
+### 13.189 现场 L10：首次引导在工作区 8 核对通过；hook 记录的绑定规则；I12、I13（2026-10-19）
+
+工作区 `WakeflowTestWorkspace8`（根仓库加五个 Alembic 克隆，克隆带上游提交的 0.9.x 残留），插件按 §13.188 的 f17fe7eb 就地加载。本节只记现场与由此新开的两条 open-items；§13.188 的源码验证不重复。
+
+- **时间线**（本地时间）：19:07 在 tmux 会话 `wf8` 里直接起 `claude` 执行 `/wakeflow:init`；问答四项（程序名 Alembic、五个仓库 owner-managed、zh-Hans、tmux 会话名 `wakeflow8`）；19:39 apply 完成；19:40–19:50 八个窗口开进 `wakeflow8`，一个都还没登记——20:10 机器关机重启，tmux、全部 Claude 会话与 scratchpad 消失，磁盘状态完好。20:23 新开引导会话再执行 `/wakeflow:init`：status → reconcile 预览 no-op → `preflight`（`sessionProven: false`）→ 先按 F-L1-9 列出五个仓库的残留并停在开窗前；残留只在工作树里删掉后，引导会话读 `first-run.md`、把自己判为设置会话（不登记自己），先 `launch --wait 0` Controller 意图（20:25，开进 `wakeflow8`），再开其余七个（20:26–20:27），给出 `tmux switch-client -t wakeflow8` 与"要点的对话框"；这次一个信任对话框都没弹（产品仓库的 settings.json 已删，目录此前已被信任）。20:58 八次 `register`，每次都凭该窗口自己的 session-start 记录 → `mark --all` 8 个 marked → `wakeflow_verify` 15/15（`window-runtime-unverified:8` 只是提示）→ `wakeflow_status`：main pod `ready`、8/8 绑定、"下一步是写需求，由你来做" → 完整交接卡（会话名、attach/switch、八个窗口一行一个用途、`Ctrl-b n/p/s/d`、先去 Design、以后用 `/wakeflow:status`）→ 引导会话按卡末句被 `/exit` 关闭（不是由我发出）。
+- **通过标准逐条核对**：引导会话不登记自己、不被收养（`wf8:0` 上没有 `@wakeflow_binding_id`，八个绑定的会话句柄里没有引导会话）；Controller 开在配置的会话里（`wakeflow8:0`，窗口名 `Controller`）；全程不需要手工重启（重启是外因，恢复走的是同一条 init）；登记后 `status.next` 为 `{frontier: requirement-authoring, owner: user, suggestedTool: null}`，`nextActions` 只有这一条（本会话直接以 `root` 调 `wakeflow_status` 读到，`hooks.records: 20`，`artifactOnDisk: same`）；残留在前时 Controller 先让删再开窗。日常路径：向 `wakeflow8` 的 Controller 发 `/wakeflow:status`，1 分 47 秒后答出 8/8 绑定、"下一步（由你来做）：在 Design 窗口写一个需求包并发布"，没有重启或重绑的建议。**L10 通过。**
+- **hook 记录的形状（不是缺陷）**：工作区 8 的 hook 记录共 20 条：17 条 `session-start`（重启前的八个窗口；重启后的引导会话、Controller 与七个窗口。重启前的引导会话在 apply 之前启动，那时还没有工作区可匹配，所以没有记录）、`user-prompt-submit`、`stop`、`notification` 各 1 条——后三条都是被登记的 Controller 在 status 一问一答里产生的。引导会话与从未对话过的七个窗口只有 `session-start`，正是观察者的规则：`session-start` 写进每个匹配的工作区，其余事件只写进绑定目录已持有该 session id 的工作区（`wakeflow-hook-observer.ts` 顶部注释）。此前把"只有 session-start"当成 hook 故障的怀疑，核对后撤销。
+- **I12（新）**：fresh-initialize 的 `selection.hosts` 在请求 Schema 里只有一句"形状同 Config Schema 的 hosts 对象"，没有属性。重启前的引导会话为写 tmux 会话名两次被拒 `invalid-request`（`details.at: hosts.claude-code`，`selection: config`），自述"Schema 没写 tmux 会话名放在 hosts 的哪里"，去 `ls` 了旁边工作区 7 的 `.wakeflow-local` 并读了它的 `wakeflow.config.json`，才试出 `hosts.claude-code.tmux.sessionName`。读别的工作区的配置不在 Wakeflow 的任何面上（I11 同类）。修法：把 Config Schema 的 `hosts` 子树放进 `freshSelection.hosts`，让 SDK 输入校验与编译器同形。
+- **I13（新）**：引导会话把信任对话框写成开窗后的必经步骤。八次 `launch --wait 0` 的结果都已带 `observation`（session-start 记录在 launch 返回前就写下了），引导会话却仍说"每个窗口要等你接受信任对话框后才会写下启动记录"，让用户依次接受对话框并等用户回话，31 分钟后才登记。`windowBootstrap` 与 `first-run.md` 的"用户只做两件事"都把对话框写成必然。修法：launch 结果已带 observation 的窗口直接登记；对话框只在目录未被信任或仓库自带 settings 时出现，有就接受。
+- **工作区 8 当前**：会话 `wakeflow8` 八个窗口全部登记并打标记，Controller 空闲等需求；会话 `wf8` 只剩一个 shell（引导会话已退出），由用户关闭；五个克隆的工作树里残留删除未提交（与工作区 7 的处理一致，是否提交由用户决定）。
+
+**本节用的级别：第 0 级**（只改 docs：本节、live-test-plan §4/§5、open-items I12/I13、README 指针；`wf verify quick --changed` 与 `wf handoff`）。

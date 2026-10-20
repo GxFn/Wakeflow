@@ -48,8 +48,10 @@ L1 停在 fresh-initialize 的预览，五个发现（F-L1-1 到 F-L1-5，详见
 
 第三次（2026-10-19 02:10–05:30，`86ae6708` 起、文本批次 `284c024a` 就地生效）：**L1–L9 全部通过**，详见 gate-log §13.185。L1 在插件更新流程里完成；L2–L6 用一个真实的跨 AlembicCore/AlembicDashboard 的 bug 走完（含 blocked → condition-cleared、测试重跑子集、flaky 判定与最后一次尝试的负载等待）；L8 用 pod `live` 开闭并在 pod 里跑了缩短版；L7 在第三个 Demand 上以"Controller 会话退出、回调发不出、静默窗口后 rearm 第二代落地"现场触发；L9 共三次换代。未覆盖：L6 的 product-defect → escalate → 返工闭环（没有真实缺陷，仍只有自动化 card-07）。
 
+第四次（2026-10-19 19:07–21:05，L10，`f17fe7eb` 就地加载，`WakeflowTestWorkspace8`）：**L10 通过**，详见 gate-log §13.189。apply 后八个窗口刚开进 `wakeflow8` 就遇到机器重启；重启后的引导会话用同一条 `/wakeflow:init` 走完：先按 F-L1-9 列残留并停在开窗前，残留删掉后 Controller 先开进 `wakeflow8`，再开其余七个，登记、打标记、`verify` 15/15、交接卡完整，引导会话 `/exit`；`status.next` 为 `requirement-authoring`（owner user）。新记 I12（`selection.hosts` 在请求 Schema 里没有形状，引导会话去读了工作区 7 的配置）与 I13（launch 结果已带 observation 却仍让用户先去接受并不会出现的信任对话框）。
+
 ## 5. 结束条件与后续
 
-- 全部场景按"什么算过"通过 → 打 `v1.1.0` tag、推送、`release:check` 真跑一次（各需授权，ADR-0021 规则 3），同时刷新图谱。**2026-10-19：条件已满足，等用户授权。**
+- 全部场景按"什么算过"通过 → 打 `v1.1.0` tag、推送、`release:check` 真跑一次（各需授权，ADR-0021 规则 3），同时刷新图谱。**2026-10-19：条件已满足，等用户授权；L10（首次引导）也于当晚通过（§13.189）。**
 - 任何一条失败 → 记进 gate-log 新节，修复后 bump 到 `1.1.1` 再来一轮；不在同一版本号下换字节（ADR-0021 规则 2）。
 - 现场通过后再做的事：D5（助手迁成类型化模块）、L6/L4 重构、C6/C11 升级语义、F1/F2/F5 与 K4 的控制、J1/J4 退出路径。

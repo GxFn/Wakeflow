@@ -52,7 +52,8 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   （claude 拒绝 --resume 一个从未有过对话的会话时就是这样退出的），只有活着才是 `pending`。
  * - `self`：Controller 给自己的窗口出同一份 observation（`TMUX_PANE` 与
  *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）。
- * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上。
+ * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上；pane 行要按会话、
+ *   窗口、pane 三项与定位器一致（tmux 重启后编号会被复用），已带别的窗口标识的 pane 报 `pane-occupied` 不覆盖。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
  * - `deliver --window <windowId> [--handle-digest <sha256>] [--prompt-ref <permit.promptRef>
  *   --prompt-digest <permit.promptDigest>] [--wait-landing <seconds>]`：带 `--prompt-ref` 时从工作区根下
@@ -1064,7 +1065,8 @@ function openTmuxWindow(config, context, windowId, launchIntent, execution, reso
     command,
   ]);
   if (!creation.ok) refuse("tmux-create-failed", { created: exists ? "new-window" : "new-session", detail: boundedDetail(creation.stderr) });
-  const coordinates = parseCreatedCoordinate(creation.stdout);
+  // 坐标带上实际开窗的会话：pod 窗口在自己的会话里，等不到 hook 记录时的存活检查要去那里找（§13.187）。
+  const coordinates = Object.freeze({ ...parseCreatedCoordinate(creation.stdout), sessionName });
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
   return { coordinates, windowName, placement, exists, sessionName };
@@ -1423,6 +1425,8 @@ function commandPanes(config) {
 function commandMark(config, options) {
   const context = tmuxContext(config);
   const windowIds = options.all ? locatorWindowIds() : options.window === null ? refuse("window-required") : [options.window];
+  const listed = listPanes(context);
+  if (!listed.available) refuse("tmux-list-failed");
   const windows = [];
   for (const windowId of windowIds) {
     const locator = readLocator(windowId);
@@ -1430,9 +1434,15 @@ function commandMark(config, options) {
       windows.push({ windowId, status: "locator-missing" });
       continue;
     }
-    const shown = tmux(context, ["display-message", "-p", "-t", locator.tmux.paneId, "#{window_id}"]);
-    if (!shown.ok || shown.stdout.trim() !== locator.tmux.windowId) {
+    // tmux 服务器重启后编号从头分配，旧定位器的 @N/%N 可能已被别的会话里的新窗口占用（§13.187）：
+    // 按会话、窗口、pane 三项核对 pane 行，且不覆盖已带着别的窗口标识的 pane。
+    const row = listed.rows.find((entry) => paneCoordinatesMatch(locator, entry));
+    if (row === undefined || row.paneDead) {
       windows.push({ windowId, status: "pane-missing" });
+      continue;
+    }
+    if (row.options.windowId !== null && row.options.windowId !== windowId) {
+      windows.push({ windowId, status: "pane-occupied", occupiedBy: row.options.windowId });
       continue;
     }
     setWindowOptions(context, locator.tmux.windowId, {

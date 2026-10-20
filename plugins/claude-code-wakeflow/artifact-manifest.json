@@ -2698,8 +2698,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-tmux-asset.js",
-      "bytes": 95155,
-      "sha256": "sha256:df6fb615b8f33be5f7048ccb2040f223e6a56e39cf5d51dc158aab8c9a89246c",
+      "bytes": 95992,
+      "sha256": "sha256:da836e4445c15745dba120bedcb52c6a8706525ad01e0a20459f8a4a3d9f7c15",
       "mode": "0644",
       "scope": "current-host"
     },

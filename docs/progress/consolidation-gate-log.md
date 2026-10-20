@@ -5056,4 +5056,14 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 
 本批改动 `src/hosts/claude-code`（启动指令渲染、助手、文本取值）、`src/contracts/schemas/configuration`（描述）与生成物、`assets/agent-text`（两份 README）、tests（助手、profile、场景链）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。
 
-**补充（用户：去掉冗余）**：pod 窗口的逻辑显示名是 `<pod 名> · <标题>`（能力卡 9 Q6，status 等处照旧），但在 pod 自己的 tmux 会话里这个前缀是冗余的（tmux 还把 `·` 显示成 `_`）。`claudeCodeTmuxWindowNameFor(intent)` 让 worktree pod 的 tmux 窗口名去掉前缀（`view · Controller` → `Controller`），primary pod 与无前缀的显示名原样；profile 测试加三条断言。只改 Claude 的启动指令渲染，第 1 级验证（hosts 与 tests；制品随之重建）。
+**补充（用户：去掉冗余）**：pod 窗口的逻辑显示名是 `<pod 名> · <标题>`（能力卡 9 Q6，status 等处照旧），但在 pod 自己的 tmux 会话里这个前缀是冗余的（tmux 还把 `·` 显示成 `_`）。`claudeCodeTmuxWindowNameFor(intent)` 让 worktree pod 的 tmux 窗口名去掉前缀（`view · Controller` → `Controller`），primary pod 与无前缀的显示名原样；profile 测试加三条断言。只改 Claude 的启动指令渲染，第 1 级验证（hosts 与 tests；制品随之重建）。现场核对（提交 `e39febca` 之后）：Controller 原地换代后新建 pod `look`，`tmux list-windows -t wakeflow-look` 列出 `Controller`、`Design`、`Alembic`、`AlembicAgent`、`AlembicCore`、`AlembicDashboard`、`AlembicPlugin`、`Test` 八个窗口，没有前缀；两阶段关闭后会话 `wakeflow-look` 消失，只剩 `wakeflow`。Controller 在这一轮里报告了两个助手问题，当天修在 §13.187：tmux 服务器重启后旧定位器的 pane 编号被新窗口复用，`mark --all` 据此打错了标记；`--wait 0` 的 launch 误报 `launch-exited`。
+
+### 13.187 助手两处缺陷：`--wait 0` 在 pod 会话里误报 `launch-exited`，`mark` 不核对 pane 行（2026-10-19）
+
+现场 Controller 在 pod `view`/`look` 两轮里写下的问题记录（工作区 7 的 `Test/controller-notes/helper-issues-2026-10-19.md`，含 10 次 launch 原文与时间线）：
+
+- **缺陷 A（§13.186 引入的回归）**：worktree pod 的产品窗口用 `launch --wait 0` 启动，10 次全部报 `launch-exited`、`pane: absent`，而窗口都在、Claude Code 停在空输入框、session-start 已写入；不带 `--wait` 再 launch 一次即以 `adopted: true` 接管。根因：`assertPaneAlive` 在等不到 hook 记录时按坐标找 pane，`openTmuxWindow` 返回的坐标没有会话名，于是退回到配置的会话 `wakeflow` 去找，而 pod 的 pane 在 `wakeflow-<pod>` 里。缺省等待 20 秒时 hook 记录先到、不走这条检查，所以只有 `--wait 0` 暴露。修法：开窗坐标带上实际开窗的会话名；launch/resume 的存活检查据此在正确的会话里找。
+- **缺陷 B（既有）**：tmux 服务器重启后编号从 `@0`/`%0` 重新分配，main pod 七扇未恢复窗口的旧定位器（`@11`、`@13`–`@16` 等）与 pod `look` 的新窗口同号。`mark --all` 只用 `display-message -t <pane> '#{window_id}'` 核对窗口号就写标识，于是把五扇过期窗口的 `@wakeflow_*` 写到了 look 的 pane 上（Controller 读回标记发现，逐窗口 `mark --window` 修正，校验 `window-identity` 通过）。修法：`mark` 先 `list-panes -a`，pane 行必须按会话、窗口、pane 三项与定位器一致（`paneCoordinatesMatch`），否则 `pane-missing`；pane 已带着别的窗口标识时报 `pane-occupied`（带 `occupiedBy`）且不覆盖；列不出 pane 时拒绝 `tmux-list-failed`。
+- 测试（助手测试 26/26）：pod 会话用例新增"`--wait 0` 等不到 hook 时在 pod 会话里找到 pane → `pending`；pod 会话里确实没有 → `launch-exited/absent`"；mark 用例改为按 `list-panes` 核对，并新增"同编号异会话 → `pane-missing`、同坐标已带别的窗口标识 → `pane-occupied`，两者都不写 set-option"。
+
+**本批用的级别：第 1 级**（`src/hosts` 助手与 tests；制品随之重建）。验证：第 0 级 `--changed`、制品重建、`smoke:artifacts`、`wf handoff` 见提交；现场复核在提交后用 pod 再跑一轮（Controller 缺省就用 `--wait 0`，并在登记后 `mark --all`）。

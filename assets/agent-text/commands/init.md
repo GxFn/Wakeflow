@@ -5,6 +5,10 @@ argument-hint: "[program name]"
 
 Set up or repair the Wakeflow workspace for this directory.
 
+On a directory without a workspace, read that skill's `references/first-run.md`
+before asking anything: the session you are in only bootstraps and never
+becomes the Controller; it ends with the handover card.
+
 Load the `wakeflow-controller` skill and follow its "Step 0 - Initialize or
 maintain the workspace" section; the depth is in its
 `references/workspace-and-windows.md`.

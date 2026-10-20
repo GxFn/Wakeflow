@@ -781,6 +781,16 @@ test("a worktree pod's window opens in the intent's own tmux session, the observ
     "wakeflow-live",
   );
   equal(first.json.attach, "tmux attach -t wakeflow-live");
+  equal("switch" in first.json, false, "outside tmux only attach is offered");
+  // §13.188：从 tmux 里面新建会话时额外给 switch-client 命令。
+  rmSync(path.join(current.state, "session-wakeflow-live"), { force: true });
+  const fromInside = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+    input: JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: podIntent }),
+    env: { ...hooks, TMUX: "/private/tmp/tmux-501/default,111,0", TMUX_PANE: "%0" },
+  });
+  equal(fromInside.status, 0, JSON.stringify(fromInside.json));
+  equal(fromInside.json.attach, "tmux attach -t wakeflow-live");
+  equal(fromInside.json.switch, "tmux switch-client -t wakeflow-live");
   // 第二个窗口进同一个 pod 会话（new-window -t =wakeflow-live），不再打印 attach。
   const second = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID, "--wait", "0"], {
     input: JSON.stringify({
@@ -809,11 +819,11 @@ test("a worktree pod's window opens in the intent's own tmux session, the observ
     env: hooks,
   });
   equal((plain.json.observation as { tmux: { sessionName: string } }).tmux.sessionName, "wakeflow");
-  // §13.187 现场：--wait 0 等不到 hook 记录时，存活检查要去 pod 的会话里找 pane（第 4 次开窗 → @4/%4）。
+  // §13.187 现场：--wait 0 等不到 hook 记录时，存活检查要去 pod 的会话里找 pane（第 5 次开窗 → @5/%5）。
   writeFileSync(
     path.join(current.state, "panes.txt"),
     [
-      paneRow({ session: "wakeflow-live", window: "@4", pane: "%4", command: "2.1.303", pid: 400 }),
+      paneRow({ session: "wakeflow-live", window: "@5", pane: "%5", command: "2.1.303", pid: 500 }),
       "",
     ].join("\n"),
   );
@@ -825,13 +835,13 @@ test("a worktree pod's window opens in the intent's own tmux session, the observ
   // 真正不在（pod 会话里没有这个 pane）才是 launch-exited。
   writeFileSync(
     path.join(current.state, "panes.txt"),
-    [paneRow({ window: "@5", pane: "%5", command: "2.1.303", pid: 500 }), ""].join("\n"),
+    [paneRow({ window: "@6", pane: "%6", command: "2.1.303", pid: 600 }), ""].join("\n"),
   );
   const gone = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
     input: JSON.stringify({ windowId: PRODUCT_WINDOW_ID, launchIntent: podIntent }),
   });
   equal(gone.json.reason, "launch-exited");
-  deepEqual(gone.json.tmux, { windowId: "@5", paneId: "%5", pane: "absent" });
+  deepEqual(gone.json.tmux, { windowId: "@6", paneId: "%6", pane: "absent" });
 });
 
 test("launch refuses malformed intents before touching tmux", async (t) => {
@@ -888,6 +898,36 @@ test("self registers the Controller's own pane from the environment and refuses 
     TMUX: "/private/tmp/tmux-501/default,111,0",
     CLAUDE_CODE_SESSION_ID: SESSION_ID,
   };
+  // §13.188 F-L1-7：没有自己的 session-start 记录的会话是引导会话，self 先拒绝、不在 pane 上写任何标识；
+  // preflight 用 sessionProven 把这一点提前告诉 Controller。
+  const unproven = runHelper(current, ["preflight"], { env: environment });
+  equal(unproven.json.sessionProven, false);
+  equal(runHelper(current, ["preflight"]).json.sessionProven, null);
+  const bootstrap = runHelper(current, ["self"], {
+    input: JSON.stringify({
+      windowId: CONTROLLER_WINDOW_ID,
+      launchIntent: launchIntent("Controller", "."),
+    }),
+    env: environment,
+  });
+  equal(bootstrap.status, 1);
+  equal(bootstrap.json.reason, "hook-evidence-missing");
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "set-option"),
+    false,
+    "an unproven session marks nothing",
+  );
+  writeFileSync(
+    path.join(current.hooks, `20260924T000000000Z-session-start-${SESSION_ID}.json`),
+    JSON.stringify({
+      kind: "stub",
+      event: "session-start",
+      sessionId: SESSION_ID,
+      cwd: current.root,
+    }),
+  );
+  equal(runHelper(current, ["preflight"], { env: environment }).json.sessionProven, true);
+  resetLog(current);
   const run = runHelper(current, ["self"], {
     input: JSON.stringify({
       windowId: CONTROLLER_WINDOW_ID,
@@ -2402,6 +2442,28 @@ test("launch adopts an unregistered marked claude window instead of opening a du
     pid: 600,
     options: marks,
   });
+  // §13.188：助手自己所在的 pane（引导会话）永远不是收养对象——即使它带着这个窗口的标识，launch 也照常开新窗口。
+  writeFileSync(path.join(current.state, "panes.txt"), [claudePane, ""].join("\n"));
+  writeFileSync(
+    path.join(current.state, "ps.txt"),
+    ["  600     1 /opt/homebrew/bin/node", ""].join("\n"),
+  );
+  resetLog(current);
+  const ownPane = runHelper(current, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+    input: intent,
+    env: {
+      WAKEFLOW_STUB_HOOKS: current.hooks,
+      TMUX_PANE: "%6",
+      TMUX: "/private/tmp/tmux-501/default,111,0",
+    },
+  });
+  equal(ownPane.status, 0, JSON.stringify(ownPane.json));
+  equal("adopted" in ownPane.json, false);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "new-session" || entry[0] === "new-window"),
+    true,
+  );
+  rmSync(path.join(current.state, "session-wakeflow"), { force: true });
   writeFileSync(
     path.join(current.state, "panes.txt"),
     [

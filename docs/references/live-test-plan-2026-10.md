@@ -28,6 +28,7 @@
 | L7 | 静默回调重发（D7） | 让回调在 Controller 窗口静默超过阈值（比如先把窗口挂起），再 `rearm_delivery` 回调 | 回调代际、`landing` | 第二代落地；超过四代被拒；这是从未现场触发过的路径 |
 | L8 | pod 开闭（多仓库） | 创建一个 worktree pod（五个仓库各一个 worktree），在 pod 里跑 L2–L5 的缩短版，归档 Demand，两阶段关闭 pod | `wakeflow_pod` 预览/应用、`git worktree list`、`tmux list-sessions` | 关闭后 worktree 与临时分支回收，主检出不变；自 §13.186 起 pod 的窗口开在自己的 tmux 会话 `<会话名>-<pod 名>` 里，关闭后该会话消失 |
 | L9 | 插件更新流程（C9/C16） | 在工作区存在的状态下再刷新一次缓存，按"After a plugin update"一节让 Controller 自己换代 | `status` 的 `server-outdated`/`windows-stale`、助手 `resume --in-place` | Controller 先告知再就地重启，其他窗口逐个换代，没有循环重启、没有读插件实现 |
+| L10 | 首次引导（§13.188，ADR-0022） | 新建工作区（如 `WakeflowTestWorkspace8`），在 tmux 里直接启动 `claude` 执行 `/wakeflow:init`，按问答建工作区、看 Controller 引导到交接卡 | 助手 `preflight` 的 `sessionProven`、`status.next`、交接卡 | 引导会话不登记自己、不被收养；Controller 开在配置的 tmux 会话里；全程不需要手工重启；登记完成后 `status.next` 为 `requirement-authoring`（owner user）；产品仓库带 0.9.x 残留时 Controller 先让用户删再开窗 |
 
 L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 的关闭条件。
 
@@ -43,7 +44,7 @@ L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 �
 
 L1 停在 fresh-initialize 的预览，五个发现（F-L1-1 到 F-L1-5，详见 gate-log §13.181）：selection 形状没地方学、拒绝不点名规则、问答表推荐 managed-block、兄弟 `wakeflow-ledger`（工作区 2 的现役账本）被当成遗留物、拒绝不带残留物种类。修复批落地后重跑 L1。环境侧：Claude Code 启动时自动升级到 2.1.303；用户的全局 `cc-status` hook 让每次工具调用多等 45 s 到 3.5 分钟，现场期间建议临时关掉。遗留物（旧测试工作区与它们的账本）由用户自己清理：Claude 在 auto 模式下不能移动或删除别的工作区的目录。
 
-第二次（2026-10-19，`1b6a816f`，五个 Alembic 克隆）：§13.181 的修复都在现场成立，预览 `ready`，apply 完成，新会话 `self` 登记成功；停在第 1 步给 Design 开窗——助手拒绝 `intent-invalid/role`（F-L1-8：公共 inspect 结果的 `launchIntent` 不带 `role`，助手夹具却带着）。同批记下 F-L1-6（selection 形状进请求 Schema，编译器拒绝带 `details.at`）与 F-L1-7（第一次初始化后必经一次重启，I6 路径）。详见 gate-log §13.182。修复批落地并刷新缓存后，从"After a plugin update"一节换代助手副本，再从第 1 步继续。
+第二次（2026-10-19，`1b6a816f`，五个 Alembic 克隆）：§13.181 的修复都在现场成立，预览 `ready`，apply 完成，新会话 `self` 登记成功；停在第 1 步给 Design 开窗——助手拒绝 `intent-invalid/role`（F-L1-8：公共 inspect 结果的 `launchIntent` 不带 `role`，助手夹具却带着）。同批记下 F-L1-6（selection 形状进请求 Schema，编译器拒绝带 `details.at`）与 F-L1-7（第一次初始化后必经一次重启，I6 路径；2026-10-19 晚由 §13.188/ADR-0022 修复：引导会话只引导、Controller 由助手开进配置的会话，下一轮在新工作区核对）。详见 gate-log §13.182。修复批落地并刷新缓存后，从"After a plugin update"一节换代助手副本，再从第 1 步继续。
 
 第三次（2026-10-19 02:10–05:30，`86ae6708` 起、文本批次 `284c024a` 就地生效）：**L1–L9 全部通过**，详见 gate-log §13.185。L1 在插件更新流程里完成；L2–L6 用一个真实的跨 AlembicCore/AlembicDashboard 的 bug 走完（含 blocked → condition-cleared、测试重跑子集、flaky 判定与最后一次尝试的负载等待）；L8 用 pod `live` 开闭并在 pod 里跑了缩短版；L7 在第三个 Demand 上以"Controller 会话退出、回调发不出、静默窗口后 rearm 第二代落地"现场触发；L9 共三次换代。未覆盖：L6 的 product-defect → escalate → 返工闭环（没有真实缺陷，仍只有自动化 card-07）。
 

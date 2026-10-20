@@ -530,11 +530,11 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 2026-10-09 核实：I6、I7、I8、I10 已修（§13.134、§13.135）；§13.165 批次 0 做了 I3、I9（投递 prompt 要求按磁盘上的技能执行）、I11；I1、I2、I4、I5 开放。
 
-- **I1** [中 / 缺口] init 完成后用户不会被引到 Design 窗口：空闲工作区上 status 给不出下一步，也没有文字说明怎么切换 tmux 窗口（计划阶段 7；状态：开放）
+- **I1** [中 / 缺口] init 完成后用户不会被引到 Design 窗口：空闲工作区上 status 给不出下一步，也没有文字说明怎么切换 tmux 窗口（计划阶段 7；状态：已修 2026-10-19（§13.188，ADR-0022）：空闲工作区的 `status.next` 为 `requirement-authoring`（owner user），交接卡与 README 把用户引到 Design 窗口，first-run 参考教一次怎么切窗口）
   - 说明：setup 刚结束是新用户最需要指引的时候，这时 /wakeflow:next 或 status 却报告“无事可做”。一个默认不懂 tmux 的用户，只能自己琢磨出第 2 步要去另一个 tmux 窗口、是哪一个、怎么切过去。
   - 证据：observation/decide.ts:59-126 只会从产物过期、维护、pod 注册、活动 Demand、待处理包中产生下一步；初始化后空 board 没有任何下一步；status 的 next-action owner 枚举没有 design；commands/next.md:20-21 只说“若下一步属于 Design 窗口，就说明”；唯一的导航提示是信任对话框用的 `Ctrl-b n`（claude-code-agent-text-profile.ts:93）；启动意图是不带角色 prompt 的 `claude`（endpoint/service.ts:792-803）；置顶记忆规则：只有用户能做的事，由 Controller 在需要的那一刻给出确切的命令
   - 建议：没有活动 Demand 也没有待处理包时，产生一个空闲状态的下一步（owner user，reason requirement-authoring，指向 Design 窗口）。Controller skill 说出 Design 窗口的名字和确切按键（在 helper 的 panes/mark 输出里加上窗口索引）。考虑给 Design 窗口一个简短的角色引导作为首条 prompt。
-- **I2** [中 / 缺口] 启动阶段的引导缺口：缺 tmux 时不处理、让用户自己执行 git init、在已有 tmux 会话中启动时新窗口开到别的会话去（计划阶段 7；状态：开放）
+- **I2** [中 / 缺口] 启动阶段的引导缺口：缺 tmux 时不处理、让用户自己执行 git init、在已有 tmux 会话中启动时新窗口开到别的会话去（计划阶段 7；状态：已修 2026-10-19（§13.188）：引导会话按 `sessionProven` 只引导，Controller 总是开进配置的会话；缺 tmux/node/claude 由 preflight 报出并在 first-run 参考里要求先停下告诉用户；`git init` 由 Controller 征得同意后自己做）
   - 说明：每一项都把 shell 或 tmux 操作推给了用户，或者让用户卡住，违背了“用户只需要启动 claude 并运行插件命令”这条规则。缺 tmux 要到后面才以 tmux-create-failed 暴露；目录还不是 git 仓库这个阻塞，Controller 经用户确认后一条命令就能解决；熟悉 tmux、在 tmux 里启动的用户会看不到新开的窗口。
   - 证据：claude-code-tmux-asset.ts:704-716 的 preflight 报告了 tmux/claude 是否可用，但 WINDOW_BOOTSTRAP（profile:87-99）只读 insideTmux；shipped 插件 README 的安装节没写需要 tmux，只有仓库根的 README.md:82 写了；commands/init.md:18-19、README:62-64、workspace-and-windows.md:28-30 都让用户去运行 git init；tmux-asset.ts:292-296 从配置取会话名（默认 wakeflow），与当前所在会话无关；:788、:854 在那个会话里建窗口，只有新建会话时才打印 attach；§13.118 唯一一次现场 bootstrap 是在 tmux 外启动的
   - 建议：windowBootstrap 在 tmux 不可用时停下来，告诉用户对应平台的一条安装命令；让 Controller 经用户确认后自己运行 git init，并同步修改 init.md、README 和参考文档；insideTmux 为真但当前会话不是配置里的会话时，要么在当前会话建窗口，要么转告用户 `tmux switch-client -t <session>`。在现场测一次“在 tmux 内启动”的分支。
@@ -547,7 +547,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：即使只是做一次评审决策，也要先读完完整的 helper 参考。信息密度过高，会增加同一文件里关键规则（resend guard、维护协议的取值）被略读的概率。skill 通常每个会话只加载一次，成本不算大。
   - 证据：渲染后的 Claude Controller SKILL.md 2,122 词，Codex 版 1,595 词；三个参考文档约 1,819、797、2,843 词；SKILL.md:22 要求在第一次工具调用前从头读到尾；第 1 步内联了 {{windowBootstrap}} 和 {{windowLaunch}}（约 20 行）；CLAUDE.md 要求 prompt 有优先级、保持轻量
   - 建议：SKILL.md 第 1 步只保留一句占位（“用宿主 helper 启动，见 references/workspace-and-windows.md”），把 windowLaunch 和 windowBootstrap 的正文移到参考文档；给 Controller SKILL 设词数预算，并在 agent-text 构建中检查。
-- **I5** [低 / 缺口] Controller 自己采集的证据文件没有指定存放位置（计划阶段 7；状态：开放）
+- **I5** [低 / 缺口] Controller 自己采集的证据文件没有指定存放位置（计划阶段 7；状态：已修 2026-10-19（§13.188）：证据参考规定核对文件放在 Test 面的 `controller-checks/<demandId>/`、先替换绝对路径）
   - 说明：needs-review 是实现目标的默认路径，要求 Controller 为每个 anchor 记录自己的验证输出。没有指定位置，它要么把探测写进产品仓库（弄脏目标报告里的 checkout），要么临时建一个脚手架、隐私规则和清理都不认识的目录。这个残留被记了两次，一直没关。
   - 证据：evidence.md:19-25 列出了可接受的来源，却没说 Controller 自己的命令输出存在哪里；reconcile 脚手架只有 drafts/、harnesses/、fixtures/；Test skill 限制只能写 harnesses/ 和 fixtures/；§13.120、§13.121 残留（L3458、L3479）：Controller 的探测文件一再落到 Test/evidence/demand_*/
   - 建议：给 Test surface（或 Controller 自有的 surface）加一个 evidence/ 脚手架目录，和其他目录一样由 reconcile 维护；在 evidence.md 中写明 `<demandId>/` 约定，并规定不得把探测写进产品 checkout。

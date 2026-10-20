@@ -319,21 +319,20 @@ main checkout; every other pod works in a worktree.
    its Controller and Design windows, then every product window with its
    worktree observation, and only then its Test window - the Test window's
    launch intent lists the worktrees as attached directories, and that list is
-   read from the receipts the product registrations wrote. The product windows
+   read from the receipts the product registrations wrote. A repository that
+   depends on a sibling checkout by relative path (`file:../Name`) cannot
+   resolve it inside a worktree; say so in that pod's task packages. The product windows
    need not start one by one: launch them all without waiting (`--wait 0` on
    Claude Code), keep each printed observation, and register them once their
    session-start records exist.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
-While a pod is open, its Controller claims its own requirement package from the
-shared board. One Demand per pod Controller still holds; a pod does not let one
-Controller run two Demands.
+While a pod is open, its Controller claims its own package from the shared
+board; one Demand per Controller still holds.
 
-Between archiving a pod's Demand and closing the pod, `wakeflow_status` keeps
-listing the branches that Demand's accepted results left unmerged, with
-`source: archived`, so the user can see what still waits for a merge or an
-abandon decision.
+Between archiving a pod's Demand and closing the pod, `wakeflow_status` lists
+the branches its accepted results left unmerged (`source: archived`).
 
 `wakeflow_pod` close, after the user has merged or abandoned the branch:
 

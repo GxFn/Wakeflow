@@ -19,7 +19,7 @@ import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "./claude-code-tmux-asset.js";
  * 本模块只导入 tmux 助手的命令常量（与权限规则同源）；取值是给人读的文本，没有运行时依赖，也不看对端宿主。
  */
 
-/** 十一个封闭占位符（D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps，I4 加 hostEffectRule）；源目录里出现表外的占位符即构建失败。 */
+/** 十二个封闭占位符（§13.188 加 firstRunHandover；D3，§13.118 加 windowBootstrap，重发守卫与窗口续接后加 resendGuard、windowResume，C9 加 pluginUpdateSteps，I4 加 hostEffectRule）；源目录里出现表外的占位符即构建失败。 */
 export type ClaudeCodeAgentTextPlaceholderKey =
   | "instructionFile"
   | "windowLaunch"
@@ -31,7 +31,8 @@ export type ClaudeCodeAgentTextPlaceholderKey =
   | "windowResume"
   | "resendGuard"
   | "pluginUpdateSteps"
-  | "hostEffectRule";
+  | "hostEffectRule"
+  | "firstRunHandover";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type ClaudeCodeAgentTextLanguage = "en" | "zh";
@@ -139,29 +140,49 @@ const RESEND_GUARD =
  * 信任对话框的窗口只需接受它），或关掉跑着别的东西的窗口，然后再 launch。
  */
 const WINDOW_BOOTSTRAP =
-  `run \`${TMUX_HELPER} preflight\` and read \`insideTmux\`. When it is true this session is ` +
-  "the Controller: register it with `self` (pipe your own window's inspect result in). A " +
-  "window that a setup session started but never registered (it was closed too early) is " +
-  "still running: `launch` it as below and the helper adopts it instead of opening a second " +
-  "one (`adopted: true`); register that observation as usual, and run `mark --all` once every " +
-  "window is registered. If adoption is refused (`adopt-unproven`, `window-ambiguous`, " +
+  `run \`${TMUX_HELPER} preflight\` and read \`sessionProven\` and \`insideTmux\`. ` +
+  "`sessionProven: true` means this session's own session-start record exists: it is the tmux " +
+  "Controller window, so register it with `self` (pipe your own window's inspect result in). " +
+  "`sessionProven: false` or `null` means this session started before the workspace's hooks " +
+  "existed - every first run, inside tmux or not: it only bootstraps and must never register " +
+  "itself or mark its pane. `launch` the Controller window's own intent so a fresh Controller " +
+  "starts inside the configured tmux session, launch every other window with `--wait 0`, then " +
+  "give the user the exact command the helper printed - `attach` when they are outside tmux, " +
+  "`switch` when this session already runs inside it - ask them to accept the trust dialog in " +
+  "every window (`Ctrl-b n` moves to the next one), to keep this session open until you have " +
+  "registered the windows, and to tell you when the dialogs are done; only then register each " +
+  "window from the observations you kept, run `mark --all` once every window is registered, " +
+  "show the handover card from `references/first-run.md`, and tell the user to continue in the " +
+  "tmux Controller and close this session with `/exit`. A window that a setup session started " +
+  "but never registered (it was closed too early) is still running: `launch` it as below and " +
+  "the helper adopts it instead of opening a second one (`adopted: true`); register that " +
+  "observation as usual. If adoption is refused (`adopt-unproven`, `window-ambiguous`, " +
   "`window-present-not-claude`), never open a second window and never `teardown` from inside " +
   "tmux: tell the user which window it is and what the refusal's `hint` asks of them - exit " +
   "`claude` there with `/exit` (in all but one of the windows, for `window-ambiguous`), or " +
   "close a window that runs something else with `Ctrl-b &` and then `y` - and `launch` again " +
   "once they have. An unproven window that still shows its trust dialog only needs that " +
-  "dialog accepted. When `insideTmux` " +
-  "is false this session only bootstraps and must not register itself: `launch` the Controller " +
-  "window's own intent too, so a fresh Controller starts inside the tmux session the helper " +
-  "creates, launch every other window with `--wait 0`, then give the user the exact `attach` " +
-  "command the helper printed, ask them to accept the trust dialog in every window (`Ctrl-b n` " +
-  "moves to the next one), to keep this session open until you have registered the windows, " +
-  "and to tell you when the dialogs are done; only then register each window " +
-  "from the observations you kept, run `mark --all`, and tell the user to continue in the tmux " +
-  "Controller and close this session. The user never sets tmux up by hand: you do it and tell " +
-  "them the one thing to run or press. If a bootstrap has to be redone before any window was " +
-  "registered, `teardown` kills that tmux session; with registered windows it refuses unless " +
-  "`--force`.";
+  "dialog accepted. The user never sets tmux up by hand: you do it and tell them the one thing " +
+  "to run or press. If a bootstrap has to be redone before any window was registered, " +
+  "`teardown` kills that tmux session; with registered windows it refuses unless `--force`.";
+
+/**
+ * 首次交接卡（§13.188）：首次初始化结束时 Controller 给用户的那一张卡，教学一次，日常不再重复。
+ * 宿主细节（tmux 会话、attach/switch、按键）只在这里。
+ */
+const FIRST_RUN_HANDOVER =
+  "show one card and nothing else: the tmux session name and the one command to get there " +
+  "(the helper's `attach` when the user is outside tmux, its `switch` when they are already " +
+  "inside); the windows in that session, one line each - `Controller` (where they give " +
+  "instructions and ask what is next), `Design` (where a requirement is written with the " +
+  "agent), one window per product repository (where that repository's work happens; it waits " +
+  "for a delivery from the Controller and is never given tasks by hand), `Test` (where the test " +
+  "contract runs); how to move - `Ctrl-b n` next window, `Ctrl-b p` previous, `Ctrl-b s` to " +
+  "pick a session, `Ctrl-b d` to detach while everything keeps running; what to do first - " +
+  "switch to the Design window and describe the first requirement in plain words, come back " +
+  "to the Controller when Design says the package is published; how to come back later - the " +
+  "same `attach` command, the sessions outlive the terminal; `/wakeflow:status` in the " +
+  'Controller answers "what is next" from then on.';
 
 const DELIVERY_ACTION =
   "run the tmux helper from the workspace root with the permit's `promptRef` and `promptDigest`: " +
@@ -311,6 +332,7 @@ export const CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS: Readonly<
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
   pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
   hostEffectRule: Object.freeze({ en: HOST_EFFECT_RULE }),
+  firstRunHandover: Object.freeze({ en: FIRST_RUN_HANDOVER }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

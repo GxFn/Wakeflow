@@ -6,6 +6,7 @@ import {
   deriveNextActions,
   deriveWindowRuntime,
   deriveWorkspaceGates,
+  IDLE_REQUIREMENT_AUTHORING,
   type NextActionInput,
   nextFromActions,
   projectionFreshness,
@@ -271,6 +272,22 @@ test("deriveNextActions：维护 > 活动 pod 的未登记窗口（按 windowId�
     suggestedTool: null,
     blockers: [],
   });
+});
+
+test("deriveNextActions：空闲工作区的下一步是用户在 Design 窗口起草需求（§13.188 I1），任何别的动作在场时不出现", () => {
+  deepEqual(deriveNextActions(nextInput()), [
+    { owner: "user", tool: null, reason: IDLE_REQUIREMENT_AUTHORING, subject: null },
+  ]);
+  const busy = deriveNextActions(
+    nextInput({
+      pendingPackages: [{ requirementId: "requirement_00000000-0000-4000-8000-000000000001" }],
+    }),
+  );
+  equal(
+    busy.some((action) => action.reason === IDLE_REQUIREMENT_AUTHORING),
+    false,
+  );
+  equal(busy[0]?.reason, "requirement-claim");
 });
 
 test("deriveNextActions：同一动作去重，总数上限 64", () => {

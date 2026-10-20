@@ -5067,3 +5067,26 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - 测试（助手测试 26/26）：pod 会话用例新增"`--wait 0` 等不到 hook 时在 pod 会话里找到 pane → `pending`；pod 会话里确实没有 → `launch-exited/absent`"；mark 用例改为按 `list-panes` 核对，并新增"同编号异会话 → `pane-missing`、同坐标已带别的窗口标识 → `pane-occupied`，两者都不写 set-option"。
 
 **本批用的级别：第 1 级**（`src/hosts` 助手与 tests；制品随之重建）。验证：第 0 级 `--changed` 48/48、制品重建、`smoke:artifacts` exit 0、`wf handoff` 八项通过（提交 `f7909999`、`5bab9742`）。现场复核（工作区 7，pod `peek`）：五个产品窗口 `--wait 0` 的 launch 全部返回 ok、`hook.sessionStart: pending`、`worktreePrepared: created`，没有再出现 `launch-exited`；登记后 `mark --all` 9 扇 `marked`（peek 的 8 扇加 main Controller）、main 的 7 扇过期窗口全部 `pane-missing`、没有 `pane-occupied`，Controller 逐窗口读回 `@wakeflow_*` 选项与 `window-identity` 门都证明没有错写；pod 两阶段关闭后只剩 `wakeflow` 会话。编号冲突在当前 tmux 服务器上不会复现（新 pane 用 %17–%24），`pane-occupied` 分支只有单元测试覆盖。
+
+### 13.188 首次引导与日常使用分开：F-L1-7、I1、I2、I5 与 Agent 侧四条引导（ADR-0022）（2026-10-19）
+
+用户确认现场观察到的"首次引导不到位"就是 F-L1-7（初始化后要手工重启），并要求把仍存在的引导缺口一起修、把教学与日常使用分开设计。根因与决定见 ADR-0022；本节记实现。
+
+- **引导会话只引导（F-L1-7、I2）**：助手 `preflight` 新增 `sessionProven`（本会话有没有自己的 session-start 记录；没有会话 id 时 `null`）；`self` 在没有记录时先拒绝 `hook-evidence-missing`（hint 指向 launch），不再往 pane 上写标识——这正是原来 `launch` 把引导会话误当收养候选、拒 `adopt-unproven` 的来源；收养候选永远排除助手自己所在的 pane（`TMUX_PANE`）；从 tmux 里新建会话时结果除 `attach` 外给 `switch`（`tmux switch-client -t <会话>`）。Claude 的 `windowBootstrap` 改为按 `sessionProven` 分支：true 是 tmux 里的 Controller（`self`）；false/null 只引导——先 launch Controller 意图、再开其余窗口、给用户 attach 或 switch 一条命令与要接受的信任对话、登记、`mark --all`、出交接卡、让用户 `/exit` 引导会话。于是在已有 tmux 会话里启动也走同一条路，Controller 总是开在配置的会话里。
+- **空闲工作区的 next（I1）**：`deriveNextActions` 在没有任何动作时给出 `requirement-authoring`（owner `user`），`status.next` 不再为空；status 命令文本要求对此只说一句"下一步是你的，在 Design 窗口"。
+- **教学与日常分开**：新增 Controller 参考 `references/first-run.md`（100 行：引导会话是什么、preflight 前置、问答脚本与每个选择的含义、bootstrap 的"用户只做两件事"、交接卡、每个窗口是做什么的、"日常从这里开始"），只在新工作区读；第十二个占位符 `firstRunHandover` 承载交接卡的宿主细节（Claude：会话名、attach/switch、`Ctrl-b n/p/s/d`、先去 Design；Codex：项目里的线程）；`SKILL.md` 阅读顺序加第 4 条（"a fresh workspace only… never in daily use"），第 1 步压缩两行保持 200 行；init 命令写明"这个会话只引导、从不成为 Controller、以交接卡结束"；两份 README 的"The flow / 主流程"拆成"First run / 第一次使用"与"Daily use / 日常使用"。
+- **Agent 侧四条引导**：目标技能——临时文件只能在检出的忽略路径或系统临时目录（Core 窗口曾把 npm ci 输出写到工作区根）；测试执行参考——以逐条列出用例的方式运行套件（第一次 ts-1 因默认 reporter 缺用例名而重跑）；投递参考——任务包要写明检出自己满足不了的环境前置与提供者（Dashboard 的 `../Alembic/dist`）；证据参考——Controller 核对文件放在 Test 面的 `controller-checks/<demandId>/`、绝对路径先替换（I5）；pod 文本写明相对 `file:` 依赖在 worktree 里解析不到（D12 的文本侧）。windows 参考压缩两段保持在 400 行内。
+- 测试：助手测试（preflight `sessionProven` 三态、无记录的 `self` 拒绝且不写 set-option、自身 pane 不被收养、tmux 内新建会话给 `switch`）；decide 测试（空闲 → `requirement-authoring`，有别的动作时不出现）；live-guidance（bootstrap 按 `sessionProven` 分支、`insideTmux` 不再决定；新增"首次 vs 日常"测试钉住 first-run 参考、交接卡两宿主、README 两节、init/status 句子与 Agent 侧四条）；honesty 的 reference 闭合与预算自动覆盖新参考。
+- 文档：ADR-0022；open-items I1、I2、I5 关闭；live-test-plan 的 F-L1-7 记为已修。
+
+**本批用的级别：第 2 级**（agent-text、宿主文本取值、capabilities；场景链未改但 `impact report` 把 agent-text 归为完整门）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级：助手文件里新加的 `self` hint 带了反引号，打断了 `String.raw` 模板（typecheck 一眼拦住；助手资产不能含反引号是既有约束）；profile 文件格式化；per-pod 测试里新加的 `fromInside` 开窗占了一个桩的编号，后面两条用例的 `@N/%N` 顺延。改后助手测试 26/26，`--changed` 66/66。
+- 制品重建（第十二个占位符与新 reference 进入两份制品）、`smoke:artifacts` exit 0。
+- 完整门 run-u2x5Op（01:10–01:33 UTC 次日，23.5 分钟）：**1503/1503 全通过**。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+- 现场核对（L10，工作区 8）：提交后在下一节记录。
+
+本批改动 `src/hosts/claude-code`（助手、文本取值、启动指令无改）、`src/hosts/codex`（占位符）、`src/capabilities/observation/decide.ts`、`assets/agent-text`（新 reference、SKILL、两份 README、init/status、目标与测试技能、三份参考）、tests（助手、decide、live-guidance、profile）、`tooling/testing/test-durations.json`、docs（ADR-0022、决策索引、open-items、live-test-plan、README 指针、本节）、CLAUDE.md/AGENTS.md/README.md（占位符数）；分两次提交：源码与制品。

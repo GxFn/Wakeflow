@@ -100,6 +100,8 @@ const WORKSPACE_MAINTENANCE_FRONTIER = "workspace-maintenance" as const;
 const MAINTENANCE_TOOL = "wakeflow_maintain_workspace" as const;
 const REGISTRATION_TOOL = "wakeflow_register_window_binding" as const;
 const CREATE_DEMAND_TOOL = "wakeflow_create_demand" as const;
+/** 空闲工作区的下一步：用户在 Design 窗口起草需求（§13.188 I1）。 */
+export const IDLE_REQUIREMENT_AUTHORING = "requirement-authoring" as const;
 
 /**
  * 顺序：制品过期（用户）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
@@ -173,6 +175,11 @@ export function deriveNextActions(
       reason: "requirement-claim",
       subject: entry.requirementId,
     });
+  }
+  // 空闲工作区（没有维护、没有待登记窗口、没有 Demand、没有待认领包）：下一步是用户去 Design 窗口写需求
+  // （§13.188 I1）；status 的 next 从此不再为空。
+  if (actions.length === 0) {
+    actions.push({ owner: "user", tool: null, reason: IDLE_REQUIREMENT_AUTHORING, subject: null });
   }
   const seen = new Set<string>();
   const unique = actions.filter((action) => {

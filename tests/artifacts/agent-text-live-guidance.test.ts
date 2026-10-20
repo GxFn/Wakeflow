@@ -243,11 +243,88 @@ test("I6：tmux 里的 Controller 用 launch 收编引导会话没登记的窗�
     ],
     "windowBootstrap",
   );
-  ok(
-    indexOfRequired(bootstrap, "`adopted: true`") <
-      indexOfRequired(bootstrap, "When `insideTmux` is false"),
-    "adoption belongs to the inside-tmux branch",
+  // §13.188：引导会话靠 sessionProven 判定，不靠 insideTmux；先讲两条分支，再讲收养。
+  includesAll(
+    bootstrap,
+    [
+      "read `sessionProven` and `insideTmux`",
+      "`sessionProven: true` means this session's own session-start record exists",
+      "`sessionProven: false` or `null` means this session started before the workspace's hooks existed",
+      "it only bootstraps and must never register itself or mark its pane",
+      "`attach` when they are outside tmux, `switch` when this session already runs inside it",
+      "show the handover card from `references/first-run.md`",
+      "close this session with `/exit`",
+    ],
+    "windowBootstrap",
   );
+  ok(
+    indexOfRequired(bootstrap, "`sessionProven: true`") <
+      indexOfRequired(bootstrap, "`sessionProven: false`") &&
+      indexOfRequired(bootstrap, "`sessionProven: false`") <
+        indexOfRequired(bootstrap, "`adopted: true`"),
+    "the proven branch, the bootstrap branch, then adoption",
+  );
+  equal(
+    bootstrap.includes("When `insideTmux` is false"),
+    false,
+    "insideTmux no longer decides who bootstraps",
+  );
+});
+
+test("§13.188 首次引导与日常使用分开：first-run 参考只在新工作区读，交接卡来自宿主占位符，README 分成首次与日常，status 对空闲工作区只说一句", () => {
+  const controller = claude(CONTROLLER);
+  ok(controller.includes("`references/first-run.md` - a fresh workspace only"));
+  ok(controller.includes("never in daily use"));
+  const firstRun = flat(claude("skills/wakeflow-controller/references/first-run.md"));
+  includesAll(
+    firstRun,
+    [
+      "It never becomes the Controller window",
+      "A setup session cannot prove itself, whether or not it runs inside the container already",
+      "do not start the workspace conversation until the preflight is clean",
+      "Recommend `owner-managed`",
+      "show one card and nothing else",
+      "`/wakeflow:status` in the Controller answers",
+      "This file is not read again",
+    ],
+    "first-run reference (Claude)",
+  );
+  ok(firstRun.includes("`Ctrl-b n` next window"), "the Claude handover card teaches the keys once");
+  const codexFirstRun = flat(codex("skills/wakeflow-controller/references/first-run.md"));
+  ok(codexFirstRun.includes("the workspace project in the Codex app and its threads"));
+  equal(codexFirstRun.includes("Ctrl-b"), false, "Codex gets no tmux keys");
+  for (const readme of [claude("README.md"), codex("README.md")]) {
+    ok(readme.includes("## First run") && readme.includes("## Daily use"));
+    ok(
+      flat(readme).includes(
+        "an idle workspace answers with the Design window and a new requirement",
+      ),
+    );
+  }
+  ok(
+    flat(claude("README.zh-CN.md", "zh")).includes("## 第一次使用") &&
+      flat(claude("README.zh-CN.md", "zh")).includes("## 日常使用"),
+  );
+  ok(
+    flat(source("commands/init.md")).includes(
+      "the session you are in only bootstraps and never becomes the Controller",
+    ),
+  );
+  ok(
+    flat(source("commands/status.md")).includes(
+      "names `requirement-authoring` with the user as owner",
+    ),
+  );
+  // Agent 侧的四条引导：临时文件、逐条列出用例、环境前置、Controller 核对文件的位置。
+  ok(flat(source(TARGET)).includes("never write into the workspace root or another repository"));
+  ok(flat(source(TEST_EXECUTION)).includes("names each case in the output"));
+  ok(
+    flat(source("skills/wakeflow-controller/references/delivery-and-review.md")).includes(
+      "an environment prerequisite the checkout cannot satisfy alone",
+    ),
+  );
+  ok(flat(source(EVIDENCE)).includes("`controller-checks/<demandId>/`"));
+  ok(flat(source(WINDOWS)).includes("cannot resolve it inside a worktree"));
 });
 
 test("F-L1-9：权限显式——只预放行自己的工具与助手，信任对话框只列这些；仓库根带 broad-permission 残留时先让用户删再开窗（§13.183）", () => {

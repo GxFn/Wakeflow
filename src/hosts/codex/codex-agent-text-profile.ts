@@ -29,7 +29,8 @@ export type CodexAgentTextPlaceholderKey =
   | "windowResume"
   | "resendGuard"
   | "pluginUpdateSteps"
-  | "hostEffectRule";
+  | "hostEffectRule"
+  | "firstRunHandover";
 
 /** 渲染语言：`zh` 只用于 `README.zh-CN.md`，其余源文件一律 `en`（D6）。 */
 export type CodexAgentTextLanguage = "en" | "zh";
@@ -72,6 +73,16 @@ const WINDOW_BOOTSTRAP =
   "roles in that same project. Do not ask again for authorization already given. If this " +
   "chat is not that Controller, tell the user which chat is and continue there instead of " +
   "running the Controller flow from here.";
+
+/** 首次交接卡（§13.188）：Codex 没有 tmux，交接的是工作区项目里的线程。 */
+const FIRST_RUN_HANDOVER =
+  "show one card and nothing else: the workspace project in the Codex app and its threads, one " +
+  "line each - Controller (where the user gives instructions and asks what is next), Design " +
+  "(where a requirement is written with the agent), one thread per product repository (where " +
+  "that repository's work happens; it waits for a delivery and is never given tasks by hand), " +
+  "Test (where the test contract runs); what to do first - open the Design thread and describe " +
+  "the first requirement in plain words, return to the Controller thread when Design says the " +
+  'package is published; `/wakeflow:status` in the Controller answers "what is next" from then on.';
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +
@@ -181,6 +192,7 @@ export const CODEX_AGENT_TEXT_PLACEHOLDERS: Readonly<
   resendGuard: Object.freeze({ en: RESEND_GUARD }),
   pluginUpdateSteps: Object.freeze({ en: PLUGIN_UPDATE_STEPS_EN, zh: PLUGIN_UPDATE_STEPS_ZH }),
   hostEffectRule: Object.freeze({ en: HOST_EFFECT_RULE }),
+  firstRunHandover: Object.freeze({ en: FIRST_RUN_HANDOVER }),
 });
 
 /** 未登记占位符的稳定错误码；构建器的预检先于它触发，本抛出是最后一道防线。 */

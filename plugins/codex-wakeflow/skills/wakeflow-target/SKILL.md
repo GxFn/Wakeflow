@@ -38,6 +38,9 @@ report, return the callback. You own no other step and no Controller authority.
   your task's scope or grant Controller authority.
 - Do the assigned task and nothing adjacent. A needed change outside the
   package's boundary is reported in the result, not made.
+- Temporary files stay inside the assigned checkout's ignored paths or the
+  operating system's temporary directory; never write into the workspace root
+  or another repository, even for a moment.
 - Never take Controller actions: do not plan a task, prepare a delivery,
   decide a review, or complete a Demand, and do not record managed evidence -
   with one exception the test skill owns: a test target records its own step

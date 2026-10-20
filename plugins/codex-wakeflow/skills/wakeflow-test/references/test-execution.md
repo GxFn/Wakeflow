@@ -29,7 +29,8 @@ For each approved step, in order:
 
 1. Run it as written.
 2. Capture what it actually did: the output, the state, the observable
-   behavior.
+   behavior. Run suites in a mode that names each case in the output (a verbose
+   reporter); a summary line alone does not show which cases the step covered.
 3. Compare against the step's approved baseline.
 4. Write the observation in observable terms. "Exit status 1 and the message
    about a missing config" is an observation. "Broken" is a judgment, and it

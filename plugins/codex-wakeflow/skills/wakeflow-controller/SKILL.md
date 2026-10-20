@@ -20,11 +20,13 @@ for the user: This host ships no slash commands. Say what you want in plain word
 2. `wakeflow_status` - the workspace's own answer to "what is next". Start
    every turn here instead of guessing from the conversation.
 3. The step section below that matches what `status` named.
-4. `references/workspace-and-windows.md` - only for workspace maintenance,
+4. `references/first-run.md` - a fresh workspace only: step 0's
+   fresh-initialize and the step 1 after it; never in daily use.
+5. `references/workspace-and-windows.md` - only for workspace maintenance,
    windows, pods, or refreshing windows after a plugin update.
-5. `references/delivery-and-review.md` - only when planning a task, preparing
+6. `references/delivery-and-review.md` - only when planning a task, preparing
    a delivery, or deciding on a returned result.
-6. `references/evidence.md` - only before you record managed evidence.
+7. `references/evidence.md` - only before you record managed evidence.
 
 Never read the host's own session transcripts or the plugin implementation for
 command syntax: the references and the tool descriptions hold it.
@@ -59,17 +61,15 @@ command syntax: the references and the tool descriptions hold it.
 Collect the user's choices (program identity, repositories as owner-managed
 unless they opt in, surfaces, storage root), build the selection from the tool's
 input schema - never from plugin files - preview `wakeflow_maintain_workspace`,
-show the plan and blockers, apply only after they confirm. Depth: `references/workspace-and-windows.md`.
+show the plan and blockers, apply only after they confirm. Depth: `references/workspace-and-windows.md`; a fresh workspace starts with `references/first-run.md`.
 
 ### Step 1 - Open windows and register their bindings
 
 Inspect each returned window with `wakeflow_register_window_binding` for its
-current host launch instructions (the execution root may differ from the startup
-root), open it exactly as "Step 1 - Windows and bindings" in
-`references/workspace-and-windows.md` says (bootstrap once, one launch per
-window), then register the handle you observed with the same tool: it needs a
-real `session-start` at the host startup root, and a refusal names the missing
-evidence - re-inspect the window and the host's hook trust before retrying. Every host effect is one call of your own Codex thread tool, kept exactly as it returned; Wakeflow never sends anything for you.
+current host launch instructions, open it exactly as "Step 1 - Windows and
+bindings" in `references/workspace-and-windows.md` says (bootstrap once, one
+launch per window), then register the handle you observed with the same tool: it
+needs a real `session-start` at the host startup root; a refusal names the missing evidence. Every host effect is one call of your own Codex thread tool, kept exactly as it returned; Wakeflow never sends anything for you.
 
 ### Step 5 - Claim a requirement package into a Demand
 

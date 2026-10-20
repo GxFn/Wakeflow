@@ -27,6 +27,10 @@ hand - name its root, file and line), any `hostAssets` entry that is not
 `current`, any work claim that is held, and the next actions the result named -
 with who owns each one.
 
+An idle workspace - no Demand, nothing pending - names `requirement-authoring`
+with the user as owner: say in one sentence that the next step is theirs, in
+the Design window; no tutorial.
+
 Run `wakeflow_verify` as well when the status contradicts itself, when a
 delivery looked sent but no evidence arrived, or when the user asks whether the
 workspace is sound. It repairs nothing; report each gate that did not pass, and

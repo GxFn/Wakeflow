@@ -138,7 +138,7 @@ A binding maps that logical window to the host handle you observed after
 launching it. Bindings live in the private local runtime and never appear in a
 public result.
 
-Before the first launch: run `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs preflight` and read `insideTmux`. When it is true this session is the Controller: register it with `self` (pipe your own window's inspect result in). A window that a setup session started but never registered (it was closed too early) is still running: `launch` it as below and the helper adopts it instead of opening a second one (`adopted: true`); register that observation as usual, and run `mark --all` once every window is registered. If adoption is refused (`adopt-unproven`, `window-ambiguous`, `window-present-not-claude`), never open a second window and never `teardown` from inside tmux: tell the user which window it is and what the refusal's `hint` asks of them - exit `claude` there with `/exit` (in all but one of the windows, for `window-ambiguous`), or close a window that runs something else with `Ctrl-b &` and then `y` - and `launch` again once they have. An unproven window that still shows its trust dialog only needs that dialog accepted. When `insideTmux` is false this session only bootstraps and must not register itself: `launch` the Controller window's own intent too, so a fresh Controller starts inside the tmux session the helper creates, launch every other window with `--wait 0`, then give the user the exact `attach` command the helper printed, ask them to accept the trust dialog in every window (`Ctrl-b n` moves to the next one), to keep this session open until you have registered the windows, and to tell you when the dialogs are done; only then register each window from the observations you kept, run `mark --all`, and tell the user to continue in the tmux Controller and close this session. The user never sets tmux up by hand: you do it and tell them the one thing to run or press. If a bootstrap has to be redone before any window was registered, `teardown` kills that tmux session; with registered windows it refuses unless `--force`.
+Before the first launch: run `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs preflight` and read `sessionProven` and `insideTmux`. `sessionProven: true` means this session's own session-start record exists: it is the tmux Controller window, so register it with `self` (pipe your own window's inspect result in). `sessionProven: false` or `null` means this session started before the workspace's hooks existed - every first run, inside tmux or not: it only bootstraps and must never register itself or mark its pane. `launch` the Controller window's own intent so a fresh Controller starts inside the configured tmux session, launch every other window with `--wait 0`, then give the user the exact command the helper printed - `attach` when they are outside tmux, `switch` when this session already runs inside it - ask them to accept the trust dialog in every window (`Ctrl-b n` moves to the next one), to keep this session open until you have registered the windows, and to tell you when the dialogs are done; only then register each window from the observations you kept, run `mark --all` once every window is registered, show the handover card from `references/first-run.md`, and tell the user to continue in the tmux Controller and close this session with `/exit`. A window that a setup session started but never registered (it was closed too early) is still running: `launch` it as below and the helper adopts it instead of opening a second one (`adopted: true`); register that observation as usual. If adoption is refused (`adopt-unproven`, `window-ambiguous`, `window-present-not-claude`), never open a second window and never `teardown` from inside tmux: tell the user which window it is and what the refusal's `hint` asks of them - exit `claude` there with `/exit` (in all but one of the windows, for `window-ambiguous`), or close a window that runs something else with `Ctrl-b &` and then `y` - and `launch` again once they have. An unproven window that still shows its trust dialog only needs that dialog accepted. The user never sets tmux up by hand: you do it and tell them the one thing to run or press. If a bootstrap has to be redone before any window was registered, `teardown` kills that tmux session; with registered windows it refuses unless `--force`.
 
 Permissions are explicit: Wakeflow pre-approves only its own tools, per role, and its helper -
 at the roots it writes and on every window it launches - never a shell-wide rule or a
@@ -319,21 +319,20 @@ main checkout; every other pod works in a worktree.
    its Controller and Design windows, then every product window with its
    worktree observation, and only then its Test window - the Test window's
    launch intent lists the worktrees as attached directories, and that list is
-   read from the receipts the product registrations wrote. The product windows
+   read from the receipts the product registrations wrote. A repository that
+   depends on a sibling checkout by relative path (`file:../Name`) cannot
+   resolve it inside a worktree; say so in that pod's task packages. The product windows
    need not start one by one: launch them all without waiting (`--wait 0` on
    Claude Code), keep each printed observation, and register them once their
    session-start records exist.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 
-While a pod is open, its Controller claims its own requirement package from the
-shared board. One Demand per pod Controller still holds; a pod does not let one
-Controller run two Demands.
+While a pod is open, its Controller claims its own package from the shared
+board; one Demand per Controller still holds.
 
-Between archiving a pod's Demand and closing the pod, `wakeflow_status` keeps
-listing the branches that Demand's accepted results left unmerged, with
-`source: archived`, so the user can see what still waits for a merge or an
-abandon decision.
+Between archiving a pod's Demand and closing the pod, `wakeflow_status` lists
+the branches its accepted results left unmerged (`source: archived`).
 
 `wakeflow_pod` close, after the user has merged or abandoned the branch:
 

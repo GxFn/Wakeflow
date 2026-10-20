@@ -24,7 +24,10 @@ lineage, not a correction.
   refusal is protecting the trace from requirement to result.
 
 What Wakeflow derives and you must not restate: the window, the environment,
-the baselines.
+the baselines. What you must state when it is true: an environment prerequisite
+the checkout cannot satisfy alone - a sibling repository's build output, a
+service, a credential - and who provides it; a product window must not build or
+change another repository to get it.
 
 Lineage rules that decide which call you make:
 

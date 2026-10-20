@@ -38,6 +38,12 @@ source.
 
 ## The procedure
 
+Before the preview, put the file where it stays: your own check outputs,
+diffs and probes go under the Test surface at `controller-checks/<demandId>/`,
+one file per check, with absolute paths replaced by `<workspace root>` before
+you record them. A record cites that path, so a file moved later is a file
+Wakeflow can no longer re-read.
+
 1. Preview. It derives the plan and writes nothing, and it tells you whether
    this exact content is already recorded.
 2. Read what the preview says about privacy and about opaque members before

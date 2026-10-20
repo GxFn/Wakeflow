@@ -17,7 +17,8 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  * 子命令（都从工作区根以 `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs
  * <子命令>` 调用，stdout 恰好一行 JSON）：
  *
- * - `preflight`：node、tmux 与 claude 是否可用及其版本、配置的会话是否已存在、当前是否在 tmux 里。
+ * - `preflight`：node、tmux 与 claude 是否可用及其版本、配置的会话是否已存在、当前是否在 tmux 里、本会话有没有
+ *   自己的 session-start 记录（`sessionProven`：没有的会话是工作区建立之前启动的引导会话，只能引导，不能登记自己，§13.188）。
  * - `launch --window <windowId>`：stdin 是 `wakeflow_register_window_binding` inspect 的结果
  *   （或其 `launchIntent`；意图里的 `role` 决定 MCP 许可规则，缺省时取结果顶层的 `role`）。窗口开在意图
  *   `execution.tmux.sessionName` 指定的会话里（primary pod 是配置的会话，worktree pod 各有 `<配置名>-<pod>`，
@@ -51,7 +52,8 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   launch 与 resume 等不到 hook 记录时再看新 pane：已消失或已死就报 `resume-exited` / `launch-exited`
  *   （claude 拒绝 --resume 一个从未有过对话的会话时就是这样退出的），只有活着才是 `pending`。
  * - `self`：Controller 给自己的窗口出同一份 observation（`TMUX_PANE` 与
- *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）。
+ *   `CLAUDE_CODE_SESSION_ID` 来自 Claude Code 交给 shell 的环境）；本会话没有 session-start 记录时先拒绝
+ *   `hook-evidence-missing`，不在 pane 上写标识（否则随后的 launch 会把引导会话当成待收养的窗口，§13.188）。
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上；pane 行要按会话、
  *   窗口、pane 三项与定位器一致（tmux 重启后编号会被复用），已带别的窗口标识的 pane 报 `pane-occupied` 不覆盖。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
@@ -931,6 +933,12 @@ function attachCommand(context, sessionName = context.sessionName) {
   return (context.socketName === null ? "tmux" : "tmux -L " + context.socketName) + " attach -t " + sessionName;
 }
 
+// 从 tmux 里面开出新会话时，用户要用 switch-client 而不是 attach（§13.188）。
+function sessionHandover(context, sessionName) {
+  const inside = typeof process.env.TMUX === "string" && process.env.TMUX.length > 0;
+  return { attach: attachCommand(context, sessionName), ...(inside ? { switch: (context.socketName === null ? "tmux" : "tmux -L " + context.socketName) + " switch-client -t " + sessionName } : {}) };
+}
+
 // 窗口所属的 tmux 会话：意图里的 execution.tmux.sessionName（worktree pod 各有自己的会话），缺省配置的会话。
 function intentSessionName(execution, context) {
   const name = execution?.tmux?.sessionName;
@@ -957,6 +965,10 @@ function commandPreflight(config) {
     insideTmux: typeof process.env.TMUX_PANE === "string" && process.env.TMUX_PANE.length > 0,
     currentSocketName: currentSocketName(),
     sessionIdVisible: typeof process.env.CLAUDE_CODE_SESSION_ID === "string" && UUID_PATTERN.test(process.env.CLAUDE_CODE_SESSION_ID),
+    // 本会话自己的 session-start 记录存在与否：引导会话（工作区建立之前启动）为 false，只能引导（§13.188）。
+    sessionProven: typeof process.env.CLAUDE_CODE_SESSION_ID === "string" && UUID_PATTERN.test(process.env.CLAUDE_CODE_SESSION_ID)
+      ? sessionStartRecord(process.env.CLAUDE_CODE_SESSION_ID) !== null
+      : null,
   };
 }
 
@@ -1243,7 +1255,7 @@ function commandResume(config, options) {
     }, null),
     hook: { sessionStart: hook.status },
     window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
-    ...(opened.exists ? {} : { attach: attachCommand(context, opened.sessionName) }),
+    ...(opened.exists ? {} : sessionHandover(context, opened.sessionName)),
   };
 }
 
@@ -1272,6 +1284,8 @@ function adoptionCandidate(config, context, windowId) {
   if (!listed.available) return null;
   const candidates = listed.rows.filter((row) => (
     !row.paneDead
+    // 助手自己所在的 pane（引导会话）永远不是收养对象（§13.188）。
+    && row.paneId !== process.env.TMUX_PANE
     && row.options.programId === config.program.programId
     && row.options.hostId === HOST_ID
     && row.options.windowId === windowId
@@ -1377,7 +1391,7 @@ function commandLaunch(config, options) {
     }, worktree),
     hook: { sessionStart: hook.status },
     window: { name: opened.windowName, cwd: opened.placement.relative, created: opened.exists ? "new-window" : "new-session" },
-    ...(opened.exists ? {} : { attach: attachCommand(context, opened.sessionName) }),
+    ...(opened.exists ? {} : sessionHandover(context, opened.sessionName)),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
     worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,
     ...(prepared === null ? {} : { worktreeBranch: prepared.branch, worktreeExclude: prepared.exclude }),
@@ -1392,6 +1406,12 @@ function commandSelf(config, options) {
   if (typeof sessionId !== "string" || !UUID_PATTERN.test(sessionId)) refuse("session-id-unavailable");
   const socketName = currentSocketName();
   if ((socketName ?? "default") !== (context.socketName ?? "default")) refuse("socket-mismatch");
+  // 没有自己的 session-start 记录的会话是工作区建立之前启动的引导会话：不能登记自己，也不往 pane 上写标识（§13.188 F-L1-7）。
+  if (sessionStartRecord(sessionId) === null) {
+    refuse("hook-evidence-missing", {
+      hint: "this session has no session-start record (it started before the workspace's hooks existed): it only bootstraps - open the Controller window with the launch command and continue there",
+    });
+  }
   const input = readStdinJson();
   const windowId = options.window ?? (typeof input.windowId === "string" ? input.windowId : primaryControllerWindowId(config));
   const { launchIntent } = unwrapIntent({ ...input, windowId }, { window: windowId });

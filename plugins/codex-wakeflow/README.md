@@ -23,27 +23,40 @@ repositories.
   on Claude Code, in its own tmux session), for running two pieces of work at
   once without them colliding.
 
-## The flow
+## First run
 
-1. In the Controller window, ask to initialize the workspace. The agent opens
-   the other windows from the launch intents and registers them, and tells you
-   at each point the one thing only you can do (look at a window it opened,
-   accept a trust dialog).
-2. In the Design window, work out the requirement with the agent. It reads your
+1. Install the plugin, start your agent host in the directory that will be
+   the workspace, and ask it to initialize a Wakeflow workspace here. That
+   session is the setup session: it asks you a few questions (program name,
+   repositories, where the ledger goes), previews the plan, and applies it
+   when you say so.
+2. It then opens every window itself - Controller, Design, one per product
+   repository, Test - and tells you the one thing only you do at each point:
+   the command that brings you to those windows, and the trust dialog to
+   accept in each.
+3. It ends with a handover card: what each window is for, how to move between
+   them, how to come back later, and what to do first - go to the Design
+   window and describe your first requirement. Then you close the setup
+   session; the Controller window is the Controller from now on.
+
+## Daily use
+
+1. In the Design window, work out a requirement with the agent. It reads your
    code read-only, drafts the package, and shows you a one-page summary. You
    confirm it, and it is published to the board.
-3. In the Controller window, the agent claims the package, plans the task,
+2. In the Controller window, the agent claims the package, plans the task,
    prepares the delivery and sends it to a product window.
-4. The product window does the work, imports its report, and wakes the
+3. The product window does the work, imports its report, and wakes the
    Controller.
-5. The Controller reads the result and the evidence, decides, and either sends
+4. The Controller reads the result and the evidence, decides, and either sends
    rework or moves on.
-6. When everything is accepted, the Demand is completed and archived in one
+5. When everything is accepted, the Demand is completed and archived in one
    transaction.
 
 You are asked to confirm twice: once on the requirement summary, and once on
 the task plan when the package asks for it. Nothing is built off a requirement
-you did not confirm.
+you did not confirm. Ask the Controller what is next whenever you are unsure;
+an idle workspace answers with the Design window and a new requirement.
 
 ## Entry points
 

@@ -5300,7 +5300,7 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 
 ### 13.200 `v1.1.1` tag 与 `release:check`；1.1.2 追加需求 I15（2026-10-21）
 
-用户授权打 tag 与跑 `release:check`。tag `v1.1.1`（轻量，与 `v1.1.0` 同式）打在 HEAD 445b19be——L11 记录提交，相对已推送的 641d3cec 只多文档；制品字节即 641d3cec/77cf57a2 重建的那份（缓存里登记的也是它）。`release:check` 第一次真跑：树干净、在 `main`、tag 在 HEAD、版本六处一致，只剩 `wakeflow-release-remote`（本地 `origin/main` 还在 641d3cec）——等用户推送 445b19be 与 tag 后再跑一次即通过；本节提交会排在 tag 之后，与 §13.192 的做法一致。
+用户授权打 tag 与跑 `release:check`。tag `v1.1.1`（轻量，与 `v1.1.0` 同式）打在本节所在的提交上（HEAD；相对已推送的 641d3cec 只多 L11 与本节两份文档，制品字节即 77cf57a2 重建的那份，缓存里登记的也是它）。`release:check` 第一次真跑：树干净、在 `main`、tag 在 HEAD、版本六处一致，只剩 `wakeflow-release-remote`（本地 `origin/main` 还在 641d3cec）——用户推送 `main` 与 tag 后再跑一次即通过，结果记在下一节。
 
 1.1.2 追加需求（用户截图：175 列下 tmux 底部状态栏被八个窗口名、`[idle]` 标记与默认 `status-right` 的主机名、时钟挤满，第 8 个窗口截成 `7>`）：设计记为 open-items I15 的 D1–D6——标记改字形（working `●`、attention `?`，idle 不显示）、会话级 `status-right` 只留 `%H:%M`、`status-left-length` 放宽到 24、只写会话选项从不 `-g`、`#I:#W` 与 tmux flags 保留、Claude 状态行不动、交接卡与 windows 参考改成解释字形；与 I14 一起在 1.1.2 批 6 同批实施，ADR-0023 决定 4 届时加一条调整。复审 §11 的 1.1.2 行已登记。
 

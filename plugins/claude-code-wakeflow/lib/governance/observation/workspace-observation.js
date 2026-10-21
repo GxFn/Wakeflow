@@ -433,6 +433,25 @@ function settingsEntryOf(bytes, key) {
     }
 }
 /**
+ * 本地设置里状态栏条目的分类：不是 JSON 对象即 unreadable；条目在但不是 Wakeflow 的命令即 custom（用户自己的
+ * 状态行，模式与内容都不比较，复审 T31）；文件不是 0600 即 mode；缺该键即 drift；规范 JSON 与期望相等才 current。
+ */
+function settingsEntryStatusOf(entry, permissionBits, settings, workspaceRoot) {
+    if (entry === SETTINGS_NOT_OBJECT)
+        return "unreadable";
+    if (entry !== undefined && !settings.ownsEntry(parseJsonValue(entry, "$settings"))) {
+        return "custom";
+    }
+    if (permissionBits !== 0o600)
+        return "mode";
+    if (entry === undefined)
+        return "drift";
+    return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings")) ===
+        computeCanonicalJsonSha256Digest(settings.expectedEntry(workspaceRoot))
+        ? "current"
+        : "drift";
+}
+/**
  * 本地设置里的状态栏条目：只比较该键的规范 JSON，其他键不看；文件不是 JSON 对象即 unreadable，
  * 是对象但缺该键即 drift。
  */
@@ -442,18 +461,7 @@ async function observeSettingsEntry(root, settings, signal) {
             maximumBytes: SETTINGS_MAXIMUM_BYTES,
             ...signalOptions(signal),
         });
-        const entry = settingsEntryOf(read.bytes, settings.key);
-        if (entry === SETTINGS_NOT_OBJECT)
-            return "unreadable";
-        if (read.node.permissionBits !== 0o600)
-            return "mode";
-        if (entry === undefined)
-            return "drift";
-        const expected = settings.expectedEntry(root.absolutePath);
-        return computeCanonicalJsonSha256Digest(parseJsonValue(entry, "$settings")) ===
-            computeCanonicalJsonSha256Digest(expected)
-            ? "current"
-            : "drift";
+        return settingsEntryStatusOf(settingsEntryOf(read.bytes, settings.key), read.node.permissionBits, settings, root.absolutePath);
     }
     catch (error) {
         if (error instanceof JsonValueError)

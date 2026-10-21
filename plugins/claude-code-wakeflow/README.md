@@ -108,9 +108,11 @@ remain available within the current format.
 The first time you start Claude Code in the workspace directory, accept the
 workspace trust dialog. Without it neither the plugin's hooks nor the status line
 run, so no session is observed and no delivery can be shown to have landed.
-`wakeflow_maintain_workspace` writes the status line command into a managed block in
-`settings.local.json`; that block belongs to Wakeflow, and a `statusLine` you rewrite
-yourself is reported as a difference the next time the workspace is reconciled.
+`wakeflow_maintain_workspace` writes the status line command into `settings.local.json`
+at the workspace root and at the Design and Test surfaces; that entry belongs to Wakeflow
+and is kept current. A `statusLine` you configured yourself (one without Wakeflow's
+marker) is left alone and shows as `custom` in `wakeflow_status`; that window then has
+no Wakeflow label.
 
 You never set tmux up by hand. Start `claude` in the workspace directory and run
 `/wakeflow:init`: the Controller creates the tmux session and every window itself through

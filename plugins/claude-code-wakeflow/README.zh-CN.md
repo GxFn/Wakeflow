@@ -82,8 +82,9 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
 
 第一次在工作区目录里启动 Claude Code 时，必须接受工作区信任对话。不接受时插件的 hook
 与状态栏都不运行：没有会话被观察到，投递也拿不到落地证据。状态栏命令由
-`wakeflow_maintain_workspace` 写进 `settings.local.json` 的托管块；那个块归 Wakeflow
-所有，你自己改写 `statusLine` 会在下一次对账里被报成差异。
+`wakeflow_maintain_workspace` 写进工作区根与 Design、Test 面的 `settings.local.json`；那一项归
+Wakeflow 所有并保持最新。你自己配置的 `statusLine`（没有 Wakeflow 标记的）不会被覆盖，在
+`wakeflow_status` 里显示为 `custom`，那个窗口就没有 Wakeflow 的标签。
 
 你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过
 维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己

@@ -416,12 +416,13 @@ function assetsGate(facts) {
     const applicable = facts.assets.filter((asset) => asset.status !== "not-applicable");
     const status = aggregate(applicable.flatMap((asset) => [
         verdict(asset.status === "current", asset.status === "unavailable"),
-        verdict(asset.settings === "current", asset.settings === "unreadable"),
+        // 用户自己的状态行算通过：Wakeflow 不管它，但在 code 里点名（复审 T31）。
+        verdict(asset.settings === "current" || asset.settings === "custom", asset.settings === "unreadable"),
     ]));
     const code = applicable.length === 0
         ? "not-applicable"
         : status === "pass"
-            ? null
+            ? joinCodes(applicable.flatMap((asset) => asset.settings === "custom" ? [`${asset.hostId}:settings-custom`] : []))
             : joinCodes(applicable.flatMap((asset) => [
                 ...(asset.status === "current"
                     ? []

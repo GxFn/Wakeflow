@@ -11,7 +11,7 @@ import { readStableFile, StableFileReadError, } from "../../foundation/filesyste
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { CLAUDE_CODE_SETTINGS_DIRECTORY_REF } from "./claude-code-portable-settings-publication.js";
-import { claudeCodeStatuslineCommand } from "./claude-code-statusline-asset.js";
+import { CLAUDE_CODE_STATUSLINE_MARKER, claudeCodeStatuslineCommand, } from "./claude-code-statusline-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-host-resource-profile.js";
 /**
  * Wakeflow Host / Claude Code：状态栏命令写进本地设置的维护操作（gate-log §13.94 D6）。
@@ -28,6 +28,8 @@ export const CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID = "claude-code-statusline-
 /** 排在资产安装之后：先装资产，再让 settings 指向它。 */
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID = "claude-statusline-settings:install";
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_KEY = "statusLine";
+/** 0.9.x 发布的状态行资产文件名：带它的命令仍是 Wakeflow 的，升级时替换而不是当成用户的。 */
+const LEGACY_STATUSLINE_FILE = "wakeflow-statusline.mjs";
 export const CLAUDE_CODE_LOCAL_SETTINGS_REF = parsePortableResourcePath(claudeCodeWorkspaceHostResourceProfile.surfaces.settingsIntegration?.localPath ??
     ".claude/settings.local.json", "$settings");
 /** 计划失败时宿主贡献报出的 blocker。 */
@@ -151,12 +153,30 @@ function entryCurrent(current, entry) {
         computeCanonicalJsonSha256Digest(existing) === computeCanonicalJsonSha256Digest(entry) &&
         current.source.node.permissionBits === SETTINGS_MODE);
 }
-/** 零写计划：键已是期望值且 0600 即 null，否则一条操作；文件读不出即抛 `settings-unreadable`。 */
+/**
+ * Wakeflow 自己的状态行条目（复审 T31/M1，旧版的 `custom/unmanaged` 判定）：命令里带现行标记 `--wakeflow-statusline-v1`
+ * 或 0.9.x 的 `wakeflow-statusline.mjs` 才是 Wakeflow 的；其他 `statusLine` 是用户自己的，维护不覆盖，观察侧报 `custom`。
+ */
+export function claudeCodeStatuslineEntryIsWakeflows(entry) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry))
+        return false;
+    const command = entry.command;
+    if (typeof command !== "string")
+        return false;
+    return (command.includes(CLAUDE_CODE_STATUSLINE_MARKER) || command.includes(LEGACY_STATUSLINE_FILE));
+}
+/**
+ * 零写计划：键已是期望值且 0600 即 null，用户自己的 `statusLine` 也是 null（不碰用户的配置），否则一条操作；
+ * 文件读不出即抛 `settings-unreadable`。
+ */
 export async function planClaudeCodeStatuslineSettingsOperation(root, options = {}) {
     assertRoot(root);
     const current = await currentSettings(root, options.signal);
     const entry = claudeCodeStatuslineSettingsEntry(root.absolutePath);
     if (entryCurrent(current, entry))
+        return null;
+    const existing = current?.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
+    if (existing !== undefined && !claudeCodeStatuslineEntryIsWakeflows(existing))
         return null;
     const target = renderTarget(current?.document ?? {}, entry);
     return Object.freeze({

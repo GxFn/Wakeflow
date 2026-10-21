@@ -5,7 +5,7 @@ import { executeStatusRequest, executeVerifyRequest } from "../capabilities/obse
 import { executePodRequest } from "../capabilities/pod/service.js";
 import { executeImplementationReviewDecisionRequest, executeTargetResultImportRequest, executeTargetResultReviewInspectionRequest, executeTestReviewDecisionRequest, } from "../capabilities/result-review/service.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_DIGEST, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-statusline-asset.js";
-import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, claudeCodeStatuslineSettingsEntry, } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
+import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, claudeCodeStatuslineSettingsEntry, claudeCodeStatuslineEntryIsWakeflows, } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_DIGEST, CLAUDE_CODE_TMUX_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -32,6 +32,7 @@ const CLAUDE_CODE_HOST_ASSETS = Object.freeze({
         path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
         key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
         expectedEntry: claudeCodeStatuslineSettingsEntry,
+        ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
     }),
     companions: Object.freeze([
         Object.freeze({

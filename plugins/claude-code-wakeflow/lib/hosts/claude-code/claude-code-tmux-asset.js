@@ -167,6 +167,8 @@ const WORKTREE_EXCLUDE_PATTERN = /^\/?\.claude\/worktrees\/?$/u;
 const HOOK_POLL_MS = 500;
 const DEFAULT_LANDING_WAIT_SECONDS = 3;
 const DEFAULT_WAIT_SECONDS = 20;
+const DEFAULT_COMMAND_TIMEOUT_MS = 10000;
+const DEFAULT_UTF8_LOCALE = "en_US.UTF-8";
 const MAX_WAIT_SECONDS = 120;
 const WINDOW_ID_PATTERN = /^window_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -453,7 +455,22 @@ function hostEnvironment() {
     }
     environment[name] = value;
   }
+  // 子进程一律在 UTF-8 locale 下运行（旧 transport 同一规则，复审 T10）：deliver、resume --in-place 与 nudge 的屏幕判定
+  // 依赖 tmux 原样输出 Claude Code 的输入框与省略号字符；非 UTF-8 的 locale 会让 tmux 把它们改成下划线。
+  const locale = environment.LC_ALL ?? environment.LANG;
+  if (typeof locale !== "string" || !/utf-?8/iu.test(locale)) {
+    environment.LANG = DEFAULT_UTF8_LOCALE;
+    environment.LC_ALL = DEFAULT_UTF8_LOCALE;
+  }
   return environment;
+}
+
+// 每个子进程（tmux、git、ps、claude）都有时间上限（复审 T11）：挂住的宿主命令不能拖住 Controller 的一轮，也绝不能被当成
+// "会话不存在"或"pane 不在"去推断。超时即拒绝 host-command-timeout；上限只供测试经环境变量缩短。
+function commandTimeoutMs() {
+  const raw = process.env.WAKEFLOW_TMUX_COMMAND_TIMEOUT_MS;
+  const parsed = typeof raw === "string" && /^[0-9]{1,6}$/u.test(raw) ? Number(raw) : Number.NaN;
+  return parsed >= 100 && parsed <= 60000 ? parsed : DEFAULT_COMMAND_TIMEOUT_MS;
 }
 
 function run(command, args, options) {
@@ -461,9 +478,17 @@ function run(command, args, options) {
     encoding: "utf8",
     env: options?.env ?? hostEnvironment(),
     maxBuffer: 8 * 1024 * 1024,
+    timeout: commandTimeoutMs(),
     ...(options?.input === undefined ? {} : { input: options.input }),
     ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
   });
+  if (result.error !== undefined && result.error.code === "ETIMEDOUT") {
+    refuse("host-command-timeout", {
+      command: path.basename(command),
+      subcommand: typeof args[0] === "string" && !args[0].startsWith("-") ? args[0] : (typeof args[2] === "string" ? args[2] : null),
+      timeoutMs: commandTimeoutMs(),
+    });
+  }
   const ok = result.error === undefined && result.status === 0;
   return Object.freeze({ ok, stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status });
 }

@@ -5155,3 +5155,14 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **未做、待授权**：推送 tag；刷新本机插件缓存（Claude Code 目前就地加载检出里的 `plugins/claude-code-wakeflow`，装的就是这次 tag 的字节）；图谱刷新仍开放。
 
 **本节用的级别：第 0 级**（只改 docs：本节、live-test-plan §5、open-items C1、README 指针；`wf handoff` 一次）。
+
+### 13.193 tag 已推送，本机 Claude Code 插件缓存刷新到 `v1.1.0` 字节（2026-10-20）
+
+用户推送了 `v1.1.0` tag（远端 refs/tags/v1.1.0 = f4ac5576）与文档提交 4f3ac853，随后授权刷新本机插件缓存。
+
+- **预览**（不带 `--yes`，只读）：缓存副本 `~/.claude/plugins/cache/gxfn/wakeflow/1.1.0` 在，清单摘要 `e9e3599c…`——是 2026-10-19 09:08 按 86ae6708 装进去的旧副本——与已提交清单 `6dffa961…` 不一致；加载位置是 `directory-marketplace`（marketplace `gxfn` 是 directory 源，Claude Code 就地加载检出里的 `plugins/claude-code-wakeflow`），其清单与已提交一致。也就是说现场加载的字节早已是 tag 的字节，差的只是登记用的副本与登记版本。
+- **刷新**（`--yes`）：`claude plugin uninstall wakeflow@gxfn`、`claude plugin install wakeflow@gxfn` 都 exit 0；之后副本清单 `6dffa961…` 与已提交一致（字节逐一相同），加载位置不变且一致，`status: passed`。`installed_plugins.json` 的登记随之更新为本次安装。
+- **未完成的一步由窗口自己做**：hook 立即用新字节；MCP 服务与技能要等每个窗口重启或 resume——本会话与工作区 8 的八个窗口都还跑着重建前的服务，`wakeflow_status` 会报 `runtime-artifact-outdated` 直到按 L9 的更新流程换代。Codex 的缓存路径本仓库未确认，工具按 unavailable 处理，Codex 侧仍由用户自己安装（preview）。
+- **发布状态**：`v1.1.0` 的 bump、重建、提交、推送、tag、`release:check`、缓存刷新七步至此全部完成，各自独立授权执行；此后 `plugins/` 字节变化先 bump 到 `1.1.1`。
+
+**本节用的级别：第 0 级**（只改 docs）。

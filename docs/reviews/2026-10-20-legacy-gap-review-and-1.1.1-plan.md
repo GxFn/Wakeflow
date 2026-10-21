@@ -179,7 +179,7 @@
 | 版本 | 内容 | 前提与验收 |
 | --- | --- | --- |
 | 1.1.1 | 第 8 节批 0–5：bump 与登记；助手守卫（超时、locale、statusLine 归属）；投递与 Demand 守卫（D1/D2/D8/D27/D7、G2/G3/G4/G12）与 R2 的 id 种子；可观察性（ADR-0023 的活动标记、支撑面状态行、retitle、保持唤醒一句）；技能与文本补深；布局声明清理 J5 | 每批按 `impact report` 的级别过门；最后一轮现场核对 L11：新建工作区首次引导 + 一次投递，看窗口列表里的标记与 Design/Test 的状态行；然后 tag `v1.1.1`、`release:check`、缓存刷新（各需授权） |
-| 1.1.2 | 批 6 读侧补齐：G7/G1 归档读回（先定 `wakeflow_status{demandId}.archive` 的字段：标题、目标、已接受目标的分支/提交/摘要、证据数、verify 失败数）、G6 完成路径上的证据重哈希、G10 撤回包的再认领提示、G11 看板索引的测试模式与 parked 触发列、D6 失败发送的宿主错误事实；M4 翻转 `instructionManagement` 与退出路径随 Q9 一起 | R8 的字段裁决；一轮现场：归档一个 Demand 后读回、撤回后再认领 |
+| 1.1.2 | 用户 2026-10-21 追加：I15 tmux 状态栏精简（标记改字形、idle 不显示、会话级 status-right/left 由助手设，见 open-items I15）与 I14（`attention` 只对 permission_prompt 及登录、额度类）；批 6 读侧补齐：G7/G1 归档读回（先定 `wakeflow_status{demandId}.archive` 的字段：标题、目标、已接受目标的分支/提交/摘要、证据数、verify 失败数）、G6 完成路径上的证据重哈希、G10 撤回包的再认领提示、G11 看板索引的测试模式与 parked 触发列、D6 失败发送的宿主错误事实；M4 翻转 `instructionManagement` 与退出路径随 Q9 一起 | R8 的字段裁决；一轮现场：归档一个 Demand 后读回、撤回后再认领 |
 | 1.2 | R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds` 各一条阻塞项（D3/D4）；R5：评审前更正（`result-reported` 阶段一次 `supersedes` 导入，或不计刹车的更正标志，D5）；H8/Q10：在两个确认点之间连续推进的 `/next`；K4 按角色的工具子集（Codex）；C6/C11 升级语义 | 1.1.x 现场稳定；每项先写能力卡补充或 ADR |
 
 规则不变：每个版本先 bump 再改 `plugins/` 字节（ADR-0021 规则 2），一个版本一轮新工作区的现场核对，tag 打在最后一个制品提交上，`release:check` 在 tag 之后真跑。

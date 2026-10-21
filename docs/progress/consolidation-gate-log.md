@@ -5177,3 +5177,13 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **登记**：open-items 新开 P 节（P1–P7）；README 的文档表加一行与指针。
 
 **本节用的级别：第 0 级**（只改 docs：复审文档、open-items、README、本节）。
+
+### 13.195 1.1.1 批 0：bump 1.1.1、ADR-0023 与裁决登记（2026-10-20）
+
+用户按建议裁决了复审（§13.194）的 R1–R9，并要求按计划实现 1.1.1 与后续版本。批 0 先于一切字节改动（ADR-0021 规则 2：`v1.1.0` 已存在，`plugins/` 变字节前必须 bump）。
+
+- **bump**：`npm run wf -- release bump --version 1.1.1 --apply` 只改 `assets/release/version.json` 与 Claude marketplace 条目；`build:artifacts:committed` 把两个插件的 `package.json`、清单与 `mcp/server.mjs` 里的版本带到 1.1.1。
+- **ADR-0023**（R1）：观察器对已绑定会话按事件写 `@wakeflow_state`（working / idle / attention / 清除），助手 `mark` 设每窗口的 `window-status-format`；只是 UI 投影，不是状态权威，不回轮询；ADR-0009 调整一加一句指向它。决策索引加行。
+- **登记**：open-items P7 记下九项裁决，路线图加 "1.1.x 补齐" 一行；复审文档改为 `accepted`，§10 的批次状态与新增 §11 "后续版本计划"（1.1.1 批 0–5 与现场 L11；1.1.2 批 6 与 R8；1.2 的 R4、R5、连续 `/next`、K4、C6/C11）。
+
+**本批用的级别：第 1 级**（版本与制品：`verify quick --changed` 触及 tests/artifacts 的版本一致性测试，`smoke:artifacts`，`wf handoff` 的 version-bytes 此时按"当前版本无 tag"放行）。

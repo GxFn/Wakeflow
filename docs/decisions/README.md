@@ -48,6 +48,7 @@
 | [0020](./0020-threat-model-and-trust-boundaries.md) | 威胁模型与信任边界：三类对手的立场、证据分级、状态转移归属表、ledger 禁入内容与已接受残余风险 | `accepted` | 2026-10-18 | Q5 的建议裁决；批次 3 的 F1/F2/F4/E2 按它落地，`--add-dir` 收窄、角色令牌、hook 记录链式摘要、工具子集待裁决 |
 | [0021](./0021-release-model-and-platform-scope.md) | 发布模型与平台范围：正式版本号、一版本一字节、tag 打在 bump 提交上；只支持 macOS；Codex 版为 preview | `accepted` | 2026-10-18 | Q2/Q11/Q1 的裁决；`wf handoff` 新增 version-bytes 检查，制品 `package.json` 声明 `os: ["darwin"]`，三处描述与两份 README 写明范围 |
 | [0022](./0022-first-run-guidance-separate-from-daily-use.md) | 首次引导与日常使用分开：引导会话只引导（`sessionProven`）、Controller 由助手开进配置的会话；教学只在 first-run 参考与 README"第一次使用"发生一次，日常只读 SKILL 与 status；空闲工作区 next 为 requirement-authoring | `accepted` | 2026-10-19 | F-L1-7、I1、I2、I5 的修复（§13.188） |
+| [0023](./0023-hook-driven-window-activity-marks.md) | hook 驱动的窗口活动标记：观察器在已绑定会话按事件写 `@wakeflow_state`，助手 `mark` 设每窗口格式；UI 投影而非状态权威，不回轮询 | `accepted` | 2026-10-20 | 旧版复审 R1（§13.194）；落地见 1.1.1 批 1 |
 
 ## 4. 已在其他文档中确认、尚未转为 ADR 的决定
 

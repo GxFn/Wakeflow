@@ -78,7 +78,7 @@ MCP 工具是状态通道，指令文件与 skills 是程序通道，Agent 与�
 
 ## 研究复核后的调整
 
-**调整一：增加宿主 hook 作为第二条证据通道。** 两宿主都提供由宿主进程调用的生命周期 hook，payload 含会话或线程 id、cwd 与最后一条助手消息。Wakeflow 插件可以在 `hooks/hooks.json` 与 Codex 的 `hooks.json` 或 `notify` 里注册一段 Wakeflow 自带的 Node 脚本，把 `SessionStart`、`Stop`、`SessionEnd` 事件写成观察记录到 `.wakeflow-local/runtime/hosts/<host>/observations/`。这不违反 TSD-12：脚本由宿主调用，不是 Wakeflow 的 MCP 进程 spawn 任何东西，也不是写效果。收益是三点：登记时 hook 记录的 `session_id` 或 `thread-id` 与 `cwd` 直接证明窗口真实且根匹配；投递后 `Stop` 或 `agent-turn-complete` 证明目标窗口确实完成了一轮，回读证据从"Agent 说"变成"宿主说"；关闭时 `SessionEnd` 提供缺席证据。这使 Codex 的证据策略从"形状加 Agent 声明"提升到"宿主证明"，两宿主的不对称只剩活性探测与关闭的机器证明。
+**调整一：增加宿主 hook 作为第二条证据通道。** 两宿主都提供由宿主进程调用的生命周期 hook，payload 含会话或线程 id、cwd 与最后一条助手消息。Wakeflow 插件可以在 `hooks/hooks.json` 与 Codex 的 `hooks.json` 或 `notify` 里注册一段 Wakeflow 自带的 Node 脚本，把 `SessionStart`、`Stop`、`SessionEnd` 事件写成观察记录到 `.wakeflow-local/runtime/hosts/<host>/observations/`。这不违反 TSD-12：脚本由宿主调用，不是 Wakeflow 的 MCP 进程 spawn 任何东西，也不是写效果。收益是三点：登记时 hook 记录的 `session_id` 或 `thread-id` 与 `cwd` 直接证明窗口真实且根匹配；投递后 `Stop` 或 `agent-turn-complete` 证明目标窗口确实完成了一轮，回读证据从"Agent 说"变成"宿主说"；关闭时 `SessionEnd` 提供缺席证据。这使 Codex 的证据策略从"形状加 Agent 声明"提升到"宿主证明"，两宿主的不对称只剩活性探测与关闭的机器证明。 2026-10-20 补充（ADR-0023）：观察脚本在记录之外唯一允许的宿主写效果，是对已绑定会话按事件写 tmux 窗口选项 `@wakeflow_state` 这一 UI 投影；它不是状态权威，Wakeflow 从不读回它。
 
 **调整二：Codex 证据策略相应上调。** 第四点原文"Codex 的证据策略允许弱于 Claude"改为"两宿主都以 hook 记录为登记与投递的基础证据；Claude 额外有 tmux 坐标与活性探测；关闭在 Codex 仍是人工门"。
 

@@ -5279,3 +5279,21 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 残留：L11 现场核对未做（新工作区首次引导加一次投递，看标记随事件变化、Design/Test 状态行、`mark` 的 retitle）；观察侧不看支撑面的本地设置；外部拥有的支撑面不写状态行（与 portable settings 同一边界）；旧工作区的退役空目录不报告（批 5）。
 
 本阶段改动 `src/entrypoints/wakeflow-hook-observer.ts`、`src/hosts/claude-code/{claude-code-tmux-asset,claude-code-statusline-settings-operation,claude-code-maintenance-capability,claude-code-agent-text-profile,wakeflow-workspace-host-resource-profile}.ts`、`src/hosts/codex/{codex-agent-text-profile,wakeflow-workspace-host-resource-profile}.ts`、`src/kernel/layout.ts`、`src/capabilities/endpoint/locator-store.ts`、`src/workspace/{workspace-host-resource-catalog,workspace-host-resource-profile,workspace-host-runtime-paths}.ts`、`src/workspace/host-runtime/wakeflow-host-capability-layout-authority.ts`、`assets/agent-text/**`（两份 README、next 命令、四份技能、四份参考）、二十余个测试文件、`docs/{README,references/{capability-map,live-test-plan-2026-10,open-items},requirements/capabilities/{01-workspace-and-configuration,02-window-model,10-automation-and-operations},reviews/2026-10-20-legacy-gap-review-and-1.1.1-plan}.md` 与本节。提交：5a595199（批 5）、bcc66ff0（批 1）、69954934（批 4 与共享文档）、77cf57a2（plugins 重建）；均未推送。
+
+### 13.199 现场 L11：窗口标记、支撑面状态行、`mark` 改名（2026-10-21）
+
+用户推送 §13.198 的五个提交后授权刷新本机插件缓存并做 L11。缓存刷新：`wf cache refresh --host claude-code --yes` 两步（uninstall、install）成功，`installed_plugins.json` 记 `1.1.1`、`gitCommitSha 641d3cec`，缓存副本清单摘要与已提交制品一致（宿主仍就地加载检出里的制品目录，缓存只是登记副本）。
+
+工作区 `WakeflowTestWorkspace9`（根 git 仓库加五个从 WakeflowTestWorkspace7 克隆的 Alembic 仓库，残留清理已在那边本地提交；一次性）。tmux 服务器从零起；引导会话 `wf9` 由 Claude 用 tmux 起 `claude`（Claude Code 2.1.303，Fable 5.1），工作区根的信任对话框由用户接受。
+
+- **首次引导**：`/wakeflow:init` 走问答表（程序名 Alembic、五仓库 owner-managed、账本在工作区内 `ledger`、zh-Hans），预览、apply；Controller 在会话 `wakeflow` 开八个窗口。五个产品窗口的信任对话框由用户在 `wakeflow` 会话里逐个接受（Controller 起了一个 Monitor 等对话框消失，再逐个登记、`mark`；它自己没有向对话框发任何键）。交接卡出现，含两句新文本：窗口列表里的 `[working]`/`[idle]`/`[attention]` 是 hook 写的提示、从不是证据；长跑前自己保持机器不睡眠。引导会话按卡 `/exit` 关闭。
+- **`mark` 的每窗口格式**：八个窗口的 `window-status-format` 都是 `#I:#W#{?@wakeflow_state, [#{@wakeflow_state}],}#{?window_flags,#{window_flags}, }`；登记前的产品窗口仍是启动时的旧格式，`mark` 后换上，没有 `-g`。
+- **Design/Test 状态行（M2）**：apply 后 `design/.claude/settings.local.json` 与 `test/.claude/settings.local.json` 都只含 `statusLine`；Design 窗口底部显示 `Fable 5.1 · Design`，Controller 绑定后显示 `Fable 5.1 · Controller`；产品窗口（owner-managed 仓库）没有状态行，符合"不写进产品仓库"。
+- **hook 驱动的标记（ADR-0023）**，由一个每 3 秒读 `list-windows -F '#{window_name}=#{@wakeflow_state}'` 的监视记录（本地时间）：00:57:56 Controller=working（收到指令）→ 01:01:10 AlembicPlugin=working（投递 prompt 落地，hook 记录 2026-10-21T08:01:09Z，与助手 `landing: observed` 同一条）→ 01:01:43 Controller=idle（回合结束）→ 01:06:55 Controller=working（回调落地，目标回合尚未结束）→ 01:07:16 AlembicPlugin=idle（目标回合结束）→ 01:13:58 Controller=idle（评审决定记完）。Design 窗口在需求对话里同样 working→idle。没有任何一步读回这个选项；落地与验收都只看 hook 记录。
+- **`mark` 的 retitle（T3）**：手工 `rename-window` 把 AlembicCore 改成 `zsh`，助手 `mark --window <id>` 返回 `{"status":"marked","renamed":true}`，窗口名回到 `AlembicCore`；再 `mark` 一次不带 `renamed`。
+- **主流程一圈**：Design 核实代码事实、两轮预览、用户确认后发布（ac-1、ac-2）；Controller 认领、规划一个 AlembicPlugin 实现任务、`deliver`（attempt sent、readback pending、landing observed）→ outcome accepted（hook-record）；目标提交 b903c7a 并以 needs-review 导入、回调落地；Controller 记五条受管证据（commit、document、三份 test-output 核验输出）、accept 带 anchorEvidence（returnCount 0、revision 11）；完成预览九门全 pass；用户确认后 apply：归档 `ledger/archives/demand_7776a191-2886-4c5b-a756-12d62355dd54/0000000012`，活动根删除，需求板 archived 1；最终 status idle、maintenance idle、八窗口全绑定、claude-code hook 记录 24 条；从制品副本（`wf mcp call --candidate`）跑 `wakeflow_verify`：15 门全 pass、0 unavailable。
+- **顺手发现（新开 I14）**：最终 status 把 Design 与 AlembicPlugin 的 `attention` 报成 needed（`idle_prompt`），Controller 自己解释为"只是空闲停在输入框"——`idle_prompt` 是 Claude Code 空闲一分钟后的通知，不是在等用户；ADR-0023 已把它映射成 `idle` 标记，`attention` 却仍按"最近一条是 Notification"报 needed，是噪音，1.1.2 收口（只对 permission_prompt 及登录、额度类报 needed）。另：Claude Code 2.1.x 在空输入框里显示幽灵建议（`❯ 确认`、`❯ 查看板上状态`），驱动脚本一度把它当成未发送文本；光标列 2 才是空框。不是 Wakeflow 的问题。另：用户在 Design 面的输入框里敲了 `tmux attach -t wf9`（想回引导会话），由 Claude 清掉后再贴需求——交接卡可以把"回引导会话"这件事说得更明白（引导会话关掉后不需要再回去）。
+
+**结论：L11 通过**——复审 P1 的四项（T24/T23、M2、T3、T25）都在真实宿主上成立；ADR-0023 与 §13.198 的关闭条件满足。`v1.1.1` tag、`release:check` 等用户授权。
+
+本节只改文档：本节、`docs/references/live-test-plan-2026-10.md`（L11 通过）、`docs/references/open-items.md`（P1 现场已核）、复审 §10 行 1。

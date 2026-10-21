@@ -177,8 +177,9 @@
 2026-10-09 核实：C4、C8、C10、C16 已关闭（§13.132–§13.136）；C6 的 stale 信号已恢复（§13.161），兄弟版本识别仍开放；C1、C2、C7 按 rc.5 与 ADR-0018 改写；C12 大部分已修；C13 部分、C14 已修（§13.165）；C3、C5、C9、C11、C15、C17、C18 开放。
   - 2026-10-02 实施（§13.146）：status/verify v2 将 observer 摘要与窗口 runtime 分开；后者缺少可信宿主关联时为 unverified，完整门报 unavailable，skills 不再据此循环重启或重建。生成 MCP 新旧并存复测单独记录，不冒充真实桌面事件证据。
 
-- **C1** [高 / 缺陷] 1.0.0 从未打 tag，却已作为 main 安装渠道持续变更；同一版本号对应多份不同字节，安装缓存按版本号键控（计划阶段 3；状态：开放，2026-10-09 改写：版本输入已是 1.1.0-rc.5 且五个版本源一致，本地 `install:check` 拒绝同版本不同字节覆盖（§13.146）；仍没有 v1.x tag，`release:check` 的 Git 门从未通过，main 上同一 rc.5 对应多套制品字节，没有“字节变了版本必须变”的门；归 Q2 与技术债务批次 4）
+- **C1** [高 / 缺陷] 1.0.0 从未打 tag，却已作为 main 安装渠道持续变更；同一版本号对应多份不同字节，安装缓存按版本号键控（计划阶段 3；状态：已关闭 2026-10-20（§13.192：`v1.1.0` 打在 f4ac5576，`release:check` 首次真跑通过）；此前 2026-10-09 改写：版本输入已是 1.1.0-rc.5 且五个版本源一致，本地 `install:check` 拒绝同版本不同字节覆盖（§13.146）；仍没有 v1.x tag，`release:check` 的 Git 门从未通过，main 上同一 rc.5 对应多套制品字节，没有“字节变了版本必须变”的门；归 Q2 与技术债务批次 4）
   - 2026-10-18（ADR-0021）：停用 rc.N，版本输入改为 `1.1.0`；`wf handoff` 新增 `version-bytes`：当前版本的 tag 存在时制品字节必须与 tag 一致，否则先 bump。本项在 `v1.1.0` 打上之后关闭。
+  - 2026-10-20：`v1.1.0` 已打（§13.192），本项关闭；此后 `plugins/` 的字节变化先 bump 到 `1.1.1`，`wf handoff` 的 `version-bytes` 开始真实比较。
   - 说明：每次 push 到 main 实际上都是一次发布，但版本号一直不动。Claude Code 按 <marketplace>/<plugin>/<version> 缓存插件，09-20 之后从 GitHub 安装的用户很可能停在他们最初拿到的那份 1.0.0 上，包括没有 387 项评审修复的构建，而且收不到任何信号（按版本号键控时的更新行为属于推断）。README 描述的发布流程在 TS 系列里从未真正执行过。
   - 证据：assets/release/version.json 为 1.0.0，最后一次修改在 629e79c5（2026-09-20）；此后 plugins/ 有 29 次提交；git tag 最新为 v0.9.4；check-release-consistency.ts:296-302 要求 v<version> 指向 HEAD，所以 release:check 现在无法通过；README.md:95-96 让用户从 GxFn/Wakeflow 安装；HEAD == origin/main == 0ef5defa；installed_plugins.json 中 wakeflow@gxfn 为 1.0.0，缓存在 cache/gxfn/wakeflow/1.0.0，manifest 166f580c，仓库是 2075d916，两者都叫 1.0.0；gate-log §13.113 在无 upcaster 的情况下删除了配置字段；§13.131 原地放宽 v1 事件数据；runtime-artifact gate（observation/decide.ts:622-631）只比较 manifest 摘要；没有“字节变了版本就必须变”的检查
   - 建议：先选定渠道模型：要么每次改动 plugins/ 的 push 都 bump 补丁版本并打 tag，要么在开发分支开发、main 只通过发布流程前进；tag 之前的构建可以用 1.0.0-rc.N。在 gate 中加一条检查：plugins/ 与最近 v* tag 不同时，version.json 也必须不同。真正发布一次 v1.0.x，并把 release:check 实际跑通。

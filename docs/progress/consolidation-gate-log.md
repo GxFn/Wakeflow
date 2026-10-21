@@ -5143,3 +5143,15 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
 
 本批只改 `assets/agent-text/skills/wakeflow-controller/references/first-run.md`、live-guidance 测试、`tooling/testing/test-durations.json` 与 docs（open-items I13、README 指针、本节）；分两次提交：源码与制品。
+
+### 13.192 `v1.1.0` tag 与 `release:check` 的第一次真跑（2026-10-20）
+
+用户自己推送了 `main`（`origin/main` = f4ac5576，含 §13.185–§13.191 的全部制品字节），随后授权"打 `v1.1.0`、跑 `release:check`"。两步各自独立执行，没有做未授权的推送 tag 或刷新缓存（ADR-0021 规则 3）。
+
+- **打 tag 前的核对**：`git fetch` 后 `main` 与 `origin/main` 同一提交、树干净、Node v24.19.0；先以不带 `--require-tag` 的同一工具核对其余条件——五个版本源（两个插件 `package.json`、两个插件清单、Claude marketplace 条目）都是 `1.1.0`，引擎范围 `>=24.19.0 <25`，两份 committed 清单 releaseEligible——全部成立。
+- **tag**：`git tag v1.1.0` 打在 f4ac5576，轻量 tag，与此前 v0.7.8–v0.9.4 的做法一致（它们都是 `commit` 类型）。tag 只在本地，推送由用户决定（`git push origin v1.1.0`）。
+- **`release:check`**：`npm run release:check`（`--require-main --require-clean --require-tag --require-remote`）通过：`git.branch: main`、`clean: true`、`tag: v1.1.0`、`remote: f4ac5576…`。这是 ADR-0021 写下的"从未真正跑过一次"之后的第一次真跑。
+- **从此生效的规则**：`v1.1.0` 存在后，`plugins/` 的任何字节变化都必须先把 `assets/release/version.json` bump 到 `1.1.1`（ADR-0021 规则 2），`wf handoff` 的 `version-bytes` 从"tag 不存在、未比较"变为真实比较；docs-only 的提交不受影响。open-items C1 关闭。
+- **未做、待授权**：推送 tag；刷新本机插件缓存（Claude Code 目前就地加载检出里的 `plugins/claude-code-wakeflow`，装的就是这次 tag 的字节）；图谱刷新仍开放。
+
+**本节用的级别：第 0 级**（只改 docs：本节、live-test-plan §5、open-items C1、README 指针；`wf handoff` 一次）。

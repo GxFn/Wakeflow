@@ -5166,3 +5166,14 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **发布状态**：`v1.1.0` 的 bump、重建、提交、推送、tag、`release:check`、缓存刷新七步至此全部完成，各自独立授权执行；此后 `plugins/` 字节变化先 bump 到 `1.1.1`。
 
 **本节用的级别：第 0 级**（只改 docs）。
+
+### 13.194 旧版逐文件复审与 1.1.1 补齐计划（2026-10-20）
+
+用户要求在做 1.1.1 之前逐个文件复审旧版（功能代码、脚本、tmux 设置、技能文档、实现）与 TS 新版的差异，找出遗漏与功能缺失，整理记录并统一设计 1.1.1 的补齐。产出 `docs/reviews/2026-10-20-legacy-gap-review-and-1.1.1-plan.md`。
+
+- **方法**：五路并行只读审读（宿主效果 35 项、投递与评审 28 项、Demand/证据/归档 22 项、维护/配置/校验、技能与文本 83 项），每路读完整文件后回报带出处的表；主线自查活动监视、状态投影、助手子命令面、技能与 README。进入计划的每一条都在当前代码里复核过出处：助手 `run()` 无超时、`hostEnvironment()` 无 locale 兜底、无 `rename-window`；statusLine 无条件替换且只在工作区根计划；fresh id 种子只含 selection；outcome schema 只把 disposition 绑到 claimHandling；`derivePrepareBlockers`/`deriveRearmBlockers` 与 AGG 守卫都不看 `awaitingDecision`；`REPLACEABLE_PHASES` 含 `delivery-prepared`；提示词只渲染 `forbidden[0]`；`lifecycle.ts` 没有 `scanPrivacy`；证据 32 MiB 对归档 16 MiB；进度页事实只取 `title`；撤回理由字面量在 `workspace-observation.ts:983` 被相等比较。
+- **结论**：没有整块功能遗漏；六类细节在重切时丢了——现场可观察性（活动 glyph、支撑面状态行、retitle）、投递与 Demand 的守卫（D1/D2/D8/D27/D7、G2/G3/G4/G12）、技能的工艺深度（22 个 weaker/missing 概念）、助手健壮性（超时、locale）、用户文件归属（自定义 statusLine）、死掉的布局声明（J5）。另有 9 项设计层裁决 R1–R9。明确维持放弃的旧能力（轮询活动监视、keep-live、unattended、迁移、storage 视图、TODO 表、派发组/候选、通用 recover、arrange、随制品发货的 validate/smoke）列在复审第 1 节。
+- **计划**：六批，建议顺序 0（bump 1.1.1 与登记）→ 2（助手守卫）→ 3（投递/Demand 守卫）→ 1（可观察性，待 R1）→ 4（文本）→ 5（布局）；6（读侧）在 1.1.1 之后。每批标注级别与前提；批 0 必须最先做（ADR-0021 规则 2）。
+- **登记**：open-items 新开 P 节（P1–P7）；README 的文档表加一行与指针。
+
+**本节用的级别：第 0 级**（只改 docs：复审文档、open-items、README、本节）。

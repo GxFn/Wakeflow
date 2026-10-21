@@ -114,6 +114,20 @@ export function payloadPrivacyBlockers(
   return Object.freeze(blockers);
 }
 
+/**
+ * 用户或 Controller 写进事件流的自由文本（取消理由、决定正文、续接摘要）只拒凭证类命中（复审 G3）：
+ * 事件只追加不可改，而终态预览会扫全部负载——不在入口拦住，一段凭据就能让 Demand 永远到不了终态。
+ */
+export function textPrivacyBlockers(label: string, text: string): readonly string[] {
+  const blockers: string[] = [];
+  for (const finding of scanPrivacy(text, PRIVACY_POLICY)) {
+    if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)) continue;
+    blockers.push(`privacy:${label}:${finding.line}:${finding.kind}`);
+    if (blockers.length >= PAYLOAD_PRIVACY_BLOCKER_MAXIMUM) break;
+  }
+  return Object.freeze(blockers);
+}
+
 /** 等待 Controller 评审的结果：取消必须先把它们评掉（F5.5）。 */
 export function pendingReviewTargets(state: Readonly<DemandAggregateState>): readonly string[] {
   return Object.freeze(
@@ -142,6 +156,8 @@ export interface TerminalBlockerInput {
   readonly pendingReviews: readonly string[];
   readonly gates: readonly VerifyGateOutcome[];
   readonly payloadBlockers: readonly string[];
+  /** 取消理由的凭证命中（`textPrivacyBlockers`）；省略即无。 */
+  readonly textBlockers?: readonly string[];
   /** 归档目标已存在且负载摘要不同。 */
   readonly archiveConflict: boolean;
 }
@@ -195,6 +211,7 @@ export function deriveTerminalBlockers(input: Readonly<TerminalBlockerInput>): r
     ...packageBlockers(input),
     ...gateBlockers(input),
     ...input.payloadBlockers,
+    ...(input.textBlockers ?? []),
     ...(input.archiveConflict ? ["archive-conflict"] : []),
   ];
   return Object.freeze([...new Set(blockers)].slice(0, BLOCKERS_MAXIMUM));
@@ -216,6 +233,8 @@ export interface ContinueBlockerInput {
     readonly podId: string;
     readonly lifecycle: "open" | "closing";
   }> | null;
+  /** 续接摘要的凭证命中；省略即无。 */
+  readonly textBlockers?: readonly string[];
 }
 
 /**
@@ -238,6 +257,7 @@ export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): r
   else if (input.pod != null && input.pod.lifecycle !== "open")
     blockers.push(`pod-closing:${input.pod.podId}`);
   if (input.otherActiveDemandId !== null) blockers.push(`pod-busy:${input.otherActiveDemandId}`);
+  blockers.push(...(input.textBlockers ?? []));
   return Object.freeze(blockers);
 }
 
@@ -245,6 +265,8 @@ export interface DecisionBlockerInput {
   readonly rootPresent: boolean;
   readonly lifecycle: DemandAggregateState["lifecycle"] | null;
   readonly awaitingDecision: boolean;
+  /** 决定正文的凭证命中；省略即无。 */
+  readonly textBlockers?: readonly string[];
 }
 
 export function deriveDecisionBlockers(input: Readonly<DecisionBlockerInput>): readonly string[] {
@@ -253,6 +275,7 @@ export function deriveDecisionBlockers(input: Readonly<DecisionBlockerInput>): r
   if (input.lifecycle !== null && input.lifecycle !== "active")
     blockers.push(`lifecycle:${input.lifecycle}`);
   if (input.rootPresent && !input.awaitingDecision) blockers.push("no-escalation-pending");
+  blockers.push(...(input.textBlockers ?? []));
   return Object.freeze(blockers);
 }
 

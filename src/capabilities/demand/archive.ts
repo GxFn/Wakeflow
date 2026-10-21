@@ -1,3 +1,4 @@
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { randomUUID } from "node:crypto";
 
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
@@ -78,13 +79,19 @@ const ARCHIVE_NAME_PATTERN = /^[0-9]{10}$/u;
 const MAXIMUM_ARCHIVES_PER_DEMAND = 4096;
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$manifest.maximumBytes");
 
-/** Demand 根与归档负载共用的树容量；超出即拒绝归档，不做部分归档。 */
+/** Demand 根与归档负载共用的树容量（kernel 常量，证据上限由它推导，复审 G12）；超出即拒绝归档，不做部分归档。 */
 const DEMAND_TREE_CAPACITY = Object.freeze({
-  maximumEntries: 8192,
-  maximumDepth: 24,
-  maximumFiles: 4096,
-  maximumFileBytes: parseByteCount(16 * 1024 * 1024, "$tree.maximumFileBytes"),
-  maximumTotalBytes: parseByteCount(256 * 1024 * 1024, "$tree.maximumTotalBytes"),
+  maximumEntries: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumEntries,
+  maximumDepth: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth,
+  maximumFiles: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFiles,
+  maximumFileBytes: parseByteCount(
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFileBytes,
+    "$tree.maximumFileBytes",
+  ),
+  maximumTotalBytes: parseByteCount(
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes,
+    "$tree.maximumTotalBytes",
+  ),
 });
 
 const validateManifest = createRuntimeJsonSchemaValidator<WakeflowDemandArchiveManifest>(

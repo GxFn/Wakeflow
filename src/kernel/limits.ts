@@ -25,6 +25,18 @@ export const WAKEFLOW_LIMITS = Object.freeze({
   listPageItems: 256,
 } as const);
 
+/**
+ * Demand 根与归档负载共用的树容量（复审 G12）：归档"超出即拒绝、不做部分归档"，所以能记录进 Demand 根的
+ * 证据成员必须先受同一上限约束——证据的单文件上限由这里推导，不能大于归档能收的单文件。
+ */
+export const WAKEFLOW_DEMAND_TREE_CAPACITY = Object.freeze({
+  maximumEntries: 8192,
+  maximumDepth: 24,
+  maximumFiles: 4096,
+  maximumFileBytes: 16 * 1024 * 1024,
+  maximumTotalBytes: 256 * 1024 * 1024,
+} as const);
+
 export type WakeflowLimitName = keyof typeof WAKEFLOW_LIMITS;
 
 type WakeflowByteLimitName = Extract<WakeflowLimitName, "publicRequestBytes" | "publicResultBytes">;

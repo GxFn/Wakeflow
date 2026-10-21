@@ -171,10 +171,13 @@ export interface PrepareTargetView {
   readonly workType: "implementation" | "test";
   readonly phase: string;
   readonly generation: number | null;
+  /** Demand 正在等用户决定（escalate 或 rework 刹车）：任何目标都不准备新投递（复审 D1）。 */
+  readonly awaitingDecision?: boolean;
 }
 
-/** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm。 */
+/** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm；等用户决定时一律阻塞。 */
 export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): readonly string[] {
+  if (target.awaitingDecision === true) return Object.freeze(["awaiting-decision"]);
   // 阶段许可只有一份：contracts 的 Target 阶段表（open-items L1）。
   const admission = wakeflowTargetPhaseAdmission(target.workType, target.phase);
   if (admission === null || admission.prepare === "no") {
@@ -193,10 +196,12 @@ export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): read
 export interface RearmTargetView {
   readonly phase: string;
   readonly generation: number;
+  readonly awaitingDecision?: boolean;
 }
 
-/** rearm 的阻塞项：只有 rejected-before-send 的当前代际可以 rearm，且不超过上限。 */
+/** rearm 的阻塞项：只有 rejected-before-send 的当前代际可以 rearm，且不超过上限；等用户决定时一律阻塞。 */
 export function deriveRearmBlockers(target: Readonly<RearmTargetView>): readonly string[] {
+  if (target.awaitingDecision === true) return Object.freeze(["awaiting-decision"]);
   if (!wakeflowRearmablePhase(target.phase)) {
     return Object.freeze([`target-phase:${target.phase}`]);
   }

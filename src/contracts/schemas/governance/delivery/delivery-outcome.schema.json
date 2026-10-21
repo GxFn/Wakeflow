@@ -142,6 +142,17 @@
         "properties": {
           "claimHandling": {
             "const": "release-authorized"
+          },
+          "readback": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "unavailable"
+              },
+              "evidenceDigest": {
+                "type": "null"
+              }
+            }
           }
         }
       },

@@ -5209,3 +5209,30 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
 
 本批改动 `src/hosts/claude-code`（助手资产、状态行设置操作、文本取值）、`src/governance/observation`、`src/capabilities/observation`、`src/entrypoints/claude-code-wakeflow-mcp.ts`、`src/contracts/schemas/entrypoints` 与 generated、`assets/agent-text`（windows 参考）、tests（助手、状态行、观察、decide、honesty）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。
+
+### 13.197 1.1.1 批 3：投递与 Demand 守卫、id 种子（2026-10-20）
+
+复审 P3 的九项加裁决 R2（§13.194 D1、D2、D8、D27、D7、G3、G2、G12、G4；M5 的 id 碰撞）。
+
+- **D1 等用户决定时不投递**：`derivePrepareBlockers`/`deriveRearmBlockers` 的视图加 `awaitingDecision`，为真即唯一阻塞项 `awaiting-decision`（服务从聚合状态取值）；聚合的 `prepareDeliveryInDemandAggregateState` 与 `rearmDeliveryInDemandAggregateState` 同样在 `awaitingDecision` 存在时 `fail("transition")`——刹车（§13.131）的"等用户决定"从此由工具兑现。
+- **D2 / R3 替代谱系**：`REPLACEABLE_PHASES` 去掉 `delivery-prepared`：许可已发、尚未送出的目标先记 `failed-before-send`（→ `host-effect-rejected`，声明释放）再替代；`lineage-target-in-flight` 给出可读原因。`delivery-and-review.md` 的谱系规则改写（顺带把已删除的 "redesign decision" 改成 "escalation answered by a supplement package"，S53 的一半）。
+- **D8 禁止边界**：提示词按锚点同一上限（4 条）列 `forbidden`，多出的点明条数（`moreBoundaries` 两语言），此前只渲染第一条。
+- **D27 outcome 核绑定**：`executeOutcome` 在读到当前路由后比对 `envelope.route.bindingId`，不一致拒 `binding-changed`（与 rearm 同一条规则）；换代后的新会话落地的同一段 prompt 不再能把旧信封标成 accepted。
+- **D7 回读一致**：`outcomeDraft` 对 `rejected-before-send` 把回读归一为 `unavailable`、无摘要；`delivery-outcome.schema.json` 的 if/then 同时约束 `readback`（strict 模式下嵌套对象要带 `type: object`）。
+- **G3 终态文本的凭证扫描**：`textPrivacyBlockers(label, text)`（只拒凭证类，与归档扫描同策略）进 cancel 的 `reason`、continue 的 `summary`、record-decision 的 `text`（阻塞项 `privacy:<label>:<line>:<kind>`）；Controller 的评审决定请求（实现与测试两条路径）用 `deriveCredentialBlockers(stringLeavesOf(request))` 扫全部字符串叶子（`privacy:<kind>`）——此前这四处文本都不扫，而终态预览会扫全部负载，一段凭据会让 Demand 既完成不了也取消不了。
+- **G2 撤回理由**：取消时需求包的撤回理由为 `demand-cancelled:<demandId>: <用户理由>`（≤4096），观察侧改为前缀匹配。
+- **G12 容量一致**：`WAKEFLOW_DEMAND_TREE_CAPACITY` 进 kernel（8192 项、深 24、4096 文件、单文件 16 MiB、整根 256 MiB），归档从它取值，证据上限由它压住（单文件 32 → 16 MiB）；累计"根字节 + 负载"的预览阻塞项留给 1.1.2。
+- **G4 进度页**：`ActiveProjectionDemandFacts` 加 `goal`、`completionDefinition`、`requirementId`、`testingDecision{mode, summary}`（来自已加载的 identity 与 authority，不加 I/O）；`developer-progress.md` 在计数前多两行（需求包、测试决定）与两节（目标、完成定义），两语言标签。
+- **R2 id 种子**：`compileWakeflowFreshConfigSelection` 的选项加 `workspaceRoot`（非空字符串，否则 `input`），给出时种子为 `{selection, workspaceRoot}` 的规范摘要；维护在 preview 与 apply 都传 `context.root.absolutePath`（realpath），确定性不变；`selectionDigest` 不含根。只影响新建工作区。
+- **测试**：delivery decide（awaiting-decision 两方向）；聚合（escalate 后 prepare 拒绝；`delivery-prepared` 不可替代；`REPLACEABLE_PHASES` 不含它）；demand decide（三例文本扫描）；demand service 的取消用例断言撤回理由；result-review decide（`deriveCredentialBlockers`、`stringLeavesOf`）；证据清单（上限关系）；投影夹具四个新字段；prompt（6 条 forbidden 的渲染两语言）；fresh selection（同根相同、异根不同、空根拒绝、`selectionDigest` 不含根）。`schema:build` 重生成 outcome。
+
+**本批用的级别：第 2 级**（`src/governance`、`src/kernel`、`src/contracts/schemas` 与 agent-text 都变了）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级（83 个被触及的测试文件，含两条场景链）：第一次在 typecheck 停下——`ParsedOptions` 的新字段在 `exactOptionalPropertyTypes` 下要写成 `string | undefined`；第二次在 format:check 停下（prompt 与 result-review 服务未格式化）；第三次 467 里 1 个失败：维护入口的 recover 测试手工编译 selection 时没传工作区根，意图与计划不一致——测试改为传 `rooted.absolutePath`，这正是 R2 的语义（同根重算才一致）。改后 quick 全绿。
+- 制品重建、`smoke:artifacts` 两宿主各 20 个工具通过。
+- 完整门 run-1oMLBR（21:49–22:13 本地，约 24 分钟）：**1517/1517 全通过**（比 §13.196 的 1510 多 7：delivery decide、聚合、demand decide、result-review decide、证据清单、prompt、fresh selection 各 1）。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+
+本批改动 `src/capabilities/{delivery,demand,result-review,workspace}`、`src/governance/{demand/model,evidence,observation}`、`src/kernel/{limits,active-projection}.ts`、`src/configuration/wakeflow-fresh-config-selection.ts`、`src/contracts/schemas/governance/delivery` 与 generated、`assets/agent-text`（delivery-and-review）、tests（10 个文件）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。

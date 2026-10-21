@@ -23,6 +23,8 @@ import {
   reportTexts,
   type StepView,
   type TestAdmissionView,
+  deriveCredentialBlockers,
+  stringLeavesOf,
 } from "../../../src/capabilities/result-review/decide.js";
 import { deriveTargetResultCallbackStatus } from "../../../src/governance/result/target-result-callback.js";
 
@@ -703,4 +705,16 @@ test("限定范围的重跑必须覆盖全部失败步骤", () => {
     ),
     [],
   );
+});
+
+test("Controller 决定文本只拒凭证类命中，字符串叶子递归收集（复审 G3）", () => {
+  const policy = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
+  deepEqual(
+    deriveCredentialBlockers(["rationale mentions /Users/someone/file and a token word"], policy),
+    [],
+  );
+  deepEqual(deriveCredentialBlockers(["-----BEGIN RSA PRIVATE KEY-----", "fine"], policy), [
+    "privacy:private-key",
+  ]);
+  deepEqual(stringLeavesOf({ a: "x", b: ["y", { c: "z", d: 3, e: null }] }), ["x", "y", "z"]);
 });

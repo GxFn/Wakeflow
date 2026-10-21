@@ -1,3 +1,4 @@
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
@@ -15,6 +16,7 @@ import {
   parseManagedEvidenceManifest,
   parseManagedEvidenceManifestDocument,
   renderManagedEvidenceManifest,
+  MANAGED_EVIDENCE_PAYLOAD_LIMITS,
 } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 
 const UUIDS = {
@@ -374,4 +376,17 @@ test("Manifest容量按实际写入的缩进文档计量，而不是紧凑规范
   equal(JSON.stringify(candidate).length < 1024 * 1024, true);
   equal(JSON.stringify(candidate, null, 2).length > 1024 * 1024, true);
   expectManifestError(() => parseManagedEvidenceManifest(candidate), "capacity", "$manifest");
+});
+
+test("能记录的证据必须能归档：证据单文件与总量上限不超过 Demand 树容量（复审 G12）", () => {
+  equal(
+    MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes,
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFileBytes,
+  );
+  equal(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes, 16 * 1024 * 1024);
+  equal(
+    MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxTotalBytes <=
+      WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes,
+    true,
+  );
 });

@@ -1,3 +1,4 @@
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
@@ -79,14 +80,23 @@ export const MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES = 1024 * 1024;
  * payload必须在Loaded Artifact硬上限内预留一个文件、两个entry、一个路径层级、
  * `payload/`的8个UTF-8字节，以及最多1 MiB的Manifest文档容量。
  */
+/**
+ * 证据负载上限：树身份的上限减去清单保留，再由 Demand 树容量（kernel）压住——能记录的必须能归档
+ * （复审 G12：此前单文件 32 MiB 大于归档的 16 MiB，记了就完成不了也取消不了）。
+ */
 export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
   maxDepth: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
   maxEntries: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxEntries - 2,
-  maxFileBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,
+  maxFileBytes: Math.min(
+    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFileBytes,
+  ),
   maxFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles - 1,
   maxRefBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxRefBytes - 8,
-  maxTotalBytes:
+  maxTotalBytes: Math.min(
     LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+  ),
 } as const);
 
 export type ManagedEvidenceContentReviewDisposition = "controller-confirmed" | "not-required";

@@ -226,6 +226,13 @@ function demandFacts(
     lastEventId: demand.reviewSnapshot.eventStream.lastEventId,
     awaitingDecision: state.awaitingDecision?.issue ?? null,
     evidenceCount: state.managedEvidence?.length ?? 0,
+    goal: demand.loaded.identity.goal,
+    completionDefinition: demand.loaded.identity.completionDefinition,
+    requirementId: demand.loaded.identity.source.requirementId,
+    testingDecision: Object.freeze({
+      mode: demand.loaded.authority.testingDecision.mode,
+      summary: demand.loaded.authority.testingDecision.summary,
+    }),
   });
 }
 

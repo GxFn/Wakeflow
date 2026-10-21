@@ -18,6 +18,7 @@ import {
   rearmDeliveryInDemandAggregateState,
   recordDeliveryOutcomeInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
+  REPLACEABLE_PHASES,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import {
   computeTaskPackageDigest,
@@ -501,4 +502,49 @@ test("取消等待决定的 Demand 清除活动等待，但保留目标摘要且
     () => cancelDemandAggregateState(cancelled),
     (error: unknown) => error instanceof DemandAggregateStateError && error.reason === "transition",
   );
+});
+
+test("等用户决定时聚合拒绝准备投递；已发许可未送出的目标不可被替代（复审 D1、D2，裁决 R3）", () => {
+  const taskPackage = createTaskPackageFixture();
+  if (taskPackage.workType !== "implementation")
+    throw new Error("Expected implementation TaskPackage fixture.");
+  const planned = planTargetTaskInDemandAggregateState(
+    createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
+    taskPackage,
+  );
+  const envelope = createDeliveryEnvelopeFixture({ claim: createWorkClaimFixture() });
+  const awaiting = escalateDemandAggregateState(
+    planned,
+    {
+      issue: "Synthetic escalation before any delivery",
+      source: { kind: "rework-brake", targetTaskId: TARGET_TASK_ID, reworkCount: 3 },
+    },
+    "demand-event_99999999-9999-4999-8999-999999999998",
+  );
+  throws(
+    () => prepareDeliveryInDemandAggregateState(awaiting, envelope),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition" &&
+      error.path === "$/targetTasks",
+  );
+  // 许可已发、尚未送出：替代被拒，先记 failed-before-send 再替代。
+  const prepared = prepareDeliveryInDemandAggregateState(planned, envelope);
+  const replacement = createTaskPackage(
+    {
+      ...taskPackageDraft(),
+      taskPackageId: "task-package_12121212-1212-4212-8212-121212121213",
+      targetTaskId: "target-task_13131313-1313-4313-8313-131313131314",
+      lineage: { kind: "replacement", replacesTargetTaskId: TARGET_TASK_ID },
+    },
+    { clock: () => TASKING_CREATED_AT },
+  );
+  throws(
+    () => planTargetTaskInDemandAggregateState(prepared, replacement),
+    (error: unknown) =>
+      error instanceof DemandAggregateStateError &&
+      error.reason === "transition" &&
+      error.path === "$state/targetTasks/lineage",
+  );
+  equal(REPLACEABLE_PHASES.includes("delivery-prepared"), false);
 });

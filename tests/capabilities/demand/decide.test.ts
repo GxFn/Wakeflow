@@ -13,6 +13,7 @@ import {
   isArchivePayloadPath,
   payloadPrivacyBlockers,
   pendingReviewTargets,
+  textPrivacyBlockers,
 } from "../../../src/capabilities/demand/decide.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -437,4 +438,16 @@ test("等待用户决策的路由把下一步交给用户并建议 wakeflow_cont
   });
   equal(next.owner, "user");
   equal(next.suggestedTool, "wakeflow_continue_demand");
+});
+
+test("取消理由、决定正文与续接摘要只拒凭证类命中（复审 G3）", () => {
+  deepEqual(textPrivacyBlockers("reason", "The optimization is no longer wanted."), []);
+  deepEqual(textPrivacyBlockers("reason", "pasted by mistake:\n-----BEGIN PRIVATE KEY-----\nabc"), [
+    "privacy:reason:2:private-key",
+  ]);
+  // 路径与裸 UUID 不是凭证：终态文本里允许出现（归档扫描同一策略）。
+  deepEqual(
+    textPrivacyBlockers("decision", "see /tmp/notes and 0f0f0f0f-1111-4222-8333-444444444444"),
+    [],
+  );
 });

@@ -1008,7 +1008,7 @@ function terminalCandidateOf(
     state.status === "withdrawn" &&
     state.withdrawal !== null &&
     state.claim !== null &&
-    state.withdrawal.reason === `demand-cancelled:${state.claim.demandId}`
+    state.withdrawal.reason.startsWith(`demand-cancelled:${state.claim.demandId}`)
   ) {
     return Object.freeze({
       demandId: state.claim.demandId,

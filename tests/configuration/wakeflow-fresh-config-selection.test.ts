@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -205,5 +205,26 @@ test("Fresh selection without a factory derives the same IDs from the same selec
     third.allocations.windows.length +
       third.allocations.repositories.length +
       third.allocations.supportSurfaces.length,
+  );
+});
+
+test("id 种子带工作区根（裁决 R2）：同 selection 不同根得到不同 id，同根重算相同，空根被拒", () => {
+  const selection = createMinimalWakeflowFreshConfigSelection();
+  const a = compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "/srv/workspaces/a" });
+  const b = compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "/srv/workspaces/b" });
+  const aAgain = compileWakeflowFreshConfigSelection(selection, {
+    workspaceRoot: "/srv/workspaces/a",
+  });
+  deepEqual(aAgain, a);
+  equal(a.config.program.programId === b.config.program.programId, false);
+  equal(
+    a.selectionDigest,
+    b.selectionDigest,
+    "the selection digest itself does not include the root",
+  );
+  throws(
+    () => compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "" }),
+    (error: unknown) =>
+      error instanceof WakeflowFreshConfigSelectionError && error.reason === "input",
   );
 });

@@ -247,13 +247,18 @@ function admitHostFacade(
   }
 }
 
-function desiredConfigFor(input: Extract<SliceInput, { readonly kind: "effect" }>): Readonly<{
+function desiredConfigFor(
+  input: Extract<SliceInput, { readonly kind: "effect" }>,
+  workspaceRoot: string,
+): Readonly<{
   readonly desiredConfig: WakeflowConfigModel | null;
   readonly compilation: Readonly<WakeflowFreshConfigCompilation> | null;
 }> {
   try {
     if (input.action === "fresh-initialize") {
-      const compilation = compileWakeflowFreshConfigSelection(input.body.selection);
+      const compilation = compileWakeflowFreshConfigSelection(input.body.selection, {
+        workspaceRoot,
+      });
       return Object.freeze({ desiredConfig: compilation.config, compilation });
     }
     if (input.action === "reconfigure") {
@@ -556,7 +561,7 @@ async function planMaintenance(
   if (input.kind !== "effect") {
     fail("invalid-request", "mode", "$request.mode");
   }
-  const { desiredConfig, compilation } = desiredConfigFor(input);
+  const { desiredConfig, compilation } = desiredConfigFor(input, context.root.absolutePath);
   const overlap = deriveArtifactOverlapBlockers(
     context.root.absolutePath,
     desiredConfig,

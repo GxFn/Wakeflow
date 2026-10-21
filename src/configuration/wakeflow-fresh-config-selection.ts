@@ -67,6 +67,8 @@ export interface WakeflowFreshConfigCompilation {
 
 interface CompileWakeflowFreshConfigSelectionOptions {
   readonly uuidFactory?: UuidV4Factory;
+  /** 工作区根的绝对路径（realpath）；给出时进入 id 种子，只影响新建工作区（裁决 R2）。 */
+  readonly workspaceRoot?: string;
 }
 
 export type WakeflowFreshConfigSelectionErrorReason =
@@ -106,6 +108,7 @@ export class WakeflowFreshConfigSelectionError extends Error {
 
 interface ParsedOptions {
   readonly uuidFactory: UuidV4Factory | undefined;
+  readonly workspaceRoot: string | undefined;
 }
 
 const TOP_LEVEL_FIELDS = Object.freeze([
@@ -169,14 +172,17 @@ function assertFields(
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
   const parsed = record(value, "$options");
   if (
-    Object.keys(parsed).some((key) => key !== "uuidFactory") ||
+    Object.keys(parsed).some((key) => key !== "uuidFactory" && key !== "workspaceRoot") ||
     (parsed.uuidFactory !== undefined &&
-      (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory)))
+      (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory))) ||
+    (parsed.workspaceRoot !== undefined &&
+      (typeof parsed.workspaceRoot !== "string" || parsed.workspaceRoot.length === 0))
   ) {
     fail("input", "$options");
   }
   return Object.freeze({
     uuidFactory: parsed.uuidFactory as UuidV4Factory | undefined,
+    workspaceRoot: parsed.workspaceRoot as string | undefined,
   });
 }
 
@@ -331,7 +337,14 @@ export function compileWakeflowFreshConfigSelection(
   }
 
   const seenUuid = new Set<string>();
-  const seed = computeCanonicalJsonSha256Digest(selection);
+  // 种子带工作区根（裁决 R2，复审 M5）：selection 字节相同的两个工作区不再得到相同的 program/window/pod id——
+  // 助手按这些 id 认 tmux pane。preview 与 apply 在同一根上重算，确定性不受影响。
+  const seed =
+    options.workspaceRoot === undefined
+      ? computeCanonicalJsonSha256Digest(selection)
+      : computeCanonicalJsonSha256Digest(
+          parseJsonValue({ selection, workspaceRoot: options.workspaceRoot }, "$seed"),
+        );
   const programId = allocateId("program", options, seenUuid, seed, "program");
   const repositoryByKey = new Map<string, WakeflowDurableId<"repository">>();
   const repositoryAllocations: WakeflowFreshConfigSelectionAllocation<"repository">[] = [];

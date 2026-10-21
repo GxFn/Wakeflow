@@ -168,7 +168,11 @@ test("Public recovery consumes only an operation ID and its private intent", asy
     throw new Error("Expected a ready recovery fixture plan.");
   }
   const executionPlan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
-  const desiredConfig = compileWakeflowFreshConfigSelection(selected).config;
+  const rooted = await RootedDirectory.open(absoluteRoot);
+  // 维护以工作区根（realpath）作 id 种子（裁决 R2）：手工编译同一 selection 时要传同一根，意图才与计划一致。
+  const desiredConfig = compileWakeflowFreshConfigSelection(selected, {
+    workspaceRoot: rooted.absolutePath,
+  }).config;
   const executionRequest = Object.freeze({
     action: "fresh-initialize" as const,
     desiredConfig,
@@ -178,7 +182,6 @@ test("Public recovery consumes only an operation ID and its private intent", asy
       claudeCodeWorkspaceHostResourceProfile,
     ]),
   });
-  const rooted = await RootedDirectory.open(absoluteRoot);
   const interrupted = new Error("intent-only test interruption");
   try {
     await rejects(

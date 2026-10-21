@@ -119,6 +119,10 @@ function demandFacts(
     lastEventId: null,
     awaitingDecision: null,
     evidenceCount: 0,
+    goal: "Ship the sample feature end to end",
+    completionDefinition: "The sample route answers and its test passes",
+    requirementId: "requirement_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    testingDecision: { mode: "controller-only", summary: "Controller runs the suite" },
     ...overrides,
   };
 }

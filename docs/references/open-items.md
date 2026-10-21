@@ -751,7 +751,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 - **P1** [中 / 缺口] 现场可观察性：hook 驱动的窗口活动 glyph（T24/T23）、Design/Test 支撑面的状态行（M2）、`mark` 时的 retitle（T3，卡 02 Q8 的保留项）、交接卡的"保持机器不睡眠"一句（T25）（1.1.1 批 1；状态：开放，待裁决 R1）
 - **P2** [中 / 风险] 助手健壮性与归属守卫：`run()` 无子进程超时（T11）、无 UTF-8 locale 兜底（T10）、用户自定义 statusLine 被无条件覆盖（T31/M1）、制品文本的项目专有词扫描（M5 校验小项）（批 2；状态：已修 2026-10-20（§13.196））
-- **P3** [高 / 缺口] 投递与 Demand 守卫：`awaiting-decision` 不拦 prepare/rearm（D1）、替代 `delivery-prepared` 目标困住窗口声明 2 小时（D2）、提示词只渲染首条 forbidden（D8）、outcome 不核对绑定是否仍当前（D27）、`rejected-before-send` 可带 `readback: confirmed`（D7）、cancel/decision/continue 文本未扫凭据而终态预览会扫（G3）、撤回理由只有字面量（G2）、证据单文件 32 MiB 大于归档 16 MiB 上限（G12）、进度页缺目标/完成定义/包/测试模式（G4）（批 3；状态：开放，待裁决 R3）
+- **P3** [高 / 缺口] 投递与 Demand 守卫：`awaiting-decision` 不拦 prepare/rearm（D1）、替代 `delivery-prepared` 目标困住窗口声明 2 小时（D2）、提示词只渲染首条 forbidden（D8）、outcome 不核对绑定是否仍当前（D27）、`rejected-before-send` 可带 `readback: confirmed`（D7）、cancel/decision/continue 文本未扫凭据而终态预览会扫（G3）、撤回理由只有字面量（G2）、证据单文件 32 MiB 大于归档 16 MiB 上限（G12）、进度页缺目标/完成定义/包/测试模式（G4）（批 3；状态：已修 2026-10-20（§13.197），累计根字节的证据预览阻塞项留 1.1.2）
 - **P4** [中 / 缺口] 技能与文本：target 的基线、测试先行、假设排序、两遍自审、rework 回应、分支卫生（S2–S8、S11、S14、S3）；Controller 的缺陷 vs 错配判断、输入路由、"不写产品代码"、决定理由清单、刹车说明、测试步骤写法、独占环境、thin implementation、遗留物授权、完成前重读非目标（S12/S51/S53/S54/S64、S22/S33/S40/S41/S43/S44、S52）与两处措辞错误（`delivery-and-review.md:35` 的 "redesign"、controller SKILL `:39-41`）；Design 的澄清、选项、失败路径、环境规格、更正触发（S30–S32、S35、S38）；helper agent 边界（S56）；`/next` 的先想后做（S48）；README 的"它会碰你机器上的什么"（S72）（批 4；状态：开放）
 - **P5** [低 / 债务] 布局声明清理：同 J5（T12/T21/T25）（批 5；状态：开放）
 - **P6** [中 / 缺口] 读侧补齐：归档读回与完成结论（G7/G1）、完成路径上的证据重哈希（G6）、撤回包的再认领提示（G10）、看板索引的测试模式与 parked 触发列（G11）、失败发送的宿主错误事实（D6）、翻转 `instructionManagement`（M4，并入 Q9）（批 6；状态：1.1.1 之后，待裁决 R4–R8）

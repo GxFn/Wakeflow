@@ -205,6 +205,8 @@ import {
   type TargetCompletionView,
   type TestAdmissionView,
   testPhaseForDecision,
+  deriveCredentialBlockers,
+  stringLeavesOf,
 } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 
@@ -1744,7 +1746,14 @@ async function executeImplementationDecision(
     request.independentChecks,
     request.anchorEvidence ?? null,
   );
-  if (blockers.length > 0) rejectWith(blockers, "$request.decision");
+  // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
+  const credentialBlockers = deriveCredentialBlockers(
+    stringLeavesOf(request),
+    REPORT_PRIVACY_POLICY,
+  );
+  if (blockers.length > 0 || credentialBlockers.length > 0) {
+    rejectWith([...blockers, ...credentialBlockers], "$request.decision");
+  }
   let decision: Readonly<ControllerImplementationReviewDecision>;
   try {
     decision = createControllerImplementationReviewDecision(
@@ -1953,7 +1962,14 @@ async function executeTestDecision(
     fail("precondition-failed", "work-type", "$request.targetResultId");
   }
   const blockers = deriveTestDecisionBlockers(request, testView.admission);
-  if (blockers.length > 0) rejectWith(blockers, "$request.decision");
+  // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
+  const credentialBlockers = deriveCredentialBlockers(
+    stringLeavesOf(request),
+    REPORT_PRIVACY_POLICY,
+  );
+  if (blockers.length > 0 || credentialBlockers.length > 0) {
+    rejectWith([...blockers, ...credentialBlockers], "$request.decision");
+  }
   let decision: Readonly<ControllerTestReviewDecision>;
   try {
     decision = createControllerTestReviewDecision(

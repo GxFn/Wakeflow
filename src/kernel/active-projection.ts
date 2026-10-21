@@ -361,6 +361,11 @@ export interface ActiveProjectionDemandFacts {
   readonly lastEventId: string | null;
   readonly awaitingDecision: string | null;
   readonly evidenceCount: number;
+  /** Demand 是做什么的、怎么算完、来自哪个需求包、测试模式（复审 G4）：人读进度页不必再开 identity.json。 */
+  readonly goal: string;
+  readonly completionDefinition: string;
+  readonly requirementId: string;
+  readonly testingDecision: Readonly<{ readonly mode: string; readonly summary: string }>;
 }
 
 export interface ActiveProjectionUnmergedFacts {
@@ -462,6 +467,10 @@ const TEXT = Object.freeze({
     awaitingDecision: "Awaiting user decision",
     evidence: "Managed evidence records",
     lifecycle: "Lifecycle",
+    requirement: "Requirement package",
+    testing: "Testing decision",
+    goal: "Goal",
+    completion: "Completion definition",
   }),
   "zh-Hans": Object.freeze({
     indexTitle: "Wakeflow 活动工作区",
@@ -506,6 +515,10 @@ const TEXT = Object.freeze({
     awaitingDecision: "等待用户决定",
     evidence: "受管证据记录",
     lifecycle: "生命周期",
+    requirement: "需求包",
+    testing: "测试决定",
+    goal: "目标",
+    completion: "完成定义",
   }),
 });
 
@@ -746,6 +759,16 @@ function renderDemandProgress(
     `- Demand: ${code(demand.demandId)}`,
     `- ${text.status}: ${demand.route.disposition} · ${demand.route.frontier ?? "—"} · ${demand.route.owner}`,
     `- ${text.awaitingDecision}: ${demand.awaitingDecision === null ? text.none : inline(demand.awaitingDecision)}`,
+    `- ${text.requirement}: ${code(demand.requirementId)}`,
+    `- ${text.testing}: ${inline(demand.testingDecision.mode)} · ${inline(demand.testingDecision.summary)}`,
+    "",
+    `## ${text.goal}`,
+    "",
+    inline(demand.goal),
+    "",
+    `## ${text.completion}`,
+    "",
+    inline(demand.completionDefinition),
     "",
     `## ${text.counts}`,
     "",

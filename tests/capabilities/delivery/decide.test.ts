@@ -282,3 +282,29 @@ test("目标窗口必须加载的技能路径按 workType 固定", () => {
     "skills/wakeflow-test/SKILL.md",
   ]);
 });
+
+test("等用户决定的 Demand 不准备投递也不 rearm（复审 D1）：阻塞项 awaiting-decision 优先于 phase 判定", () => {
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "planned",
+      generation: null,
+      awaitingDecision: true,
+    }),
+    ["awaiting-decision"],
+  );
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "rework-requested",
+      generation: 1,
+      awaitingDecision: false,
+    }),
+    [],
+  );
+  deepEqual(
+    deriveRearmBlockers({ phase: "host-effect-rejected", generation: 1, awaitingDecision: true }),
+    ["awaiting-decision"],
+  );
+  deepEqual(deriveRearmBlockers({ phase: "host-effect-rejected", generation: 1 }), []);
+});

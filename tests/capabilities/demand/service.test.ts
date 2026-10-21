@@ -325,6 +325,15 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(cancelled.disposition, "cancelled");
     equal(cancelled.package.status, "withdrawn");
     equal(cancelled.next.frontier, null);
+    // 复审 G2：看板上的撤回理由带前缀与用户的取消理由，不再只有字面量。
+    const withdrawn = await readRequirementClaimState(
+      fixture.workspaceRoot,
+      PLANNING_REQUIREMENT_ID,
+    );
+    equal(
+      withdrawn?.state.withdrawal?.reason,
+      `demand-cancelled:${demandId}: The optimization is no longer wanted.`,
+    );
     equal(demandRootExists(root, demandId), false);
     equal(readdirSync(ledgerArchives).length, 2);
 

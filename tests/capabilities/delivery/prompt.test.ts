@@ -295,3 +295,45 @@ test("重跑只跑失败子集时测试合同点明范围，首次尝试没有�
   );
   equal(withContract(null).includes("- run only:"), false);
 });
+
+test("禁止边界超过上限时同样点明其余条数，不再只渲染第一条（复审 D8）", () => {
+  const base = taskPackageDraft();
+  const forbidden = Array.from({ length: 6 }, (_, index) => `forbidden ${index + 1}`);
+  const taskPackage = createTaskPackage(
+    { ...base, boundaries: { ...base.boundaries, forbidden } },
+    { clock: () => TASKING_CREATED_AT },
+  );
+  const prompt = (language: WakeflowPresentationLanguage) =>
+    renderDeliveryPortablePrompt({
+      language,
+      displayTitle: "ProductA",
+      taskPackage,
+      authored: { goal: "goal", focus: ["focus"], boundary: "boundary" },
+      identity: {
+        demandId: taskPackage.demandId,
+        podId: "main (pod-1)",
+        windowId: "window-1",
+        repositoryId: "repository-1",
+        bindingId: "binding-1",
+      },
+      readingOrder: readingOrder(),
+      returnPointer: {
+        deliveryId: "delivery-1",
+        claimDigest: `sha256:${"1".repeat(64)}`,
+        streamRevision: 7,
+        generation: 1,
+      },
+      rework: null,
+      productDefectRemediation: null,
+      testContract: null,
+    });
+  deepEqual(readingSection(prompt("en"), "Critical boundary:"), [
+    "- boundary",
+    "- forbidden: forbidden 1",
+    "- forbidden: forbidden 2",
+    "- forbidden: forbidden 3",
+    "- forbidden: forbidden 4",
+    "- … 2 more forbidden boundaries are in the task package",
+  ]);
+  equal(readingSection(prompt("zh-Hans"), "关键边界:").at(-1), "- … 2 条禁止边界在任务包里");
+});

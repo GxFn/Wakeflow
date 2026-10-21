@@ -63,6 +63,9 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   `hook-evidence-missing`，不在 pane 上写标识（否则随后的 launch 会把引导会话当成待收养的窗口，§13.188）。
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上；pane 行要按会话、
  *   窗口、pane 三项与定位器一致（tmux 重启后编号会被复用），已带别的窗口标识的 pane 报 `pane-occupied` 不覆盖。
+ *   同时给该窗口单独设 `window-status-format` 与 `window-status-current-format`（窗口名后跟 hook 观察器写下的
+ *   `[working]`/`[idle]`/`[attention]`，ADR-0023），并在窗口名偏离配置的显示名时 `rename-window` 收敛回去
+ *   （结果里 `renamed: true`）。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
  * - `deliver --window <windowId> [--handle-digest <sha256>] [--prompt-ref <permit.promptRef>
  *   --prompt-digest <permit.promptDigest>] [--wait-landing <seconds>]`：带 `--prompt-ref` 时从工作区根下
@@ -146,7 +149,11 @@ const PANE_FORMAT = [
   "#{@wakeflow_binding_id}",
   "#{@wakeflow_locator_id}",
   "#{pane_pid}",
+  "#{window_name}",
 ].join(FIELD_SEPARATOR);
+// ADR-0023：每个受管窗口单独设的窗口列表格式——窗口名后跟 hook 写下的 [working]/[idle]/[attention]；从不 -g。
+const WINDOW_STATUS_FORMAT = "#I:#W#{?@wakeflow_state, [#{@wakeflow_state}],}#{?window_flags,#{window_flags}, }";
+const WINDOW_STATUS_FORMAT_OPTIONS = Object.freeze(["window-status-format", "window-status-current-format"]);
 const MAX_PANES = 16;
 const MAX_CONFIG_BYTES = 1048576;
 const MAX_RECORD_BYTES = 65536;
@@ -882,8 +889,8 @@ function parsePaneRows(context, stdout, table) {
   for (const line of stdout.split("\n")) {
     if (line.length === 0) continue;
     const fields = line.split(FIELD_SEPARATOR);
-    if (fields.length !== 11) continue;
-    const [sessionName, windowId, paneId, paneDead, currentCommand, programId, hostId, logicalWindowId, bindingId, locatorId, panePid] = fields;
+    if (fields.length !== 11 && fields.length !== 12) continue;
+    const [sessionName, windowId, paneId, paneDead, currentCommand, programId, hostId, logicalWindowId, bindingId, locatorId, panePid, windowName] = fields;
     if (!TMUX_WINDOW_PATTERN.test(windowId) || !TMUX_PANE_PATTERN.test(paneId)) continue;
     const optional = (value) => (value.length === 0 ? null : value.slice(0, 256));
     const claudePid = claudeProcessFor(Number(panePid), table);
@@ -896,6 +903,7 @@ function parsePaneRows(context, stdout, table) {
       paneWindowId: windowId,
       paneDead: paneDead === "1",
       currentCommand: claudePid === null ? currentCommand.slice(0, 256) : "claude",
+      windowName: typeof windowName === "string" && windowName.length > 0 ? windowName.slice(0, 128) : null,
       options: Object.freeze({
         programId: optional(programId),
         hostId: optional(hostId),
@@ -1513,9 +1521,30 @@ function commandMark(config, options) {
       bindingId: locator.bindingId,
       locatorId: locator.locatorId,
     });
-    windows.push({ windowId, status: "marked" });
+    setWindowStatusFormats(context, locator.tmux.windowId);
+    // 卡 02 Q8 保留的 retitle：窗口名漂移时收敛回配置的显示名（复审 T3）。
+    const expectedName = configuredWindowName(config, windowId);
+    const renamed = row.windowName !== null && expectedName !== null && row.windowName !== expectedName;
+    if (renamed) {
+      const result = tmux(context, ["rename-window", "-t", locator.tmux.windowId, expectedName]);
+      if (!result.ok) refuse("tmux-rename-failed", { windowId });
+    }
+    windows.push(renamed ? { windowId, status: "marked", renamed: true } : { windowId, status: "marked" });
   }
   return { ok: windows.every((entry) => entry.status === "marked"), command: "mark", windows };
+}
+
+function setWindowStatusFormats(context, windowId) {
+  for (const option of WINDOW_STATUS_FORMAT_OPTIONS) {
+    const result = tmux(context, ["set-option", "-w", "-t", windowId, option, WINDOW_STATUS_FORMAT]);
+    if (!result.ok) refuse("tmux-option-failed", { option });
+  }
+}
+
+// 配置里该窗口的显示名就是 tmux 窗口名（worktree pod 的窗口同样只用标题，§13.186）。
+function configuredWindowName(config, windowId) {
+  const window = (config.topology?.windows ?? []).find((entry) => entry?.windowId === windowId);
+  return typeof window?.displayName === "string" ? cleanLabel(window.displayName, "window") : null;
 }
 
 function beforeSend(reason, windowId, extra) {

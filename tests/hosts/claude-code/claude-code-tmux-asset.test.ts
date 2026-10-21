@@ -35,6 +35,7 @@ import {
   executeClaudeCodeTmuxAssetOperation,
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
+import { hostWindowLocatorsRootRef } from "../../../src/kernel/layout.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
@@ -108,7 +109,7 @@ case "$cmd" in
         printf '{"kind":"stub","event":"session-start","sessionId":"%s","source":"resume"}\\n' "$rid" > "$WAKEFLOW_STUB_HOOKS/20260924T000002000Z-session-start-respawn-$rid-$RANDOM.json"
       fi
     fi ;;
-  set-option|paste-buffer|send-keys|delete-buffer) : ;;
+  set-option|paste-buffer|send-keys|delete-buffer|rename-window) : ;;
   list-panes) if [ -f "$state/panes.txt" ]; then cat "$state/panes.txt"; fi ;;
   display-message) cat "$state/display.txt" ;;
   load-buffer) cat > "$state/buffer.txt" ;;
@@ -392,6 +393,8 @@ function paneRow(row: {
   readonly options?: Readonly<
     Partial<Record<"programId" | "hostId" | "windowId" | "bindingId" | "locatorId", string>>
   >;
+  /** 第 12 列 `#{window_name}`（ADR-0023 批 1）；缺省不带，模拟老格式的 11 列行。 */
+  readonly windowName?: string;
 }): string {
   const options = row.options ?? {};
   return [
@@ -406,6 +409,7 @@ function paneRow(row: {
     options.bindingId ?? "",
     options.locatorId ?? "",
     String(row.pid ?? 0),
+    ...(row.windowName === undefined ? [] : [row.windowName]),
   ].join(FIELDS);
 }
 
@@ -423,6 +427,14 @@ test("tmux asset is a fixed 0600 file whose command and permission rule agree an
   equal(computeSha256Digest(readFileSync(current.assetPath)), CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(readFileSync(current.assetPath, "utf8"), CLAUDE_CODE_TMUX_ASSET_CONTENT);
   equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("`"), false);
+  // 复审 J5：助手里的定位器目录字面量等于内核布局常量（资产是 String.raw，不能 import）。
+  ok(
+    CLAUDE_CODE_TMUX_ASSET_CONTENT.includes(
+      `const LOCATORS = RUNTIME + "${hostWindowLocatorsRootRef("claude-code").slice(RUNTIME.length)}";`,
+    ),
+    "the helper reads locators from the kernel's locator directory",
+  );
+  equal(hostWindowLocatorsRootRef("claude-code"), `${RUNTIME}/identity/window-locators`);
   equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("${"), false);
   equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("/Users/"), false);
   equal(CLAUDE_CODE_TMUX_ASSET_COMMAND, `node ${CLAUDE_CODE_TMUX_ASSET_REF}`);
@@ -1039,6 +1051,7 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     paneWindowId: "@5",
     paneDead: false,
     currentCommand: "claude",
+    windowName: null,
     options: { programId: null, hostId: null, windowId: null, bindingId: null, locatorId: null },
   });
   equal(
@@ -1057,7 +1070,7 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   // §13.187：按 pane 行核对（会话、窗口、pane 三项），不再只问 display-message 的窗口号。
   equal(markLog[0]?.[0], "list-panes");
   deepEqual(
-    markLog.slice(1).map((entry) => entry.slice(4)),
+    markLog.slice(1, 6).map((entry) => entry.slice(4)),
     [
       ["@wakeflow_program_id", PROGRAM_ID],
       ["@wakeflow_host_id", "claude-code"],
@@ -1066,9 +1079,72 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
       ["@wakeflow_locator_id", LOCATOR_ID],
     ],
   );
+  // ADR-0023：每个受管窗口单独设两条窗口列表格式，窗口名后跟 hook 写下的状态；没有 -g，别的窗口不受影响。
+  deepEqual(
+    markLog.slice(6).map((entry) => entry.slice(0, 5)),
+    [
+      ["set-option", "-w", "-t", "@5", "window-status-format"],
+      ["set-option", "-w", "-t", "@5", "window-status-current-format"],
+    ],
+  );
+  for (const entry of markLog.slice(6)) {
+    ok(entry[5]?.includes("#{?@wakeflow_state, [#{@wakeflow_state}],}"), "format shows the state");
+    ok(entry[5]?.startsWith("#I:#W"), "format keeps index and name first");
+  }
+  equal(markLog.length, 8, "no rename when the pane row carries no window name");
   deepEqual(runHelper(current, ["mark", "--all"]).json.windows, [
     { windowId: PRODUCT_WINDOW_ID, status: "marked" },
   ]);
+  // 复审 T3（卡 02 Q8 保留的 retitle）：窗口名偏离配置的显示名时 rename-window 收敛回去，结果带 renamed。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, windowName: "zsh" }),
+      "",
+    ].join("\n"),
+  );
+  resetLog(current);
+  const retitled = runHelper(current, ["mark", "--window", PRODUCT_WINDOW_ID]);
+  equal(retitled.status, 0, JSON.stringify(retitled.json));
+  deepEqual(retitled.json.windows, [
+    { windowId: PRODUCT_WINDOW_ID, status: "marked", renamed: true },
+  ]);
+  deepEqual(tmuxLog(current).at(-1), ["rename-window", "-t", "@5", "Product A"]);
+  // 名字已是显示名：不改名，也不报 renamed。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, windowName: "Product A" }),
+      "",
+    ].join("\n"),
+  );
+  resetLog(current);
+  deepEqual(runHelper(current, ["mark", "--window", PRODUCT_WINDOW_ID]).json.windows, [
+    { windowId: PRODUCT_WINDOW_ID, status: "marked" },
+  ]);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "rename-window"),
+    false,
+    "a window already carrying its display name is not renamed",
+  );
+  // 改名失败：拒绝 tmux-rename-failed，不假装标记成功。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500, windowName: "zsh" }),
+      "",
+    ].join("\n"),
+  );
+  const renameFailed = runHelper(current, ["mark", "--window", PRODUCT_WINDOW_ID], {
+    env: { WAKEFLOW_STUB_FAIL: "rename-window" },
+  });
+  equal(renameFailed.status, 1);
+  equal(renameFailed.json.reason, "tmux-rename-failed");
+  // 回到无名的行，后面的用例沿用老格式。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500 }), ""].join("\n"),
+  );
   const unknown = runHelper(current, ["mark", "--window", CONTROLLER_WINDOW_ID]);
   equal(unknown.status, 1);
   deepEqual(unknown.json.windows, [{ windowId: CONTROLLER_WINDOW_ID, status: "locator-missing" }]);

@@ -39,6 +39,7 @@ import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID } from "../../../src/hosts/cl
 import {
   CLAUDE_CODE_LOCAL_SETTINGS_REF,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
+  claudeCodeStatuslineSettingsSurfaceOperationId,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import {
   CLAUDE_CODE_TMUX_ASSET_DIGEST,
@@ -127,20 +128,39 @@ test("Claude aggregate preview preserves cancellation as an operation outcome", 
   );
 });
 
-test("Claude aggregate transaction publishes three portable settings, the two assets and the local settings entry before Config", async (t) => {
+test("Claude aggregate transaction publishes three portable settings, the two assets and the three local settings entries before Config", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
   const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
   equal(plan.status, "ready");
-  // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产；按标识排序（§13.94 D6，§13.117 D4）。
-  equal(plan.hostContribution?.operations.length, 6);
-  const statusline = plan.hostContribution?.operations.at(-3);
-  const settings = plan.hostContribution?.operations.at(-2);
+  // 三条 portable settings、状态栏资产、本地设置条目（工作区根与 Design、Test 面各一条，复审 M2）、tmux 助手资产；
+  // 按标识排序（§13.94 D6，§13.117 D4）。
+  equal(plan.hostContribution?.operations.length, 8);
+  const statusline = plan.hostContribution?.operations.at(-5);
+  const settings = plan.hostContribution?.operations.at(-4);
+  const designSettings = plan.hostContribution?.operations.at(-3);
+  const testSettings = plan.hostContribution?.operations.at(-2);
   const tmuxAsset = plan.hostContribution?.operations.at(-1);
   equal(settings?.operationId, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID);
   equal(settings?.operationKind, "statusline-settings");
   equal(settings?.sourceDigest, null);
+  const [designSurface, testSurface] = desired.topology.supportSurfaces;
+  if (designSurface === undefined || testSurface === undefined) {
+    throw new Error("The fixture config declares two support surfaces.");
+  }
+  equal(
+    designSettings?.operationId,
+    claudeCodeStatuslineSettingsSurfaceOperationId(designSurface.surfaceId),
+  );
+  equal(
+    testSettings?.operationId,
+    claudeCodeStatuslineSettingsSurfaceOperationId(testSurface.surfaceId),
+  );
+  for (const entry of [designSettings, testSettings]) {
+    equal(entry?.operationKind, "statusline-settings");
+    equal(entry?.sourceDigest, null, "a surface that does not exist yet plans a create");
+  }
   equal(statusline?.operationId, CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_ID);
   equal(statusline?.operationKind, "statusline-asset");
   equal(statusline?.targetDigest, CLAUDE_CODE_STATUSLINE_ASSET_DIGEST);
@@ -148,14 +168,14 @@ test("Claude aggregate transaction publishes three portable settings, the two as
   equal(tmuxAsset?.operationKind, "tmux-asset");
   equal(tmuxAsset?.targetDigest, CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(plan.steps.at(-1)?.stepId, "authority:config");
-  equal(plan.steps.filter((entry) => entry.boundary === "host-capability").length, 6);
+  equal(plan.steps.filter((entry) => entry.boundary === "host-capability").length, 8);
 
   const completed = await executeClaudeCodeMaintenanceExecution(workspace.root, plan, input, {
     uuidFactory: () => UUID,
   });
   equal(completed.status, "completed");
   equal(completed.operationId, OPERATION_ID);
-  equal(completed.stepReceipts.filter((entry) => entry.boundary === "host-capability").length, 6);
+  equal(completed.stepReceipts.filter((entry) => entry.boundary === "host-capability").length, 8);
   const assetPath = path.join(
     workspace.absolutePath,
     ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"),
@@ -177,6 +197,21 @@ test("Claude aggregate transaction publishes three portable settings, the two as
       command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
     },
   });
+  // Design、Test 面各有同一条目（命令里仍是工作区根），所以那两个窗口也有状态行（复审 M2）。
+  for (const surface of desired.topology.supportSurfaces) {
+    const surfaceSettingsPath = path.join(
+      workspace.absolutePath,
+      surface.path,
+      ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"),
+    );
+    equal(statSync(surfaceSettingsPath).mode & 0o777, 0o600);
+    deepEqual(JSON.parse(readFileSync(surfaceSettingsPath, "utf8")), {
+      statusLine: {
+        type: "command",
+        command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
+      },
+    });
+  }
   // 工作区根多一条只放行 tmux 助手的规则（§13.117 D5）；支撑面只放行该角色使用的工具（ADR-0020 决定 3），且没有任何 Bash 规则。
   deepEqual(settingsPermission(workspace.absolutePath), [
     WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,

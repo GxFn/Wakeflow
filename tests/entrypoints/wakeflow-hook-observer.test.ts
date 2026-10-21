@@ -4,8 +4,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -21,6 +21,7 @@ import {
   type HookObserverCode,
   type HookObserverOutcome,
   type HookObserverStderrCode,
+  type HookObserverWindowStateProjector,
   registerProcessGuards,
   runWakeflowHookObserver,
   unwrapHostPrompt,
@@ -149,6 +150,7 @@ interface ObserveOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly argv?: readonly string[];
   readonly artifactManifestDigest?: string;
+  readonly projectWindowState?: HookObserverWindowStateProjector;
 }
 
 function observe(
@@ -164,6 +166,9 @@ function observe(
     ...(options.artifactManifestDigest === undefined
       ? {}
       : { artifactManifestDigest: options.artifactManifestDigest as never }),
+    ...(options.projectWindowState === undefined
+      ? {}
+      : { projectWindowState: options.projectWindowState }),
   });
 }
 
@@ -957,7 +962,7 @@ test("registerProcessGuards 幂等：首次为两个进程事件各登记一个�
   equal(process.listenerCount("unhandledRejection"), unhandledBefore + 1);
 });
 
-test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引用 node:fs、node:fs/promises、node:path 与这两层的模块，从不 spawn 子进程", () => {
+test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引用 node:fs、node:fs/promises、node:path、node:child_process（ADR-0023 的一次 tmux 客户端）与这两层的模块", () => {
   const source = readFileSync(
     fileURLToPath(import.meta.resolve("../../src/entrypoints/wakeflow-hook-observer.js")),
     "utf8",
@@ -971,16 +976,24 @@ test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引�
   ok(specifiers.length > 0, "the compiled entrypoint must have static imports");
   for (const specifier of specifiers) {
     ok(
-      ["node:fs", "node:fs/promises", "node:path"].includes(specifier) ||
+      ["node:fs", "node:fs/promises", "node:path", "node:child_process"].includes(specifier) ||
         specifier.startsWith("../foundation/") ||
         specifier.startsWith("../kernel/"),
       `unexpected import ${specifier}`,
     );
   }
   // stdout 的三种写法一起拦：直接写流、console 的任一方法、按文件描述符 1 同步写。
-  for (const forbidden of ["child_process", "process.stdout", "console.", "writeSync(1"]) {
+  for (const forbidden of ["process.stdout", "console.", "writeSync(1"]) {
     equal(source.includes(forbidden), false, forbidden);
   }
+  // ADR-0023：子进程只有 spawnSync 一种、只对 tmux、带超时、stdio 全部忽略；没有 exec/spawn/fork。
+  equal(source.match(/\bspawnSync\(/gu)?.length, 1, "exactly one spawnSync call");
+  ok(source.includes('spawnSync(\n      "tmux",') || source.includes('spawnSync("tmux",'));
+  for (const forbidden of ["execSync(", "execFileSync(", "execFile(", " spawn(", "fork("]) {
+    equal(source.includes(forbidden), false, forbidden);
+  }
+  ok(source.includes('stdio: "ignore"'), "the tmux client inherits no stdio");
+  ok(source.includes("timeout: WINDOW_STATE_TIMEOUT_MILLISECONDS"), "the tmux client is bounded");
 });
 
 test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥壳后与信封 prompt 同摘要，Codex 原样计算（§13.119）", async (t) => {
@@ -1050,4 +1063,82 @@ test("launcher 交来的制品 manifest 摘要原样进记录，没交时为 nul
   const byEvent = new Map(inventory.records.map((record) => [record.event, record]));
   equal(byEvent.get("session-start")?.artifactManifestDigest, artifact);
   equal(byEvent.get("stop")?.artifactManifestDigest, null);
+});
+
+test("ADR-0023：已绑定会话的事件投影为 tmux 窗口状态；未绑定、不在 tmux 里或其他通知类型不投影", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  const projections: Array<{ socketPath: string; paneId: string; state: string | null }> = [];
+  const inTmux = { TMUX: "/tmp/tmux-501/default,4242,0", TMUX_PANE: "%7" };
+  const projector: HookObserverWindowStateProjector = (projection) => {
+    projections.push({ ...projection });
+  };
+  const cases: ReadonlyArray<readonly [string, Record<string, unknown>, string | null]> = [
+    ["SessionStart", {}, "idle"],
+    ["UserPromptSubmit", { prompt: PROMPT, prompt_id: "prompt-0001" }, "working"],
+    ["Stop", { last_assistant_message: LAST_ASSISTANT_MESSAGE, prompt_id: "prompt-0001" }, "idle"],
+    ["Notification", { notification_type: "permission_prompt" }, "attention"],
+    ["Notification", { notification_type: "idle_prompt" }, "idle"],
+    ["SessionEnd", {}, null],
+  ];
+  for (const [name, extra, expected] of cases) {
+    projections.length = 0;
+    const outcome = await observe(
+      "claude-code",
+      hookPayload(name, sessionId, fixture.workspace, fixture.transcriptPath, extra),
+      { env: inTmux, projectWindowState: projector },
+    );
+    equal(outcome.code, null, name);
+    deepEqual(
+      projections,
+      [{ socketPath: "/tmp/tmux-501/default", paneId: "%7", state: expected }],
+      name,
+    );
+  }
+  // 其他通知类型不改状态。
+  projections.length = 0;
+  await observe(
+    "claude-code",
+    hookPayload("Notification", sessionId, fixture.workspace, fixture.transcriptPath, {
+      notification_type: "auth_success",
+    }),
+    { env: inTmux, projectWindowState: projector },
+  );
+  deepEqual(projections, []);
+  // 不在 tmux 里（没有 TMUX / TMUX_PANE）不投影；记录照写。
+  const outside = await observe(
+    "claude-code",
+    hookPayload("Stop", sessionId, fixture.workspace, fixture.transcriptPath, {
+      last_assistant_message: LAST_ASSISTANT_MESSAGE,
+      prompt_id: "prompt-0002",
+    }),
+    { env: {}, projectWindowState: projector },
+  );
+  equal(outside.code, null);
+  deepEqual(projections, []);
+  // 未绑定的会话：session-start 照写记录，但不投影。
+  const unbound = "0f0f0f0f-2222-4222-8222-222222222222";
+  await observe(
+    "claude-code",
+    hookPayload("SessionStart", unbound, fixture.workspace, fixture.transcriptPath, {}),
+    { env: inTmux, projectWindowState: projector },
+  );
+  deepEqual(projections, []);
+  // 投影器抛错不影响记录。
+  const throwing = await observe(
+    "claude-code",
+    hookPayload("Stop", sessionId, fixture.workspace, fixture.transcriptPath, {
+      last_assistant_message: LAST_ASSISTANT_MESSAGE,
+      prompt_id: "prompt-0003",
+    }),
+    {
+      env: inTmux,
+      projectWindowState: () => {
+        throw new Error("tmux unavailable");
+      },
+    },
+  );
+  equal(throwing.code, null);
+  equal(throwing.written.length, 1);
 });

@@ -29,6 +29,7 @@
 | L8 | pod 开闭（多仓库） | 创建一个 worktree pod（五个仓库各一个 worktree），在 pod 里跑 L2–L5 的缩短版，归档 Demand，两阶段关闭 pod | `wakeflow_pod` 预览/应用、`git worktree list`、`tmux list-sessions` | 关闭后 worktree 与临时分支回收，主检出不变；自 §13.186 起 pod 的窗口开在自己的 tmux 会话 `<会话名>-<pod 名>` 里，关闭后该会话消失 |
 | L9 | 插件更新流程（C9/C16） | 在工作区存在的状态下再刷新一次缓存，按"After a plugin update"一节让 Controller 自己换代 | `status` 的 `server-outdated`/`windows-stale`、助手 `resume --in-place` | Controller 先告知再就地重启，其他窗口逐个换代，没有循环重启、没有读插件实现 |
 | L10 | 首次引导（§13.188，ADR-0022） | 新建工作区（如 `WakeflowTestWorkspace8`），在 tmux 里直接启动 `claude` 执行 `/wakeflow:init`，按问答建工作区、看 Controller 引导到交接卡 | 助手 `preflight` 的 `sessionProven`、`status.next`、交接卡 | 引导会话不登记自己、不被收养；Controller 开在配置的 tmux 会话里；全程不需要手工重启；登记完成后 `status.next` 为 `requirement-authoring`（owner user）；产品仓库带 0.9.x 残留时 Controller 先让用户删再开窗 |
+| L11 | 现场可观察性（1.1.1 批 1，ADR-0023） | 新建工作区首次引导后在 Controller 发一次投递：看 tmux 窗口列表里受管窗口名后的 `[working]`/`[idle]`/`[attention]` 随 hook 变化，Design、Test 窗口各有状态行，把一个窗口手动改名后让 Controller 再 `mark` | `tmux list-windows -F '#{window_name} #{@wakeflow_state}'`、Design/Test 窗口底部的状态行、`mark` 的 `renamed`、`wakeflow_status.windows[].attention` | 标记随事件变化、session-end 后清除，且落地记录不受投影影响；两个面的 `settings.local.json` 各一条 Wakeflow 条目；改名后 `mark` 报 `renamed: true` 且窗口名回到配置的显示名 |
 
 L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 的关闭条件。
 
@@ -54,4 +55,5 @@ L1 停在 fresh-initialize 的预览，五个发现（F-L1-1 到 F-L1-5，详见
 
 - 全部场景按"什么算过"通过 → 打 `v1.1.0` tag、推送、`release:check` 真跑一次（各需授权，ADR-0021 规则 3），同时刷新图谱。**2026-10-19：条件已满足，等用户授权；L10（首次引导）也于当晚通过（§13.189）。2026-10-20：用户推送后授权，`v1.1.0` 已打在 f4ac5576（轻量 tag，与 v0.9.4 之前一致）、`release:check` 首次真跑通过（§13.192）；同日用户推送 tag，本机 Claude Code 缓存刷新到同一字节（§13.193）。**
 - 任何一条失败 → 记进 gate-log 新节，修复后 bump 到 `1.1.1` 再来一轮；不在同一版本号下换字节（ADR-0021 规则 2）。
+- 1.1.1 批 1 做完后补 L11（现场可观察性）；它是 ADR-0023 与复审 P1 的关闭条件，通过后再打 `v1.1.1`。
 - 现场通过后再做的事：D5（助手迁成类型化模块）、L6/L4 重构、C6/C11 升级语义、F1/F2/F5 与 K4 的控制、J1/J4 退出路径。

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { type Dirent, constants as fileSystemConstants } from "node:fs";
 import {
   type FileHandle,
@@ -19,13 +20,13 @@ import {
   type HostHookObservationInput,
   writeHostHookObservation,
 } from "../kernel/hook-observations.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import {
   hostRuntimeRootRef,
   parseWakeflowHostId,
   WAKEFLOW_CONFIG_KIND,
   WAKEFLOW_CONFIG_SCHEMA_VERSION,
 } from "../kernel/layout.js";
-import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
 
 /**
@@ -73,6 +74,25 @@ export type HookObserverCode =
  */
 export type HookObserverStderrCode = HookObserverCode | "launcher" | "node-version";
 
+/**
+ * ADR-0023：记录之外唯一允许的宿主写效果——对已绑定会话按事件把 `@wakeflow_state` 写到 pane 所在的 tmux 窗口
+ * 选项上。只是 UI 投影（状态行同类），不是状态权威，Wakeflow 从不读回；写失败静默，永不影响记录写入。
+ */
+export type HookObserverWindowState = "working" | "idle" | "attention";
+
+export interface HookObserverWindowStateProjection {
+  /** `$TMUX` 第一段：tmux 服务器的 socket 路径。 */
+  readonly socketPath: string;
+  /** `$TMUX_PANE`，`%N`；选项写在它所在的窗口上。 */
+  readonly paneId: string;
+  /** null 即清除（session-end）。 */
+  readonly state: HookObserverWindowState | null;
+}
+
+export type HookObserverWindowStateProjector = (
+  projection: Readonly<HookObserverWindowStateProjection>,
+) => void;
+
 export interface HookObserverInput {
   readonly argv: readonly string[];
   readonly env: Readonly<Record<string, string | undefined>>;
@@ -80,6 +100,8 @@ export interface HookObserverInput {
   readonly clock?: () => Date;
   /** 观察脚本所属制品的 manifest 摘要；launcher 在进程入口算一次，测试可注入（§13.127）。 */
   readonly artifactManifestDigest?: Sha256Digest | null;
+  /** 窗口状态投影器；缺省用一次短命的 tmux 客户端，测试注入桩（ADR-0023）。 */
+  readonly projectWindowState?: HookObserverWindowStateProjector;
 }
 
 export interface HookObserverWrittenRecord {
@@ -722,6 +744,91 @@ function outcome(
   return Object.freeze({ code, written: Object.freeze([...written]) });
 }
 
+// ---- 窗口状态投影（ADR-0023） -------------------------------------------------------
+
+const TMUX_PANE_ID_PATTERN = /^%\d{1,9}$/u;
+const WINDOW_STATE_OPTION = "@wakeflow_state";
+const WINDOW_STATE_TIMEOUT_MILLISECONDS = 1000;
+
+/** 事件到状态的封闭映射；undefined 即不写（其他类型的 Notification）。 */
+function windowStateFor(
+  event: HostHookEvent,
+  notificationType: string | null,
+): HookObserverWindowState | null | undefined {
+  switch (event) {
+    case "session-start":
+      return "idle";
+    case "user-prompt-submit":
+      return "working";
+    case "stop":
+      return "idle";
+    case "session-end":
+      return null;
+    case "notification":
+      if (notificationType === "permission_prompt") return "attention";
+      if (notificationType === "idle_prompt") return "idle";
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** hook 进程继承了 pane 里 claude 的环境：`TMUX` 与 `TMUX_PANE` 同时在场才说明它在 tmux 里。 */
+function tmuxTargetOf(
+  env: Readonly<Record<string, string | undefined>>,
+): Readonly<{ readonly socketPath: string; readonly paneId: string }> | null {
+  const socketPath = typeof env.TMUX === "string" ? (env.TMUX.split(",")[0] ?? "") : "";
+  const paneId = env.TMUX_PANE;
+  if (
+    !socketPath.startsWith("/") ||
+    typeof paneId !== "string" ||
+    !TMUX_PANE_ID_PATTERN.test(paneId)
+  ) {
+    return null;
+  }
+  return Object.freeze({ socketPath, paneId });
+}
+
+/** 缺省投影器：一次有界的 tmux 客户端，不重试、不抛、不读回。 */
+function projectWindowStateWithTmux(projection: Readonly<HookObserverWindowStateProjection>): void {
+  try {
+    spawnSync(
+      "tmux",
+      [
+        "-S",
+        projection.socketPath,
+        "set-option",
+        "-w",
+        "-t",
+        projection.paneId,
+        ...(projection.state === null
+          ? ["-u", WINDOW_STATE_OPTION]
+          : [WINDOW_STATE_OPTION, projection.state]),
+      ],
+      { stdio: "ignore", timeout: WINDOW_STATE_TIMEOUT_MILLISECONDS },
+    );
+  } catch {
+    // UI 投影失败静默：记录已经写下，落地与验收永不看这个选项。
+  }
+}
+
+function projectWindowState(
+  input: HookObserverInput,
+  event: HostHookEvent,
+  notificationType: string | null,
+): void {
+  const state = windowStateFor(event, notificationType);
+  if (state === undefined) return;
+  const target = tmuxTargetOf(isRecord(input.env) ? input.env : {});
+  if (target === null) return;
+  const projector = input.projectWindowState ?? projectWindowStateWithTmux;
+  try {
+    projector(Object.freeze({ ...target, state }));
+  } catch {
+    // 注入的投影器抛错同样静默。
+  }
+}
+
 function defaultClock(): Date {
   return new Date();
 }
@@ -746,23 +853,34 @@ async function observe(
   if (record === null) return outcome("stdin-invalid", written);
   const subject = await resolveSubject(payload.value.cwd, isRecord(input.env) ? input.env : {});
   if (subject === null) return outcome(null, written);
+  const landing = await writeToMatchingWorkspaces(subject, host.value, record, written);
+  // ADR-0023：只对已绑定会话投影窗口状态；记录写入的成败不受它影响。
+  if (landing.bound) projectWindowState(input, record.event, payload.value.notificationType);
+  return outcome(landing.failed ? "write-failed" : null, written);
+}
+
+/** 写进每个匹配的工作区：session-start 之外只写已绑定的会话；报是否有写失败、是否命中了绑定。 */
+async function writeToMatchingWorkspaces(
+  subject: Subject,
+  hostId: HostId,
+  record: Readonly<HostHookObservationInput>,
+  written: Readonly<HookObserverWrittenRecord>[],
+): Promise<{ readonly failed: boolean; readonly bound: boolean }> {
   let failed = false;
+  let bound = false;
   for (const workspace of await matchingWorkspaces(subject)) {
-    if (
-      record.event !== "session-start" &&
-      !(await workspaceBindsSession(workspace, host.value, record.sessionId))
-    ) {
-      continue;
-    }
+    const binds = await workspaceBindsSession(workspace, hostId, record.sessionId);
+    if (record.event !== "session-start" && !binds) continue;
+    if (binds) bound = true;
     const result = await writeObservation(workspace, record);
     if ("failure" in result) {
       failed = true;
-      await recordWriteFailure(workspace, host.value, record.event, result.failure);
+      await recordWriteFailure(workspace, hostId, record.event, result.failure);
     } else {
       written.push(result.written);
     }
   }
-  return outcome(failed ? "write-failed" : null, written);
+  return { failed, bound };
 }
 
 /**

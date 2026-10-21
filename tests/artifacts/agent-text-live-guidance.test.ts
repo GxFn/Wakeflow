@@ -574,3 +574,34 @@ test("§13.190 I12/I13：引导会话先登记、按 hook-evidence-missing 判�
     "the daily reference forbids reading another workspace's config too",
   );
 });
+
+test("ADR-0023：交接卡与 windows 参考把窗口列表标记说成提示、从不是证据；Codex 不提标记；两家都提醒长跑前保持机器不睡眠", () => {
+  const claudeCard = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.firstRunHandover.en);
+  const codexCard = flat(CODEX_AGENT_TEXT_PLACEHOLDERS.firstRunHandover.en);
+  const keepAwake = "keep the machine awake yourself, Wakeflow runs no background process";
+  includesAll(
+    claudeCard,
+    [
+      "`[working]`, `[idle]` or `[attention]` after a window name",
+      "written by the hooks, a hint and never evidence",
+      keepAwake,
+    ],
+    "Claude handover card",
+  );
+  ok(codexCard.includes(keepAwake), "the Codex card carries the same host-neutral advice");
+  for (const claudeOnly of ["[working]", "[attention]", "hooks", "tmux"]) {
+    equal(codexCard.includes(claudeOnly), false, `Codex card must not say "${claudeOnly}"`);
+  }
+  includesAll(
+    claude(WINDOWS),
+    [
+      "On Claude Code the same hooks also mark a bound window's name in the window list with " +
+        "`[working]`, `[idle]` or `[attention]`",
+      "(`mark` sets that format per window): a hint for the user, never evidence",
+      "their action there clears it, no tool does",
+    ],
+    "windows reference",
+  );
+  // 更新一节在 Codex 渲染里仍不提 tmux：标记那句不点名宿主工具。
+  equal(section(codex(WINDOWS), PLUGIN_UPDATE_HEADING).includes("tmux"), false);
+});

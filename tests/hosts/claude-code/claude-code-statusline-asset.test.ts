@@ -1,4 +1,3 @@
-import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -14,9 +13,10 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   CLAUDE_CODE_STATUSLINE_ASSET_CONTENT,
@@ -35,9 +35,12 @@ import {
   CLAUDE_CODE_LOCAL_SETTINGS_REF,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
   ClaudeCodeStatuslineSettingsOperationError,
+  claudeCodeStatuslineEntryIsWakeflows,
+  claudeCodeStatuslineSettingsSurfaceBlocker,
+  claudeCodeStatuslineSettingsSurfaceOperationId,
   executeClaudeCodeStatuslineSettingsOperation,
   planClaudeCodeStatuslineSettingsOperation,
-  claudeCodeStatuslineEntryIsWakeflows,
+  planClaudeCodeStatuslineSettingsSurfaceOperations,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
@@ -383,6 +386,13 @@ test("状态栏资产维护操作：缺失创建 0600、当前零写、字节与
   equal(await planClaudeCodeStatuslineAssetOperation(root), null);
 });
 
+/** 支撑面用例的配置：账本放进工作区（兄弟账本会被当成遗留，§13.181），其余取最小配置。 */
+function surfacesModel() {
+  const value = createMinimalWakeflowConfig();
+  (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  return parseWakeflowConfig(value);
+}
+
 test("资产脚本里的绑定目录字面量等于内核布局派生的绑定根", () => {
   ok(
     CLAUDE_CODE_STATUSLINE_ASSET_CONTENT.includes(
@@ -409,6 +419,7 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
   ) => {
     if (operation === null) throw new Error("Expected an operation.");
     return executeClaudeCodeStatuslineSettingsOperation(root, {
+      config: surfacesModel(),
       operation: operation.payload,
       sourceDigest: operation.sourceDigest,
       targetDigest: operation.targetDigest,
@@ -533,4 +544,157 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
   await rejects(planClaudeCodeStatuslineSettingsOperation(root), isUnreadable);
   writeFileSync(settingsPath, "{ not json\n", { mode: 0o600 });
   await rejects(planClaudeCodeStatuslineSettingsOperation(root), isUnreadable);
+});
+
+test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面各一条操作，条目仍由工作区根派生，面根缺失时只有 fresh-initialize 计划创建，执行时对照配置核对", async (t) => {
+  const workspace = temporaryDirectory(t, "wakeflow-claude-statusline-surfaces-");
+  const root = await RootedDirectory.open(workspace);
+  t.after(async () => {
+    await root.close();
+  });
+  const model = surfacesModel();
+  const [design, testSurface] = model.topology.supportSurfaces;
+  if (design === undefined || testSurface === undefined) {
+    throw new Error("The fixture config declares two support surfaces.");
+  }
+  mkdirSync(path.join(workspace, design.path), { recursive: true });
+  const expectedEntry = {
+    type: "command",
+    command: claudeCodeStatuslineCommand(root.absolutePath),
+  };
+  const settingsPathOf = (surfacePath: string) =>
+    path.join(workspace, surfacePath, ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"));
+  const execute = (
+    operation: Readonly<{
+      readonly payload: unknown;
+      readonly sourceDigest: ReturnType<typeof computeSha256Digest> | null;
+      readonly targetDigest: ReturnType<typeof computeSha256Digest>;
+    }>,
+    recoveringAffectedOperation = false,
+  ) =>
+    executeClaudeCodeStatuslineSettingsOperation(root, {
+      config: model,
+      operation: operation.payload,
+      sourceDigest: operation.sourceDigest,
+      targetDigest: operation.targetDigest,
+      recoveringAffectedOperation,
+    });
+  const plan = (action: "fresh-initialize" | "reconcile") =>
+    planClaudeCodeStatuslineSettingsSurfaceOperations(root, { action, config: model });
+
+  // fresh-initialize：Design 根在（缺文件）、Test 根不在（维护会先建根）→ 两条创建，按 surfaceId 排序，
+  // 标识、目标键与负载各带 surfaceId；来源都是 null。
+  const fresh = await plan("fresh-initialize");
+  deepEqual(fresh.blockerCodes, []);
+  deepEqual(
+    fresh.operations.map((operation) => operation.operationId),
+    [
+      claudeCodeStatuslineSettingsSurfaceOperationId(design.surfaceId),
+      claudeCodeStatuslineSettingsSurfaceOperationId(testSurface.surfaceId),
+    ],
+  );
+  deepEqual(
+    fresh.operations.map((operation) => operation.targetKey),
+    [
+      `settings:claude-code:local-statusline:support-surface:${design.surfaceId}`,
+      `settings:claude-code:local-statusline:support-surface:${testSurface.surfaceId}`,
+    ],
+  );
+  const [designOperation, testOperation] = fresh.operations;
+  ok(designOperation !== undefined && testOperation !== undefined, "two surface operations");
+  deepEqual(designOperation.payload, {
+    path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+    key: "statusLine",
+    surface: { surfaceId: design.surfaceId, configuredPlacement: design.path },
+  });
+  equal(designOperation.sourceDigest, null);
+  equal(testOperation.sourceDigest, null);
+  equal(
+    designOperation.operationId > CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
+    true,
+    "surface operations sort after the workspace root's",
+  );
+
+  // reconcile：Test 根不在 → 跳过（portable settings 的组合已报 support-root-missing），只剩 Design。
+  deepEqual(
+    (await plan("reconcile")).operations.map((operation) => operation.operationId),
+    [claudeCodeStatuslineSettingsSurfaceOperationId(design.surfaceId)],
+  );
+
+  // 执行 Design：建 Design/.claude/settings.local.json（0600），条目里是工作区根，不是面根。
+  const designExecuted = await execute(designOperation);
+  equal(designExecuted.disposition, "created");
+  equal(designExecuted.operationId, designOperation.operationId);
+  equal(statSync(settingsPathOf(design.path)).mode & 0o777, 0o600);
+  deepEqual(JSON.parse(readFileSync(settingsPathOf(design.path), "utf8")), {
+    statusLine: expectedEntry,
+  });
+  equal((await execute(designOperation)).disposition, "current");
+
+  // Test 根还不在：执行拒 placement；根建好后创建。
+  const isReason = (reason: string) => (error: unknown) =>
+    error instanceof ClaudeCodeStatuslineSettingsOperationError && error.reason === reason;
+  await rejects(execute(testOperation), isReason("placement"));
+  mkdirSync(path.join(workspace, testSurface.path), { recursive: true });
+  equal((await execute(testOperation)).disposition, "created");
+  deepEqual(JSON.parse(readFileSync(settingsPathOf(testSurface.path), "utf8")), {
+    statusLine: expectedEntry,
+  });
+  deepEqual((await plan("reconcile")).operations, [], "both surfaces current: zero writes");
+
+  // Design 里是用户自己的 statusLine：不碰；Test 不是 JSON 对象：带 surfaceId 的 blocker，不抛。
+  writeFileSync(
+    settingsPathOf(design.path),
+    `${JSON.stringify({ statusLine: { type: "command", command: "echo mine" } }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  writeFileSync(settingsPathOf(testSurface.path), "[]\n", { mode: 0o600 });
+  const mixed = await plan("reconcile");
+  deepEqual(mixed.operations, []);
+  deepEqual(mixed.blockerCodes, [
+    claudeCodeStatuslineSettingsSurfaceBlocker(testSurface.surfaceId),
+  ]);
+
+  // 负载对照配置：配置里没有的面、放置不同的面都拒 operation（旧日志或篡改都写不到别处）。
+  const forgedPlacement = {
+    ...testOperation,
+    payload: {
+      path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+      key: "statusLine",
+      surface: { surfaceId: testSurface.surfaceId, configuredPlacement: "Elsewhere" },
+    },
+  };
+  await rejects(execute(forgedPlacement), isReason("operation"));
+  const forgedSurface = {
+    ...testOperation,
+    payload: {
+      path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+      key: "statusLine",
+      surface: {
+        surfaceId: "surface_99999999-9999-4999-8999-999999999999",
+        configuredPlacement: testSurface.path,
+      },
+    },
+  };
+  await rejects(execute(forgedSurface), isReason("operation"));
+  const extraKey = {
+    ...testOperation,
+    payload: {
+      path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+      key: "statusLine",
+      surface: { surfaceId: testSurface.surfaceId, configuredPlacement: testSurface.path, x: 1 },
+    },
+  };
+  await rejects(execute(extraKey), isReason("operation"));
+  // 配置本身不合法：input。
+  await rejects(
+    executeClaudeCodeStatuslineSettingsOperation(root, {
+      config: {} as never,
+      operation: testOperation.payload,
+      sourceDigest: testOperation.sourceDigest,
+      targetDigest: testOperation.targetDigest,
+      recoveringAffectedOperation: false,
+    }),
+    isReason("input"),
+  );
 });

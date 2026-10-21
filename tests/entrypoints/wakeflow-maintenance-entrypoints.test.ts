@@ -3,16 +3,16 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { compileWakeflowFreshConfigSelection } from "../../src/configuration/wakeflow-fresh-config-selection.js";
 import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
+import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import { publishWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { parseWakeflowMaintenanceExecutionPlan } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
@@ -131,8 +131,8 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
     throw new Error("Expected a ready Claude plan.");
   }
   const plan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
-  // 三条 portable settings、状态栏资产、本地设置条目、tmux 助手资产（§13.117 D4）。
-  equal(plan.hostContribution?.operations.length, 6);
+  // 三条 portable settings、状态栏资产、三条本地设置条目（根与 Design、Test 面，复审 M2）、tmux 助手资产。
+  equal(plan.hostContribution?.operations.length, 8);
 
   let caught: unknown;
   try {

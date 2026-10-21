@@ -5,7 +5,10 @@ import type {
   WakeflowHostMaintenanceCapability,
   WakeflowHostMaintenanceOperationReceipt,
 } from "../../workspace/maintenance/wakeflow-host-maintenance-capability.js";
-import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import {
+  createWakeflowHostMaintenanceContribution,
+  type WakeflowHostMaintenanceOperationInput,
+} from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
   assertWakeflowMaintenanceGateContext,
   type WakeflowMaintenanceGateContext,
@@ -37,6 +40,7 @@ import {
   ClaudeCodeStatuslineSettingsOperationError,
   executeClaudeCodeStatuslineSettingsOperation,
   planClaudeCodeStatuslineSettingsOperation,
+  planClaudeCodeStatuslineSettingsSurfaceOperations,
 } from "./claude-code-statusline-settings-operation.js";
 import {
   CLAUDE_CODE_TMUX_ASSET_BLOCKER,
@@ -94,8 +98,9 @@ interface HostAssetPlan {
 }
 
 interface StatuslineSettingsPlan {
-  readonly operation: Awaited<ReturnType<typeof planClaudeCodeStatuslineSettingsOperation>>;
-  readonly blocker: string | null;
+  /** 程序根一条加每个 wakeflow-managed 支撑面一条（复审 M2），都是零写计划。 */
+  readonly operations: readonly Readonly<WakeflowHostMaintenanceOperationInput>[];
+  readonly blockerCodes: readonly string[];
 }
 
 /** 资产字节读不稳时不猜：整份贡献 blocked，不带该操作，而不是抛出未分类的宿主错误。 */
@@ -118,22 +123,27 @@ async function planHostAsset(
   }
 }
 
-/** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作。 */
+/** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作；支撑面各自带 surfaceId 的 blocker。 */
 async function planStatuslineSettings(
   root: RootedDirectory,
-  signal: AbortSignal | undefined,
+  request: PlanWakeflowHostMaintenanceContributionRequest,
 ): Promise<StatuslineSettingsPlan> {
+  const signal = request.signal === undefined ? {} : { signal: request.signal };
   try {
+    const program = await planClaudeCodeStatuslineSettingsOperation(root, signal);
+    const surfaces = await planClaudeCodeStatuslineSettingsSurfaceOperations(root, {
+      action: request.action,
+      config: request.config,
+      ...signal,
+    });
     return {
-      operation: await planClaudeCodeStatuslineSettingsOperation(root, {
-        ...(signal === undefined ? {} : { signal }),
-      }),
-      blocker: null,
+      operations: [...(program === null ? [] : [program]), ...surfaces.operations],
+      blockerCodes: surfaces.blockerCodes,
     };
   } catch (error: unknown) {
     if (error instanceof ClaudeCodeStatuslineSettingsOperationError) {
       if (error.reason === "settings-unreadable") {
-        return { operation: null, blocker: CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER };
+        return { operations: [], blockerCodes: [CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER] };
       }
       fail("owner", error.path);
     }
@@ -161,14 +171,14 @@ async function planContribution(
     CLAUDE_CODE_TMUX_ASSET_BLOCKER,
     request.signal,
   );
-  const settings = await planStatuslineSettings(root, request.signal);
+  const settings = await planStatuslineSettings(root, request);
   const projections = await planProjections(root, request);
   // blocker 在边界内排序去重前必须互不相同：五个来源的前缀各不相同。
   const blockerCodes = [
     ...composition.blockerCodes,
     ...(statusline.blocker === null ? [] : [statusline.blocker]),
     ...(tmuxAsset.blocker === null ? [] : [tmuxAsset.blocker]),
-    ...(settings.blocker === null ? [] : [settings.blocker]),
+    ...settings.blockerCodes,
     ...projections.blockerCodes,
   ];
   return createWakeflowHostMaintenanceContribution({
@@ -188,7 +198,7 @@ async function planContribution(
       })),
       ...(statusline.operation === null ? [] : [statusline.operation]),
       ...(tmuxAsset.operation === null ? [] : [tmuxAsset.operation]),
-      ...(settings.operation === null ? [] : [settings.operation]),
+      ...settings.operations,
       ...projections.operations,
     ],
   });
@@ -271,6 +281,7 @@ async function executeStatuslineSettingsOperation(
 ): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
   try {
     const executed = await executeClaudeCodeStatuslineSettingsOperation(root, {
+      config: request.config,
       operation: request.operation.payload,
       sourceDigest: request.operation.sourceDigest,
       targetDigest: request.operation.targetDigest,

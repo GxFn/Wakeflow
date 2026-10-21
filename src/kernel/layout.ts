@@ -1,9 +1,9 @@
-import {
-  parsePortableResourcePath,
-  type PortableResourcePath,
-} from "../foundation/filesystem/portable-resource-path.js";
 import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-durable-id.js";
 import { isWakeflowHostId, type WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../foundation/filesystem/portable-resource-path.js";
 import { fail } from "./error.js";
 
 // 配置文件的身份由词汇层拥有；内核在布局这一处转发，闭包只许到 kernel 的轻读者从这里取。
@@ -178,6 +178,17 @@ export function hostRuntimeProfilesRootRef(): PortableResourcePath {
 export function hostRuntimeRootRef(hostId: WakeflowHostId): PortableResourcePath {
   return parsePortableResourcePath(
     `${hostRuntimeProfilesRootRef()}/${parseWakeflowHostId(hostId)}`,
+    "$layout",
+  );
+}
+
+/**
+ * 窗口定位器目录：`.wakeflow-local/runtime/hosts/<host>/identity/window-locators`（复审 J5）。locator store、
+ * 资源目录声明与 tmux 助手资产里的字面量都以此为准；助手是 String.raw 资产，测试钉住它的字面量等于这里。
+ */
+export function hostWindowLocatorsRootRef(hostId: WakeflowHostId): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${hostRuntimeRootRef(hostId)}/identity/window-locators`,
     "$layout",
   );
 }

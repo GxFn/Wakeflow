@@ -1,4 +1,3 @@
-import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -13,7 +12,6 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import {
   executeStatusRequest,
@@ -23,6 +21,7 @@ import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
@@ -99,19 +98,11 @@ test("maintain_workspace reconcile repairs missing Wakeflow-owned static directo
   const drafts = path.join(root, "Design", "drafts");
   const harnesses = path.join(root, "Test", "harnesses");
   const fixtures = path.join(root, "Test", "fixtures");
-  const leases = path.join(
-    root,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-    "operations",
-    "keep-live",
-    "leases",
-  );
+  // 复审 J5：Codex 的 capability 目录只剩 pod 回执目录（0700）。
+  const podReceipts = path.join(root, ".wakeflow-local", "runtime", "hosts", "codex", "pods");
   const boardIndex = path.join(root, ".wakeflow-active", "current", "board", "index.md");
   const archives = path.join(root, "Ledger", "archives");
-  for (const directory of [drafts, harnesses, fixtures, leases, archives]) {
+  for (const directory of [drafts, harnesses, fixtures, podReceipts, archives]) {
     equal(statSync(directory).isDirectory(), true, `fresh must create ${path.basename(directory)}`);
   }
   equal(existsSync(boardIndex), true);
@@ -133,7 +124,7 @@ test("maintain_workspace reconcile repairs missing Wakeflow-owned static directo
 
   rmSync(drafts, { recursive: true });
   rmSync(harnesses, { recursive: true });
-  rmSync(leases, { recursive: true });
+  rmSync(podReceipts, { recursive: true });
   rmSync(path.join(root, ".wakeflow-active", "current"), { recursive: true });
   rmSync(archives, { recursive: true });
   rmSync(designIgnore);
@@ -160,13 +151,13 @@ test("maintain_workspace reconcile repairs missing Wakeflow-owned static directo
     planDigest: repair.planDigest as string,
   });
   equal(repaired.status, "completed");
-  for (const directory of [drafts, harnesses, fixtures, leases, archives]) {
+  for (const directory of [drafts, harnesses, fixtures, podReceipts, archives]) {
     equal(
       statSync(directory).isDirectory(),
       true,
       `reconcile must restore ${path.basename(directory)}`,
     );
-    equal(statSync(directory).mode & 0o777, directory === leases ? 0o700 : 0o755);
+    equal(statSync(directory).mode & 0o777, directory === podReceipts ? 0o700 : 0o755);
   }
   equal(existsSync(boardIndex), true);
   equal(readFileSync(designIgnore, "utf8"), designIgnoreText);
@@ -396,10 +387,9 @@ test("maintain_workspace reconcile rebuilds a missing ledger root, a missing hos
   for (const intent of preview.launchIntents as unknown as readonly { windowId: string }[]) {
     equal(existsSync(path.join(projectionsRoot, `${intent.windowId}.json`)), true);
   }
-  equal(
-    statSync(path.join(hostsRoot, "codex", "operations", "keep-live", "leases")).isDirectory(),
-    true,
-  );
+  equal(statSync(path.join(hostsRoot, "codex", "pods")).isDirectory(), true);
+  // 复审 J5：无人使用的 operations 目录不再创建。
+  equal(existsSync(path.join(hostsRoot, "codex", "operations")), false);
   deepEqual(stepKinds(await reconcilePreview(root)), []);
 
   // 维护协议根缺失而其他 Wakeflow 目录仍在：gate 以 repair 模式引导，预览只剩协议步骤。

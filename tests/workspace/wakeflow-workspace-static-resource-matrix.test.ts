@@ -49,9 +49,10 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   equal(claude.hostId, "claude-code");
   // 共享目录相对 L0 的 43/51 变化：TODO 集合的 5 条声明（看板投影、集合锁、items、
   // 根、transactions）删除，需求看板加 2 条（`board/` 目录与 `board/index.md` 索引），
-  // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录不变。
-  equal(codex.declarations.length, 39);
-  equal(claude.declarations.length, 48);
+  // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录按复审 J5 去掉
+  // keep-live 两条（Codex 还去掉 operations 根）与 Claude 的 activity-monitor、temp 两条。
+  equal(codex.declarations.length, 36);
+  equal(claude.declarations.length, 43);
 
   const expectedSharedIds = sorted(
     [
@@ -138,13 +139,10 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
         launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
-      keepLive: false,
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
       tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },

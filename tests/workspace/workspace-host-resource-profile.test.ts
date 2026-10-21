@@ -47,13 +47,10 @@ function codexProfile(overrides: Readonly<Record<string, unknown>> = {}): Record
         launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
-      keepLive: true,
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
       tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -67,13 +64,10 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     "windowIdentity",
     "podReceipts",
     "worktree",
-    "keepLive",
     "windowLocator",
     "settingsIntegration",
     "statuslineAsset",
     "tmuxAsset",
-    "activityMonitor",
-    "temporaryPrompts",
     "runtimeStaleness",
     "runtimeRefresh",
   ]);
@@ -90,13 +84,10 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
         launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
-      keepLive: true,
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
       tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -123,7 +114,6 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
         launch: "claude-worktree-flag",
         attachedDirectories: "add-dir-flag",
       },
-      keepLive: true,
       windowLocator: true,
       settingsIntegration: {
         portablePath: ".claude/settings.json",
@@ -135,8 +125,6 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       tmuxAsset: {
         fileName: "tmux.mjs",
       },
-      activityMonitor: true,
-      temporaryPrompts: true,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -187,13 +175,10 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               launch: "git-worktree",
               attachedDirectories: "prompt-path",
             },
-            keepLive: true,
             windowLocator: false,
             settingsIntegration: null,
             statuslineAsset: null,
             tmuxAsset: null,
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
             close: true,
@@ -234,7 +219,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               launch: "git-worktree",
               attachedDirectories: "prompt-path",
             },
-            keepLive: true,
             windowLocator: true,
             settingsIntegration: {
               portablePath: "../settings.json",
@@ -242,8 +226,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
             },
             statuslineAsset: null,
             tmuxAsset: null,
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -264,7 +246,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               launch: "git-worktree",
               attachedDirectories: "prompt-path",
             },
-            keepLive: true,
             windowLocator: true,
             settingsIntegration: {
               portablePath: ".host/settings.json",
@@ -273,8 +254,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
             },
             statuslineAsset: null,
             tmuxAsset: null,
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -295,7 +274,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               launch: "git-worktree",
               attachedDirectories: "prompt-path",
             },
-            keepLive: true,
             windowLocator: true,
             settingsIntegration: {
               portablePath: ".host/settings.json",
@@ -306,8 +284,6 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               executable: true,
             },
             tmuxAsset: null,
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -367,7 +343,6 @@ test("host resource profile closes relations without encoding host capability br
               launch: "claude-worktree-flag",
               attachedDirectories: "add-dir-flag",
             },
-            keepLive: true,
             windowLocator: true,
             settingsIntegration: {
               portablePath: ".host/settings.json",
@@ -375,8 +350,6 @@ test("host resource profile closes relations without encoding host capability br
             },
             statuslineAsset: null,
             tmuxAsset: null,
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -397,7 +370,6 @@ test("host resource profile closes relations without encoding host capability br
               launch: "git-worktree",
               attachedDirectories: "prompt-path",
             },
-            keepLive: true,
             windowLocator: false,
             settingsIntegration: null,
             statuslineAsset: {
@@ -406,8 +378,6 @@ test("host resource profile closes relations without encoding host capability br
             tmuxAsset: {
               fileName: "tmux.mjs",
             },
-            activityMonitor: false,
-            temporaryPrompts: false,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -427,7 +397,6 @@ test("host resource profile closes relations without encoding host capability br
           launch: "git-worktree",
           attachedDirectories: "prompt-path",
         },
-        keepLive: false,
         windowLocator: true,
         settingsIntegration: {
           portablePath: ".codex/settings.json",
@@ -439,8 +408,6 @@ test("host resource profile closes relations without encoding host capability br
         tmuxAsset: {
           fileName: "tmux.mjs",
         },
-        activityMonitor: true,
-        temporaryPrompts: true,
         runtimeStaleness: "unverified",
         runtimeRefresh: "user-app-restart",
       },
@@ -450,8 +417,6 @@ test("host resource profile closes relations without encoding host capability br
   equal(capabilityIndependentCodex.hostId, "codex");
   equal(capabilityIndependentCodex.surfaces.windowIdentity, false);
   equal(capabilityIndependentCodex.surfaces.windowLocator, true);
-  equal(capabilityIndependentCodex.surfaces.activityMonitor, true);
-  equal(capabilityIndependentCodex.surfaces.temporaryPrompts, true);
   deepEqual(capabilityIndependentCodex.surfaces.settingsIntegration, {
     portablePath: ".codex/settings.json",
     localPath: ".codex/settings.local.json",

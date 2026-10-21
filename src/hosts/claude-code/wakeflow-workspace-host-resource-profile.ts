@@ -18,7 +18,6 @@ export const claudeCodeWorkspaceHostResourceProfile = parseWakeflowWorkspaceHost
       launch: "claude-worktree-flag",
       attachedDirectories: "add-dir-flag",
     },
-    keepLive: true,
     windowLocator: true,
     settingsIntegration: {
       portablePath: ".claude/settings.json",
@@ -30,8 +29,6 @@ export const claudeCodeWorkspaceHostResourceProfile = parseWakeflowWorkspaceHost
     tmuxAsset: {
       fileName: "tmux.mjs",
     },
-    activityMonitor: true,
-    temporaryPrompts: true,
     // 制品在原路径就地更新，助手能就地重启窗口：启动记录旧于磁盘制品的会话确定过期。
     runtimeStaleness: "session-start-observer-digest",
     // Controller 按 "After a plugin update" 用 tmux 助手 `resume --in-place` 自己换代（§13.134）。

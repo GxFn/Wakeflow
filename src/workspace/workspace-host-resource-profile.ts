@@ -28,13 +28,10 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowIdentity",
   "podReceipts",
   "worktree",
-  "keepLive",
   "windowLocator",
   "settingsIntegration",
   "statuslineAsset",
   "tmuxAsset",
-  "activityMonitor",
-  "temporaryPrompts",
   "runtimeStaleness",
   "runtimeRefresh",
 ] as const);
@@ -91,13 +88,11 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
   /** pod 回执目录 `hosts/<host>/pods/`：worktree 回执与关闭观察（ADR-0010 D6）。 */
   readonly podReceipts: boolean;
   readonly worktree: Readonly<WakeflowWorkspaceHostWorktreeTemplate>;
-  readonly keepLive: boolean;
+  /** 窗口定位器目录 `identity/window-locators`（Claude Code 的 tmux 定位器；复审 J5 之前误声明在 operations 下）。 */
   readonly windowLocator: boolean;
   readonly settingsIntegration: Readonly<WakeflowWorkspaceHostSettingsIntegration> | null;
   readonly statuslineAsset: Readonly<WakeflowWorkspaceHostStatuslineAsset> | null;
   readonly tmuxAsset: Readonly<WakeflowWorkspaceHostTmuxAsset> | null;
-  readonly activityMonitor: boolean;
-  readonly temporaryPrompts: boolean;
   /**
    * 绑定窗口的运行身份怎样判为过期（§13.161）。`session-start-observer-digest`：制品在原路径就地
    * 更新、宿主有重启窗口的手段（Claude Code 的 tmux 助手），会话最近一次启动记录的观察器摘要不等于
@@ -331,13 +326,10 @@ function parseSurfaces(value: unknown): Readonly<WakeflowWorkspaceHostResourceSu
     windowIdentity: surfaceBoolean(record.windowIdentity, "windowIdentity"),
     podReceipts: surfaceBoolean(record.podReceipts, "podReceipts"),
     worktree: parseWorktreeTemplate(record.worktree),
-    keepLive: surfaceBoolean(record.keepLive, "keepLive"),
     windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
     settingsIntegration,
     statuslineAsset,
     tmuxAsset: parseTmuxAsset(record.tmuxAsset),
-    activityMonitor: surfaceBoolean(record.activityMonitor, "activityMonitor"),
-    temporaryPrompts: surfaceBoolean(record.temporaryPrompts, "temporaryPrompts"),
     runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
     runtimeRefresh: parseRuntimeRefresh(record.runtimeRefresh),
   });

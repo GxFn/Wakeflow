@@ -106,6 +106,7 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
     ),
     true,
   );
+  // 复审 J5：Codex 没有 operations 表面，无人使用的目录不再创建。
   equal(
     existsSync(
       path.join(
@@ -115,11 +116,9 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
         "hosts",
         "codex",
         "operations",
-        "keep-live",
-        "leases",
       ),
     ),
-    true,
+    false,
   );
   equal(existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")), true);
   equal(existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")), false);

@@ -200,11 +200,9 @@ test("shared maintenance transaction executes all steps and retires terminal jou
         "hosts",
         "codex",
         "operations",
-        "keep-live",
-        "leases",
       ),
     ),
-    true,
+    false,
   );
   equal(
     existsSync(
@@ -894,7 +892,7 @@ test("recovery reuses exact Host capability layout after effect-before-checkpoin
     "codex",
   );
   equal(readdirSync(path.join(hostRoot, "pods")).length, 0);
-  equal(readdirSync(path.join(hostRoot, "operations", "keep-live", "leases")).length, 0);
+  equal(existsSync(path.join(hostRoot, "operations")), false);
 
   const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");

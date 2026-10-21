@@ -1,9 +1,10 @@
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, type JsonObject } from "../../foundation/data/json-value.js";
+import { type JsonObject, parseJsonValue } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -19,8 +20,8 @@ import {
   unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
@@ -34,8 +35,7 @@ import {
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
-import { hostRuntimeRootRef } from "../../kernel/layout.js";
-import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { hostWindowLocatorsRootRef } from "../../kernel/layout.js";
 import type { TmuxCoordinates, TmuxLocator } from "./pane-classification.js";
 
 /**
@@ -64,10 +64,7 @@ export interface WindowLocatorRecord {
 }
 
 function windowLocatorRootRef(hostId: WakeflowHostId): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${hostRuntimeRootRef(hostId)}/identity/window-locators`,
-    "$locator",
-  );
+  return hostWindowLocatorsRootRef(hostId);
 }
 
 function windowLocatorRef(hostId: WakeflowHostId, windowId: string): PortableResourcePath {

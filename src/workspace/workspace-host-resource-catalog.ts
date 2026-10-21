@@ -16,6 +16,7 @@ import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
   wakeflowHostRuntimeRootRef,
+  wakeflowHostWindowLocatorsRootRef,
 } from "./workspace-host-runtime-paths.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -172,18 +173,11 @@ function privateProjectionFileDeclaration(
   });
 }
 
-/** Profile 是否声明任一 `operations/` 下的表面；目录与布局 authority 共用此判定。 */
+/** Profile 是否声明任一 `operations/` 下的表面（只剩 `operations/assets` 的两份资产，复审 J5）；目录与布局 authority 共用此判定。 */
 export function hostProfileHasOperationSurface(
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): boolean {
-  return (
-    profile.surfaces.keepLive ||
-    profile.surfaces.windowLocator ||
-    profile.surfaces.statuslineAsset !== null ||
-    profile.surfaces.tmuxAsset !== null ||
-    profile.surfaces.activityMonitor ||
-    profile.surfaces.temporaryPrompts
-  );
+  return profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null;
 }
 
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
@@ -254,26 +248,13 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       ),
     );
   }
-  if (profile.surfaces.keepLive) {
-    declarations.push(
-      privateDirectoryDeclaration(
-        `${prefix}.keep-live-root`,
-        "keep-live",
-        hostRuntimeRef(profile, "operations/keep-live"),
-      ),
-      privateDirectoryDeclaration(
-        `${prefix}.keep-live-leases-root`,
-        "keep-live",
-        hostRuntimeRef(profile, "operations/keep-live/leases"),
-      ),
-    );
-  }
   if (profile.surfaces.windowLocator) {
+    // 复审 J5：定位器真实目录在 identity 下（locator store 与 tmux 助手共用同一内核常量）。
     declarations.push(
       privateDirectoryDeclaration(
         `${prefix}.window-locators-root`,
         "window-locator",
-        hostRuntimeRef(profile, "operations/window-locators"),
+        wakeflowHostWindowLocatorsRootRef(profile),
       ),
     );
   }
@@ -318,29 +299,6 @@ export function createWakeflowWorkspaceHostResourceCatalog(
         `${prefix}.tmux-asset`,
         "host-tmux",
         hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`),
-      ),
-    );
-  }
-  if (profile.surfaces.activityMonitor) {
-    declarations.push(
-      privateDirectoryDeclaration(
-        `${prefix}.activity-monitor-root`,
-        "activity-monitor",
-        hostRuntimeRef(profile, "operations/activity-monitor"),
-      ),
-    );
-  }
-  if (profile.surfaces.temporaryPrompts) {
-    declarations.push(
-      privateDirectoryDeclaration(
-        `${prefix}.temporary-root`,
-        "host-runtime-layout",
-        hostRuntimeRef(profile, "operations/temp"),
-      ),
-      privateDirectoryDeclaration(
-        `${prefix}.temporary-prompts-root`,
-        "temporary-prompt",
-        hostRuntimeRef(profile, "operations/temp/prompts"),
       ),
     );
   }

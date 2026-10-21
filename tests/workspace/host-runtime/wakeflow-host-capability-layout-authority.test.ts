@@ -9,12 +9,7 @@ test("Host capability authority selects only applicable empty directory surfaces
   const codex = compileWakeflowHostCapabilityLayoutAuthority(codexWorkspaceHostResourceProfile);
   deepEqual(
     codex.declarations.map((entry) => entry.declarationId),
-    [
-      "host-runtime.codex.pod-receipts-root",
-      "host-runtime.codex.operations-root",
-      "host-runtime.codex.keep-live-root",
-      "host-runtime.codex.keep-live-leases-root",
-    ],
+    ["host-runtime.codex.pod-receipts-root"],
   );
   equal(
     codex.declarations.every(
@@ -34,13 +29,7 @@ test("Host capability authority selects only applicable empty directory surfaces
     [
       "host-runtime.claude-code.pod-receipts-root",
       "host-runtime.claude-code.operations-root",
-      "host-runtime.claude-code.keep-live-root",
-      "host-runtime.claude-code.keep-live-leases-root",
-      "host-runtime.claude-code.window-locators-root",
       "host-runtime.claude-code.statusline-assets-root",
-      "host-runtime.claude-code.activity-monitor-root",
-      "host-runtime.claude-code.temporary-root",
-      "host-runtime.claude-code.temporary-prompts-root",
     ],
   );
   equal(

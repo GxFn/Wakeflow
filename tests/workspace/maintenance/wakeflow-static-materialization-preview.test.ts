@@ -420,17 +420,10 @@ test("placement-stable reconfigure plans derived files before Config activation"
   // 支撑面 scaffold、宿主 capability 目录、活动布局与看板缺失同样只补齐，不阻塞。
   rmSync(path.join(workspace.absolutePath, "Design", "drafts"), { recursive: true });
   rmSync(
-    path.join(
-      workspace.absolutePath,
-      ".wakeflow-local",
-      "runtime",
-      "hosts",
-      "codex",
-      "operations",
-      "keep-live",
-      "leases",
-    ),
-    { recursive: true },
+    path.join(workspace.absolutePath, ".wakeflow-local", "runtime", "hosts", "codex", "pods"),
+    {
+      recursive: true,
+    },
   );
   rmSync(path.join(workspace.absolutePath, ".wakeflow-active", "current"), {
     recursive: true,

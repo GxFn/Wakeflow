@@ -45,7 +45,7 @@
 | 项 | Codex | Claude Code |
 | --- | --- | --- |
 | 指令文件 | `AGENTS.md` | `CLAUDE.md` |
-| 宿主运行目录 | `runtime/hosts/codex/`：window-bindings、window-runtime 投影、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods）、keep-live | `runtime/hosts/claude-code/`：以上加 window-locators、assets/statusline.mjs 与 assets/tmux.mjs（2026-09-24 §13.117 D4）、activity-monitor、temp/prompts |
+| 宿主运行目录 | `runtime/hosts/codex/`：identity/window-bindings、projections/window-runtime 投影、observations/hooks、pods（worktree 回执，2026-09-10 pod 切片 9 取代 evidence/pods） | `runtime/hosts/claude-code/`：以上加 identity/window-locators、operations/assets/statusline.mjs 与 operations/assets/tmux.mjs（2026-09-24 §13.117 D4）；keep-live、activity-monitor、temp/prompts 与 `operations/window-locators` 的声明于 2026-10-20 按复审 J5 删除（§13.198），旧工作区里那些空目录不碰也不报 |
 | settings | 不适用 | 工作区根的 `permissions.allow` 只写两条：`mcp__plugin_wakeflow_wakeflow` 与按路径限定的 tmux 助手调用；支撑面根只写该角色工具的 MCP 规则；产品仓库的 settings 不写；不写 `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`（§13.117 D5、ADR-0020 决定 3；0.9.x 留下的宽规则由残留扫描报成 `broad-permission`，开窗前由用户删除，§13.183）；`settings.local.json` 只写 statusLine 命令；`.claude/` 目录 0700 |
 | statusline | 不适用 | 安装 `statusline.mjs` 0600，命令带 base64url 编码的根路径；规划前做一次有界 smoke 并检查敏感内容 |
 | 激活范围 | 永远 `unknown`，无人值守 `forbidden`，Codex 没有安装覆盖范围 API | 按 settings 来源分 per-workspace、host-wide、unknown |

@@ -68,7 +68,7 @@
 | 值形状 | 宽松 UUID | 宽松 UUID，但 launch 时用严格 v4 生成 |
 | 获取方式 | Agent 调 `create_thread` 得到 threadId | 旧 CLI 自己生成 UUID 传给 `claude --session-id` |
 | 后续验证 | 无，`locator` 不适用 | 定位器加 pane 探测 |
-| 定位器文件 | 无 | `operations/window-locators/<windowId>.json` 加 `.lock`，字段 `locatorId`、`provider: tmux`、`tmux{socketName, sessionName, windowId "@N", paneId "%N"}` |
+| 定位器文件 | 无 | `identity/window-locators/<windowId>.json` 加 `.lock`（目录由 `kernel/layout.ts` 的 `hostWindowLocatorsRootRef` 一处给出，资源目录、locator store 与 tmux 助手共用，复审 J5），字段 `locatorId`、`provider: tmux`、`tmux{socketName, sessionName, windowId "@N", paneId "%N"}` |
 | 关闭证明 | `set_thread_archived`，永远人工门 | `kill-window` 加有界缺席探测，可机器验证 |
 
 - 定位器观察状态按顺序判定：binding-mismatch、host-context-drift、missing、duplicate、coordinate-mismatch、pane-window-mismatch、pane-dead、process-mismatch、metadata-mismatch、live；只有 live 是 `authorityEligible`。事实来自 `tmux list-panes -a -F` 十个字段，含写入窗口选项的 program、host、window、binding、locator 五个 id。`wakeflow-claude-locator.mjs:480-532`、`wakeflow-claude-lifecycle.mjs:992-1069`。

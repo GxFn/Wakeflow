@@ -111,33 +111,10 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
         mode: "0700",
         processing: "directory-container:materialize-directory",
       },
-      {
-        declarationId: "host-runtime.codex.operations-root",
-        ownerId: "host-runtime-layout",
-        relativePath: ".wakeflow-local/runtime/hosts/codex/operations",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.codex.keep-live-root",
-        ownerId: "keep-live",
-        relativePath: ".wakeflow-local/runtime/hosts/codex/operations/keep-live",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.codex.keep-live-leases-root",
-        ownerId: "keep-live",
-        relativePath: ".wakeflow-local/runtime/hosts/codex/operations/keep-live/leases",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
     ],
   );
-  equal(catalog.length, 12);
+  // 复审 J5：Codex 没有 operations 表面，也不再声明无人使用的 keep-live 目录。
+  equal(catalog.length, 9);
   equal(
     catalog.every(
       (entry) =>
@@ -255,25 +232,9 @@ test("optional Host resources are compiled from profile values without host bran
         processing: "directory-container:materialize-directory",
       },
       {
-        declarationId: "host-runtime.claude-code.keep-live-root",
-        ownerId: "keep-live",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/keep-live",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.claude-code.keep-live-leases-root",
-        ownerId: "keep-live",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/keep-live/leases",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
         declarationId: "host-runtime.claude-code.window-locators-root",
         ownerId: "window-locator",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/window-locators",
+        relativePath: ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
         tracking: "ignored:runtime-private",
         mode: "0700",
         processing: "directory-container:materialize-directory",
@@ -318,34 +279,11 @@ test("optional Host resources are compiled from profile values without host bran
         mode: "0600",
         processing: "derived-projection:deterministic-rewrite",
       },
-      {
-        declarationId: "host-runtime.claude-code.activity-monitor-root",
-        ownerId: "activity-monitor",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/activity-monitor",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.claude-code.temporary-root",
-        ownerId: "host-runtime-layout",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/temp",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.claude-code.temporary-prompts-root",
-        ownerId: "temporary-prompt",
-        relativePath: ".wakeflow-local/runtime/hosts/claude-code/operations/temp/prompts",
-        tracking: "ignored:runtime-private",
-        mode: "0700",
-        processing: "directory-container:materialize-directory",
-      },
     ],
   );
-  equal(catalog.length, 21);
-  const statusline = catalog[16];
+  // 复审 J5：定位器声明在真实目录 identity 下；activity-monitor 与 temp/prompts 不再声明。
+  equal(catalog.length, 16);
+  const statusline = catalog[14];
   equal(statusline?.nodePolicy.kind, "file");
   if (statusline?.nodePolicy.kind === "file") {
     equal(statusline.nodePolicy.executablePolicy, "forbidden");
@@ -375,7 +313,6 @@ test("optional Host resources are compiled from profile values without host bran
         launch: "git-worktree",
         attachedDirectories: "prompt-path",
       },
-      keepLive: false,
       windowLocator: true,
       settingsIntegration: {
         portablePath: ".tool/settings.json",
@@ -383,8 +320,6 @@ test("optional Host resources are compiled from profile values without host bran
       },
       statuslineAsset: { fileName: "statusline.mjs" },
       tmuxAsset: null,
-      activityMonitor: true,
-      temporaryPrompts: true,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -407,9 +342,6 @@ test("optional Host resources are compiled from profile values without host bran
       "host-runtime.codex.settings-local",
       "host-runtime.codex.statusline-assets-root",
       "host-runtime.codex.statusline-asset",
-      "host-runtime.codex.activity-monitor-root",
-      "host-runtime.codex.temporary-root",
-      "host-runtime.codex.temporary-prompts-root",
     ],
   );
 });

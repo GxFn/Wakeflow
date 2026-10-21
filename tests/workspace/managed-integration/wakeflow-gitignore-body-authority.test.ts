@@ -96,7 +96,6 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
         launch: "claude-worktree-flag",
         attachedDirectories: "add-dir-flag",
       },
-      keepLive: false,
       windowLocator: false,
       settingsIntegration: {
         portablePath: ".claude/settings.json",
@@ -104,8 +103,6 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       },
       statuslineAsset: null,
       tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -171,7 +168,6 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
         launch: "claude-worktree-flag",
         attachedDirectories: "add-dir-flag",
       },
-      keepLive: false,
       windowLocator: false,
       settingsIntegration: {
         portablePath: ".claude/settings.json",
@@ -179,8 +175,6 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       },
       statuslineAsset: null,
       tmuxAsset: null,
-      activityMonitor: false,
-      temporaryPrompts: false,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },

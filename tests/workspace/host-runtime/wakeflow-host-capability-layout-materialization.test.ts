@@ -66,10 +66,11 @@ test("Host capability layout creates only profile-applicable empty directories",
     codexWorkspaceHostResourceProfile,
     { recoveringFreshLayout: false },
   );
-  equal(created.createdDirectoryCount, 4);
+  // 复审 J5：Codex 只有 pod 回执目录；没有 operations，也没有无人使用的 keep-live 目录。
+  equal(created.createdDirectoryCount, 1);
   const codexHost = path.join(codex.absolutePath, ".wakeflow-local/runtime/hosts/codex");
   equal(readdirSync(path.join(codexHost, "pods")).length, 0);
-  equal(readdirSync(path.join(codexHost, "operations", "keep-live", "leases")).length, 0);
+  equal(existsSync(path.join(codexHost, "operations")), false);
   await expectLayoutError(
     () =>
       materializeWakeflowHostCapabilityLayout(codex.root, codexWorkspaceHostResourceProfile, {
@@ -92,15 +93,18 @@ test("Host capability layout creates only profile-applicable empty directories",
     claudeCodeWorkspaceHostResourceProfile,
     { recoveringFreshLayout: false },
   );
-  equal(claudeCreated.createdDirectoryCount, 9);
+  // pods、operations、operations/assets；定位器目录在 identity 下，由 locator store 首次登记时创建（J5）。
+  equal(claudeCreated.createdDirectoryCount, 3);
   const claudeHost = path.join(claude.absolutePath, ".wakeflow-local/runtime/hosts/claude-code");
-  for (const relative of [
+  equal(readdirSync(path.join(claudeHost, "operations", "assets")).length, 0);
+  equal(existsSync(path.join(claudeHost, "identity", "window-locators")), false);
+  for (const retired of [
     "operations/window-locators",
-    "operations/assets",
+    "operations/keep-live",
     "operations/activity-monitor",
-    "operations/temp/prompts",
+    "operations/temp",
   ]) {
-    equal(readdirSync(path.join(claudeHost, relative)).length, 0);
+    equal(existsSync(path.join(claudeHost, retired)), false, `${retired} is not declared`);
   }
 });
 
@@ -110,7 +114,7 @@ test("Host capability recovery fills an exact prefix and preserves foreign resou
     recoveringFreshLayout: false,
   });
   const hostRoot = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
-  rmdirSync(path.join(hostRoot, "operations", "keep-live", "leases"));
+  rmdirSync(path.join(hostRoot, "pods"));
   const recovered = await materializeWakeflowHostCapabilityLayout(
     value.root,
     codexWorkspaceHostResourceProfile,
@@ -136,10 +140,10 @@ test("Host capability inspection and ensure ignore live contents and only repair
     recoveringFreshLayout: false,
   });
   const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
-  const leases = path.join(codexHost, "operations", "keep-live", "leases");
-  // 运行中的工作区：租约文件与 pod 回执目录都不是冲突。
-  writeFileSync(path.join(leases, "lease.json"), "{}\n", { mode: 0o600 });
-  mkdirSync(path.join(codexHost, "pods", "pod_x"), { mode: 0o700 });
+  const pods = path.join(codexHost, "pods");
+  // 运行中的工作区：pod 回执目录与其中的文件都不是冲突；检查只看声明的目录本身。
+  mkdirSync(path.join(pods, "pod_x"), { mode: 0o700 });
+  writeFileSync(path.join(pods, "pod_x", "receipt.json"), "{}\n", { mode: 0o600 });
   const live = await inspectWakeflowHostCapabilityLayout(
     value.root,
     codexWorkspaceHostResourceProfile,
@@ -152,21 +156,25 @@ test("Host capability inspection and ensure ignore live contents and only repair
     "current",
   );
 
-  rmSync(path.join(codexHost, "operations", "keep-live"), { recursive: true });
+  rmSync(pods, { recursive: true });
   const incomplete = await inspectWakeflowHostCapabilityLayout(
     value.root,
     codexWorkspaceHostResourceProfile,
   );
   equal(incomplete.status, "incomplete");
-  equal(incomplete.missingDirectoryCount, 2);
+  equal(incomplete.missingDirectoryCount, 1);
   const ensured = await ensureWakeflowHostCapabilityLayout(
     value.root,
     codexWorkspaceHostResourceProfile,
   );
   equal(ensured.disposition, "created");
-  equal(ensured.createdDirectoryCount, 2);
-  equal(statSync(leases).mode & 0o777, 0o700);
-  equal(existsSync(path.join(codexHost, "pods", "pod_x")), true, "ensure must not touch siblings");
+  equal(ensured.createdDirectoryCount, 1);
+  equal(statSync(pods).mode & 0o777, 0o700);
+  equal(
+    readdirSync(path.join(codexHost, "identity")).length > 0,
+    true,
+    "ensure must not touch siblings",
+  );
   equal(
     (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
       .status,
@@ -174,8 +182,8 @@ test("Host capability inspection and ensure ignore live contents and only repair
   );
 
   // 声明位置被普通文件占用：只报告，ensure 拒绝。
-  rmSync(path.join(codexHost, "operations", "keep-live"), { recursive: true });
-  writeFileSync(path.join(codexHost, "operations", "keep-live"), "not a directory\n");
+  rmSync(pods, { recursive: true });
+  writeFileSync(pods, "not a directory\n");
   equal(
     (await inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile))
       .status,

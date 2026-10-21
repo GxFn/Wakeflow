@@ -73,20 +73,10 @@ export function compileWakeflowHostCapabilityLayoutAuthority(
   if (hostProfileHasOperationSurface(profile)) {
     declarationIds.push(`${prefix}.operations-root`);
   }
-  if (profile.surfaces.keepLive) {
-    declarationIds.push(`${prefix}.keep-live-root`, `${prefix}.keep-live-leases-root`);
-  }
-  if (profile.surfaces.windowLocator) {
-    declarationIds.push(`${prefix}.window-locators-root`);
-  }
+  // 定位器目录 `identity/window-locators` 不进 capability 布局：它在 identity 下（窗口运行时发布对 identity
+  // 的子项有精确断言），由 locator store 在第一次登记时创建；目录声明只作资源清单（复审 J5）。
   if (profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null) {
     declarationIds.push(`${prefix}.statusline-assets-root`);
-  }
-  if (profile.surfaces.activityMonitor) {
-    declarationIds.push(`${prefix}.activity-monitor-root`);
-  }
-  if (profile.surfaces.temporaryPrompts) {
-    declarationIds.push(`${prefix}.temporary-root`, `${prefix}.temporary-prompts-root`);
   }
   const catalog = createWakeflowWorkspaceHostResourceCatalog(profile);
   const declarations = Object.freeze(

@@ -31,7 +31,6 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
         launch: "claude-worktree-flag",
         attachedDirectories: "add-dir-flag",
       },
-      keepLive: true,
       windowLocator: true,
       settingsIntegration: {
         portablePath: ".claude/settings.json",
@@ -43,8 +42,6 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
       tmuxAsset: {
         fileName: "tmux.mjs",
       },
-      activityMonitor: true,
-      temporaryPrompts: true,
       runtimeStaleness: "session-start-observer-digest",
       runtimeRefresh: "controller-in-place",
     },

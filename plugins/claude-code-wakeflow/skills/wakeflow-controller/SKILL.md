@@ -36,9 +36,10 @@ command syntax: the references and the tool descriptions hold it.
 - Wakeflow holds state authority; you hold judgment. An inspection result or a
   returned report is evidence, never acceptance. You accept by recording a
   decision in your own words.
-- Wakeflow never opens, inspects or closes a window, never sends a prompt, and
-  never edits a product repository. Those are your host actions, and each one
-  must be reported back through the tool that expects it.
+- Wakeflow never opens, inspects or closes a window and never sends a prompt:
+  those are your host actions, each reported back through the tool that
+  expects it. Neither Wakeflow nor you edits a product repository; that work
+  reaches a target window only through a delivery.
 - Never edit an active Demand root, a ledger record, a config file or a binding
   file by hand. If a call is refused, read what it returned, fix the cause, and
   call again; do not route around a refusal.
@@ -137,8 +138,7 @@ holds the coverage rules and exclusions.
 
 After the user has merged or abandoned the pod's branch and its Demand is
 archived, close the pod with `wakeflow_pod`: record the branch dispositions,
-then remove the pod once its windows are retired and its checkouts are gone.
-Depth: `references/workspace-and-windows.md`.
+then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
 
 ## Checking the workspace
 

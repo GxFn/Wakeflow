@@ -137,6 +137,21 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
 `wakeflow_verify` 是严格读，每道门只有通过、失败或不可用三种结果。不可用与失败
 分开计数是有意的："没能检查"永远不会被报成"没问题"。
 
+## 它会碰你机器上的什么
+
+- 完全在你的机器上运行：一个走 stdio 的工具服务与观察 hook，都由 Agent 宿主以
+  `node` 启动。不联网、不发遥测、不需要账号。
+- 在工作区内写 `wakeflow.config.json`、`.wakeflow-active/`、`.wakeflow-local/`（运行时
+  状态、hook 记录与它发布的宿主资产）、你选的账本目录、它管理的 Design 与 Test
+  支撑面，以及 `CLAUDE.md` 和 `.gitignore` 里的托管块。
+- 宿主设置（有这种设置的宿主，即 Claude Code）：在工作区根与受管的 Design、Test
+  面的 `.claude/settings.json` 里只放行它自己的工具与助手的精确规则，在同样三处的
+  `.claude/settings.local.json` 里写状态行条目。不写更宽的规则，也不写进产品仓库。
+- 产品仓库由 Design 只读，只有产品窗口按投递的任务改动它；托管块只出现在明确选择
+  的仓库里；pod 会添加"安装"一节说明的关联检出。
+- 窗口、会话与 prompt 是宿主效果，由 Controller 里的 Agent 经宿主执行、以它自己的
+  命令可见；Wakeflow 的进程从不执行任何一个。
+
 ## Wakeflow 不会做的事
 
 - 代你接受工作。接受是 Controller Agent 自己措辞记录的决定，且对着你能复读的证

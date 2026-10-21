@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { constants as fileSystemConstants } from "node:fs";
 import { lstat, opendir, open as openFileHandle, readFile, realpath, } from "node:fs/promises";
 import nodePath from "node:path";
@@ -6,8 +7,8 @@ import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { decodeUtf8, encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { createHostHookObservation, writeHostHookObservation, } from "../kernel/hook-observations.js";
-import { hostRuntimeRootRef, parseWakeflowHostId, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../kernel/layout.js";
 import { createIncidentId, recordIncident } from "../kernel/incident.js";
+import { hostRuntimeRootRef, parseWakeflowHostId, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../kernel/layout.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
@@ -552,6 +553,76 @@ async function writeObservation(root, input) {
 function outcome(code, written) {
     return Object.freeze({ code, written: Object.freeze([...written]) });
 }
+// ---- 窗口状态投影（ADR-0023） -------------------------------------------------------
+const TMUX_PANE_ID_PATTERN = /^%\d{1,9}$/u;
+const WINDOW_STATE_OPTION = "@wakeflow_state";
+const WINDOW_STATE_TIMEOUT_MILLISECONDS = 1000;
+/** 事件到状态的封闭映射；undefined 即不写（其他类型的 Notification）。 */
+function windowStateFor(event, notificationType) {
+    switch (event) {
+        case "session-start":
+            return "idle";
+        case "user-prompt-submit":
+            return "working";
+        case "stop":
+            return "idle";
+        case "session-end":
+            return null;
+        case "notification":
+            if (notificationType === "permission_prompt")
+                return "attention";
+            if (notificationType === "idle_prompt")
+                return "idle";
+            return undefined;
+        default:
+            return undefined;
+    }
+}
+/** hook 进程继承了 pane 里 claude 的环境：`TMUX` 与 `TMUX_PANE` 同时在场才说明它在 tmux 里。 */
+function tmuxTargetOf(env) {
+    const socketPath = typeof env.TMUX === "string" ? (env.TMUX.split(",")[0] ?? "") : "";
+    const paneId = env.TMUX_PANE;
+    if (!socketPath.startsWith("/") ||
+        typeof paneId !== "string" ||
+        !TMUX_PANE_ID_PATTERN.test(paneId)) {
+        return null;
+    }
+    return Object.freeze({ socketPath, paneId });
+}
+/** 缺省投影器：一次有界的 tmux 客户端，不重试、不抛、不读回。 */
+function projectWindowStateWithTmux(projection) {
+    try {
+        spawnSync("tmux", [
+            "-S",
+            projection.socketPath,
+            "set-option",
+            "-w",
+            "-t",
+            projection.paneId,
+            ...(projection.state === null
+                ? ["-u", WINDOW_STATE_OPTION]
+                : [WINDOW_STATE_OPTION, projection.state]),
+        ], { stdio: "ignore", timeout: WINDOW_STATE_TIMEOUT_MILLISECONDS });
+    }
+    catch {
+        // UI 投影失败静默：记录已经写下，落地与验收永不看这个选项。
+    }
+}
+function projectWindowState(input, event, notificationType) {
+    const state = windowStateFor(event, notificationType);
+    if (state === undefined)
+        return;
+    const target = tmuxTargetOf(isRecord(input.env) ? input.env : {});
+    if (target === null)
+        return;
+    const projector = input.projectWindowState ?? projectWindowStateWithTmux;
+    try {
+        projector(Object.freeze({ ...target, state }));
+    }
+    catch {
+        // 注入的投影器抛错同样静默。
+    }
+}
 function defaultClock() {
     return new Date();
 }
@@ -571,22 +642,32 @@ async function observe(input, written) {
     const subject = await resolveSubject(payload.value.cwd, isRecord(input.env) ? input.env : {});
     if (subject === null)
         return outcome(null, written);
+    const landing = await writeToMatchingWorkspaces(subject, host.value, record, written);
+    // ADR-0023：只对已绑定会话投影窗口状态；记录写入的成败不受它影响。
+    if (landing.bound)
+        projectWindowState(input, record.event, payload.value.notificationType);
+    return outcome(landing.failed ? "write-failed" : null, written);
+}
+/** 写进每个匹配的工作区：session-start 之外只写已绑定的会话；报是否有写失败、是否命中了绑定。 */
+async function writeToMatchingWorkspaces(subject, hostId, record, written) {
     let failed = false;
+    let bound = false;
     for (const workspace of await matchingWorkspaces(subject)) {
-        if (record.event !== "session-start" &&
-            !(await workspaceBindsSession(workspace, host.value, record.sessionId))) {
+        const binds = await workspaceBindsSession(workspace, hostId, record.sessionId);
+        if (record.event !== "session-start" && !binds)
             continue;
-        }
+        if (binds)
+            bound = true;
         const result = await writeObservation(workspace, record);
         if ("failure" in result) {
             failed = true;
-            await recordWriteFailure(workspace, host.value, record.event, result.failure);
+            await recordWriteFailure(workspace, hostId, record.event, result.failure);
         }
         else {
             written.push(result.written);
         }
     }
-    return outcome(failed ? "write-failed" : null, written);
+    return { failed, bound };
 }
 /**
  * 写失败留一条事故记录（open-items G8，§13.166）：工作区已初始化时才写，失败静默；verify 的

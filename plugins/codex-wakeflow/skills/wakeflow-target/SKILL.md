@@ -51,6 +51,9 @@ report, return the callback. You own no other step and no Controller authority.
   tool name, `code`/`reason` and any `causeCode` in your report and stop.
 - Never invent a result. If you could not run something, say so; "unverified"
   is an acceptable report and a false pass is not.
+- A sub-agent you spawn may only search, triage logs or summarize, bounded;
+  its output is advice. It never imports, sends the callback, edits outside
+  your checkout or answers in the user's place.
 - Every acceptance anchor in the package must be answered in your report -
   satisfied, not satisfied, or blocked, each with what you actually observed.
 - Evidence you cite must already be a managed evidence record of this Demand.
@@ -118,4 +121,7 @@ not cross, and the residual risk in one honest paragraph.
 Stop and report a blocker, without changing code, when the package's goal
 contradicts the repository's rules, when the assigned checkout is missing or
 not the one described, when the work would require leaving the boundary, or
-when a required piece of evidence cannot be produced.
+when a required piece of evidence cannot be produced. An anchor that cannot
+be tested, contradicts the repository's own authority or rests on a fact you
+cannot establish is imported as `needs-review` with that finding; do not
+invent a goal that makes it testable.

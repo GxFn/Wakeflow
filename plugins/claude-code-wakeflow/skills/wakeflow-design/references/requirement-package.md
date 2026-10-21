@@ -26,6 +26,15 @@ records the result. While it is still fuzzy:
   with your recommended answer and its trade-off.
 - Keep verified facts, your recommendations, the user's decisions and open
   questions apart. A recommendation the user has not confirmed is not scope.
+- Probe a vague term with a concrete scenario ("when X happens, what does
+  the user see?") rather than asking for a definition. Write down every place
+  where the code and the documentation contradict each other. A decision the
+  user has not answered, and that would make the implementer guess, means the
+  package is not ready - say which decision, not "needs clarification".
+- When the change can land in more than one way, offer two to four real
+  alternatives compared on the same dimensions, recommend one, and say which
+  evidence would overturn the recommendation. An interface, a mock or an
+  adapter on its own is not an alternative.
 
 ## Sections
 
@@ -65,7 +74,9 @@ means the exact steps and the observed wrong behavior, not a theory about the
 cause.
 
 **Completion definition.** What is observably true when this is done. Write
-it so that someone who did not read the discussion can check it.
+it so that someone who did not read the discussion can check it, including
+the failure paths (what happens when the input is wrong or the dependency is
+down) and how the user will verify it themselves.
 
 **Non-goals.** What this package deliberately does not do. This is what
 prevents a target from widening the change, so name the adjacent work that
@@ -111,6 +122,13 @@ Enough for the Controller to split it into tasks; not a line-by-line design.
 **Testing decision.** Whether this needs real-environment testing, and if so
 what environment and what has to be exercised. The Controller freezes a test
 contract from this, so vagueness here becomes an untestable contract later.
+For a real environment name the environment reference, where each
+configuration value comes from, how data is prepared and reset, which
+resources are exclusive and which shared, and which operations are allowed.
+
+**Correcting after an escalation.** A package that answers an escalation
+states the observed effect and the expected effect side by side, and what in
+the original package led to the difference.
 
 **Known facts and method** (research only). What is already established, and
 how the question will be answered.

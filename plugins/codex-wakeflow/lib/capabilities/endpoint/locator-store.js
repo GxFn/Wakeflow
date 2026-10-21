@@ -12,7 +12,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
-import { hostRuntimeRootRef } from "../../kernel/layout.js";
+import { hostWindowLocatorsRootRef } from "../../kernel/layout.js";
 /**
  * Wakeflow Capabilities / Endpoint：Claude 窗口定位器记录（能力卡 2.3）。
  *
@@ -24,7 +24,7 @@ const LOCATOR_MAXIMUM_BYTES = parseByteCount(16 * 1024, "$locator.maximumBytes")
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 function windowLocatorRootRef(hostId) {
-    return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/identity/window-locators`, "$locator");
+    return hostWindowLocatorsRootRef(hostId);
 }
 function windowLocatorRef(hostId, windowId) {
     return parsePortableResourcePath(`${windowLocatorRootRef(hostId)}/${windowId}.json`, "$locator");

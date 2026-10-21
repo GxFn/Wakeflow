@@ -2,7 +2,7 @@ import { parsePortableResourcePath, } from "../foundation/filesystem/portable-re
 import { hostPodReceiptsRootRef } from "../kernel/layout.js";
 import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./window-runtime/wakeflow-window-runtime-paths.js";
 import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
-import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "./workspace-host-runtime-paths.js";
+import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, wakeflowHostWindowLocatorsRootRef, } from "./workspace-host-runtime-paths.js";
 import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 function hostRuntimeRef(profile, suffix) {
     return parsePortableResourcePath(suffix === undefined
@@ -111,14 +111,9 @@ function privateProjectionFileDeclaration(declarationId, ownerId, relativePath) 
         },
     });
 }
-/** Profile 是否声明任一 `operations/` 下的表面；目录与布局 authority 共用此判定。 */
+/** Profile 是否声明任一 `operations/` 下的表面（只剩 `operations/assets` 的两份资产，复审 J5）；目录与布局 authority 共用此判定。 */
 export function hostProfileHasOperationSurface(profile) {
-    return (profile.surfaces.keepLive ||
-        profile.surfaces.windowLocator ||
-        profile.surfaces.statuslineAsset !== null ||
-        profile.surfaces.tmuxAsset !== null ||
-        profile.surfaces.activityMonitor ||
-        profile.surfaces.temporaryPrompts);
+    return profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null;
 }
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
@@ -141,11 +136,9 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
     if (hostProfileHasOperationSurface(profile)) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.operations-root`, "host-runtime-layout", hostRuntimeRef(profile, "operations")));
     }
-    if (profile.surfaces.keepLive) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.keep-live-root`, "keep-live", hostRuntimeRef(profile, "operations/keep-live")), privateDirectoryDeclaration(`${prefix}.keep-live-leases-root`, "keep-live", hostRuntimeRef(profile, "operations/keep-live/leases")));
-    }
     if (profile.surfaces.windowLocator) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.window-locators-root`, "window-locator", hostRuntimeRef(profile, "operations/window-locators")));
+        // 复审 J5：定位器真实目录在 identity 下（locator store 与 tmux 助手共用同一内核常量）。
+        declarations.push(privateDirectoryDeclaration(`${prefix}.window-locators-root`, "window-locator", wakeflowHostWindowLocatorsRootRef(profile)));
     }
     if (profile.surfaces.settingsIntegration !== null) {
         declarations.push(integrationFileDeclaration(`${prefix}.settings-portable`, "host-settings-integration", profile.surfaces.settingsIntegration.portablePath, "tracked-shareable"), integrationFileDeclaration(`${prefix}.settings-local`, "host-settings-integration", profile.surfaces.settingsIntegration.localPath, "ignored-private"));
@@ -159,12 +152,6 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
     }
     if (tmuxAsset !== null) {
         declarations.push(privateProjectionFileDeclaration(`${prefix}.tmux-asset`, "host-tmux", hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`)));
-    }
-    if (profile.surfaces.activityMonitor) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.activity-monitor-root`, "activity-monitor", hostRuntimeRef(profile, "operations/activity-monitor")));
-    }
-    if (profile.surfaces.temporaryPrompts) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.temporary-root`, "host-runtime-layout", hostRuntimeRef(profile, "operations/temp")), privateDirectoryDeclaration(`${prefix}.temporary-prompts-root`, "temporary-prompt", hostRuntimeRef(profile, "operations/temp/prompts")));
     }
     return Object.freeze(declarations);
 }

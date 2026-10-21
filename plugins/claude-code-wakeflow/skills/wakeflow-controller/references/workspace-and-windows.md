@@ -249,12 +249,12 @@ blanket prerequisite for actions whose own contracts do not depend on it.
 
 A window's `attention` says whether the host is waiting for the user there:
 `needed` when the bound session's latest hook record is a Claude Code
-`Notification` (its `notificationType` names the cause - a permission prompt,
-an idle prompt, an expired login or a usage limit), `none` once a later prompt
+`Notification` (`notificationType` names the cause), `none` once a later prompt
 or stop superseded it, `null` without a binding or any record. Tell the user
-which window needs them instead of waiting for a callback from it. No tool
-clears the state; the user's action in that window does. The field says
-nothing about the window's MCP or instruction state.
+which window needs them rather than wait for its callback; their action there
+clears it, no tool does. On Claude Code the same hooks also mark a bound
+window's name in the window list with `[working]`, `[idle]` or `[attention]`
+(`mark` sets that format per window): a hint for the user, never evidence.
 
 A registered window's `launchIntent` compares the intent digest recorded at its
 handshake with the intent the current config and host profile produce:

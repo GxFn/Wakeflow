@@ -83,7 +83,7 @@ registered but started again.
 ## The handover card
 
 When every window is registered and `wakeflow_status` names
-`requirement-authoring` as the next action: show one card and nothing else: the workspace project in the Codex app and its threads, one line each - Controller (where the user gives instructions and asks what is next), Design (where a requirement is written with the agent), one thread per product repository (where that repository's work happens; it waits for a delivery and is never given tasks by hand), Test (where the test contract runs); what to do first - open the Design thread and describe the first requirement in plain words, return to the Controller thread when Design says the package is published; `/wakeflow:status` in the Controller answers "what is next" from then on.
+`requirement-authoring` as the next action: show one card and nothing else: the workspace project in the Codex app and its threads, one line each - Controller (where the user gives instructions and asks what is next), Design (where a requirement is written with the agent), one thread per product repository (where that repository's work happens; it waits for a delivery and is never given tasks by hand), Test (where the test contract runs); long runs - keep the machine awake yourself, Wakeflow runs no background process; what to do first - open the Design thread and describe the first requirement in plain words, return to the Controller thread when Design says the package is published; `/wakeflow:status` in the Controller answers "what is next" from then on.
 
 After the card, tell the user to close this setup session. Do not continue the
 main flow from here: from now on the Controller window is the Controller.

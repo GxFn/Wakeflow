@@ -1,4 +1,4 @@
-import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import { createWakeflowHostMaintenanceContribution, } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
@@ -6,7 +6,7 @@ import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-oper
 import { planClaudeCodePortableSettingsComposition } from "./claude-code-portable-settings-composition.js";
 import { ClaudeCodePortableSettingsOperationExecutionError, executeClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-operation-executor.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
-import { CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID, ClaudeCodeStatuslineSettingsOperationError, executeClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsOperation, } from "./claude-code-statusline-settings-operation.js";
+import { CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID, ClaudeCodeStatuslineSettingsOperationError, executeClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsSurfaceOperations, } from "./claude-code-statusline-settings-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_BLOCKER, CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND, CLAUDE_CODE_TMUX_ASSET_OWNER_ID, executeClaudeCodeTmuxAssetOperation, planClaudeCodeTmuxAssetOperation, } from "./claude-code-tmux-asset-operation.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
 /**
@@ -58,20 +58,25 @@ async function planHostAsset(plan, blocker, signal) {
         throw error;
     }
 }
-/** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作。 */
-async function planStatuslineSettings(root, signal) {
+/** 本地设置读不出或不是 JSON 对象时不猜：整份贡献 blocked，不带该操作；支撑面各自带 surfaceId 的 blocker。 */
+async function planStatuslineSettings(root, request) {
+    const signal = request.signal === undefined ? {} : { signal: request.signal };
     try {
+        const program = await planClaudeCodeStatuslineSettingsOperation(root, signal);
+        const surfaces = await planClaudeCodeStatuslineSettingsSurfaceOperations(root, {
+            action: request.action,
+            config: request.config,
+            ...signal,
+        });
         return {
-            operation: await planClaudeCodeStatuslineSettingsOperation(root, {
-                ...(signal === undefined ? {} : { signal }),
-            }),
-            blocker: null,
+            operations: [...(program === null ? [] : [program]), ...surfaces.operations],
+            blockerCodes: surfaces.blockerCodes,
         };
     }
     catch (error) {
         if (error instanceof ClaudeCodeStatuslineSettingsOperationError) {
             if (error.reason === "settings-unreadable") {
-                return { operation: null, blocker: CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER };
+                return { operations: [], blockerCodes: [CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER] };
             }
             fail("owner", error.path);
         }
@@ -87,14 +92,14 @@ async function planContribution(root, request) {
     });
     const statusline = await planHostAsset((options) => planClaudeCodeStatuslineAssetOperation(root, options), CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER, request.signal);
     const tmuxAsset = await planHostAsset((options) => planClaudeCodeTmuxAssetOperation(root, options), CLAUDE_CODE_TMUX_ASSET_BLOCKER, request.signal);
-    const settings = await planStatuslineSettings(root, request.signal);
+    const settings = await planStatuslineSettings(root, request);
     const projections = await planProjections(root, request);
     // blocker 在边界内排序去重前必须互不相同：五个来源的前缀各不相同。
     const blockerCodes = [
         ...composition.blockerCodes,
         ...(statusline.blocker === null ? [] : [statusline.blocker]),
         ...(tmuxAsset.blocker === null ? [] : [tmuxAsset.blocker]),
-        ...(settings.blocker === null ? [] : [settings.blocker]),
+        ...settings.blockerCodes,
         ...projections.blockerCodes,
     ];
     return createWakeflowHostMaintenanceContribution({
@@ -114,7 +119,7 @@ async function planContribution(root, request) {
             })),
             ...(statusline.operation === null ? [] : [statusline.operation]),
             ...(tmuxAsset.operation === null ? [] : [tmuxAsset.operation]),
-            ...(settings.operation === null ? [] : [settings.operation]),
+            ...settings.operations,
             ...projections.operations,
         ],
     });
@@ -182,6 +187,7 @@ async function executeHostAssetOperation(execute, root, request) {
 async function executeStatuslineSettingsOperation(root, request) {
     try {
         const executed = await executeClaudeCodeStatuslineSettingsOperation(root, {
+            config: request.config,
             operation: request.operation.payload,
             sourceDigest: request.operation.sourceDigest,
             targetDigest: request.operation.targetDigest,

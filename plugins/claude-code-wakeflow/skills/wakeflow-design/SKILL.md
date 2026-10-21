@@ -94,7 +94,9 @@ needs. A `claim-state-drift` blocker means the board moved; inspect again.
 - **Correction**: publish the corrected package with `supersedes` set to the
   old `requirementId`. If the old package is still pending or parked, the same
   apply withdraws it as `superseded-by`; a claimed package is the Controller's
-  and is not superseded from here.
+  and is not superseded from here. When an escalation brought the user here,
+  the correction records what the target observed beside what was expected,
+  and why the original package said otherwise.
 - **Parking**: a package that must wait for something is published with
   `parked.trigger` - the condition that must become true. It lands `parked`
   and the Controller does not claim it. When the trigger holds, run

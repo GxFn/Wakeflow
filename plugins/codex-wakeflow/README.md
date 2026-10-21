@@ -162,6 +162,27 @@ next action; `wakeflow_verify` is the strict read, where each gate passes,
 fails, or is reported as unavailable. Unavailable is counted separately from
 failure on purpose: "we could not check" is never reported as "it is fine".
 
+## What it touches on your machine
+
+- It runs entirely on your machine: a tool server over stdio and the
+  observation hooks, both started as `node` by your agent host. It makes no
+  network call, sends no telemetry and needs no account.
+- Inside the workspace it writes `wakeflow.config.json`, `.wakeflow-active/`,
+  `.wakeflow-local/` (runtime state, hook records and the host assets it
+  publishes), the ledger directory you chose, the Design and Test surfaces it
+  manages, and the managed blocks in `AGENTS.md` and `.gitignore`.
+- Host settings, where the host has them (Claude Code): precise allow rules
+  for its own tools and helper in `.claude/settings.json` at the workspace
+  root and the managed Design and Test surfaces, and the status line entry in
+  `.claude/settings.local.json` in the same three places. Nothing broader, and
+  nothing in a product repository.
+- Product repositories are read by Design and changed only by a product
+  window doing a delivered task; the managed block appears only where the
+  repository opted in; a pod adds the linked checkout described under Install.
+- Windows, sessions and prompts are host effects your Controller agent
+  performs through the host, visible as its own commands; Wakeflow's process
+  never performs one.
+
 ## What Wakeflow will not do
 
 - Accept work on your behalf. Acceptance is a decision your Controller agent

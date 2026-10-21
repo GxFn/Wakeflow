@@ -572,6 +572,7 @@ async function executePrepare(context, input, binding) {
         workType: target.workType === "test" ? "test" : "implementation",
         phase: target.phase,
         generation: currentGeneration,
+        awaitingDecision: context.authority.loaded.aggregate.state.awaitingDecision !== undefined,
     });
     if (blockers.length > 0)
         rejectWith(blockers, "$request.targetTaskId");
@@ -988,7 +989,10 @@ function outcomeDraft(input, target, decision) {
     if (!decision.accepted)
         rejectWith([decision.blocker], "$request.attempt");
     const attemptDigest = input.attempt.evidenceDigest ?? null;
-    const readback = input.readback ?? { status: "unavailable" };
+    // 从未到达窗口的投递没有回读（复审 D7）：rejected-before-send 的回读一律 unavailable、无摘要。
+    const readback = decision.disposition === "rejected-before-send"
+        ? { status: "unavailable", evidenceDigest: null }
+        : (input.readback ?? { status: "unavailable" });
     try {
         return createDeliveryOutcome({
             deliveryId: target.currentDelivery.deliveryId,
@@ -1118,6 +1122,10 @@ async function executeOutcome(context, input, binding) {
     const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
     const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
     const route = await loadRoute(context, envelope.route.windowId);
+    // 窗口已被换代就不能用新会话的记录给旧信封定处置（复审 D27，与 rearm 同一条规则）。
+    if (route.binding.bindingId !== envelope.route.bindingId) {
+        fail("precondition-failed", "binding-changed", "$request.deliveryId");
+    }
     const decision = await observedOutcomeDecision(context, input, envelope, route.binding.handle.value, currentlyIndeterminate);
     if (!decision.accepted) {
         const blockers = [decision.blocker];
@@ -1381,6 +1389,7 @@ async function executeRearm(context, input, binding) {
     const blockers = deriveRearmBlockers({
         phase: target.phase,
         generation: target.currentDelivery.generation,
+        awaitingDecision: context.authority.loaded.aggregate.state.awaitingDecision !== undefined,
     });
     if (blockers.length > 0)
         rejectWith(blockers, "$request.deliveryId");

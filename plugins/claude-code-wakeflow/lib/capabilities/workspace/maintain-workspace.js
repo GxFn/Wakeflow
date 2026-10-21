@@ -85,10 +85,12 @@ function admitHostFacade(facade) {
         throw error;
     }
 }
-function desiredConfigFor(input) {
+function desiredConfigFor(input, workspaceRoot) {
     try {
         if (input.action === "fresh-initialize") {
-            const compilation = compileWakeflowFreshConfigSelection(input.body.selection);
+            const compilation = compileWakeflowFreshConfigSelection(input.body.selection, {
+                workspaceRoot,
+            });
             return Object.freeze({ desiredConfig: compilation.config, compilation });
         }
         if (input.action === "reconfigure") {
@@ -351,7 +353,7 @@ async function planMaintenance(context, input) {
     if (input.kind !== "effect") {
         fail("invalid-request", "mode", "$request.mode");
     }
-    const { desiredConfig, compilation } = desiredConfigFor(input);
+    const { desiredConfig, compilation } = desiredConfigFor(input, context.root.absolutePath);
     const overlap = deriveArtifactOverlapBlockers(context.root.absolutePath, desiredConfig, context.facade.artifactRoot);
     if (overlap.length > 0)
         return blockedPlan(overlap);

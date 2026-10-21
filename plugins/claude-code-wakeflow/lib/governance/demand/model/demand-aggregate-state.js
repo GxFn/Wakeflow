@@ -820,6 +820,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
     }
     const target = current.targetTasks.find((entry) => entry.targetTaskId === envelope.target.targetTaskId);
     if (current.lifecycle !== "active" ||
+        current.awaitingDecision !== undefined ||
         envelope.demandId !== current.demandId ||
         target === undefined ||
         target.taskPackageId !== envelope.target.taskPackageId ||
@@ -1073,6 +1074,7 @@ export function rearmDeliveryInDemandAggregateState(currentValue, rearmValue) {
     // rearmedAt 只保留来源时钟的审计事实；因果关系由处置摘要、围栏与追加 CAS 建立。
     if (target === undefined ||
         current.lifecycle !== "active" ||
+        current.awaitingDecision !== undefined ||
         (target.phase !== "host-effect-rejected" && target.phase !== "test-host-effect-rejected") ||
         target.currentDelivery.generation !== rearm.previousGeneration ||
         target.currentDelivery.fence.claimId !== rearm.previousFence.claimId ||
@@ -1724,10 +1726,13 @@ export function createInitialDemandAggregateState(demandIdValue, authorityDigest
         targetTasks: [],
     });
 }
-/** 可被替代的实现目标 phase：没有在飞的宿主效果，也没有待评审的结果。tasking 的谱系期望共用这一份。 */
+/**
+ * 可被替代的实现目标 phase：没有在飞的宿主效果，也没有待评审的结果。tasking 的谱系期望共用这一份。
+ * `delivery-prepared` 不在其中（复审 D2、裁决 R3）：许可已发、尚未送出时替代会把窗口的工作声明困到恢复窗口；
+ * 先记 `failed-before-send`（→ `host-effect-rejected`，声明释放）再替代。
+ */
 export const REPLACEABLE_PHASES = Object.freeze([
     "planned",
-    "delivery-prepared",
     "host-effect-rejected",
     "rework-requested",
     "product-defect-rework-requested",

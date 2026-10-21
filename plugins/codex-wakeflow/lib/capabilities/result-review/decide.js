@@ -1,5 +1,5 @@
 import { RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS, } from "../../contracts/vocabulary/test-step-vocabulary.js";
-import { scanPrivacy } from "../../kernel/privacy-scan.js";
+import { CREDENTIAL_PRIVACY_FINDING_KINDS, scanPrivacy, } from "../../kernel/privacy-scan.js";
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
  *
@@ -105,6 +105,31 @@ export function reportTexts(report) {
             ? [step.observed]
             : [step.observed, step.failure.recommendedAction]),
     ]);
+}
+/** Controller 写进事件流的决定文本只拒凭证类命中（复审 G3）：rationale、阻塞理由、残余风险、升级的问题/选项/建议。 */
+export function deriveCredentialBlockers(texts, policy) {
+    return Object.freeze(derivePrivacyRules(texts, policy)
+        .filter((kind) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(kind))
+        .map((kind) => `privacy:${kind}`));
+}
+/** 递归收集一个请求值里的全部字符串叶子：决定请求的文本字段随 schema 演进，扫描不挑字段名。 */
+export function stringLeavesOf(value, limit = 4096) {
+    const leaves = [];
+    const visit = (node) => {
+        if (leaves.length >= limit)
+            return;
+        if (typeof node === "string")
+            leaves.push(node);
+        else if (Array.isArray(node))
+            for (const entry of node)
+                visit(entry);
+        else if (node !== null && typeof node === "object") {
+            for (const entry of Object.values(node))
+                visit(entry);
+        }
+    };
+    visit(value);
+    return Object.freeze(leaves);
 }
 /** 隐私扫描只返回命中的规则类别（去重、稳定排序），从不返回命中的文本。 */
 export function derivePrivacyRules(texts, policy) {

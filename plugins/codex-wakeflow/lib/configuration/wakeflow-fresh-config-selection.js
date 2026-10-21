@@ -90,13 +90,16 @@ function assertFields(value, required, optional, path) {
 }
 function parseOptions(value) {
     const parsed = record(value, "$options");
-    if (Object.keys(parsed).some((key) => key !== "uuidFactory") ||
+    if (Object.keys(parsed).some((key) => key !== "uuidFactory" && key !== "workspaceRoot") ||
         (parsed.uuidFactory !== undefined &&
-            (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory)))) {
+            (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory))) ||
+        (parsed.workspaceRoot !== undefined &&
+            (typeof parsed.workspaceRoot !== "string" || parsed.workspaceRoot.length === 0))) {
         fail("input", "$options");
     }
     return Object.freeze({
         uuidFactory: parsed.uuidFactory,
+        workspaceRoot: parsed.workspaceRoot,
     });
 }
 function selectionKey(value, path, seen) {
@@ -213,7 +216,11 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
             fail("reference", `${selectionEntry.path}/root/selectionKey`);
     }
     const seenUuid = new Set();
-    const seed = computeCanonicalJsonSha256Digest(selection);
+    // 种子带工作区根（裁决 R2，复审 M5）：selection 字节相同的两个工作区不再得到相同的 program/window/pod id——
+    // 助手按这些 id 认 tmux pane。preview 与 apply 在同一根上重算，确定性不受影响。
+    const seed = options.workspaceRoot === undefined
+        ? computeCanonicalJsonSha256Digest(selection)
+        : computeCanonicalJsonSha256Digest(parseJsonValue({ selection, workspaceRoot: options.workspaceRoot }, "$seed"));
     const programId = allocateId("program", options, seenUuid, seed, "program");
     const repositoryByKey = new Map();
     const repositoryAllocations = [];

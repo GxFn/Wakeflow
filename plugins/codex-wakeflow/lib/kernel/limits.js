@@ -21,6 +21,17 @@ export const WAKEFLOW_LIMITS = Object.freeze({
     /** 分页读取一页的最大条目数。 */
     listPageItems: 256,
 });
+/**
+ * Demand 根与归档负载共用的树容量（复审 G12）：归档"超出即拒绝、不做部分归档"，所以能记录进 Demand 根的
+ * 证据成员必须先受同一上限约束——证据的单文件上限由这里推导，不能大于归档能收的单文件。
+ */
+export const WAKEFLOW_DEMAND_TREE_CAPACITY = Object.freeze({
+    maximumEntries: 8192,
+    maximumDepth: 24,
+    maximumFiles: 4096,
+    maximumFileBytes: 16 * 1024 * 1024,
+    maximumTotalBytes: 256 * 1024 * 1024,
+});
 /** 失败原因必须是 kebab-case 记号；字节上限名到原因的映射是显式的。 */
 const BYTE_LIMIT_REASONS = Object.freeze({
     publicRequestBytes: "public-request-bytes",

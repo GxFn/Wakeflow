@@ -32,8 +32,12 @@ change another repository to get it.
 Lineage rules that decide which call you make:
 
 - First package for a repository in this Demand: no lineage.
-- After a redesign decision: a replacement package. The old target and package
-  become superseded. Only a target that was not accepted can be replaced.
+- After an escalation answered by a supplement package: a replacement package.
+  The old target and package become superseded. Only a target with nothing in
+  flight can be replaced - planned, rework-requested, escalated, review-blocked,
+  or rejected before send with its outcome recorded. A prepared delivery that
+  was never sent is recorded as `failed-before-send` first, so the window's
+  work claim is released before the replacement is planned.
 - Follow-up work on a repository whose target was accepted: a continuation
   package - later in the same Demand, or on a finished Demand reached through
   `wakeflow_continue_demand` first (`lineage-continuation-required` names the

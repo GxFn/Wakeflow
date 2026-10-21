@@ -57,6 +57,21 @@ export function payloadPrivacyBlockers(files) {
     }
     return Object.freeze(blockers);
 }
+/**
+ * 用户或 Controller 写进事件流的自由文本（取消理由、决定正文、续接摘要）只拒凭证类命中（复审 G3）：
+ * 事件只追加不可改，而终态预览会扫全部负载——不在入口拦住，一段凭据就能让 Demand 永远到不了终态。
+ */
+export function textPrivacyBlockers(label, text) {
+    const blockers = [];
+    for (const finding of scanPrivacy(text, PRIVACY_POLICY)) {
+        if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
+            continue;
+        blockers.push(`privacy:${label}:${finding.line}:${finding.kind}`);
+        if (blockers.length >= PAYLOAD_PRIVACY_BLOCKER_MAXIMUM)
+            break;
+    }
+    return Object.freeze(blockers);
+}
 /** 等待 Controller 评审的结果：取消必须先把它们评掉（F5.5）。 */
 export function pendingReviewTargets(state) {
     return Object.freeze(state.targetTasks
@@ -112,6 +127,7 @@ export function deriveTerminalBlockers(input) {
         ...packageBlockers(input),
         ...gateBlockers(input),
         ...input.payloadBlockers,
+        ...(input.textBlockers ?? []),
         ...(input.archiveConflict ? ["archive-conflict"] : []),
     ];
     return Object.freeze([...new Set(blockers)].slice(0, BLOCKERS_MAXIMUM));
@@ -141,6 +157,7 @@ export function deriveContinueBlockers(input) {
         blockers.push(`pod-closing:${input.pod.podId}`);
     if (input.otherActiveDemandId !== null)
         blockers.push(`pod-busy:${input.otherActiveDemandId}`);
+    blockers.push(...(input.textBlockers ?? []));
     return Object.freeze(blockers);
 }
 export function deriveDecisionBlockers(input) {
@@ -151,6 +168,7 @@ export function deriveDecisionBlockers(input) {
         blockers.push(`lifecycle:${input.lifecycle}`);
     if (input.rootPresent && !input.awaitingDecision)
         blockers.push("no-escalation-pending");
+    blockers.push(...(input.textBlockers ?? []));
     return Object.freeze(blockers);
 }
 /**

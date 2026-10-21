@@ -27,7 +27,7 @@ import { archiveRequirementClaim, readRequirementClaimState, reclaimRequirementP
 import { createArchiveManifest, findLatestDemandArchive, manifestDigest, manifestPath, mapFoundationError, readArchivePayload, readDemandRootSnapshot, readPayloadFiles, restoreDemandRoot, retireDemandRoot, sealDemandArchive, payloadTexts, } from "./archive.js";
 import { closeSliceContext, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, publicationEnvelope, releaseDemandHandle, signalOptions, } from "./context.js";
 import { admitDemandCancellationResult, admitDemandCompletionResult, admitDemandContinuationResult, parseDemandCancellationRequest, parseDemandCompletionRequest, parseDemandContinuationRequest, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
-import { computePayloadTreeDigest, demandWindowIds, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, } from "./decide.js";
+import { computePayloadTreeDigest, demandWindowIds, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, textPrivacyBlockers, } from "./decide.js";
 import { activeDemandOnPod } from "./service.js";
 import { evaluateVerifyGates } from "./verify.js";
 /**
@@ -281,6 +281,7 @@ async function planTerminal(context, input, facts) {
         pendingReviews: pendingReviewTargets(state),
         gates: verify.gates,
         payloadBlockers,
+        textBlockers: input.reason === null ? [] : textPrivacyBlockers("reason", input.reason),
         archiveConflict: existingArchive !== null && existingArchive.archiveRef === archiveRef,
     });
     // 只有 complete 依赖接受后路由；cancel 在路由不可用时照常进行（路由不可用对 complete 已是阻塞项）。
@@ -473,6 +474,18 @@ function manifestLineage(manifest) {
     });
 }
 /** 步骤 3：需求包 claimed → archived（完成）或 withdrawn（取消）；已到位即 current。 */
+/**
+ * 取消时需求包的撤回理由（复审 G2）：前缀 `demand-cancelled:<demandId>` 供观察侧识别（前缀匹配），后面带用户的
+ * 取消理由，整体不超过看板理由上限。
+ */
+const WITHDRAWAL_REASON_MAXIMUM = 4096;
+function cancellationWithdrawalReason(plan) {
+    const prefix = `demand-cancelled:${plan.demandId}`;
+    const reason = plan.reason?.trim() ?? "";
+    if (reason.length === 0)
+        return prefix;
+    return `${prefix}: ${reason}`.slice(0, WITHDRAWAL_REASON_MAXIMUM).trimEnd();
+}
 async function settlePackage(context, plan, lineage) {
     const source = await readClaim(context, plan.package.requirementId);
     if (source === null)
@@ -489,7 +502,7 @@ async function settlePackage(context, plan, lineage) {
     const at = now(context);
     const next = plan.action === "complete"
         ? archiveRequirementClaim(state, at)
-        : withdrawRequirementClaim(state, `demand-cancelled:${plan.demandId}`, at);
+        : withdrawRequirementClaim(state, cancellationWithdrawalReason(plan), at);
     await replaceRequirementClaimStateFile(context.root, source, next, context.signal);
     const reread = await readClaim(context, plan.package.requirementId);
     if (reread === null)
@@ -704,6 +717,7 @@ async function planContinue(context, input) {
         otherActiveDemandId: archive === null ? null : await activeDemandOnPod(context, archive.manifest.podId, demandId),
         archivedPodId: archive?.manifest.podId ?? null,
         pod: archive === null ? null : configuredPod(context, archive.manifest.podId),
+        textBlockers: textPrivacyBlockers("summary", input.continuation.summary),
     });
     if (blockers.length > 0 || archive === null || claim === null)
         return blockedPlan(blockers);
@@ -737,6 +751,7 @@ async function planDecision(context, input) {
         rootPresent: handle !== null,
         lifecycle: state?.lifecycle ?? null,
         awaitingDecision: state?.awaitingDecision !== undefined,
+        textBlockers: textPrivacyBlockers("decision", input.decision.text),
     });
     if (blockers.length > 0 || handle === null || state?.awaitingDecision === undefined)
         return blockedPlan(blockers);

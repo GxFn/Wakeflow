@@ -42,7 +42,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { collectEvidenceReferences, deriveCallbackLanding, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
+import { collectEvidenceReferences, deriveCallbackLanding, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, summarizeResultForCallback, testPhaseForDecision, deriveCredentialBlockers, stringLeavesOf, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 const REPORT_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
@@ -1080,8 +1080,11 @@ async function executeImplementationDecision(context, input, binding) {
     assertControllerAuthority(context, sources);
     // 记录时未给绑定就是 null（缺失）；undefined 只留给允许集推导（§13.121 D7）。
     const blockers = deriveImplementationDecisionBlockers(request.decision, implementationAdmissionView(sources.unit, sources.evidence.targetCompletion, managedEvidenceIdsOf(context)), request.independentChecks, request.anchorEvidence ?? null);
-    if (blockers.length > 0)
-        rejectWith(blockers, "$request.decision");
+    // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
+    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request), REPORT_PRIVACY_POLICY);
+    if (blockers.length > 0 || credentialBlockers.length > 0) {
+        rejectWith([...blockers, ...credentialBlockers], "$request.decision");
+    }
     let decision;
     try {
         decision = createControllerImplementationReviewDecision({
@@ -1238,8 +1241,11 @@ async function executeTestDecision(context, input, binding) {
         fail("precondition-failed", "work-type", "$request.targetResultId");
     }
     const blockers = deriveTestDecisionBlockers(request, testView.admission);
-    if (blockers.length > 0)
-        rejectWith(blockers, "$request.decision");
+    // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
+    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request), REPORT_PRIVACY_POLICY);
+    if (blockers.length > 0 || credentialBlockers.length > 0) {
+        rejectWith([...blockers, ...credentialBlockers], "$request.decision");
+    }
     let decision;
     try {
         decision = createControllerTestReviewDecision({

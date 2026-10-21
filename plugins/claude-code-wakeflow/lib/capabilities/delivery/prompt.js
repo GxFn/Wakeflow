@@ -48,6 +48,7 @@ const LABELS = Object.freeze({
         worktrees: "pod worktrees to read (relative to this window's root)",
         sections: "sections",
         moreAnchors: "more acceptance anchors are in the task package",
+        moreBoundaries: "more forbidden boundaries are in the task package",
         returnInstruction: "Import the result with the MCP tool below; do not write result files. Delivery is not acceptance.",
         noWrite: "Never send this prompt onward to another window.",
     }),
@@ -78,6 +79,7 @@ const LABELS = Object.freeze({
         worktrees: "要读取的 pod worktree（相对本窗口根）",
         sections: "章节",
         moreAnchors: "条验收锚点在任务包里",
+        moreBoundaries: "条禁止边界在任务包里",
         returnInstruction: "用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。",
         noWrite: "不得把本 prompt 转发给其他窗口。",
     }),
@@ -86,6 +88,15 @@ function section(title, lines) {
     return ["", `${title}:`, ...lines];
 }
 // 提示词只列前 MAXIMUM_ANCHORS 条；多出来的点明条数，目标窗口才知道要去任务包里找（§13.134 现场：第 5 条被静默略去）。
+// 禁止边界同样只列前 MAXIMUM_ANCHORS 条并点明其余条数（复审 D8）：此前只渲染第一条，其余静默丢失。
+function forbiddenLines(taskPackage, labels) {
+    const forbidden = taskPackage.boundaries.forbidden;
+    const hidden = forbidden.length - MAXIMUM_ANCHORS;
+    return [
+        ...forbidden.slice(0, MAXIMUM_ANCHORS).map((entry) => `- forbidden: ${entry}`),
+        ...(hidden > 0 ? [`- … ${hidden} ${labels.moreBoundaries}`] : []),
+    ];
+}
 function anchorLines(taskPackage, labels) {
     const anchors = taskPackage.acceptanceAnchors;
     const hidden = anchors.length - MAXIMUM_ANCHORS;
@@ -217,9 +228,7 @@ export function renderDeliveryPortablePrompt(input) {
         ...section(labels.context, [taskPackage.confirmedContext[0] ?? taskPackage.objective]),
         ...section(labels.boundary, [
             `- ${input.authored.boundary}`,
-            ...(taskPackage.boundaries.forbidden[0] === undefined
-                ? []
-                : [`- forbidden: ${taskPackage.boundaries.forbidden[0]}`]),
+            ...forbiddenLines(taskPackage, labels),
         ]),
         ...(workType === "implementation"
             ? section(labels.anchors, anchorLines(taskPackage, labels))

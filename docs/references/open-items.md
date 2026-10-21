@@ -609,7 +609,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：只要以后 helper 换位置或规则收窄，旧规则就会永远留在共享 settings 里，并且仍然允许运行旧路径上的任何文件，规则集只增不减。卸载后允许规则和 statusLine 也留着。Controller 也没有办法把 legacy-broad 阻塞转成用户该做的确切修改。
   - 证据：claude-code-portable-settings-transition.ts:172-192 managedAllowEntries：不在当前规则集里的条目一律保留为用户条目；当前根规则是与运行时路径绑定的 helper 命令（tmux-asset.ts:69-76，03f8acec 引入）；现场 settings.local.json 的 statusLine 是 'node -- <绝对根>/.wakeflow-local/.../statusline.mjs'（claude-code-statusline-settings-operation.ts:240），工作区移动后失效，卸载插件后仍会运行；legacy-broad-permission-present 只出现在 settings-blocked 码里，agent 文本没有解释
   - 建议：维护一张 Wakeflow 曾写过的退役规则清单，reconcile 时删除完全匹配的条目；在 settings-blocked 的解释里点名 legacy-broad-permission-present，并给出要删的三行；把 statusLine 和允许规则的移除纳入退出意图。
-- **J5** [低 / 缺陷] 声明的宿主布局与实际存储不一致：locator 目录声明了却没人用，真正使用的目录没声明，还保留着已删除功能的目录和从未产生的事件词汇（计划阶段 9；状态：开放）
+- **J5** [低 / 缺陷] 声明的宿主布局与实际存储不一致：locator 目录声明了却没人用，真正使用的目录没声明，还保留着已删除功能的目录和从未产生的事件词汇（计划阶段 9；状态：已修 2026-10-20（§13.198）——目录声明只剩真实目录，`identity/window-locators` 由内核常量一处给出；旧工作区的空目录不碰也不报）
   - 说明：verify、reconcile 和 D8 普查所依赖的布局权威，描述的是没人用的目录，却漏掉了真正存放 locator 记录的那个。三处各自维护 locator 路径，以后改其中一处，helper 和运行时就会悄悄不一致，孤儿报告也分不清真实残留和“声明了但没用”的目录。
   - 证据：workspace-host-resource-catalog.ts:259-340 声明了 operations/window-locators（:273-278）、keep-live/leases、activity-monitor、temp/prompts，src 里没有任何写入者；locator-store.ts:66-70、231-235 实际写 identity/window-locators；helper（tmux-asset.ts:96）另外硬编码了同一路径；现场 operations/window-locators 为 0 条，identity/window-locators 有 8 条；operations/keep-live 存在；卡片 10 L15 写 keep-live 整体删除，但两个 profile 都是 keepLive: true（L24）；kernel/hook-observations.ts:68,139 和 result-review/decide.ts:184-205 接受 'turn-complete'，observer 从不产生它；§13.117、§13.119 L3442 已记录，§13.130 表里没有
   - 建议：在 catalog 中声明 identity/window-locators，导出一个常量供 locator store 和 helper 共用；删除 operations/window-locators、keep-live 的声明和 keepLive 标志，以及 activityMonitor、temporaryPrompts 和 'turn-complete'，或者写明它们归哪个未来功能；让 reconcile 把遗留的空目录作为孤儿报告（只报告）。
@@ -749,10 +749,10 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 来源：[旧版逐文件复审与 1.1.1 补齐计划](../reviews/2026-10-20-legacy-gap-review-and-1.1.1-plan.md)。每项的出处、判定与建议在复审的对应节里（T 宿主效果、D 投递评审、G Demand/证据/归档、M 维护、S 技能文本）；这里只登记去向。
 
-- **P1** [中 / 缺口] 现场可观察性：hook 驱动的窗口活动 glyph（T24/T23）、Design/Test 支撑面的状态行（M2）、`mark` 时的 retitle（T3，卡 02 Q8 的保留项）、交接卡的"保持机器不睡眠"一句（T25）（1.1.1 批 1；状态：开放，待裁决 R1）
+- **P1** [中 / 缺口] 现场可观察性：hook 驱动的窗口活动 glyph（T24/T23）、Design/Test 支撑面的状态行（M2）、`mark` 时的 retitle（T3，卡 02 Q8 的保留项）、交接卡的"保持机器不睡眠"一句（T25）（1.1.1 批 1；状态：已修 2026-10-20（§13.198，ADR-0023）；现场 L11 待做，观察侧仍只看工作区根的本地设置）
 - **P2** [中 / 风险] 助手健壮性与归属守卫：`run()` 无子进程超时（T11）、无 UTF-8 locale 兜底（T10）、用户自定义 statusLine 被无条件覆盖（T31/M1）、制品文本的项目专有词扫描（M5 校验小项）（批 2；状态：已修 2026-10-20（§13.196））
 - **P3** [高 / 缺口] 投递与 Demand 守卫：`awaiting-decision` 不拦 prepare/rearm（D1）、替代 `delivery-prepared` 目标困住窗口声明 2 小时（D2）、提示词只渲染首条 forbidden（D8）、outcome 不核对绑定是否仍当前（D27）、`rejected-before-send` 可带 `readback: confirmed`（D7）、cancel/decision/continue 文本未扫凭据而终态预览会扫（G3）、撤回理由只有字面量（G2）、证据单文件 32 MiB 大于归档 16 MiB 上限（G12）、进度页缺目标/完成定义/包/测试模式（G4）（批 3；状态：已修 2026-10-20（§13.197），累计根字节的证据预览阻塞项留 1.1.2）
-- **P4** [中 / 缺口] 技能与文本：target 的基线、测试先行、假设排序、两遍自审、rework 回应、分支卫生（S2–S8、S11、S14、S3）；Controller 的缺陷 vs 错配判断、输入路由、"不写产品代码"、决定理由清单、刹车说明、测试步骤写法、独占环境、thin implementation、遗留物授权、完成前重读非目标（S12/S51/S53/S54/S64、S22/S33/S40/S41/S43/S44、S52）与两处措辞错误（`delivery-and-review.md:35` 的 "redesign"、controller SKILL `:39-41`）；Design 的澄清、选项、失败路径、环境规格、更正触发（S30–S32、S35、S38）；helper agent 边界（S56）；`/next` 的先想后做（S48）；README 的"它会碰你机器上的什么"（S72）（批 4；状态：开放）
-- **P5** [低 / 债务] 布局声明清理：同 J5（T12/T21/T25）（批 5；状态：开放）
+- **P4** [中 / 缺口] 技能与文本：target 的基线、测试先行、假设排序、两遍自审、rework 回应、分支卫生（S2–S8、S11、S14、S3）；Controller 的缺陷 vs 错配判断、输入路由、"不写产品代码"、决定理由清单、刹车说明、测试步骤写法、独占环境、thin implementation、遗留物授权、完成前重读非目标（S12/S51/S53/S54/S64、S22/S33/S40/S41/S43/S44、S52）与两处措辞错误（`delivery-and-review.md:35` 的 "redesign"、controller SKILL `:39-41`）；Design 的澄清、选项、失败路径、环境规格、更正触发（S30–S32、S35、S38）；helper agent 边界（S56）；`/next` 的先想后做（S48）；README 的"它会碰你机器上的什么"（S72）（批 4；状态：已修 2026-10-20（§13.198））
+- **P5** [低 / 债务] 布局声明清理：同 J5（T12/T21/T25）（批 5；状态：已修 2026-10-20（§13.198））
 - **P6** [中 / 缺口] 读侧补齐：归档读回与完成结论（G7/G1）、完成路径上的证据重哈希（G6）、撤回包的再认领提示（G10）、看板索引的测试模式与 parked 触发列（G11）、失败发送的宿主错误事实（D6）、翻转 `instructionManagement`（M4，并入 Q9）（批 6；状态：1.1.1 之后，待裁决 R4–R8）
 - **P7** [裁决] R1–R9 已裁决 2026-10-20（用户：按建议）：R1 观察器可写 `@wakeflow_state`（ADR-0023）；R2 fresh id 种子加入工作区根 realpath（只影响新建工作区）；R3 从 `REPLACEABLE_PHASES` 去掉 `delivery-prepared`；R4 D3/D4 推到 1.2；R5 D5 推到 1.2；R6 keep-live 与 unattended 维持放弃，连续 `/next` 在 1.1.1 之后按 H8 另议；R7 M4 并入 Q9；R8 归档读回放到 1.1.2、先定字段；R9 批 0–5 进 1.1.1、批 6 进 1.1.2（状态：已裁决）

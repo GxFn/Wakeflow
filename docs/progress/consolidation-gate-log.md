@@ -5236,3 +5236,46 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
 
 本批改动 `src/capabilities/{delivery,demand,result-review,workspace}`、`src/governance/{demand/model,evidence,observation}`、`src/kernel/{limits,active-projection}.ts`、`src/configuration/wakeflow-fresh-config-selection.ts`、`src/contracts/schemas/governance/delivery` 与 generated、`assets/agent-text`（delivery-and-review）、tests（10 个文件）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。
+
+### 13.198 1.1.1 批 1、4、5：现场可观察性、技能与文本补深、布局声明清理（2026-10-20）
+
+用户 2026-10-20 裁决：先把本阶段剩余各批做完再统一过一次完整门，不再每批一门（批 1 的单独门已启动即中止）。本节合记三批。
+
+#### 批 1：现场可观察性
+
+复审 P1 的四项加裁决 R1（§13.194 T24/T23、M2、T3、T25；ADR-0023）。
+
+- **T24/T23 hook 驱动的窗口标记（ADR-0023 决定 1–3、5）**：`wakeflow-hook-observer.ts` 在把记录写进匹配的工作区之后，只要本次写入命中了该工作区的绑定（`writeToMatchingWorkspaces` 报 `bound`），就按事件投影一次 tmux 窗口选项 `@wakeflow_state`：`user-prompt-submit`→`working`，`stop`、`idle_prompt` 通知与已绑定会话的 `session-start`→`idle`，`permission_prompt` 通知→`attention`，`session-end`→`-u` 清除；其他通知类型不写。只在 hook 进程环境里同时有 `TMUX`（socket 取第一段，必须是绝对路径）与 `TMUX_PANE`（`%N`）时写，目标是 `set-option -w -t <pane>`。缺省投影器是一次 `spawnSync("tmux", …)`，stdio 全忽略、1 s 超时、不重试、不读回、失败静默；`HookObserverInput.projectWindowState` 可注入（测试用桩）。未绑定的引导会话不投影；投影器抛错不影响记录写入与出口码。闭包测试放行 `node:child_process`，同时钉死"恰好一次 `spawnSync`、只对 tmux、`stdio: "ignore"`、带超时常量、没有 exec/execFile/spawn/fork"。
+- **T3 + ADR-0023 决定 4 的 `mark`**：助手 `mark` 在写完五个标识选项后，给该窗口单独设 `window-status-format` 与 `window-status-current-format`（`#I:#W#{?@wakeflow_state, [#{@wakeflow_state}],}#{?window_flags,#{window_flags}, }`，从不 `-g`，窗口关闭即随之消失）；pane 行格式加第 12 列 `#{window_name}`，解析器兼容 11 列与 12 列（老助手产出的行照读），`panes` 观察多一个 `windowName`（可为 null）。窗口名偏离配置的 `displayName`（经 `cleanLabel`）时 `rename-window` 收敛，结果带 `renamed: true`；改名失败拒 `tmux-rename-failed`。
+- **M2 Design/Test 状态行**：`claude-code-statusline-settings-operation.ts` 的负载多一个可选 `surface {surfaceId, configuredPlacement}`；新的 `planClaudeCodeStatuslineSettingsSurfaceOperations(workspaceRoot, {action, config})` 对每个 wakeflow-managed 支撑面（按 surfaceId 排序）各算一条零写计划——面根在就按它的 `.claude/settings.local.json` 算，面根不在时 fresh-initialize 当作缺文件（维护会先建根），其他动作跳过（组合已报 `support-root-missing`）；读不出不抛，记 `claude-settings-local-unreadable:support-surface:<surfaceId>`。条目永远由工作区根派生（命令里的 base64url 根是工作区根，状态行脚本读的绑定目录也在那里）。操作标识 `claude-statusline-settings:install:support-surface:<surfaceId>`、目标键 `settings:claude-code:local-statusline:support-surface:<surfaceId>`，程序根的标识与负载不变，所以旧日志的恢复照旧。执行时对照当前配置核对（面仍在、仍是 wakeflow-managed、放置未变，否则拒 `operation`），面根缺失拒 `placement`，以该面的根为写入根（`root-open`/`close-failure` 各有理由），同一条 CAS 与 0600 规则。维护能力把三条（根 + 两面）一起放进贡献；`ExecuteClaudeCodeStatuslineSettingsOperationRequest` 必须带 `config`。支撑面根的 `.gitignore` 托管块本来就忽略这个文件，没有托管文本改动。观察侧（`hostAssets.settings`）仍只看工作区根，支撑面的漂移靠 maintenance preview 发现——留给 1.1.2。
+- **T25 文本**：Claude 的 `FIRST_RUN_HANDOVER` 多两句（窗口列表里的 `[working]`/`[idle]`/`[attention]` 是 hook 写的提示、从不是证据；长跑前自己保持机器不睡眠，Wakeflow 没有后台进程）；windows 参考的 `attention` 段加一句标记说明，为守住 400 行上限去掉了通知原因的枚举（字段名 `notificationType` 已足够）；标记那句不写 "tmux"（Codex 渲染的更新一节钉死不含该词）。能力卡 10 §10.3"现 TS 状态"与能力映射"活动监视"行改指 ADR-0023；现场计划加 L11 行（批 1 的关闭条件）；open-items P1 已修；复审 §10 行 1 已执行。
+- **测试**：观察器（桩投影器下六种事件的状态、其他通知不写、无 `TMUX` 不写、未绑定不写、投影器抛错不影响记录；闭包测试）；助手（两条格式、无名行不改名、`renamed: true`、已是显示名不改、改名失败拒绝、`panes` 行的 `windowName`）；状态行设置（支撑面：fresh 两条/ reconcile 一条、执行建 0600 文件、面根缺失拒 `placement`、零写、用户自己的 statusLine 不碰、读不出的 blocker、伪造放置/面/多余键拒 `operation`、配置不合法拒 `input`）；维护执行（贡献 8 条操作，Design/Test 各有同一条目的本地设置）；live-guidance 钉文本（两张交接卡的 keep-awake 句、Claude 卡的标记句、Codex 卡不提标记与 tmux、windows 参考的标记句、Codex 渲染的更新一节不含 tmux）。Codex 交接卡也加了 keep-awake 一句（宿主中立的建议）。
+
+#### 批 4：技能与文本补深（S 组）
+
+- **target**：`craft.md` 的自审改为两遍（先对包的原文核对规格，再按严重度看质量，S8）；新节 "Before you change code"（基线先跑且红基线只报告不据为己有 S5；缺陷与行为改动先写今天会失败的检查、每条锚点各一条 S2/S6；经真实入口复现、不 mock 被验证的边界 S24；修事实丢失的第一处；回归测试留在公共接缝；排序可证伪的假设、一次只动一个变量 S7；多步工作写有序计划、压缩或断轮后重读包与计划 S4）；新节 "When the delivery is a rework"（对着 diff 读失败检查、逐条回应、先当缺陷复现、不让提示静默消失 S11）；分支卫生一句（S14）；"顺手修的缺陷"改为"只能经补充包 / 完成定义内的已证实 bug / 授权优化成为工作"（原 `:35-36` 与遗留物授权矛盾）。target SKILL：子代理只做有界查找 / 日志分流 / 摘要、输出是建议（S56）；不可测 / 与权威冲突 / 缺事实的锚点按 `needs-review` 导入、不自造目标（S3）。
+- **controller**：`delivery-and-review.md` Step 6 加测试步骤写法（一个问题与对象边界、能证明该条的最低层、可观察信号、pass/fail 含义、"跑套件"不算步骤、flaky 是证据退化）、独占环境是跨 pod 串行资源、thin implementation 不算完成并点名缺的消费者、目标发现的事只能经三条路成为工作（S22/S40/S41/S33/S44/S43）；Step 10 加子代理边界（S56，宿主中立）；Step 11 加缺陷 vs 错配的判断与路由（点修循环停、交回 Design）、刹车说明（每个决定结果带 `reworkCount`，第三次返工被拒改走 escalate）、缺失输入按归属路由、Controller 不写产品代码、决定理由清单（S12/S53/S54/S64/S51）；Step 12 完成前重读完成定义与非目标（S52）。controller SKILL `:39-41` 改词（"Wakeflow 与你都不改产品仓库，那项工作只经投递到达目标窗口"），Step 13 压一行保住 200 行上限。
+- **design**：`requirement-package.md` 加澄清法（具体场景试探、记录代码/文档矛盾、未答决定即 not ready 并点名）、选项法（2–4 个真实备选同维度比较、推荐并说什么证据会推翻、只有接口/mock/adapter 的不算）、完成定义写失败路径与用户如何验证、真实环境决定的五项规格、更正包并排写观察到的与预期的（S30/S31/S32/S35）；design SKILL 的 Correction 加 escalate 触发（S38）。
+- **命令与 README**：`next.md` 加先想后做（动手前一句话说清安全操作与下一步，S48）；两份 README 各加一节"它会碰你机器上的什么"（本机运行、不联网不遥测、工作区内写什么、宿主设置只写精确规则与状态行、产品仓库谁能改、宿主效果归 Agent；S72，本仓库 `src/` 无网络 API 已核）。
+- 预算：controller SKILL 200/200 行；delivery-and-review 335、requirement-package 210、craft 151、target SKILL 127、design SKILL 121、next 26；全部在上限内。
+
+#### 批 5：布局声明清理（J5）
+
+- 资源目录与布局 authority 去掉无人使用的 `operations/keep-live{,/leases}`、`operations/window-locators`、`operations/activity-monitor`、`operations/temp{,/prompts}`；画像去掉 `keepLive`、`activityMonitor`、`temporaryPrompts` 三个表面标志（两宿主画像、解析器的封闭键集、测试夹具同步）；`hostProfileHasOperationSurface` 只看两份资产，所以 Codex 不再有 `operations/` 根。
+- 定位器真实目录 `identity/window-locators` 由内核 `hostWindowLocatorsRootRef` 一处给出：locator store 改用它，资源目录以 `window-locator` 为 owner 声明它（清单，不进 capability 布局——它在 identity 下，窗口运行时发布对 identity 子项有精确断言，目录由 locator store 首次登记时创建），tmux 助手的字面量由测试钉住等于内核常量。
+- 旧工作区里的空目录：维护既不创建也不删除，也不报告（复审写的"只报告不删"没有落——观察与预览的契约里没有可放它的字段，为一个惰性空目录加字段不值；记在此处与 open-items J5）。
+- 第一次第 0 级暴露的真问题：把 `identity/window-locators` 放进 capability 布局会让 fresh 的 `materialize-host-capability-layout` 在 `identity` 前缀上报 `prefix-conflict`（identity 已由窗口运行时发布创建并带 window-bindings），scenario 链的 fresh-initialize、端点 service、permission-mode、reconfigure 与 Claude 维护执行全部跟着失败；改为清单声明后恢复。
+
+**本阶段用的级别：第 2 级**（agent-text 与 agent-text-profile 变了；ADR-0023 改了入口的闭包；资源目录与画像变了）。
+
+验证与观察（本地，2 worker）：
+
+- 批 1 单独的第 0 级（8 个被触及的测试文件）：第一次 77/80——助手 `panes` 的期望缺 `windowName: null`、观察器闭包测试拒 `node:child_process`、Codex 渲染的更新一节出现 "tmux"（标记那句改为不点名）；第二次 79/80——闭包测试的禁用子串 `exec(` 误中已有的正则 `.exec(`；第三次 run-n1h0Yo 80/80；加钉文本后 81/81。
+- 三批合并的第 0 级（`--changed` 选出 628 项，含两条场景链）：第一次 run-S5I9zl 584/628（20 失败：J5 的 `identity/window-locators` 进了 capability 布局——见批 5 一节——加十余处夹具仍带旧键或旧目录）；改为清单声明并同步夹具后 run-KTMUmJ 627/628（剩一处合成画像的期望表）；修掉后聚焦 15/15。
+- 制品重建（两宿主 44 个制品文件变化）、`smoke:artifacts`：两宿主各 20 个工具，fresh completed / reconcile no-op / status idle / verify ok / pod preview ready / hook observer landed。
+- 完整门 run-cTElD6（23:48–00:11 本地，约 23 分钟，2 worker）：**1520/1520 全通过**（比 §13.197 的 1517 多 3：观察器投影、live-guidance 的 ADR-0023 钉文本、支撑面状态行各 1）；`inputsUnchanged: true`；`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+
+残留：L11 现场核对未做（新工作区首次引导加一次投递，看标记随事件变化、Design/Test 状态行、`mark` 的 retitle）；观察侧不看支撑面的本地设置；外部拥有的支撑面不写状态行（与 portable settings 同一边界）；旧工作区的退役空目录不报告（批 5）。
+
+本阶段改动 `src/entrypoints/wakeflow-hook-observer.ts`、`src/hosts/claude-code/{claude-code-tmux-asset,claude-code-statusline-settings-operation,claude-code-maintenance-capability,claude-code-agent-text-profile,wakeflow-workspace-host-resource-profile}.ts`、`src/hosts/codex/{codex-agent-text-profile,wakeflow-workspace-host-resource-profile}.ts`、`src/kernel/layout.ts`、`src/capabilities/endpoint/locator-store.ts`、`src/workspace/{workspace-host-resource-catalog,workspace-host-resource-profile,workspace-host-runtime-paths}.ts`、`src/workspace/host-runtime/wakeflow-host-capability-layout-authority.ts`、`assets/agent-text/**`（两份 README、next 命令、四份技能、四份参考）、二十余个测试文件、`docs/{README,references/{capability-map,live-test-plan-2026-10,open-items},requirements/capabilities/{01-workspace-and-configuration,02-window-model,10-automation-and-operations},reviews/2026-10-20-legacy-gap-review-and-1.1.1-plan}.md` 与本节；`plugins/` 由随后的重建提交。

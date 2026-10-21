@@ -13,6 +13,10 @@ First tool call: `wakeflow_status`, passing a Demand id if the user named one.
 Its next actions are the authority on what comes next - do not infer the step
 from the conversation.
 
+Before any action, say in one sentence which safe operation you are about to
+perform and what the single next step will be; the urge to act is a hard stop
+until that sentence exists.
+
 Then do that one step, and stop. Do not run ahead into the step after it: each
 step produces state that the next one has to read. A fresh Controller session
 may take over at any step boundary: the state is in Wakeflow, not in this chat.

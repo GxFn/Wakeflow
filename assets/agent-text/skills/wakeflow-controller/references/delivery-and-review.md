@@ -56,6 +56,20 @@ and `step-item-unknown` names the real count as `acceptance-items:<n>` -
 because a Demand gets one test contract per generation and completion requires
 that contract to cover the whole list.
 
+Writing a test step: one question with a named object boundary, checked at
+the lowest layer that can prove that criterion, with an observable signal and
+a stated meaning for pass and for fail. "Run the suite" is not a step. A
+flaky step is degraded evidence, never a pass. An exclusive environment is a
+serial resource across pods: say so in the setup so two Demands do not race
+for it.
+
+A landing that is only a connection, an empty API, a mock or a consumer
+nobody wired is not complete: rework it and name the missing consumer. What a
+target discovered on the way becomes work only through a supplement package,
+a confirmed bug inside the completion definition or an optimization the user
+authorized - never through its diff, and never through a task you add to make
+the discovery go away.
+
 When the requirement package asks for user review of the task plan, show the
 plan to the user and get their answer before applying. That is the flow's
 second confirmation point.
@@ -196,6 +210,10 @@ decision advances the workflow. Then do the work inspection cannot do:
 3. Notice what is missing. An anchor answered with a confident sentence and no
    evidence is the most common failure you will see.
 
+A sub-agent you spawn for a bounded search, a log triage or a summary returns
+advice. It does not inspect in your place, record a decision, write state,
+or stand in for the user's confirmation.
+
 The callback is sent before the target window's turn ends, so a unit read
 seconds after the callback may still show the target's completion record as
 pending. That is timing, not a missing record: read the unit again after the
@@ -255,7 +273,21 @@ apply the usual failure classification rules. Only prior passing steps can
 supply a passing baseline; issuing a repair authorization does not turn another
 failed step into a pass.
 
-Write the decision in your own words and make the reason checkable: name the
+Defect or mismatch? A result that misses its anchors because the code is
+wrong is a defect: rework. One that misses them because the package asked for
+the wrong thing - the target did what was written, and the written thing is
+not what the user needs - is a requirement mismatch: do not loop point fixes
+on it; escalate, and the correction comes back from Design as a new package.
+The rules brake that loop regardless: every decision result carries
+`reworkCount`, and a target's third rework is refused in favor of an
+escalation. A missing input - a credential, a fixture, an answer only the
+user has - is routed to whoever owns it and never guessed on the target's
+behalf. You never write product code yourself: not to finish a target, not to
+prove a claim. A verification is a check you run, not a change you make.
+
+A decision states: the goal as you understood it, the independent check you
+made for every anchor, what you could not verify, the residual risk, and the
+next step. Write it in your own words and make the reason checkable: name the
 anchor, the file, the evidence. "Looks good" is not a review.
 
 When the returned route is `awaiting-decision`, hand the user the issue,
@@ -283,7 +315,10 @@ Real-environment work needs coverage by the accepted current test contract for
 each item; implementation coverage cannot substitute for missing test coverage.
 Planned work, superseded targets and historical test generations do not close
 the gap. There is no implicit waiver. Cancellation remains available for
-uncompleted requirements.
+uncompleted requirements. Before you apply, re-read the package's completion
+definition and non-goals against what landed: the gate checks the acceptance
+list, not the non-goals, and "every task is accepted" is not the completion
+definition.
 
 `wakeflow_cancel_demand` ends a non-terminal Demand with a reason. Results and
 evidence are kept, the work claims are released, the requirement package is

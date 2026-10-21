@@ -75,7 +75,7 @@
 | --- | --- | --- | --- | --- |
 | 活动投影 `index.md`、`workspace-current-status.md`、每 Demand `index.md` 与 `developer-progress.md` | 9 | 内核 `active-projection` 加治理层 `observation/active-projection-{facts, refresh}` | 重切 | 2026-09-18 切片 10：标记、指纹、四类目标分类、unsafe 整轮零写、投影锁内逐文件 CAS；每 Demand 页面在 `.wakeflow-active/projections/<demandId>/`；pod 段；Demand 变更、pod 创建与关闭、维护 apply 之后刷新；场景 `card-09/active-projection` |
 | Claude 状态栏资产 | 9 | `hosts/claude-code/claude-code-statusline-asset.ts` 精确字节与摘要；维护操作 `claude-statusline-asset:install` 安装 0600 资产、`claude-statusline-settings:install` 把 statusLine 命令写进 `.claude/settings.local.json`（只改一键，0600） | 重切 | 2026-09-18 切片 10：label `<model> · <pod> · <window>`，main 省略 pod（能力卡 9 Q6）；资产由仓库测试以 node 执行验收，Claude 宿主真实会话未验证；2026-09-24 §13.117：同机制多一份 tmux 助手资产 `claude-code-tmux-asset.ts`（`claude-tmux-asset:install`，通用 `claude-code-host-asset-operation.ts`），工作区根 `settings.json` 多一条只放行该助手的 allow 规则 |
-| Claude 活动监视 | 10 | 无；宿主 hook 观察取代 | 放弃 | 能力卡 10 Q3、ADR-0009 |
+| Claude 活动监视 | 10 | 轮询进程无；hook 观察器按事件写 `@wakeflow_state` 窗口选项，助手 `mark` 设每窗口格式（UI 投影） | 放弃轮询、重做为投影 | 能力卡 10 Q3、ADR-0009、ADR-0023 |
 | 提示临时文件与清扫 | 10 | 无；Agent 自行选择粘贴方式 | 放弃 | 能力卡 10 Q4 |
 | keep-live | 10 | 无 | 放弃 | 能力卡 10 Q1、TSD-12 |
 | unattended、激活范围与门 | 10 | 无；推迟 | 放弃（推迟） | 能力卡 10 Q2、TSD-12 |
@@ -127,7 +127,7 @@
 | D24 到 D28 | 双宿主 Pod 模型、manifest、operation、binding、test-access | ADR-0010 | 重切 | pod 四状态由回执派生、config 记录、无四类文件、无 Design 交接（已落地 2026-09-10，gate-log §13.92） |
 | D29 | keep-live 记录与锁 | 无 | 放弃 | 能力卡 10 Q1 |
 | D30 | Claude window-locators | 能力卡 2、6 | 重切 | 互斥语义留在工作声明，坐标由 Agent 观察 |
-| D31 | Claude assets、activity-monitor、temp | 能力卡 9、10 | 重切 | statusline 保留为资产；monitor 与 temp 放弃 |
+| D31 | Claude assets、activity-monitor、temp | 能力卡 9、10 | 重切 | statusline 保留为资产；monitor 与 temp 放弃，其目录声明与画像标志于 2026-10-20 清理（J5，§13.198） |
 | D32 | runtime-meta | 无 | 放弃 | 旧版已退役 |
 | D33 | preserved audit | 无 | 放弃 | 能力卡 8 Q6 |
 | D34 | local initialize、reset、reconcile、storage 横向合同 | 能力卡 1 | 保留 | 统一 maintenance gate 与 journal |

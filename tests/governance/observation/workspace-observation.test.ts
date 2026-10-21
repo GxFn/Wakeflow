@@ -27,6 +27,7 @@ import {
   CLAUDE_CODE_LOCAL_SETTINGS_REF,
   CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
   claudeCodeStatuslineSettingsEntry,
+  claudeCodeStatuslineEntryIsWakeflows,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -276,6 +277,7 @@ test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：se
               path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
               key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
               expectedEntry: claudeCodeStatuslineSettingsEntry,
+              ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
             },
             companions: [],
           },
@@ -295,6 +297,43 @@ test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：se
       asset.issue,
     ]),
     [["claude-code", "current", "drift", null, null]],
+  );
+
+  // 用户自己的状态行（复审 T31）：没有 Wakeflow 标记的命令报 custom，模式与内容都不比较。
+  writeFileSync(
+    settingsPath,
+    `${JSON.stringify({ statusLine: { type: "command", command: "echo mine" } })}\n`,
+    { mode: 0o644 },
+  );
+  const custom = await observeWorkspace(
+    workspace.rooted,
+    workspace.snapshot,
+    workspace.ledgerRoot,
+    {
+      hosts: [
+        {
+          ...claudeHost,
+          statuslineAsset: {
+            fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+            digest: computeSha256Digest(assetBytes),
+            settings: {
+              path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+              key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+              expectedEntry: claudeCodeStatuslineSettingsEntry,
+              ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+            },
+            companions: [],
+          },
+        },
+      ],
+      currentHostId: "claude-code",
+      scope: "full",
+      clock: () => OBSERVED_AT,
+    },
+  );
+  deepEqual(
+    custom.assets.map((asset) => [asset.hostId, asset.status, asset.settings]),
+    [["claude-code", "current", "custom"]],
   );
 });
 

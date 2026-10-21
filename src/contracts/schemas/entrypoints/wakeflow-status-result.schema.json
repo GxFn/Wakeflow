@@ -420,7 +420,15 @@
             "enum": ["current", "missing", "drift", "mode", "not-applicable", "unavailable"]
           },
           "settings": {
-            "enum": ["current", "missing", "drift", "mode", "unreadable", "not-applicable"]
+            "enum": [
+              "current",
+              "custom",
+              "missing",
+              "drift",
+              "mode",
+              "unreadable",
+              "not-applicable"
+            ]
           },
           "companion": {
             "oneOf": [

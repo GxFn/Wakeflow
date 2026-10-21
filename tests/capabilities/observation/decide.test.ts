@@ -752,6 +752,14 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     ),
     ["unavailable", "claude-code:settings-unreadable"],
   );
+  // 用户自己的状态行通过，但 code 点名（复审 T31）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({ assets: [{ hostId: "claude-code", status: "current", settings: "custom" }] }),
+      "host-settings-assets",
+    ),
+    ["pass", "claude-code:settings-custom"],
+  );
 });
 
 test("pod-execution-location：ready 的 worktree pod 缺回执或检出即 fail；creating 只报 pending-registration 且不失败；closing 的 pod 检出仍在只报 disposal-pending；primary 仓库根未观察为 unavailable、不是主检出为 fail", () => {

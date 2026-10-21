@@ -5187,3 +5187,25 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **登记**：open-items P7 记下九项裁决，路线图加 "1.1.x 补齐" 一行；复审文档改为 `accepted`，§10 的批次状态与新增 §11 "后续版本计划"（1.1.1 批 0–5 与现场 L11；1.1.2 批 6 与 R8；1.2 的 R4、R5、连续 `/next`、K4、C6/C11）。
 
 **本批用的级别：第 1 级**（版本与制品：`verify quick --changed` 触及 tests/artifacts 的版本一致性测试，`smoke:artifacts`，`wf handoff` 的 version-bytes 此时按"当前版本无 tag"放行）。
+
+### 13.196 1.1.1 批 2：助手健壮性与状态行归属守卫（2026-10-20）
+
+复审 P2 的三项加一项校验小项（§13.194 T11、T10、T31/M1、M5）。
+
+- **T11 子进程超时**：助手 `run()` 给每个子进程（tmux、git、ps、claude）加 10 秒上限（`spawnSync` 的 `timeout`；测试经 `WAKEFLOW_TMUX_COMMAND_TIMEOUT_MS` 缩短），超时拒绝 `host-command-timeout`（带 command、subcommand、timeoutMs）——挂住的 `has-session` 绝不会被读成"会话不存在"而去 `new-session`。桩加 `WAKEFLOW_STUB_HANG`。
+- **T10 UTF-8 locale**：`hostEnvironment()` 在 `LC_ALL ?? LANG` 不含 utf-8 时把两者设为 `en_US.UTF-8`（旧 transport 同一规则）；已是 UTF-8 的不动、不补 `LC_ALL`。
+- **T31/M1 用户自己的状态行**：`claudeCodeStatuslineEntryIsWakeflows`（命令带 `--wakeflow-statusline-v1` 或 0.9.x 的 `wakeflow-statusline.mjs` 才是 Wakeflow 的）；维护规划器对不是 Wakeflow 的 `statusLine` 返回零操作、文件原样；观察侧的宿主资产描述 `statuslineAsset.settings` 加 `ownsEntry`（宿主在入口提供，治理层不认识宿主标记——分层规则），设置状态新增 `custom`；`host-settings-assets` 门对 `custom` 通过、code 点名 `<host>:settings-custom`；`wakeflow_status.hostAssets[].settings` 的 schema 词表加 `custom`；HOST_TRUST_STEPS 两语言与 windows 参考改措辞（Wakeflow 的那一项保持最新；自己配置的不覆盖、显示 `custom`、那个窗口就没有 Wakeflow 标签）。
+- **M5 校验小项**：honesty 门新增"发货文本与宿主取值不含项目专有词"（Alembic、AFAPI、WakeflowTestWorkspace、WakeWorkspace、CodexPlugin）。
+- **测试**：助手 +2（UTF-8 不动、超时拒绝）与 env 测试的 LANG/LC_ALL 断言；状态栏设置测试把"漂移替换"改成带标记的陈旧条目、新增用户条目零操作与三例判定；观察测试 `custom`；decide 门 `custom` 通过带 code；`schema:build` 重生成 status 结果。
+- **过程**：第一次 quick 在 lint 停下（`observeSettingsEntry` 超复杂度阈值，抽出 `settingsEntryStatusOf`）；第二次在 format:check 停下（schema JSON 未格式化）；一次误操作把助手测试文件截空（python 以写模式打开后才报 newline 参数错），从 HEAD 恢复后重做。
+
+**本批用的级别：第 2 级**（`src/contracts/schemas` 变了，`impact report` 也因 agent-text-profile 与 schema 建议完整门）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级 run-NZfv14：typecheck、architecture、lint、format、unused，37 个被触及的测试文件 278/278。
+- 制品重建、`smoke:artifacts` 两宿主各 20 个工具通过。
+- 完整门 run-MAd2tl（20:53–21:14 本地，约 22 分钟）：**1510/1510 全通过**（比 §13.191 的 1507 多 3：助手 2、honesty 1）。`wf timings apply --receipt` 写回。
+- `wf handoff`（含真实 build:check）：见提交说明；`git diff --check` 干净。
+
+本批改动 `src/hosts/claude-code`（助手资产、状态行设置操作、文本取值）、`src/governance/observation`、`src/capabilities/observation`、`src/entrypoints/claude-code-wakeflow-mcp.ts`、`src/contracts/schemas/entrypoints` 与 generated、`assets/agent-text`（windows 参考）、tests（助手、状态行、观察、decide、honesty）、`tooling/testing/test-durations.json`、docs；分两次提交：源码与制品。

@@ -1,3 +1,4 @@
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -36,6 +37,7 @@ import {
   ClaudeCodeStatuslineSettingsOperationError,
   executeClaudeCodeStatuslineSettingsOperation,
   planClaudeCodeStatuslineSettingsOperation,
+  claudeCodeStatuslineEntryIsWakeflows,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
@@ -434,13 +436,47 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
   equal(await planClaudeCodeStatuslineSettingsOperation(root), null);
   equal((await execute(planned)).disposition, "current");
 
-  // 用户的其他键原位保留，statusLine 原位替换；键顺序不变。
+  // 用户自己的状态行（复审 T31）：命令里没有 Wakeflow 的标记，维护不碰它，文件原样。
+  const foreign = `${JSON.stringify(
+    {
+      permissions: { allow: ["Bash(ls:*)"] },
+      statusLine: { type: "command", command: "echo mine" },
+      theme: "dark",
+    },
+    null,
+    2,
+  )}\n`;
+  writeFileSync(settingsPath, foreign, { mode: 0o644 });
+  equal(await planClaudeCodeStatuslineSettingsOperation(root), null);
+  equal(readFileSync(settingsPath, "utf8"), foreign);
+  equal(
+    claudeCodeStatuslineEntryIsWakeflows(
+      parseJsonValue({ type: "command", command: "echo mine" }, "$e"),
+    ),
+    false,
+  );
+  equal(
+    claudeCodeStatuslineEntryIsWakeflows(
+      parseJsonValue(
+        { type: "command", command: 'node "/elsewhere/.wakeflow-local/wakeflow-statusline.mjs"' },
+        "$e",
+      ),
+    ),
+    true,
+    "the 0.9.x asset command is Wakeflow's and gets upgraded",
+  );
+  equal(claudeCodeStatuslineEntryIsWakeflows(parseJsonValue("a string", "$e")), false);
+
+  // 用户的其他键原位保留，Wakeflow 自己的陈旧 statusLine（带标记、根不同）原位替换；键顺序不变。
   writeFileSync(
     settingsPath,
     `${JSON.stringify(
       {
         permissions: { allow: ["Bash(ls:*)"] },
-        statusLine: { type: "command", command: "echo old" },
+        statusLine: {
+          type: "command",
+          command: claudeCodeStatuslineCommand("/elsewhere/workspace"),
+        },
         theme: "dark",
       },
       null,
@@ -449,7 +485,7 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
     { mode: 0o600 },
   );
   const drifted = await planClaudeCodeStatuslineSettingsOperation(root);
-  ok(drifted !== null, "a different statusLine must plan one operation");
+  ok(drifted !== null, "a stale Wakeflow statusLine must plan one operation");
   equal(drifted.sourceDigest, computeSha256Digest(readFileSync(settingsPath)));
   equal((await execute(drifted)).disposition, "updated");
   const rewritten = JSON.parse(readFileSync(settingsPath, "utf8"));

@@ -69,6 +69,7 @@ shift || true
 { printf '%s' "$cmd"; for arg in "$@"; do printf '\\x1f%s' "$arg"; done; printf '\\n'; } >> "$log"
 if [ -n "\${WAKEFLOW_STUB_ENV:-}" ]; then env > "$WAKEFLOW_STUB_ENV"; fi
 if [ "\${WAKEFLOW_STUB_FAIL:-}" = "$cmd" ]; then echo "stub: $cmd failed at /private/stub/path" >&2; exit 1; fi
+if [ "\${WAKEFLOW_STUB_HANG:-}" = "$cmd" ]; then sleep 30; fi
 case "$cmd" in
   -V) echo "tmux 3.6b" ;;
   has-session) name=""; prev=""; for arg in "$@"; do if [ "$prev" = "-t" ]; then name="\${arg#=}"; fi; prev="$arg"; done; [ -e "$state/session-$name" ] ;;
@@ -590,6 +591,7 @@ test("the helper strips every Claude session and host variable before running tm
       CLAUDE_CODE_OAUTH_TOKEN: "user-token",
       ANTHROPIC_BASE_URL: "https://example.invalid",
       TMUX_PANE: "%3",
+      LANG: "C",
     },
   });
   equal(run.status, 0, JSON.stringify(run.json));
@@ -605,6 +607,9 @@ test("the helper strips every Claude session and host variable before running tm
   equal(names.get("CLAUDE_CODE_SKIP_BEDROCK_AUTH"), "1");
   equal(names.get("CLAUDE_CODE_OAUTH_TOKEN"), "user-token");
   equal(names.get("ANTHROPIC_BASE_URL"), "https://example.invalid");
+  // 复审 T10：非 UTF-8 的 locale 换成 en_US.UTF-8，tmux 才原样输出屏幕判定依赖的字符。
+  equal(names.get("LANG"), "en_US.UTF-8");
+  equal(names.get("LC_ALL"), "en_US.UTF-8");
   for (const stripped of [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
@@ -2823,4 +2828,44 @@ test("deliver reads the permit prompt by reference, verifies its digest, and sen
     "prompt-digest-invalid",
   );
   deepEqual(tmuxLog(current), []);
+});
+
+test("the helper keeps a UTF-8 locale as the user set it and never adds LC_ALL when LANG already is UTF-8（复审 T10）", async (t) => {
+  const current = await fixture(t);
+  const dump = path.join(current.state, "env-utf8.txt");
+  const run = runHelper(current, ["preflight"], {
+    env: { WAKEFLOW_STUB_ENV: dump, LANG: "zh_CN.UTF-8" },
+  });
+  equal(run.status, 0, JSON.stringify(run.json));
+  const names = new Map(
+    readFileSync(dump, "utf8")
+      .split("\n")
+      .filter((line) => line.includes("="))
+      .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+  );
+  equal(names.get("LANG"), "zh_CN.UTF-8");
+  equal(names.has("LC_ALL"), false);
+});
+
+test("a hung host command is refused as host-command-timeout instead of being read as an absent session（复审 T11）", async (t) => {
+  const current = await fixture(t);
+  const started = Date.now();
+  const run = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
+    input: JSON.stringify(launchIntent("Controller", ".")),
+    env: { WAKEFLOW_STUB_HANG: "has-session", WAKEFLOW_TMUX_COMMAND_TIMEOUT_MS: "500" },
+  });
+  equal(run.status, 1);
+  equal(run.json.reason, "host-command-timeout");
+  equal(run.json.command, "tmux");
+  equal(run.json.subcommand, "has-session");
+  equal(run.json.timeoutMs, 500);
+  ok(
+    Date.now() - started < 20_000,
+    "the refusal arrives at the timeout, not after the stub's 30 s sleep",
+  );
+  // 超时不是"会话不存在"：助手没有继续去 new-session。
+  equal(
+    tmuxLog(current).some((call) => call[0] === "new-session" || call[0] === "new-window"),
+    false,
+  );
 });

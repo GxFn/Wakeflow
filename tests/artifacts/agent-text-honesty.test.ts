@@ -181,6 +181,34 @@ test("退役词汇不出现在任何源文件或宿主取值里（D4 c：黑名�
   }
 });
 
+/**
+ * 项目专有词（复审 M5，旧 validate.mjs 的 project-token 扫描）：发货文本是通用产品文本，不能带测试程序、
+ * 测试工作区或本机目录的名字。只收已经在现场出现过的词。
+ */
+const PROJECT_SPECIFIC_TOKENS: readonly string[] = Object.freeze([
+  "Alembic",
+  "AFAPI",
+  "WakeflowTestWorkspace",
+  "WakeWorkspace",
+  "CodexPlugin",
+]);
+
+test("发货文本与宿主取值里没有项目专有词（M5：旧版 project-token 扫描的对应物）", () => {
+  for (const token of PROJECT_SPECIFIC_TOKENS) {
+    const pattern = new RegExp(`(?<![A-Za-z])${token}`, "u");
+    for (const source of SOURCES) {
+      equal(
+        pattern.test(source.text),
+        false,
+        `${source.path} names a project-specific token: ${token}`,
+      );
+    }
+    for (const value of HOST_VALUE_TEXTS) {
+      equal(pattern.test(value), false, `a host value names a project-specific token: ${token}`);
+    }
+  }
+});
+
 test("代码点名的技能路径都存在，源目录里也没有孤儿技能（D4 d：技能路径闭合）", () => {
   const present = new Set(SOURCES.map((source) => source.path));
   const referenced = new Set<string>();

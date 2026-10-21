@@ -36,7 +36,7 @@ process.on("unhandledRejection", (error) => reportIncident("unhandled-rejection"
 try {
   const server = await import("../lib/entrypoints/claude-code-wakeflow-mcp.js");
   if (typeof server.runClaudeCodeWakeflowMcpStdio !== "function") throw new TypeError("runClaudeCodeWakeflowMcpStdio");
-  await server.runClaudeCodeWakeflowMcpStdio("1.1.0");
+  await server.runClaudeCodeWakeflowMcpStdio("1.1.1");
 } catch (error) {
   reportIncident("launcher", error);
 }

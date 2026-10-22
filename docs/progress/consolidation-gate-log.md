@@ -5339,3 +5339,5 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - `wf handoff`：见提交说明；`git diff --check` 干净。
 
 残留：L12 现场核对（工作区 9：对账装新助手、`mark` 后看新状态栏与 `?`/`●`；一次投递看 `●`；归档读回看 `wakeflow_status{demandId}.archive`）待缓存刷新与用户授权；G11、M4/J1 如上。
+
+提交：43aef04a（源、测试、文档）、5103d85b（plugins 重建）；均未推送。

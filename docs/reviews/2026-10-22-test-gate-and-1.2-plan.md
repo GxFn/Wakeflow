@@ -147,7 +147,7 @@ T1 与 T2 可以合成一个阶段、一道门；T3 等新耗时表。D5 没有�
 
 **现状。** 角色词汇 `wakeflow-role-tool-access.ts:8-36`（design 3 个工具、product 2、test 3、controller 全部）只被 Claude 宿主消费：`--allowedTools` 与 settings 的 MCP 允许规则（`claude-code-mcp-permission-rules.ts:16-23`、`tmux-asset.ts:1106-1113`）。服务端一律注册全部 20 个工具（`wakeflow-public-mcp-server.ts:45-73`、`wakeflow-public-mcp-tool.ts:247-287`），组合根唯一的运行期输入是 `serverVersion`，启动器 `server.mjs:37-39` 不读 argv/env。Codex 的 `.mcp.json` 是**插件级**一条服务器（`codex-process-launch-profile.ts:10-19`），窗口是项目上的 `create_thread`，不能带 cwd/env/参数（`codex-window-launch-instructions.ts:46-47`），请求里只有 `root` 没有角色；仓库与文档里没有任何 `config.toml`/`enabled_tools` 的接口。§13.140 量过：全目录 92,681 字节，Design 子集 10,035，Product/Test 子集 16,878。
 
-**结论与设计。** 在 Codex 插件模型下，一个窗口能看到哪些工具由插件级 `.mcp.json` 决定，没有按窗口选择服务器或工具的通道；服务端按请求过滤也无济于事（`tools/list` 在任何请求之前）。按角色给子集的前提是宿主提供"按项目/线程启用 MCP 服务器"或"工具白名单"，当前没有。因此 1.2 不实现 K4 的服务端裁剪，改做两件确定有效的事：(a) **描述减肥**（K3）：三个最大的工具描述（`record_test_review_decision` 8.6 KB、`import_target_result` 8.5 KB、`record_implementation_review_decision` 7.0 KB）把重复的枚举解释移到技能参考，目标是目录回到 95 KiB 以内，给 3.1/3.2 的 Schema 增长留出余量；(b) 在 open-items K4 写下宿主前提与一句"Codex 提供按项目启用 MCP 时再做"，并把 Claude 的 `--allowedTools` 子集继续作为角色边界。**级别 1**（描述文本进制品）。
+**结论与设计。** 在 Codex 插件模型下，一个窗口能看到哪些工具由插件级 `.mcp.json` 决定，没有按窗口选择服务器或工具的通道；服务端按请求过滤也无济于事（`tools/list` 在任何请求之前）。按角色给子集的前提是宿主提供"按项目/线程启用 MCP 服务器"或"工具白名单"，当前没有。因此 1.2 不实现 K4 的服务端裁剪，改做两件确定有效的事：(a) **Schema 描述减肥**（K3）：目录 104,406 字节里工具描述本身每个不超过 640 字节、合计约 11 KB，大头是请求/结果 Schema——`inspect_target_result_review` 的结果 Schema 39 KB、`status` 29 KB、`maintain_workspace` 的请求 14 KB——其中 194 条 Schema 内 `description` 字串合计 30.5 KB（最长的 400–600 字节是整段中文说明）。把这些说明压到一句、把与技能参考重复的解释删掉，目标是目录回到 95 KiB 以内，给 3.1/3.2 的 Schema 增长留出余量；这是 Schema 改动，与 3.1/3.2 同批（C）过一道门；(b) 在 open-items K4 写下宿主前提与一句"Codex 提供按项目启用 MCP 时再做"，并把 Claude 的 `--allowedTools` 子集继续作为角色边界。**级别 1**（描述文本进制品）。
 
 ### 3.6 C6/C11：真正的版本升级与"谁写的"
 
@@ -176,9 +176,9 @@ T1 与 T2 可以合成一个阶段、一道门；T3 等新耗时表。D5 没有�
 | 批 | 内容 | 级别 | 前提 |
 | --- | --- | --- | --- |
 | 0 | `npm run wf -- release bump --version 1.2.0 --apply`、重建、登记（open-items 新节 + 本页 id）；T1/T2 的门先于本批跑完（门更快，后面每批都受益） | 1 | 第 2 节 T1/T2 完成 |
-| A | 3.3 连续 `/next`（文本）+ 3.5 描述减肥（K3）；现场 L13 | 1 | — |
+| A | 3.3 连续 `/next`（文本）；现场 L13 | 1 | — |
 | B | 3.4 G11 两列与重投影 | 2 | — |
-| C | 3.1 R4 + 3.2 R5（同批管理目录预算与链场景） | 2 | A 的减肥先腾出预算 |
+| C | 3.1 R4 + 3.2 R5 + 3.5 Schema 描述减肥（同批管理目录预算与链场景） | 2 | — |
 | D | 3.6 C6/C11 | 2 | — |
 | E | 3.7 detach（ADR 先行） | 2 | 用户确认 detach-workspace 的终态（改名 vs 删除） |
 

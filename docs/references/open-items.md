@@ -769,3 +769,15 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **P5** [低 / 债务] 布局声明清理：同 J5（T12/T21/T25）（批 5；状态：已修 2026-10-20（§13.198））
 - **P6** [中 / 缺口] 读侧补齐：归档读回与完成结论（G7/G1）、完成路径上的证据重哈希（G6）、撤回包的再认领提示（G10）、看板索引的测试模式与 parked 触发列（G11）、失败发送的宿主错误事实（D6）、翻转 `instructionManagement`（M4，并入 Q9）（批 6；状态：1.1.1 之后，待裁决 R4–R8）
 - **P7** [裁决] R1–R9 已裁决 2026-10-20（用户：按建议）：R1 观察器可写 `@wakeflow_state`（ADR-0023）；R2 fresh id 种子加入工作区根 realpath（只影响新建工作区）；R3 从 `REPLACEABLE_PHASES` 去掉 `delivery-prepared`；R4 D3/D4 推到 1.2；R5 D5 推到 1.2；R6 keep-live 与 unattended 维持放弃，连续 `/next` 在 1.1.1 之后按 H8 另议；R7 M4 并入 Q9；R8 归档读回放到 1.1.2、先定字段；R9 批 0–5 进 1.1.1、批 6 进 1.1.2（状态：已裁决）
+
+## V. 1.2 版本推进（2026-10-22）
+
+来源：[测试门的构成分析与 1.2 计划](../reviews/2026-10-22-test-gate-and-1.2-plan.md) 第 3 节（底层设计）与第 4 节（批次）。裁决：用户 2026-10-22 全部按推荐。版本 2026-10-22 bump 到 1.2.0（§13.207），每批先补能力卡或 ADR，一批一门，tag 打在最后一个制品提交上。
+
+- **V1** [中 / 缺口] R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds`——准备时从已规划事件重读，阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后；第 16 道门 `required-evidence`，取消跳过（计划 §3.1；批 C；级别 2；状态：待执行）
+- **V2** [中 / 缺口] R5：`result-reported` 阶段一次 `supersedes` 导入——四处单次约束同时放宽（服务阶段门、聚合转换、`claimId` 派生身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签（计划 §3.2；批 C；级别 2；状态：待执行）
+- **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：待执行）
+- **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：待执行）
+- **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：待执行）
+- **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：待执行）
+- **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：待执行）

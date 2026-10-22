@@ -5406,3 +5406,9 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **文档。** 标准 §1/§4、CLAUDE.md 与 AGENTS.md 的 Verification（冒烟含 lab 四个实验）、maintainer-tools §1/§5/§19 与新 §25、计划 §2.1 D3 与跟踪表、open-items D9；耗时表随本门刷新。
 
 **结论：通过（run-9xr332，1527/1527，14.2 分钟）。整门 18.2 → 14.2 分钟，两个阶段累计 36 → 14.2。T3（D4 重文件、D7 道再平衡）等有空档再做，先按计划 §4 进 1.2 批 0。提交 id 见 README 指针。**
+
+### 13.207 1.2 批 0：bump 到 1.2.0 与登记（2026-10-22）
+
+T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- release bump --version 1.2.0 --apply` 改 `assets/release/version.json` 与 Claude 市场条目，`build:artifacts:committed` 重渲染两份制品的版本（package.json、manifest、`mcp/server.mjs` 的启动版本），`build:check` 一致。这是 `v1.1.2` 之后第一次改 `plugins/` 字节（ADR-0021 规则 2）。登记：open-items 新开 V 节，V1–V7 对应计划 §3 的七项与批 A–E。验证（第 1 级，发布元数据触及制品）：`tests/artifacts` 与 `tests/release` 聚焦、`smoke:artifacts`——46/46，冒烟五幕通过、lab 四个实验 4/4。
+
+**结论：通过；1.2.0 的 bump 与登记提交，制品重建另一提交（id 见 README 指针）。**

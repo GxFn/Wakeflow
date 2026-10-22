@@ -5359,3 +5359,9 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 **本节修复用的级别：第 2 级**（助手资产与 agent-text 变了）。验证（本地，2 worker）：第 0 级 `--changed` 53/53（助手、live-guidance、honesty）；制品重建、`smoke:artifacts` 两宿主通过；完整门 run-g8SYkE（20:11–20:46 本地，约 36 分钟）：**1520/1520 全通过**，`inputsUnchanged: true`，`wf timings apply --receipt` 写回；`wf handoff` 通过。
 
 **结论：L12 通过**——I15（ASCII 字形、会话级状态栏选项、`mark` 幂等重设）、I14、G7/G1 都在真实宿主上成立；三个助手缺陷（F-L12-1/2/3）在现场修掉并写进测试，修复本身走一次完整门后提交：7e8953a6（助手、测试、文本、文档）、7af281ca（plugins 重建）；均未推送。工作区 9 的八个窗口都在新制品上运行。
+
+### 13.203 `v1.1.2` tag 与 `release:check`（2026-10-21）
+
+用户推送 §13.202 的三个提交（`origin/main` = f96222ac）后授权打 tag 与跑 `release:check`。tag `v1.1.2`（轻量，与前两版同式）打在 f96222ac——L12 修复的登记提交，制品字节即 7af281ca 重建的那份（缓存里登记的 0756ff48 是 1.1.2 第一次重建，差三个助手修复；下次刷新缓存前先推送 tag）。`release:check` 第一次真跑即通过：分支 `main`、树干净、tag 在 HEAD、本地 `origin/main` = HEAD、六处版本 1.1.2 一致、Node 24。与 §13.192/§13.200 同一做法，本节提交排在 tag 之后。
+
+1.1.2 至此收口：§13.201（阶段实现）、§13.202（现场 L12 与三个助手修复）、本节（tag）。未推送：tag 本身与本节提交。留到 1.2：G11、M4/J1、R4/R5、连续 `/next`、K4、C6/C11。

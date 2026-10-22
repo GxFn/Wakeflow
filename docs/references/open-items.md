@@ -17,7 +17,7 @@
 - **Q7** 后续工作由哪个机制负责：让 continue_demand 接受补充需求包；还是让 supplement 包带上父 Demand 或父需求的链接。升级后文档承诺的“补充包认领出口”是实现出来，还是改文档，说明实际路径是 record-decision 或取消后重新认领。（**事实状态 2026-10-09**：`wakeflow_continue_demand` 只接受 optimization、requirement-supplement、verified-bug 三种 kind 的续接；“补充包认领出口”未实现，§13.165 批次 0 已把升级选项文本与需求文档改为实际路径（record-decision，或取消后重新认领）；supplement 的父链接与归档写回归 H2/H10，仍待裁决。）
 - **Q8** Demand 完成时，未被任何任务或测试覆盖的验收标准怎么处理：阻断完成，还是由 Controller 逐条豁免并记入归档。（**已裁决 2026-10-02**：用户确认修复设计；缺项默认阻断，无隐式豁免；controller-only 由已接受实现锚点覆盖，real-environment 由当前已接受测试合同覆盖，见 ADR-0014。）
 - **Q9** v1 是否需要退出路径：删除或改动仓库和窗口，把仓库切出 managed-block，分离整个工作区。另外，managed-block 的默认值是否改为 owner-managed，托管块能否不带工作区专属的 id。
-- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 仍一步即停；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）
+- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 一步即停——2026-10-22 §13.208 改为连续执行 Controller 自有步骤、四类停点（V3）；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）
 - **Q11** 平台范围怎么声明：仅支持 macOS 和 Linux 的本地文件系统，是否明确拒绝网络文件系统。Node 的 engines 范围是否放宽到 26。
 - **Q12** 架构目标是重新定基线还是排期去做：ADR-0004 的 tools/list 小于 60 KB，ADR-0013 的 foundation 不超过 20 个文件和单一错误类型。约 2,100 行没有生产调用者的恢复模块，逐个决定接进恢复入口还是删除。
 
@@ -515,7 +515,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：5 个仓库的工作区里，同时跑两个只涉及一个仓库的小 Demand，就要建 8 个窗口和 5 个 worktree，事后还要逐个处置 5 个分支（大多数根本没动过）。会话数翻倍也会让 hook 目录更快触顶。再加上一个 pod 一个 Demand、升级会卡住整个 pod，用户会被推向串行工作。
   - 证据：wakeflow-pod-request.schema.json createIntent 只有 {kind, name, idempotencyKey}，窗口集合由 Wakeflow 推导，每个仓库一个产品窗口加一个 worktree，外加 Controller、Design、Test；demand/decide.ts:234,279：每个 pod 只能有一个 Demand；gate-log §13.128：8 窗口 pod 意味着一台机器上 16 个 Claude 会话，启动和关闭各花十几分钟；§13.130 D9：只要存在 worktree pod，加仓库就在配置解析时被拒（configReason topology）
   - 建议：让用户决定 pod 的范围：createIntent 可以指定仓库，只生成这些仓库的产品窗口和 worktree；考虑让处置完毕的 pod 不拆除就认领下一个 Demand。把结论记入 ADR-0010。
-- **H8** [低 / 待决] /wakeflow:next 的“做一步就停”规则让人工往返次数和 status 调用成倍增加（计划阶段 7；状态：开放）
+- **H8** [低 / 待决] /wakeflow:next 的“做一步就停”规则让人工往返次数和 status 调用成倍增加（计划阶段 7；状态：已裁决并实现，§13.208（V3）：owner 是 Controller 就连续，owner 变化、记录决定、投递发送、用户确认点即停，取舍写在命令文本里；现场 L13 待做）
   - 说明：这条规则让用户保有控制权，每一步都读最新状态，这是合理的。代价是每一步都要一次人工 prompt、一次约 9 KB 的 status、在大上下文上跑一到多轮。对纯机械的 Controller 自有序列，它只增加了延迟，没有增加决策点。
   - 证据：assets/agent-text/commands/next.md：第一个工具调用是 wakeflow_status，做完那一步就停；80580357：/wakeflow:next 调用 11 次，status 调用 27 次（约 231-258 KB）；gate-log L3667 的 74 分钟里包含维护者等待的时间；验证者更正：launch/register/mark 本来就在第 1 步里一起完成；只有 prepare（第 7 步）和 send 加 record（第 8 步）之间的分界把一段机械序列拆开了
   - 建议：这需要产品决定：是否允许 /wakeflow:next 连续执行多个 Controller 自有步骤，直到 owner 变化或需要用户决策为止。无论怎么定，都在命令文本里写明其中的取舍。
@@ -776,7 +776,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 - **V1** [中 / 缺口] R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds`——准备时从已规划事件重读，阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后；第 16 道门 `required-evidence`，取消跳过（计划 §3.1；批 C；级别 2；状态：待执行）
 - **V2** [中 / 缺口] R5：`result-reported` 阶段一次 `supersedes` 导入——四处单次约束同时放宽（服务阶段门、聚合转换、`claimId` 派生身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签（计划 §3.2；批 C；级别 2；状态：待执行）
-- **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：待执行）
+- **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：已执行 §13.208，现场 L13 待缓存刷新）
 - **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：待执行）
 - **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：待执行）
 - **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：待执行）

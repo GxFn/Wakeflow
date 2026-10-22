@@ -315,6 +315,18 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
       "names `requirement-authoring` with the user as owner",
     ),
   );
+  // 连续 `/next`（V3，§13.208）：owner 是 Controller 就连续，四类停点写在命令里，旧的"一步即停"措辞不再出现。
+  const next = flat(source("commands/next.md"));
+  ok(next.includes("Keep going while the owner of `next` is the Controller"));
+  ok(next.includes("you recorded a review decision"));
+  ok(next.includes("you performed a delivery send and recorded its outcome"));
+  ok(next.includes("asks for the user's confirmation or decision"));
+  equal(next.includes("do that one step, and stop"), false);
+  ok(
+    flat(source("skills/wakeflow-controller/SKILL.md")).includes(
+      "A recorded decision ends the turn; the next `/wakeflow:next` resumes from `wakeflow_status`",
+    ),
+  );
   // Agent 侧的四条引导：临时文件、逐条列出用例、环境前置、Controller 核对文件的位置。
   ok(flat(source(TARGET)).includes("never write into the workspace root or another repository"));
   ok(flat(source(TEST_EXECUTION)).includes("names each case in the output"));

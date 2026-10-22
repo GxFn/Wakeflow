@@ -219,7 +219,9 @@ or stand in for the user's confirmation.
 The callback is sent before the target window's turn ends, so a unit read
 seconds after the callback may still show the target's completion record as
 pending. That is timing, not a missing record: read the unit again after the
-window goes idle instead of deciding around it.
+window goes idle instead of deciding around it. The turn in which the callback
+landed may run from the inspection to the decision in one go; the decision is
+the stop.
 
 If the set of allowed decisions does not contain what you want to record, the
 reason is in the unit: the target's completion evidence has not arrived yet, or

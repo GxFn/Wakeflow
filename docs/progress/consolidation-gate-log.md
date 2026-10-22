@@ -5412,3 +5412,11 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- release bump --version 1.2.0 --apply` 改 `assets/release/version.json` 与 Claude 市场条目，`build:artifacts:committed` 重渲染两份制品的版本（package.json、manifest、`mcp/server.mjs` 的启动版本），`build:check` 一致。这是 `v1.1.2` 之后第一次改 `plugins/` 字节（ADR-0021 规则 2）。登记：open-items 新开 V 节，V1–V7 对应计划 §3 的七项与批 A–E。验证（第 1 级，发布元数据触及制品）：`tests/artifacts` 与 `tests/release` 聚焦、`smoke:artifacts`——46/46，冒烟五幕通过、lab 四个实验 4/4。
 
 **结论：通过；1.2.0 的 bump 与登记提交，制品重建另一提交（id 见 README 指针）。**
+
+### 13.208 1.2 批 A：连续 `/wakeflow:next`（V3，H8/Q10）（2026-10-22）
+
+只改文本，不加状态、不改工具（计划 §3.3）。`commands/next.md`（26 → 33 行，上限 40）：owner 是 Controller 就连续，每步之前重新读 `wakeflow_status` 并先宣布这一步；停点四类——owner 变化（投递落地后是 target 窗口，认领前是 Design 或用户）、刚记录了评审决定、刚执行了投递发送并记录结局、技能要用户确认或决定（或预览阻塞无法自行解决）；取舍写进命令：少的是 plan→prepare→send 与 inspect→decide 之间的人工往返，留下的两停让用户仍能在每次投递与每个决定后介入。Controller SKILL 第 11 步加一句“记录决定即结束回合，下一次 `/wakeflow:next` 从 status 继续”（仍 200 行）；`delivery-and-review.md` 的回调一段加“回调落地的那一轮可以从检视一直做到决定；决定是停点”。现场指引测试钉住四个停点短语、旧的“一步即停”不再出现，以及 SKILL 的那句。
+
+验证（第 1 级，agent-text 经资源边选中制品测试）：制品重建，`tests/artifacts` 43/43，`smoke:artifacts` 通过（五幕与 lab 四个实验 4/4）。现场 L13（数一个 Demand 从认领到接受的 `/next` 与 status 次数）等用户推送并授权刷新缓存后做。H8 据此关闭，Q10 的“`/wakeflow:next` 一步即停”事实状态随之更新。
+
+**结论：通过（制品测试 43/43，冒烟通过）；提交 id 见 README 指针。**

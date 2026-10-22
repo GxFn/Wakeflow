@@ -253,7 +253,7 @@ A window's `attention` says whether the host is waiting for the user there:
 `none` once a later record superseded it, `null` without a binding or any
 record. Tell the user which window needs them; their action there clears it, no
 tool does. On Claude Code the hooks also mark a bound window's name in the
-window list: green `●` working, red `?` waiting for you, nothing when idle
+window list: green `+` working, red `?` waiting for you, nothing when idle
 (`mark` sets that format): a hint, never evidence.
 
 A registered window's `launchIntent` compares the intent digest recorded at its

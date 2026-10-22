@@ -127,6 +127,12 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
     single-lane setting, not a local requirement. A test that times out only
     under eight workers gets the tag, not a longer timeout.
 - Each gate-log section states which tier ran and why.
+- Tests follow `docs/standards/testing-standard.md`: six levels (pure, component,
+  capability, public-tool, tooling, artifact) with per-file budgets, placement
+  mirroring `src/`, disposable roots with `durability: "none"` outside the
+  crash-semantics tests, the `loadSensitive` tag for real-process or wall-clock
+  work, and no skip/todo/only or retries inside the gate. A new or changed test
+  names its level in the file header and stays inside that level's budget.
 - When another session or agent may be compiling or testing in this tree,
   run every `.build/`- or `plugins/`-writing command under the repository
   build lock: `npm run locked -- npm test`. `wf verify` and `wf handoff`

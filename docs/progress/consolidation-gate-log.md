@@ -5379,3 +5379,16 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **文档。** CLAUDE.md Verification（分级时长、本地不再需要 `WAKEFLOW_TEST_CONCURRENCY=2`、agent-text 归第 1 级）、maintainer-tools §1/§14/§19/§23、`load-sensitive.ts` 注释、open-items D9 后续；耗时表随本门刷新。
 
 **结论：通过（run-2t0hxo，1528/1528，18 分钟）。剩余差距是结构性的：隔离道（约 590 秒、四进程）结束前其余 302 个文件不能开始，而链本身就要 600 秒，所以 phase 1 的下限是链。下一步的两个杠杆记在 D9，等门时长再成为问题时才动：隔离道并发 2 → 3（其余道可提前约 150 秒开始，代价是五进程下 lab 实验与 hook 大目录测试的余量变小，后者的 83 秒用例预算 120 秒）；或把链与隔离文件合成一条 4 worker 的重道、其余道等它结束后用全预算 8（链先结束时空出的两个 worker 自动接隔离文件，其余道约省 2 分钟，但其余 302 个文件要在 8 进程下跑）。链拆分（方案 C）与夹具模板克隆（方案 D）仍是更大的工程。已提交 8a915769；本节的登记提交见 README 指针。**
+
+### 13.205 测试门的构成分析、测试开发标准与 1.2 底层设计（2026-10-22）
+
+用户在 §13.204 之后要求两件事：把测试门的内容说清、按级别区分并给一份专门的测试开发说明（Claude 与 Codex 共用）；其余 1.2 事项全部按推荐裁决，从底层实现归纳设计并出计划。本节是分析与设计，没有改 `src/`、没有跑门；两次实验在仓库外的临时目录完成。
+
+- **门的构成。** 315 个文件、1528 个用例、约 8.3 万行，按行为分六级：0 级纯逻辑 85 个文件只花 6 秒；1–2 级一次性文件系统 148 个文件 1663 秒、带子进程 30 个文件 1029 秒；3 级公共工具 13 个文件 1315 秒（两条链 1190）；4 级维护者工具 30 个文件 1150 秒（lab 六个文件 943）；5 级制品 9 个文件 23 秒。三套端到端：场景链（组合根 + 内存 Transport）、lab 矩阵（已构建制品 + stdio + 合成 hook，6 个实验各约 100 秒）、`smoke:artifacts`（门外）。最重的文件与原因见计划 §1.2。
+- **两个实验。** 本机 3000 次"暂存写 + fsync + 改名 + 父目录 fsync"25.8 秒，去掉 fsync 0.48 秒（一次耐久写约 8.6 毫秒）。单独跑 Codex 场景链：生产 fsync 319 秒；把 `FileHandle.sync()` 预载成计数空操作后 289 秒（25/25 通过，链进程 8858 次 sync）——单进程里 fsync 只占一成。但门里同一文件 589 秒（与另一条链和两个 lab 实验同跑），旧 2 worker 门两条链互跑 668/662 秒：多个 fsync 密集的进程同跑时每个都慢一到两倍，fsync 在本机是被串行化的共享资源。链证明的是业务行为而不是崩溃耐久，一次性工作区去掉 fsync 既省自己也不再让别人排队——`prepared-workspace.ts` 的原则早已如此（plan §11），只是组合根与维护入口没有耐久性选项，链和多数能力测试没能用上。
+- **标准。** 新建 `docs/standards/testing-standard.md`：门的组成、六级定义（依赖、禁止、单文件预算）、放置与命名（`.load.test.ts` 后缀、一文件一语言、文件头注释）、夹具与资源纪律（一次性根、预备基线、`durability: "none"`、隔离 git、替身 CLI、注入时钟）、负载标签与道、门里的禁止项、按场景的命令、"改了什么补什么"表。`CLAUDE.md` 与 `AGENTS.md` 的 Verification 各加一条指向它（`instructions-parity`），`docs/README.md` 登记。
+- **清理与优化设计（计划 §2）。** D1 测试支持模块包装 `RootedDirectory.open` 让 2–3 级测试进程缺省 `none`（不改生产字节、不需 bump）；D2 lab 矩阵的 dual-product/worktree 四个实验归 `smoke:artifacts`，门里每宿主留一个 single-product；D3 `.load` 后缀与五个混合文件的拆分；D4 重文件拆分与 `observation/service` 改基线复制；D5 命名与头注释随改随补；D6 `wf test levels` 只读报告；D7 道再平衡。预期整门 18 → 约 14（D1）→ 约 11（+D2）→ 约 10 分钟（+D4/D7）。批次 T1（D1/D3/D6）、T2（D2）、T3（D4/D7），一批一门。
+- **1.2 底层设计（计划 §3）。** 七路只读调研按文件与行号回报实现事实，设计按原实现归纳：R4 的 `dependsOn`（只能依赖已规划目标，无环由构造保证；准备时从已规划事件重读，聚合形状不变；阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后）与 `requiredEvidenceKinds`（第 16 道门 `required-evidence`，取消跳过）；R5 的一次 `supersedes` 导入要同时放宽四处单次约束（服务阶段门、聚合转换、`claimId` 派生的身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签；连续 `/next` 只改命令文本——owner 是 Controller 就连续，owner 变化、记录决定、投递发送、用户确认点即停；G11 认领状态加可选 `testingMode`，索引两列、标记 v2，维护 apply 收尾调用已有的 `refreshRequirementBoardIndex` 重写陈旧索引；K4 在 Codex 插件模型下没有按窗口裁剪的通道，1.2 改做描述减肥；C6 加版本轴（manifest `version` 进身份与 hook 记录，比较规则分"服务器旧"与"窗口旧"），维护 preview 被过期进程阻塞，C11 最小闭环是提交记录带写者与门 `artifact-older-than-stream`；detach 两个动作、五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`。批次 0 → A → B → C → D → E，一批一门。
+- **留给用户的两点。** T2 的取舍（lab 四个实验从门移到冒烟）；detach-workspace 的终态（改名或删除）。
+
+**结论：分析与设计完成，待确认后执行 T1/T2（下一道门）。提交 id 见 README 指针。**

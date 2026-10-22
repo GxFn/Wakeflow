@@ -3,10 +3,10 @@ import {
   chmodSync,
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  lstatSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -20,9 +20,9 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../src/foundation/data/json-value.js";
-import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
 import { parseDurableAtomicFileStageFileName } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import type { UtcInstant } from "../../src/foundation/time/utc-instant.js";
@@ -33,13 +33,14 @@ import {
   HOST_HOOK_RECORDS_MAXIMUM,
   HOST_HOOK_RETENTION_MILLISECONDS,
   type HostHookObservationInput,
-  readHostHookObservations,
   readHostHookObservationRecord,
-  scanHostHookObservations,
+  readHostHookObservations,
   readHostHookObservationsInterleaved,
+  scanHostHookObservations,
   writeHostHookObservation,
 } from "../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
+import { loadSensitive } from "../support/load-sensitive.js";
 
 async function fixture(
   t: TestContext,
@@ -474,6 +475,13 @@ function fillOversizedDirectory(directory: string): void {
 test("旧目录超过 16384 项仍可分页完整读取与按龄修剪，未知条目不被删除", {
   timeout: 120_000,
 }, async (t) => {
+  if (
+    loadSensitive(
+      t,
+      "oversized real directory tree with 16384+ entries; times out at eight file workers",
+    )
+  )
+    return;
   const { root, path: workspace } = await fixture(t);
   const directory = hooksDirectory(workspace, "claude-code");
   const kept = await writeHostHookObservation(root, observation(workspace, ago(DAY)));
@@ -765,6 +773,7 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
 test("旧平铺目录的 16385 条近期有效记录可完整扫描，目标查询与逐条证据读取不截断", {
   timeout: 240_000,
 }, async (t) => {
+  if (loadSensitive(t, "16385-entry real directory scan; times out at eight file workers")) return;
   const { root, path: workspace } = await fixture(t);
   const directory = hooksDirectory(workspace, "codex");
   mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -840,6 +849,10 @@ test("有限结果明确报告不完整；损坏旧目录不会阻断新分片�
 test("密集历史也按龄退役：基准取最新的另一条记录，只走截止日之前的日目录，清空的分片与日目录随手回收（§13.161 H2-01/H2-02）", {
   timeout: 120_000,
 }, async (t) => {
+  if (
+    loadSensitive(t, "8000-record real history tree pruned by age; times out at eight file workers")
+  )
+    return;
   const { root, path: workspace } = await fixture(t);
   const directory = hooksDirectory(workspace, "claude-code");
   // 40 天、每天 200 条，远高于旧实现约 137 条/天的饥饿阈值：最旧的 4096 个叶子跨不到 30 天，

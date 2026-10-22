@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-import { selectImpactedTests } from "../../../tooling/testing/impacted-tests.js";
+import {
+  selectImpactedTests,
+  testSourcesDependingOn,
+} from "../../../tooling/testing/impacted-tests.js";
 
 function git(root: string, args: readonly string[]): void {
   const result = spawnSync(
@@ -99,16 +102,17 @@ test("改动的夹具只影响它的消费者；新增的未跟踪测试本身�
   throws(() => selectImpactedTests(root, { since: "--output=x" }), /one Git revision/u);
 });
 
-test("Schema、agent 文本、工具链输入与运行器改动建议完整门；选择集过大也建议完整门", (t) => {
+test("Schema、工具链输入与运行器改动建议完整门；agent 文本不再是整门理由；选择集过大也建议完整门", (t) => {
   const root = fixture(t);
   write(root, "src/contracts/schemas/x.schema.json", "{}\n");
   write(root, "assets/agent-text/README.md", "# x\n");
   write(root, "knip.json", "{}\n");
+  write(root, "tooling/testing/impacted-tests.ts", "export const x = 1;\n");
   const selection = selectImpactedTests(root);
   equal(selection.fullGateRecommended, true);
   deepEqual(selection.fullGateReasons, [
-    "agent-text",
     "schema-or-generated-contract",
+    "test-runner",
     "toolchain-input",
   ]);
   for (let index = 0; index < 90; index += 1) {
@@ -122,4 +126,103 @@ test("Schema、agent 文本、工具链输入与运行器改动建议完整门�
   const large = selectImpactedTests(root);
   equal(large.tests.length, 92);
   equal(large.fullGateReasons.includes("selection-too-large"), true);
+});
+
+test("agent 文本改动经资源边传播：读取它的模块的导入者与按路径点名它的测试入选，其余不选，不建议完整门", (t) => {
+  const root = fixture(t);
+  write(root, "src/hosts/codex/codex-agent-text-profile.ts", "export const profile = 1;\n");
+  write(root, "tooling/artifacts/build-plugin-artifacts.ts", "export const build = 1;\n");
+  write(
+    root,
+    "tests/artifacts/agent-text-honesty.test.ts",
+    'import { profile } from "../../src/hosts/codex/codex-agent-text-profile.js";\n',
+  );
+  write(
+    root,
+    "tests/artifacts/plugin-artifacts.test.ts",
+    'import { build } from "../../tooling/artifacts/build-plugin-artifacts.js";\n',
+  );
+  write(
+    root,
+    "tests/entrypoints/descriptions.test.ts",
+    'const SKILL_ROOT = path.join(process.cwd(), "assets", "agent-text", "skills");\n',
+  );
+  write(root, "assets/agent-text/skills/wakeflow-test/SKILL.md", "# skill\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "owners"]);
+  deepEqual(selectImpactedTests(root).tests, []);
+
+  write(root, "assets/agent-text/skills/wakeflow-test/SKILL.md", "# skill v2\n");
+  const selection = selectImpactedTests(root);
+  deepEqual(selection.changed, ["assets/agent-text/skills/wakeflow-test/SKILL.md"]);
+  deepEqual(selection.tests, [
+    "tests/artifacts/agent-text-honesty.test.ts",
+    "tests/artifacts/plugin-artifacts.test.ts",
+    "tests/entrypoints/descriptions.test.ts",
+  ]);
+  deepEqual(selection.reasons, {
+    "tests/artifacts/agent-text-honesty.test.ts": "assets/agent-text/skills/wakeflow-test/SKILL.md",
+    "tests/artifacts/plugin-artifacts.test.ts": "assets/agent-text/skills/wakeflow-test/SKILL.md",
+    "tests/entrypoints/descriptions.test.ts": "assets/agent-text/skills/wakeflow-test/SKILL.md",
+  });
+  equal(selection.fullGateRecommended, false);
+  deepEqual(selection.fullGateReasons, []);
+});
+
+test("tooling 源也在静态图里：改动的 tooling 模块选中导入它的测试，经另一个 tooling 模块的间接导入也选中", (t) => {
+  const root = fixture(t);
+  write(root, "tooling/verification/files.ts", "export const files = 1;\n");
+  write(
+    root,
+    "tooling/testing/test-recording.ts",
+    'import { files } from "../verification/files.js";\nexport const recording = files;\n',
+  );
+  write(
+    root,
+    "tests/tooling/testing/test-recording.test.ts",
+    'import { recording } from "../../../tooling/testing/test-recording.js";\n',
+  );
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "tooling"]);
+  write(root, "tooling/verification/files.ts", "export const files = 2;\n");
+  const selection = selectImpactedTests(root);
+  deepEqual(selection.tests, ["tests/tooling/testing/test-recording.test.ts"]);
+  deepEqual(selection.reasons, {
+    "tests/tooling/testing/test-recording.test.ts": "tooling/verification/files.ts",
+  });
+  equal(selection.fullGateRecommended, false);
+});
+
+test("testSourcesDependingOn：静态导入链到达目标的测试文件，含经夹具的间接依赖；目标不存在或无人导入时为空集", (t) => {
+  const root = fixture(t);
+  write(root, "tests/support/load-sensitive.ts", "export const loadSensitive = 1;\n");
+  write(
+    root,
+    "tests/foundation/lock.test.ts",
+    'import { loadSensitive } from "../support/load-sensitive.js";\n',
+  );
+  write(
+    root,
+    "tests/tooling/lab/workflow-matrix.fixture.ts",
+    'import { loadSensitive } from "../../support/load-sensitive.js";\nexport const matrix = 1;\n',
+  );
+  write(
+    root,
+    "tests/tooling/lab/workflow-codex.test.ts",
+    'import { matrix } from "./workflow-matrix.fixture.js";\n',
+  );
+  deepEqual([...testSourcesDependingOn(root, "tests/support/load-sensitive.ts")].sort(), [
+    "tests/foundation/lock.test.ts",
+    "tests/tooling/lab/workflow-codex.test.ts",
+  ]);
+  // 夹具本身不是测试文件，不在集合里；无关测试也不在。
+  equal(
+    testSourcesDependingOn(root, "tests/support/load-sensitive.ts").has("tests/kernel/a.test.ts"),
+    false,
+  );
+  deepEqual([...testSourcesDependingOn(root, "tests/support/missing.ts")], []);
+  deepEqual([...testSourcesDependingOn(root, "src/kernel/a.ts")].sort(), [
+    "tests/capabilities/x/service.test.ts",
+    "tests/kernel/a.test.ts",
+  ]);
 });

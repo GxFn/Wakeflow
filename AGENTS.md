@@ -110,14 +110,22 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   - Tier 1, before every commit (5–12 min): tier 0 plus what the impact report
     names - `schema:build` and `schema:check` for schema changes; the artifact
     rebuild, `tests/artifacts` and `smoke:artifacts` for anything that reaches
-    the artifacts; the owning slice's tests and one host's scenario chain for
-    capability or governance changes - then `npm run wf -- handoff`.
-  - Tier 2, the full gate `npm test` (21–26 min): before a push or a tag, after
-    any change under `src/foundation`, `src/kernel`, `src/contracts`,
-    `tests/scenarios` or `tooling/testing`, after a Biome, knip or tsconfig
-    change, and once per day of work. Only tier 2 receipts feed
-    `wf timings apply`. A push runs the same gate remotely (`verify.yml`), so
-    the push itself needs no second local run.
+    the artifacts (an `assets/agent-text/` change selects those tests through
+    a declared resource edge and is tier 1, not a full gate); the owning
+    slice's tests and one host's scenario chain for capability or governance
+    changes - then `npm run wf -- handoff`.
+  - Tier 2, the full gate `npm test` (about 18 min on 8 CPUs): before a
+    push or a tag, after any change under `src/foundation`, `src/kernel`,
+    `src/contracts`, `tests/scenarios` or `tooling/testing`, after a Biome,
+    knip or tsconfig change, and once per day of work. Only tier 2 receipts
+    feed `wf timings apply`. A push runs the same gate remotely
+    (`verify.yml`), so the push itself needs no second local run.
+  - The runner schedules lanes on its own (gate-log §13.204): the two scenario
+    chains and the `loadSensitive`-tagged files start at once with two workers
+    each, the rest follow at the remaining budget once the tagged files finish.
+    Run the gate at the default budget; `WAKEFLOW_TEST_CONCURRENCY=2` is CI's
+    single-lane setting, not a local requirement. A test that times out only
+    under eight workers gets the tag, not a longer timeout.
 - Each gate-log section states which tier ran and why.
 - When another session or agent may be compiling or testing in this tree,
   run every `.build/`- or `plugins/`-writing command under the repository

@@ -1,11 +1,9 @@
-import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
 import {
   executeWindowBindingRequest,
   type WindowBindingHostFacade,
@@ -13,8 +11,10 @@ import {
 import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 /**
  * Claude Code 启动意图的权限模式（用户裁决 Q4，gate-log §13.134）：配置未声明时按宿主
@@ -99,6 +99,10 @@ function addedDirectories(arguments_: readonly string[]): readonly string[] {
 test("Claude Code：配置未声明 permissionMode 时启动参数取宿主缺省 --permission-mode auto", {
   timeout: 60_000,
 }, async (t) => {
+  if (
+    loadSensitive(t, "fresh initialize with real fsync fixtures; times out at eight file workers")
+  )
+    return;
   const arguments_ = await launchArguments(t, {}, true);
   equal(permissionMode(arguments_), "auto");
   // 账本在工作区之外：窗口按占位符带上账本目录，由助手换成绝对路径。
@@ -110,6 +114,10 @@ test("Claude Code：配置未声明 permissionMode 时启动参数取宿主缺�
 test("Claude Code：配置显式声明的 acceptEdits 原样进入启动参数，不被缺省 auto 覆盖", {
   timeout: 60_000,
 }, async (t) => {
+  if (
+    loadSensitive(t, "fresh initialize with real fsync fixtures; times out at eight file workers")
+  )
+    return;
   const arguments_ = await launchArguments(
     t,
     { "claude-code": { launch: { permissionMode: "acceptEdits" } } },

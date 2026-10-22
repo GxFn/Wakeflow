@@ -116,3 +116,39 @@ test("变更影响：手改生成目录与制品给出警告；只改 tooling �
   equal(chain.tier.level, 2);
   ok(chain.tier.reasons.includes("tests/scenarios/chain.ts is gate infrastructure"));
 });
+
+test("变更影响：建议命令跟着级别走——第 1 级的运行时改动重建制品、跑受影响测试与 smoke，不推整门；agent 文本是第 1 级", (t) => {
+  const root = fixture(t);
+  write(root, "src/capabilities/tasking/decide.ts", "export const d = 1;\n");
+  write(
+    root,
+    "tests/capabilities/tasking/decide.test.ts",
+    'import { d } from "../../../src/capabilities/tasking/decide.js";\n',
+  );
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "slice"]);
+  write(root, "src/capabilities/tasking/decide.ts", "export const d = 2;\n");
+  const runtime = reportChangeImpact(root);
+  deepEqual(runtime.tier, { level: 1, reasons: ["runtime changed"] });
+  equal(runtime.artifactsAffected, true);
+  equal(runtime.tests.count, 1);
+  equal(runtime.tests.fullGateRecommended, false);
+  deepEqual(runtime.recommended, [
+    "npm run build:artifacts:committed",
+    "npm run wf -- verify quick --changed",
+    "npm run smoke:artifacts",
+    "npm run wf -- handoff",
+  ]);
+
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "runtime"]);
+  write(root, "assets/agent-text/skills/x/SKILL.md", "# x\n");
+  const text = reportChangeImpact(root);
+  deepEqual(text.tier, { level: 1, reasons: ["agent-text changed"] });
+  equal(text.tests.fullGateRecommended, false);
+  deepEqual(text.recommended, [
+    "npm run build:artifacts:committed",
+    "npm run smoke:artifacts",
+    "npm run wf -- handoff",
+  ]);
+});

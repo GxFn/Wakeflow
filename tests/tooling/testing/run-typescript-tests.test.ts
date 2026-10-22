@@ -5,7 +5,11 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  CHAIN_LANE_CONCURRENCY,
   compiledTypeScriptTests,
+  ISOLATED_LANE_CONCURRENCY,
+  LANE_MINIMUM_BUDGET,
+  planTestLanes,
   resolveTestConcurrency,
 } from "../../../tooling/testing/run-typescript-tests.js";
 
@@ -122,4 +126,92 @@ test("test concurrency override changes only the worker budget and rejects inval
     throws(() => resolveTestConcurrency(value, 8), /WAKEFLOW_TEST_CONCURRENCY/u);
   }
   throws(() => resolveTestConcurrency(undefined, 0), /parallelism/u);
+});
+
+const ORDERED = [
+  "tests/scenarios/wakeflow-scenario-acceptance-claude-code.test.ts",
+  "tests/scenarios/wakeflow-scenario-acceptance-codex.test.ts",
+  "tests/capabilities/result-review/service.test.ts",
+  "tests/tooling/lab/workflow-claude-code.test.ts",
+  "tests/tooling/lab/workflow-codex.test.ts",
+  "tests/kernel/a.test.ts",
+  "tests/foundation/filesystem/rooted-read-write-scope.test.ts",
+  "tests/kernel/b.test.ts",
+];
+const ISOLATED = new Set([
+  "tests/tooling/lab/workflow-claude-code.test.ts",
+  "tests/tooling/lab/workflow-codex.test.ts",
+  "tests/foundation/filesystem/rooted-read-write-scope.test.ts",
+]);
+
+test("道计划：预算足够时链道与隔离道立即开始、其余道等隔离道结束，每条道内保持传入顺序，文件不增不减", () => {
+  const lanes = planTestLanes(ORDERED, 8, ISOLATED);
+  deepEqual(
+    lanes.map((lane) => [lane.name, lane.concurrency, lane.after]),
+    [
+      ["chain", CHAIN_LANE_CONCURRENCY, null],
+      ["isolated", ISOLATED_LANE_CONCURRENCY, null],
+      ["normal", 8 - CHAIN_LANE_CONCURRENCY, "isolated"],
+    ],
+  );
+  deepEqual(lanes[0]?.files, ORDERED.slice(0, 2));
+  deepEqual(lanes[1]?.files, [
+    "tests/tooling/lab/workflow-claude-code.test.ts",
+    "tests/tooling/lab/workflow-codex.test.ts",
+    "tests/foundation/filesystem/rooted-read-write-scope.test.ts",
+  ]);
+  deepEqual(lanes[2]?.files, [
+    "tests/capabilities/result-review/service.test.ts",
+    "tests/kernel/a.test.ts",
+    "tests/kernel/b.test.ts",
+  ]);
+  deepEqual([...lanes.flatMap((lane) => lane.files)].sort(), [...ORDERED].sort());
+  // 预算 6 是分道的下限：其余道还剩四个 worker。
+  equal(planTestLanes(ORDERED, LANE_MINIMUM_BUDGET, ISOLATED).at(-1)?.concurrency, 4);
+  // 道计划对同一输入确定。
+  deepEqual(planTestLanes(ORDERED, 8, ISOLATED), lanes);
+});
+
+test("道计划退回单道：预算不足、清单里没有负载敏感文件，或只有链文件", () => {
+  for (const budget of [1, 2, LANE_MINIMUM_BUDGET - 1]) {
+    deepEqual(planTestLanes(ORDERED, budget, ISOLATED), [
+      { name: "all", concurrency: budget, after: null, files: ORDERED },
+    ]);
+  }
+  deepEqual(planTestLanes(ORDERED, 8, new Set()), [
+    { name: "all", concurrency: 8, after: null, files: ORDERED },
+  ]);
+  // 场景链文件即便带了标签也归链道，不算隔离文件。
+  deepEqual(planTestLanes(ORDERED.slice(0, 2), 8, new Set(ORDERED.slice(0, 2))), [
+    { name: "all", concurrency: 8, after: null, files: ORDERED.slice(0, 2) },
+  ]);
+  throws(() => planTestLanes(ORDERED, 0, ISOLATED), /lane budget/u);
+});
+
+test("道计划的边界：没有链文件时其余道用整个预算，隔离道与链道的并发不超过各自文件数，全是隔离文件时没有其余道", () => {
+  const withoutChain = planTestLanes(ORDERED.slice(2), 8, ISOLATED);
+  deepEqual(
+    withoutChain.map((lane) => [lane.name, lane.concurrency, lane.after]),
+    [
+      ["isolated", ISOLATED_LANE_CONCURRENCY, null],
+      ["normal", 8, "isolated"],
+    ],
+  );
+  const oneEach = planTestLanes(
+    [ORDERED[0] as string, "tests/foundation/filesystem/rooted-read-write-scope.test.ts"],
+    8,
+    ISOLATED,
+  );
+  deepEqual(
+    oneEach.map((lane) => [lane.name, lane.concurrency, lane.after]),
+    [
+      ["chain", 1, null],
+      ["isolated", 1, null],
+    ],
+  );
+  const onlyIsolated = planTestLanes([...ISOLATED], 6, ISOLATED);
+  deepEqual(
+    onlyIsolated.map((lane) => [lane.name, lane.concurrency, lane.after]),
+    [["isolated", ISOLATED_LANE_CONCURRENCY, null]],
+  );
 });

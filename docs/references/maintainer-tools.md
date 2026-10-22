@@ -23,11 +23,11 @@ npm run wf -- verify artifact
 
 验证不会隐式执行 `build:artifacts:committed` 来修复漂移。需要重建时仍明确运行原命令。
 
-分级（CLAUDE.md Verification，§13.181）：第 0 级每次改完跑 `verify quick --changed`；第 1 级提交前再加 `impact report` 点名的套件与 `handoff`；第 2 级完整门只在推送或打 tag 前、改到 `src/foundation`、`src/kernel`、`src/contracts`、`tests/scenarios`、`tooling/testing` 或 Biome/knip/tsconfig 时、以及每天收尾一次。`impact report` 的 `tier` 字段给出当前变更集的级别与理由；只有第 2 级的回执写回耗时表。门在跑时不要再起任何编译、扫描或测试。
+分级（CLAUDE.md Verification，§13.181）：第 0 级每次改完跑 `verify quick --changed`；第 1 级提交前再加 `impact report` 点名的套件与 `handoff`；第 2 级完整门只在推送或打 tag 前、改到 `src/foundation`、`src/kernel`、`src/contracts`、`tests/scenarios`、`tooling/testing` 或 Biome/knip/tsconfig 时、以及每天收尾一次。`impact report` 的 `tier` 字段给出当前变更集的级别与理由；只有第 2 级的回执写回耗时表。agent-text 的改动经资源边选中制品测试（第 14 节），归第 1 级；`impact report` 的建议命令跟着级别走，只有第 2 级才列完整门（§13.204）。门在跑时不要再起任何编译、扫描或测试。
 
 测试文件由官方 `node:test.run({files})` 接收既有耗时队列，保持每文件一个进程。Node 24 CLI会重新排序显式文件参数，因此本轮改用程序化入口；真实进程回归同时检查实际执行顺序与选择记录，终端和JSONL仍来自同一原生事件流。见[Node 24.19测试入口](https://nodejs.org/download/release/v24.19.0/docs/api/test.html#runoptions)。
 
-并发度是文件 worker 数，仍复用既有调度器。整门示例从 2 worker 开始；4 worker 曾完成整门，但本轮同样出现准备阶段和慢场景超时，6 worker 也曾出现初始化超时（§13.153）。并发适用性必须随实际负载判断，不能仅凭一次通过就当作稳定上限。调整并发不改变用例、断言、fsync 或测试自己的超时；每轮结果分别保存。
+并发度是文件 worker 数（`WAKEFLOW_TEST_CONCURRENCY`，缺省一 CPU 一 worker），是整次运行的预算。运行器把排好序的清单分成几条并行的“道”（§13.204）：预算不足 6 或清单里没有负载敏感文件时单道（CI 固定 2 worker，行为不变）；否则 `tests/scenarios/` 的两个场景链文件进链道、带 `loadSensitive` 标签的文件（含经夹具间接到达标签的，按静态导入闭包识别）进隔离道，两条道各用 2 个 worker 立即开始，此时机器上只有四个测试进程；其余文件等隔离道结束后以“预算减链道”的 worker 数开始。每条道是一次独立的 `node:test.run()`，事件合成一条流，终端与 `test-events.jsonl` 只有一份运行尾部，`test-selection.json` 记下道计划（`lanes`）；子进程看到的 `WAKEFLOW_TEST_CONCURRENCY` 是本道的并发度。8 CPU 上整门从单道 2 worker 的约 36 分钟降到约 18 分钟；再往下的关键路径是两个场景链文件（各约 11 分钟，顺序推进，拆分要先做工作区快照）。历史记录：单道 4 worker 曾出现准备阶段和慢场景超时、6 worker 出现初始化超时（§13.153），8 worker 下 hook 观察的大目录测试与 permission-mode 的 fresh 初始化超时（现已带标签进隔离道）。并发适用性必须随实际负载判断，不能仅凭一次通过就当作稳定上限；调整并发不改变用例、断言、fsync 或测试自己的超时，每轮结果分别保存。
 
 每次创建一个私有 `.build/verification/run-…/` 目录，保存：
 
@@ -40,7 +40,7 @@ Node 对某些主动 abort 的文件级与汇总计数可能分类不同，因�
 
 运行开始、结束分别读取验证输入指纹；源码提交或内容发生变化时，不给新字节背书。输入包含源代码、测试、tooling、assets、plugins、marketplace、`.github` 和根配置，忽略构建输出及独立文档/图谱。端点指纹不能排除期间修改后恢复，也不是抵抗同用户篡改的证明；需要更强隔离时应在独立受控检出运行。
 
-quick 与 artifact 的每个阶段有 30 分钟外层期限，gate 阶段为 90 分钟（完整门在 2 worker 下约 50–60 分钟，§13.161）；都不改变用例自己的超时。SIGINT/SIGTERM 会中止受管命令并结算回执；POSIX 使用独立进程组清理本次子进程。进程被直接 SIGKILL 等情况可能留下 `running` 回执，该记录不能当作通过。日志与事件属于私有材料，保留在被忽略目录，不应直接提交或自动上传。
+quick 与 artifact 的每个阶段有 30 分钟外层期限，gate 阶段为 90 分钟（完整门单道 2 worker 约 36 分钟，分道 8 worker 约 18 分钟，§13.204）；都不改变用例自己的超时。SIGINT/SIGTERM 会中止受管命令并结算回执；POSIX 使用独立进程组清理本次子进程。进程被直接 SIGKILL 等情况可能留下 `running` 回执，该记录不能当作通过。日志与事件属于私有材料，保留在被忽略目录，不应直接提交或自动上传。
 
 | 退出码 | 含义 |
 | --- | --- |
@@ -361,7 +361,7 @@ npm run --silent wf -- impact tests [--since REF]
 npm run --silent wf -- verify quick --changed [--since REF]
 ```
 
-聚焦值可以是 `tests/` 下的当前测试文件或目录（展开为其中全部测试源）；写错的路径在错误里点名。`--changed` 由 Git 变更集（`git diff --name-only <since>` 加未跟踪文件）沿 `src/**` 与 `tests/**` 的静态相对导入反向传播，落到 `.test.ts` 的入选，`reasons` 记录每个测试的第一条来源。它是开发时的聚焦建议，不是完整门：Schema 与生成合同、agent-text 与宿主文本画像、工具链输入（package/tsconfig/biome/knip）、架构规则、测试运行器与耗时表的改动，或超过 80 个文件的选择集，都给出 `fullGateRecommended` 和原因；动态装配、Schema `$ref` 与 agent-text 占位符不在静态图里。没有受影响的测试时运行器如实说明并跳过，`verify quick --changed` 只跑静态检查并把 `selection` 写进回执；未选中的测试不能被说成通过。
+聚焦值可以是 `tests/` 下的当前测试文件或目录（展开为其中全部测试源）；写错的路径在错误里点名。`--changed` 由 Git 变更集（`git diff --name-only <since>` 加未跟踪文件）沿 `src/**`、`tooling/**` 与 `tests/**` 的静态相对导入反向传播，落到 `.test.ts` 的入选，`reasons` 记录每个测试的第一条来源。它是开发时的聚焦建议，不是完整门：Schema 与生成合同、工具链输入（package/tsconfig/biome/knip）、架构规则、测试运行器（含 impacted-tests）与耗时表的改动，或超过 80 个文件的选择集，都给出 `fullGateRecommended` 和原因；动态装配与 Schema `$ref` 不在静态图里。`assets/agent-text/` 不在导入图里，但有声明的资源边：改动从读取它的三个模块（两份宿主文本画像、制品构建）的导入者和源文本里点名 `agent-text` 的测试出发传播，所以只改技能文本时选中的是 `tests/artifacts/` 与公共工具描述测试，不再建议整门（§13.204）。没有受影响的测试时运行器如实说明并跳过，`verify quick --changed` 只跑静态检查并把 `selection` 写进回执；未选中的测试不能被说成通过。
 
 ## 15. 交接检查
 
@@ -410,7 +410,7 @@ npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.test.ts --r
 
 同一组文件重复运行 N 次（1–20），每次是一条完整的聚焦运行，整个分诊持有构建锁；输出每次的结果与耗时，混合结果标为 `flaky` 且非零退出，全部失败也非零。它不自动重试洗绿，日志与 `triage.json` 留在 `.build/flaky/run-…/`。
 
-负载敏感用例带标签（`tests/support/load-sensitive.ts` 的 `loadSensitive(t, reason)`，open-items D9）：真实子进程、墙钟等待或外部 CLI 的用例——lab 的 240 秒实验、读写许可的真实读者进程与 latch 等待、排他锁的八方争用、tmux 助手的脱离重启、运行器取消真实测试子进程——在测试诊断里写出原因，并在 `WAKEFLOW_TEST_CONCURRENCY` 高于推荐值 2 时点名（CI 固定 2 个 worker；本地 `wf verify` 缺省一 CPU 一 worker，复现门的负载特征用 `WAKEFLOW_TEST_CONCURRENCY=2`）；它不改变断言。开发机繁忙时 `WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 把这些用例标为 skip，门与 CI 从不设置它，所以不能用它把偶发失败说成通过。latch 与锁等待仍是墙钟（`rooted-exclusive-file-lock.ts` 的 `waitForRetry`、读写许可的 latch），时钟注入未做。
+负载敏感用例带标签（`tests/support/load-sensitive.ts` 的 `loadSensitive(t, reason)`，open-items D9）：真实子进程、墙钟等待或外部 CLI 的用例——lab 的 240 秒实验、读写许可的真实读者进程与 latch 等待、排他锁的八方争用、tmux 助手的脱离重启、运行器取消真实测试子进程、hook 观察的上万条目真实目录树、permission-mode 的 fresh 初始化与真实 fsync 夹具、运行器分道的真实子进程计时（后三项 §13.204 新增）——在测试诊断里写出原因，并在 `WAKEFLOW_TEST_CONCURRENCY` 高于推荐值 2 时点名（CI 固定 2 个 worker；本地运行器把带标签的文件放进 2 worker 的隔离道、子进程看到的就是 2，见第 1 节的道，只有显式用高并发单道跑它们时才会点名）；它不改变断言。开发机繁忙时 `WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 把这些用例标为 skip，门与 CI 从不设置它，所以不能用它把偶发失败说成通过。latch 与锁等待仍是墙钟（`rooted-exclusive-file-lock.ts` 的 `waitForRetry`、读写许可的 latch），时钟注入未做。
 
 ## 20. 图谱漂移摘要
 
@@ -447,7 +447,7 @@ npm run --silent wf -- impact report
 npm run --silent wf -- impact report --since HEAD~1
 ```
 
-把 Git 变更集（相对 `--since`，缺省 HEAD，加未跟踪文件）按 CLAUDE.md 的所有权规则分类，并给出 `tier`（0/1/2 与理由，见第 1 节的分级）：Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并给出警告，分不进任何规则的路径点名。随后给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §14 的选择）与按顺序排好的建议命令：`schema:build`/`schema:check`、`build:artifacts:committed`、聚焦或完整门、`smoke:artifacts`、`wf handoff`。它是开发建议，不替代完整门；静态图说明不了的影响仍由 `fullGateRecommended` 兜底。
+把 Git 变更集（相对 `--since`，缺省 HEAD，加未跟踪文件）按 CLAUDE.md 的所有权规则分类，并给出 `tier`（0/1/2 与理由，见第 1 节的分级）：Schema、运行时（按六层与切片归 owner）、宿主、入口、agent-text、发布元数据、tooling、测试、文档、CI、工具链输入、仓库文件；手改的 `plugins/` 与 `src/contracts/generated/` 单独列出并给出警告，分不进任何规则的路径点名。随后给出 `schemaBuildRequired`、`artifactsAffected`、受影响测试（复用 §14 的选择）与按顺序排好的建议命令，命令跟着 `tier` 走：先是 `schema:build`/`schema:check`（Schema 改动）与 `build:artifacts:committed`（触及制品）；第 2 级列完整门 `npm run locked -- npm test`，第 1 级列 `verify quick --changed`（有受影响测试时）；触及制品再列 `smoke:artifacts`；都以 `wf handoff` 收尾。§13.204 之前凡触及制品就列整门，那正是 20 到 30 分钟的门被反复触发的来源。它是开发建议，不替代完整门；静态图说明不了的影响仍由 `fullGateRecommended` 兜底。
 
 ## 24. 脚手架：需求包草稿
 

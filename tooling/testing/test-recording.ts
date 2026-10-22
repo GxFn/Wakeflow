@@ -2,11 +2,22 @@ import { lstatSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord, readBoundedFile, sha256 } from "../verification/files.js";
 
+/** 运行器的一条"道"：一组按派发顺序排好的测试源与它们自己的文件并发度（run-typescript-tests.ts）。 */
+export interface TestLane {
+  readonly name: "all" | "chain" | "isolated" | "normal";
+  readonly concurrency: number;
+  /** 等这条道全部结束后才开始；null 为立即开始。 */
+  readonly after: TestLane["name"] | null;
+  /** 仓库相对测试源路径，保持传入的派发顺序。 */
+  readonly files: readonly string[];
+}
+
 export function prepareTestRecording(
   root: string,
   directory: string,
   files: readonly string[],
   concurrency: number,
+  lanes: readonly TestLane[] | null = null,
 ) {
   const resolved = path.resolve(directory);
   const parent = path.join(realpathSync(root), ".build", "verification");
@@ -36,6 +47,8 @@ export function prepareTestRecording(
           digest: sha256(readBoundedFile(file)),
         })),
         concurrency,
+        // 道计划是排程事实的一部分：哪些文件在哪条道、几个 worker、等谁结束才开始。
+        lanes,
       },
       null,
       2,
@@ -146,6 +159,7 @@ export function inspectTestRecording(directory: string) {
     counts,
     selectedFiles: files,
     concurrency: selection.concurrency,
+    lanes: Array.isArray(selection.lanes) ? (selection.lanes as readonly TestLane[]) : null,
     fileResults: perFile.map((event) => ({
       file: event.file,
       success: event.success,

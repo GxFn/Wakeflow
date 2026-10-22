@@ -1,4 +1,4 @@
-import { deepEqual, ok, throws } from "node:assert/strict";
+import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -10,16 +10,18 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import os from "node:os";
+import os, { availableParallelism } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   loadTestDurations,
   orderTestSourcesByCost,
+  planTestLanes,
   TEST_DURATION_TABLE_PATH,
 } from "../../../tooling/testing/run-typescript-tests.js";
 import { inspectTestRecording } from "../../../tooling/testing/test-recording.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 function temporaryRoot(after: (cleanup: () => void) => void): string {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-test-schedule-"));
@@ -182,5 +184,127 @@ test("实际Node进程按耗时队列执行文件，终端与事件记录保持�
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/** 一个把生命周期写进共享日志的测试文件：`start` 立即写，可选地等一段墙钟后写 `end`。 */
+function loggingTest(name: string, waitMs: number): string {
+  return [
+    "import {test} from 'node:test'; import {appendFileSync} from 'node:fs';",
+    `test('${name}', async () => {`,
+    `  appendFileSync('execution-order.txt', '${name}-start\\n');`,
+    waitMs > 0 ? `  await new Promise((resolve) => setTimeout(resolve, ${waitMs}));` : "",
+    `  appendFileSync('execution-order.txt', '${name}-end\\n');`,
+    "});",
+    "",
+  ].join("\n");
+}
+
+test("实际 Node 进程按道运行：链与隔离文件立即开始，其余文件等隔离道结束，终端与记录只有一份运行尾部", (t) => {
+  if (
+    loadSensitive(
+      t,
+      "spawns the runner with four real test processes and asserts their relative timing",
+    )
+  )
+    return;
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-lane-order-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, "tests/scenarios"), { recursive: true });
+  mkdirSync(path.join(root, "tests/support"), { recursive: true });
+  mkdirSync(path.join(root, ".build/tests/scenarios"), { recursive: true });
+  mkdirSync(path.join(root, ".build/verification"), { mode: 0o700 });
+  writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
+  // 源文件只给静态图看：slow 经导入链到达负载敏感标签，其余文件不到。
+  writeFileSync(path.join(root, "tests/support/load-sensitive.ts"), "export const tag = 1;\n");
+  writeFileSync(
+    path.join(root, "tests/slow.test.ts"),
+    'import { tag } from "./support/load-sensitive.js";\n',
+  );
+  for (const name of ["scenarios/chain", "a", "b"]) {
+    writeFileSync(path.join(root, `tests/${name}.test.ts`), "// source fixture\n");
+  }
+  writeFileSync(path.join(root, ".build/tests/scenarios/chain.test.js"), loggingTest("chain", 300));
+  writeFileSync(path.join(root, ".build/tests/slow.test.js"), loggingTest("isolated", 800));
+  writeFileSync(path.join(root, ".build/tests/a.test.js"), loggingTest("normal-a", 0));
+  writeFileSync(path.join(root, ".build/tests/b.test.js"), loggingTest("normal-b", 0));
+  writeTable(
+    root,
+    JSON.stringify({
+      durationsMs: {
+        "tests/scenarios/chain.test.ts": 1000,
+        "tests/slow.test.ts": 500,
+        "tests/a.test.ts": 10,
+        "tests/b.test.ts": 5,
+      },
+    }),
+  );
+  writeFileSync(path.join(root, "execution-order.txt"), "");
+  const budget = Math.min(8, availableParallelism());
+  const directory = path.join(root, ".build/verification/run-lanes");
+  mkdirSync(directory, { mode: 0o700 });
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    WAKEFLOW_TEST_CONCURRENCY: String(budget),
+    WAKEFLOW_TEST_RECORD_DIR: directory,
+  };
+  delete env.NODE_TEST_CONTEXT;
+  const runner = fileURLToPath(
+    new URL("../../../tooling/testing/run-typescript-tests.js", import.meta.url),
+  );
+  const result = spawnSync(process.execPath, [runner], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 60_000,
+  });
+  ok(result.status === 0, result.stderr);
+
+  const selected = [
+    "tests/scenarios/chain.test.ts",
+    "tests/slow.test.ts",
+    "tests/a.test.ts",
+    "tests/b.test.ts",
+  ];
+  const record = inspectTestRecording(directory);
+  ok(record.complete && record.passed);
+  equal(record.counts.tests, 4);
+  equal(record.concurrency, budget);
+  deepEqual(record.selectedFiles, selected);
+  // 记录里的道计划就是纯函数对同一清单、同一预算给出的计划。
+  const expected = planTestLanes(selected, budget, new Set(["tests/slow.test.ts"]));
+  deepEqual(record.lanes, expected);
+  // 四个文件各报了一次文件汇总；运行尾部只合成一份（终端的 ℹ tests 行只出现一次）。
+  equal(record.fileResults.length, 4);
+  equal((result.stdout.match(/tests 4\n/gu) ?? []).length, 1);
+  equal(result.stdout.includes("tests 1\n"), false);
+  ok(result.stderr.includes(`budget ${budget}, lanes `), result.stderr);
+
+  const log = readFileSync(path.join(root, "execution-order.txt"), "utf8").trim().split("\n");
+  deepEqual([...log].sort(), [
+    "chain-end",
+    "chain-start",
+    "isolated-end",
+    "isolated-start",
+    "normal-a-end",
+    "normal-a-start",
+    "normal-b-end",
+    "normal-b-start",
+  ]);
+  if (expected.length === 3) {
+    ok(result.stderr.includes("lanes chain=1@1 isolated=1@1 normal=2@"), result.stderr);
+    const isolatedEnd = log.indexOf("isolated-end");
+    // 链道立即开始：它的 start 在隔离文件 800 毫秒的等待结束之前。
+    ok(log.indexOf("chain-start") < isolatedEnd, log.join(" "));
+    // 其余道等隔离道结束：两个 normal 文件都在 isolated-end 之后才开始。
+    ok(log.indexOf("normal-a-start") > isolatedEnd, log.join(" "));
+    ok(log.indexOf("normal-b-start") > isolatedEnd, log.join(" "));
+  } else {
+    // 预算不足时是单道：计划只有一条 all 道，记录与终端的其余断言已在上面成立。
+    deepEqual(
+      expected.map((lane) => lane.name),
+      ["all"],
+    );
   }
 });

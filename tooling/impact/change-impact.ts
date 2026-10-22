@@ -13,7 +13,7 @@ import {
  * 分类规则直接对应 CLAUDE.md 的 Source Ownership：`src/contracts/schemas/` 由 `schema:build` 派生
  * 生成文件；运行时、宿主与 agent-text 进入两份制品；`tooling/` 与 `tests/` 不进制品；`plugins/` 与
  * `src/contracts/generated/` 不能手改。它是开发建议，不替代完整门；静态图说明不了的影响（动态装配、
- * Schema `$ref`、占位符）仍由 `fullGateRecommended` 兜底（开发工具规划 §4.6）。
+ * Schema `$ref`）仍由 `fullGateRecommended` 兜底，agent-text 经资源边选中制品测试（开发工具规划 §4.6）。
  */
 
 export type ImpactCategory =
@@ -151,19 +151,22 @@ function ownerOf(file: string): string | null {
   return slice === null ? null : `capabilities/${slice[1] as string}`;
 }
 
+/**
+ * 建议命令跟着级别走（CLAUDE.md Verification）：第 2 级才是完整门；第 1 级是重建制品、受影响的
+ * 测试（含资源边选中的制品测试）与 smoke。触及制品本身不再把每次改动都推成整门——那正是
+ * 一次 20 到 30 分钟的门被反复触发的来源。
+ */
 function recommendations(
   categories: Readonly<Record<ImpactCategory, readonly string[]>>,
   tests: Readonly<ImpactedTestSelection>,
   artifactsAffected: boolean,
+  tier: Readonly<{ level: 0 | 1 | 2 }>,
 ): readonly string[] {
   const steps: string[] = [];
   if (categories.schemas.length > 0) steps.push("npm run schema:build", "npm run schema:check");
   if (artifactsAffected) steps.push("npm run build:artifacts:committed");
-  if (tests.tests.length > 0 && !tests.fullGateRecommended)
-    steps.push("npm run wf -- verify quick --changed");
-  if (tests.fullGateRecommended || artifactsAffected || categories.toolchain.length > 0)
-    steps.push("npm run locked -- npm test");
-  else if (tests.tests.length > 0) steps.push("npm run locked -- npm test (before handoff)");
+  if (tier.level === 2) steps.push("npm run locked -- npm test");
+  else if (tests.tests.length > 0) steps.push("npm run wf -- verify quick --changed");
   if (artifactsAffected) steps.push("npm run smoke:artifacts");
   if (categories.docs.length > 0 || categories.repository.length > 0)
     steps.push("check docs/README.md pointers (wf handoff covers it)");
@@ -224,6 +227,7 @@ export function reportChangeImpact(
     warnings.push(
       "unclassified paths are outside the documented ownership; decide where they belong",
     );
+  const tier = verificationTier(categories, owners, tests, changed);
   return Object.freeze({
     kind: "WakeflowChangeImpact",
     schemaVersion: 1,
@@ -247,7 +251,7 @@ export function reportChangeImpact(
       fullGateRecommended: tests.fullGateRecommended,
       fullGateReasons: tests.fullGateReasons,
     },
-    recommended: recommendations(categories, tests, artifactsAffected),
-    tier: verificationTier(categories, owners, tests, changed),
+    recommended: recommendations(categories, tests, artifactsAffected, tier),
+    tier,
   });
 }

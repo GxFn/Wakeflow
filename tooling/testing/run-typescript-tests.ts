@@ -1,3 +1,4 @@
+import { once } from "node:events";
 import type { Dirent } from "node:fs";
 import { createWriteStream, lstatSync, opendirSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
@@ -7,9 +8,9 @@ import { pipeline } from "node:stream/promises";
 import { run as runNodeTests } from "node:test";
 import { spec } from "node:test/reporters";
 import { isMainModule } from "../main-module.js";
-import { selectImpactedTests } from "./impacted-tests.js";
+import { selectImpactedTests, testSourcesDependingOn } from "./impacted-tests.js";
 import testEventReporter from "./test-event-reporter.js";
-import { prepareTestRecording } from "./test-recording.js";
+import { prepareTestRecording, type TestLane } from "./test-recording.js";
 
 /**
  * Wakeflow Tooling / Testing：由当前 `.test.ts` 源清单启动编译后测试。
@@ -26,6 +27,10 @@ import { prepareTestRecording } from "./test-recording.js";
  * 而不是“最后才开始的长文件”决定。耗时表是 `tooling/testing/test-durations.json`，
  * 只是排程提示：表缺席时全部文件视为未知、退回与旧版一致的路径升序；表存在但内容
  * 非法（绝对路径、越界路径、非法毫秒）时立即失败，避免错表悄悄削掉排程收益。
+ *
+ * 排好序的清单再分成几条并行的"道"（planTestLanes）：场景链与负载敏感文件立即开始、各用两个
+ * worker，其余文件等负载敏感道结束后用剩余预算开始。每条道是一次独立的 `node:test.run()`，事件
+ * 合成一条流给终端与记录；每个文件仍是自己的进程，断言、超时与用例顺序都不变。
  */
 
 const MAXIMUM_TEST_FILES = 512;
@@ -275,6 +280,77 @@ export function compiledTypeScriptTests(
   );
 }
 
+/** 负载敏感标签所在的模块：静态导入链到达它的测试文件进隔离道。 */
+export const LOAD_SENSITIVE_TAG_PATH = "tests/support/load-sensitive.ts";
+/** 端到端场景链所在目录：每个文件顺序跑完一个宿主的全部场景，是整门的关键路径。 */
+export const CHAIN_LANE_PREFIX = "tests/scenarios/";
+/** 预算低于这个 worker 数时不分道：链道与隔离道各占两个，其余道至少还要两个。 */
+export const LANE_MINIMUM_BUDGET = 6;
+export const CHAIN_LANE_CONCURRENCY = 2;
+/** 与 `tests/support/load-sensitive.ts` 的推荐并发一致。 */
+export const ISOLATED_LANE_CONCURRENCY = 2;
+
+/**
+ * 排程用的纯函数：把一份已排好序的清单分成几条并行的道。
+ *
+ * 负载敏感文件（真实子进程、墙钟等待、大目录树）在一 CPU 一 worker 下会超时，所以整门过去只能
+ * 整体用两个 worker 跑（§13.169）。道把这个限制收窄到需要它的文件：两个场景链文件各自顺序推进、
+ * 不可拆，立即开始；负载敏感文件在自己的道里以两个 worker 立即开始，此时机器上只有链加它们共四个
+ * 测试进程；其余文件等隔离道结束后再以"预算减链道"的 worker 数开始。预算不足 `LANE_MINIMUM_BUDGET`
+ * 或清单里没有负载敏感文件时退回单道，CI 固定两个 worker 的行为不变。每条道内保持传入顺序。
+ */
+export function planTestLanes(
+  orderedKeys: readonly string[],
+  budget: number,
+  isolated: ReadonlySet<string>,
+): readonly TestLane[] {
+  if (!Number.isSafeInteger(budget) || budget < 1) fail("lane budget must be a positive integer");
+  const single: readonly TestLane[] = Object.freeze([
+    Object.freeze({
+      name: "all" as const,
+      concurrency: budget,
+      after: null,
+      files: [...orderedKeys],
+    }),
+  ]);
+  if (budget < LANE_MINIMUM_BUDGET) return single;
+  const chain = orderedKeys.filter((key) => key.startsWith(CHAIN_LANE_PREFIX));
+  const isolatedFiles = orderedKeys.filter(
+    (key) => !key.startsWith(CHAIN_LANE_PREFIX) && isolated.has(key),
+  );
+  if (isolatedFiles.length === 0) return single;
+  const placed = new Set([...chain, ...isolatedFiles]);
+  const normal = orderedKeys.filter((key) => !placed.has(key));
+  const chainConcurrency = Math.min(chain.length, CHAIN_LANE_CONCURRENCY);
+  const lanes: TestLane[] = [];
+  if (chain.length > 0) {
+    lanes.push({ name: "chain", concurrency: chainConcurrency, after: null, files: chain });
+  }
+  lanes.push({
+    name: "isolated",
+    concurrency: Math.min(isolatedFiles.length, ISOLATED_LANE_CONCURRENCY),
+    after: null,
+    files: isolatedFiles,
+  });
+  if (normal.length > 0) {
+    lanes.push({
+      name: "normal",
+      concurrency: budget - chainConcurrency,
+      after: "isolated",
+      files: normal,
+    });
+  }
+  return Object.freeze(lanes.map((lane) => Object.freeze(lane)));
+}
+
+/** 编译输出路径回到仓库相对测试源路径（compiledOutputFor 的逆映射，与记录器用同一条规则）。 */
+function sourceKeyOf(repositoryRoot: string, output: string): string {
+  const relative = nodePath.relative(repositoryRoot, output).split(nodePath.sep).join("/");
+  const key = relative.replace(/^\.build\/tests\/(.*)\.js$/u, "tests/$1.ts");
+  if (key === relative) fail("compiled test output is outside .build/tests");
+  return key;
+}
+
 interface RunnerInvocation {
   readonly focused?: readonly string[];
   readonly changed?: Readonly<{ readonly since?: string }>;
@@ -348,19 +424,149 @@ const GIT_TEST_ENVIRONMENT: Readonly<Record<string, string>> = Object.freeze({
   GIT_TERMINAL_PROMPT: "0",
 });
 
+interface RunSummary {
+  readonly success: boolean;
+  readonly counts: Readonly<Record<string, number>>;
+  readonly duration_ms: number;
+  readonly file?: string;
+}
+
+interface LaneEvent {
+  readonly type: string;
+  readonly data?: { readonly file?: string };
+}
+
+interface MergeState {
+  readonly merged: PassThrough;
+  readonly laneSummaries: RunSummary[];
+  readonly reportedFiles: Set<string>;
+}
+
+/**
+ * 一条道是一次 `node:test.run()`。文件级事件原样进合成流；运行级事件（`file` 为空的 plan、
+ * 诊断与总汇总）只属于这条道，记下它的总汇总后丢弃，最后由 writeRunTail 为整次运行合成一份。
+ * 子进程看到的 `WAKEFLOW_TEST_CONCURRENCY` 是本道的文件并发度：负载敏感标签按它判断是否超过
+ * 推荐值，道计划本身记在 test-selection.json。
+ */
+async function consumeLane(
+  lane: TestLane,
+  files: readonly string[],
+  base: Readonly<{
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    signal: AbortSignal;
+  }>,
+  state: MergeState,
+): Promise<void> {
+  // Node 24 passes `env` to every test child (the typings still omit it), which is how the
+  // isolated git environment and the lane concurrency reach the children.
+  const options = {
+    files: [...files],
+    concurrency: lane.concurrency,
+    cwd: base.cwd,
+    isolation: "process" as const,
+    env: { ...base.env, WAKEFLOW_TEST_CONCURRENCY: String(lane.concurrency) },
+    signal: base.signal,
+  };
+  const stream = runNodeTests(options);
+  for await (const event of stream as AsyncIterable<LaneEvent>) {
+    const file = event.data?.file;
+    if (file === undefined) {
+      if (event.type === "test:summary") state.laneSummaries.push(event.data as RunSummary);
+      continue;
+    }
+    if (event.type === "test:summary") state.reportedFiles.add(file);
+    if (!state.merged.write(event)) await once(state.merged, "drain");
+  }
+}
+
+/** 道按 `after` 依赖开始；任何一条道的基础设施错误都让整次运行失败，测试自身的失败不在此列。 */
+async function executeLanes(
+  lanes: readonly TestLane[],
+  outputs: ReadonlyMap<string, string>,
+  base: Readonly<{ cwd: string; env: NodeJS.ProcessEnv; signal: AbortSignal }>,
+  state: MergeState,
+): Promise<void> {
+  const finished = new Map<TestLane["name"], Promise<void>>();
+  const all: Promise<void>[] = [];
+  for (const lane of lanes) {
+    const dependency = lane.after === null ? Promise.resolve() : finished.get(lane.after);
+    if (dependency === undefined) fail(`lane ${lane.name} waits for an unknown lane`);
+    const files = lane.files.map((key) => {
+      const output = outputs.get(key);
+      if (output === undefined) fail("lane planning dropped one selected test source");
+      return output;
+    });
+    const promise = dependency.then(() => consumeLane(lane, files, base, state));
+    finished.set(lane.name, promise);
+    all.push(promise);
+  }
+  const rejected = (await Promise.allSettled(all)).find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (rejected !== undefined) throw rejected.reason;
+}
+
+const COUNT_KEYS = [
+  "tests",
+  "suites",
+  "passed",
+  "failed",
+  "cancelled",
+  "skipped",
+  "todo",
+  "topLevel",
+] as const;
+
+function combineSummaries(summaries: readonly RunSummary[], durationMs: number): RunSummary {
+  const counts: Record<string, number> = {};
+  for (const key of COUNT_KEYS) {
+    counts[key] = summaries.reduce((sum, summary) => sum + (summary.counts[key] ?? 0), 0);
+  }
+  return {
+    success: summaries.every((summary) => summary.success),
+    counts,
+    duration_ms: durationMs,
+  };
+}
+
+/** 与 Node 自己的运行尾部同形：八行诊断加一条运行级 `test:summary`，终端与事件记录各取所需。 */
+function writeRunTail(merged: PassThrough, total: RunSummary): void {
+  const lines: readonly (readonly [string, number])[] = [
+    ["tests", total.counts.tests ?? 0],
+    ["suites", total.counts.suites ?? 0],
+    ["pass", total.counts.passed ?? 0],
+    ["fail", total.counts.failed ?? 0],
+    ["cancelled", total.counts.cancelled ?? 0],
+    ["skipped", total.counts.skipped ?? 0],
+    ["todo", total.counts.todo ?? 0],
+    ["duration_ms", total.duration_ms],
+  ];
+  for (const [name, value] of lines) {
+    merged.write({ type: "test:diagnostic", data: { nesting: 0, message: `${name} ${value}` } });
+  }
+  merged.write({ type: "test:summary", data: total });
+}
+
 async function run(): Promise<void> {
   const repositoryRoot = process.cwd();
   const files = selectedFiles(repositoryRoot, parseInvocation(process.argv.slice(2)));
   if (files === null) return;
-  const concurrency = resolveTestConcurrency(
+  const budget = resolveTestConcurrency(
     process.env.WAKEFLOW_TEST_CONCURRENCY,
     Math.max(1, availableParallelism()),
+  );
+  const outputs = new Map(files.map((file) => [sourceKeyOf(repositoryRoot, file), file] as const));
+  const lanes = planTestLanes(
+    [...outputs.keys()],
+    budget,
+    testSourcesDependingOn(repositoryRoot, LOAD_SENSITIVE_TAG_PATH),
   );
   const recordDirectory = process.env.WAKEFLOW_TEST_RECORD_DIR;
   const recording =
     recordDirectory === undefined
       ? null
-      : prepareTestRecording(repositoryRoot, recordDirectory, files, concurrency);
+      : prepareTestRecording(repositoryRoot, recordDirectory, files, budget, lanes);
   const childEnvironment = { ...process.env, ...GIT_TEST_ENVIRONMENT };
   delete childEnvironment.WAKEFLOW_TEST_RECORD_DIR;
   // A runner started from inside another node:test process inherits NODE_TEST_CONTEXT, and
@@ -372,36 +578,24 @@ async function run(): Promise<void> {
   const abort = () => controller.abort();
   process.once("SIGINT", abort);
   process.once("SIGTERM", abort);
-  // The Node CLI glob-expands and sorts even explicit file arguments. The public run API
-  // preserves this already validated LPT queue while keeping one process per test file.
-  const options = {
-    files: [...files],
-    concurrency,
-    cwd: repositoryRoot,
-    isolation: "process" as const,
-    env: childEnvironment,
-    signal: controller.signal,
-  };
-  const stream = runNodeTests(options);
-  // The exit code rests on three facts, not on the run summary alone: every selected file
-  // reported its own summary, the run executed at least one test, and the run succeeded.
-  const observed: { run: { success: boolean; counts?: { tests?: number } } | null } = {
-    run: null,
-  };
-  const reportedFiles = new Set<string>();
-  stream.on(
-    "test:summary",
-    (summary: { file?: string; success: boolean; counts?: { tests?: number } }) => {
-      if (summary.file === undefined) observed.run = summary;
-      else reportedFiles.add(summary.file);
-    },
+  process.stderr.write(
+    `wakeflow tests: ${files.length} file(s), budget ${budget}, lanes ${lanes
+      .map((lane) => `${lane.name}=${lane.files.length}@${lane.concurrency}`)
+      .join(" ")}\n`,
   );
+  // The Node CLI glob-expands and sorts even explicit file arguments. The public run API
+  // preserves the validated LPT queue of every lane while keeping one process per test file.
+  const state: MergeState = {
+    merged: new PassThrough({ objectMode: true }),
+    laneSummaries: [],
+    reportedFiles: new Set(),
+  };
   const terminal = new PassThrough({ objectMode: true });
-  stream.pipe(terminal);
+  state.merged.pipe(terminal);
   const reports = [pipeline(terminal, new spec(), process.stdout, { end: false })];
   if (recording !== null) {
     const events = new PassThrough({ objectMode: true });
-    stream.pipe(events);
+    state.merged.pipe(events);
     // prepareTestRecording reserved this private file. Append never erases a foreign prefix;
     // the recording reader rejects a noncanonical or concatenated event stream.
     reports.push(
@@ -412,17 +606,32 @@ async function run(): Promise<void> {
       ),
     );
   }
+  const startedAt = performance.now();
   try {
-    await Promise.all(reports);
-    const summary = observed.run;
-    if (summary === null) fail("Node test runner did not finish its summary");
-    if (reportedFiles.size !== files.length) {
-      fail(`Node test runner reported ${reportedFiles.size} of ${files.length} test files`);
+    await executeLanes(
+      lanes,
+      outputs,
+      { cwd: repositoryRoot, env: childEnvironment, signal: controller.signal },
+      state,
+    );
+    // The exit code rests on four facts, not on one run summary alone: every lane finished its
+    // summary, every selected file reported its own summary, the run executed at least one
+    // test, and every lane succeeded.
+    if (state.laneSummaries.length !== lanes.length) {
+      fail(`Node test runner finished ${state.laneSummaries.length} of ${lanes.length} lanes`);
     }
-    if ((summary.counts?.tests ?? 0) === 0) fail("Node test runner executed zero tests");
-    if (!summary.success) process.exitCode = 1;
+    const total = combineSummaries(state.laneSummaries, performance.now() - startedAt);
+    writeRunTail(state.merged, total);
+    state.merged.end();
+    await Promise.all(reports);
+    if (state.reportedFiles.size !== files.length) {
+      fail(`Node test runner reported ${state.reportedFiles.size} of ${files.length} test files`);
+    }
+    if ((total.counts.tests ?? 0) === 0) fail("Node test runner executed zero tests");
+    if (!total.success) process.exitCode = 1;
   } catch (error: unknown) {
     controller.abort();
+    if (!state.merged.writableEnded) state.merged.end();
     await Promise.allSettled(reports);
     throw error;
   } finally {

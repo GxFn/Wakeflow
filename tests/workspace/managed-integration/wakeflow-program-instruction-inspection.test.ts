@@ -21,6 +21,9 @@ import {
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-inspection.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(
   t: TestContext,

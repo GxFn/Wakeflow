@@ -7,6 +7,9 @@ import { test } from "node:test";
 
 import { CODEX_HOOK_OBSERVER_COMMAND } from "../../../src/hosts/codex/codex-hook-fragment.js";
 import { CODEX_MCP_CONFIGURATION } from "../../../src/hosts/codex/codex-process-launch-profile.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 for (const selection of ["host", "unset", "empty", "invalid-host"] as const) {
   test(`Codex MCP 和 hook 的实际启动遵守 Node 选择：${selection}`, {

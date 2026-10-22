@@ -18,6 +18,9 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandAggregateState } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { FIXTURE_REQUIREMENT_MARKDOWN } from "../../governance/ledger/requirement-package.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * tasking 切片纯决定：验收标准条目切分、锚点引用、章节锚点、审阅门、仓库谱系、

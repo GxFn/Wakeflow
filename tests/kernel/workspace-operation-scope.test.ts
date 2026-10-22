@@ -2,15 +2,15 @@ import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import {
@@ -18,7 +18,10 @@ import {
   WORKSPACE_OPERATION_SCOPES_REF,
 } from "../../src/kernel/layout.js";
 import { withWorkspaceOperationScope } from "../../src/kernel/workspace-operation-scope.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../support/workspace-operation-scope.fixture.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext) {
   const absolute = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-scope-lifetime-")));

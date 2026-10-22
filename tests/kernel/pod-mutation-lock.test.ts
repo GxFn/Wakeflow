@@ -2,10 +2,13 @@ import { equal, rejects } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { withPodMutation } from "../../src/kernel/pod-mutation-lock.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const POD_ID = "pod_99999999-9999-4999-8999-999999999999";
 

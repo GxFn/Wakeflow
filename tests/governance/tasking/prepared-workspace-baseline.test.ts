@@ -2,12 +2,14 @@ import { equal, notEqual, ok } from "node:assert/strict";
 import { existsSync, lstatSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
   planFixtureTargetTask,
 } from "./target-task-planning-service.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 共享预备基线（plan §11）的不变量：副本必须是彼此隔离、权限位与基线一致的真实工作区。

@@ -29,6 +29,7 @@ import {
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
 import { publishLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-record-publisher.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 import {
@@ -40,6 +41,8 @@ import {
   requirementMembers,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 /** 直接覆盖不可变权威目录树读取器与成员引用编解码器。 */
 

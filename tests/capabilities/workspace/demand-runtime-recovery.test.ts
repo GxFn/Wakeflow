@@ -1,19 +1,22 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { threadId } from "node:worker_threads";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { demandEventAppendCandidateRef } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
+import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
 import { startAppendCrashProcess } from "../../support/append-crash-process.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function preparePrivateModes(root: string) {
   const request = { root, mode: "preview", action: "reconcile", request: {} };

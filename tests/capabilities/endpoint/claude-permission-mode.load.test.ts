@@ -14,7 +14,10 @@ import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-c
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
+
+useDisposableDurability();
 
 /**
  * Claude Code 启动意图的权限模式（用户裁决 Q4，gate-log §13.134）：配置未声明时按宿主

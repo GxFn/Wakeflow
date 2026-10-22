@@ -15,6 +15,9 @@ import {
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 test("registered projection只公开Binding引用与代际ID并保留root blocker", () => {
   const config = createMinimalWakeflowConfig();

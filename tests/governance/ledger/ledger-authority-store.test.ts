@@ -46,6 +46,7 @@ import {
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_RECORDED_AT,
@@ -55,6 +56,8 @@ import {
   requirementMembers,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 const REQUIREMENT_ID = FIXTURE_REQUIREMENT_ID;
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";

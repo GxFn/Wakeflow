@@ -26,8 +26,8 @@ import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claud
 import {
   CLAUDE_CODE_LOCAL_SETTINGS_REF,
   CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-  claudeCodeStatuslineSettingsEntry,
   claudeCodeStatuslineEntryIsWakeflows,
+  claudeCodeStatuslineSettingsEntry,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -39,6 +39,7 @@ import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.
 import { createWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import {
@@ -46,6 +47,8 @@ import {
   createDeliveryWorkspaceFixture,
   prepareFixtureDelivery,
 } from "../delivery/delivery-workspace.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 一次观察多域（gate-log §13.94 D1、D4）：每个域独立读取并隔离失败，读不出只让该域

@@ -1,6 +1,7 @@
-import { createHash } from "node:crypto";
 import { deepEqual, doesNotMatch, equal, match, ok, throws } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import {
   cpSync,
   lstatSync,
@@ -13,34 +14,19 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import type { Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, test, type TestContext } from "node:test";
+import { after, type TestContext, test } from "node:test";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-
-import {
-  assertRenderedHookFragmentDigest,
-  assertSharedClosure,
-  buildWakeflowPluginArtifacts,
-  type CandidateHostIsolationRule,
-} from "../../tooling/artifacts/build-plugin-artifacts.js";
-import { resolveRuntimeDependencyClosure } from "../../tooling/artifacts/plugin-dependency-closure.js";
-import {
-  parsePluginNodeEngineBounds,
-  PLUGIN_ENGINES_NODE,
-  pluginManifestPath,
-  readReleaseVersion,
-} from "../../tooling/artifacts/plugin-metadata.js";
-import { WAKEFLOW_NODE_ENGINES } from "../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
-import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
+import { WAKEFLOW_NODE_ENGINES } from "../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import {
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
   WAKEFLOW_HOOK_OBSERVER_MARKER,
 } from "../../src/entrypoints/wakeflow-hook-observer.js";
+import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import {
   CLAUDE_CODE_HOOK_FRAGMENT_DIGEST,
   renderClaudeCodeHooksJson,
@@ -50,6 +36,19 @@ import {
   renderCodexHooksJson,
 } from "../../src/hosts/codex/codex-hook-fragment.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
+import {
+  assertRenderedHookFragmentDigest,
+  assertSharedClosure,
+  buildWakeflowPluginArtifacts,
+  type CandidateHostIsolationRule,
+} from "../../tooling/artifacts/build-plugin-artifacts.js";
+import { resolveRuntimeDependencyClosure } from "../../tooling/artifacts/plugin-dependency-closure.js";
+import {
+  PLUGIN_ENGINES_NODE,
+  parsePluginNodeEngineBounds,
+  pluginManifestPath,
+  readReleaseVersion,
+} from "../../tooling/artifacts/plugin-metadata.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/plugin-artifacts";

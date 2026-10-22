@@ -43,7 +43,10 @@ import {
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { runGit } from "../support/git-fixture.js";
+
+useDisposableDurability();
 
 /**
  * hook 观察脚本（gate-log §13.97 D1–D4、D9）：进程内经 `runWakeflowHookObserver` 覆盖定位、映射、

@@ -43,6 +43,9 @@ import {
   PLANNING_REQUIREMENT_ID,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * delivery 切片效果：prepare 一次追加并返回可移植许可（声明、信封、围栏）；重放、异请求、

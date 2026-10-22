@@ -15,15 +15,16 @@ import {
   parseDemandAggregateState,
   planTargetTaskInDemandAggregateState,
   prepareDeliveryInDemandAggregateState,
+  REPLACEABLE_PHASES,
   rearmDeliveryInDemandAggregateState,
   recordDeliveryOutcomeInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
-  REPLACEABLE_PHASES,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
 } from "../../../src/governance/tasking/task-package.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { fixtureMember } from "../../support/fixture-member.js";
 import {
   createDeliveryEnvelopeFixture,
@@ -51,6 +52,8 @@ import {
   TASKING_WINDOW_ID,
   taskPackageDraft,
 } from "../tasking/task-package.fixture.js";
+
+useDisposableDurability();
 
 test("Demand 聚合保存任务决策所需的最小 authority 与 target 摘要", () => {
   const active = createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST);

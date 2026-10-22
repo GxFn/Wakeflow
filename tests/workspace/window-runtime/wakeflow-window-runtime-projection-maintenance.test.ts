@@ -38,7 +38,10 @@ import {
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 对账时的窗口运行投影：健康零操作；缺失或过期（合法 JSON、内容不同）各出一条操作，执行后

@@ -8,6 +8,9 @@ import {
   WakeflowManagedSupportResourceCatalogError,
 } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

@@ -27,6 +27,9 @@ import {
   recomposeWakeflowManagedTextEnvelope,
 } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,

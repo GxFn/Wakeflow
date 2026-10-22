@@ -17,6 +17,9 @@ import { publishClaudeCodePortableSettings } from "../../../src/hosts/claude-cod
 import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-settings-composition-"));

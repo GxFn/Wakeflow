@@ -43,7 +43,7 @@
 
 ### 1.4 发现
 
-- **F1 并发下的 fsync 排队是 1–3 级耗时的第一来源。** 单独跑一个文件 fsync 只占一成，但门里 4–8 个进程同时 fsync 时每个都慢一到两倍（§1.3），其余道 302 个文件在 6 worker 下 2825 秒之和也是这样被放大的。`RootedDirectory` 早有 `durability: "none"`（只跳过 fsync 系统调用，暂存、原子改名、权限位、CAS、错误分类全保留），`tests/support/prepared-workspace.ts` 把它定为一次性工作区的原则（plan §11），21 个测试与夹具文件已用；但场景链、`entrypoints`、多数 `capabilities` 与 `workspace/maintenance` 测试没用——组合根与维护入口没有这个选项，测试也不该为此改生产缺省。
+- **F1 并发下的 fsync 排队是 1–3 级耗时的来源之一，CPU 争用是另一个。** 单独跑一个文件 fsync 只占一成，但门里 4–8 个进程同时 fsync 时每个都慢一到两倍（§1.3）。T1 落地后再量（§2.2 的实测段）：机器是 4 性能核加 4 效率核的 M1，8 个进程下其余道是 CPU 受限的，去掉 fsync 让链快一成、让 lab 实验快一半，却没有让其余道的和变小。`RootedDirectory` 早有 `durability: "none"`（只跳过 fsync 系统调用，暂存、原子改名、权限位、CAS、错误分类全保留），`tests/support/prepared-workspace.ts` 把它定为一次性工作区的原则（plan §11），21 个测试与夹具文件已用；但场景链、`entrypoints`、多数 `capabilities` 与 `workspace/maintenance` 测试没用——组合根与维护入口没有这个选项，测试也不该为此改生产缺省。
 - **F2 lab 矩阵与链重叠，却在最贵的位置。** 6 个实验 644 秒都在隔离道（2 worker），与链一起决定了 phase 1 的 600 秒；它独有的价值是"装到别处的制品能跑完业务"，这正是 `smoke:artifacts` 的定义，而 smoke 现在只做五幕。
 - **F3 级别从文件名看不出来。** `hook-observations`（13 快 + 3 慢）、`operation-scope`（一个 55 秒用例）、`claude-code-tmux-asset`（29 个用例里 1 个脱离重启）、`test-recording`、`test-schedule-order` 都是混合文件；标签在用例里，`--focused` 跑文件时慢用例一起来。
 - **F4 五个 2 级文件超出 90 秒预算**（§1.2）。原因是 F1 加"一个用例一条完整链"；`observation/service` 还每用例 fresh-initialize。
@@ -56,7 +56,7 @@
 
 - **D1 一次性耐久性进 2–3 级。** 新支持模块 `tests/support/disposable-durability.ts`：`useDisposableDurability()` 在**测试进程内**包装 `RootedDirectory.open`，省略 `durability` 时按 `none` 打开，显式 `fsync` 仍生效。链文件、`entrypoints`、`capabilities/*`、`workspace/*`、`hosts/*` 的测试在文件顶部调用一次；Foundation 的崩溃语义测试不调用并在用例名里写明 fsync。不改 `src/` 一个字节，制品不变，不需要 bump；标准 §4 已写明这条纪律。预计：链在门里 600 → 约 300 秒（单独跑的 289 秒是下限），其余道的 fsync 排队消失、之和显著下降；lab 实验跑的是生产制品仍 fsync，但竞争者少了也会快（旧门里只有一个竞争者时是 218/200 秒）。
 - **D2 lab 矩阵改归制品冒烟。** `tests/tooling/lab/workflow-{codex,claude-code}.test.ts` 的 3×2 矩阵缩成门里每宿主一个 `single-product` 实验（约 100 秒，保住"制品 + stdio + 合成 hook"这条路），`dual-product` 与 `worktree` 四个实验进 `smoke:artifacts`（第 1 级触及制品时必跑；CI 的 `artifact` 作业照跑）。门的隔离道从 1170 秒之和降到约 700 秒；冒烟从约 1 分钟增到约 4–5 分钟，只在制品真变时付。lab 的行为测试（inventory、lab、sealing、workflow）留在门里。
-- **D3 级别可见。** 新后缀 `.load.test.ts`：整个文件都带 `loadSensitive` 标签的文件用它（lab 矩阵、sealing、rooted-read-write-scope、permission-mode）；混合文件拆成两个（`hook-observations.load.test.ts` 收 3 个大目录用例，`operation-scope.load.test.ts` 收 55 秒的在途投影用例，tmux 脱离重启、运行器取消与分道回归各自拆出）。运行器仍按导入闭包识别隔离道，后缀是给人和 `--focused` 看的；`wf test levels`（D6）检查后缀与标签一致。
+- **D3 级别可见。** 新后缀 `.load.test.ts`：整个文件都带 `loadSensitive` 标签的文件用它（lab 的五个文件、permission-mode）；混合文件拆成两个（`hook-observations.load.test.ts` 收 3 个大目录用例，共享夹具 `hook-observations.fixture.ts`）。`operation-scope` 的 55 秒用例不带标签（它测的就是真实 fsync 夹具），不拆；rooted-read-write-scope（5/9）、rooted-exclusive-file-lock（1/8）、tmux 资产（1/28）、test-recording（1/4）、test-schedule-order（1/7）五个混合文件带标签的用例只占几秒，按标准 §3 在下次改到时拆，`wf test levels` 的 `mixed` 列着它们。运行器仍按导入闭包识别隔离道，后缀是给人和 `--focused` 看的；`wf test levels`（D6）检查后缀与标签一致。
 - **D4 重文件瘦身。** D1 之后再量；仍超 90 秒的按合同拆文件让 LPT 并行（`result-review/service` 拆成导入与回调、实现评审、测试评审三份），`observation/service` 改用 `createPreparedWorkspaceStore` 的基线复制而不是每用例 fresh-initialize。只拆文件不改断言。
 - **D5 命名与头注释。** 按标准 §3：新文件一种语言、必有头注释；现有文件改到时补，不做整仓改写（避免 232 个文件的无意义 diff）。
 - **D6 `wf test levels`。** 新只读子命令：按静态事实（导入 `node:fs` 写接口、`node:child_process`、MCP 客户端、`tests/support` 模块、`loadSensitive` 闭包）与最近回执把每个文件归级，输出每级的文件/用例/秒数、超预算文件、混合文件（带标签用例数 / 总数）、`.load` 后缀与标签不一致的文件、缺头注释的新文件；`wf handoff` 加一项信息性的 `test-levels`（只报告，不阻塞）。实现在 `tooling/testing/test-levels.ts`，复用 `impacted-tests.ts` 的导入图。
@@ -72,6 +72,14 @@
 | + D4、D7 | 约 300 秒 | 约 350 秒 | 约 1800 / 8 worker 225 秒 | 约 10 分钟 |
 
 数字是按 §1.2 的实测与 §1.3 的实验外推（排队效应消失的幅度只有实测才知道），每一批落地后以回执为准、更新本表。
+
+**T1+T2 实测（§13.206；第一次 run-dsQa9M 14.8 分钟有一个夹具失败，复跑 run-9xr332 全绿 14.2 分钟）：** 链 554/532 秒；隔离道 12 个文件 645 秒之和、两 worker 约 320 秒；其余道 303 个文件 2990 秒之和、6 worker 约 500 秒；整门 18.2 → 14.2 分钟。与预期的差别和原因：
+
+- 机器是 Apple M1，4 个性能核加 4 个效率核。`availableParallelism()` 报 8，但 8 个重进程里有一半落在效率核上，所以其余道在 8 进程下是 CPU 受限的：去掉 fsync 并没有让 303 个文件的和变小（2905 → 3108 秒，还略大），因为它们本来等 fsync 的时间现在变成了排 CPU 的时间；最重的几个文件（result-review 303 → 420 秒）慢是因为其余道如今在 340 秒就开始、与两条链重叠了 200 秒，而上一门里其余道开始时链已接近结束。
+- D1 对链的效果是 10%（601/589 → 546/535），不是预想的一半：链单独跑 319 秒、在门里 546 秒，差的那一半是 CPU 争用而不是 fsync。D1 真正显著的是 lab 实验：single-product 从约 105 秒降到 52/57 秒——它们跑的是生产制品、自己仍 fsync，变快是因为同时跑的测试进程不再和它争磁盘刷写。
+- D2 的收益如预期：隔离道从约 590 秒降到约 340 秒，其余道提前 250 秒开始。
+
+于是 T3/D7 的量化选项（都要一门实测）：隔离道并发 3 → 其余道提前到约 230 秒开始，整门约 12.5 分钟，phase 1 五进程；其余道拆成"4 worker 从 0 秒开始的一片"加"隔离道结束后 2 worker 的一片"，整门约 10.5–11 分钟，但 phase 1 变成八进程，隔离道的 hook 大目录用例（83 秒对 120 秒预算）与 lab 实验的余量会被吃掉；或者把运行器预算的缺省改为性能核数（M1 上 4）而不是逻辑核数——每个进程更快、总吞吐略降，尾巴更短，同样要测。
 
 ### 2.3 批次
 
@@ -186,5 +194,6 @@ T1 与 T2 可以合成一个阶段、一道门；T3 等新耗时表。D5 没有�
 | 项 | 状态 | gate-log | 登记 |
 | --- | --- | --- | --- |
 | 标准与本计划 | 已提交 f52927ef | §13.205 | D9、路线图 |
-| T1–T3 | 待执行 | — | D9 |
+| T1–T2 | 已执行：整门 18.2 → 14.2 分钟（run-9xr332） | §13.206 | D9 |
+| T3 | 待执行（D4 重文件、D7 道再平衡的三个量化选项见 §2.2 实测段） | — | D9 |
 | 1.2 批 0–E | 待执行 | — | open-items 1.2 节（批 0 新开） |

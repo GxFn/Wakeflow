@@ -1,17 +1,20 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { mkdirSync, writeFileSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import type { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import {
-  runAppendCommand,
   type AppendCommandBinding,
   type AppendCommandEnvelope,
+  runAppendCommand,
 } from "../../src/kernel/append-command.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import { deriveDemandCommitId } from "../../src/kernel/ids.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function fixture(t: TestContext): string {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-append-")));

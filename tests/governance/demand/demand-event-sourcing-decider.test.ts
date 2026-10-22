@@ -10,6 +10,7 @@ import {
   evolveDemandEventSourcingState,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { computeDemandAggregateStateDigest } from "../../../src/governance/demand/model/demand-aggregate-state.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -28,6 +29,8 @@ import {
   TASKING_AUTHORITY_DIGEST,
   TASKING_DEMAND_ID,
 } from "../tasking/task-package.fixture.js";
+
+useDisposableDurability();
 
 const PUBLISHED_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_22222222-2222-4222-8222-222222222222",

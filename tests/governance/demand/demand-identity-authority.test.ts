@@ -26,8 +26,11 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 import { requirementLineageOf } from "./requirement-board.fixture.js";
+
+useDisposableDurability();
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",

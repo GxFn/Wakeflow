@@ -9,8 +9,11 @@ import {
   WakeflowConfigRootPlacementError,
 } from "../../src/configuration/wakeflow-config-root-placement.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { fixtureMember } from "../support/fixture-member.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext): Promise<
   Readonly<{

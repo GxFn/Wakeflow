@@ -28,6 +28,7 @@ import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -36,6 +37,8 @@ import {
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
   readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
+
+useDisposableDurability();
 
 const EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_d1111111-1111-4111-8111-111111111111",

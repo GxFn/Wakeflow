@@ -1,18 +1,18 @@
 import path from "node:path";
+import { summarizeAtlasDrift } from "./atlas/drift.js";
+import { BuildLockError } from "./build-lock.js";
 import { CaptureError } from "./capture/io.js";
 import { prepareCapture } from "./capture/plan.js";
 import { inspectCapture, runCapture } from "./capture/run.js";
-import { summarizeAtlasDrift } from "./atlas/drift.js";
-import { BuildLockError } from "./build-lock.js";
 import { collectDiagnosticBundle, inspectDiagnosticBundle } from "./diagnostics/bundle.js";
-import { checkHandoff } from "./handoff/handoff.js";
-import { reportChangeImpact } from "./impact/change-impact.js";
 import {
   inspectArtifactInstallation,
   inspectDevelopmentEnvironment,
 } from "./diagnostics/doctor.js";
 import { exportDiagnosticSummary, inspectDiagnosticSummary } from "./diagnostics/public-summary.js";
 import { inspectWorkspace } from "./diagnostics/workspace.js";
+import { checkHandoff } from "./handoff/handoff.js";
+import { reportChangeImpact } from "./impact/change-impact.js";
 import { LabError } from "./lab/inventory.js";
 import { createLab, disposeLab, inspectLab, runLab } from "./lab/lab.js";
 import { BUSINESS_SCENARIOS, type BusinessScenario } from "./lab/workflow-context.js";
@@ -20,8 +20,9 @@ import { recordLiveAttempt } from "./live/attempts.js";
 import { LiveError } from "./live/contracts.js";
 import { verifyLiveEvidence } from "./live/evidence.js";
 import { planLiveProject } from "./live/plan.js";
-import { callArtifactTool, parseToolArguments } from "./mcp/call.js";
 import { captureHostReceipt } from "./live/receipt.js";
+import { isMainModule } from "./main-module.js";
+import { callArtifactTool, parseToolArguments } from "./mcp/call.js";
 import { planVersionBump } from "./release/bump-version.js";
 import { refreshPluginCache } from "./release/cache-refresh.js";
 import {
@@ -34,10 +35,10 @@ import { listFaultSuites, runFaultSuite } from "./testing/fault-suites.js";
 import { triageFlakyTests } from "./testing/flaky.js";
 import { selectImpactedTests } from "./testing/impacted-tests.js";
 import { proposeTestDurations } from "./testing/test-duration-report.js";
+import { reportTestLevels } from "./testing/test-levels.js";
 import { exportCiVerification, verifyCiBundle } from "./verification/export-ci.js";
 import { terminateOwnedCommands } from "./verification/process.js";
 import { type VerificationProfile, verifyRepository } from "./verification/verify.js";
-import { isMainModule } from "./main-module.js";
 
 const HELP = `Wakeflow maintainer tools (run from the repository root)
 
@@ -77,6 +78,7 @@ npm run wf -- release bump --version X.Y.Z[-pre] [--apply]
 npm run wf -- mcp call --candidate ARTIFACT_DIR --root WORKSPACE --tool wakeflow_status [--input JSON_FILE | --arguments JSON]
 npm run wf -- cache refresh --host claude-code [--yes] [--installed DIR] [--cli PATH]
 npm run wf -- test flaky --files tests/path.test.ts [...] --runs N
+npm run wf -- test levels
 npm run wf -- atlas drift
 npm run wf -- scaffold test --for src/path.ts [--apply]
 npm run wf -- scaffold node --section 13.N --title TITLE [--apply]
@@ -96,7 +98,7 @@ Release bump edits only assets/release/version.json and the Claude marketplace e
 Every verify, handoff build:check and \`npm run locked -- <command>\` holds the one repository build lock (.build/locks/build.lock).
 Mcp call starts a new stdio process on a verified artifact copy and calls one public tool once; mutations are real, so use only disposable workspaces. It proves nothing about an existing chat's MCP.
 Cache refresh runs the host CLI only with --yes (uninstall, then install) and compares the cache manifest with the committed artifact; windows still need a restart or resume.
-Test flaky repeats one focused run N times under the build lock and never retries a failure away. Atlas drift only reads the map subproject's own check.
+Test flaky repeats one focused run N times under the build lock and never retries a failure away. Test levels classifies every test file by the testing standard's six levels from static facts and the duration table, naming over-budget, mixed and mis-suffixed files; it runs nothing. Atlas drift only reads the map subproject's own check.
 Scaffold writes a failing test skeleton, a gate-log section header or a Design draft pair (requirement.md and landing.md from the Design skill's own skeletons) only with --apply; timings apply rewrites the tracked duration table, which is a new repository input.
 `;
 
@@ -509,6 +511,10 @@ function runTestCommand(
   root: string,
   signal?: AbortSignal,
 ) {
+  if (action === "levels") {
+    if (options.size !== 0) invalid();
+    return reportTestLevels(root);
+  }
   const files = options.get("--files");
   const runs = options.get("--runs")?.[0];
   if (

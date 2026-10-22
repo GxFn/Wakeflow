@@ -43,7 +43,10 @@ import {
   PLANNING_REQUIREMENT_ID,
   PLANNING_WINDOW_ID,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * demand 切片效果：升级后路由 awaiting-decision 且完成被阻塞；记录决定后完成即归档

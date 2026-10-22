@@ -26,7 +26,10 @@ import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_REQUIREMENT_MARKDOWN,
 } from "../../governance/ledger/requirement-package.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
+
+useDisposableDurability();
 
 /**
  * requirement 切片测试：一次性工作区经 Fresh 初始化后，走两段 preview、apply、重放、

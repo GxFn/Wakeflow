@@ -20,6 +20,7 @@ import { loadSensitive } from "../../support/load-sensitive.js";
 test("an inventory written before final receipt failure cannot authorize later lab operations", {
   timeout: 90_000,
 }, async (t) => {
+  if (loadSensitive(t, "lab CLI with real product sessions against a built artifact")) return;
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-lab-sealing-")));
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const repository = path.join(base, "Reports");

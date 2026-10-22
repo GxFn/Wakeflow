@@ -110,8 +110,10 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   - Tier 1, before every commit (5–12 min): tier 0 plus what the impact report
     names - `schema:build` and `schema:check` for schema changes; the artifact
     rebuild, `tests/artifacts` and `smoke:artifacts` for anything that reaches
-    the artifacts (an `assets/agent-text/` change selects those tests through
-    a declared resource edge and is tier 1, not a full gate); the owning
+    the artifacts (the smoke also runs the lab dual-product and worktree
+    experiments on both built artifacts; an `assets/agent-text/` change selects
+    those tests through a declared resource edge and is tier 1, not a full
+    gate); the owning
     slice's tests and one host's scenario chain for capability or governance
     changes - then `npm run wf -- handoff`.
   - Tier 2, the full gate `npm test` (about 18 min on 8 CPUs): before a

@@ -10,6 +10,7 @@ import {
   TaskPackageError,
   type TaskPackageErrorReason,
 } from "../../../src/governance/tasking/task-package.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { fixtureMember } from "../../support/fixture-member.js";
 import {
   createTaskPackageFixture,
@@ -22,6 +23,8 @@ import {
   TASKING_WINDOW_ID,
   taskPackageDraft,
 } from "./task-package.fixture.js";
+
+useDisposableDurability();
 
 function expectTaskPackageError(
   action: () => unknown,

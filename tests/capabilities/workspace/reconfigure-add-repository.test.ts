@@ -24,8 +24,11 @@ import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-w
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
-import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * reconfigure 的"先新增"（gate-log §13.124 D9，§13.130）：往运行中的工作区加一个产品仓库，连同它在

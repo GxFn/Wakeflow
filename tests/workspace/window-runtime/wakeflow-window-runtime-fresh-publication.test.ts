@@ -21,6 +21,9 @@ import {
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { parseWakeflowWindowRuntimeUnregisteredProjectionDocument } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-window-runtime-publication-"));

@@ -4,6 +4,9 @@ import { test } from "node:test";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../../src/contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { parseJsonValue } from "../../src/foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../src/foundation/schema/runtime-json-schema.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * I12（§13.190）：fresh-initialize 的 `selection.hosts` 在请求 Schema 里有了 Config Schema 的形状。

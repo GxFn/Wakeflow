@@ -12,6 +12,7 @@ import {
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { targetResultRecordedEventIdFromResult } from "../../../src/governance/result/target-result.js";
 import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -26,6 +27,8 @@ import {
 } from "../result/target-result.fixture.js";
 import { createControllerImplementationReviewDecisionFixture } from "../review/controller-implementation-review-decision.fixture.js";
 import { createTaskPackageFixture, TASKING_DEMAND_ID } from "../tasking/task-package.fixture.js";
+
+useDisposableDurability();
 
 const EVENT = Object.freeze({
   artifactKind: "wakeflow-demand-event-sourcing-event" as const,

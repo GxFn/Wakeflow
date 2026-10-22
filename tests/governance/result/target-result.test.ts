@@ -14,6 +14,7 @@ import {
   targetResultRecordedEventIdFromResult,
 } from "../../../src/governance/result/target-result.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -27,6 +28,8 @@ import {
   TARGET_RESULT_REPORTED_AT,
 } from "./implementation-target-result-report.fixture.js";
 import { createTargetResultFixture, deliveryBindingFromOutcome } from "./target-result.fixture.js";
+
+useDisposableDurability();
 
 function implementationTaskPackageFixture() {
   const taskPackage = createTaskPackageFixture();

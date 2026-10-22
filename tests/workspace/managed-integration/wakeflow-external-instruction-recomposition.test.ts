@@ -35,11 +35,14 @@ import {
 } from "../../../src/workspace/managed-integration/wakeflow-external-instruction-recomposition.js";
 import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createManagedBlockWakeflowConfig,
   EXTERNAL_DESIGN_SURFACE_TARGET,
   MANAGED_BLOCK_REPOSITORY_TARGET,
 } from "./wakeflow-external-instruction.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 外部根托管块的检查与 CAS 重组：不存在则以 0644 新建、存在则追加并保留所有者权限位、

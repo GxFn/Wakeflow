@@ -1,15 +1,9 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
-import type { WakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import type { TestTargetResultStep } from "../../../src/governance/result/test-target-result-report.js";
-import type { TestContractStep } from "../../../src/governance/tasking/task-package.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../../src/kernel/privacy-scan.js";
 import {
   collectEvidenceReferences,
   deriveCallbackLanding,
+  deriveCredentialBlockers,
   deriveImplementationAllowedDecisions,
   deriveImplementationDecisionBlockers,
   derivePrivacyRules,
@@ -22,11 +16,16 @@ import {
   planEvidenceLocator,
   reportTexts,
   type StepView,
-  type TestAdmissionView,
-  deriveCredentialBlockers,
   stringLeavesOf,
+  type TestAdmissionView,
 } from "../../../src/capabilities/result-review/decide.js";
+import type { WakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { deriveTargetResultCallbackStatus } from "../../../src/governance/result/target-result-callback.js";
+import type { TestTargetResultStep } from "../../../src/governance/result/test-target-result-report.js";
+import type { TestContractStep } from "../../../src/governance/tasking/task-package.js";
+import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../../src/kernel/privacy-scan.js";
 
 /**
  * 结果导入与评审的纯决定（§13.87 D2 D3 D6 D7）：定位符计划、隐私规则、完成证据、回调状态、

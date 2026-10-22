@@ -1,14 +1,16 @@
 import { equal, ok } from "node:assert/strict";
 import { test } from "node:test";
-
-import { renderWakeControllerPrompt } from "../../../src/capabilities/result-review/prompt.js";
 import { summarizeResultForCallback } from "../../../src/capabilities/result-review/decide.js";
+import { renderWakeControllerPrompt } from "../../../src/capabilities/result-review/prompt.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
 import {
   createImplementationTargetResultReportContentFixture,
   TARGET_RESULT_REPORTED_AT,
 } from "../../governance/result/implementation-target-result-report.fixture.js";
 import { createTargetResultFixture } from "../../governance/result/target-result.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 test("admitted non-empty Git identities survive callback summarization and rendering", () => {
   for (const [algorithm, length] of [

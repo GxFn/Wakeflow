@@ -30,6 +30,7 @@ import {
   decideTargetResultReviewInDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -48,6 +49,8 @@ import {
   createControllerImplementationReviewDecisionForSnapshot,
   createControllerImplementationReviewDecisionForState,
 } from "./controller-implementation-review-decision.fixture.js";
+
+useDisposableDurability();
 
 const PUBLICATION_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_01010101-0101-4101-8101-010101010101",

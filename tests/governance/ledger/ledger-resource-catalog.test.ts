@@ -6,11 +6,14 @@ import {
   createLedgerAuthorityResourceCatalog,
   WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
 } from "../../../src/governance/ledger/ledger-resource-catalog.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   FIXTURE_RECORDED_AT,
   FIXTURE_REQUIREMENT_ID,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 test("Ledger static catalog separates the durable requirements root from private transactions", () => {
   deepEqual(

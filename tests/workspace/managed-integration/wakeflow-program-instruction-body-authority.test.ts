@@ -17,6 +17,9 @@ import {
   type WakeflowProgramInstructionBodyAuthorityErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

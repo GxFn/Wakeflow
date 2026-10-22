@@ -14,6 +14,9 @@ import {
   planFixtureTargetTask,
   type TargetTaskPlanningWorkspaceFixture,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 自定义 Unicode 章节锚点的接受面：需求包正文带 "## 性能约束" 时，任务包引用该锚点

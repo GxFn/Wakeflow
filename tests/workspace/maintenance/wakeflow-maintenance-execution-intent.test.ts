@@ -29,6 +29,9 @@ import {
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const OPERATION_ID = "maintenance_operation_11111111-1111-4111-8111-111111111111";
 const PROFILES = Object.freeze([

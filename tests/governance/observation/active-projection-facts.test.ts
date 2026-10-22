@@ -43,7 +43,10 @@ import {
 } from "../../../src/kernel/pod-worktree-receipts.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 观察 → 投影事实 → 刷新（gate-log §13.94 D5、§13.96）：worktree 检出目录此刻在不在是本地

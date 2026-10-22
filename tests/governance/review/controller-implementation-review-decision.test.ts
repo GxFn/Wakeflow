@@ -10,6 +10,7 @@ import {
   renderControllerImplementationReviewDecision,
 } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   CONTROLLER_REVIEW_DECIDED_AT,
   CONTROLLER_REVIEW_DECISION_UUID,
@@ -17,6 +18,8 @@ import {
   controllerReviewEscalationFixture,
   createControllerImplementationReviewDecisionFixture,
 } from "./controller-implementation-review-decision.fixture.js";
+
+useDisposableDurability();
 
 function createDecision(input = controllerImplementationReviewDecisionInput()) {
   return createControllerImplementationReviewDecision(input, {

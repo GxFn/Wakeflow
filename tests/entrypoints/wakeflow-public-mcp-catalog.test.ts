@@ -41,10 +41,13 @@ import {
   findWakeflowToolRegistration,
   measureWakeflowToolCatalogBytes,
 } from "../../src/kernel/tool-registry.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpServerForTest,
   connectWakeflowMcpTestClient,
 } from "./wakeflow-public-mcp-server.fixture.js";
+
+useDisposableDurability();
 
 /**
  * Public MCP catalog是组合根的横切合同，不承载任何领域成功样例。

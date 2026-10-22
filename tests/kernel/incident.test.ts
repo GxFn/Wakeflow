@@ -23,6 +23,9 @@ import {
   recordIncident,
   WAKEFLOW_INCIDENT_RETENTION,
 } from "../../src/kernel/incident.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(
   t: TestContext,

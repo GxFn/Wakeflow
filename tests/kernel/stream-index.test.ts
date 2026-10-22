@@ -12,13 +12,16 @@ import {
   advanceStreamIndex,
   buildStreamIndex,
   createStreamIndex,
+  type IndexableCommit,
   parseStreamIndex,
   publishStreamIndex,
   readLatestStreamIndex,
   renderStreamIndex,
   retireStreamIndexesBefore,
-  type IndexableCommit,
 } from "../../src/kernel/event-stream/stream-index.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const DIGEST_A = `sha256:${"a".repeat(64)}`;
 const DIGEST_B = `sha256:${"b".repeat(64)}`;

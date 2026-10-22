@@ -16,9 +16,12 @@ import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
   demandEventSourcingPublicationAuthoredDemand,
-  publishPendingPackage,
   PUBLICATION_SECOND_REQUIREMENT_ID,
+  publishPendingPackage,
 } from "../../governance/demand/demand-event-sourcing-publication-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const CODEX = {
   hostId: "codex" as const,

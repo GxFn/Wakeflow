@@ -19,7 +19,10 @@ import {
   retireManagedEvidencePublicationTransactionJournal,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createManagedEvidencePublicationTransactionFixture } from "./managed-evidence-publication.fixture.js";
+
+useDisposableDurability();
 
 const OTHER_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_99999999-9999-4999-8999-999999999999",

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { expectedClaudeMarketplaceEntry } from "../../tooling/artifacts/plugin-metadata.js";
 import { checkWakeflowReleaseConsistency } from "../../tooling/release/check-release-consistency.js";

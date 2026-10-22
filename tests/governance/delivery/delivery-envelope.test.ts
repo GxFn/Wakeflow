@@ -7,7 +7,10 @@ import {
   DeliveryEnvelopeError,
   parseDeliveryEnvelope,
 } from "../../../src/governance/delivery/delivery-envelope.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createDeliveryEnvelopeFixture } from "./delivery-records.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 信封解析的摘要自洽：promptDigest 必须是 portablePrompt 的摘要，即使 envelopeDigest

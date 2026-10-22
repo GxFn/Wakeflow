@@ -30,6 +30,9 @@ import { planClaudeCodePortableSettingsTransition } from "../../../src/hosts/cla
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-settings-operation-"));

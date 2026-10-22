@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import {
   createWakeflowDurableId,
+  type ParsedWakeflowDurableId,
   parseWakeflowDurableId,
   parseWakeflowDurableIdOfKind,
   WAKEFLOW_DURABLE_ID_KINDS,
-  WakeflowDurableIdError,
-  type ParsedWakeflowDurableId,
   type WakeflowDurableId,
+  WakeflowDurableIdError,
   type WakeflowDurableIdErrorReason,
   type WakeflowDurableIdKind,
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";

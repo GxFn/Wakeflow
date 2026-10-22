@@ -14,6 +14,9 @@ import {
   TASKING_CREATED_AT,
   taskPackageDraft,
 } from "../../governance/tasking/task-package.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 投递 prompt 的阅读顺序（gate-log §13.134，收 §13.133 I7）：需求包按文档列出，requirement.md

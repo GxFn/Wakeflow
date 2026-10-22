@@ -1,7 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
+import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
 import {
   WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS,
@@ -11,6 +11,9 @@ import {
   registerWakeflowPublicMcpCatalog,
   type WakeflowPublicMcpExecutor,
 } from "../../src/entrypoints/wakeflow-public-mcp-tool.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 type CapturedHandler = (request: unknown) => Promise<CallToolResult>;
 

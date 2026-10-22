@@ -1,6 +1,6 @@
 import type { TestContext } from "node:test";
 
-import { Client, InMemoryTransport, type CallToolResult } from "@modelcontextprotocol/client";
+import { type CallToolResult, Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createWakeflowPublicMcpServer } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 

@@ -1,5 +1,5 @@
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedReadWriteScope } from "../../src/foundation/filesystem/rooted-read-write-scope.js";
 
 const base = process.argv[2];

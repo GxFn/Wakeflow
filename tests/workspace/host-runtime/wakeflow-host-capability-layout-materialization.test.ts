@@ -26,6 +26,9 @@ import {
 } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext, profile: unknown) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-host-capability-layout-"));

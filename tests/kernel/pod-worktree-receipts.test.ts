@@ -24,13 +24,16 @@ import {
   listPodReceiptDirectories,
   listPodWorktreeReceipts,
   listPodWorktreeReceiptsAnyHost,
+  observeWorktreeCheckout,
   parseGitWorktreePorcelain,
   readPodWorktreeReceipt,
   retirePodReceipts,
   retirePodWorktreeReceipt,
-  observeWorktreeCheckout,
   writePodWorktreeReceipt,
 } from "../../src/kernel/pod-worktree-receipts.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * worktree 回执（§13.91 D4）：porcelain 解析、用 `.git` 指针文件与 admin 目录核对的准入、

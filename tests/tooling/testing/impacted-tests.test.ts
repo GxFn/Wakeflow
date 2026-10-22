@@ -208,12 +208,12 @@ test("testSourcesDependingOn：静态导入链到达目标的测试文件，含�
   );
   write(
     root,
-    "tests/tooling/lab/workflow-codex.test.ts",
+    "tests/tooling/lab/workflow-codex.load.test.ts",
     'import { matrix } from "./workflow-matrix.fixture.js";\n',
   );
   deepEqual([...testSourcesDependingOn(root, "tests/support/load-sensitive.ts")].sort(), [
     "tests/foundation/lock.test.ts",
-    "tests/tooling/lab/workflow-codex.test.ts",
+    "tests/tooling/lab/workflow-codex.load.test.ts",
   ]);
   // 夹具本身不是测试文件，不在集合里；无关测试也不在。
   equal(

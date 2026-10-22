@@ -2,28 +2,28 @@ import { deepEqual, equal, rejects } from "node:assert/strict";
 import { test } from "node:test";
 import { executeDemandCompletionRequest } from "../../../src/capabilities/demand/lifecycle.js";
 import {
-  executeImplementationReviewDecisionRequest,
-  executeTestReviewDecisionRequest,
-} from "../../../src/capabilities/result-review/service.js";
-import {
   deriveStepViews,
   deriveUnionVerdict,
 } from "../../../src/capabilities/result-review/decide.js";
+import {
+  executeImplementationReviewDecisionRequest,
+  executeTestReviewDecisionRequest,
+} from "../../../src/capabilities/result-review/service.js";
 import { parseUuidV4 } from "../../../src/foundation/identity/uuid-v4.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
-  prepareFixtureDelivery,
-  recordFixtureDeliveryOutcome,
+  type DeliveryWindowRoute,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
+  prepareFixtureDelivery,
+  recordFixtureDeliveryOutcome,
   withFixtureDemandRoot,
-  type DeliveryWindowRoute,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
-  createTestDeliveryWorkspaceFixture,
   cleanupTestDeliveryWorkspaceFixture,
+  createTestDeliveryWorkspaceFixture,
   deliverFixtureTestTarget,
   type TestDeliveryWorkspaceFixture,
 } from "../../governance/delivery/test-delivery-workspace.fixture.js";
@@ -37,14 +37,17 @@ import {
 } from "../../governance/review/controller-implementation-review-decision-service.fixture.js";
 import {
   failingStep,
-  passingStep,
   fixtureTestDecisionRequest,
   importFixtureTestResult,
+  passingStep,
   TEST_REVIEW_DECIDED_AT,
   TEST_REVIEW_INSPECTED_AT,
   TEST_TARGET_STOPPED_AT,
 } from "../../governance/review/controller-test-review-decision-service.fixture.js";
 import { planFixtureTestTask } from "../../governance/tasking/test-task-planning.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const at = (time: string) => parseUtcInstant(`2026-08-29T${time}.000Z`);
 const options = (time: string, sequence: number) => ({

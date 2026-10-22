@@ -15,12 +15,15 @@ import {
   parseTestExecutionAttempt,
   TestExecutionAttemptError,
 } from "../../../src/governance/testing/test-execution-attempt.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createTaskPackageFixture,
   SELECTED_AUTHORITY_REF,
   TASKING_REPOSITORY_ID,
   TASKING_WINDOW_ID,
 } from "../tasking/task-package.fixture.js";
+
+useDisposableDurability();
 
 function testPackage(setupPolicy: TestSetupPolicy): Readonly<TestTaskPackage> {
   const implementation = createTaskPackageFixture();

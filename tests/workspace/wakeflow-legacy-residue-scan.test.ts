@@ -14,7 +14,10 @@ import {
   WAKEFLOW_CURRENT_LEDGER_ENTRY_NAMES,
   WAKEFLOW_LEGACY_RESIDUE_MAXIMUM_ITEMS,
 } from "../../src/workspace/wakeflow-legacy-residue-scan.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { disposableRoot } from "../support/temp-root.js";
+
+useDisposableDurability();
 
 const REPOSITORY_KEY = "repository.repository_22222222-2222-4222-8222-222222222222.root";
 

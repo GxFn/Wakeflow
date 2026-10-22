@@ -17,6 +17,7 @@ import { executeDemandEventSourcingCommand } from "../../../src/governance/deman
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -40,6 +41,8 @@ import {
   createTestTaskPlanningWorkspaceFixture,
   planFixtureTestTask,
 } from "../tasking/test-task-planning.fixture.js";
+
+useDisposableDurability();
 
 async function readControllerRoute(
   workspaceRoot: RootedDirectory,

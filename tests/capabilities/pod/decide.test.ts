@@ -18,6 +18,9 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * pod 切片的纯决定（§13.91 D1 到 D3、D6）：身份与窗口集派生、状态派生、创建与两段关闭的阻塞项、next。

@@ -14,6 +14,9 @@ import {
   inspectWakeflowPrivateModes,
   wakeflowPrivateModeAreas,
 } from "../../../src/workspace/maintenance/wakeflow-private-mode-census.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const PRIVATE_DIRECTORIES = [
   ".wakeflow-local",

@@ -5,24 +5,18 @@ import {
   linkSync,
   lstatSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   renameSync,
-  rmSync,
   statSync,
   symlinkSync,
   unlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { type TestContext, test } from "node:test";
+import { test } from "node:test";
 import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
-import { renderDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
-import { parseJsonValue } from "../../src/foundation/data/json-value.js";
 import { parseDurableAtomicFileStageFileName } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import type { UtcInstant } from "../../src/foundation/time/utc-instant.js";
@@ -32,31 +26,26 @@ import {
   HOST_HOOK_ABANDONED_STAGE_MILLISECONDS,
   HOST_HOOK_RECORDS_MAXIMUM,
   HOST_HOOK_RETENTION_MILLISECONDS,
-  type HostHookObservationInput,
   readHostHookObservationRecord,
   readHostHookObservations,
   readHostHookObservationsInterleaved,
-  scanHostHookObservations,
   writeHostHookObservation,
 } from "../../src/kernel/hook-observations.js";
-import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
-import { loadSensitive } from "../support/load-sensitive.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+import {
+  AT,
+  ago,
+  DAY,
+  fixture,
+  hookEntries,
+  hooksDirectory,
+  NOW,
+  observation,
+  recordName,
+  SESSION,
+} from "./hook-observations.fixture.js";
 
-async function fixture(
-  t: TestContext,
-): Promise<{ readonly root: RootedDirectory; readonly path: string }> {
-  const absolutePath = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-hooks-")));
-  const root = await RootedDirectory.open(absolutePath);
-  t.after(async () => {
-    await root.close();
-    rmSync(absolutePath, { recursive: true, force: true });
-  });
-  return { root, path: absolutePath };
-}
-
-const SESSION = "0d1e2f30-1111-4222-8333-444455556666";
-const AT = (offset: number): UtcInstant =>
-  new Date(Date.UTC(2026, 8, 4, 12, 0, offset)).toISOString() as UtcInstant;
+useDisposableDurability();
 
 test("hook 观察记录：确定性标识、私有文件、按事件与会话有界读取", async (t) => {
   const { root, path: workspace } = await fixture(t);
@@ -189,53 +178,8 @@ test("hook 观察记录拒绝越界输入与同名不同内容", async (t) => {
 
 // ---- §13.97 D7：毫秒精度、按龄修剪、列举后消失 ----------------------------------------
 
-const DAY = 24 * 60 * 60 * 1000;
-const NOW = Date.UTC(2026, 8, 18, 12, 0, 0);
-/** 相对固定"现在"的毫秒形时刻；测试不读墙钟。 */
-const ago = (milliseconds: number): UtcInstant =>
-  new Date(NOW - milliseconds).toISOString() as UtcInstant;
-const compact = (instant: UtcInstant): string => instant.replace(/[-:.]/gu, "");
 const OLD_UUID = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
 const OLD_UUID_OTHER = "0e0e0e0e-0e0e-4e0e-8e0e-0e0e0e0e0e0e";
-
-function hooksDirectory(workspace: string, hostId: "codex" | "claude-code"): string {
-  return path.join(workspace, ...hostHookObservationsRootRef(hostId).split("/"));
-}
-
-function hookEntries(directory: string): string[] {
-  const entries: string[] = [];
-  for (const name of readdirSync(directory)) {
-    const child = path.join(directory, name);
-    if (/^\d{8}$/u.test(name) && lstatSync(child).isDirectory()) {
-      for (const shard of readdirSync(child)) {
-        const shardPath = path.join(child, shard);
-        if (/^[0-9a-f]{2}$/u.test(shard) && lstatSync(shardPath).isDirectory()) {
-          for (const leaf of readdirSync(shardPath)) entries.push(`${name}/${shard}/${leaf}`);
-        } else entries.push(`${name}/${shard}`);
-      }
-    } else entries.push(name);
-  }
-  return entries.sort();
-}
-
-function observation(
-  workspace: string,
-  recordedAt: UtcInstant,
-  patch: Partial<HostHookObservationInput> = {},
-): HostHookObservationInput {
-  return {
-    hostId: "claude-code",
-    event: "stop",
-    sessionId: SESSION,
-    cwd: `${workspace}/product`,
-    recordedAt,
-    ...patch,
-  };
-}
-
-function recordName(receipt: Awaited<ReturnType<typeof writeHostHookObservation>>): string {
-  return `${compact(receipt.record.recordedAt).slice(0, 8)}/${receipt.record.recordId.slice(0, 2)}/${compact(receipt.record.recordedAt)}-${receipt.record.event}-${receipt.record.recordId}.json`;
-}
 
 test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写得进去却永远读不出（D7a）", async (t) => {
   const { root, path: workspace } = await fixture(t);
@@ -447,66 +391,6 @@ async function concurrentPruneDuringRead(
   unlinkSync(path.join(directory, recordName(replaced)));
   equal((await readHostHookObservations(root, "claude-code")).skipped, 0);
 }
-
-/**
- * 越界目录的合成条目：无法识别的名字最便宜，而且修剪按定义不碰它们（D7b），所以填多少个，
- * 修剪之后读取报的 `skipped` 就还是多少个。
- */
-const OVERSIZED_UNRECOGNIZED = 16_300;
-/** 过期记录数：足以把目录从读取上限之上带回上限之下，又不必 unlink 上万个文件。 */
-const OVERSIZED_EXPIRED = 96;
-
-function fillOversizedDirectory(directory: string): void {
-  for (let index = 0; index < OVERSIZED_UNRECOGNIZED; index += 1) {
-    writeFileSync(path.join(directory, `stray-${index.toString(16).padStart(6, "0")}.txt`), "x\n", {
-      mode: 0o600,
-    });
-  }
-  for (let index = 0; index < OVERSIZED_EXPIRED; index += 1) {
-    const hex = index.toString(16).padStart(12, "0");
-    writeFileSync(
-      path.join(directory, `20200101T000000000Z-stop-00000000-0000-4000-8000-${hex}.json`),
-      "garbage\n",
-      { mode: 0o600 },
-    );
-  }
-}
-
-test("旧目录超过 16384 项仍可分页完整读取与按龄修剪，未知条目不被删除", {
-  timeout: 120_000,
-}, async (t) => {
-  if (
-    loadSensitive(
-      t,
-      "oversized real directory tree with 16384+ entries; times out at eight file workers",
-    )
-  )
-    return;
-  const { root, path: workspace } = await fixture(t);
-  const directory = hooksDirectory(workspace, "claude-code");
-  const kept = await writeHostHookObservation(root, observation(workspace, ago(DAY)));
-  fillOversizedDirectory(directory);
-  const before = 1 + OVERSIZED_UNRECOGNIZED + OVERSIZED_EXPIRED;
-  equal(hookEntries(directory).length, before);
-  const beforeRead = await readHostHookObservations(root, "claude-code");
-  equal(beforeRead.complete, true);
-  equal(beforeRead.skipped, OVERSIZED_UNRECOGNIZED + OVERSIZED_EXPIRED);
-  deepEqual(
-    beforeRead.records.map((record) => record.recordId),
-    [kept.record.recordId],
-  );
-  const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
-  equal(latest.disposition, "created");
-  equal(hookEntries(directory).length, before + 1 - OVERSIZED_EXPIRED);
-  const inventory = await readHostHookObservations(root, "claude-code");
-  deepEqual(
-    inventory.records.map((record) => record.recordId),
-    [kept.record.recordId, latest.record.recordId],
-  );
-  // 修剪永远不动无法识别的条目（它们留给 verify 的门），所以修剪之后 skipped 仍然恰好等于
-  // 填充进去的那批文件数：少一个就说明修剪越界删掉了不属于它的东西，多一个就说明有记录读不出。
-  equal(inventory.skipped, OVERSIZED_UNRECOGNIZED);
-});
 
 test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 null，新记录原样往返（§13.127）", async (t) => {
   const { root, path: workspace } = await fixture(t);
@@ -770,54 +654,6 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   equal(existsSync(path.join(directory, stageName(5, { pid: process.ppid }))), true);
 });
 
-test("旧平铺目录的 16385 条近期有效记录可完整扫描，目标查询与逐条证据读取不截断", {
-  timeout: 240_000,
-}, async (t) => {
-  if (loadSensitive(t, "16385-entry real directory scan; times out at eight file workers")) return;
-  const { root, path: workspace } = await fixture(t);
-  const directory = hooksDirectory(workspace, "codex");
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  let target: ReturnType<typeof createHostHookObservation> | undefined;
-  for (let index = 0; index < 16_385; index += 1) {
-    const record = createHostHookObservation({
-      hostId: "codex",
-      event: index === 16_384 ? "session-start" : "stop",
-      sessionId: `synthetic-${index}`,
-      cwd: workspace,
-      recordedAt: AT(0),
-    });
-    const name = `${compact(record.recordedAt)}-${record.event}-${record.recordId}.json`;
-    writeFileSync(
-      path.join(directory, name),
-      renderDeterministicJsonDocument(parseJsonValue(record)),
-      { mode: 0o600 },
-    );
-    if (index === 16_384) target = record;
-  }
-  if (target === undefined) throw new Error("Missing synthetic target");
-  const selected = await readHostHookObservations(root, "codex", {
-    event: "session-start",
-    sessionId: target.sessionId,
-    limit: 1,
-  });
-  equal(selected.complete, true);
-  deepEqual(selected.records, [target]);
-  equal(
-    (await readHostHookObservationRecord(root, "codex", target.recordId))?.record.recordId,
-    target.recordId,
-  );
-  const scan = await scanHostHookObservations(root, "codex", {}, () => {});
-  deepEqual(scan, { records: 16_385, skipped: 0, unreadable: 0 });
-  // Upgrading does not copy or rewrite an already durable legacy fact.
-  const retry = await writeHostHookObservation(root, target);
-  equal(retry.disposition, "current");
-  equal(
-    retry.resourceRef.split("/").length,
-    hostHookObservationsRootRef("codex").split("/").length + 1,
-  );
-  equal(readdirSync(directory).length, 16_385);
-});
-
 test("有限结果明确报告不完整；损坏旧目录不会阻断新分片，未知文件保留", async (t) => {
   const { root, path: workspace } = await fixture(t);
   const directory = hooksDirectory(workspace, "claude-code");
@@ -844,50 +680,6 @@ test("有限结果明确报告不完整；损坏旧目录不会阻断新分片�
     });
     equal((await readHostHookObservations(root, "claude-code")).skipped, 2);
   }
-});
-
-test("密集历史也按龄退役：基准取最新的另一条记录，只走截止日之前的日目录，清空的分片与日目录随手回收（§13.161 H2-01/H2-02）", {
-  timeout: 120_000,
-}, async (t) => {
-  if (
-    loadSensitive(t, "8000-record real history tree pruned by age; times out at eight file workers")
-  )
-    return;
-  const { root, path: workspace } = await fixture(t);
-  const directory = hooksDirectory(workspace, "claude-code");
-  // 40 天、每天 200 条，远高于旧实现约 137 条/天的饥饿阈值：最旧的 4096 个叶子跨不到 30 天，
-  // 旧实现的截止基准会被钉在陈旧历史上，永远修剪不到任何东西。
-  const perDay = 150;
-  const days = 40;
-  const dayDirectory = (day: number): string =>
-    path.join(
-      directory,
-      compact(new Date(NOW - day * DAY).toISOString() as UtcInstant).slice(0, 8),
-    );
-  for (let day = days; day >= 1; day -= 1) {
-    for (let index = 0; index < perDay; index += 1) {
-      const at = new Date(NOW - day * DAY + index * 60_000).toISOString() as UtcInstant;
-      const recordId = `${(index % 256).toString(16).padStart(2, "0")}000000-0000-4000-8000-${day
-        .toString(16)
-        .padStart(6, "0")}${index.toString(16).padStart(6, "0")}`;
-      const shard = path.join(dayDirectory(day), recordId.slice(0, 2));
-      mkdirSync(shard, { recursive: true, mode: 0o700 });
-      writeFileSync(path.join(shard, `${compact(at)}-stop-${recordId}.json`), "garbage\n", {
-        mode: 0o600,
-      });
-    }
-  }
-  const total = perDay * days;
-  equal(hookEntries(directory).length, total);
-  const latest = await writeHostHookObservation(root, observation(workspace, ago(0)));
-  equal(latest.disposition, "created");
-  // 基准是最新的另一条（昨天的最后一条），截止在 30 天多一点之前：40…32 天前的 9 天（1800 条）
-  // 整天过期，都在 4096 的检查预算之内，一次写入全部退役；31 天前那天跨过截止时刻，整天保留到下次。
-  equal(hookEntries(directory).length, total + 1 - 9 * perDay);
-  equal(existsSync(dayDirectory(40)), false);
-  equal(existsSync(dayDirectory(32)), false);
-  equal(existsSync(dayDirectory(31)), true);
-  equal(existsSync(dayDirectory(1)), true);
 });
 
 test("外来点文件不计，外来文件名只计 skipped，记录命名却读不出或叶子位置上的目录才计 unreadable（§13.161 B5-1）", async (t) => {

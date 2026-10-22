@@ -31,6 +31,9 @@ import {
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { wakeflowProgramInstructionRecompositionLockRef } from "../../../src/workspace/workspace-host-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 interface Fixture {
   readonly absolutePath: string;

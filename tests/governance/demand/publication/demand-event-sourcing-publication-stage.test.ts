@@ -53,10 +53,13 @@ import {
   LedgerAuthorityStore,
 } from "../../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../../src/kernel/active-projection.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import { DISPOSABLE_ROOT_OPTIONS } from "../../../support/prepared-workspace.js";
 import { disposableRoot } from "../../../support/temp-root.js";
 import { publishFixtureRequirement } from "../../ledger/requirement-package.fixture.js";
 import { placePendingClaimState, requirementLineageOf } from "../requirement-board.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 直接覆盖暂存构建、整体重命名与最终加载；工作区、Ledger 与需求包按

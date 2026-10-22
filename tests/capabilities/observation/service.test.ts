@@ -114,8 +114,11 @@ import {
   PLANNING_REPOSITORY_ID,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
 import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；

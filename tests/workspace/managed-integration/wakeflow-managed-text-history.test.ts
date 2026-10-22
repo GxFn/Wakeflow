@@ -22,11 +22,14 @@ import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/work
 import { createWakeflowSupportGitignoreBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js";
 import { createWakeflowSupportMemoryAuthority } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createManagedBlockWakeflowConfig,
   EXTERNAL_DESIGN_SURFACE_TARGET,
   MANAGED_BLOCK_REPOSITORY_TARGET,
 } from "./wakeflow-external-instruction.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 托管正文的历史准入（open-items C5，§13.167）。

@@ -9,6 +9,9 @@ import {
   type PackageDocumentText,
   privacyBlockers,
 } from "../../../src/capabilities/requirement/decide.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 test("requirement route prose stays allowed while filesystem locators use normalized classification", () => {
   deepEqual(
@@ -29,6 +32,7 @@ test("requirement route prose stays allowed while filesystem locators use normal
       text,
     );
 });
+
 import {
   boardCounts,
   deriveRequirementNext,

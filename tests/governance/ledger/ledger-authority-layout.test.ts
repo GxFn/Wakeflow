@@ -10,6 +10,9 @@ import {
   LEDGER_AUTHORITY_LAYOUT_DIGEST,
 } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 test("Ledger layout inspection observes only the three fixed containers", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-ledger-layout-"));

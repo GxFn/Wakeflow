@@ -24,6 +24,9 @@ import {
   createManagedEvidenceCapturePlanFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
 } from "../../governance/evidence/managed-evidence-publication.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * evidence 切片的纯决定（§13.89 D1、D3）：计划摘要不含时间、身份派生、计划投影、内容阻塞项。

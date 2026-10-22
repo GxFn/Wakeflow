@@ -7,11 +7,14 @@ import {
 } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { fixtureMember } from "../support/fixture-member.js";
 import {
   createMinimalWakeflowConfig,
   serializeWakeflowConfigFixture,
 } from "./wakeflow-config.fixture.js";
+
+useDisposableDurability();
 
 test("minimal config renders in its one explicit domain field order", () => {
   const value = createMinimalWakeflowConfig();

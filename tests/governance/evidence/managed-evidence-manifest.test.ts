@@ -1,7 +1,5 @@
-import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
-
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -10,14 +8,15 @@ import {
   computeManagedEvidenceManifestDigest,
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_MANIFEST_KIND,
+  MANAGED_EVIDENCE_PAYLOAD_LIMITS,
   type ManagedEvidenceManifestDraft,
   ManagedEvidenceManifestError,
   type ManagedEvidenceManifestErrorReason,
   parseManagedEvidenceManifest,
   parseManagedEvidenceManifestDocument,
   renderManagedEvidenceManifest,
-  MANAGED_EVIDENCE_PAYLOAD_LIMITS,
 } from "../../../src/governance/evidence/managed-evidence-manifest.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 
 const UUIDS = {
   evidence: "11111111-1111-4111-8111-111111111111",

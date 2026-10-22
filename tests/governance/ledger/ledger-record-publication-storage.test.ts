@@ -71,6 +71,7 @@ import {
 } from "../../../src/governance/ledger/ledger-record-publication-storage.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 import {
@@ -79,6 +80,8 @@ import {
   requirementMembers,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 /** 直接覆盖逐记录发布流程的私有存储边界：意图记录、残留、锁、暂存发布与精确回读。 */
 

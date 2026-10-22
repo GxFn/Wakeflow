@@ -20,7 +20,10 @@ import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 私有模式的安全漂移由 reconcile 收回（gate-log §13.124 D8，§13.130）：`chmod -R go+rX` 之后，

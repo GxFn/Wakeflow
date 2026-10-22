@@ -1,17 +1,20 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { mkdirSync, writeFileSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import type { Sha256Digest } from "../../src/foundation/crypto/sha256.js";
 import type { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
-  runPublicationTransaction,
   type PublicationTransactionEnvelope,
   type PublicationTransactionPhase,
+  runPublicationTransaction,
 } from "../../src/kernel/publication-transaction.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function fixture(t: TestContext): string {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-effect-")));

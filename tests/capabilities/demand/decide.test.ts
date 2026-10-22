@@ -27,8 +27,8 @@ import {
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   computeDemandAggregateStateDigest,
-  parseDemandAggregateState,
   type DemandAggregateState,
+  parseDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import {
@@ -46,6 +46,9 @@ import {
   TASKING_AUTHORITY_DIGEST,
   TASKING_DEMAND_ID,
 } from "../../governance/tasking/task-package.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * demand 切片纯决定：标识派生、归档负载筛选、凭证扫描、阻塞项派生；

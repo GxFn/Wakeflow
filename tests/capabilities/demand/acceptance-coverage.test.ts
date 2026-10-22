@@ -9,17 +9,20 @@ import {
   executeVerifyRequest,
 } from "../../../src/capabilities/observation/service.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
+import { FIXTURE_REQUIREMENT_MARKDOWN } from "../../governance/ledger/requirement-package.fixture.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   createAcceptedDemandCompletionWorkspaceFixture,
 } from "../../governance/lifecycle/demand-completion-service.fixture.js";
-import { FIXTURE_REQUIREMENT_MARKDOWN } from "../../governance/ledger/requirement-package.fixture.js";
-import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 import {
   cleanupTestTaskPlanningWorkspaceFixture,
   createTestTaskPlanningWorkspaceFixture,
   planFixtureTestTask,
 } from "../../governance/tasking/test-task-planning.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 const TEN_CRITERIA = FIXTURE_REQUIREMENT_MARKDOWN.replace(
   /^- AC-2.*$/mu,

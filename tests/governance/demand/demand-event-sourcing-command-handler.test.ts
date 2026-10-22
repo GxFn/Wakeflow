@@ -13,6 +13,7 @@ import {
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -24,6 +25,8 @@ import {
   TASKING_AUTHORITY_DIGEST,
   TASKING_DEMAND_ID,
 } from "../tasking/task-package.fixture.js";
+
+useDisposableDurability();
 
 const DEMAND_ID = TASKING_DEMAND_ID;
 const EVENT_ID = parseWakeflowDurableIdOfKind(

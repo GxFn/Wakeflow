@@ -51,6 +51,7 @@ import {
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
 import { publishLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-record-publisher.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 import {
@@ -61,6 +62,8 @@ import {
   requirementMembers,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 /** 直接覆盖单记录暂存发布编排：输入准入、首次提交、幂等复用、残留处理与锁门控。 */
 

@@ -11,14 +11,14 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, test, type TestContext } from "node:test";
+import { after, type TestContext, test } from "node:test";
 
 import { buildWakeflowPluginArtifacts } from "../../tooling/artifacts/build-plugin-artifacts.js";
 import {
-  checkMarketplaces,
-  checkWakeflowPluginArtifacts,
   CLAUDE_MARKETPLACE_PATH,
   CODEX_MARKETPLACE_PATH,
+  checkMarketplaces,
+  checkWakeflowPluginArtifacts,
   jsonStructurallyEqual,
   verifyArtifactAgainstManifest,
 } from "../../tooling/artifacts/check-plugin-artifacts.js";

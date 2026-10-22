@@ -19,6 +19,9 @@ import { parseWakeflowMaintenanceExecutionPlan } from "../../src/workspace/maint
 import { withWakeflowMaintenanceGate } from "../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId } from "../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext, label: string) {
   const absolutePath = realpathSync(

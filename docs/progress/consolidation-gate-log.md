@@ -5392,3 +5392,17 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 - **留给用户的两点。** T2 的取舍（lab 四个实验从门移到冒烟）；detach-workspace 的终态（改名或删除）。
 
 **结论：分析与设计完成，待确认后执行 T1/T2（下一道门）。提交 id 见 README 指针。**
+
+### 13.206 测试门清理 T1+T2：一次性耐久性、`.load` 后缀、lab 矩阵归冒烟、`wf test levels`（2026-10-22）
+
+用户确认计划（§13.205）的两点建议后开始执行：T1 与 T2 合成一个阶段、一道门。
+
+- **D1 一次性耐久性。** `tests/support/disposable-durability.ts` 的 `useDisposableDurability()` 在测试进程里包装 `RootedDirectory.open`（唯一构造入口）：省略 `durability` 的根按 `none` 打开，显式 `fsync` 仍生效；生产一字未改、制品不变、不需 bump。按静态事实（一次性根、夹具或支持模块导入、MCP 客户端、`entrypoints`/`scenarios`）给 152 个 1–3 级测试文件在顶部各加一次调用；测试耐久性本身的四个文件（`kernel/command-shell`、发布存储、发布服务、`capabilities/workspace/operation-scope`）与 Foundation 不加。
+- **D3 后缀与拆分。** 整个文件都带标签的改名 `.load.test.ts`：lab 的 `workflow-codex`、`workflow-claude-code`、`workflow`、`sealing`（后两者的三个真实实验补上标签）与 `claude-permission-mode`；`hook-observations` 拆出 `hook-observations.load.test.ts`（三个上万条目目录树用例）与共享夹具 `hook-observations.fixture.ts`，主文件剩 12 个用例；`workflow` 里那条纯 CLI 拒绝用例搬到 `lab.test.ts`。五个带标签用例只占几秒的混合文件按标准 §3 等下次改到时拆（`wf test levels` 列出）。耗时表先改键名，门后重测。
+- **D2 lab 矩阵归冒烟。** `registerWorkflowMatrix(host, scenarios)` 带场景参数：门里每宿主只注册 `single-product`；新 `tests/tooling/lab/workflow-matrix.manual.ts` 在 `describe({ concurrency: 2 })` 下注册两宿主的 `dual-product` 与 `worktree`，并把运行器给子进程的隔离 git 环境放进本进程（`GIT_FIXTURE_ENVIRONMENT` 导出）；`npm run smoke:artifacts` 现在编译 tests 工程、跑五幕冒烟后以 `node --test` 跑它，`wf verify artifact` 与 CI 的 artifact 作业随之覆盖。冒烟实测：`npm run smoke:artifacts` 全程 3 分 53 秒，其中四个实验两个同跑 203 秒，4/4 通过。
+- **D6 `wf test levels`。** `tooling/testing/test-levels.ts`：按标准 §2 归级（目录 + 静态事实），耗时取签入表，预算按级别（链 600 秒、`.load` 360 秒），报超预算、混合、后缀不一致、缺头注释、未计时；`wf test levels` 只读。夹具树覆盖每级与每种偏差，真实仓库只断言不变量（每个文件有级别、链是 3 级、`.load` 都在标签闭包里、没有后缀不一致）。
+- **门。** 本节是 `tests/scenarios`、`tooling/testing` 与 152 个测试文件的改动，第 2 级。第一次（run-dsQa9M，14.8 分钟）1527 项 1526 通过，唯一的失败是 tmux 资产的“挂起命令按 host-command-timeout 拒绝”：桩在 `has-session` 上睡 30 秒、助手命令上限被压到 500 毫秒，门里前一条正常的 `list-panes` 子进程调用自己就超过了 500 毫秒，被判成超时的命令不对；上限改 3 秒（远小于 30 秒的挂起，20 秒内拒绝的断言不变）并补 `loadSensitive` 标签。第二次（run-9xr332，06:04–06:18 UTC）14.2 分钟：1527/1527，0 失败/取消/跳过，317 个文件各一条汇总，`inputsUnchanged`；链 554/532 秒、隔离道 645 秒之和、其余道 2990 秒之和。耗时表随之刷新为 317 条、合计 4721 秒。
+- **量到的结构性事实。** 第一次门的道数据（run-dsQa9M）：链 546/535 秒（上一门 601/589），隔离道 679 秒之和（lab single-product 52/57 秒，上一门三实验 329/315 即每个约 105 秒；hook 大目录 129；workflow 150；sealing 110），其余道 3108 秒之和（上一门 2905）。机器是 Apple M1，4 性能核加 4 效率核：其余道在 8 进程下 CPU 受限，去掉 fsync 没让它的和变小，反而因为提前 250 秒开始、与链重叠 200 秒而让最重的几个文件变慢（result-review 303 → 420 秒）；D1 对链是 10%，对 lab 实验是一半（它们自己仍 fsync，快是因为别的进程不再争磁盘刷写）；D2 让其余道提前开始，是这 3.4 分钟里的大头。T3/D7 的三个量化选项记在计划 §2.2。
+- **文档。** 标准 §1/§4、CLAUDE.md 与 AGENTS.md 的 Verification（冒烟含 lab 四个实验）、maintainer-tools §1/§5/§19 与新 §25、计划 §2.1 D3 与跟踪表、open-items D9；耗时表随本门刷新。
+
+**结论：通过（run-9xr332，1527/1527，14.2 分钟）。整门 18.2 → 14.2 分钟，两个阶段累计 36 → 14.2。T3（D4 重文件、D7 道再平衡）等有空档再做，先按计划 §4 进 1.2 批 0。提交 id 见 README 指针。**

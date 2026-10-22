@@ -39,6 +39,7 @@ import {
   type ManagedEvidenceReferenceSource,
   renderManagedEvidenceSourceProjection,
 } from "../../../src/governance/evidence/managed-evidence-source-projection.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 import {
@@ -49,6 +50,8 @@ import {
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS,
 } from "./managed-evidence-publication.fixture.js";
+
+useDisposableDurability();
 
 /** Direct coverage of the source-specific payload materializer, without the stage materializer. */
 

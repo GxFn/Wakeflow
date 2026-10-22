@@ -1,7 +1,7 @@
 # Wakeflow 测试开发标准
 
 > 状态：`active`
-> 基线提交：`3fcc3246`（`main`；门的组成与耗时取自 run-2t0hxo，gate-log §13.204）
+> 基线提交：`3fcc3246`（`main`；门的组成与耗时取自 run-9xr332，gate-log §13.206）
 > 建立日期：2026-10-22
 > 上位文档：[docs/README.md](../README.md)、根目录 `CLAUDE.md` / `AGENTS.md` 的 Verification 一节
 > 适用对象：在本仓库写测试或改测试的人和 Agent（Claude Code、Codex 都读同一份），以及 `tooling/testing` 的维护者
@@ -10,20 +10,20 @@
 
 ## 1. 测试门的组成
 
-`npm test`（第 2 级，完整门）依次运行：`typecheck`、`check:architecture`（六层依赖方向）、`lint` 与 `format:check`（Biome）、`check:unused`（knip）、`test:typescript`（下表全部文件）、`schema:check`（生成合同无漂移）、`build:check`（已提交制品与新构建字节一致）。静态阶段合计约 16 秒，测试阶段是全部时间。`smoke:artifacts`（把制品搬到仓库外启动的冒烟）与现场 L 系列核对不在门里，分别由第 1 级与现场计划触发。
+`npm test`（第 2 级，完整门）依次运行：`typecheck`、`check:architecture`（六层依赖方向）、`lint` 与 `format:check`（Biome）、`check:unused`（knip）、`test:typescript`（下表全部文件）、`schema:check`（生成合同无漂移）、`build:check`（已提交制品与新构建字节一致）。静态阶段合计约 16 秒，测试阶段是全部时间。`smoke:artifacts`（把制品搬到仓库外启动的五幕冒烟，加上 lab 的 dual-product 与 worktree 四个实验，`tests/tooling/lab/workflow-matrix.manual.ts`）与现场 L 系列核对不在门里，分别由第 1 级与现场计划触发；门里的 lab 矩阵只剩每宿主一个 single-product 实验。
 
-测试阶段按行为分成六级（第 2 节），run-2t0hxo 的构成：
+测试阶段按行为分成六级（第 2 节），run-9xr332 的构成（317 个文件、1527 个用例，`wf test levels` 按第 2 节的规则算出）：
 
 | 级 | 文件 | 用例 | 门内耗时之和 | 典型目录 |
 | --- | --- | --- | --- | --- |
-| 0 纯逻辑 | 85 | 353 | 6 秒 | `foundation/{data,time,crypto,text,numeric,identity,schema,event-sourcing}`、`contracts`、各层的 `decide`/`contract` 测试 |
-| 1 组件 | 约 100 | 约 480 | 约 500 秒 | `foundation/filesystem`、`kernel`、`governance/*` 的存储与发布 |
-| 2 能力 | 约 80 | 约 410 | 约 2200 秒 | `capabilities/*`、`workspace/*`、`hosts/*`、`configuration` |
-| 3 公共工具 | 13 | 98 | 1315 秒 | `entrypoints`（单工具协议）、`scenarios`（两条场景链） |
-| 4 维护者工具 | 30 | 128 | 1150 秒 | `tooling/*` |
-| 5 制品与发布 | 9 | 54 | 23 秒 | `artifacts`、`codegen`、`release` |
+| 0 纯逻辑 | 85 | 353 | 5 秒 | `foundation/{data,time,crypto,text,numeric,identity,schema,event-sourcing}`、`contracts`、各层的 `decide`/`contract` 测试 |
+| 1 组件 | 103 | 509 | 669 秒 | `foundation/filesystem`、`kernel`、`governance/*` 的存储与发布 |
+| 2 能力 | 76 | 386 | 2259 秒 | `capabilities/*`、`workspace/*`、`hosts/*`、`configuration` |
+| 3 公共工具 | 13 | 98 | 1158 秒 | `entrypoints`（单工具协议）、`scenarios`（两条场景链） |
+| 4 维护者工具 | 31 | 127 | 611 秒 | `tooling/*` |
+| 5 制品与发布 | 9 | 54 | 19 秒 | `artifacts`、`codegen`、`release` |
 
-1 级与 2 级的分界按第 2 节的定义判断，不按目录机械划分，所以表里是约数；`wf timings apply` 刷新的 `tooling/testing/test-durations.json` 是每个文件的权威耗时。
+1 级与 2 级的分界按第 2 节的定义判断，不按目录机械划分（`wf test levels` 给每个文件的归级依据）；`wf timings apply` 刷新的 `tooling/testing/test-durations.json` 是每个文件的权威耗时。
 
 ## 2. 测试级别
 
@@ -54,7 +54,7 @@
 
 - **一次性根目录。** 所有写盘都在 `tests/support/temp-root.ts` 的 `disposableRoot(t, prefix)` 之下，`t.after` 删除；绝不写仓库目录、`$HOME` 或 `/tmp` 之外的位置。路径比较用 realpath。
 - **预备基线。** 2 级测试的工作区用 `tests/support/prepared-workspace.ts` 的 `createPreparedWorkspaceStore`：同一进程里同 key 的初始化链只跑一次，每个用例 `fs.cp` 复制一份隔离副本（权限位复验、基线不得含自身绝对路径）。新的 2 级夹具一律建在它上面，不再逐用例跑 fresh-initialize。
-- **耐久性。** 一次性工作区用 `DISPOSABLE_ROOT_OPTIONS`（`durability: "none"`，只跳过 `fsync` 系统调用，暂存、原子重命名、权限位、CAS 与错误分类不变）。单个进程里 fsync 只占一成（Codex 链单独跑 319 对 289 秒，§13.205），但门里多个进程同时 fsync 会互相排队，每个都慢一到两倍（两条链同跑 668/662 秒）——一次性工作区去掉 fsync，既省自己的时间，也不再让别人排队。只有 Foundation 的崩溃语义测试显式保持 `fsync`，并在用例名里说出来。生产组合根永远是 `fsync`，测试不得改生产缺省。
+- **耐久性。** 1–3 级测试文件在顶部调用一次 `useDisposableDurability()`（`tests/support/disposable-durability.ts`）：本进程里省略 `durability` 打开的根一律按 `none`（只跳过 `fsync` 系统调用，暂存、原子重命名、权限位、CAS 与错误分类不变），显式 `fsync` 仍生效；直接开根的夹具用 `DISPOSABLE_ROOT_OPTIONS`。测试耐久性本身的文件（`command-shell`、发布存储与发布服务、`operation-scope`）不调用。单个进程里 fsync 只占一成（Codex 链单独跑 319 对 289 秒，§13.205），但门里多个进程同时 fsync 会互相排队，每个都慢一到两倍（两条链同跑 668/662 秒）——一次性工作区去掉 fsync，既省自己的时间，也不再让别人排队。只有 Foundation 的崩溃语义测试显式保持 `fsync`，并在用例名里说出来。生产组合根永远是 `fsync`，测试不得改生产缺省。
 - **git。** 运行器给每个测试子进程隔离的 git 环境（无全局/系统配置、`init.defaultBranch=main`、夹具身份）；测试里起 git 用 `tests/support/git-fixture.ts` 的 `runGit`。
 - **外部命令。** tmux、claude、codex、ps 等一律用 `tests/support/fake-cli.ts` 写替身放到 `PATH` 前面；子进程 pid 经 `child-process.ts` 读取（空文件不是 pid 0）。门里不启动真实宿主会话，不依赖登录状态。
 - **时钟。** 业务时序用注入时钟（`clock: () => parseUtcInstant(...)`）与常量（如 `DELIVERY_LANDING_SILENCE_MILLISECONDS`）推进，不 `setTimeout` 等待业务时间；只有 4 级的真实子进程测试允许墙钟等待，且带标签。

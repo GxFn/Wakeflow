@@ -10,8 +10,11 @@ import {
   type WakeflowConfigErrorReason,
 } from "../../src/configuration/wakeflow-config.js";
 import { WAKEFLOW_CONFIG_SCHEMA } from "../../src/contracts/generated/configuration/wakeflow-config.generated.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { fixtureMember } from "../support/fixture-member.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
+
+useDisposableDurability();
 
 function expectConfigError(
   action: () => unknown,

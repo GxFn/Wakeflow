@@ -39,6 +39,7 @@ import {
   managedEvidenceRecordRootRef,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -52,6 +53,8 @@ import {
   createManagedEvidencePublicationTransactionFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS as IDS,
 } from "./managed-evidence-publication.fixture.js";
+
+useDisposableDurability();
 
 function physical(root: string, ref: string): string {
   return path.join(root, ...ref.split("/"));

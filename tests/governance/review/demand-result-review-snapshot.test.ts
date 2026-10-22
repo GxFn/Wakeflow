@@ -15,6 +15,7 @@ import {
   readDemandResultReviewSnapshot,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -24,6 +25,8 @@ import {
   importFixtureImplementationResult,
   registerFixtureControllerWindow,
 } from "./controller-implementation-review-decision-service.fixture.js";
+
+useDisposableDurability();
 
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
 

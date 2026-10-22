@@ -26,6 +26,7 @@ import {
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
 } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -44,6 +45,8 @@ import {
   createControllerImplementationReviewDecisionForSnapshot,
   createControllerImplementationReviewDecisionForState,
 } from "./controller-implementation-review-decision.fixture.js";
+
+useDisposableDurability();
 
 function eventId(digit: string) {
   return parseWakeflowDurableIdOfKind(

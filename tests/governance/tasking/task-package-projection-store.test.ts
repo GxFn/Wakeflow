@@ -30,6 +30,7 @@ import {
   TaskPackageProjectionStore,
   TaskPackageProjectionStoreError,
 } from "../../../src/governance/tasking/task-package-projection-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createTaskPackageFixture,
   TASK_PACKAGE_ID,
@@ -37,6 +38,8 @@ import {
   TASKING_CREATED_AT,
   TASKING_DEMAND_ID,
 } from "./task-package.fixture.js";
+
+useDisposableDurability();
 
 const PUBLISHED_EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_88888888-8888-4888-8888-888888888888",

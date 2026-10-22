@@ -80,6 +80,9 @@ import {
   createTestTaskPlanningWorkspaceFixture,
   planFixtureTestTask,
 } from "../../governance/tasking/test-task-planning.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * result-review 切片效果（§13.87 D1–D8）：导入重放与二次导入；回调只在静默后重发、重放幂等、

@@ -3,10 +3,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { Client } from "@modelcontextprotocol/client";
-import { runToolingCli } from "../../../tooling/cli.js";
 import { createLab, disposeLab } from "../../../tooling/lab/lab.js";
-import { fixture } from "./workflow-matrix.fixture.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
+import { fixture } from "./workflow-matrix.fixture.js";
 
 function intercept(t: TestContext, observe: (args: Parameters<Client["callTool"]>[0]) => void) {
   const original = Client.prototype.callTool;
@@ -24,6 +23,7 @@ function intercept(t: TestContext, observe: (args: Parameters<Client["callTool"]
 test("a cancelled mutating experiment retains evidence and never authorizes inventory disposal or resume", {
   timeout: 90_000,
 }, async (t) => {
+  if (loadSensitive(t, "lab CLI with real product sessions against a built artifact")) return;
   const { repository, root, candidate } = fixture(t);
   const controller = new AbortController();
   intercept(t, (request) => {
@@ -48,6 +48,7 @@ test("a cancelled mutating experiment retains evidence and never authorizes inve
 test("changed product bytes prevent fixture acceptance even when import returned success", {
   timeout: 120_000,
 }, async (t) => {
+  if (loadSensitive(t, "lab CLI with real product sessions against a built artifact")) return;
   const { repository, root, candidate } = fixture(t);
   intercept(t, (request) => {
     if (request.name === "wakeflow_import_target_result")
@@ -100,27 +101,4 @@ test("worktree cleanup refuses a newly introduced file and preserves the checkou
   );
   ok(existsSync(path.join(root, "Worktree-Alpha/.git")));
   await rejects(disposeLab(repository, result.id));
-});
-
-test("business CLI refuses unknown scenarios and mixing existing IDs with fresh roots before writing", async (t) => {
-  const { repository, root, candidate } = fixture(t);
-  for (const args of [
-    ["lab", "run", "--scenario", "unknown", "--dir", root, "--candidate", candidate],
-    [
-      "lab",
-      "run",
-      "--scenario",
-      "single-product",
-      "--id",
-      "lab-existing",
-      "--dir",
-      root,
-      "--candidate",
-      candidate,
-    ],
-    ["lab", "run", "--scenario", "single-product", "--candidate", candidate],
-  ])
-    await rejects(runToolingCli(args, repository));
-  equal(existsSync(root), false);
-  equal(existsSync(path.join(repository, ".build")), false);
 });

@@ -2,25 +2,24 @@ import { equal } from "node:assert/strict";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-
-import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
-import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
-import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../../src/capabilities/observation/contract.js";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/delivery/contract.js";
-import { workClaimRef } from "../../src/kernel/layout.js";
-import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
+import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
+import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../../src/capabilities/observation/contract.js";
 import {
   WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
   WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
   WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/result-review/contract.js";
+import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
+import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
+import { workClaimRef } from "../../src/kernel/layout.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
@@ -28,17 +27,20 @@ import {
   landFixturePrompt,
 } from "../governance/delivery/delivery-workspace.fixture.js";
 import { createImplementationTargetResultReportContentFixture } from "../governance/result/implementation-target-result-report.fixture.js";
+import { implementationReviewJudgmentWire } from "../governance/review/controller-implementation-review-decision.fixture.js";
 import {
   landFixtureCallback,
   landFixtureTargetCompletion,
   recordFixtureEvidence,
   registerFixtureControllerWindow,
 } from "../governance/review/controller-implementation-review-decision-service.fixture.js";
-import { implementationReviewJudgmentWire } from "../governance/review/controller-implementation-review-decision.fixture.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpServerForTest,
   wakeflowMcpTextContent as textContent,
 } from "./wakeflow-public-mcp-server.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 公共MCP只保留一条跨域真实生命周期链。

@@ -50,6 +50,9 @@ import {
 } from "../../src/kernel/layout.js";
 import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 内核活动投影（gate-log §13.94 D5）：两级容器的检查与物化；事实 → 四份文件的渲染，标记

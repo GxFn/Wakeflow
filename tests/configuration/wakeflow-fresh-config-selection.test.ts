@@ -5,11 +5,14 @@ import {
   compileWakeflowFreshConfigSelection,
   WakeflowFreshConfigSelectionError,
 } from "../../src/configuration/wakeflow-fresh-config-selection.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   createMinimalWakeflowFreshConfigSelection,
   createSequenceUuidV4Factory,
   MINIMAL_WAKEFLOW_FRESH_SELECTION_UUIDS as UUIDS,
 } from "./wakeflow-fresh-config-selection.fixture.js";
+
+useDisposableDurability();
 
 test("Fresh selection allocates typed IDs and resolves request-local roots", () => {
   const input = createMinimalWakeflowFreshConfigSelection();

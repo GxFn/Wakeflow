@@ -11,13 +11,16 @@ import {
   createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
+import { createImplementationTargetResultReportContentFixture } from "../../governance/result/implementation-target-result-report.fixture.js";
 import {
   importFixtureImplementationResult,
   loadFixtureTaskPackage,
   recordFixtureEvidence,
   registerFixtureControllerWindow,
 } from "../../governance/review/controller-implementation-review-decision-service.fixture.js";
-import { createImplementationTargetResultReportContentFixture } from "../../governance/result/implementation-target-result-report.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 结果导入拒绝解析不了的证据引用时点名是哪一条、属于哪一类（gate-log §13.134，收 §13.133 I8）：

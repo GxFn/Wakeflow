@@ -1,12 +1,11 @@
 import { equal, rejects } from "node:assert/strict";
 import { test } from "node:test";
-
-import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
+import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
-import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { readRequirementClaimState } from "../../src/kernel/requirement-board.js";
@@ -14,7 +13,10 @@ import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
 } from "../governance/demand/demand-event-sourcing-publication-service.fixture.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { connectWakeflowMcpServerForTest } from "./wakeflow-public-mcp-server.fixture.js";
+
+useDisposableDurability();
 
 for (const [host, createServer, maintain] of [
   ["codex", createCodexWakeflowMcpServer, executeCodexWakeflowMaintenance],

@@ -22,6 +22,7 @@ import {
   WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX,
 } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createManagedBlockWakeflowConfig,
   EXTERNAL_DESIGN_SURFACE_ID,
@@ -30,6 +31,8 @@ import {
   MANAGED_BLOCK_REPOSITORY_TARGET,
   SECOND_PRODUCT_WINDOW_ID,
 } from "./wakeflow-external-instruction.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 外部根托管块正文权威：managed-block 仓库与 external-owned 支撑面各一份正文，只引用

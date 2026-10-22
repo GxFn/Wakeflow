@@ -25,7 +25,10 @@ import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/co
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 能力级 given-when-then（能力卡 1 §1.4 自动修复）：fresh 之后删掉 Wakeflow 拥有的静态目录

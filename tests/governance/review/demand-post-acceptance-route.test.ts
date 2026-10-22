@@ -13,6 +13,7 @@ import {
   DemandPostAcceptanceRouteError,
   readDemandPostAcceptanceRoute,
 } from "../../../src/governance/review/demand-post-acceptance-route.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
@@ -23,6 +24,8 @@ import {
   createControllerImplementationReviewDecisionServiceFixture,
   decideFixtureImplementation,
 } from "./controller-implementation-review-decision-service.fixture.js";
+
+useDisposableDurability();
 
 const ACCEPTED_AT = parseUtcInstant("2026-08-29T12:15:00.000Z");
 const ACCEPT_UUID = "c2c2c2c2-c2c2-42c2-82c2-c2c2c2c2c2c2";

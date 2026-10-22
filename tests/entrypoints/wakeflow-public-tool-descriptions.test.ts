@@ -6,6 +6,9 @@ import { test } from "node:test";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../src/contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES } from "../../src/kernel/tool-registry.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 公共工具描述与技能词汇的静态门（gate-log §13.130，收 §13.122 与 §13.129 的残留）。

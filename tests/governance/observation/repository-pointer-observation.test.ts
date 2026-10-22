@@ -18,7 +18,10 @@ import {
   repositoryBranchesComplete,
 } from "../../../src/governance/observation/repository-pointer-observation.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
+
+useDisposableDurability();
 
 /**
  * 仓库指针事实（gate-log §13.94 D2）：只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与

@@ -20,6 +20,9 @@ import {
   publishClaudeCodePortableSettings,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
 import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-portable-settings-"));

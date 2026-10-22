@@ -1,4 +1,3 @@
-import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -13,7 +12,6 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { executeVerifyRequest } from "../../../src/capabilities/observation/service.js";
 import { executePodRequest, type PodHostFacade } from "../../../src/capabilities/pod/service.js";
@@ -22,13 +20,17 @@ import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { inspectWakeflowWindowRuntimeProjectionSet } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * pod 切片效果（§13.91 D1 到 D7）：create preview 零写、apply 一次配置事务、同键重放、重名阻塞；

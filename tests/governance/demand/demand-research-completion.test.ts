@@ -54,6 +54,7 @@ import { readDemandResultReviewSnapshot } from "../../../src/governance/review/d
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 import {
@@ -76,6 +77,8 @@ import {
   type DemandEventSourcingPublicationWorkspaceFixture,
 } from "./demand-event-sourcing-publication-service.fixture.js";
 import { placePendingClaimState } from "./requirement-board.fixture.js";
+
+useDisposableDurability();
 
 /**
  * research Demand 的完成路径（gate-log §13.94 D8）：完成物是 document 类受管证据。

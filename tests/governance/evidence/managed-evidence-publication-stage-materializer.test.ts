@@ -35,12 +35,15 @@ import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_ROOT_REF,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createManagedEvidenceCapturePlanFixture,
   createManagedEvidencePublicationTransactionFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS,
 } from "./managed-evidence-publication.fixture.js";
+
+useDisposableDurability();
 
 interface MaterializerFixture {
   readonly fixtureRoot: string;

@@ -21,6 +21,7 @@ import { type LabToolObservation, withLabMcp } from "../../../tooling/lab/mcp-se
 import { sha256 } from "../../../tooling/verification/files.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { killChildProcess, waitForChildPid } from "../../support/child-process.js";
+import { fixture as workflowFixture } from "./workflow-matrix.fixture.js";
 
 function fixture(t: TestContext) {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-lab-integration-")));
@@ -292,4 +293,27 @@ test("unverified stdio shutdown keeps the lab lock and failure evidence instead 
     "lab-mcp-shutdown-unverified",
   );
   equal(existsSync(root), true);
+});
+
+test("business CLI refuses unknown scenarios and mixing existing IDs with fresh roots before writing", async (t) => {
+  const { repository, root, candidate } = workflowFixture(t);
+  for (const args of [
+    ["lab", "run", "--scenario", "unknown", "--dir", root, "--candidate", candidate],
+    [
+      "lab",
+      "run",
+      "--scenario",
+      "single-product",
+      "--id",
+      "lab-existing",
+      "--dir",
+      root,
+      "--candidate",
+      candidate,
+    ],
+    ["lab", "run", "--scenario", "single-product", "--candidate", candidate],
+  ])
+    await rejects(runToolingCli(args, repository));
+  equal(existsSync(root), false);
+  equal(existsSync(path.join(repository, ".build")), false);
 });

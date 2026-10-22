@@ -14,6 +14,7 @@ import { createTestTargetResultReport } from "../../../src/governance/result/tes
 import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   loadFixtureDeliveryOutcome,
   withFixtureDemandRoot,
@@ -30,6 +31,8 @@ import {
   testResultReportContent,
 } from "../review/controller-test-review-decision-service.fixture.js";
 import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
+
+useDisposableDurability();
 
 test("TestTargetResult闭合测试合同、attempt与投递结局并携带派生判定，但不表示acceptance", async () => {
   const fixture = await createTestDeliveryWorkspaceFixture();

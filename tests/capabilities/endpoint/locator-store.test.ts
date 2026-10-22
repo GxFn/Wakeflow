@@ -15,6 +15,9 @@ import { renderDeterministicJsonDocument } from "../../../src/foundation/data/de
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 定位器存储测试：私有定位器文件损坏、registeredAt 非法、hostId 与读取方不符时，

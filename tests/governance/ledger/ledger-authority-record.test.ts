@@ -16,6 +16,7 @@ import {
   type RequirementDocumentRole,
   renderLedgerAuthorityRecord,
 } from "../../../src/governance/ledger/ledger-authority-record.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   FIXTURE_ORIGIN_WINDOW_ID,
   FIXTURE_PROGRAM_ID,
@@ -23,6 +24,8 @@ import {
   FIXTURE_REQUIREMENT_ID,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const CLOCK = { clock: () => FIXTURE_RECORDED_AT } as const;

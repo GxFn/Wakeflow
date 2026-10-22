@@ -8,6 +8,9 @@ import { type TestContext, test } from "node:test";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * §13.181 F-L1-6：fresh-initialize 的 selection 被拒时，公共错误要点名位置与规则（`details.at`、

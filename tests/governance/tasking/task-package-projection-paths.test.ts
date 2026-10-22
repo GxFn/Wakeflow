@@ -7,7 +7,10 @@ import {
   TaskPackageProjectionPathError,
   taskPackageProjectionRef,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { TASK_PACKAGE_ID } from "./task-package.fixture.js";
+
+useDisposableDurability();
 
 test("TaskPackage projection path is a single typed-ID mapping", () => {
   const fileName = `${TASK_PACKAGE_ID}.json`;

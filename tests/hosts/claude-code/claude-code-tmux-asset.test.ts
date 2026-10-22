@@ -37,8 +37,11 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
 import { hostWindowLocatorsRootRef } from "../../../src/kernel/layout.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
+
+useDisposableDurability();
 
 /**
  * Claude tmux 助手资产（gate-log §13.117 D4）：资产由仓库测试用 node 直接执行，tmux、claude 与 git
@@ -2989,17 +2992,24 @@ test("the helper keeps a UTF-8 locale as the user set it and never adds LC_ALL w
 });
 
 test("a hung host command is refused as host-command-timeout instead of being read as an absent session（复审 T11）", async (t) => {
+  // 真实 bash 桩的墙钟计时：挂起的必须是超时的那条命令。桩在 has-session 上睡 30 秒；之前的 list-panes 是一次
+  // 正常的子进程调用，机器繁忙时它自己就可能超过 500 毫秒（run-dsQa9M 在门里就是这样被判成 list-panes 超时），
+  // 所以上限给 3 秒——仍远小于 30 秒的挂起，下面"20 秒内拒绝"的断言不变。
+  if (
+    loadSensitive(t, "real stub subprocess timing: the hung command must be the one that times out")
+  )
+    return;
   const current = await fixture(t);
   const started = Date.now();
   const run = runHelper(current, ["launch", "--window", CONTROLLER_WINDOW_ID], {
     input: JSON.stringify(launchIntent("Controller", ".")),
-    env: { WAKEFLOW_STUB_HANG: "has-session", WAKEFLOW_TMUX_COMMAND_TIMEOUT_MS: "500" },
+    env: { WAKEFLOW_STUB_HANG: "has-session", WAKEFLOW_TMUX_COMMAND_TIMEOUT_MS: "3000" },
   });
   equal(run.status, 1);
   equal(run.json.reason, "host-command-timeout");
   equal(run.json.command, "tmux");
   equal(run.json.subcommand, "has-session");
-  equal(run.json.timeoutMs, 500);
+  equal(run.json.timeoutMs, 3000);
   ok(
     Date.now() - started < 20_000,
     "the refusal arrives at the timeout, not after the stub's 30 s sleep",

@@ -10,6 +10,9 @@ import {
   inspectDemandEventSourcingRootInventory,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 test("Demand Event Sourcing root inventory 同时证明允许项与未知项不存在", async () => {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-root-inventory-"));

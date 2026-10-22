@@ -11,6 +11,9 @@ import { StableFileReadError } from "../../../src/foundation/filesystem/stable-f
 import { locateLatestDemandArchive } from "../../../src/governance/observation/demand-archive-locator.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { demandArchivesRootRef } from "../../../src/kernel/layout.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 归档回执定位（`wakeflow_status{demandId}`）：清单读取失败必须和目录列举失败一样带稳定错误码。

@@ -1,6 +1,9 @@
 import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { test } from "node:test";
-
+import {
+  isWakeflowErrorCode,
+  WAKEFLOW_ERROR_CODES,
+} from "../../src/contracts/vocabulary/wakeflow-error-code.js";
 import {
   fail,
   failWithBlockers,
@@ -9,10 +12,6 @@ import {
   translateLegacyError,
   WakeflowError,
 } from "../../src/kernel/error.js";
-import {
-  isWakeflowErrorCode,
-  WAKEFLOW_ERROR_CODES,
-} from "../../src/contracts/vocabulary/wakeflow-error-code.js";
 
 test("WakeflowError 只接受封闭错误码、kebab-case 原因与结构路径", () => {
   const error = new WakeflowError("precondition-failed", "review-pending", "$.demandId", {

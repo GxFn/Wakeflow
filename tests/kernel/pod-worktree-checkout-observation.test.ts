@@ -8,6 +8,9 @@ import {
   observeWorktreeCheckout,
   type PodWorktreeReceipt,
 } from "../../src/kernel/pod-worktree-receipts.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function receiptAt(checkout: string): Readonly<PodWorktreeReceipt> {
   return { path: checkout } as unknown as Readonly<PodWorktreeReceipt>;

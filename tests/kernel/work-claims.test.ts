@@ -2,7 +2,7 @@ import { equal } from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, type TestContext } from "node:test";
+import { type TestContext, test } from "node:test";
 
 import { createWakeflowDurableId } from "../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
@@ -16,6 +16,9 @@ import {
   type WorkClaim,
 } from "../../src/kernel/work-claims.js";
 import { createWakeflowWindowHostBindingId } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 async function fixture(t: TestContext): Promise<RootedDirectory> {
   const absolutePath = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-claims-")));

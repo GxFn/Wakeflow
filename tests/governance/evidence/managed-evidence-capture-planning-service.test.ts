@@ -14,6 +14,7 @@ import {
 } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
 import { parseManagedEvidenceSourceSelection } from "../../../src/governance/evidence/managed-evidence-source-selection.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -24,6 +25,8 @@ import {
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
   readyCapturePlan,
 } from "./managed-evidence-capture-planning-service.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 捕获规划（切片 8 D1 到 D3）：四种来源的零写观察、隐私分类与内容阻塞、由内容派生的身份。

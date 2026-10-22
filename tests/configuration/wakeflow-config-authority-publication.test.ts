@@ -25,7 +25,10 @@ import {
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { sameFileNodeSnapshot } from "../../src/foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
+
+useDisposableDurability();
 
 interface WorkspaceFixture {
   readonly temporaryRoot: string;

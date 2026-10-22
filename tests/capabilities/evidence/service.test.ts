@@ -27,6 +27,9 @@ import {
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
   readyCapturePlan,
 } from "../../governance/evidence/managed-evidence-capture-planning-service.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * evidence 切片效果（§13.89 D1 到 D3）：preview 零写、apply 重算并按内容摘要执行、同内容

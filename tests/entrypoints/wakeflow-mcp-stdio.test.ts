@@ -6,6 +6,9 @@ import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { useDisposableDurability } from "../support/disposable-durability.js";
+
+useDisposableDurability();
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
   test(`${signal} 关闭实际 stdio server，取消在途请求并允许完成结算`, {

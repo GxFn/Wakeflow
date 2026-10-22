@@ -37,8 +37,11 @@ import {
   readDemandFileEventCommitsAfter,
   readDemandFileEventDirectory,
 } from "../../../../src/governance/demand/event-sourcing/demand-file-event-store-reader.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import { DISPOSABLE_ROOT_OPTIONS } from "../../../support/prepared-workspace.js";
 import { disposableRoot } from "../../../support/temp-root.js";
+
+useDisposableDurability();
 
 /** 直接覆盖读取边界：与 demand-file-event-store.test.ts 同一套 prepared commit 夹具。 */
 

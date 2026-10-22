@@ -25,12 +25,15 @@ import {
   parseLedgerRecordPublicationIntentDocument,
   renderLedgerRecordPublicationIntent,
 } from "../../../src/governance/ledger/ledger-record-publication-intent.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   FIXTURE_RECORDED_AT,
   FIXTURE_REQUIREMENT_ID,
   requirementMembers,
   requirementRecordDraft,
 } from "./requirement-package.fixture.js";
+
+useDisposableDurability();
 
 const MEMBERS = requirementMembers();
 const PLAN_OPTIONS = {

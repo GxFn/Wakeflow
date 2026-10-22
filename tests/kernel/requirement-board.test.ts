@@ -23,7 +23,10 @@ import {
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
 } from "../../src/kernel/requirement-board.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import { holdLockInChildProcess } from "../support/held-lock-process.js";
+
+useDisposableDurability();
 
 const AT = parseUtcInstant("2026-09-04T10:00:00.000Z");
 const LATER = parseUtcInstant("2026-09-04T11:00:00.000Z");

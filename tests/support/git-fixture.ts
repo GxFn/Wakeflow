@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
  * 模板），钉住缺省分支与夹具身份，不弹终端提示。测试运行器已经给每个测试子进程同一份环境
  * （tooling/testing/run-typescript-tests.ts）；`runGit` 在此之上再显式带一次，只跑一次、失败即抛。
  */
-const GIT_FIXTURE_ENVIRONMENT: Readonly<Record<string, string>> = Object.freeze({
+export const GIT_FIXTURE_ENVIRONMENT: Readonly<Record<string, string>> = Object.freeze({
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_NOSYSTEM: "1",
   GIT_CONFIG_COUNT: "1",

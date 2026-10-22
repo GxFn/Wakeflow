@@ -15,11 +15,14 @@ import {
   parseDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupControllerTestReviewDecisionServiceFixture,
   createControllerTestReviewDecisionServiceFixture,
   decideFixtureTest,
 } from "../review/controller-test-review-decision-service.fixture.js";
+
+useDisposableDurability();
 
 const CONTINUED_EVENT_ID = "demand-event_18181818-1818-4818-8818-181818181818";
 const RECORDED_AT = "2026-09-25T12:00:00.000Z";

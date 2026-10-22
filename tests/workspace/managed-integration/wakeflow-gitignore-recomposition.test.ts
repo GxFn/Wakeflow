@@ -27,6 +27,9 @@ import {
 import { WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { inspectWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,

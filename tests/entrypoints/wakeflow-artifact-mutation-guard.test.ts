@@ -2,16 +2,19 @@ import { equal, throws } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { resolveWakeflowArtifactIdentity } from "../../src/entrypoints/wakeflow-artifact-identity.js";
 import { createWakeflowPublicMcpServer } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 import { fail, WakeflowError } from "../../src/kernel/error.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpServerForTest,
   defaultMcpExecutors,
   wakeflowMcpTextContent,
 } from "./wakeflow-public-mcp-server.fixture.js";
+
+useDisposableDurability();
 
 test("a generated process refuses mutation if its manifest changed or disappeared", (t) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-artifact-guard-"));

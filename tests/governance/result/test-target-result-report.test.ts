@@ -11,7 +11,10 @@ import {
   TestTargetResultReportError,
   testTargetResultReportContentDigest,
 } from "../../../src/governance/result/test-target-result-report.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { fixtureMember } from "../../support/fixture-member.js";
+
+useDisposableDurability();
 
 const REPORTED_AT = parseUtcInstant("2026-08-30T10:00:00.000Z");
 const FIRST_DIGEST = `sha256:${"1".repeat(64)}`;

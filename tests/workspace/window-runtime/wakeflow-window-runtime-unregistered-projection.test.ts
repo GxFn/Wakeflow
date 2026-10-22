@@ -12,6 +12,9 @@ import {
   WakeflowWindowRuntimeUnregisteredProjectionRecordError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 function expectRecordError(
   action: () => unknown,

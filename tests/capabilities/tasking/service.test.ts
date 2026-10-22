@@ -1,9 +1,8 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
-
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
@@ -12,8 +11,8 @@ import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
-  planFixtureTargetTask,
   PLANNING_RECORDED_AT,
+  planFixtureTargetTask,
   type TargetTaskPlanningWorkspaceFixture,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
 import {
@@ -22,6 +21,9 @@ import {
   createTestTaskPlanningWorkspaceFixture,
   planFixtureTestTask,
 } from "../../governance/tasking/test-task-planning.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * tasking 切片效果：一次追加、同键重放、同键异请求、过期修订、私有路径、非法键；

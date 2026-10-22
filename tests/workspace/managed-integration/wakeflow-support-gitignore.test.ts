@@ -29,6 +29,9 @@ import {
   createWakeflowSupportGitignoreBodyAuthority,
   WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME,
 } from "../../../src/workspace/managed-integration/wakeflow-support-gitignore-body-authority.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+
+useDisposableDurability();
 
 /**
  * 支撑面 `.gitignore` 托管块：正文只含各宿主的本机设置路径，根锚定；托管块文件的机械

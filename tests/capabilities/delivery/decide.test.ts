@@ -4,13 +4,13 @@ import { test } from "node:test";
 import {
   DELIVERY_LANDING_SILENCE_MILLISECONDS,
   DELIVERY_REQUIRED_SKILLS,
+  type DispositionInput,
   deriveClaimBlocker,
   deriveDeliveryDisposition,
   derivePrepareBlockers,
   deriveRearmBlockers,
   landingSilenceExceeded,
   sendReturnProvesLanding,
-  type DispositionInput,
 } from "../../../src/capabilities/delivery/decide.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";

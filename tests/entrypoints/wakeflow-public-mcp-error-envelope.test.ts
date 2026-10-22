@@ -1,20 +1,22 @@
 import { deepEqual, equal, match } from "node:assert/strict";
 import os from "node:os";
 import { test } from "node:test";
-
+import { WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME } from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/capabilities/demand/contract.js";
 import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../../src/capabilities/observation/contract.js";
-import { WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME } from "../../src/capabilities/delivery/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import {
   createTaskPackageFixture,
   TASKING_DEMAND_ID,
 } from "../governance/tasking/task-package.fixture.js";
+import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpTestClient,
   wakeflowMcpTextContent,
 } from "./wakeflow-public-mcp-server.fixture.js";
+
+useDisposableDurability();
 
 function prepareDeliveryRequest() {
   const taskPackage = createTaskPackageFixture();

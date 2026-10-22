@@ -19,7 +19,7 @@ npm run wf -- verify artifact
 | --- | --- | --- |
 | quick | typecheck、架构、lint、format、knip，加明确列出的聚焦测试 | 全仓静态检查和所选测试；不会自动选择相关测试 |
 | gate | 现有 `npm test` | 完整源码门；没有替换或缩减既有测试清单 |
-| artifact | `build:check`，然后 `smoke:artifacts` | 双制品完整性与合成环境冒烟，不是原生会话验收 |
+| artifact | `build:check`，然后 `smoke:artifacts` | 双制品完整性、五幕合成环境冒烟，加 lab 的 dual-product 与 worktree 四个实验（§13.206 D2）；不是原生会话验收 |
 
 验证不会隐式执行 `build:artifacts:committed` 来修复漂移。需要重建时仍明确运行原命令。
 
@@ -127,7 +127,7 @@ npm run --silent wf -- lab run --scenario worktree --dir "<new-worktree-root>" -
 | dual-product | 两个合成产品各自完成实现，再由独立 Test 合同执行两个步骤、生成各自证据并接受归档 |
 | worktree | 两个真实 Git 产品 worktree 中执行双产品与 Test 链；归档后两阶段关闭 pod，退役合成绑定，移除已核对的本次输出，再以非 force Git 命令回收检出和临时分支 |
 
-三个场景是固定算术夹具，产品代码由场景写入并由实际 Node 子进程执行；Controller 复算结果、核对证据字节后才在夹具中记录决定。它们不接受用户产品任务，不是通用自动 Controller。宿主身份、投递和结束观察由生成制品的 hook 入口合成，明确记录 `synthetic-generated-hooks`；没有创建原生聊天、tmux pane 或实际发送消息。实际原生验收始终 `unverified`。
+门里（`tests/tooling/lab/workflow-{codex,claude-code}.load.test.ts`）每宿主只跑 single-product；dual-product 与 worktree 四个实验由 `tests/tooling/lab/workflow-matrix.manual.ts` 在 `npm run smoke:artifacts` 里跑，两个同时（§13.206 D2）。三个场景是固定算术夹具，产品代码由场景写入并由实际 Node 子进程执行；Controller 复算结果、核对证据字节后才在夹具中记录决定。它们不接受用户产品任务，不是通用自动 Controller。宿主身份、投递和结束观察由生成制品的 hook 入口合成，明确记录 `synthetic-generated-hooks`；没有创建原生聊天、tmux pane 或实际发送消息。实际原生验收始终 `unverified`。
 
 每次业务实验完成前先保留严格 verify 的 `window-runtime-unverified` 结果，验证合成 hook 没有被升级为原生 MCP 关联；之后退役本次合成绑定，再要求清理后的工作区完整 verify 通过。前后两次检查不能混成“真实窗口全部通过”。
 
@@ -405,12 +405,12 @@ npm run --silent wf -- cache refresh --host claude-code --yes
 ## 19. 偶发失败分诊
 
 ```sh
-npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.test.ts --runs 5
+npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.load.test.ts --runs 5
 ```
 
 同一组文件重复运行 N 次（1–20），每次是一条完整的聚焦运行，整个分诊持有构建锁；输出每次的结果与耗时，混合结果标为 `flaky` 且非零退出，全部失败也非零。它不自动重试洗绿，日志与 `triage.json` 留在 `.build/flaky/run-…/`。
 
-负载敏感用例带标签（`tests/support/load-sensitive.ts` 的 `loadSensitive(t, reason)`，open-items D9）：真实子进程、墙钟等待或外部 CLI 的用例——lab 的 240 秒实验、读写许可的真实读者进程与 latch 等待、排他锁的八方争用、tmux 助手的脱离重启、运行器取消真实测试子进程、hook 观察的上万条目真实目录树、permission-mode 的 fresh 初始化与真实 fsync 夹具、运行器分道的真实子进程计时（后三项 §13.204 新增）——在测试诊断里写出原因，并在 `WAKEFLOW_TEST_CONCURRENCY` 高于推荐值 2 时点名（CI 固定 2 个 worker；本地运行器把带标签的文件放进 2 worker 的隔离道、子进程看到的就是 2，见第 1 节的道，只有显式用高并发单道跑它们时才会点名）；它不改变断言。开发机繁忙时 `WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 把这些用例标为 skip，门与 CI 从不设置它，所以不能用它把偶发失败说成通过。latch 与锁等待仍是墙钟（`rooted-exclusive-file-lock.ts` 的 `waitForRetry`、读写许可的 latch），时钟注入未做。
+负载敏感用例带标签（`tests/support/load-sensitive.ts` 的 `loadSensitive(t, reason)`，open-items D9）；整个文件都带标签的用 `.load.test.ts` 后缀（lab 的五个文件、permission-mode、hook 观察的大目录用例，§13.206 D3），`wf test levels` 报出混合与后缀不一致的文件（第 25 节）：真实子进程、墙钟等待或外部 CLI 的用例——lab 的 240 秒实验、读写许可的真实读者进程与 latch 等待、排他锁的八方争用、tmux 助手的脱离重启、运行器取消真实测试子进程、hook 观察的上万条目真实目录树、permission-mode 的 fresh 初始化与真实 fsync 夹具、运行器分道的真实子进程计时（后三项 §13.204 新增）——在测试诊断里写出原因，并在 `WAKEFLOW_TEST_CONCURRENCY` 高于推荐值 2 时点名（CI 固定 2 个 worker；本地运行器把带标签的文件放进 2 worker 的隔离道、子进程看到的就是 2，见第 1 节的道，只有显式用高并发单道跑它们时才会点名）；它不改变断言。开发机繁忙时 `WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 把这些用例标为 skip，门与 CI 从不设置它，所以不能用它把偶发失败说成通过。latch 与锁等待仍是墙钟（`rooted-exclusive-file-lock.ts` 的 `waitForRetry`、读写许可的 latch），时钟注入未做。
 
 ## 20. 图谱漂移摘要
 
@@ -457,3 +457,11 @@ npm run --silent wf -- scaffold requirement --design "<design-surface-dir>" --na
 ```
 
 从 Design 技能参考（`assets/agent-text/skills/wakeflow-design/references/requirement-package.md`）的两个骨架代码块生成 `requirement.md` 与 `landing.md`，写进 Design 支持面的 `drafts/<name>/`；`--root` 从工作区的 `wakeflow.config.json` 解析 design 支持面路径，`--design` 直接给目录。只限 `requirement` 类型；bug、supplement、research 的节换法按技能参考手工调整。骨架不填用户确认、不发明验收锚点、不发布：preview 会拒绝它，直到提示行被真实内容替换；`nextSteps` 给出 preview 该传的 `requirementPath` 与 `landingPath`。这是给维护者在可丢弃工作区演练 Design 流程用的，不是替 Design 窗口写需求。
+
+## 25. 测试级别报告
+
+```sh
+npm run --silent wf -- test levels
+```
+
+按[测试开发标准](../standards/testing-standard.md) §2 给 `tests/` 下每个 `.test.ts` 归级（0 纯逻辑、1 组件、2 能力、3 公共工具、4 维护者工具、5 制品），依据是目录与静态事实：`tests/scenarios/` 是 3 级链，`tests/tooling/` 是 4 级，`artifacts`/`codegen`/`release` 是 5 级，`entrypoints` 或 MCP 客户端夹具是 3 级，其余按是否有一次性文件系统（`mkdtempSync`、`disposableRoot`、预备基线、`useDisposableDurability()`、`RootedDirectory.open`、夹具导入）或子进程事实，再按目录分 1 级与 2 级，都没有就是 0 级。耗时取签入的耗时表，预算按级别（链 600 秒、`.load` 文件 360 秒）。输出每级的文件数与耗时之和、超预算文件、混合文件（带标签用例只占一部分）、后缀与标签不一致的文件（`.load` 却不在标签闭包里；全部带标签却没有后缀）、缺文件头注释的数量与样本、没有耗时记录的文件。只读、不跑测试、不进门；清理进度记在 open-items D9。

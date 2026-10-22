@@ -22,8 +22,11 @@ import {
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 import { placePendingClaimState, requirementLineageOf } from "./requirement-board.fixture.js";
+
+useDisposableDurability();
 
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const OWNER_POD_ID = "pod_99999999-9999-4999-8999-999999999999";

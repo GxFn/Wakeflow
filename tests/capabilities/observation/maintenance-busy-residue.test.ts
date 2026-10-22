@@ -15,7 +15,10 @@ import {
   WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
+
+useDisposableDurability();
 
 /**
  * 维护锁被活着的持有者占着（busy）时，transactions 里的条目属于正在进行的维护：status 照实列出，

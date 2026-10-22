@@ -11,10 +11,13 @@ import {
   parseImplementationTargetResultReportDocument,
   renderImplementationTargetResultReport,
 } from "../../../src/governance/result/implementation-target-result-report.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createImplementationTargetResultReportContentFixture,
   createImplementationTargetResultReportFixture,
 } from "./implementation-target-result-report.fixture.js";
+
+useDisposableDurability();
 
 test("ImplementationTargetResultReport只保存Agent业务陈述并使用显式Git object format", () => {
   const content = createImplementationTargetResultReportContentFixture();

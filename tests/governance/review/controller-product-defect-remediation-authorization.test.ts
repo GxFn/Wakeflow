@@ -22,8 +22,11 @@ import {
   createControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import type { TestImplementationBaseline } from "../../../src/governance/tasking/task-package.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { fixtureMember } from "../../support/fixture-member.js";
 import { testReviewDecisionBaseInput } from "./controller-test-review-decision.fixture.js";
+
+useDisposableDurability();
 
 const DECIDED_AT = parseUtcInstant("2026-08-29T12:35:00.000Z");
 const AUTHORIZED_AT = parseUtcInstant("2026-08-29T12:33:00.000Z");

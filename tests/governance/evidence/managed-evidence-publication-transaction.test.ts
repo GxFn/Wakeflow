@@ -21,11 +21,14 @@ import {
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
 } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createManagedEvidenceCapturePlanFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS as DIGESTS,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS as IDS,
 } from "./managed-evidence-publication.fixture.js";
+
+useDisposableDurability();
 
 const capturePlan = createManagedEvidenceCapturePlanFixture;
 

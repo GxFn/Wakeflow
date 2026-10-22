@@ -120,13 +120,13 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 11970,
-      "sha256": "sha256:f492c5322319b9ac518fbdfcec6885c81db1411654cdb1b55211467a252ad122"
+      "bytes": 12063,
+      "sha256": "sha256:39b937b5f650a30f136dfa008aeb2f8a157fda7afe00370743bbefda2b2720e7"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 19935,
-      "sha256": "sha256:046df47eed536b6d26ac42d1fa28dcd3c363bc72091b764b08fb908456c16acb"
+      "bytes": 20054,
+      "sha256": "sha256:64bbfd6a64b9d574cb79048cffe8abee15f78456436b209d5b8b2eabbbafcf4c"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -6526,15 +6526,15 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 11970,
-      "sha256": "sha256:f492c5322319b9ac518fbdfcec6885c81db1411654cdb1b55211467a252ad122",
+      "bytes": 12063,
+      "sha256": "sha256:39b937b5f650a30f136dfa008aeb2f8a157fda7afe00370743bbefda2b2720e7",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 19935,
-      "sha256": "sha256:046df47eed536b6d26ac42d1fa28dcd3c363bc72091b764b08fb908456c16acb",
+      "bytes": 20054,
+      "sha256": "sha256:64bbfd6a64b9d574cb79048cffe8abee15f78456436b209d5b8b2eabbbafcf4c",
       "mode": "0644",
       "scope": "agent-text"
     },

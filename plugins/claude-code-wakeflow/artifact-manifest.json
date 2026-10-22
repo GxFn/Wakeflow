@@ -132,8 +132,8 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 1166,
-      "sha256": "sha256:67d7a1bb859da6ff391b9f01b771e5a6cc4f6f183c9177b56faa52af4eee29e7"
+      "bytes": 1740,
+      "sha256": "sha256:5cfd38542d0dc14cfbd0d303ee73062dc89799a9c3ef64b12c08d02735a01c7a"
     },
     {
       "path": "commands/pod.md",
@@ -147,13 +147,13 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13594,
-      "sha256": "sha256:8e11c30292faf2766e21f546fa97aef50515c555ffdc0fad618707a57b2337c2"
+      "bytes": 13687,
+      "sha256": "sha256:32e24ad63577d92daaa20b71fa5b51e6d9665088028265a836efc1a65632e175"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 20081,
-      "sha256": "sha256:33f2ffe188fb2348f7b56b4ff248af534d6c0be885d8a19f451870aed50251d9"
+      "bytes": 20200,
+      "sha256": "sha256:996741b622c47977b8b1913bdb0c3883389a53009ecc8adee385b04b9ce5cf4d"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -260,8 +260,8 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 1166,
-      "sha256": "sha256:67d7a1bb859da6ff391b9f01b771e5a6cc4f6f183c9177b56faa52af4eee29e7",
+      "bytes": 1740,
+      "sha256": "sha256:5cfd38542d0dc14cfbd0d303ee73062dc89799a9c3ef64b12c08d02735a01c7a",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6770,15 +6770,15 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13594,
-      "sha256": "sha256:8e11c30292faf2766e21f546fa97aef50515c555ffdc0fad618707a57b2337c2",
+      "bytes": 13687,
+      "sha256": "sha256:32e24ad63577d92daaa20b71fa5b51e6d9665088028265a836efc1a65632e175",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 20081,
-      "sha256": "sha256:33f2ffe188fb2348f7b56b4ff248af534d6c0be885d8a19f451870aed50251d9",
+      "bytes": 20200,
+      "sha256": "sha256:996741b622c47977b8b1913bdb0c3883389a53009ecc8adee385b04b9ce5cf4d",
       "mode": "0644",
       "scope": "agent-text"
     },

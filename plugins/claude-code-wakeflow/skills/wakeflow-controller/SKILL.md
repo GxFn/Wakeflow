@@ -122,7 +122,7 @@ for an implementation result or `wakeflow_record_test_review_decision` for a
 test result. On escalate, hand the user the issue, options and recommendation,
 then bring their answer back through `wakeflow_continue_demand`; a
 product-defect escalation instead returns to implementation delivery planning.
-Depth: `references/delivery-and-review.md`.
+A recorded decision ends the turn; the next `/wakeflow:next` resumes from `wakeflow_status`. Depth: `references/delivery-and-review.md`.
 
 ### Step 12 - Complete and archive
 

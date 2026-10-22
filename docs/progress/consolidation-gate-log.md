@@ -5341,3 +5341,21 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 残留：L12 现场核对（工作区 9：对账装新助手、`mark` 后看新状态栏与 `?`/`●`；一次投递看 `●`；归档读回看 `wakeflow_status{demandId}.archive`）待缓存刷新与用户授权；G11、M4/J1 如上。
 
 提交：43aef04a（源、测试、文档）、5103d85b（plugins 重建）；均未推送。
+
+### 13.202 现场 L12：新状态栏、attention 语义、归档读回（2026-10-21）
+
+用户推送 1.1.2 的三个提交后授权刷新本机插件缓存并做 L12。缓存刷到 `1.1.2`（登记 0756ff48，副本清单与已提交制品一致；宿主仍就地加载检出里的制品目录）。工作区 9 的 tmux 服务器已不在（用户关掉了终端，八个会话都在 08:48Z 留下 session-end 记录），所以 L12 同时走了"服务器没了之后把窗口开回来"的路径：在工作区根起引导会话（Opus 5.5），`/wakeflow:status` 报八个窗口 `runtime: stale`、助手资产 drift、服务器 current，建议先重启窗口再修复；按 L12 的目的改为先修复（装新助手）再开窗。
+
+- **F-L12-1（已修）**：1.1.2 的助手给会话设状态栏选项时用 `set-option -t =wakeflow`，tmux 3.6b 的 set-option 不认 `=name` 精确匹配前缀（"no such session: =wakeflow"），`resume` 在建好会话、开出 Controller pane 之后拒 `tmux-option-failed`，不打印观察、不登记。单元测试的 tmux 桩原本对 set-option 什么都接受，所以没拦住。修法：目标改成该会话里一个受管窗口的 `@id`（既精确又不会前缀误中别的会话；`openTmuxWindow` 用刚建的窗口，`mark` 每个会话经它的第一个受管窗口设一次），拒绝时带 `detail`；桩改成像真 tmux 一样拒 `-t =name`；制品重建；引导会话 `/exit` 后重开以载入新字节，再修复一次并收编被留下的 Controller pane。
+- **F-L12-2（已修）**：1.1.2 的 `●` 在 tmux 窗口格式里变成了 `_`——tmux 服务器在非 UTF-8 locale 下启动（这里是驱动脚本从 Bash 工具起的 `tmux new-session`）时把选项值里的多字节字符换成 `_`，助手自己的 UTF-8 locale 兜底只管子进程、管不到早已在跑的服务器。改为纯 ASCII：working 绿 `+`、attention 红 `?`；助手测试钉住格式只含可打印 ASCII；交接卡、windows 参考、ADR-0023 调整一、能力卡 10、open-items I15 同步。
+- **F-L12-3（已修）**：tmux 服务器重启后 pane 编号被复用——Alembic 的旧定位器指向 @3/%3，而 @3/%3 现在跑的是刚 resume 回来的 AlembicPlugin；助手 `launch`/`resume` 的 `locator-live` 只比对坐标不看 pane 上的标识，于是认定 Alembic 还活着、拒绝开窗，`close` 又因标识不符正确地什么都不关，`mark --all` 则正确报 `pane-occupied`。修法：`assertLocatorNotLive` 只把标识为空或等于本窗口的 pane 当作活位置；测试加"同坐标被别的窗口占用时 launch 照常开新窗口"。
+- **F-L12-4（流程观察，不是缺陷）**：制品重建后，引导会话里的 MCP 服务进程还是旧的——它拒绝写操作、reconcile 预览里"助手已是最新"，Controller 正确地停下来要求重连；引导会话不是登记窗口，`resume --in-place` 够不着它，只能 `/exit` 重开（或 `/mcp` 重连）。两次重建两次重开，都按它的提示办了。
+- **状态栏（I15）**：修好后 reconcile 装上新助手，Alembic `launch` 不再被 `locator-live` 挡住（开在 @8，`replace` 新绑定，`marked`），`mark --all` 后八个窗口的 `window-status-format` 都是 ASCII 版（`#I:#W#{?#{==:#{@wakeflow_state},working},#[fg=green] +#[default],}…`），会话选项 `status-right "%H:%M "`、`status-right-length 6`、`status-left-length 24` 在会话级生效，用户的全局 tmux.conf 未动。给 Design 窗口发一句话：2 秒后 `#{T:window-status-format}` 渲染为 `1:Design#[fg=green] +#[default]`（`@wakeflow_state=working`），回合结束回到 `1:Design`（idle，什么都不显示）。
+- **标记在重启路径上（ADR-0023）**：`resume --in-place` 让窗口的标记先在 session-end 时清空（`-u`），新会话的 session-start 再写回 `idle`；四个从未对话过的窗口 `resume --in-place` 被拒 `resume-never-conversed`，按 Alembic 的做法 close → launch → replace → mark 重开。
+- **归档读回（G7/G1）**：对已归档的 demand_7776a191… 调 `wakeflow_status{demandId}`，`archive` 带 `title`（L11 的标题）、`goal`（完整目标句）、`testingMode: controller-only`、`evidenceCount: 5`、`verify {gateCount: 9, failedCount: 0}`、`acceptedTargets` 一条（repository_0322514a…、branch `main`、commit b903c7aaaf28…、summary 截到 280 字符带 `…`）——与 L11 的归档一致。
+- **attention（I14）**：八个窗口空闲停在输入框时 `wakeflow_status` 没有任何窗口 `attention: needed`（L11 时 `idle_prompt` 会把 Design、AlembicPlugin 报成 needed）。
+- **收尾**：四个从未对话的窗口 close → launch → replace → mark 重开（@9–@12，各得新绑定），`mark --all` 八个 marked；Controller 的 `wakeflow_verify` 15 门全过（`runtime-artifact` 从 `windows-stale:4` 变成只有 `window-runtime-unverified:8` 的说明项）；从制品副本（`wf mcp call --candidate`）再跑一次 `wakeflow_verify`：15 pass、0 fail、0 unavailable。引导会话按卡关闭。
+
+**本节修复用的级别：第 2 级**（助手资产与 agent-text 变了）。验证（本地，2 worker）：第 0 级 `--changed` 53/53（助手、live-guidance、honesty）；制品重建、`smoke:artifacts` 两宿主通过；完整门 run-g8SYkE（20:11–20:46 本地，约 36 分钟）：**1520/1520 全通过**，`inputsUnchanged: true`，`wf timings apply --receipt` 写回；`wf handoff` 通过。
+
+**结论：L12 通过**——I15（ASCII 字形、会话级状态栏选项、`mark` 幂等重设）、I14、G7/G1 都在真实宿主上成立；三个助手缺陷（F-L12-1/2/3）在现场修掉并写进测试，修复本身走一次完整门后再提交（本节的提交号见下一节）。工作区 9 的八个窗口都在新制品上运行。

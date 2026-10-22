@@ -64,7 +64,7 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上；pane 行要按会话、
  *   窗口、pane 三项与定位器一致（tmux 重启后编号会被复用），已带别的窗口标识的 pane 报 `pane-occupied` 不覆盖。
  *   同时给该窗口单独设 `window-status-format` 与 `window-status-current-format`（窗口名后跟 hook 观察器写下的
- *   状态字形：working 绿 ●、attention 红 ?，idle 不显示；ADR-0023 调整一），给窗口所在会话幂等重设状态栏的
+ *   状态字形：working 绿 +、attention 红 ?，idle 不显示；ADR-0023 调整一），给窗口所在会话幂等重设状态栏的
  *   `status-right`（只留时钟）与 `status-left-length`（I15，从不 -g），并在窗口名偏离配置的显示名时
  *   `rename-window` 收敛回去（结果里 `renamed: true`）。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
@@ -152,12 +152,15 @@ const PANE_FORMAT = [
   "#{pane_pid}",
   "#{window_name}",
 ].join(FIELD_SEPARATOR);
-// ADR-0023 调整一（I15）：每个受管窗口单独设的窗口列表格式——窗口名后只用字形：working 绿 ●、attention 红 ?，
-// idle 不显示（不用 ! 与 *，它们是 tmux 自己的 bell / 当前窗口标志）；从不 -g。
-const WINDOW_STATUS_FORMAT = "#I:#W#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}#{?window_flags,#{window_flags}, }";
+// ADR-0023 调整一（I15）：每个受管窗口单独设的窗口列表格式——窗口名后只用 ASCII 字形：working 绿 +、attention 红 ?，
+// idle 不显示（不用 ! 与 *，它们是 tmux 自己的 bell / 当前窗口标志；不用非 ASCII：tmux 服务器若在非 UTF-8 locale 下
+// 启动会把选项值里的多字节字符换成 _，现场 L12 的 ● 就成了 _）；从不 -g。
+const WINDOW_STATUS_FORMAT = "#I:#W#{?#{==:#{@wakeflow_state},working},#[fg=green] +#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}#{?window_flags,#{window_flags}, }";
 const WINDOW_STATUS_FORMAT_OPTIONS = Object.freeze(["window-status-format", "window-status-current-format"]);
 // 会话级状态栏选项（I15）：右侧只留时钟，去掉默认的 pane 标题与日期；左侧放宽到 24 列装下 wakeflow-<pod>。
-// 只写 Wakeflow 自己建的会话（set-option -t），从不 -g，用户的全局 tmux.conf 不碰。
+// 只写 Wakeflow 自己建的会话，从不 -g，用户的全局 tmux.conf 不碰。目标用该会话里一个受管窗口的 @id：
+// set-option 的 -t 不认 "=name" 的精确匹配前缀（现场 L12："no such session: =wakeflow"），而 @id 既精确又不会
+// 前缀误中别的会话。
 const SESSION_STATUS_OPTIONS = Object.freeze([
   ["status-right", "%H:%M "],
   ["status-right-length", "6"],
@@ -1041,6 +1044,8 @@ function assertLocatorNotLive(context, windowId, options) {
     && entry.windowId === locator.tmux.windowId
     && entry.paneId === locator.tmux.paneId
     && !entry.paneDead
+    // tmux 服务器重启后编号会被复用：pane 上的窗口标识归别的窗口时，它不是本窗口的活位置（现场 L12）。
+    && (entry.options.windowId === null || entry.options.windowId === windowId)
   ));
   if (live !== undefined) {
     refuse("locator-live", {
@@ -1139,7 +1144,7 @@ function openTmuxWindow(config, context, windowId, launchIntent, execution, reso
   const coordinates = Object.freeze({ ...parseCreatedCoordinate(creation.stdout), sessionName });
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
-  if (!exists) setSessionStatusOptions(context, sessionName);
+  if (!exists) setSessionStatusOptions(context, coordinates.windowId);
   return { coordinates, windowName, placement, exists, sessionName };
 }
 
@@ -1507,7 +1512,7 @@ function commandMark(config, options) {
   const listed = listPanes(context);
   if (!listed.available) refuse("tmux-list-failed");
   const windows = [];
-  const markedSessions = new Set();
+  const markedSessions = new Map();
   for (const windowId of windowIds) {
     const locator = readLocator(windowId);
     if (locator === null) {
@@ -1541,10 +1546,10 @@ function commandMark(config, options) {
       if (!result.ok) refuse("tmux-rename-failed", { windowId });
     }
     windows.push(renamed ? { windowId, status: "marked", renamed: true } : { windowId, status: "marked" });
-    markedSessions.add(locator.tmux.sessionName);
+    if (!markedSessions.has(locator.tmux.sessionName)) markedSessions.set(locator.tmux.sessionName, locator.tmux.windowId);
   }
-  // I15：会话级状态栏选项随 mark 幂等重设，老工作区对账后也换上新栏。
-  for (const sessionName of markedSessions) setSessionStatusOptions(context, sessionName);
+  // I15：会话级状态栏选项随 mark 幂等重设（每个会话经它的一个受管窗口设一次），老工作区对账后也换上新栏。
+  for (const windowId of markedSessions.values()) setSessionStatusOptions(context, windowId);
   return { ok: windows.every((entry) => entry.status === "marked"), command: "mark", windows };
 }
 
@@ -1555,10 +1560,10 @@ function setWindowStatusFormats(context, windowId) {
   }
 }
 
-function setSessionStatusOptions(context, sessionName) {
+function setSessionStatusOptions(context, tmuxWindowId) {
   for (const [option, value] of SESSION_STATUS_OPTIONS) {
-    const result = tmux(context, ["set-option", "-t", "=" + sessionName, option, value]);
-    if (!result.ok) refuse("tmux-option-failed", { option });
+    const result = tmux(context, ["set-option", "-t", tmuxWindowId, option, value]);
+    if (!result.ok) refuse("tmux-option-failed", { option, detail: boundedDetail(result.stderr) });
   }
 }
 

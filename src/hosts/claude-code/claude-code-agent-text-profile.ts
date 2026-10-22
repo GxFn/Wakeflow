@@ -185,7 +185,7 @@ const FIRST_RUN_HANDOVER =
   "for a delivery from the Controller and is never given tasks by hand), `Test` (where the test " +
   "contract runs); how to move - `Ctrl-b n` next window, `Ctrl-b p` previous, `Ctrl-b s` to " +
   "pick a session, `Ctrl-b d` to detach while everything keeps running; how to read the " +
-  "window list - a green `●` after a window name means it is working, a red `?` means it " +
+  "window list - a green `+` after a window name means it is working, a red `?` means it " +
   "is waiting for you, nothing means idle; the hooks write them, a hint and never evidence; " +
   "long runs - " +
   "keep the machine awake yourself, Wakeflow runs no background process; what to do first - " +

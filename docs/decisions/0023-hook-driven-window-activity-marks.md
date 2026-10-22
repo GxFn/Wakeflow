@@ -70,6 +70,6 @@ tmux 按 `status-interval` 轮询助手，助手读最新 hook 记录。是轮�
 
 现场 L11 后用户指出 tmux 底部状态栏拥挤（八个窗口名、`[idle]` 标记与默认 `status-right` 的主机名、时钟，175 列下第 8 个窗口被截）。决定 3 与 4 调整为：
 
-- 标记只用字形，idle 不显示：`working` 显示绿色 `●`，`attention` 显示红色粗体 `?`；不用 `!`（tmux 的 bell 标志）与 `*`（当前窗口标志）。格式仍由助手 `mark` 按窗口单独设。
+- 标记只用 ASCII 字形，idle 不显示：`working` 显示绿色 `+`，`attention` 显示红色粗体 `?`；不用 `!`（tmux 的 bell 标志）与 `*`（当前窗口标志），也不用 `●` 一类非 ASCII 字符（tmux 服务器在非 UTF-8 locale 下启动时会把它换成 `_`，现场 L12）。格式仍由助手 `mark` 按窗口单独设。
 - 助手同时只写 Wakeflow 自己建的会话的 `status-right`（`%H:%M`）、`status-right-length`（6）与 `status-left-length`（24）：`new-session` 时设一次，`mark` 时幂等重设；从不 `-g`，用户的全局 tmux.conf 不碰。
 - `idle_prompt` 通知不再让 `wakeflow_status.windows[].attention` 报 `needed`（它只是空闲一分钟的通知，与本 ADR 把它映射成 `idle` 一致）；`needed` 只对权限提示、登录、用量一类的通知。

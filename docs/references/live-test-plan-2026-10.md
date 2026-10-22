@@ -30,6 +30,7 @@
 | L9 | 插件更新流程（C9/C16） | 在工作区存在的状态下再刷新一次缓存，按"After a plugin update"一节让 Controller 自己换代 | `status` 的 `server-outdated`/`windows-stale`、助手 `resume --in-place` | Controller 先告知再就地重启，其他窗口逐个换代，没有循环重启、没有读插件实现 |
 | L10 | 首次引导（§13.188，ADR-0022） | 新建工作区（如 `WakeflowTestWorkspace8`），在 tmux 里直接启动 `claude` 执行 `/wakeflow:init`，按问答建工作区、看 Controller 引导到交接卡 | 助手 `preflight` 的 `sessionProven`、`status.next`、交接卡 | 引导会话不登记自己、不被收养；Controller 开在配置的 tmux 会话里；全程不需要手工重启；登记完成后 `status.next` 为 `requirement-authoring`（owner user）；产品仓库带 0.9.x 残留时 Controller 先让用户删再开窗 |
 | L11 | 现场可观察性（1.1.1 批 1，ADR-0023） | 新建工作区首次引导后在 Controller 发一次投递：看 tmux 窗口列表里受管窗口名后的 `[working]`/`[idle]`/`[attention]` 随 hook 变化，Design、Test 窗口各有状态行，把一个窗口手动改名后让 Controller 再 `mark` | `tmux list-windows -F '#{window_name} #{@wakeflow_state}'`、Design/Test 窗口底部的状态行、`mark` 的 `renamed`、`wakeflow_status.windows[].attention` | 标记随事件变化、session-end 后清除，且落地记录不受投影影响；两个面的 `settings.local.json` 各一条 Wakeflow 条目；改名后 `mark` 报 `renamed: true` 且窗口名回到配置的显示名 |
+| L12 | 1.1.2 状态栏、attention、归档读回 | 现存工作区刷新缓存后按"插件更新"流程对账装新助手、重启/重开窗口；看 tmux 窗口列表的 `+`/`?`、会话级 `status-right`；对已归档 Demand 调 `wakeflow_status{demandId}` | `tmux show-options -w window-status-format`、`#{T:window-status-format}` 的渲染、`archive` 字段 | 八个窗口都带 ASCII 格式与会话选项；工作中的窗口渲染出 `+`；`archive` 带标题、目标、测试模式、证据数、verify 计数与已接受目标落点；`idle_prompt` 不再报 needed |
 
 L3、L5 是这一轮新增能力，L7 与 L6 的现场记录是登记 D7、D4 的关闭条件。
 
@@ -52,6 +53,8 @@ L1 停在 fresh-initialize 的预览，五个发现（F-L1-1 到 F-L1-5，详见
 第四次（2026-10-19 19:07–21:05，L10，`f17fe7eb` 就地加载，`WakeflowTestWorkspace8`）：**L10 通过**，详见 gate-log §13.189。apply 后八个窗口刚开进 `wakeflow8` 就遇到机器重启；重启后的引导会话用同一条 `/wakeflow:init` 走完：先按 F-L1-9 列残留并停在开窗前，残留删掉后 Controller 先开进 `wakeflow8`，再开其余七个，登记、打标记、`verify` 15/15、交接卡完整，引导会话 `/exit`；`status.next` 为 `requirement-authoring`（owner user）。新记 I12（`selection.hosts` 在请求 Schema 里没有形状，引导会话去读了工作区 7 的配置）与 I13（launch 结果已带 observation 却仍让用户先去接受并不会出现的信任对话框）；两条于同晚修复（§13.190）。
 
 第五次（2026-10-21 00:16–01:15，L11，缓存刷到 1.1.1 / 641d3cec 就地加载，`WakeflowTestWorkspace9`）：**L11 通过**，详见 gate-log §13.199。首次引导、八窗口 `mark` 格式、Design/Test 状态行、hook 驱动的标记随投递与回调六次变化、`mark` 改名、主流程一圈到归档；新开 I14（`attention` 对 `idle_prompt` 报 needed 是噪音）。
+
+第六次（2026-10-21 19:40–20:10，L12，缓存刷到 1.1.2，`WakeflowTestWorkspace9`，tmux 服务器从零起）：**L12 通过**，详见 gate-log §13.202；现场修了三个助手缺陷（set-option 的 `=name` 目标、`●` 在非 UTF-8 tmux 服务器下成 `_`、`locator-live` 不看 pane 标识）。
 
 ## 5. 结束条件与后续
 

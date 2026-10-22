@@ -590,13 +590,13 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 建议：launch 结果已带 observation 的窗口直接登记；对话框只在目录未被信任或仓库自带 settings 时出现，文本改成"有就接受"，并说明怎么从 launch 结果看出要不要等。
 - **I14** [低 / 噪音] `wakeflow_status.windows[].attention` 对 `idle_prompt` 通知报 `needed`：那是 Claude Code 空闲一分钟后的通知，窗口并不在等用户；ADR-0023 已把它映射成 `idle` 标记，`attention` 仍按"最近一条是 Notification"判定（现场 L11，§13.199；状态：已修 2026-10-21（§13.201）——`idle_prompt` 算 none，其他通知仍 needed，windows 参考同步）
 - **I15** [中 / 需求] tmux 底部状态栏拥挤（用户 2026-10-21 追加，截图：175 列下八个窗口加 `[idle]` 标记与默认 `status-right` 的主机名、时钟，第 8 个窗口被截成 `7>`）。设计（1.1.2 与批 6 同批实施，ADR-0023 决定 4 加一条调整）：
-  - D1 标记改字形、idle 不显示：working `●`（绿）、attention `?`（红粗），`#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}`；每窗口最多多 2 列而不是 10 列；不用 `!`（与 tmux 的 bell 标志撞）、不用 `*`（与当前窗口标志撞）。
+  - D1 标记改字形、idle 不显示：working `+`（绿）、attention `?`（红粗），`#{?#{==:#{@wakeflow_state},working},#[fg=green] +#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}`；每窗口最多多 2 列而不是 10 列；不用 `!`（与 tmux 的 bell 标志撞）、不用 `*`（与当前窗口标志撞）；原定的 `●` 在现场 L12 被非 UTF-8 locale 下启动的 tmux 服务器换成了 `_`，改为纯 ASCII。
   - D2 会话级 `status-right` 改成 `%H:%M `（`status-right-length 6`），去掉 pane 标题（主机名）与日期；`status-left` 仍 `[#S] ` 但 `status-left-length 24`，pod 会话名 `wakeflow-<pod>` 不再被截。
   - D3 只写会话选项（`set-option -t <session>`，从不 `-g`）：`new-session` 时设一次，`mark` 时幂等重设（老工作区对账后生效）；用户的全局 tmux.conf 不碰；windows 参考说明这几项归助手。
   - D4 保留 `#I:#W` 与 tmux 自己的 flags；窗口名不缩写，仍溢出时交给 tmux 的列表滚动。
   - D5 Claude 状态行维持 `<model> · <window>`（已是最小）；`⏵⏵ auto mode` 一行是 Claude Code 自己的，不可去。
   - D6 交接卡与 windows 参考改成解释两个字形；与 I14 同步：`?` 与 `attention: needed` 只对 permission_prompt 及登录、额度类。
-  （状态：已修 2026-10-21（§13.201），现场 L12 待核）
+  （状态：已修 2026-10-21（§13.201），现场 L12 通过（§13.202：字形改纯 ASCII `+`/`?`，set-option 目标改 @id））
 - **G11** [低 / 缺口] 看板索引缺测试模式与 parked 触发两列（复审 §7）：改索引渲染会让每个现存工作区的 `board-consistency` 门报 `index-stale`——索引只在看板变更时重投影，对账没有"投影陈旧即重写"的步骤；两列不值一个新维护步骤，留到 1.2 与投影刷新一起做（§13.201；状态：开放）
 
 ## J. 占用与退出路径：进得去，出不来

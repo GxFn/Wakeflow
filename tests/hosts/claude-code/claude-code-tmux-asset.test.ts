@@ -109,7 +109,8 @@ case "$cmd" in
         printf '{"kind":"stub","event":"session-start","sessionId":"%s","source":"resume"}\\n' "$rid" > "$WAKEFLOW_STUB_HOOKS/20260924T000002000Z-session-start-respawn-$rid-$RANDOM.json"
       fi
     fi ;;
-  set-option|paste-buffer|send-keys|delete-buffer|rename-window) : ;;
+  set-option) if [ "\${1:-}" = "-t" ] && [ "\${2#=}" != "\${2:-}" ]; then echo "no such session: $2" >&2; exit 1; fi ;;
+  paste-buffer|send-keys|delete-buffer|rename-window) : ;;
   list-panes) if [ -f "$state/panes.txt" ]; then cat "$state/panes.txt"; fi ;;
   display-message) cat "$state/display.txt" ;;
   load-buffer) cat > "$state/buffer.txt" ;;
@@ -749,9 +750,9 @@ test("launch opens the session or a window from the intent, freezes the title, w
   deepEqual(log[6], ["set-option", "-w", "-t", "@1", "@wakeflow_window_id", CONTROLLER_WINDOW_ID]);
   // I15：新建会话时给它设一次状态栏选项（会话级，不是 -g）。
   deepEqual(log.slice(7), [
-    ["set-option", "-t", "=wakeflow", "status-right", "%H:%M "],
-    ["set-option", "-t", "=wakeflow", "status-right-length", "6"],
-    ["set-option", "-t", "=wakeflow", "status-left-length", "24"],
+    ["set-option", "-t", "@1", "status-right", "%H:%M "],
+    ["set-option", "-t", "@1", "status-right-length", "6"],
+    ["set-option", "-t", "@1", "status-left-length", "24"],
   ]);
   equal(log.length, 10);
 
@@ -1100,7 +1101,7 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
       ["@wakeflow_locator_id", LOCATOR_ID],
     ],
   );
-  // ADR-0023 调整一：每个受管窗口单独设两条窗口列表格式——只用字形（working 绿 ●、attention 红 ?），idle 不显示；
+  // ADR-0023 调整一：每个受管窗口单独设两条窗口列表格式——只用 ASCII 字形（working 绿 +、attention 红 ?），idle 不显示；
   // 没有 -g，别的窗口不受影响。
   deepEqual(
     markLog.slice(6, 8).map((entry) => entry.slice(0, 5)),
@@ -1113,9 +1114,10 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     const format = entry[5] ?? "";
     ok(format.startsWith("#I:#W"), "format keeps index and name first");
     ok(
-      format.includes("#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}"),
+      format.includes("#{?#{==:#{@wakeflow_state},working},#[fg=green] +#[default],}"),
       "working glyph",
     );
+    ok(/^[\x20-\x7e]*$/u.test(format), "ASCII only: a non-UTF-8 tmux server mangles other bytes");
     ok(
       format.includes("#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}"),
       "attention glyph",
@@ -1124,10 +1126,11 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     equal(format.includes("-g"), false);
   }
   // I15：会话级状态栏选项只写这个会话（set-option -t =<session>，不是 -g）：右侧只留时钟，左侧放宽到 24 列。
+  // 目标是该会话里受管窗口的 @id（set-option 的 -t 不认 "=name"，现场 L12）。
   deepEqual(markLog.slice(8), [
-    ["set-option", "-t", "=wakeflow", "status-right", "%H:%M "],
-    ["set-option", "-t", "=wakeflow", "status-right-length", "6"],
-    ["set-option", "-t", "=wakeflow", "status-left-length", "24"],
+    ["set-option", "-t", "@5", "status-right", "%H:%M "],
+    ["set-option", "-t", "@5", "status-right-length", "6"],
+    ["set-option", "-t", "@5", "status-left-length", "24"],
   ]);
   equal(markLog.length, 11, "no rename when the pane row carries no window name");
   deepEqual(runHelper(current, ["mark", "--all"]).json.windows, [
@@ -1747,6 +1750,24 @@ test("resume restarts the bound session in a new pane and launch refuses while t
   equal(exitedLaunch.status, 1);
   equal(exitedLaunch.json.reason, "launch-exited");
   deepEqual(exitedLaunch.json.tmux, { windowId: "@4", paneId: "%4", pane: "dead" });
+  // 现场 L12：tmux 服务器重启后同一 @5/%9 被另一个窗口的会话占用（pane 上的标识归 Controller）——这不是本窗口的
+  // 活位置，launch 不再拒 locator-live 而是照常开新窗口（之后由 replace 登记）。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: { ...LIVE_OPTIONS, windowId: CONTROLLER_WINDOW_ID } })}\n`,
+  );
+  resetLog(current);
+  const occupiedLaunch = runHelper(
+    current,
+    ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "0"],
+    { input: intent, env: hooks },
+  );
+  equal(occupiedLaunch.json.reason === "locator-live", false, JSON.stringify(occupiedLaunch.json));
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session"),
+    true,
+    "a pane marked for another window does not block the launch",
+  );
 });
 
 test("the helper resolves the workspace from its own location and refuses to run outside one", async (t) => {

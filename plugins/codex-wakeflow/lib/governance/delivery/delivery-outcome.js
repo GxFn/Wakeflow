@@ -95,9 +95,18 @@ function outcomeBasis(value) {
         generation: value.generation,
         fence: Object.freeze({ claimId: value.fence.claimId, claimDigest: value.fence.claimDigest }),
         disposition: value.disposition,
+        // failure 只在给出时进入摘要基底：没有它的旧记录摘要不变。
         attempt: Object.freeze({
             status: value.attempt.status,
             evidenceDigest: value.attempt.evidenceDigest,
+            ...(value.attempt.failure === undefined
+                ? {}
+                : {
+                    failure: Object.freeze({
+                        code: value.attempt.failure.code,
+                        summary: value.attempt.failure.summary,
+                    }),
+                }),
         }),
         readback: Object.freeze({
             status: value.readback.status,
@@ -139,6 +148,9 @@ export function parseDeliveryOutcome(value) {
         attempt: {
             status: wire.attempt.status,
             evidenceDigest: optionalDigest(wire.attempt.evidenceDigest, "$/attempt/evidenceDigest"),
+            ...(wire.attempt.failure === undefined
+                ? {}
+                : { failure: { code: wire.attempt.failure.code, summary: wire.attempt.failure.summary } }),
         },
         readback: {
             status: wire.readback.status,

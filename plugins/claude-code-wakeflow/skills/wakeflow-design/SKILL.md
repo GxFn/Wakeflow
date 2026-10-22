@@ -104,7 +104,9 @@ needs. A `claim-state-drift` blocker means the board moved; inspect again.
   the package becomes pending.
 - **Withdrawing**: action `withdraw` with a reason retires a pending or parked
   package the user no longer wants. A claimed package is withdrawn only by the
-  Controller cancelling its Demand.
+  Controller cancelling its Demand. A withdrawn package is never claimed again
+  (the Controller is refused with `package-claim:withdrawn`): when the user
+  wants that work after all, publish a new package.
 
 ## What you must return to the user
 

@@ -43,7 +43,7 @@
 - 提示临时文件：默认内存传递；路径适配器写 0600、上限 1 MiB 的 `workspace-mutation_<uuid>.txt`；清扫用本地时钟、拒绝任何 invalid、unverifiable、live 条目、只删严格过期的孤儿。`:2168-2172`、`:2385-2436`。
 - 宿主命令面 23 个封闭命令含 activity-ensure、activity-inspect、activity-stop、prompt-temp-inspect、prompt-temp-sweep、activation-scope。`wakeflow-claude-host.mjs:54-77`。
 
-**现 TS 状态**：监视进程无；2026-10-20 起按 ADR-0023 由 hook 观察器对已绑定会话按事件写 tmux 窗口选项 `@wakeflow_state`（working / idle / attention / 清除），助手 `mark` 给每个受管窗口单独设 `window-status-format`；只是 UI 投影，不轮询、不抓屏、不读回。
+**现 TS 状态**：监视进程无；2026-10-20 起按 ADR-0023 由 hook 观察器对已绑定会话按事件写 tmux 窗口选项 `@wakeflow_state`（working / idle / attention / 清除），助手 `mark` 给每个受管窗口单独设 `window-status-format`（2026-10-21 起只用字形 ●/?，idle 不显示，并给 Wakeflow 自己的会话设 `status-right`/`status-left-length`，ADR-0023 调整一）；只是 UI 投影，不轮询、不抓屏、不读回。
 
 **实现判断**：活动监视删除。ADR-0009 已把宿主 hook 定为第二证据通道：Claude 的 31 个 hook 事件与 Codex 的 `notify` 给出 turn 开始与结束的精确事实，不再需要抓屏幕文本猜"运行中"。提示临时文件随投递的宿主执行一起移交 Agent：投递计划给出提示正文与摘要，Agent 自行选择粘贴方式，Wakeflow 只核对回读摘要。
 

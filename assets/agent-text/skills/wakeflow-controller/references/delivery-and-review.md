@@ -125,8 +125,10 @@ decide. Before it pastes, the helper captures the pane and refuses with
 `menu-cursor` or `input-box-unseen`) when the window shows a dialog or menu
 instead of its input box; `--force` does not bypass this. Nothing was sent:
 ask the user to answer the dialog in that window - never send keys to it
-yourself - then record the outcome as reported and re-arm the delivery. Readback is only
-screen text and never proves landing.
+yourself - then record the outcome as reported and re-arm the delivery. Pass
+the helper's `attempt` through unchanged: on a refusal it carries
+`failure {code, summary}`, the host's own reason, into the outcome record.
+Readback is only screen text and never proves landing.
 
 An indeterminate delivery is not a dead end. When the landing evidence arrives
 later, call `wakeflow_record_delivery_outcome` again with a new idempotency

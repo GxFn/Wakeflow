@@ -1,4 +1,3 @@
-import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
@@ -11,19 +10,18 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-
 import {
   executeDemandCancellationRequest,
   executeDemandCompletionRequest,
   executeDemandContinuationRequest,
 } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
-import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 import { executeTargetTaskPlanningPublicRequest } from "../../../src/capabilities/tasking/service.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
@@ -45,6 +43,7 @@ import {
   PLANNING_REQUIREMENT_ID,
   PLANNING_WINDOW_ID,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 
 /**
  * demand 切片效果：升级后路由 awaiting-decision 且完成被阻塞；记录决定后完成即归档
@@ -119,6 +118,27 @@ async function escalate(workspacePath: string, demandId: string, targetTaskId: s
   }
 }
 
+/** 活动根里第一条受管证据的第一个负载文件（复审 G6 的篡改用例）。 */
+function firstEvidencePayloadFile(root: string): string {
+  const pending = [path.join(root, ".wakeflow-active")];
+  while (pending.length > 0) {
+    const directory = pending.pop() as string;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(candidate);
+      } else if (
+        entry.isFile() &&
+        candidate.includes(`${path.sep}managed-evidence${path.sep}`) &&
+        candidate.includes(`${path.sep}payload${path.sep}`)
+      ) {
+        return candidate;
+      }
+    }
+  }
+  throw new Error("no managed evidence payload in the fixture");
+}
+
 test("升级阻塞完成；记录决定后完成即归档、recover 幂等、continue 重开、取消撤回需求包", async () => {
   const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
   try {
@@ -167,6 +187,18 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
       throw new Error("Expected a mutation.");
     equal(decided.disposition, "decision-recorded");
     equal(decided.next.frontier, "demand-completion-preflight");
+
+    // 复审 G6：受管证据的负载字节在完成路径上重新哈希——改一个字节，preview 的 evidence-integrity 门失败并点名
+    // `<evidenceId>:<ref>`；改回去才通过。
+    const payloadFile = firstEvidencePayloadFile(root);
+    const original = readFileSync(payloadFile);
+    writeFileSync(payloadFile, Buffer.concat([original, Buffer.from("x")]));
+    const tampered = await executeDemandCompletionRequest({ root, mode: "preview", demandId });
+    if (tampered.kind !== "WakeflowDemandCompletionPreview") throw new Error("Expected a preview.");
+    const integrity = tampered.verify?.gates.find((gate) => gate.gate === "evidence-integrity");
+    equal(integrity?.status, "fail");
+    equal(integrity?.detail?.includes(":"), true, "the failing evidence and file are named");
+    writeFileSync(payloadFile, original);
 
     const ledgerRoot = path.join(fixture.fixtureRoot, "wakeflow-ledger");
     const beforeApply = [snapshotTree(root), snapshotTree(ledgerRoot)];

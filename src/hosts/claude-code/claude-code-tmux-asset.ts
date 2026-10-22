@@ -64,8 +64,9 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  * - `mark --window <windowId> | --all`：登记后把 binding 与 locator 标识写到窗口选项上；pane 行要按会话、
  *   窗口、pane 三项与定位器一致（tmux 重启后编号会被复用），已带别的窗口标识的 pane 报 `pane-occupied` 不覆盖。
  *   同时给该窗口单独设 `window-status-format` 与 `window-status-current-format`（窗口名后跟 hook 观察器写下的
- *   `[working]`/`[idle]`/`[attention]`，ADR-0023），并在窗口名偏离配置的显示名时 `rename-window` 收敛回去
- *   （结果里 `renamed: true`）。
+ *   状态字形：working 绿 ●、attention 红 ?，idle 不显示；ADR-0023 调整一），给窗口所在会话幂等重设状态栏的
+ *   `status-right`（只留时钟）与 `status-left-length`（I15，从不 -g），并在窗口名偏离配置的显示名时
+ *   `rename-window` 收敛回去（结果里 `renamed: true`）。
  * - `panes`：`tmux list-panes -a` 转成 `tmux-panes` 观察。
  * - `deliver --window <windowId> [--handle-digest <sha256>] [--prompt-ref <permit.promptRef>
  *   --prompt-digest <permit.promptDigest>] [--wait-landing <seconds>]`：带 `--prompt-ref` 时从工作区根下
@@ -151,9 +152,17 @@ const PANE_FORMAT = [
   "#{pane_pid}",
   "#{window_name}",
 ].join(FIELD_SEPARATOR);
-// ADR-0023：每个受管窗口单独设的窗口列表格式——窗口名后跟 hook 写下的 [working]/[idle]/[attention]；从不 -g。
-const WINDOW_STATUS_FORMAT = "#I:#W#{?@wakeflow_state, [#{@wakeflow_state}],}#{?window_flags,#{window_flags}, }";
+// ADR-0023 调整一（I15）：每个受管窗口单独设的窗口列表格式——窗口名后只用字形：working 绿 ●、attention 红 ?，
+// idle 不显示（不用 ! 与 *，它们是 tmux 自己的 bell / 当前窗口标志）；从不 -g。
+const WINDOW_STATUS_FORMAT = "#I:#W#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}#{?window_flags,#{window_flags}, }";
 const WINDOW_STATUS_FORMAT_OPTIONS = Object.freeze(["window-status-format", "window-status-current-format"]);
+// 会话级状态栏选项（I15）：右侧只留时钟，去掉默认的 pane 标题与日期；左侧放宽到 24 列装下 wakeflow-<pod>。
+// 只写 Wakeflow 自己建的会话（set-option -t），从不 -g，用户的全局 tmux.conf 不碰。
+const SESSION_STATUS_OPTIONS = Object.freeze([
+  ["status-right", "%H:%M "],
+  ["status-right-length", "6"],
+  ["status-left-length", "24"],
+]);
 const MAX_PANES = 16;
 const MAX_CONFIG_BYTES = 1048576;
 const MAX_RECORD_BYTES = 65536;
@@ -1130,6 +1139,7 @@ function openTmuxWindow(config, context, windowId, launchIntent, execution, reso
   const coordinates = Object.freeze({ ...parseCreatedCoordinate(creation.stdout), sessionName });
   freezeTitle(context, coordinates.windowId);
   setWindowOptions(context, coordinates.windowId, { programId: config.program.programId, hostId: HOST_ID, windowId });
+  if (!exists) setSessionStatusOptions(context, sessionName);
   return { coordinates, windowName, placement, exists, sessionName };
 }
 
@@ -1497,6 +1507,7 @@ function commandMark(config, options) {
   const listed = listPanes(context);
   if (!listed.available) refuse("tmux-list-failed");
   const windows = [];
+  const markedSessions = new Set();
   for (const windowId of windowIds) {
     const locator = readLocator(windowId);
     if (locator === null) {
@@ -1530,7 +1541,10 @@ function commandMark(config, options) {
       if (!result.ok) refuse("tmux-rename-failed", { windowId });
     }
     windows.push(renamed ? { windowId, status: "marked", renamed: true } : { windowId, status: "marked" });
+    markedSessions.add(locator.tmux.sessionName);
   }
+  // I15：会话级状态栏选项随 mark 幂等重设，老工作区对账后也换上新栏。
+  for (const sessionName of markedSessions) setSessionStatusOptions(context, sessionName);
   return { ok: windows.every((entry) => entry.status === "marked"), command: "mark", windows };
 }
 
@@ -1541,14 +1555,24 @@ function setWindowStatusFormats(context, windowId) {
   }
 }
 
+function setSessionStatusOptions(context, sessionName) {
+  for (const [option, value] of SESSION_STATUS_OPTIONS) {
+    const result = tmux(context, ["set-option", "-t", "=" + sessionName, option, value]);
+    if (!result.ok) refuse("tmux-option-failed", { option });
+  }
+}
+
 // 配置里该窗口的显示名就是 tmux 窗口名（worktree pod 的窗口同样只用标题，§13.186）。
 function configuredWindowName(config, windowId) {
   const window = (config.topology?.windows ?? []).find((entry) => entry?.windowId === windowId);
   return typeof window?.displayName === "string" ? cleanLabel(window.displayName, "window") : null;
 }
 
+// 复审 D6：没送出去的尝试把宿主自己的原因带在 attempt.failure 里（code = reason，summary = 有界的 stderr 或提示），
+// Controller 原样记进 outcome，事件流里才留得下宿主错误事实。
 function beforeSend(reason, windowId, extra) {
-  return { ok: false, command: "deliver", windowId, reason, attempt: { status: "failed-before-send" }, ...(extra ?? {}) };
+  const summary = typeof extra?.detail === "string" ? extra.detail : typeof extra?.hint === "string" ? extra.hint : null;
+  return { ok: false, command: "deliver", windowId, reason, attempt: { status: "failed-before-send", failure: { code: reason, summary } }, ...(extra ?? {}) };
 }
 
 // pane 行与定位器的坐标一致。
@@ -1707,7 +1731,10 @@ function commandDeliver(config, options) {
   }
   const submitted = pasteAndSubmit(context, locator.tmux.paneId, prompt);
   if (submitted.stage === "load-buffer") return beforeSend("load-buffer-failed", windowId);
-  if (submitted.stage !== null) return { ok: false, command: "deliver", windowId, reason: submitted.stage + "-failed", attempt: { status: "unknown" } };
+  if (submitted.stage !== null) {
+    const reason = submitted.stage + "-failed";
+    return { ok: false, command: "deliver", windowId, reason, attempt: { status: "unknown", failure: { code: reason, summary: null } } };
+  }
   const attemptDigest = sha256(JSON.stringify({
     sessionName: locator.tmux.sessionName,
     windowId: locator.tmux.windowId,

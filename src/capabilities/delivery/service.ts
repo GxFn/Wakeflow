@@ -127,6 +127,11 @@ import {
   readPodWorktreeReceipt,
 } from "../../kernel/pod-worktree-receipts.js";
 import {
+  CREDENTIAL_PRIVACY_FINDING_KINDS,
+  DEFAULT_ALLOWED_ID_PREFIXES,
+  scanPrivacy,
+} from "../../kernel/privacy-scan.js";
+import {
   createWorkClaim,
   deriveWorkClaimId,
   inspectWorkClaim,
@@ -1548,10 +1553,41 @@ const SEND_RETURN_MAXIMUM_BYTES = 16 * 1024;
  * `evidenceDigest`——摘要的定义因此在合同里而不在 Agent 手里；同时给出的 evidenceDigest 必须一致。记录只留
  * 摘要，不留内容。
  */
+const ATTEMPT_FAILURE_PRIVACY_POLICY = Object.freeze({
+  allowedPathRoots: Object.freeze([]),
+  allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
+});
+
+/** 复审 D6：failure 只随没送出去的尝试记录，summary 走凭证扫描（与归档、终态文本同一策略）。 */
+function normalizeAttemptFailure(attempt: RecordDeliveryOutcomeRequest["attempt"]): {
+  readonly failure?: NonNullable<RecordDeliveryOutcomeRequest["attempt"]["failure"]>;
+} {
+  if (attempt.failure === undefined) return {};
+  if (attempt.status === "sent") {
+    rejectWith(["attempt-failure-unexpected"], "$request.attempt.failure");
+  }
+  if (attempt.failure.summary !== null) {
+    const blockers: string[] = [];
+    for (const finding of scanPrivacy(attempt.failure.summary, ATTEMPT_FAILURE_PRIVACY_POLICY)) {
+      if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)) continue;
+      blockers.push(`privacy:attempt-failure:${finding.line}:${finding.kind}`);
+    }
+    if (blockers.length > 0) rejectWith(blockers, "$request.attempt.failure.summary");
+  }
+  return { failure: { code: attempt.failure.code, summary: attempt.failure.summary } };
+}
+
 function normalizeOutcomeAttempt(
   attempt: RecordDeliveryOutcomeRequest["attempt"],
 ): RecordDeliveryOutcomeRequest["attempt"] {
-  if (attempt.sendReturn === undefined) return attempt;
+  const failure = normalizeAttemptFailure(attempt);
+  if (attempt.sendReturn === undefined) {
+    return Object.freeze({
+      status: attempt.status,
+      ...(attempt.evidenceDigest === undefined ? {} : { evidenceDigest: attempt.evidenceDigest }),
+      ...failure,
+    });
+  }
   let bytes: Uint8Array;
   try {
     bytes = encodeCanonicalJson(attempt.sendReturn, "$request.attempt.sendReturn");
@@ -1568,7 +1604,7 @@ function normalizeOutcomeAttempt(
   if (attempt.evidenceDigest !== undefined && attempt.evidenceDigest !== computed) {
     rejectWith(["send-return-digest-mismatch"], "$request.attempt.evidenceDigest");
   }
-  return Object.freeze({ status: attempt.status, evidenceDigest: computed });
+  return Object.freeze({ status: attempt.status, evidenceDigest: computed, ...failure });
 }
 
 interface OutcomeInput {
@@ -1631,6 +1667,7 @@ function outcomeDraft(
       attempt: {
         status: input.attempt.status,
         evidenceDigest: attemptDigest as Sha256Digest | null,
+        ...(input.attempt.failure === undefined ? {} : { failure: input.attempt.failure }),
       },
       readback: {
         status: readback.status,

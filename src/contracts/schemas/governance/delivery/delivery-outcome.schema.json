@@ -59,6 +59,30 @@
               "type": "null"
             }
           ]
+        },
+        "failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "summary"],
+          "description": "Host reason when nothing was sent; absent when status is sent.",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "summary": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
         }
       }
     },
@@ -259,6 +283,33 @@
               "rationale": {
                 "type": "string"
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "attempt": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "sent"
+              }
+            },
+            "required": ["status"]
+          }
+        },
+        "required": ["attempt"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "type": "object",
+            "properties": {
+              "failure": false
             }
           }
         }

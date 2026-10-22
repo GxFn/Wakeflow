@@ -582,22 +582,22 @@ test("ADR-0023：交接卡与 windows 参考把窗口列表标记说成提示、
   includesAll(
     claudeCard,
     [
-      "`[working]`, `[idle]` or `[attention]` after a window name",
-      "written by the hooks, a hint and never evidence",
+      "a green `●` after a window name means it is working, a red `?` means it is waiting for you, nothing means idle",
+      "the hooks write them, a hint and never evidence",
       keepAwake,
     ],
     "Claude handover card",
   );
   ok(codexCard.includes(keepAwake), "the Codex card carries the same host-neutral advice");
-  for (const claudeOnly of ["[working]", "[attention]", "hooks", "tmux"]) {
+  for (const claudeOnly of ["●", "`?`", "hooks", "tmux"]) {
     equal(codexCard.includes(claudeOnly), false, `Codex card must not say "${claudeOnly}"`);
   }
   includesAll(
     claude(WINDOWS),
     [
-      "On Claude Code the same hooks also mark a bound window's name in the window list with " +
-        "`[working]`, `[idle]` or `[attention]`",
-      "(`mark` sets that format per window): a hint for the user, never evidence",
+      "other than an idle prompt",
+      "green `●` working, red `?` waiting for you, nothing when idle",
+      "a hint, never evidence",
       "their action there clears it, no tool does",
     ],
     "windows reference",

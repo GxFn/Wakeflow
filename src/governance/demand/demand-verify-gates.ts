@@ -3,14 +3,26 @@ import {
   type WakeflowConfigAuthoritySnapshot,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  readStableFile,
+  StableFileReadError,
+} from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import type { RequirementClaimStateSource } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
-import { managedEvidenceManifestRef } from "../evidence/managed-evidence-resource-paths.js";
+import {
+  ManagedEvidenceManifestError,
+  parseManagedEvidenceManifest,
+} from "../evidence/managed-evidence-manifest.js";
+import {
+  managedEvidenceManifestRef,
+  managedEvidencePayloadRootRef,
+} from "../evidence/managed-evidence-resource-paths.js";
 import { inspectLedgerAuthorityLayout } from "../ledger/ledger-authority-layout.js";
 import { readDemandAcceptanceCoverage } from "./demand-acceptance-coverage.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";
@@ -147,6 +159,57 @@ function appendCandidateGate(input: VerifyInput): VerifyGateOutcome {
     : gate("append-candidates-clear", "fail", String(input.loaded.inventory.appendCandidateCount));
 }
 
+/**
+ * 复审 G6：每条受管证据的负载字节在完成路径上重新哈希——清单树里每个文件的字节数与 sha256 都要
+ * 等于磁盘上的；读不到、超长、摘要不等都算该条证据失败（`<evidenceId>:<ref>`）。上限由证据清单
+ * 自己的容量（内核 WAKEFLOW_DEMAND_TREE_CAPACITY）压住，所以可归档的证据必然可重哈希。
+ */
+async function payloadFileMismatch(
+  input: VerifyInput,
+  evidenceId: string,
+  payloadRoot: string,
+  file: Readonly<{ readonly ref: string; readonly bytes: number; readonly digest: string }>,
+): Promise<string | null> {
+  const ref = parsePortableResourcePath(`${payloadRoot}/${file.ref}`, "$evidence");
+  let bytes: Uint8Array;
+  try {
+    bytes = (
+      await readStableFile(input.demandRoot, ref, {
+        maximumBytes: parseByteCount(Math.max(file.bytes, 1), "$evidence.maximumBytes"),
+        ...signalOptions(input.signal),
+      })
+    ).bytes;
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError && error.reason !== "aborted") {
+      return `${evidenceId}:${file.ref}`;
+    }
+    throw error;
+  }
+  const matches =
+    bytes.byteLength === file.bytes && computeSha256Digest(bytes, "$evidence") === file.digest;
+  return matches ? null : `${evidenceId}:${file.ref}`;
+}
+
+async function evidencePayloadMismatch(
+  input: VerifyInput,
+  evidenceId: string,
+  value: unknown,
+): Promise<string | null> {
+  let manifest: ReturnType<typeof parseManagedEvidenceManifest>;
+  try {
+    manifest = parseManagedEvidenceManifest(value);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceManifestError) return `${evidenceId}:manifest`;
+    throw error;
+  }
+  const payloadRoot = managedEvidencePayloadRootRef(evidenceId);
+  for (const file of manifest.payload.treeManifest.files) {
+    const mismatch = await payloadFileMismatch(input, evidenceId, payloadRoot, file);
+    if (mismatch !== null) return mismatch;
+  }
+  return null;
+}
+
 async function evidenceGate(input: VerifyInput): Promise<VerifyGateOutcome> {
   for (const summary of input.loaded.aggregate.state.managedEvidence ?? []) {
     const read = await readDeterministicJsonFile(
@@ -162,6 +225,8 @@ async function evidenceGate(input: VerifyInput): Promise<VerifyGateOutcome> {
     if (evidenceId !== summary.evidenceId) {
       return gate("evidence-integrity", "fail", summary.evidenceId);
     }
+    const mismatch = await evidencePayloadMismatch(input, summary.evidenceId, value);
+    if (mismatch !== null) return gate("evidence-integrity", "fail", mismatch);
   }
   return gate("evidence-integrity", "pass");
 }

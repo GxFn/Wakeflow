@@ -372,6 +372,8 @@ export interface RecordFixtureOutcomeOverrides {
     readonly evidenceDigest?: string;
     /** E2（ADR-0020）：宿主发送调用的原样返回值，Wakeflow 只记它的摘要。 */
     readonly sendReturn?: Readonly<Record<string, unknown>>;
+    /** 复审 D6：没送出去时宿主自己的原因。 */
+    readonly failure?: Readonly<{ readonly code: string; readonly summary: string | null }>;
   }>;
   readonly readback?: Readonly<{
     readonly status: "confirmed" | "pending" | "unavailable";

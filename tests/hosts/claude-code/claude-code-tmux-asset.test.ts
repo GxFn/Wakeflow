@@ -383,6 +383,21 @@ function writeBinding(current: Fixture, windowId: string, sessionId: string): vo
   );
 }
 
+/** 复审 D6：没送出去的尝试带 attempt.failure，code 就是拒绝原因，summary 是有界 stderr / 提示或 null。 */
+function assertFailedBeforeSend(json: Readonly<Record<string, unknown>>): void {
+  const attempt = json.attempt as {
+    readonly status: string;
+    readonly failure: { readonly code: string; readonly summary: string | null };
+  };
+  equal(attempt.status, "failed-before-send");
+  equal(attempt.failure.code, json.reason);
+  ok(attempt.failure.summary === null || typeof attempt.failure.summary === "string");
+}
+
+function assertUnknownAttempt(json: Readonly<Record<string, unknown>>): void {
+  deepEqual(json.attempt, { status: "unknown", failure: { code: json.reason, summary: null } });
+}
+
 function paneRow(row: {
   readonly session?: string;
   readonly window: string;
@@ -732,7 +747,13 @@ test("launch opens the session or a window from the intent, freezes the title, w
   deepEqual(log[4], ["set-option", "-w", "-t", "@1", "@wakeflow_program_id", PROGRAM_ID]);
   deepEqual(log[5], ["set-option", "-w", "-t", "@1", "@wakeflow_host_id", "claude-code"]);
   deepEqual(log[6], ["set-option", "-w", "-t", "@1", "@wakeflow_window_id", CONTROLLER_WINDOW_ID]);
-  equal(log.length, 7);
+  // I15：新建会话时给它设一次状态栏选项（会话级，不是 -g）。
+  deepEqual(log.slice(7), [
+    ["set-option", "-t", "=wakeflow", "status-right", "%H:%M "],
+    ["set-option", "-t", "=wakeflow", "status-right-length", "6"],
+    ["set-option", "-t", "=wakeflow", "status-left-length", "24"],
+  ]);
+  equal(log.length, 10);
 
   // 会话已存在：第二个窗口走 new-window；仓库在根旁边（../ProductA）也能作为 cwd。
   // hook 还没到但新 pane 活着：待定，不是失败。
@@ -1079,19 +1100,36 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
       ["@wakeflow_locator_id", LOCATOR_ID],
     ],
   );
-  // ADR-0023：每个受管窗口单独设两条窗口列表格式，窗口名后跟 hook 写下的状态；没有 -g，别的窗口不受影响。
+  // ADR-0023 调整一：每个受管窗口单独设两条窗口列表格式——只用字形（working 绿 ●、attention 红 ?），idle 不显示；
+  // 没有 -g，别的窗口不受影响。
   deepEqual(
-    markLog.slice(6).map((entry) => entry.slice(0, 5)),
+    markLog.slice(6, 8).map((entry) => entry.slice(0, 5)),
     [
       ["set-option", "-w", "-t", "@5", "window-status-format"],
       ["set-option", "-w", "-t", "@5", "window-status-current-format"],
     ],
   );
-  for (const entry of markLog.slice(6)) {
-    ok(entry[5]?.includes("#{?@wakeflow_state, [#{@wakeflow_state}],}"), "format shows the state");
-    ok(entry[5]?.startsWith("#I:#W"), "format keeps index and name first");
+  for (const entry of markLog.slice(6, 8)) {
+    const format = entry[5] ?? "";
+    ok(format.startsWith("#I:#W"), "format keeps index and name first");
+    ok(
+      format.includes("#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}"),
+      "working glyph",
+    );
+    ok(
+      format.includes("#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}"),
+      "attention glyph",
+    );
+    equal(format.includes("idle"), false, "idle is silent");
+    equal(format.includes("-g"), false);
   }
-  equal(markLog.length, 8, "no rename when the pane row carries no window name");
+  // I15：会话级状态栏选项只写这个会话（set-option -t =<session>，不是 -g）：右侧只留时钟，左侧放宽到 24 列。
+  deepEqual(markLog.slice(8), [
+    ["set-option", "-t", "=wakeflow", "status-right", "%H:%M "],
+    ["set-option", "-t", "=wakeflow", "status-right-length", "6"],
+    ["set-option", "-t", "=wakeflow", "status-left-length", "24"],
+  ]);
+  equal(markLog.length, 11, "no rename when the pane row carries no window name");
   deepEqual(runHelper(current, ["mark", "--all"]).json.windows, [
     { windowId: PRODUCT_WINDOW_ID, status: "marked" },
   ]);
@@ -1109,7 +1147,13 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   deepEqual(retitled.json.windows, [
     { windowId: PRODUCT_WINDOW_ID, status: "marked", renamed: true },
   ]);
-  deepEqual(tmuxLog(current).at(-1), ["rename-window", "-t", "@5", "Product A"]);
+  ok(
+    tmuxLog(current).some(
+      (entry) =>
+        JSON.stringify(entry) === JSON.stringify(["rename-window", "-t", "@5", "Product A"]),
+    ),
+    "the window is renamed back to its configured display name",
+  );
   // 名字已是显示名：不改名，也不报 renamed。
   writeFileSync(
     path.join(current.state, "panes.txt"),
@@ -1331,7 +1375,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   equal(noCapture.json.reason, "capture-failed");
   // §13.165 G6：拒绝带 stderr 首行作为有界 detail，绝对路径换成占位符。
   equal(noCapture.json.detail, "stub: capture-pane failed at <path>");
-  deepEqual(noCapture.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(noCapture.json);
   equal(
     tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
     false,
@@ -1347,7 +1391,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   );
   equal(wrongHandle.status, 1);
   equal(wrongHandle.json.reason, "handle-mismatch");
-  deepEqual(wrongHandle.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(wrongHandle.json);
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${paneRow({ window: "@5", pane: "%9" })}\n`,
@@ -1356,7 +1400,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     input: prompt,
   });
   equal(unmarked.json.reason, "metadata-mismatch");
-  deepEqual(unmarked.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(unmarked.json);
   writeFileSync(path.join(current.state, "panes.txt"), "");
   equal(
     runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: prompt }).json.reason,
@@ -1369,7 +1413,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     env: { WAKEFLOW_STUB_FAIL: "load-buffer" },
   });
   equal(loadFailed.json.reason, "load-buffer-failed");
-  deepEqual(loadFailed.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(loadFailed.json);
   equal(
     tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
     false,
@@ -1382,7 +1426,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     env: { WAKEFLOW_STUB_FAIL: "paste-buffer" },
   });
   equal(pasteFailed.json.reason, "paste-failed");
-  deepEqual(pasteFailed.json.attempt, { status: "unknown" });
+  assertUnknownAttempt(pasteFailed.json);
   equal(
     tmuxLog(current).some((entry) => entry[0] === "delete-buffer"),
     true,
@@ -1392,7 +1436,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     env: { WAKEFLOW_STUB_FAIL: "send-keys" },
   });
   equal(enterFailed.json.reason, "enter-failed");
-  deepEqual(enterFailed.json.attempt, { status: "unknown" });
+  assertUnknownAttempt(enterFailed.json);
   equal(
     runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID], { input: "   \n" }).json.reason,
     "stdin-empty",
@@ -1412,7 +1456,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
     input: prompt,
   });
   equal(duplicate.json.reason, "duplicate-pane");
-  deepEqual(duplicate.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(duplicate.json);
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${paneRow({ window: "@5", pane: "%9", command: "zsh", options: LIVE_OPTIONS })}\n`,
@@ -1467,7 +1511,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   );
   equal(alreadyLanded.status, 1);
   equal(alreadyLanded.json.reason, "already-landed");
-  deepEqual(alreadyLanded.json.attempt, { status: "failed-before-send" });
+  assertFailedBeforeSend(alreadyLanded.json);
   deepEqual(alreadyLanded.json.landing, {
     status: "observed",
     recordId,
@@ -1529,7 +1573,7 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     const refused = deliverWith(dialog, args);
     equal(refused.status, 1, JSON.stringify(refused.json));
     equal(refused.json.reason, "target-not-at-prompt");
-    deepEqual(refused.json.attempt, { status: "failed-before-send" });
+    assertFailedBeforeSend(refused.json);
     equal(refused.json.observed, "menu-cursor");
     equal(
       refused.json.evidenceDigest,

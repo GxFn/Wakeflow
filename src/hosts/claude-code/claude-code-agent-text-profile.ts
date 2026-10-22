@@ -185,8 +185,9 @@ const FIRST_RUN_HANDOVER =
   "for a delivery from the Controller and is never given tasks by hand), `Test` (where the test " +
   "contract runs); how to move - `Ctrl-b n` next window, `Ctrl-b p` previous, `Ctrl-b s` to " +
   "pick a session, `Ctrl-b d` to detach while everything keeps running; how to read the " +
-  "window list - `[working]`, `[idle]` or `[attention]` after a window name is what that " +
-  "window is doing right now, written by the hooks, a hint and never evidence; long runs - " +
+  "window list - a green `●` after a window name means it is working, a red `?` means it " +
+  "is waiting for you, nothing means idle; the hooks write them, a hint and never evidence; " +
+  "long runs - " +
   "keep the machine awake yourself, Wakeflow runs no background process; what to do first - " +
   "switch to the Design window and describe the first requirement in plain words, come back " +
   "to the Controller when Design says the package is published; how to come back later - the " +

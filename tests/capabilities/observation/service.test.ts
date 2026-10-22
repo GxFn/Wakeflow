@@ -579,6 +579,19 @@ test("status 的窗口 attention：绑定会话最近一条记录是 Notificatio
       true,
       "unbound windows carry no attention state",
     );
+    // I14：idle_prompt 只是空闲一分钟的通知，窗口没有在等人，attention 为 none。
+    await write("notification", "2026-09-18T08:59:45.000Z", "idle_prompt");
+    const idle = await executeStatusRequest(
+      CODEX_OBSERVATION_FACADE,
+      { root: workspace.root },
+      CLOCK,
+    );
+    deepEqual(
+      plain(
+        idle.windows.find((window) => window.windowId === workspace.controllerWindowId)?.attention,
+      ),
+      { status: "none", notificationType: null, recordedAt: null },
+    );
     await write("stop", "2026-09-18T08:59:50.000Z", null);
     const cleared = await executeStatusRequest(
       CODEX_OBSERVATION_FACADE,
@@ -873,6 +886,19 @@ test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执�
     equal(status.archive.outcome, "completed");
     equal(status.archive.archiveRef, completed.archive.archiveRef);
     equal(status.archive.terminalEvent.streamRevision >= 2, true);
+    // 裁决 R8（G7/G1）：归档回执带业务读回，全部现读自归档负载。
+    equal(typeof status.archive.title, "string");
+    equal(status.archive.title.length > 0, true, "title comes from identity.json");
+    equal(typeof status.archive.goal, "string");
+    equal(status.archive.verify?.failedCount, 0);
+    equal((status.archive.verify?.gateCount ?? 0) > 0, true);
+    equal(status.archive.evidenceCount >= 0, true);
+    equal(status.archive.acceptedTargets.length >= 1, true, "the accepted target is listed");
+    for (const target of status.archive.acceptedTargets) {
+      equal(typeof target.targetTaskId, "string");
+      equal(target.branch === null || typeof target.branch === "string", true);
+      equal(target.commit === null || typeof target.commit === "string", true);
+    }
     deepEqual(plain(status.next), {
       frontier: "demand-continuation",
       owner: "controller",

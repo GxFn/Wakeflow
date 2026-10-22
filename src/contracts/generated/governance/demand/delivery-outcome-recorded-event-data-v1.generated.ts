@@ -18,6 +18,13 @@ disposition: ("accepted" | "indeterminate" | "rejected-before-send")
 attempt: {
 status: ("sent" | "failed-before-send" | "unknown")
 evidenceDigest: (WakeflowSha256DigestText | null)
+/**
+ * Host reason when nothing was sent; absent when status is sent.
+ */
+failure?: {
+code: string
+summary: (string | null)
+}
 }
 readback: {
 status: ("confirmed" | "pending" | "unavailable")

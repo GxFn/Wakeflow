@@ -5305,3 +5305,37 @@ Q12 于 2026-10-18 裁决为"按现状重定基线"：governance/workspace/confi
 1.1.2 追加需求（用户截图：175 列下 tmux 底部状态栏被八个窗口名、`[idle]` 标记与默认 `status-right` 的主机名、时钟挤满，第 8 个窗口截成 `7>`）：设计记为 open-items I15 的 D1–D6——标记改字形（working `●`、attention `?`，idle 不显示）、会话级 `status-right` 只留 `%H:%M`、`status-left-length` 放宽到 24、只写会话选项从不 `-g`、`#I:#W` 与 tmux flags 保留、Claude 状态行不动、交接卡与 windows 参考改成解释字形；与 I14 一起在 1.1.2 批 6 同批实施，ADR-0023 决定 4 届时加一条调整。复审 §11 的 1.1.2 行已登记。
 
 本节只改文档：本节、open-items（I15）、复审 §11、README 指针。
+
+### 13.201 1.1.2：状态栏精简（I15）、attention 语义（I14）与批 6 读侧补齐（2026-10-21）
+
+用户推送 09a00e50 与 `v1.1.1` 后，`release:check` 第二次真跑通过（分支 `main`、树干净、tag 在 HEAD、`origin/main` = HEAD、六处版本一致、Node 24）。随后 `npm run wf -- release bump --version 1.1.2 --apply`，再改 `plugins/` 字节（ADR-0021 规则 2）。本节按"一阶段一门"合记 1.1.2 的全部改动（用户 2026-10-21："按照你的计划继续吧"）。
+
+#### I15 tmux 状态栏精简（ADR-0023 调整一）
+
+- 助手 `WINDOW_STATUS_FORMAT` 改为 `#I:#W#{?#{==:#{@wakeflow_state},working},#[fg=green] ●#[default],}#{?#{==:#{@wakeflow_state},attention},#[fg=red#,bold] ?#[default],}#{?window_flags,#{window_flags}, }`：working 绿 `●`、attention 红粗 `?`、idle 不显示；不用 `!`（tmux bell 标志）与 `*`（当前窗口标志）。
+- 会话级 `status-right "%H:%M "`、`status-right-length 6`、`status-left-length 24`：`new-session` 时设一次，`mark` 时对每个被标记窗口所在会话幂等重设（老工作区对账 + mark 后换上新栏）；只用 `set-option -t =<session>`，从不 `-g`。
+- 文本：Claude 交接卡改为"绿 ● 在工作、红 ? 在等你、什么都没有是空闲"；windows 参考 `attention` 段同步（仍 400 行）；能力卡 10 §10.3 一句；ADR-0023 加"调整一"。live-guidance 钉文本随之更新（Codex 卡不含 ●、`?`、hooks、tmux）。
+
+#### I14 `attention` 对 `idle_prompt` 报 none
+
+`attentionOf`：最近一条记录是 Notification 且类型不是 `idle_prompt` 才 `needed`；`idle_prompt` 是 Claude Code 空闲一分钟的通知、没有在等人（与 ADR-0023 把它映射成 `idle` 一致）。windows 参考改为"other than an idle prompt"。观察测试加 idle_prompt 用例。
+
+#### 批 6 读侧补齐
+
+- **G7/G1 归档读回（裁决 R8）**：`wakeflow_status{demandId}.archive` 多六个字段——`title`、`goal`（identity.json，截断 256/512）、`testingMode`（authority.json）、`evidenceCount`（受管证据目录条数）、`verify {gateCount, failedCount}`（清单）、`acceptedTargets[]`（扫描事件提交：最后一次导入报告的 `repositoryChange` 仓库/分支/末次提交与摘要（截断 280），加 accept 决定；只收实现目标）。全部现读自归档负载，不加持久成员；负载缺项只让字段变空，不让 status 失败。`describeDemandArchive` 只在 status{demandId} 的归档分支调用，归档观察（unmergedAccepted 扫描）不走它。结果 Schema `archiveReceipt` 同步。
+- **G6 完成路径证据重哈希**：`evidence-integrity` 门在核对 evidenceId 之后，按清单树逐文件读负载字节（上限取清单声明的字节数），字节数或 sha256 不等、读不到、清单不合法都失败并点名 `<evidenceId>:<ref>`。容量由内核 `WAKEFLOW_DEMAND_TREE_CAPACITY` 压住。测试：篡改一个负载字节，preview 的门失败；改回即过。
+- **D6 没送出去的宿主事实**：处置记录 `attempt.failure {code, summary}`（可选；`sent` 时 Schema 禁止）；请求 Schema 同形；服务拒 `attempt-failure-unexpected`（sent 带 failure）与 `privacy:attempt-failure:<line>:<kind>`（summary 带凭证）；助手 `deliver` 的拒绝直接带 `attempt.failure`（code = reason，summary = 有界 stderr / 提示或 null），Controller 原样转记（delivery-and-review Step 8 加一句）。摘要基底只在给出 failure 时含它，旧记录摘要不变。
+- **G10 撤回包再认领提示**：阻塞项 `package-claim:withdrawn` 早已存在；补的是 Design SKILL 的一句——撤回的包不会再被认领，要那项工作就发新包。
+- **G11 看板索引两列**：**未做**。改索引渲染会让每个现存工作区的 `board-consistency` 门报 `index-stale`（索引只在看板变更时重投影，对账没有"刷新陈旧投影"的步骤），为两列装一个新的维护步骤不值；记回 open-items G11 待 1.2 与"投影陈旧即重写"一起考虑。
+- **M4/J1 退出路径**：需要裁决（翻转 `instructionManagement`、停用仓库或整个工作区），不在本节；见 open-items J1/J2 与复审 R7。
+
+**本阶段用的级别：第 2 级**（agent-text、agent-text-profile、`src/contracts/schemas`、`src/kernel` 以外的 governance 与 capabilities 都变了）。
+
+验证与观察（本地，2 worker）：
+
+- 第 0 级（`--changed`，8 worker，692 项含两条场景链）：前两次停在静态门（两个函数的认知复杂度、一处格式）；第三次 688/692——处置记录的 privacy 断言按内核 `failWithBlockers` 的编码（reason 取冒号前缀）改写、手搭清单没有 `verify` 让归档摘要抛错（改为可空）、公共工具目录超预算 170 字节（删去只进结果 Schema 的描述，回到 104 406 / 104 448，余量只剩 42 字节，下次动 Schema 前先量）；第四次 689/692，剩一处是两条否定用例共用了夹具的幂等键（改成各自的键后三个文件聚焦通过），另两处是负载敏感用例在 8 worker 下超时（hook 记录退役、permission-mode 启动参数），由 2 worker 的完整门复核。
+- 制品重建（1.1.2，两宿主 34 个制品文件变化）、`smoke:artifacts`：两宿主各 20 个工具，fresh completed / reconcile no-op / status idle / verify ok / pod preview ready / hook observer landed。
+- 完整门 run-ykRiSa（19:04–19:37 本地，约 33 分钟，2 worker）：**1520/1520 全通过**（第 0 级在 8 worker 下超时的两个负载敏感用例在这里都过了）；`inputsUnchanged: true`；`wf timings apply --receipt` 写回。
+- `wf handoff`：见提交说明；`git diff --check` 干净。
+
+残留：L12 现场核对（工作区 9：对账装新助手、`mark` 后看新状态栏与 `?`/`●`；一次投递看 `●`；归档读回看 `wakeflow_status{demandId}.archive`）待缓存刷新与用户授权；G11、M4/J1 如上。

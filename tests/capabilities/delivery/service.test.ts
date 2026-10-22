@@ -1,5 +1,12 @@
-import { equal, ok, rejects } from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -41,6 +48,34 @@ import {
  * delivery 切片效果：prepare 一次追加并返回可移植许可（声明、信封、围栏）；重放、异请求、
  * 过期修订、非法 phase 各有结局；结局按证据派生并处理声明；rearm 换代直至上限。
  */
+
+/** 事件流里摘要为 outcomeDigest 的处置记录的 attempt.failure（复审 D6）。 */
+function recordedOutcomeFailure(workspacePath: string, outcomeDigest: string): unknown {
+  const pending = [path.join(workspacePath, ".wakeflow-active")];
+  while (pending.length > 0) {
+    const directory = pending.pop() as string;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(candidate);
+        continue;
+      }
+      if (!entry.isFile() || !candidate.includes(`${path.sep}commits${path.sep}`)) continue;
+      const commit = JSON.parse(readFileSync(candidate, "utf8")) as {
+        readonly events?: readonly {
+          readonly data?: { readonly outcome?: Record<string, unknown> };
+        }[];
+      };
+      for (const event of commit.events ?? []) {
+        const outcome = event.data?.outcome;
+        if (outcome?.outcomeDigest === outcomeDigest) {
+          return (outcome.attempt as { readonly failure?: unknown }).failure;
+        }
+      }
+    }
+  }
+  throw new Error("outcome record not found in the event stream");
+}
 
 function rejectedWith(reason: string, code = "precondition-failed") {
   return (error: unknown) =>
@@ -310,12 +345,46 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
   const fixture = await createDeliveryWorkspaceFixture();
   try {
     const prepared = await prepareFixtureDelivery(fixture);
+    // 复审 D6：failure 只随没送出去的尝试记录；sent 带 failure 被拒，summary 带凭证被拒。
+    await rejects(
+      recordFixtureDeliveryOutcome(fixture, prepared, {
+        idempotencyKey: "fixture-outcome-failure-on-sent",
+        attempt: { status: "sent", failure: { code: "capture-failed", summary: null } },
+        readback: { status: "unavailable" },
+      }),
+      rejectedWith("attempt-failure-unexpected"),
+    );
+    await rejects(
+      recordFixtureDeliveryOutcome(fixture, prepared, {
+        idempotencyKey: "fixture-outcome-failure-credential",
+        attempt: {
+          status: "failed-before-send",
+          failure: { code: "capture-failed", summary: "token sk-ant-api03-abcdefghijklmnop1234" },
+        },
+        readback: { status: "unavailable" },
+      }),
+      (error: unknown) =>
+        isWakeflowError(error) &&
+        error.reason === "privacy" &&
+        error.path === "$request.attempt.failure.summary",
+    );
     const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
-      attempt: { status: "failed-before-send" },
+      attempt: {
+        status: "failed-before-send",
+        failure: {
+          code: "target-not-at-prompt",
+          summary: "the target pane shows a dialog or menu instead of its input box",
+        },
+      },
       readback: { status: "unavailable" },
     });
     equal(rejected.outcome.disposition, "rejected-before-send");
     equal(rejected.outcome.claimHandling, "release-authorized");
+    // 失败事实进了事件流里的处置记录（结果投影不复述它）。
+    deepEqual(recordedOutcomeFailure(fixture.workspacePath, rejected.outcome.outcomeDigest), {
+      code: "target-not-at-prompt",
+      summary: "the target pane shows a dialog or menu instead of its input box",
+    });
     equal(rejected.target.phase, "host-effect-rejected");
     equal(rejected.next.frontier, "implementation-host-effect-rearm");
     equal(rejected.next.suggestedTool, "wakeflow_rearm_delivery");
@@ -411,7 +480,13 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
     equal(reprepared.delivery.phase, "delivery-prepared");
     // 目标已换到新信封之后，重放第一代的结局仍返回幂等结果，而不是 delivery-unknown。
     const replayedFirst = await recordFixtureDeliveryOutcome(fixture, prepared, {
-      attempt: { status: "failed-before-send" },
+      attempt: {
+        status: "failed-before-send",
+        failure: {
+          code: "target-not-at-prompt",
+          summary: "the target pane shows a dialog or menu instead of its input box",
+        },
+      },
       readback: { status: "unavailable" },
     });
     equal(replayedFirst.status, "idempotent");

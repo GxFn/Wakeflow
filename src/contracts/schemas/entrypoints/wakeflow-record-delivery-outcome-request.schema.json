@@ -93,6 +93,29 @@
         "sendReturn": {
           "type": "object",
           "description": "宿主发送调用的原样返回值（Codex 线程工具的返回对象），规范 JSON 至多 16 KiB。Wakeflow 只保存它的 sha256 作为 evidenceDigest，不保存内容；它是 Agent 自述，不是宿主观察。"
+        },
+        "failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "summary"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "summary": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
         }
       }
     },

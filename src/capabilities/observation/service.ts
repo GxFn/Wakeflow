@@ -36,7 +36,10 @@ import {
   observeProjectionTargets,
   unmergedAcceptedFacts,
 } from "../../governance/observation/active-projection-facts.js";
-import { locateLatestDemandArchive } from "../../governance/observation/demand-archive-locator.js";
+import {
+  describeDemandArchive,
+  locateLatestDemandArchive,
+} from "../../governance/observation/demand-archive-locator.js";
 import {
   deriveOverallStatus,
   type ObservationHost,
@@ -508,10 +511,14 @@ function lastObservationOf(
 }
 
 /**
- * 窗口是否在等用户（open-items A7，§13.167）：绑定会话最近一条 hook 记录是 Claude Code 的 Notification
- * （等待权限、空闲等待、登录或用量提示）时为 needed 并带类型；之后任何一条记录都把它清成 none。
+ * 窗口是否在等用户（open-items A7，§13.167；I14）：绑定会话最近一条 hook 记录是 Claude Code 的 Notification
+ * （等待权限、登录或用量提示）时为 needed 并带类型；`idle_prompt` 只是空闲一分钟的通知、没有在等任何人，
+ * 算 none（与 ADR-0023 把它映射成 idle 标记一致）；之后任何一条记录都把它清成 none。
  * 没有绑定或没有记录为 null。它只说宿主在等人，不说窗口的 MCP 或指令状态。
  */
+/** Claude Code 空闲提示的通知类型：窗口没有在等人（I14）。 */
+const IDLE_PROMPT_NOTIFICATION = "idle_prompt";
+
 function attentionOf(
   observation: Readonly<WorkspaceObservation>,
   binding: WindowBindingView | null,
@@ -521,7 +528,7 @@ function attentionOf(
     .find((entry) => entry.hostId === binding.hostId)
     ?.latestBySession.get(binding.handleValue);
   if (latest === undefined) return null;
-  return latest.event === "notification"
+  return latest.event === "notification" && latest.notificationType !== IDLE_PROMPT_NOTIFICATION
     ? {
         status: "needed" as const,
         notificationType: latest.notificationType,
@@ -864,6 +871,8 @@ async function routeSection(
     context.options.signal,
   );
   if (archive === null) fail("not-found", "demand-unknown", "$request.demandId");
+  // 裁决 R8（复审 G7/G1）：归档回执带业务读回——标题、目标、测试模式、证据数、verify 计数、已接受目标的落点。
+  const readback = await describeDemandArchive(context.ledgerRoot, archive, context.options.signal);
   return Object.freeze({
     route: null,
     archive: {
@@ -873,6 +882,12 @@ async function routeSection(
       archivedAt: archive.archivedAt,
       terminalEvent: archive.terminalEvent,
       manifestDigest: archive.manifestDigest,
+      title: readback.title,
+      goal: readback.goal,
+      testingMode: readback.testingMode,
+      evidenceCount: readback.evidenceCount,
+      verify: archive.verify,
+      acceptedTargets: readback.acceptedTargets,
     },
     next:
       archive.outcome === "completed"

@@ -65,6 +65,8 @@ export interface DeliveryOutcome {
   readonly attempt: Readonly<{
     readonly status: DeliveryAttemptStatus;
     readonly evidenceDigest: Sha256Digest | null;
+    /** 没送出去时宿主自己的原因（复审 D6）：拒绝码与一句有界摘要；sent 时没有这一项。 */
+    readonly failure?: Readonly<DeliveryAttemptFailure>;
   }>;
   readonly readback: Readonly<{
     readonly status: DeliveryReadbackStatus;
@@ -78,6 +80,11 @@ export interface DeliveryOutcome {
   readonly claimHandling: "retain" | "release-authorized";
   readonly observedAt: UtcInstant;
   readonly outcomeDigest: Sha256Digest;
+}
+
+export interface DeliveryAttemptFailure {
+  readonly code: string;
+  readonly summary: string | null;
 }
 
 export type DeliveryOutcomeDraft = Omit<
@@ -173,9 +180,18 @@ function outcomeBasis(
     generation: value.generation,
     fence: Object.freeze({ claimId: value.fence.claimId, claimDigest: value.fence.claimDigest }),
     disposition: value.disposition,
+    // failure 只在给出时进入摘要基底：没有它的旧记录摘要不变。
     attempt: Object.freeze({
       status: value.attempt.status,
       evidenceDigest: value.attempt.evidenceDigest,
+      ...(value.attempt.failure === undefined
+        ? {}
+        : {
+            failure: Object.freeze({
+              code: value.attempt.failure.code,
+              summary: value.attempt.failure.summary,
+            }),
+          }),
     }),
     readback: Object.freeze({
       status: value.readback.status,
@@ -215,6 +231,9 @@ export function parseDeliveryOutcome(value: unknown): Readonly<DeliveryOutcome> 
     attempt: {
       status: wire.attempt.status,
       evidenceDigest: optionalDigest(wire.attempt.evidenceDigest, "$/attempt/evidenceDigest"),
+      ...(wire.attempt.failure === undefined
+        ? {}
+        : { failure: { code: wire.attempt.failure.code, summary: wire.attempt.failure.summary } }),
     },
     readback: {
       status: wire.readback.status,

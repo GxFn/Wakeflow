@@ -1335,7 +1335,13 @@
         "archiveRef",
         "archivedAt",
         "terminalEvent",
-        "manifestDigest"
+        "manifestDigest",
+        "title",
+        "goal",
+        "testingMode",
+        "evidenceCount",
+        "verify",
+        "acceptedTargets"
       ],
       "properties": {
         "demandId": {
@@ -1367,6 +1373,113 @@
         },
         "manifestDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "goal": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "testingMode": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "verify": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["gateCount", "failedCount"],
+              "properties": {
+                "gateCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 64
+                },
+                "failedCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 64
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptedTargets": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["targetTaskId", "repositoryId", "branch", "commit", "summary"],
+            "properties": {
+              "targetTaskId": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "repositoryId": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "branch": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "commit": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "summary": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 280
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
         }
       }
     },

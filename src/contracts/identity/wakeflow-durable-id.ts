@@ -1,13 +1,13 @@
 import {
+  createUuidV4,
+  parseUuidV4,
+  type UuidV4,
+  UuidV4Error,
+} from "../../foundation/identity/uuid-v4.js";
+import {
   WAKEFLOW_DURABLE_ID_KINDS,
   type WakeflowDurableIdKind,
 } from "../generated/identity/wakeflow-durable-id-kind.generated.js";
-import {
-  createUuidV4,
-  parseUuidV4,
-  UuidV4Error,
-  type UuidV4,
-} from "../../foundation/identity/uuid-v4.js";
 
 /**
  * Wakeflow Contracts / Identity：应用级持久类型化身份。
@@ -21,9 +21,9 @@ import {
  * 只有在拥有真实 producer、consumer 和持久字段时才进入本合同。
  */
 
+export type { WakeflowDurableIdKind };
 /** 对外转交 Schema 派生词汇；本模块不保存第二份类别清单。 */
 export { WAKEFLOW_DURABLE_ID_KINDS };
-export type { WakeflowDurableIdKind };
 
 const WAKEFLOW_DURABLE_ID_KIND_SET: ReadonlySet<string> = new Set(WAKEFLOW_DURABLE_ID_KINDS);
 

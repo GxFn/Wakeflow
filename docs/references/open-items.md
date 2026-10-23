@@ -35,6 +35,7 @@
 - **阶段 9**（L）阶段 9：架构还债和退出路径。建一张统一的阶段转移表；按目录逐步解除 knip 和 Biome 的豁免；为无调用者的恢复模块决定接线还是删除；tmux helper 改成真实模块，并用 kernel writer 生成测试夹具；错误体系收敛到 ADR-0013 D；抽取共享的切片上下文；拆分巨石文件。按用户的决定实现 detach 或删除仓库和窗口；managed-block 的默认值和撤销；pod 关闭时清理分支；为 settings 规则记录所有权；统一 locator 布局。 理由：这些不会立刻阻断用户，但决定后续改动是否安全、能否被检查出来，也决定用户在停用时能否干净地退出。
 - **1.1.x 补齐**（2026-10-20）：按[旧版复审](../reviews/2026-10-20-legacy-gap-review-and-1.1.1-plan.md)第 8 节的六批与第 11 节的版本表推进；每个版本先 bump 再改制品字节（ADR-0021 规则 2），每个版本一轮新工作区现场核对。
 - **测试门清理与 1.2**（2026-10-22）：按[测试门与 1.2 计划](../reviews/2026-10-22-test-gate-and-1.2-plan.md)第 2 节的 T1–T3 先把门清到约 10 分钟（耐久性进 2–3 级、lab 矩阵归冒烟、`.load` 后缀、`wf test levels`），再按第 4 节批 0–E 推进 1.2（连续 `/next` 与描述减肥、G11、R4+R5、C6/C11、detach）；测试怎么写见[测试开发标准](../standards/testing-standard.md)。K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做。
+- **Codex 审阅修复**（2026-10-22）：按[Codex 审阅的核实与修复计划](../reviews/2026-10-22-codex-review-response-and-replan.md)第 4 节 F → G → H → I → D′ → J → E 推进（F 先恢复验证可信，D′ 吸收 1.2 批 D，E 仍最后）；35 项登记在 W 节。
 
 ## A. 默认安装下 Claude Code 宿主运行姿态：现场测试没有覆盖新用户的真实环境
 
@@ -782,3 +783,43 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：已执行 §13.210，目录 104,406 → 约 102,900 字节）
 - **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：待执行）
 - **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：待执行）
+
+## W. Codex 审阅 35 项（2026-10-22）
+
+来源：用户用 Codex 做的只读审阅（35 项：33 动态反例、2 静态），本会话在 HEAD c304f106 上分四组只读核实，全部成立；根因归类、设计优化点与批次见[Codex 审阅的核实与修复计划](../reviews/2026-10-22-codex-review-response-and-replan.md)。CR-<id> 是报告原编号（与本文件 H 节等编号无关）。批次 F、G、H、I、D′、J、E 一批一门。
+
+- **W1** [P2 / 触发低] CR-H1：并发注册未锁内复验跨窗口 handle 唯一性（批 I；状态：待执行）。修：mutateBinding 的 store 回调里用锁内 inventory 重算 handleOwners，异窗口持有即 handle-conflict。
+- **W2** [P2 / 触发中] CR-H2：Claude worktree 普通 resume 输出不能用于 relocate（批 J；状态：待执行）。修：resume 带 --worktree 且 hook cwd 存在时 observeWorktree，pending 同 launch。
+- **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J；状态：待执行）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。
+- **W4** [P2 / 触发中] CR-H4：旧 SessionEnd 可释放恢复会话的新 claim（批 I；状态：待执行）。修：loadHookSessions 按 recordedAt 只计最新 end 晚于最新 start 的会话。
+- **W5** [P2 / 触发中] CR-H6：Claude reconcile 被自己的设置贡献阻止修复缺失支撑面（批 D′；状态：待执行）。修：composition 对 reconcile 的 missing 根走 planned-missing，statusline 同步。
+- **W6** [P2 / 触发低] CR-H7：portable settings 在两次读取间变化后先写入再报 stale（批 I；状态：待执行）。修：发布器接 expectedSourceDigest，不等即 source-changed 不写。
+- **W7** [P2 / 触发低] CR-H8：跨宿主关闭 Pod 漏掉对端仍在的窗口绑定（批 D′；状态：待执行）。修：pod facade 增 hosts，loadPodFacts 与 retire 按全部宿主。
+- **W8** [P2 / 触发低] CR-R-REC-01：工作区读写租约释放失败覆盖业务结果（批 H；状态：待执行）。修：rooted-read-write-scope 的 finally 改为与 withRootedExclusiveFileLock 同一结算。
+- **W9** [P2 / 触发低] CR-R-REC-02：跨宿主回执汇总提前返回（批 D′；状态：待执行）。修：listPodWorktreeReceiptsAnyHost 合并全部宿主、按仓库唯一、冲突显式失败。
+- **W10** [P2 / 触发中] CR-R-REC-03：可录入的深层证据使 Demand 无法归档/取消（批 H；状态：待执行）。修：maxDepth 从 Demand 树容量换算（减四层），preview 用同一容量给累计阻塞。
+- **W11** [P2 / 触发低] CR-R-REC-04：final 目录同步失败被回读改判成功并退休日志（批 H；状态：待执行）。修：durability-failure 不视作 current；final 可见前补父目录 sync，失败留 journal。
+- **W12** [P2 / 触发极低] CR-R-ROOT-01：合法幂等键命中继承属性时被误当提交序号（批 H；状态：待执行）。修：stream-index 用无原型字典；repository 用 Object.hasOwn 并校验序号。
+- **W13** [P2 / 触发中] CR-R-ROOT-03：并发 prepare 误回收在途 claim（批 I；状态：待执行）。修：孤儿回收移到 appendCommand 成功之后，CAS 即围栏。
+- **W14** [P2 / 触发低] CR-R-ROOT-04：Codex 用自身制品摘要误判 Claude 窗口过期（批 D′；状态：待执行）。修：ObservationHost 增 per-host artifact，windowRuntimeOf 取绑定宿主条目；C6/C11 前置。
+- **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：待执行）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
+- **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：待执行）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
+- **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：待执行）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
+- **W18** [P2 / 触发高] CR-R3：Codex 文本教用户调用未提供的 slash 命令（批 F；状态：待执行）。修：Codex 交接文本改 wakeflow_status 措辞；SKILL.md:125 改宿主中性。
+- **W19** [P2 / 触发低] CR-S1：归档后活动根只删了一部分，recover 无法重入（批 H；状态：待执行）。修：recover 以日志 + 已封归档为权威，retire 接受日志授权的残根清除。
+- **W20** [P2 / 触发低] CR-S2：取消理由按 UTF-16 截断使事务持续恢复失败（批 H；状态：待执行）。修：foundation/text boundedText 按码点；派生理由在 preview 先校验。
+- **W21** [P2 / 触发中] CR-S3：第三次 rework 提供的接受选项无法执行（批 G；状态：待执行）。修：修法 B：rework-brake 阻塞 + escalate{needs-decision}，回答后 accept 可达（待用户确认）。
+- **W22** [P2 / 触发中] CR-S4：快照暂存残留使公开入口挡住仓储 fallback（批 H；状态：待执行）。修：root-inventory 对暂存条目按 stage owner 状态分类，死 owner 容忍。
+- **W23** [P2 / 触发中] CR-S5：部分测试报告缺失的步骤无法补跑（批 G；状态：待执行）。修：未观察且无基线的步骤并入可点名集合，no-failed-step 改无未决步骤。
+- **W24** [P2 / 触发低] CR-T1：构建锁 stale 回收会删除新持有者活锁（批 F；状态：待执行）。修：回收前 wx 建标记并重读 owner 仍等于观察值才 rm；mjs 同步。
+- **W25** [P2 / 触发低] CR-T2：owner 写入失败留下无法自动回收的构建锁（批 F；状态：待执行）。修：写 owner 失败即删自己的目录；无主目录按 mtime 有界回收。
+- **W26** [P2 / 触发高] CR-T3：必需 artifact 检查不可用时 handoff 仍为绿色（批 F；状态：待执行）。修：只在 --no-artifacts 时豁免，其余 unavailable 整体不通过。
+- **W27** [P2 / 触发高] CR-T4：多行静态 import/export 从影响与负载依赖图中消失（批 F；状态：待执行）。修：导入图允许跨行/词法扫描；夹具加多行、export…from、import type。
+- **W28** [P3 / 触发高] CR-H5：mark 重新加回 worktree 窗口标题前缀（批 J；状态：待执行）。修：configuredWindowName 与 launch 共用去前缀规则。
+- **W29** [P3 / 触发低] CR-R-ROOT-02：较旧看板刷新覆盖较新的状态投影（批 I；状态：待执行）。修：列举 + 发布进看板级锁。
+- **W30** [P3 / 触发低] CR-R-ROOT-05：摘要按 UTF-16 截断使合法 emoji 不能通过输出准入（批 H；状态：待执行）。修：同 W20 的助手替换 requirement summary、archive goal、active-projection。
+- **W31** [P3 / 触发极低] CR-R-ROOT-07：Git worktree 指针读不出被误标 prunable（批 J；状态：待执行）。修：collectWorktrees 用 readPointer，仅 missing→absent。
+- **W32** [P3 / 触发中] CR-R-ROOT-09：已记录的 Notification hook 不能转为受管证据（批 H；状态：待执行）。修：两份 Schema 加 notification，抽共享 hook-event 定义三处 $ref。
+- **W33** [P3 / 触发高] CR-R4：README 验证门数与实现不一致（批 F；状态：待执行）。修：两份 README 改十五道工作区门与 Demand 门分述。
+- **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：待执行）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
+- **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：待执行）。修：export-ci 依回执 selection 判完整。

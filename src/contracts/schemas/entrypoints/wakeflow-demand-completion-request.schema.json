@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-completion-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA",
   "title": "WakeflowDemandCompletionRequestV1",
-  "description": "wakeflow_complete_demand 的请求：完成即归档。preview 零写并内嵌 verify 门与归档前置；apply 带 planDigest 在一个事务里写终态事件、封归档包、置需求包 archived、删活动根；recover 带 operationId（即 demandId）按步骤日志向前恢复。",
+  "description": "wakeflow_complete_demand 的请求：完成即归档。preview 零写并内嵌 verify 门；apply 带 planDigest 在一个事务里写终态事件、封归档、置需求包 archived、删活动根；recover 带 operationId 向前恢复。",
   "type": "object",
   "oneOf": [
     {

@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:window-host-binding-registration-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA",
   "title": "WakeflowWindowHostBindingRegistrationResultV1",
-  "description": "Closed successful MCP output contract for one execution-endpoint operation: an inspection with the recomputed launch intent and current state, or a mutation receipt. Raw host handles, tmux coordinates, and workspace paths never appear; every result carries next.",
+  "description": "One execution-endpoint result: an inspection with the recomputed launch intent and state, or a mutation receipt; no raw handles, tmux coordinates or paths; every result carries next.",
   "type": "object",
   "oneOf": [
     {

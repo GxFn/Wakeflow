@@ -161,7 +161,7 @@ surfaceId: string
  */
 capability: ("design" | "test")
 /**
- * Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
+ * Portable relative placement below the program root or at most one `../` level up; absolute paths, backslashes, empty or dot-only segments and deeper traversal are rejected.
  */
 path: (string & string & string)
 /**
@@ -190,7 +190,7 @@ surfaceId: string
  */
 capability: ("design" | "test")
 /**
- * Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.
+ * Portable relative placement below the program root or at most one `../` level up; absolute paths, backslashes, empty or dot-only segments and deeper traversal are rejected.
  */
 path: (string & string & string)
 /**
@@ -350,7 +350,7 @@ kind: "repository"
 repositoryId: string
 }
 /**
- * One pod: the only execution-environment abstraction (ADR-0010). The primary pod runs in the main checkouts; a worktree pod runs each repository in its own git worktree. States creating/ready/closed are derived from receipts; only the Controller's open/closing decision is durable.
+ * One pod (ADR-0010): the primary pod runs in the main checkouts, a worktree pod runs each repository in its own git worktree; creating/ready/closed derive from receipts.
  */
 export interface Pod {
 /**
@@ -520,7 +520,7 @@ export interface ClaudeLaunch {
 modelByRole?: ModelByRole
 reasoningEffortByRole?: ReasoningEffortByRole
 /**
- * Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice.
+ * auto (default) lets Claude Code review each action itself; acceptEdits stops for commands; bypassPermissions requires an explicit durable user choice.
  */
 permissionMode?: ("auto" | "acceptEdits" | "bypassPermissions")
 }

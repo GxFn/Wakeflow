@@ -55,6 +55,8 @@ confirmedAt: WakeflowUtcInstantText
 sectionAnchors?: SectionAnchors
 testContract?: TestContract
 implementationBaselines?: ImplementationBaselines
+dependsOn?: DependsOn
+requiredEvidenceKinds?: RequiredEvidenceKinds
 })
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
@@ -86,6 +88,18 @@ export type SectionAnchors = string[]
  * @maxItems 32
  */
 export type ImplementationBaselines = [ImplementationBaseline, ...(ImplementationBaseline)[]]
+/**
+ * 实现目标在投递准备前必须已接受的其他实现目标（本 Demand 已规划的目标；R4，§13.210）。
+ *
+ * @maxItems 32
+ */
+export type DependsOn = string[]
+/**
+ * 完成前本 Demand 必须持有的受管证据种类（取所有已规划包的并集；R4，§13.210）。
+ *
+ * @maxItems 7
+ */
+export type RequiredEvidenceKinds = []|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]|[("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit"), ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")]
 
 /**
  * tasking.target-task-planned persisted event v1 的严格 payload。

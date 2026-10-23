@@ -1,3 +1,4 @@
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   assertDeliveryEnvelopeMatchesTaskPackage,
@@ -21,7 +22,7 @@ import {
   type TargetResultBasis,
   type TargetResultDeliveryBinding,
   TargetResultError,
-  targetResultIdForClaim,
+  targetResultIdentityForClaim,
 } from "./target-result.js";
 
 /**
@@ -32,6 +33,8 @@ import {
  */
 
 export interface CreateImplementationTargetResultInput {
+  /** 评审前取代的上一份结果的身份（R5）；缺席即第一份结果。 */
+  readonly supersedes?: WakeflowDurableId<"target-result">;
   readonly taskPackage: Readonly<ImplementationTaskPackage>;
   readonly envelope: Readonly<DeliveryEnvelope>;
   readonly delivery: Readonly<TargetResultDeliveryBinding>;
@@ -149,7 +152,7 @@ export function createImplementationTargetResult(
     kind: "WakeflowTargetResult" as const,
     schemaVersion: 1 as const,
     workType: "implementation" as const,
-    targetResultId: targetResultIdForClaim(input.delivery.fence.claimId),
+    ...targetResultIdentityForClaim(input.delivery.fence.claimId, input.supersedes),
     programId: taskPackage.programId,
     demandId: taskPackage.demandId,
     targetTaskId: taskPackage.targetTaskId,

@@ -9,6 +9,7 @@ import {
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { EvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
@@ -171,12 +172,16 @@ interface TaskPackageBase {
   ];
   readonly boundaries: Readonly<TaskPackageBoundaries>;
   readonly completionExpectations: readonly [string, ...string[]];
+  /** 完成前 Demand 必须持有的受管证据种类（R4）；缺席即不要求。 */
+  readonly requiredEvidenceKinds?: readonly EvidenceKind[];
 }
 
 export interface ImplementationTaskPackage extends TaskPackageBase {
   readonly assignment: Readonly<ImplementationTaskPackageAssignment>;
   readonly workType: "implementation";
   readonly commitExpectation: TaskPackageCommitExpectation;
+  /** 投递准备前必须已接受的其他实现目标（R4）；缺席即无依赖。 */
+  readonly dependsOn?: readonly WakeflowDurableId<"target-task">[];
   readonly acceptanceAnchors: readonly [
     Readonly<TaskPackageAcceptanceAnchor>,
     ...Readonly<TaskPackageAcceptanceAnchor>[],
@@ -255,6 +260,8 @@ const validateWire = createRuntimeJsonSchemaValidator<TaskPackageWire>(
 );
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+/** 两种草稿都可带的可选字段；`dependsOn` 只有实现包可带（Schema 的 else 分支禁止）。 */
+const OPTIONAL_DRAFT_FIELDS = Object.freeze(["dependsOn", "requiredEvidenceKinds"] as const);
 const DRAFT_FIELDS = Object.freeze([
   "acceptanceAnchors",
   "assignment",
@@ -627,6 +634,9 @@ function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
       forbidden: parseTextList(wire.boundaries.forbidden, "$/boundaries/forbidden"),
     }),
     completionExpectations,
+    ...(wire.requiredEvidenceKinds === undefined
+      ? {}
+      : { requiredEvidenceKinds: Object.freeze([...wire.requiredEvidenceKinds]) }),
   } as const;
   const windowId = parseId(wire.assignment.windowId, "window", "$/assignment/windowId");
   const acceptanceAnchors = parseAcceptanceAnchors(wire.acceptanceAnchors);
@@ -661,6 +671,15 @@ function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
       ),
       planReview: parsePlanReview(wire.planReview),
       sectionAnchors: parseSectionAnchors(wire.sectionAnchors),
+      ...(wire.dependsOn === undefined
+        ? {}
+        : {
+            dependsOn: Object.freeze(
+              wire.dependsOn.map((value, index) =>
+                parseId(value, "target-task", `$/dependsOn/${index}`),
+              ),
+            ),
+          }),
     };
     return Object.freeze(implementation);
   }
@@ -732,10 +751,13 @@ export function createTaskPackage(
     throw error;
   }
   const keys = Object.keys(record).sort();
-  const expectedFields = record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
+  const expectedFields: readonly string[] =
+    record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
+  const optional: readonly string[] = OPTIONAL_DRAFT_FIELDS;
+  const required = keys.filter((key) => !optional.includes(key));
   if (
-    keys.length !== expectedFields.length ||
-    keys.some((key, index) => key !== expectedFields[index])
+    required.length !== expectedFields.length ||
+    required.some((key, index) => key !== expectedFields[index])
   ) {
     fail("input", "$draft");
   }
@@ -757,17 +779,22 @@ export function createTaskPackage(
     boundaries: record.boundaries,
     completionExpectations: record.completionExpectations,
     acceptanceAnchors: record.acceptanceAnchors,
+    ...("requiredEvidenceKinds" in record
+      ? { requiredEvidenceKinds: record.requiredEvidenceKinds }
+      : {}),
     ...(record.workType === "test"
       ? {
           testContract: record.testContract,
           implementationBaselines: record.implementationBaselines,
           lineage: record.lineage,
+          ...("dependsOn" in record ? { dependsOn: record.dependsOn } : {}),
         }
       : {
           commitExpectation: record.commitExpectation,
           lineage: record.lineage,
           planReview: record.planReview,
           sectionAnchors: record.sectionAnchors,
+          ...("dependsOn" in record ? { dependsOn: record.dependsOn } : {}),
         }),
   });
   return Object.freeze({

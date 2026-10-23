@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:maintenance-public-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA",
   "title": "WakeflowMaintenancePublicRequestV1",
-  "description": "Closed MCP input contract for one Wakeflow workspace Maintenance effect: preview derives a plan without writing, apply re-derives the same plan and executes it only when planDigest matches, recover finishes an interrupted transaction by its operation ID. Nested domain values are revalidated by their owning domain modules.",
+  "description": "One workspace Maintenance effect: preview derives a plan without writing, apply executes it only when planDigest matches, recover finishes an interrupted transaction by operation id.",
   "type": "object",
   "oneOf": [
     {
@@ -366,7 +366,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["program", "presentation", "topology", "storage", "governance", "hosts"],
-      "description": "The fresh-initialize selection: six parts, compiled by the Configuration owner into the typed Config. Every repository and window keeps its own selectionKey; windows reference repositories and surfaces by those keys. A refusal names the failing path in details.at and the rule in details.selection.",
+      "description": "The fresh-initialize selection, compiled into the typed Config; repositories and windows reference each other by selectionKey. A refusal names the path in details.at and the rule in details.selection.",
       "properties": {
         "program": {
           "type": "object",
@@ -444,7 +444,7 @@
         },
         "hosts": {
           "$ref": "#/$defs/hosts",
-          "description": "Optional launch and container preferences by host, keyed `claude-code` and `codex`; the empty object inherits the tested profile. Models and reasoning efforts sit under `<host>.launch.modelByRole` and `<host>.launch.reasoningEffortByRole` (by role or `default`), Claude Code's permission mode under `claude-code.launch.permissionMode`, and the Claude Code tmux session name under `claude-code.tmux.sessionName` (worktree pods open `<name>-<pod name>`). This is the Config schema's hosts object mirrored here, so the request is built from this schema alone - never from another workspace's config."
+          "description": "Per-host launch and container preferences (`claude-code`, `codex`); an empty object inherits the profile. Models and reasoning effort by role under `<host>.launch.modelByRole` / `reasoningEffortByRole`, Claude's permission mode under `claude-code.launch.permissionMode`, the tmux session name under `claude-code.tmux.sessionName`. Build the request from this schema alone, never from another workspace's config."
         }
       }
     },
@@ -510,7 +510,7 @@
         },
         "permissionMode": {
           "enum": ["auto", "acceptEdits", "bypassPermissions"],
-          "description": "Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice."
+          "description": "auto (default) lets Claude Code review each action itself; acceptEdits stops for commands; bypassPermissions requires an explicit durable user choice."
         }
       }
     },

@@ -109,7 +109,7 @@
 
 **旧实现**：四个 ledger 投影 `requirement-designs/index.md`、`goal-stage-confirmation/index.md`、`workspace/workspace-record-map.md`、`workspace/archive/index.md`，带 `<!-- wakeflow:ledger-projection:v1:… -->` 标记，按 recordId 排序，转义与单尾换行确定；部分失败时权威已提交而投影记为 stale。活动投影 `.wakeflow-active/index.md` 与 `current/workspace-current-status.md` 只链接 TODO 板，不列行。`wakeflow-ledger-projector.mjs:33-38`、`:759-845`、`wakeflow-active-projector.mjs:1039-1108`。
 
-**现 TS 状态**：ledger 记录不带 Markdown 投影；看板索引 `board/index.md` 由内核确定性重写；活动投影链接看板索引。
+**现 TS 状态**：ledger 记录不带 Markdown 投影；看板索引 `board/index.md` 由内核确定性重写（v2 九列：Priority、Status、Requirement、Title、Type、Testing、Parked、Published、Demand；认领状态 2026-10-22 起带可选 `testingMode`，Parked 列是触发词前 40 个码点；维护 apply 之后陈旧索引按当前渲染重写，§13.209）；活动投影链接看板索引。
 
 **实现判断**：投影语义按资源处理标准的 derived-projection 角色，`deterministic-rewrite`，不引入新问题。
 

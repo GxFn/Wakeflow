@@ -90,6 +90,8 @@ export interface DemandResultReviewReportedTarget {
   readonly targetResultSourceEvent: Readonly<DemandTargetResultSourceEvent>;
   readonly targetResult: Readonly<TargetResult>;
   readonly priorReviewHistory: readonly Readonly<DemandTargetReviewHistoryEntry>[];
+  /** 评审前被 `supersedes` 导入取代的结果（R5）；没有时缺席，既有单元的摘要不变。 */
+  readonly supersededResults?: readonly WakeflowDurableId<"target-result">[];
   readonly reviewUnitDigest: Sha256Digest;
 }
 
@@ -106,6 +108,8 @@ export interface DemandResultReviewDecidedTarget {
   readonly outcome: TargetResultOutcome;
   readonly taskPackageSourceEvent: Readonly<DemandTargetResultSourceEvent>;
   readonly taskPackage: Readonly<TaskPackage>;
+  /** 评审前被 `supersedes` 导入取代的结果（R5）；没有时缺席。 */
+  readonly supersededResults?: readonly WakeflowDurableId<"target-result">[];
   readonly targetResultSourceEvent: Readonly<DemandTargetResultSourceEvent>;
   readonly targetResult: Readonly<TargetResult>;
   readonly priorReviewHistory: readonly Readonly<DemandTargetReviewHistoryEntry>[];
@@ -212,6 +216,7 @@ function reportedTargetBasis(
   targetResultSourceEvent: Readonly<DemandTargetResultSourceEvent>,
   targetResult: Readonly<TargetResult>,
   priorReviewHistory: readonly Readonly<DemandTargetReviewHistoryEntry>[],
+  supersededResults: readonly WakeflowDurableId<"target-result">[] = [],
 ): Omit<DemandResultReviewReportedTarget, "reviewUnitDigest"> {
   return {
     status: "reported",
@@ -222,7 +227,28 @@ function reportedTargetBasis(
     targetResultSourceEvent,
     targetResult,
     priorReviewHistory,
+    ...(supersededResults.length === 0 ? {} : { supersededResults }),
   };
+}
+
+/** 本目标里被取代的结果：出现在某份结果 `supersedes` 里的身份，按流序（R5）。 */
+function supersededResultsOf(
+  sources: Readonly<AuditedDemandTargetResultHistory>,
+  targetTaskId: WakeflowDurableId<"target-task">,
+): readonly WakeflowDurableId<"target-result">[] {
+  const superseded = new Set(
+    sources.targetResults
+      .filter((entry) => entry.result.supersedes !== undefined)
+      .map((entry) => entry.result.supersedes as WakeflowDurableId<"target-result">),
+  );
+  return Object.freeze(
+    sources.targetResults
+      .filter(
+        (entry) =>
+          entry.result.targetTaskId === targetTaskId && superseded.has(entry.result.targetResultId),
+      )
+      .map((entry) => entry.result.targetResultId),
+  );
 }
 
 /**
@@ -236,6 +262,7 @@ export function computeReportedReviewUnitDigest(
   targetResultSourceEvent: Readonly<DemandTargetResultSourceEvent>,
   targetResult: Readonly<TargetResult>,
   priorReviewHistory: readonly Readonly<DemandTargetReviewHistoryEntry>[],
+  supersededResults: readonly WakeflowDurableId<"target-result">[] = [],
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
     reportedTargetBasis(
@@ -245,6 +272,7 @@ export function computeReportedReviewUnitDigest(
       targetResultSourceEvent,
       targetResult,
       priorReviewHistory,
+      supersededResults,
     ),
   );
 }
@@ -401,6 +429,7 @@ function buildTargets(
         targetResultSource.sourceEvent,
         targetResultSource.result,
         priorReviewHistory(sources, target.targetTaskId, null),
+        supersededResultsOf(sources, target.targetTaskId),
       );
       return Object.freeze({
         ...reportedBasis,
@@ -429,6 +458,7 @@ function buildTargets(
       targetResultSource.sourceEvent,
       targetResultSource.result,
       priorReviewHistory(sources, target.targetTaskId, decisionSource.sourceEvent.streamRevision),
+      supersededResultsOf(sources, target.targetTaskId),
     );
     const reviewUnitDigest = reproduceDecidedReviewUnitDigest(
       reportedBasis,

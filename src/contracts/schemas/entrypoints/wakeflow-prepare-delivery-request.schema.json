@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:prepare-delivery-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_PREPARE_DELIVERY_REQUEST_SCHEMA",
   "title": "WakeflowPrepareDeliveryRequestV1",
-  "description": "Append one delivery for a planned, rework-requested, product-defect-rework-requested, test-another-attempt-requested, or rejected-before-send (rearm-exhausted) target: take the window work claim, render the prompt skeleton, and return the one-shot permit.",
+  "description": "Append one delivery for a target that may be prepared (planned, rework or another attempt requested, rearm exhausted): take the window work claim, render the prompt and return the one-shot permit.",
   "$comment": "Append shape (ADR-0012 D2): idempotencyKey plus expectedStreamRevision. Implementation and test targets share the tool; Wakeflow derives the work type, the rework or remediation context, and the test attempt from the Demand state.",
   "type": "object",
   "additionalProperties": false,

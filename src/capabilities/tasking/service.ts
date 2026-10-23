@@ -1,4 +1,5 @@
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type {
@@ -9,29 +10,29 @@ import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   parseUtcInstant,
-  UtcInstantError,
   type UtcInstant,
+  UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import {
   closeDemandOperationAuthorityContext,
+  type DemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
   openDemandOperationAuthorityContext,
-  type DemandOperationAuthorityContext,
 } from "../../governance/demand/demand-operation-authority-context.js";
-import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   DemandEventSourcingCommandHandlerError,
-  executeDemandEventSourcingCommand,
   type DemandEventSourcingCommandResult,
+  executeDemandEventSourcingCommand,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
@@ -40,29 +41,28 @@ import {
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   DemandPostAcceptanceRouteError,
   resolveDemandTestEnvironmentAuthority,
 } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
-  TaskPackageError,
   type TaskPackage,
+  TaskPackageError,
   type TestTaskLineage,
 } from "../../governance/tasking/task-package.js";
 import {
+  type TaskPackageProjectionMaterializationReceipt,
   TaskPackageProjectionStore,
   TaskPackageProjectionStoreError,
-  type TaskPackageProjectionMaterializationReceipt,
 } from "../../governance/tasking/task-package-projection-store.js";
-import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import {
-  runAppendCommand,
   type AppendCommandBinding,
   type AppendCommandEnvelope,
+  runAppendCommand,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
@@ -71,21 +71,22 @@ import { deriveNextProjection, type NextProjection } from "../../kernel/next-pro
 import {
   admitTargetTaskPlanningResult,
   parseTargetTaskPlanningRequest,
-  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION,
-  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
   type TargetTaskPlanningRequest,
   type TargetTaskPlanningResult,
+  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION,
+  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
 } from "./contract.js";
 import {
   deriveAnchorReferenceBlockers,
+  deriveDependencyBlockers,
   deriveImplementationBaselines,
   deriveImplementationPlanningBlockers,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
   deriveSectionAnchorBlockers,
-  deriveTestPlanningBlockers,
   deriveTestContractCoverageBlockers,
+  deriveTestPlanningBlockers,
   deriveTestStepReferenceBlockers,
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
@@ -289,6 +290,7 @@ async function buildImplementationPackage(
       requested.sectionAnchors,
       loaded.record.sections.map((section) => section.anchor),
     ),
+    ...deriveDependencyBlockers(authority.loaded.aggregate.state, requested.dependsOn),
   ];
   if (blockers.length > 0) rejectWith(blockers, "$request.taskPackage");
   const selectedAuthorityRefs = resolveAuthorityReferences(
@@ -329,6 +331,10 @@ async function buildImplementationPackage(
         lineage: requested.lineage,
         planReview: review.planReview,
         sectionAnchors: requested.sectionAnchors,
+        ...(requested.dependsOn === undefined ? {} : { dependsOn: requested.dependsOn }),
+        ...(requested.requiredEvidenceKinds === undefined
+          ? {}
+          : { requiredEvidenceKinds: requested.requiredEvidenceKinds }),
       },
       options.clock === undefined ? {} : { clock: options.clock },
     );
@@ -468,6 +474,9 @@ async function buildTestPackage(
           stopConditions: requested.testContract.stopConditions,
         },
         implementationBaselines: deriveImplementationBaselines(state),
+        ...(requested.requiredEvidenceKinds === undefined
+          ? {}
+          : { requiredEvidenceKinds: requested.requiredEvidenceKinds }),
         lineage: testLineageOf(context, requested),
       },
       options.clock === undefined ? {} : { clock: options.clock },

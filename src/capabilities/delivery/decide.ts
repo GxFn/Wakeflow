@@ -173,11 +173,18 @@ export interface PrepareTargetView {
   readonly generation: number | null;
   /** Demand 正在等用户决定（escalate 或 rework 刹车）：任何目标都不准备新投递（复审 D1）。 */
   readonly awaitingDecision?: boolean;
+  /** 任务包 `dependsOn` 里尚未接受的实现目标（R4）：排在等决定之后、阶段许可之前。 */
+  readonly pendingDependencies?: readonly string[];
 }
 
 /** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm；等用户决定时一律阻塞。 */
 export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): readonly string[] {
   if (target.awaitingDecision === true) return Object.freeze(["awaiting-decision"]);
+  if (target.pendingDependencies !== undefined && target.pendingDependencies.length > 0) {
+    return Object.freeze(
+      target.pendingDependencies.map((targetTaskId) => `dependency-pending:${targetTaskId}`),
+    );
+  }
   // 阶段许可只有一份：contracts 的 Target 阶段表（open-items L1）。
   const admission = wakeflowTargetPhaseAdmission(target.workType, target.phase);
   if (admission === null || admission.prepare === "no") {

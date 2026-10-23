@@ -93,6 +93,8 @@ interface TargetResultBase {
   }>;
   /** 结果绑定的投递代际与围栏：导入必须带回信封里的同一令牌。 */
   readonly delivery: Readonly<TargetResultDeliveryBinding>;
+  /** 评审前被本结果取代的上一份结果（同一投递、同一声明；R5）；没有取代时缺席。 */
+  readonly supersedes?: WakeflowDurableId<"target-result">;
   readonly resultDigest: Sha256Digest;
 }
 
@@ -242,6 +244,7 @@ function resultBasis(value: Readonly<TargetResultBasis>): Readonly<TargetResultB
         taskPackage: value.taskPackage,
         assignment: value.assignment,
         delivery: value.delivery,
+        ...(value.supersedes === undefined ? {} : { supersedes: value.supersedes }),
         testExecution: value.testExecution,
         report: value.report,
       })
@@ -257,6 +260,7 @@ function resultBasis(value: Readonly<TargetResultBasis>): Readonly<TargetResultB
         taskPackage: value.taskPackage,
         assignment: value.assignment,
         delivery: value.delivery,
+        ...(value.supersedes === undefined ? {} : { supersedes: value.supersedes }),
         report: value.report,
       });
 }
@@ -281,6 +285,9 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
     demandId: id(wire.demandId, "demand", "$/demandId"),
     targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
     deliveryId: id(wire.deliveryId, "target-delivery", "$/deliveryId"),
+    ...(wire.supersedes === undefined
+      ? {}
+      : { supersedes: id(wire.supersedes, "target-result", "$/supersedes") }),
     taskPackage: Object.freeze({
       taskPackageId: id(
         wire.taskPackage.taskPackageId,
@@ -359,8 +366,17 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       report,
     });
   }
-  if (targetResultIdForClaim(basis.delivery.fence.claimId) !== basis.targetResultId) {
+  // 身份与取代的关系（R5）：第一份结果的身份由声明派生（序号 1），取代它的那份由同一声明加序号 2
+  // 派生，且必须点名被取代的那份；一个声明代际至多两份结果。
+  const sequence = targetResultSequenceOf(basis.delivery.fence.claimId, basis.targetResultId);
+  if (sequence === null || (sequence === 2) !== (basis.supersedes !== undefined)) {
     fail("relation", "$result");
+  }
+  if (
+    basis.supersedes !== undefined &&
+    basis.supersedes !== targetResultIdForClaim(basis.delivery.fence.claimId, 1)
+  ) {
+    fail("relation", "$/supersedes");
   }
   // reportedAt 是Report来源时钟给出的审计事实；Result与Host Effect的因果关系
   // 由exact identity、Observation摘要、Event引用和Aggregate CAS闭合，不由墙钟排序推断。
@@ -371,26 +387,65 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
   return Object.freeze({ ...basis, resultDigest });
 }
 
-/** 结果身份由围栏声明的 UUID 派生：一个声明代际至多一份结果。 */
+export type TargetResultSequence = 1 | 2;
+
+/**
+ * 结果身份由围栏声明的 UUID 派生：序号 1 是一个声明代际的第一份结果（既有流的身份不变），
+ * 序号 2 是评审前取代它的那一份（R5）；没有第三份。
+ */
 export function targetResultIdForClaim(
   claimId: WakeflowDurableId<"work-claim">,
+  sequence: TargetResultSequence = 1,
 ): WakeflowDurableId<"target-result"> {
-  return derivedIdFromWorkClaim("target-result", claimId);
+  return sequence === 1
+    ? derivedIdFromWorkClaim("target-result", claimId)
+    : deriveDurableId("target-result", "target-result-supersede", claimId);
 }
 
-/** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交。 */
+/** 一份结果的身份字段：首份只有身份，取代的那份还带上被取代者（R5）。 */
+export function targetResultIdentityForClaim(
+  claimId: WakeflowDurableId<"work-claim">,
+  supersedes: WakeflowDurableId<"target-result"> | undefined,
+): Readonly<{
+  readonly targetResultId: WakeflowDurableId<"target-result">;
+  readonly supersedes?: WakeflowDurableId<"target-result">;
+}> {
+  return supersedes === undefined
+    ? Object.freeze({ targetResultId: targetResultIdForClaim(claimId, 1) })
+    : Object.freeze({ targetResultId: targetResultIdForClaim(claimId, 2), supersedes });
+}
+
+/** 一份结果身份相对它的声明是第几份；两者都不是即 null。 */
+function targetResultSequenceOf(
+  claimId: WakeflowDurableId<"work-claim">,
+  targetResultId: WakeflowDurableId<"target-result">,
+): TargetResultSequence | null {
+  if (targetResultId === targetResultIdForClaim(claimId, 1)) return 1;
+  if (targetResultId === targetResultIdForClaim(claimId, 2)) return 2;
+  return null;
+}
+
+function eventPurposeOf(result: Readonly<TargetResult>): string {
+  return result.supersedes === undefined ? "target-result" : "target-result-supersede";
+}
+
+/** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交；取代的那份有自己的一对。 */
 export function targetResultRecordedEventIdFromResult(
   resultValue: unknown,
 ): WakeflowDurableId<"demand-event"> {
   const result = parseTargetResult(resultValue);
-  return deriveDurableId("demand-event", "target-result", result.delivery.fence.claimId);
+  return deriveDurableId("demand-event", eventPurposeOf(result), result.delivery.fence.claimId);
 }
 
 export function targetResultRecordedCommitIdFromResult(
   resultValue: unknown,
 ): WakeflowDurableId<"demand-event-commit"> {
   const result = parseTargetResult(resultValue);
-  return deriveDurableId("demand-event-commit", "target-result", result.delivery.fence.claimId);
+  return deriveDurableId(
+    "demand-event-commit",
+    eventPurposeOf(result),
+    result.delivery.fence.claimId,
+  );
 }
 
 export function renderTargetResult(value: unknown): string {

@@ -1,7 +1,7 @@
 import {
   readWakeflowConfigAuthoritySnapshot,
-  WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
+  WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type {
@@ -12,13 +12,13 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
-  RootedDirectoryError,
   type RootedDirectoryDurability,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
@@ -34,9 +34,9 @@ import {
 } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
+  type CreateRequirementRecordInput,
   createRequirementRecord,
   LedgerAuthorityRecordError,
-  type CreateRequirementRecordInput,
   type RequirementRecord,
 } from "../../governance/ledger/ledger-authority-record.js";
 import {
@@ -48,44 +48,44 @@ import { commandShellExecutionOptions, runCommandShell } from "../../kernel/comm
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
-  runPublicationTransaction,
   type PublicationTransactionEnvelope,
   type PublicationTransactionPhase,
   type PublicationTransactionPlan,
+  runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
 import {
   activateRequirementClaim,
   createRequirementClaimState,
   createRequirementClaimStateFile,
   listRequirementClaimStates,
+  type RequirementClaimState,
+  type RequirementClaimStateSource,
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
-  type RequirementClaimState,
-  type RequirementClaimStateSource,
 } from "../../kernel/requirement-board.js";
 import {
   admitBoardInspectionResult,
   admitRequirementPublicationResult,
+  type BoardInspectionRequest,
+  type BoardInspectionResult,
   parseBoardInspectionRequest,
   parseRequirementPublicationRequest,
+  type RequirementPublicationRequest,
+  type RequirementPublicationResult,
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
-  type BoardInspectionRequest,
-  type BoardInspectionResult,
-  type RequirementPublicationRequest,
-  type RequirementPublicationResult,
 } from "./contract.js";
 import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
   derivePublishAssessment,
   deriveRequirementId,
-  privacyBlockers,
   type PackageAnalysis,
   type PackageDocumentText,
+  privacyBlockers,
   type RecordSection,
   type SummarySection,
 } from "./decide.js";
@@ -702,6 +702,7 @@ async function ensureClaimState(
     title: record.title,
     demandType: record.demandType,
     priority: record.priority,
+    testingMode: record.testingDecision.mode,
     publishedAt: readUtcWallClock(context.clock),
     supersedes: record.supersedes,
     parkedTrigger: record.parked?.trigger ?? null,

@@ -79,10 +79,10 @@ function gate(name: string, status: VerifyGateOutcome["status"], detail: string 
   return Object.freeze({ gate: name, status, detail });
 }
 
-async function guarded(
+async function guarded<Outcome extends VerifyGateOutcome | null>(
   name: string,
-  probe: () => Promise<VerifyGateOutcome>,
-): Promise<VerifyGateOutcome> {
+  probe: () => Promise<Outcome>,
+): Promise<Outcome | VerifyGateOutcome> {
   try {
     return await probe();
   } catch (error: unknown) {
@@ -248,9 +248,35 @@ function researchEvidenceGate(input: VerifyInput): VerifyGateOutcome | null {
     : gate("research-evidence", "fail", "document-evidence-missing");
 }
 
+/**
+ * 任务包声明的证据要求（R4）：所有已规划包 `requiredEvidenceKinds` 的并集都要在受管证据里出现；
+ * 没有任何包声明时不设此门。包从已规划事件重读（与 coverage 同一做法）。
+ */
+async function requiredEvidenceGate(input: VerifyInput): Promise<VerifyGateOutcome | null> {
+  const repository = new DemandEventSourcingRepository(input.demandRoot);
+  const required = new Set<string>();
+  for (const target of input.loaded.aggregate.state.targetTasks) {
+    const planned = await repository.findTargetTaskPlannedEvent(
+      target.taskPackageId,
+      signalOptions(input.signal),
+    );
+    for (const kind of planned?.event.data.taskPackage.requiredEvidenceKinds ?? [])
+      required.add(kind);
+  }
+  if (required.size === 0) return null;
+  const held = new Set<string>(
+    (input.loaded.aggregate.state.managedEvidence ?? []).map((summary) => summary.kind),
+  );
+  const missing = [...required].filter((kind) => !held.has(kind)).sort();
+  return missing.length === 0
+    ? gate("required-evidence", "pass")
+    : gate("required-evidence", "fail", `missing:${missing.join(",")}`);
+}
+
 /** 门按固定顺序评估；报告确定性，摘要只依赖门的结果。 */
 export async function evaluateVerifyGates(input: VerifyInput): Promise<VerifyReport> {
   const research = researchEvidenceGate(input);
+  const requiredEvidence = await guarded("required-evidence", () => requiredEvidenceGate(input));
   const gates: VerifyGateOutcome[] = [
     await guarded("config-authority", () => configGate(input)),
     await guarded("ledger-layout", () => ledgerGate(input)),
@@ -261,6 +287,7 @@ export async function evaluateVerifyGates(input: VerifyInput): Promise<VerifyRep
     await guarded("evidence-integrity", () => evidenceGate(input)),
     ...(input.payloadBlockers === null ? [] : [privacyGate(input.payloadBlockers)]),
     ...(research === null ? [] : [research]),
+    ...(requiredEvidence === null ? [] : [requiredEvidence]),
     ...(input.loaded.identity.demandType === "research" ||
     input.loaded.aggregate.state.lifecycle !== "active"
       ? []

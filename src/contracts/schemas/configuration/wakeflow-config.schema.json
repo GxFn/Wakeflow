@@ -92,7 +92,7 @@
         }
       ],
       "pattern": "^(?![A-Za-z]:)(?:\\.\\./)?(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+(?:/(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+)*$",
-      "description": "Canonical portable relative placement of a repository or support surface: below the program root or at most one ../ level up (a named sibling of the root). A deeper ../ chain is rejected so that a session working directory can always be traced back to its program root through an ancestor or an ancestor's direct child; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.",
+      "description": "Portable relative placement below the program root or at most one `../` level up; absolute paths, backslashes, empty or dot-only segments and deeper traversal are rejected.",
       "examples": ["Design", "../ProductA"]
     },
     "claudeTmuxSessionName": {
@@ -1004,7 +1004,7 @@
         },
         "permissionMode": {
           "enum": ["auto", "acceptEdits", "bypassPermissions"],
-          "description": "Persistent Claude permission preference. auto is the default: Claude Code reviews each action itself, so the guided user is not asked to approve routine tool calls. acceptEdits is the conservative mode that stops for commands. bypassPermissions requires an explicit durable user choice.",
+          "description": "auto (default) lets Claude Code review each action itself; acceptEdits stops for commands; bypassPermissions requires an explicit durable user choice.",
           "examples": ["auto"]
         }
       }
@@ -1208,7 +1208,7 @@
       }
     },
     "pod": {
-      "description": "One pod: the only execution-environment abstraction (ADR-0010). The primary pod runs in the main checkouts; a worktree pod runs each repository in its own git worktree. States creating/ready/closed are derived from receipts; only the Controller's open/closing decision is durable.",
+      "description": "One pod (ADR-0010): the primary pod runs in the main checkouts, a worktree pod runs each repository in its own git worktree; creating/ready/closed derive from receipts.",
       "examples": [
         {
           "podId": "pod_99999999-9999-4999-8999-999999999999",

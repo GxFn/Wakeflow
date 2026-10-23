@@ -81,6 +81,10 @@ testAttempts?: [TestAttemptState]|[TestAttemptState, TestAttemptState]|[TestAtte
 productDefectRemediation?: ProductDefectRemediation
 reworkCount?: number
 supersededByTargetTaskId?: string
+/**
+ * @maxItems 32
+ */
+supersededTargetResultIds?: string[]
 })
 /**
  * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。

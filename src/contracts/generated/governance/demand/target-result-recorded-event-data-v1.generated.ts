@@ -23,6 +23,10 @@ delivery: Delivery
 report: (WakeflowImplementationTargetResultReport | WakeflowTestTargetResultReport)
 testExecution?: TestExecution
 resultDigest: WakeflowSha256DigestText
+/**
+ * 评审前被这份结果取代的上一份结果（同一投递、同一声明，R5）；没有取代时缺席。
+ */
+supersedes?: string
 })
 /**
  * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。

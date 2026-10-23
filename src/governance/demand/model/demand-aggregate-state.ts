@@ -77,6 +77,7 @@ import {
   parseTargetResult,
   type TargetResult,
   TargetResultError,
+  targetResultIdForClaim,
 } from "../../result/target-result.js";
 import {
   deriveTargetResultCallbackId,
@@ -147,6 +148,8 @@ interface DemandImplementationTargetTaskStateBase {
   readonly acceptanceAnchorIds: readonly string[];
   /** 已被评审判为 rework 的次数；从未 rework 的目标不写入，保持既有 state digest。 */
   readonly reworkCount?: number;
+  /** 评审前被 `supersedes` 导入取代的结果（R5）；从未取代的目标不写入，保持既有 state digest。 */
+  readonly supersededTargetResultIds?: readonly WakeflowDurableId<"target-result">[];
 }
 
 export interface DemandPlannedTargetTaskState extends DemandImplementationTargetTaskStateBase {
@@ -333,6 +336,8 @@ interface DemandTestTargetTaskStateBase {
   readonly taskPackageDigest: Sha256Digest;
   readonly workType: "test";
   readonly windowId: WakeflowDurableId<"window">;
+  /** 评审前被 `supersedes` 导入取代的结果（R5）；从未取代的目标不写入。 */
+  readonly supersededTargetResultIds?: readonly WakeflowDurableId<"target-result">[];
 }
 
 export interface DemandTestPlannedTargetTaskState extends DemandTestTargetTaskStateBase {
@@ -1949,6 +1954,77 @@ function callbackSummaryOf(
   });
 }
 
+/**
+ * 结果准入的阶段（R5）：第一份结果要求投递已落地（accepted 或 indeterminate）；带 `supersedes` 的
+ * 结果要求目标正停在已回报、尚无决定的阶段，且点名的正是当前那份序号 1 的结果——一个投递只能
+ * 取代一次，决定之后只有返工。
+ */
+function resultAdmitted(
+  target: Readonly<{ readonly phase: string }>,
+  result: Readonly<TargetResult>,
+  reportedPhase: string,
+  importablePhases: readonly string[],
+): boolean {
+  if (result.supersedes === undefined) return importablePhases.includes(target.phase);
+  const delivery = (
+    target as Readonly<{
+      readonly currentDelivery?: Readonly<{
+        readonly targetResult?: Readonly<{ readonly targetResultId: string }>;
+      }>;
+    }>
+  ).currentDelivery;
+  return (
+    target.phase === reportedPhase &&
+    delivery?.targetResult?.targetResultId === result.supersedes &&
+    result.supersedes === targetResultIdForClaim(result.delivery.fence.claimId, 1)
+  );
+}
+
+type TestImportTarget = Extract<
+  DemandTargetTaskState,
+  {
+    readonly phase:
+      | "test-host-effect-accepted"
+      | "test-host-effect-indeterminate"
+      | "test-result-reported";
+  }
+>;
+type ImplementationImportTarget = Extract<
+  DemandTargetTaskState,
+  { readonly phase: "host-effect-accepted" | "host-effect-indeterminate" | "result-reported" }
+>;
+
+function isTestImportTarget(target: Readonly<DemandTargetTaskState>): target is TestImportTarget {
+  return (
+    target.phase === "test-host-effect-accepted" ||
+    target.phase === "test-host-effect-indeterminate" ||
+    target.phase === "test-result-reported"
+  );
+}
+
+function isImplementationImportTarget(
+  target: Readonly<DemandTargetTaskState>,
+): target is ImplementationImportTarget {
+  return (
+    target.phase === "host-effect-accepted" ||
+    target.phase === "host-effect-indeterminate" ||
+    target.phase === "result-reported"
+  );
+}
+
+function supersededIdsAfter(
+  target: Readonly<{
+    readonly supersededTargetResultIds?: readonly WakeflowDurableId<"target-result">[];
+  }>,
+  result: Readonly<TargetResult>,
+): Readonly<{ supersededTargetResultIds?: readonly WakeflowDurableId<"target-result">[] }> {
+  return result.supersedes === undefined
+    ? {}
+    : {
+        supersededTargetResultIds: [...(target.supersededTargetResultIds ?? []), result.supersedes],
+      };
+}
+
 /** `result.target-result-recorded.v1` 使用的纯状态转换：结果与其回调记录一起进入摘要。 */
 export function recordTargetResultInDemandAggregateState(
   currentValue: unknown,
@@ -1980,8 +2056,11 @@ export function recordTargetResultInDemandAggregateState(
       result.demandId !== current.demandId ||
       target === undefined ||
       target.workType !== "test" ||
-      (target.phase !== "test-host-effect-accepted" &&
-        target.phase !== "test-host-effect-indeterminate") ||
+      !isTestImportTarget(target) ||
+      !resultAdmitted(target, result, "test-result-reported", [
+        "test-host-effect-accepted",
+        "test-host-effect-indeterminate",
+      ]) ||
       target.taskPackageId !== result.taskPackage.taskPackageId ||
       target.taskPackageDigest !== result.taskPackage.digest ||
       target.windowId !== result.assignment.windowId ||
@@ -2003,6 +2082,7 @@ export function recordTargetResultInDemandAggregateState(
         entry.targetTaskId === target.targetTaskId
           ? {
               ...target,
+              ...supersededIdsAfter(target, result),
               phase: "test-result-reported",
               currentDelivery: {
                 ...target.currentDelivery,
@@ -2036,7 +2116,11 @@ export function recordTargetResultInDemandAggregateState(
   if (
     current.lifecycle !== "active" ||
     result.demandId !== current.demandId ||
-    (target.phase !== "host-effect-accepted" && target.phase !== "host-effect-indeterminate") ||
+    !isImplementationImportTarget(target) ||
+    !resultAdmitted(target, result, "result-reported", [
+      "host-effect-accepted",
+      "host-effect-indeterminate",
+    ]) ||
     target.taskPackageId !== result.taskPackage.taskPackageId ||
     target.taskPackageDigest !== result.taskPackage.digest ||
     target.repositoryId !== result.assignment.repositoryId ||
@@ -2062,6 +2146,7 @@ export function recordTargetResultInDemandAggregateState(
       entry.targetTaskId === target.targetTaskId
         ? {
             ...entry,
+            ...supersededIdsAfter(target, result),
             phase: "result-reported",
             currentDelivery: {
               ...target.currentDelivery,

@@ -89,7 +89,10 @@ report, return the callback. You own no other step and no Controller authority.
    from the prompt. Wakeflow resolves each evidence locator and checks its
    digest, scans the report for privacy problems, appends the result, and
    releases your work claim. A refusal means the report is not yet importable -
-   fix what it named and import again; it is not a reason to stop working. An
+   fix what it named and import again; it is not a reason to stop working. If
+   you find the imported report wrong before the Controller has decided, import
+   once more with `supersedes` set to the `targetResultId` the first import
+   returned; after a decision only a rework can change it. An
    evidence refusal's `path` points at the first citation it could not
    resolve, its `reason` says why (for example `evidence-digest-mismatch`), and
    `details.unresolvedCitations` counts them all. A

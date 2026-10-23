@@ -40,6 +40,7 @@ export async function placePendingClaimState(
     title: loaded.record.title,
     demandType: loaded.record.demandType,
     priority: loaded.record.priority,
+    testingMode: loaded.record.testingDecision.mode,
     publishedAt: parseUtcInstant(loaded.record.recordedAt),
     supersedes: loaded.record.supersedes,
     parkedTrigger: null,

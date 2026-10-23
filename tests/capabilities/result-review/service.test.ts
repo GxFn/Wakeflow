@@ -1,4 +1,4 @@
-import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import { deepEqual, equal, notEqual, ok, rejects } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -12,6 +12,7 @@ import type {
 import {
   type ExecuteResultReviewOptions,
   executeImplementationReviewDecisionRequest,
+  executeTargetResultImportRequest,
   executeTestReviewDecisionRequest,
 } from "../../../src/capabilities/result-review/service.js";
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
@@ -1309,5 +1310,115 @@ test("inspect detail=summary：测试目标的任务包带合同步骤 id，逐�
     ok(JSON.stringify(summary).length < JSON.stringify(full).length);
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("R5（§13.210）：评审前一次 supersedes 导入换新身份与新回调；点错、第二次、决定之后都被拒；旧身份的决定失效", async () => {
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
+  try {
+    const first = fixture.imported;
+    const taskPackage = await loadFixtureTaskPackage(
+      fixture,
+      fixture.delivered.envelope.target.taskPackageId,
+    );
+    const corrected = {
+      ...createImplementationTargetResultReportContentFixture(taskPackage, fixture.evidence),
+      summary: "更正后的摘要：补充了遗漏的验证说明。",
+    };
+    const supersede = (
+      idempotencyKey: string,
+      supersedes: string,
+      expectedStreamRevision: number,
+    ) =>
+      executeTargetResultImportRequest(
+        CODEX_REVIEW_FACADE,
+        {
+          root: fixture.workspacePath,
+          demandId: fixture.demandId,
+          idempotencyKey,
+          expectedStreamRevision,
+          deliveryId: fixture.delivered.prepared.delivery.deliveryId,
+          claimDigest: fixture.delivered.prepared.permit.fence.claimDigest,
+          report: { workType: "implementation", content: corrected },
+          supersedes,
+        },
+        { clock: () => at("12:12:00"), durability: "none" },
+      );
+    await rejects(
+      supersede(
+        "fixture-supersede-wrong",
+        `target-result_${"0".repeat(8)}-0000-4000-8000-${"0".repeat(12)}`,
+        await currentFixtureStreamRevision(fixture),
+      ),
+      rejectedWith("supersede-result-mismatch"),
+    );
+    const second = await supersede(
+      "fixture-supersede-1",
+      first.result.targetResultId,
+      await currentFixtureStreamRevision(fixture),
+    );
+    equal(second.status, "committed");
+    notEqual(second.result.targetResultId, first.result.targetResultId);
+    equal(second.result.supersedes, first.result.targetResultId);
+    notEqual(second.callback.callbackId, first.callback.callbackId);
+    equal(second.callback.permit.generation, 1);
+    equal(second.next.frontier, "implementation-result-review");
+    const replayed = await supersede(
+      "fixture-supersede-1",
+      first.result.targetResultId,
+      second.event.streamRevision - 1,
+    );
+    equal(replayed.status, "idempotent");
+    equal(replayed.result.targetResultId, second.result.targetResultId);
+    await rejects(
+      supersede(
+        "fixture-supersede-2",
+        second.result.targetResultId,
+        await currentFixtureStreamRevision(fixture),
+      ),
+      rejectedWith("supersede-exhausted"),
+    );
+
+    const inspection = await inspectFixtureReview(fixture, fixture.targetTaskId);
+    equal(inspection.reviewUnit.targetResult.targetResultId, second.result.targetResultId);
+    deepEqual(inspection.reviewUnit.supersededResults, [first.result.targetResultId]);
+    // 夹具里按第一份结果准备的决定请求点的是旧身份：被取代的结果不再是可决定的单元。
+    await rejects(
+      decideFixtureImplementation(fixture, {
+        expectedStreamRevision: await currentFixtureStreamRevision(fixture),
+      }),
+      (error: unknown) =>
+        isWakeflowError(error) &&
+        error.code === "precondition-failed" &&
+        (error.reason === "snapshot-stale" || error.reason === "result-unknown"),
+    );
+
+    await landFixtureTargetCompletion(fixture, fixture.route, at("12:21:00"));
+    const confirmed = await inspectFixtureReview(fixture, fixture.targetTaskId, {
+      clock: () => at("12:22:00"),
+    });
+    equal(allows(confirmed.reviewUnit, "accept"), true);
+    const decided = await decideFixtureImplementation(
+      fixture,
+      fixtureImplementationDecisionRequest(
+        fixture,
+        confirmed,
+        await currentFixtureStreamRevision(fixture),
+        "accept",
+        "fixture-decision-after-supersede",
+      ),
+      decisionOptions(at("12:23:00"), "c5c5c5c5-c5c5-4c5c-8c5c-c5c5c5c5c5c5"),
+    );
+    equal(decided.status, "committed");
+    await rejects(
+      supersede(
+        "fixture-supersede-3",
+        second.result.targetResultId,
+        await currentFixtureStreamRevision(fixture),
+      ),
+      rejectedWith("supersede-target-phase"),
+    );
+  } finally {
+    await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
   }
 });

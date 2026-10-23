@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-cancellation-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CANCELLATION_REQUEST_SCHEMA",
   "title": "WakeflowDemandCancellationRequestV1",
-  "description": "wakeflow_cancel_demand 的请求：取消任何非终态 Demand。preview 零写；apply 带 planDigest 在一个事务里写取消事件、封归档包、释放本 Demand 的窗口工作声明、撤回需求包、删活动根；有待评审结果时拒绝。recover 带 operationId（即 demandId）。",
+  "description": "wakeflow_cancel_demand 的请求：取消非终态 Demand。preview 零写；apply 带 planDigest 在一个事务里写取消事件、封归档、释放声明、撤回需求包、删活动根；有待评审结果时拒绝；recover 带 operationId。",
   "type": "object",
   "oneOf": [
     {

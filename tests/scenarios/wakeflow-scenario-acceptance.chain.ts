@@ -178,6 +178,7 @@ interface ImportResult {
   readonly result: {
     readonly targetResultId: string;
     readonly resultDigest: string;
+    readonly supersedes?: string;
     readonly delivery: {
       readonly generation: number;
       readonly fence: { readonly claimDigest: string };
@@ -228,6 +229,7 @@ interface ReviewInspection {
     };
     readonly targetCompletion: { readonly status: string };
     readonly allowedDecisions: readonly string[];
+    readonly supersededResults?: readonly string[];
     readonly resumptionBasis: {
       readonly kind: string;
       readonly escalationEventId?: string;
@@ -1997,6 +1999,65 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   equal(replay.callback.callbackId, importResult.callback.callbackId);
   equal(replay.result.resultDigest, importResult.result.resultDigest);
 
+  // R5（§13.210）：评审前一次更正——目标以 supersedes 点名第一份结果再导入一次：新身份、新回调（代际 1）、
+  // 检视里 supersededResults 列出被取代的那份；点错对象或第二次取代被拒；决定之后只有返工（见能力测试）。
+  const wrongSupersede = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...importRequest(
+        context,
+        permit,
+        "scenario-supersede-wrong",
+        await currentStreamRevision(context),
+        content,
+      ),
+      supersedes: `target-result_${"0".repeat(8)}-0000-4000-8000-${"0".repeat(12)}`,
+    },
+  });
+  equal(wrongSupersede.isError, true, "a supersede must name the current result");
+  equal(scenarioToolText(wrongSupersede).includes("supersede-result-mismatch"), true);
+  const superseded = await call(context, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, {
+    ...importRequest(
+      context,
+      permit,
+      "scenario-supersede-1",
+      await currentStreamRevision(context),
+      {
+        ...content,
+        summary: `${content.summary} 更正：补充了遗漏的验证说明。`,
+      },
+    ),
+    supersedes: importResult.result.targetResultId,
+  });
+  assertNoPrivatePath(context, superseded);
+  const supersedeResult = superseded.structuredContent as ImportResult;
+  equal(supersedeResult.status, "committed");
+  equal(supersedeResult.result.supersedes, importResult.result.targetResultId);
+  equal(supersedeResult.result.targetResultId === importResult.result.targetResultId, false);
+  equal(supersedeResult.callback.callbackId === importResult.callback.callbackId, false);
+  equal(supersedeResult.callback.permit.generation, 1);
+  const exhausted = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...importRequest(
+        context,
+        permit,
+        "scenario-supersede-2",
+        await currentStreamRevision(context),
+        content,
+      ),
+      supersedes: supersedeResult.result.targetResultId,
+    },
+  });
+  equal(exhausted.isError, true, "one correction per delivery");
+  equal(scenarioToolText(exhausted).includes("supersede-exhausted"), true);
+  const afterSupersede = await inspectReview(context, context.targetTaskId);
+  equal(
+    afterSupersede.reviewUnit.targetResult.targetResultId,
+    supersedeResult.result.targetResultId,
+  );
+  deepEqual(afterSupersede.reviewUnit.supersededResults, [importResult.result.targetResultId]);
+
   const pending = await inspectReview(context, context.targetTaskId);
   equal(pending.reviewUnit.status, "reported");
   equal(pending.reviewUnit.callback.status, "pending");
@@ -2039,11 +2100,12 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   equal(summary.reviewUnit.reviewUnitDigest, confirmed.reviewUnit.reviewUnitDigest);
   deepEqual(summary.reviewUnit.allowedDecisions, confirmed.reviewUnit.allowedDecisions);
   equal(JSON.stringify(summary).length < JSON.stringify(confirmed).length, true);
+  // 后面的回调落地与 rearm 场景跟随当前（取代后）的那份结果的回调。
   context.callback = {
-    callbackId: importResult.callback.callbackId,
-    prompt: importResult.callback.permit.prompt,
-    generation: importResult.callback.permit.generation,
-    issuedAt: importResult.callback.permit.issuedAt,
+    callbackId: supersedeResult.callback.callbackId,
+    prompt: supersedeResult.callback.permit.prompt,
+    generation: supersedeResult.callback.permit.generation,
+    issuedAt: supersedeResult.callback.permit.issuedAt,
   };
   return `wrong-digest=rejected; private-path=rejected; kind-mismatch=${context.documentEvidence === undefined ? "skipped" : "rejected"}; import=${importResult.status}; replay=${replay.status}; claim=released; callback=${pending.reviewUnit.callback.status}; completion=${pending.reviewUnit.targetCompletion.status}->${confirmed.reviewUnit.targetCompletion.status}; accept-before-stop=rejected; allowed=${confirmed.reviewUnit.allowedDecisions.join("|")}; summary=${summary.detail}/${summary.reviewUnit.taskPackage.acceptanceAnchors.length}-anchors/same-digests`;
 }

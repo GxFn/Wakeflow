@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-result-import-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA",
   "title": "WakeflowTargetResultImportRequestV1",
-  "description": "Single-call request importing one target-authored implementation or test Report into an authority-enriched TargetResult: evidence locators must resolve inside this Demand's managed evidence records and match their digests, report text passes the privacy scan, test steps carry observed/evidence/verdict and a failure classification, and the same idempotency key and body replays the first result.",
+  "description": "Import one target-authored implementation or test Report as a TargetResult: evidence locators must resolve to this Demand's managed evidence, text passes the privacy scan, steps carry observed/evidence/verdict; the same key and body replays.",
   "$comment": "The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.",
   "type": "object",
   "additionalProperties": false,
@@ -51,6 +51,11 @@
       "minimum": 1,
       "maximum": 9007199254740991,
       "description": "Demand stream revision the caller observed; a stale value is rejected."
+    },
+    "supersedes": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Replace the result this delivery already reported (its targetResultId) before the Controller decides; allowed once per delivery and never after a decision."
     }
   },
   "$defs": {

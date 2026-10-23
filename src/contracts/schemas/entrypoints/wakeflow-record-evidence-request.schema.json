@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:record-evidence-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_RECORD_EVIDENCE_REQUEST_SCHEMA",
   "title": "WakeflowRecordEvidenceRequestV1",
-  "description": "Effect-shaped request recording one immutable managed evidence record for an active Demand: preview derives the plan without writing, apply recomputes the same plan from the same selection and executes it when the plan digest matches, recover finishes an interrupted publication by demandId.",
+  "description": "Record one immutable managed evidence record for an active Demand: preview derives the plan, apply executes it when the plan digest matches, recover finishes an interrupted publication by demandId.",
   "$comment": "The selection names a kind from the closed vocabulary and one of four sources: managed-path copies bytes from a configured root; observation projects one host hook record without its session handle or working directory; link and commit are reference-only. contentReview=controller-confirmed lets opaque members and non-credential privacy findings through; credential findings always block.",
   "type": "object",
   "oneOf": [
@@ -43,7 +43,7 @@
       "pattern": "^(?!\\.\\.?(?:/|$))[^/\\u0000]+(?:/(?!\\.\\.?(?:/|$))[^/\\u0000]+)*$"
     },
     "evidenceKind": {
-      "description": "Closed kind vocabulary tied to the source kind: managed-path takes test-output, diff or document; observation takes hook-observation, or transcript only when the hook record carries one; link takes link; commit takes commit. Any other pairing is refused as kind-source-mismatch at $request.selection.kind.",
+      "description": "Kind must match the source: managed-path takes test-output, diff or document; observation takes hook-observation or transcript; link takes link; commit takes commit (else kind-source-mismatch).",
       "enum": [
         "hook-observation",
         "transcript",

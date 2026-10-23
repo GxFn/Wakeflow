@@ -237,6 +237,45 @@ test("准备与 rearm 的 phase 阻塞：rearm 未用尽的 rejected 目标必�
   deepEqual(derivePrepareBlockers({ workType: "test", phase: "rework-requested", generation: 1 }), [
     "target-phase:rework-requested",
   ]);
+  // R4（§13.210）：未接受的依赖排在等决定之后、阶段许可之前；空依赖不阻塞。
+  const dependency = "target-task_0d0d0d0d-0d0d-40d0-80d0-0d0d0d0d0d0d";
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "planned",
+      generation: null,
+      pendingDependencies: [dependency],
+    }),
+    [`dependency-pending:${dependency}`],
+  );
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "delivery-prepared",
+      generation: 1,
+      pendingDependencies: [dependency],
+    }),
+    [`dependency-pending:${dependency}`],
+  );
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "planned",
+      generation: null,
+      awaitingDecision: true,
+      pendingDependencies: [dependency],
+    }),
+    ["awaiting-decision"],
+  );
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "planned",
+      generation: null,
+      pendingDependencies: [],
+    }),
+    [],
+  );
   deepEqual(deriveRearmBlockers({ phase: "host-effect-rejected", generation: 3 }), []);
   deepEqual(deriveRearmBlockers({ phase: "test-host-effect-rejected", generation: 1 }), []);
   deepEqual(deriveRearmBlockers({ phase: "host-effect-rejected", generation: 4 }), [

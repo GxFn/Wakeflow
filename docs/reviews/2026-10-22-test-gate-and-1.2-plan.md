@@ -81,6 +81,8 @@
 
 于是 T3/D7 的量化选项（都要一门实测）：隔离道并发 3 → 其余道提前到约 230 秒开始，整门约 12.5 分钟，phase 1 五进程；其余道拆成"4 worker 从 0 秒开始的一片"加"隔离道结束后 2 worker 的一片"，整门约 10.5–11 分钟，但 phase 1 变成八进程，隔离道的 hook 大目录用例（83 秒对 120 秒预算）与 lab 实验的余量会被吃掉；或者把运行器预算的缺省改为性能核数（M1 上 4）而不是逻辑核数——每个进程更快、总吞吐略降，尾巴更短，同样要测。
 
+2026-10-22 补充（§13.210 的门）：与用户的交互会话共用机器时（它们占约 4 个核），8 worker 的门中位放慢 1.87 倍、p90 3.1 倍，六条用例被 120/240 秒的用例预算取消——它们在安静机器上的时长已是预算的 40–60%（lab workflow 单条 69 秒、投递查询不完整 47 秒、混合失败一条约 100 秒），任何 2.5 倍的外部放慢都会把它们推过线，而单独重跑全部通过。这给 D4 多一个理由：拆重文件也把单条用例压回预算的三分之一以内。同批把运行器预算降到 6 再跑一次，作为"预算 = 性能核数"选项的一个数据点（结果见 §13.210）。
+
 ### 2.3 批次
 
 | 批 | 内容 | 级别 | 验收 |
@@ -102,7 +104,7 @@ T1 与 T2 可以合成一个阶段、一道门；T3 等新耗时表。D5 没有�
 **设计。**
 - 实现任务包新增可选 `dependsOn: targetTaskId[]`（≤32、唯一、不含自身、每个都是**本 Demand 已规划的实现目标**——只能依赖已存在的目标，所以无环是构造保证）；测试包不加（规划时已要求全部接受）。`createTaskPackage` 的键检查从"精确等于"改为"必有 ⊆ 键 ⊆ 允许"，Schema 的实现分支加该字段为可选。
 - 投递准备新增阻塞 `dependency-pending:<targetTaskId>`，排在 `awaiting-decision` 之后、`target-phase` 之前；依赖目标的阶段取聚合 `targetTasks[].phase === "accepted"`；`dependsOn` 本身在准备时从已规划事件重读（与 coverage 同一做法），聚合状态形状不变。
-- 两种包都可选 `requiredEvidenceKinds: EvidenceKind[]`（≤7、唯一）。完成新增第 16 道门 `required-evidence`：取所有已规划包的并集，与聚合 `managedEvidence[].kind` 比对，缺一报 `missing:<kind>`；取消时跳过（与 `research-evidence` 同列）。`wakeflow_verify` 的描述与 decide 测试钉的"fifteen gates"同步改"sixteen"。
+- 两种包都可选 `requiredEvidenceKinds: EvidenceKind[]`（≤7、唯一）。完成新增 Demand 完成门 `required-evidence`（`evaluateVerifyGates` 的报告，不是 `wakeflow_verify` 的工作区十五门——执行时更正，§13.210）：取所有已规划包的并集，与聚合 `managedEvidence[].kind` 比对，缺一报 `missing:<kinds>`；没有包声明时不设此门；取消时跳过（与 `research-evidence` 同列）。
 - 技能：`delivery-and-review.md` Step 6 写"多仓库先后顺序用 `dependsOn`，不再靠 prose"，Step 12 写 `required-evidence`；Design 的 `requirement-package.md` 允许在 landing 里给"顺序提示"，由 Controller 落成 `dependsOn`。
 - 预算：规划请求 Schema 两处增长，先量 `measureWakeflowToolCatalogBytes`，超出就删描述重复文本，不动 102 KiB 的上限。
 
@@ -196,4 +198,6 @@ T1 与 T2 可以合成一个阶段、一道门；T3 等新耗时表。D5 没有�
 | 标准与本计划 | 已提交 f52927ef | §13.205 | D9、路线图 |
 | T1–T2 | 已执行：整门 18.2 → 14.2 分钟（run-9xr332，提交 6ab75f9f） | §13.206 | D9 |
 | T3 | 待执行（D4 重文件、D7 道再平衡的三个量化选项见 §2.2 实测段） | — | D9 |
-| 1.2 批 0–E | 待执行 | — | open-items 1.2 节（批 0 新开） |
+| 1.2 批 0、A | 已执行（§13.207、§13.208；L13 待缓存刷新） | §13.207、§13.208 | V3 |
+| 1.2 批 B、C | 已执行，合成一道门（§13.209、§13.210） | §13.209、§13.210 | V1、V2、V4、V5 |
+| 1.2 批 D、E | 待执行 | — | V6、V7 |

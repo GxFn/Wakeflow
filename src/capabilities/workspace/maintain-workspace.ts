@@ -39,7 +39,7 @@ import {
 } from "../../governance/demand/demand-runtime-recovery.js";
 import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
-import { fail } from "../../kernel/error.js";
+import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   type PublicationTransactionEnvelope,
@@ -47,6 +47,7 @@ import {
   type PublicationTransactionPlan,
   runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
+import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
@@ -795,6 +796,18 @@ function parseRequest(value: unknown): Readonly<{
 }
 
 /** 使用宿主 entrypoint 固定提供的 facade 执行一个公共 Maintenance 请求。 */
+/** 看板索引重写失败不让维护失败：索引是投影，陈旧由 verify 的 board-consistency 报出（G11）。 */
+async function refreshRequirementBoardIndexQuietly(
+  root: RootedDirectory,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    await refreshRequirementBoardIndex(root, signal);
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowError)) throw error;
+  }
+}
+
 export async function executeWakeflowMaintenancePublicRequest(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
   value: unknown,
@@ -835,9 +848,13 @@ export async function executeWakeflowMaintenancePublicRequest(
         }
         try {
           // 维护 apply 之后刷新一次活动投影：reconfigure 换语言或配置摘要、reconcile 重建派生文件（§13.94 D5）。
-          return await afterMutationRefresh(context.root, options.signal, () =>
+          const applied = await afterMutationRefresh(context.root, options.signal, () =>
             context.facade.apply(context.root, plan.executionPlan, plan.executionRequest),
           );
+          // 看板索引是认领状态的投影：渲染器升级后现存工作区的索引陈旧（board-consistency 报 index-stale），
+          // 任何一次维护 apply——含零步的 reconcile——之后按当前渲染重写一次；写不动留给 verify（G11，§13.209）。
+          await refreshRequirementBoardIndexQuietly(context.root, options.signal);
+          return applied;
         } catch (error: unknown) {
           mapTransactionError(error);
         }

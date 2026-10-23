@@ -163,6 +163,34 @@ test("阻塞项派生：完成看路由与门，取消看待评审，continue �
     }),
     ["lifecycle:completed", "pending-review:target-task_1", "package-claim:claimed"],
   );
+  // R4（§13.210）：required-evidence 门失败阻塞完成；取消与 research-evidence 一样跳过它。
+  const requiredEvidenceFailing = [
+    ...passing.filter((gate) => gate.gate !== "board-claim"),
+    { gate: "required-evidence", status: "fail" as const, detail: "missing:commit" },
+  ];
+  const base = {
+    lifecycle: "active" as const,
+    awaitingDecision: false,
+    postAcceptanceStage: "completion-preflight" as const,
+    demandId: "demand_00000000-0000-4000-8000-000000000000",
+    claim,
+    pendingReviews: [],
+    gates: requiredEvidenceFailing,
+    payloadBlockers: [],
+    archiveConflict: false,
+  };
+  deepEqual(
+    deriveTerminalBlockers({ ...base, action: "complete" }).filter((blocker) =>
+      blocker.startsWith("verify:required-evidence"),
+    ),
+    ["verify:required-evidence:fail"],
+  );
+  deepEqual(
+    deriveTerminalBlockers({ ...base, action: "cancel" }).filter((blocker) =>
+      blocker.startsWith("verify:required-evidence"),
+    ),
+    [],
+  );
   deepEqual(
     deriveContinueBlockers({
       rootPresent: true,

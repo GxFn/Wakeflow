@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA",
   "title": "WakeflowDemandPublicationResultV1",
-  "description": "wakeflow_create_demand 的结果：preview 给出确定性计划摘要、派生的 demandId 与阻塞项；apply 与 recover 只返回稳定回执（身份与权威摘要、事件与提交、看板认领），不回显聚合、权威内容或路径。",
+  "description": "wakeflow_create_demand 的结果：preview 给出计划摘要、demandId 与阻塞项；apply 与 recover 只返回稳定回执，不回显聚合与路径。",
   "type": "object",
   "oneOf": [
     {

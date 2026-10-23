@@ -304,3 +304,40 @@ test("TaskPackage keeps repository and window inside the explicit assignment rel
     "$/assignment/windowId",
   );
 });
+
+test("R4（§13.210）：实现包可带 dependsOn 与 requiredEvidenceKinds，进摘要与文档；test 包只可带后者；旧名与重复仍拒", () => {
+  const other = "target-task_0d0d0d0d-0d0d-40d0-80d0-0d0d0d0d0d0d";
+  const withDependencies = createTaskPackage(
+    { ...taskPackageDraft(), dependsOn: [other], requiredEvidenceKinds: ["commit", "diff"] },
+    { clock: () => TASKING_CREATED_AT },
+  );
+  deepEqual(withDependencies.workType === "implementation" ? withDependencies.dependsOn : null, [
+    other,
+  ]);
+  deepEqual(withDependencies.requiredEvidenceKinds, ["commit", "diff"]);
+  // 可选字段参与摘要与确定性文档。
+  equal(
+    computeTaskPackageDigest(withDependencies) ===
+      computeTaskPackageDigest(createTaskPackageFixture()),
+    false,
+  );
+  deepEqual(parseTaskPackageDocument(renderTaskPackage(withDependencies)), withDependencies);
+  // 缺席的可选字段不出现在包里，也不改变没有它们的包的摘要。
+  equal("dependsOn" in createTaskPackageFixture(), false);
+  equal("requiredEvidenceKinds" in createTaskPackageFixture(), false);
+  expectTaskPackageError(
+    () => parseTaskPackage({ ...withDependencies, dependsOn: [other, other] }),
+    "schema",
+    "$/dependsOn",
+  );
+  expectTaskPackageError(
+    () => parseTaskPackage({ ...withDependencies, requiredEvidenceKinds: ["screenshot"] }),
+    "schema",
+    "$/requiredEvidenceKinds/0",
+  );
+  expectTaskPackageError(
+    () => parseTaskPackage({ ...createTaskPackageFixture(), dependsOnTargetTaskIds: [] }),
+    "schema",
+    "$",
+  );
+});

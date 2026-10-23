@@ -20,7 +20,7 @@ export const EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-09-01T21:00:00.000Z");
  * 由需求包与看板认领状态确定性派生的 Demand 标识（demand 切片 `deriveDemandCreationIds`）；
  * fixture 创建后校验，认领状态形状一变这里就会报出新值。
  */
-export const EVIDENCE_DEMAND_ID = "demand_0aa174cc-cf4c-484d-8ac2-961b3489b5c6";
+export const EVIDENCE_DEMAND_ID = "demand_045ce1b0-e5b4-43d8-b494-a945624228a8";
 
 export interface ManagedEvidenceCapturePlanningWorkspaceFixture {
   readonly publication: Readonly<DemandEventSourcingPublicationWorkspaceFixture>;

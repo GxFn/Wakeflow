@@ -1,10 +1,10 @@
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/utc-instant.generated.js";
 import {
   WAKEFLOW_REQUIREMENT_CLAIM_STATE_SCHEMA,
   type WakeflowRequirementClaimState,
 } from "../contracts/generated/governance/board/requirement-claim-state.generated.js";
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../contracts/generated/foundation/portable-resource-path.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/utc-instant.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import {
@@ -14,8 +14,8 @@ import {
 } from "../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../foundation/data/json-value.js";
 import {
-  readDeterministicJsonFile,
   type DeterministicJsonFileResult,
+  readDeterministicJsonFile,
 } from "../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -27,14 +27,14 @@ import {
   materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
-  retireRootedExclusiveFileLockResidue,
   RootedExclusiveFileLockError,
+  retireRootedExclusiveFileLockResidue,
   withRootedExclusiveFileLock,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
@@ -213,6 +213,8 @@ export interface CreateRequirementClaimStateInput {
   readonly supersedes: string | null;
   /** 非空即 parked，否则 pending。 */
   readonly parkedTrigger: string | null;
+  /** 需求记录的测试模式；进状态文件只为索引显示（G11）。 */
+  readonly testingMode: NonNullable<WakeflowRequirementClaimState["testingMode"]>;
 }
 
 /** 发布即上板：修订 1，pending 或 parked。 */
@@ -228,6 +230,7 @@ export function createRequirementClaimState(
     title: input.title,
     demandType: input.demandType,
     priority: input.priority,
+    testingMode: input.testingMode,
     publishedAt: input.publishedAt,
     supersedes: input.supersedes,
     revision: 1,
@@ -567,7 +570,17 @@ function escapeCell(value: string): string {
     .replace(/\|/gu, "\\|");
 }
 
-const REQUIREMENT_BOARD_INDEX_MARKER = "<!-- wakeflow:board-projection:v1 -->";
+/** v2（G11，§13.209）：加 Testing 与 Parked 两列；维护 apply 之后陈旧的 v1 索引被重写。 */
+const REQUIREMENT_BOARD_INDEX_MARKER = "<!-- wakeflow:board-projection:v2 -->";
+/** Parked 列只给触发词的开头：整段触发词在状态文件与 `wakeflow_inspect_board` 里。 */
+const PARKED_CELL_MAXIMUM_CODE_POINTS = 40;
+
+function parkedCell(state: RequirementClaimState): string {
+  if (state.parked === null) return "—";
+  const points = [...state.parked.trigger];
+  const shown = points.slice(0, PARKED_CELL_MAXIMUM_CODE_POINTS).join("");
+  return escapeCell(points.length > PARKED_CELL_MAXIMUM_CODE_POINTS ? `${shown}…` : shown);
+}
 
 /** 人读索引：只列 pending、parked、claimed；已撤回与已归档留在状态文件里。 */
 export function renderRequirementBoardIndex(states: readonly RequirementClaimState[]): string {
@@ -576,7 +589,7 @@ export function renderRequirementBoardIndex(states: readonly RequirementClaimSta
     .sort(compareRequirementClaimStates)
     .map(
       (state) =>
-        `| ${state.priority} | ${state.status} | \`${state.requirementId}\` | ${escapeCell(state.title)} | ${state.demandType} | ${state.publishedAt} | ${state.claim === null ? "—" : `\`${state.claim.demandId}\``} |`,
+        `| ${state.priority} | ${state.status} | \`${state.requirementId}\` | ${escapeCell(state.title)} | ${state.demandType} | ${state.testingMode ?? "—"} | ${parkedCell(state)} | ${state.publishedAt} | ${state.claim === null ? "—" : `\`${state.claim.demandId}\``} |`,
     );
   const lines = [
     "# Requirement Board",
@@ -585,8 +598,8 @@ export function renderRequirementBoardIndex(states: readonly RequirementClaimSta
     "",
     "This file is a deterministic projection of the claim states under `board/`; do not edit it by hand.",
     "",
-    "| Priority | Status | Requirement | Title | Type | Published | Demand |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Priority | Status | Requirement | Title | Type | Testing | Parked | Published | Demand |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ];
   return `${lines.join("\n")}\n`;

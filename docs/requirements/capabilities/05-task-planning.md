@@ -129,3 +129,9 @@
 | 尝试 | 一次尝试可指定 `stepIds` 只跑失败子集；预算不变 |
 | 验收锚点 | 每个 `acceptanceAnchor` 增加 `requirementRef{recordDigest, sectionAnchor, itemId}` 指向需求包验收标准的一条，Wakeflow 校验引用存在；Controller 不能发明锚点 |
 | 调用形状 | `plan_target_task` 是追加型一次调用：`idempotencyKey` 加 `expectedStreamRevision`，结果带 `next` |
+
+## 修订（2026-10-22，1.2 批 C：R4，§13.210）
+
+- 实现任务包可选 `dependsOn`：本 Demand 已规划的实现目标（≤32，唯一）；规划时未知的或指向 test 目标的依赖以 `dependency-unknown:<id>` 拒绝，自依赖因目标尚未存在而自然落在未知里。test 包不可带它（规划测试已要求全部实现目标接受）。
+- 两种包可选 `requiredEvidenceKinds`：证据种类闭集（≤7，唯一），表示完成前 Demand 必须持有的受管证据种类；由完成门 `required-evidence`（卡 08）取所有已规划包的并集核对。
+- 两个字段参与任务包摘要与确定性文档；缺席时不出现在包里，没有它们的包的摘要不变。规划请求的两个分支同步开放这两个可选字段。

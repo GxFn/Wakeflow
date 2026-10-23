@@ -7,8 +7,8 @@ import {
   type TargetDeliveryProductDefectRemediationContext,
   type TargetDeliveryReworkContext,
 } from "../../governance/delivery/delivery-envelope.js";
-import type { LedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-store-contract.js";
 import type { RequirementSection } from "../../governance/ledger/ledger-authority-record.js";
+import type { LedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-store-contract.js";
 import type { TaskPackage } from "../../governance/tasking/task-package.js";
 import { fail } from "../../kernel/error.js";
 import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";

@@ -1,4 +1,4 @@
-import { equal, throws } from "node:assert/strict";
+import { equal, notEqual, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
   createImplementationTargetResult,
@@ -6,9 +6,11 @@ import {
 } from "../../../src/governance/result/implementation-target-result.js";
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
 import {
+  parseTargetResult,
   parseTargetResultDocument,
   renderTargetResult,
   type TargetResultDeliveryBinding,
+  TargetResultError,
   targetResultIdForClaim,
   targetResultRecordedCommitIdFromResult,
   targetResultRecordedEventIdFromResult,
@@ -176,4 +178,42 @@ test("blocked TargetResult允许部分或空anchor evidence且仍不是acceptanc
   equal(result.report.outcome, "blocked");
   equal(result.delivery.disposition, "indeterminate");
   equal(Object.hasOwn(result, "accepted"), false);
+});
+
+test("R5（§13.210）：取代的结果由同一声明的第二序号派生身份并点名第一份；第一份带 supersedes、第二份不带、点错对象都是 relation 错", () => {
+  const claim = createWorkClaimFixture();
+  const envelope = createDeliveryEnvelopeFixture({ claim });
+  const outcome = createDeliveryOutcomeFixture({ claim, envelope });
+  const first = createTargetResultFixture({ claim, envelope, outcome });
+  const taskPackage = createTaskPackageFixture();
+  if (taskPackage.workType !== "implementation") throw new Error("Expected implementation.");
+  const second = createImplementationTargetResult({
+    taskPackage,
+    envelope,
+    delivery: deliveryBindingFromOutcome(outcome),
+    report: createImplementationTargetResultReportFixture(),
+    supersedes: first.targetResultId,
+  });
+  equal(second.targetResultId, targetResultIdForClaim(claim.claimId, 2));
+  notEqual(second.targetResultId, first.targetResultId);
+  equal(second.supersedes, first.targetResultId);
+  notEqual(second.resultDigest, first.resultDigest);
+  equal(
+    targetResultRecordedEventIdFromResult(second),
+    deriveDurableId("demand-event", "target-result-supersede", claim.claimId),
+  );
+  equal(
+    targetResultRecordedCommitIdFromResult(second),
+    deriveDurableId("demand-event-commit", "target-result-supersede", claim.claimId),
+  );
+  equal(parseTargetResultDocument(renderTargetResult(second)).supersedes, first.targetResultId);
+  const relation = (error: unknown) =>
+    error instanceof TargetResultError && error.reason === "relation";
+  throws(() => parseTargetResult({ ...first, supersedes: first.targetResultId }), relation);
+  const { supersedes: _dropped, ...withoutSupersedes } = second;
+  throws(() => parseTargetResult(withoutSupersedes), relation);
+  throws(
+    () => parseTargetResult({ ...second, supersedes: targetResultIdForClaim(claim.claimId, 2) }),
+    relation,
+  );
 });

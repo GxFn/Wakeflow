@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   deriveAnchorReferenceBlockers,
+  deriveDependencyBlockers,
   deriveImplementationBaselines,
   deriveImplementationPlanningBlockers,
   deriveLineageBlockers,
@@ -397,4 +398,22 @@ test("实现规划准入：非活动 Demand、待消费复测与已有 test 目�
     } as unknown as Readonly<DemandAggregateState>),
     ["demand-lifecycle:completed", "test-retest-pending", "test-target-present:t-test"],
   );
+});
+
+test("R4（§13.210）：dependsOn 只能指向本 Demand 已规划的实现目标；未知与 test 目标逐条点名，缺席即无阻塞", () => {
+  const implementation = "target-task_0a0a0a0a-0a0a-40a0-80a0-0a0a0a0a0a0a";
+  const testTarget = "target-task_0b0b0b0b-0b0b-40b0-80b0-0b0b0b0b0b0b";
+  const unknown = "target-task_0c0c0c0c-0c0c-40c0-80c0-0c0c0c0c0c0c";
+  const state = {
+    targetTasks: [
+      { targetTaskId: implementation, workType: "implementation" },
+      { targetTaskId: testTarget, workType: "test" },
+    ],
+  } as unknown as DemandAggregateState;
+  deepEqual(deriveDependencyBlockers(state, undefined), []);
+  deepEqual(deriveDependencyBlockers(state, [implementation]), []);
+  deepEqual(deriveDependencyBlockers(state, [implementation, testTarget, unknown]), [
+    `dependency-unknown:${testTarget}`,
+    `dependency-unknown:${unknown}`,
+  ]);
 });

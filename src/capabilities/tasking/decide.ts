@@ -13,9 +13,10 @@ import type {
   TestImplementationBaseline,
 } from "../../governance/tasking/task-package.js";
 import type { AcceptanceCriterion } from "../../kernel/requirement-acceptance.js";
+
 export {
-  parseAcceptanceCriteria,
   type AcceptanceCriterion,
+  parseAcceptanceCriteria,
 } from "../../kernel/requirement-acceptance.js";
 
 /**
@@ -292,6 +293,24 @@ function testLineageBlockers(
     blockers.push("lineage-unexpected");
   }
   return Object.freeze(blockers);
+}
+
+/** `dependsOn` 只能指向本 Demand 已规划的实现目标（R4）：未知的、或指向 test 目标的，逐条点名。 */
+export function deriveDependencyBlockers(
+  state: Readonly<DemandAggregateState>,
+  dependsOn: readonly string[] | undefined,
+): readonly string[] {
+  if (dependsOn === undefined) return Object.freeze([]);
+  const implementationTargets = new Set<string>(
+    state.targetTasks
+      .filter((target) => target.workType !== "test")
+      .map((target) => target.targetTaskId),
+  );
+  return Object.freeze(
+    dependsOn
+      .filter((targetTaskId) => !implementationTargets.has(targetTaskId))
+      .map((targetTaskId) => `dependency-unknown:${targetTaskId}`),
+  );
 }
 
 /**

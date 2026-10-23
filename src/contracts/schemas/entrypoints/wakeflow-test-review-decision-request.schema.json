@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:test-review-decision-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TEST_REVIEW_DECISION_REQUEST_SCHEMA",
   "title": "WakeflowTestReviewDecisionRequestV1",
-  "description": "Single-call Controller command recording one test TargetResult review decision (accept, request-another-attempt with stepIds, blocked, escalate with a classification) against an inspected Snapshot baseline; the same idempotency key and body replays the first result.",
+  "description": "Record one test TargetResult review decision (accept, request-another-attempt with stepIds, blocked, escalate with a classification) against an inspected snapshot; the same key and body replays.",
   "$comment": "escalate{product-defect} carries the remediation mapping and appends the product-defect remediation authorization in the same commit; escalate{needs-decision} carries the user decision request and appends the Demand escalation event. Admissibility follows the failure classifications of the reported steps.",
   "type": "object",
   "additionalProperties": false,

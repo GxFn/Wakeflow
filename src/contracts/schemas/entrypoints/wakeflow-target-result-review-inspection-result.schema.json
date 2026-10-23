@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-result-review-inspection-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_RESULT_SCHEMA",
   "title": "WakeflowTargetResultReviewInspectionResultV1",
-  "description": "Current read-only review context for one reported, review-blocked, or escalated TargetResult: the complete task package and result, prior decisions, callback and completion evidence status, the decisions the rules allow, and, for test results, the per-step record with approved baselines.",
+  "description": "Read-only review context for one reported, review-blocked or escalated TargetResult: task package, result, prior decisions, callback and completion status, allowed decisions and, for tests, the per-step record.",
   "$comment": "The result is review input only. It performs no checks, derives no verdict, and creates no Controller acceptance; allowedDecisions only restates the admissibility rules of the two decision tools.",
   "type": "object",
   "additionalProperties": false,
@@ -169,6 +169,9 @@
         },
         "resultDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "supersedes": {
+          "$ref": "#/$defs/targetResultId"
         }
       },
       "allOf": [
@@ -1004,6 +1007,22 @@
         },
         "implementationBaselines": {
           "$ref": "#/$defs/reviewTaskPackageImplementationBaselines"
+        },
+        "dependsOn": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reviewTaskPackageTargetTaskId"
+          }
+        },
+        "requiredEvidenceKinds": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidenceKind"
+          }
         }
       },
       "allOf": [
@@ -1039,7 +1058,15 @@
                 "$ref": "#/$defs/reviewTaskPackageSectionAnchors"
               },
               "testContract": false,
-              "implementationBaselines": false
+              "implementationBaselines": false,
+              "dependsOn": {
+                "type": "array",
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/reviewTaskPackageTargetTaskId"
+                }
+              }
             }
           },
           "else": {
@@ -1063,7 +1090,8 @@
                 "$ref": "#/$defs/reviewTaskPackageTestLineage"
               },
               "planReview": false,
-              "sectionAnchors": false
+              "sectionAnchors": false,
+              "dependsOn": false
             }
           }
         }
@@ -1532,6 +1560,14 @@
               }
             }
           ]
+        },
+        "supersededResults": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/targetResultId"
+          },
+          "description": "Results of this target replaced by a supersedes import before any decision; absent when none."
         }
       },
       "allOf": [
@@ -2335,7 +2371,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "generation", "issuedAt", "landedRecordId"],
-      "description": "wake-controller 回调的落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 表示签发后超过静默阈值仍无记录；acknowledged 表示该结果已记录评审决定，此时 landedRecordId 仍可能为 null。",
+      "description": "回调落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 为超过静默阈值仍无记录；acknowledged 为已记录评审决定。",
       "properties": {
         "status": {
           "enum": ["pending", "landed", "silent", "acknowledged"]

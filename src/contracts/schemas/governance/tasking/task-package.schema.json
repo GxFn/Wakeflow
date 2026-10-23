@@ -111,6 +111,12 @@
     },
     "implementationBaselines": {
       "$ref": "#/$defs/implementationBaselines"
+    },
+    "dependsOn": {
+      "$ref": "#/$defs/dependsOn"
+    },
+    "requiredEvidenceKinds": {
+      "$ref": "#/$defs/requiredEvidenceKinds"
     }
   },
   "allOf": [
@@ -146,7 +152,13 @@
             "$ref": "#/$defs/sectionAnchors"
           },
           "testContract": false,
-          "implementationBaselines": false
+          "implementationBaselines": false,
+          "dependsOn": {
+            "$ref": "#/$defs/dependsOn"
+          },
+          "requiredEvidenceKinds": {
+            "$ref": "#/$defs/requiredEvidenceKinds"
+          }
         }
       },
       "else": {
@@ -170,7 +182,11 @@
             "$ref": "#/$defs/testLineage"
           },
           "planReview": false,
-          "sectionAnchors": false
+          "sectionAnchors": false,
+          "dependsOn": false,
+          "requiredEvidenceKinds": {
+            "$ref": "#/$defs/requiredEvidenceKinds"
+          }
         }
       }
     }
@@ -572,6 +588,32 @@
     "productDefectRemediationId": {
       "type": "string",
       "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "dependsOn": {
+      "description": "实现目标在投递准备前必须已接受的其他实现目标（本 Demand 已规划的目标；R4，§13.210）。",
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/targetTaskId"
+      }
+    },
+    "requiredEvidenceKinds": {
+      "description": "完成前本 Demand 必须持有的受管证据种类（取所有已规划包的并集；R4，§13.210）。",
+      "type": "array",
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "hook-observation",
+          "transcript",
+          "test-output",
+          "diff",
+          "document",
+          "link",
+          "commit"
+        ]
+      }
     }
   }
 }

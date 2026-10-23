@@ -141,3 +141,7 @@
 | 6.4 Controller 回传 | 固定效果 `wake-controller`：`import_target_result` 一次调用返回回调内容与许可，目标 Agent 送进 Controller 窗口；回调正文由 Wakeflow 渲染，含 demandId、pod、任务、结论与摘要、分支与提交、摘要、下一步工具名、"传输证据"声明；Controller 会话的 `UserPromptSubmit` 记录证明落地，Controller 第一次评审读取把回调记为 acknowledged；ambiguous 静默超阈值（默认 10 分钟）列入"未被接收的结果"，可重发，同信封新代际，上限 3；Controller 窗口被替换时回调目标按当前绑定重算，旧信封作废。旧的 review_pack、controller-preview、apply、pre-send、controller-outcome 删除 |
 | returnPolicy | 默认 `per-target`；`group-ready` 只在多目标派发组上可选 |
 | Q5 | 由上一修订与本节取代：必经、默认开启 |
+
+## 修订（2026-10-22，1.2 批 C：R4，§13.210）
+
+- 投递准备先从已规划事件重读任务包（与完成覆盖同一做法），`dependsOn` 里阶段不是 `accepted` 的目标以 `dependency-pending:<targetTaskId>` 阻塞；顺序是 `awaiting-decision` → `dependency-pending` → 阶段许可（`target-phase` / `rearm-available`）。依赖目标被替代时以替代后的阶段为准由 Controller 重新规划依赖。

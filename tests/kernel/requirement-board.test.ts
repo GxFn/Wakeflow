@@ -68,6 +68,7 @@ function pending(
     title: "示例 | 需求",
     demandType: "requirement",
     priority,
+    testingMode: "controller-only",
     publishedAt: AT,
     supersedes: null,
     parkedTrigger: null,
@@ -166,6 +167,15 @@ test("状态文件独占创建、CAS 替换、目录列出与索引重写", asyn
   equal(index.includes("示例 \\| 需求"), true);
   equal(index.includes(`\`${DEMAND}\``), true);
   equal(index.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)).length, 2);
+  // G11（§13.209）：v2 标记，Testing 与 Parked 两列；没有 parked 的行是 —。
+  equal(index.includes("<!-- wakeflow:board-projection:v2 -->"), true);
+  equal(
+    index.includes(
+      "| Priority | Status | Requirement | Title | Type | Testing | Parked | Published | Demand |",
+    ),
+    true,
+  );
+  equal(index.includes("| controller-only | — |"), true);
   equal(existsSync(stateFile), true);
 });
 

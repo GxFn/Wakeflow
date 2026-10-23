@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:rearm-delivery-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REARM_DELIVERY_REQUEST_SCHEMA",
   "title": "WakeflowRearmDeliveryRequestV1",
-  "description": "Rearm one delivery. Target mode: a target deliveryId in host-effect-rejected or test-host-effect-rejected keeps its envelope and prompt and gets a fresh work claim and fence, generation plus one. Callback mode: the callback deliveryId of a result-reported or test-result-reported target has its wake-controller callback permit re-issued against the current Controller binding, with no claim or fence.",
+  "description": "Rearm one delivery: a rejected target deliveryId gets a fresh claim and fence (generation plus one, same envelope); a callback deliveryId re-issues the wake-controller permit against the current Controller binding.",
   "$comment": "At most three target-mode rearms per envelope; beyond that the target must be prepared again with a new envelope.",
   "type": "object",
   "additionalProperties": false,

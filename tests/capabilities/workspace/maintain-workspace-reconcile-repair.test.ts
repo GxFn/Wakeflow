@@ -435,3 +435,48 @@ test("maintain_workspace reconcile rebuilds a missing ledger root, a missing hos
   equal(statSync(projectionsRoot).isDirectory(), true);
   deepEqual(stepKinds(await reconcilePreview(root)), []);
 });
+
+test("a zero-step reconcile rewrites a stale board index so an upgraded renderer never leaves board-consistency red（G11，§13.209）", async (t) => {
+  const root = await fixture(t);
+  const fresh = { root, action: "fresh-initialize", request: { selection: selection() } } as const;
+  const preview = await executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" });
+  const applied = await executeCodexWakeflowMaintenance({
+    ...fresh,
+    mode: "apply",
+    planDigest: preview.planDigest as string,
+  });
+  equal(applied.status, "completed");
+  const boardIndex = path.join(root, ".wakeflow-active", "current", "board", "index.md");
+  const current = readFileSync(boardIndex, "utf8");
+  // 一份旧渲染：上一版标记、少两列；认领状态文件本身没有变。
+  writeFileSync(
+    boardIndex,
+    current
+      .replace("board-projection:v2", "board-projection:v1")
+      .replace("| Type | Testing | Parked | Published |", "| Type | Published |"),
+  );
+  const stale = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root });
+  const staleGate = stale.gates.find((entry) => entry.name === "board-consistency");
+  deepEqual([staleGate?.status, staleGate?.code], ["fail", "index-stale"]);
+  equal(stale.next.frontier, "workspace-maintenance");
+
+  const reconcile = await reconcilePreview(root);
+  equal(reconcile.status, "ready");
+  deepEqual(stepKinds(reconcile), []);
+  equal(
+    readFileSync(boardIndex, "utf8").includes("board-projection:v1"),
+    true,
+    "preview writes nothing",
+  );
+  const repaired = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: reconcile.planDigest as string,
+  });
+  equal(repaired.status, "no-op");
+  equal(readFileSync(boardIndex, "utf8"), current);
+  const healthy = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root });
+  equal(healthy.gates.find((entry) => entry.name === "board-consistency")?.status, "pass");
+});

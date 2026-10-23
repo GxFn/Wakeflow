@@ -130,6 +130,9 @@
         },
         "resultDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "supersedes": {
+          "$ref": "#/$defs/targetResultId"
         }
       },
       "allOf": [

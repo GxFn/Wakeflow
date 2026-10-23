@@ -312,6 +312,7 @@
   - 2026-10-14 后续（§13.169）：lab 的宿主×场景矩阵拆成 `workflow-codex.test.ts` 与 `workflow-claude-code.test.ts`，场景链同样拆成 `wakeflow-scenario-acceptance-codex.test.ts` 与 `-claude-code.test.ts`（链在 `.chain.ts`；两个 worker 可并行安排，单文件双宿主 832 秒的关键路径消失，耗时表随本批绿门刷新）；`operation-scope.test.ts` 的五份真实 fsync 夹具准备预算 60 → 180 秒（门里与两个 lab 文件同跑时超时，各测试的操作期限不变）；负载敏感用例带 `loadSensitive(t, reason)` 标签（lab 240 秒实验、读写许可真实读者与 latch、排他锁八方争用、tmux 脱离重启、运行器取消真实子进程），诊断里点名高于推荐并发 2 的 `WAKEFLOW_TEST_CONCURRENCY`，`WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 只给开发机；CI 加 `handoff` 作业。latch/锁等待的时钟注入未做（`waitForRetry` 仍是墙钟）。
   - 2026-10-09（§13.165）：`wf handoff` 新增耗时表覆盖检查；本批完整门后以 `wf timings apply` 把耗时表刷新为 294 条、合计 2,787 秒。同批在外部负载（均值 11–12）下 endpoint 的 register/decommission 用例 60 秒超时、test-recording 的取消用例读到半写记录，单独重跑通过——时序敏感的证据又添两条，归批次 5。
   - 2026-10-21 后续（§13.204，用户追加需求：完整门每次 20 到 30 分钟，要求优化）：运行器分道——两个场景链文件与带 `loadSensitive` 标签的文件各以 2 worker 立即开始，其余文件等隔离道结束后用剩余预算；标签文件按静态导入闭包识别（`testSourcesDependingOn`），hook 观察的三条大目录测试与 permission-mode 的两条 fresh 初始化测试补上标签（8 worker 下曾超时）；`assets/agent-text/` 的改动经声明的资源边选中制品测试而不是整门；`impact report` 的建议命令只在第 2 级列整门。8 CPU 上整门从单道 2 worker 的约 36 分钟（run-g8SYkE，2134 秒测试阶段）降到约 18 分钟（run-2t0hxo，1528 项）。实测分道：链 601/589 秒，隔离道 1170 秒之和两 worker 约 590 秒，其余道 2825 秒之和 6 worker 约 470 秒，墙钟 ≈ 600 + 470 秒。 2026-10-22 分析（计划 §1–2，§13.205）：门的六级构成与最重文件已量；并发下的 fsync 排队是 1–3 级耗时的第一来源（Codex 链单独跑 319 秒、把 `FileHandle.sync()` 换成空操作后 289 秒、门里与三个进程同跑 589 秒、旧 2 worker 门两链互跑 668 秒；8858 次 sync），lab 矩阵 644 秒与链重叠且占住隔离道；设计 D1 一次性耐久性进 2–3 级（测试支持模块包装 `RootedDirectory.open`，不改生产字节）、D2 lab 的 dual-product/worktree 四个实验归 `smoke:artifacts`、D3 `.load.test.ts` 后缀与混合文件拆分、D4 重文件拆分与基线复制、D6 `wf test levels`、D7 道再平衡；预期整门约 10 分钟；测试开发标准已建（`docs/standards/testing-standard.md`）。T1+T2 已执行（§13.206，run-9xr332）：整门 18.2 → 14.2 分钟；机器是 M1 四性能核加四效率核，其余道在 8 进程下 CPU 受限，D1 对链一成、对 lab 实验一半，D2 是大头；T3（D4、D7）的三个量化选项见计划 §2.2。下一步杠杆（等门时长再成为问题时再动）：隔离道并发 2 → 3，或链与隔离文件合成一条 4 worker 重道、其余道用全预算（约省 2 分钟）。未做：场景链拆分（phase 1 的下限是链各约 10 分钟，要先有工作区快照）、重服务测试的夹具模板克隆（result-review service 303 秒、observation service 164 秒）、latch/锁等待的时钟注入。
+  - 2026-10-22 后续（§13.210）：1.2 批 B+C 的门跑在与用户交互会话共用的机器上（外部约 4 个核），8 worker 下中位放慢 1.87 倍、p90 3.1 倍，六条重用例被 120/240 秒预算取消而单独重跑 19/19 通过；这些用例在安静机器上已用掉预算的 40–60%，D4 的拆分同时是对外部负载的余量。同批以预算 6 重跑作为"预算 = 性能核数"的数据点。
 - **D10** [低 / 风险] 测试会继承开发者的全局和系统 git 配置（计划阶段 1；状态：已修（§13.166 批次 1）：测试运行器给每个测试子进程注入隔离的 git 环境（GIT_CONFIG_GLOBAL=/dev/null、GIT_CONFIG_NOSYSTEM=1、init.defaultBranch=main、夹具身份、无终端提示）；tests/support 新增 git-fixture、temp-root、write-tree、fake-cli 四个共享夹具，五个 git 助手副本、handoff 与 mcp call 的根夹具、tmux 桩改用共享实现；两个保留原始 stdout 的 git 助手与 148 处 mkdtemp 归批次 5）
   - 说明：在全局开启 commit.gpgsign 或 core.hooksPath 的机器上，临时仓库的提交会失败或弹出提示，pod 和场景测试会因与 Wakeflow 无关的原因失败，也会挡住以后接入 CI。
   - 证据：9 个测试文件设置了 GIT_AUTHOR_* 和 GIT_COMMITTER_*，但没有设置 GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM（例如 pod/service.test.ts:44、scenario test:2561）；只有 check-release-consistency.test.ts:54-55 和 tmux asset 测试做了隔离
@@ -599,7 +600,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - D5 Claude 状态行维持 `<model> · <window>`（已是最小）；`⏵⏵ auto mode` 一行是 Claude Code 自己的，不可去。
   - D6 交接卡与 windows 参考改成解释两个字形；与 I14 同步：`?` 与 `attention: needed` 只对 permission_prompt 及登录、额度类。
   （状态：已修 2026-10-21（§13.201），现场 L12 通过（§13.202：字形改纯 ASCII `+`/`?`，set-option 目标改 @id））
-- **G11** [低 / 缺口] 看板索引缺测试模式与 parked 触发两列（复审 §7）：改索引渲染会让每个现存工作区的 `board-consistency` 门报 `index-stale`——索引只在看板变更时重投影，对账没有"投影陈旧即重写"的步骤；两列不值一个新维护步骤，留到 1.2 与投影刷新一起做（§13.201；状态：开放）
+- **G11** [低 / 缺口] 看板索引缺测试模式与 parked 触发两列（复审 §7）：改索引渲染会让每个现存工作区的 `board-consistency` 门报 `index-stale`——索引只在看板变更时重投影，对账没有"投影陈旧即重写"的步骤；两列不值一个新维护步骤，留到 1.2 与投影刷新一起做（§13.201；状态：开放） 已修 2026-10-22（§13.209，V4）：认领状态可选 `testingMode`、索引两列与 v2 标记、维护 apply 之后重写陈旧索引。
 
 ## J. 占用与退出路径：进得去，出不来
 
@@ -774,10 +775,10 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 来源：[测试门的构成分析与 1.2 计划](../reviews/2026-10-22-test-gate-and-1.2-plan.md) 第 3 节（底层设计）与第 4 节（批次）。裁决：用户 2026-10-22 全部按推荐。版本 2026-10-22 bump 到 1.2.0（§13.207），每批先补能力卡或 ADR，一批一门，tag 打在最后一个制品提交上。
 
-- **V1** [中 / 缺口] R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds`——准备时从已规划事件重读，阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后；第 16 道门 `required-evidence`，取消跳过（计划 §3.1；批 C；级别 2；状态：待执行）
-- **V2** [中 / 缺口] R5：`result-reported` 阶段一次 `supersedes` 导入——四处单次约束同时放宽（服务阶段门、聚合转换、`claimId` 派生身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签（计划 §3.2；批 C；级别 2；状态：待执行）
+- **V1** [中 / 缺口] R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds`——准备时从已规划事件重读，阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后；第 16 道门 `required-evidence`，取消跳过（计划 §3.1；批 C；级别 2；状态：已执行 §13.210；`required-evidence` 是 Demand 完成门，不是 verify 的十五门）
+- **V2** [中 / 缺口] R5：`result-reported` 阶段一次 `supersedes` 导入——四处单次约束同时放宽（服务阶段门、聚合转换、`claimId` 派生身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签（计划 §3.2；批 C；级别 2；状态：已执行 §13.210）
 - **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：已执行 §13.208，现场 L13 待缓存刷新）
-- **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：待执行）
-- **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：待执行）
+- **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：已执行 §13.209）
+- **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：已执行 §13.210，目录 104,406 → 约 102,900 字节）
 - **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：待执行）
 - **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：待执行）

@@ -78,6 +78,10 @@
     },
     "resultDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "supersedes": {
+      "$ref": "#/$defs/targetResultId",
+      "description": "评审前被这份结果取代的上一份结果（同一投递、同一声明，R5）；没有取代时缺席。"
     }
   },
   "allOf": [

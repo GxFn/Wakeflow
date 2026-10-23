@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:window-host-binding-registration-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA",
   "title": "WakeflowWindowHostBindingRegistrationRequestV1",
-  "description": "Closed MCP input contract for one execution-endpoint operation on a logical window: inspect (launch intent and current binding, claim, and locator state), register (bind the handle the Agent observed), replace (bind a new handle with CAS on the old binding), relocate (keep the binding and record a resumed session's new tmux pane, with CAS on the binding), decommission (release the binding with closure evidence), or release-claim (force-release an expired or orphaned work claim with liveness evidence).",
+  "description": "One execution-endpoint operation on a logical window: inspect, register, replace (CAS on the old binding), relocate (new tmux pane, CAS), decommission (closure evidence) or release-claim (liveness evidence).",
   "type": "object",
   "oneOf": [
     {
@@ -462,7 +462,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["porcelain", "commonDir"],
-      "description": "Git facts observed in the assigned product checkout. Session-root hosts use the SessionStart cwd; project-chat hosts require executionRoot from pwd in that checkout. Wakeflow cross-checks the selected porcelain entry, repository common dir and linked .git pointers. Paths remain private.",
+      "description": "Git facts observed in the assigned checkout (SessionStart cwd, or executionRoot for project-chat hosts); Wakeflow cross-checks the porcelain entry, common dir and linked .git pointers. Paths stay private.",
       "properties": {
         "porcelain": {
           "type": "string",

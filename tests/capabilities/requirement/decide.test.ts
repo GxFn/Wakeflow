@@ -184,6 +184,7 @@ test("看板投影：排序、过滤、计数、认领转移阻塞与 next", () 
     recordDigest: `sha256:${"a".repeat(64)}` as never,
     title: "t",
     demandType: "requirement" as const,
+    testingMode: "controller-only" as const,
     supersedes: null,
     parkedTrigger: null,
   };

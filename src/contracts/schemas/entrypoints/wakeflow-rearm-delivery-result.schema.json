@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:rearm-delivery-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_REARM_DELIVERY_RESULT_SCHEMA",
   "title": "WakeflowRearmDeliveryResultV1",
-  "description": "Result of one delivery rearm: the new generation with its re-issued permit, the appended event, and next. A callback deliveryId (the wake-controller callback of a recorded result) re-issues the callback permit against the current Controller binding without a work claim (kind callback).",
+  "description": "Result of one rearm: the new generation with its permit, the appended event and next; a callback rearm re-issues the wake-controller permit without a work claim (kind callback).",
   "$comment": "A target rearm re-issues the original envelope's prompt with a new fence; a callback rearm re-issues the callback's portable prompt with a null fence (envelopeDigest then holds the result digest). Sending remains the Agent host effect.",
   "type": "object",
   "additionalProperties": false,

@@ -131,3 +131,7 @@
 | 8.3 审计保留 | 按 Q6 不实现 |
 | 8.4 运行时清理 | 2026-09-10 pod 切片 9：并入 `wakeflow_pod` 关闭第二段，检出仍在时 `worktree-present:<repositoryId>` 阻塞并由 Agent 以宿主手段处置，closed 时 Wakeflow 只删自己的回执目录；Q7 的"删检出"由此变为"处置后才 closed"，对账只报告（观察切片）。归档清单增加 `podId` 与 `worktree{podId, name, placement, repositories[]{repositoryId, suggestedName, branch, head}} \| null` |
 | 工具面 | 公共工具 18 不变；公共协调器删除（0 个）；wire Schema 改名 `wakeflow-record-evidence-{request, result}` |
+
+## 修订（2026-10-22，1.2 批 C：R4，§13.210）
+
+- Demand 完成报告新增门 `required-evidence`：所有已规划任务包 `requiredEvidenceKinds` 的并集都必须出现在本 Demand 的受管证据种类里，缺一报 `missing:<kinds>`；没有任何包声明时不设此门；取消跳过它（与 `work-claims-released`、`requirement-coverage`、`research-evidence` 同列）。它是 Demand 完成门，不是 `wakeflow_verify` 的工作区十五门。

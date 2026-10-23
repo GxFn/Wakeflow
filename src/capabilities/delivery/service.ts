@@ -1070,14 +1070,24 @@ async function executePrepare(
     target.phase === "planned" || target.phase === "superseded"
       ? null
       : target.currentDelivery.generation;
+  const taskPackage = await loadTaskPackage(repository, target, options.signal);
+  const state = context.authority.loaded.aggregate.state;
   const blockers = derivePrepareBlockers({
     workType: target.workType === "test" ? "test" : "implementation",
     phase: target.phase,
     generation: currentGeneration,
-    awaitingDecision: context.authority.loaded.aggregate.state.awaitingDecision !== undefined,
+    awaitingDecision: state.awaitingDecision !== undefined,
+    // R4：依赖的实现目标以聚合里的阶段为准，包本身从已规划事件重读（与 coverage 同一做法）。
+    pendingDependencies:
+      taskPackage.workType === "implementation"
+        ? (taskPackage.dependsOn ?? []).filter(
+            (targetTaskId) =>
+              state.targetTasks.find((entry) => entry.targetTaskId === targetTaskId)?.phase !==
+              "accepted",
+          )
+        : [],
   });
   if (blockers.length > 0) rejectWith(blockers, "$request.targetTaskId");
-  const taskPackage = await loadTaskPackage(repository, target, options.signal);
   const route = await loadRoute(context, taskPackage.assignment.windowId);
   await assertHostAssetsCurrent(context, route);
   const demandId = authority.loaded.identity.demandId;

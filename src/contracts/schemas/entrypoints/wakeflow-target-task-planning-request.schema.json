@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-task-planning-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA",
   "title": "WakeflowTargetTaskPlanningRequestV1",
-  "description": "Single-call request appending one immutable Implementation or Test TaskPackage plan to an existing Demand. The client supplies an idempotency key and the stream revision it observed; a retry with the same key and body returns the first result. 实现任务包的每个验收锚点必须带 requirementRef 指向需求包验收标准的一条；同仓库再来一个包必须声明 lineage（replacement 或 continuation）。",
+  "description": "Append one immutable Implementation or Test TaskPackage to a Demand; the same idempotency key and body replays the first result. 实现包的每个验收锚点带 requirementRef；同仓库再来一个包必须声明 lineage。",
   "type": "object",
   "$defs": {
     "requestedTaskPackage": {
@@ -80,6 +80,32 @@
           "items": {
             "$ref": "#/$defs/anchor"
           }
+        },
+        "dependsOn": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/targetTaskId"
+          },
+          "description": "Implementation targets of this Demand whose results must be accepted before this target's delivery can be prepared."
+        },
+        "requiredEvidenceKinds": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hook-observation",
+              "transcript",
+              "test-output",
+              "diff",
+              "document",
+              "link",
+              "commit"
+            ]
+          },
+          "description": "Managed evidence kinds the Demand must hold before completion (union over all planned packages)."
         }
       }
     },
@@ -125,6 +151,23 @@
         },
         "lineage": {
           "$ref": "#/$defs/testLineageRequest"
+        },
+        "requiredEvidenceKinds": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hook-observation",
+              "transcript",
+              "test-output",
+              "diff",
+              "document",
+              "link",
+              "commit"
+            ]
+          },
+          "description": "Managed evidence kinds the Demand must hold before completion (union over all planned packages)."
         }
       }
     },

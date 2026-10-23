@@ -57,6 +57,10 @@
     "priority": {
       "enum": ["P0", "P1", "P2", "P3"]
     },
+    "testingMode": {
+      "description": "需求记录的测试模式，供看板索引显示；2026-10-22 之前的状态文件没有它（G11）。",
+      "enum": ["controller-only", "real-environment", "not-applicable"]
+    },
     "publishedAt": {
       "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
     },

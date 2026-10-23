@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:status-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_STATUS_RESULT_SCHEMA",
   "title": "WakeflowStatusResultV2",
-  "description": "wakeflow_status 的结果：一次观察派生的工作区定向投影——总体状态、配置摘要、看板摘要、活动 Demand、窗口与工作声明、pod、仓库指针事实、hook 通道、已接受但分支仍在的结果、没有自带 status 的域的观察状态、被上限略去的条数、投影目标、生效阈值与下一步；带 demandId 时附该 Demand 的 Controller Route 或归档回执。不含私有路径、句柄与摘要之外的内容。",
+  "description": "wakeflow_status 的结果：一次观察派生的工作区投影——总体状态、配置与看板摘要、活动 Demand、窗口、pod、仓库指针、hook 通道、下一步；带 demandId 时附 Route 或归档回执。不含私有路径与句柄。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -220,7 +220,7 @@
           "$ref": "#/$defs/observedDomain"
         },
         "archives": {
-          "description": "仍在配置里的 worktree pod 的终态 Demand（完成归档的与取消撤回的，§13.130），只为 unmergedAccepted 读：没有 worktree pod 时什么都不读；看板读不出时 unavailable；有归档读不出时仍 observed，issue 报出条数。",
+          "description": "仍在配置里的 worktree pod 的终态 Demand，只为 unmergedAccepted 读；没有 worktree pod 时不读；看板读不出时 unavailable。",
           "$ref": "#/$defs/observedDomain"
         }
       }
@@ -405,7 +405,7 @@
       }
     },
     "hostAssets": {
-      "description": "Files Wakeflow published for each host (the status line and, on Claude Code, the tmux helper beside it) and whether their bytes are still the artifact's (F1, ADR-0020). A helper that is not current is not the Controller's to run: wakeflow_prepare_delivery refuses with host-asset-<status> until a reconcile republishes it. Peer hosts' assets are not-applicable.",
+      "description": "Files Wakeflow published per host (status line; the tmux helper on Claude Code) and whether their bytes are the artifact's; a non-current helper blocks wakeflow_prepare_delivery with host-asset-<status> until reconcile republishes it.",
       "type": "array",
       "maxItems": 8,
       "items": {
@@ -444,7 +444,7 @@
       }
     },
     "legacyResidue": {
-      "description": "Content the old JavaScript plugin left in the workspace root, the present repository roots and support-surface roots (F4, ADR-0020): legacy scope blocks in instruction files, the broad Bash allow rules and additionalDirectories in .claude settings, old root markers and a wakeflow-ledger directory beside a root. User-owned findings reported read-only with the file and line to remove; Wakeflow never edits them. unreadable counts files that could not be checked, which is not an absence.",
+      "description": "Residue of the old JavaScript plugin in the workspace, repository and support roots (F4, ADR-0020): legacy instruction blocks, broad settings rules, old markers. Reported read-only with file and line; unreadable counts files that could not be checked.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "issue", "items", "itemsOmitted", "unreadable"],
@@ -515,7 +515,7 @@
       }
     },
     "maintenance": {
-      "description": "维护协议的状态（§13.129），与维护工具的预览同一份核心布局检查：idle 才没有事情要做；busy 是另一次维护正在进行；recovery-required 是一次被打断的 apply 留下了事务残留，要用 recover 收尾；conflict 是锁不安全；absent 与 bootstrap-prefix 是协议根尚未建好，由对账重建。非 idle 时 overall 记 maintenance；检查本身读不出即 unavailable，protocol 为 unknown。",
+      "description": "维护协议状态：idle 无事；busy 另一次维护进行中；recovery-required 要用 recover 收尾被打断的 apply；conflict 锁不安全；absent 与 bootstrap-prefix 是协议根未建、由对账重建；读不出为 unavailable。非 idle 时 overall 为 maintenance。",
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "protocol", "residues", "residuesOmitted"],
@@ -535,7 +535,7 @@
           ]
         },
         "residues": {
-          "description": "transactions 目录里的条目（§13.130），按名字排序，至多 64 条：kind 按命名约定分 intent、journal 与 unknown；recoverable 为 true 时可以用 operationId 调维护 recover（recover 仍会核对内容）；protocol 为 busy 时条目属于正在进行的维护，一律为 false；名字不合约定的条目 recover 找不到，只能由人查看后删除。名字只保留可打印字符。",
+          "description": "transactions 目录条目，按名排序、至多 64 条：kind 为 intent、journal 或 unknown；recoverable 为 true 时可用 operationId 调 recover；busy 时一律 false；名字不合约定的只能人工处理。",
           "type": "array",
           "maxItems": 64,
           "items": {
@@ -952,7 +952,7 @@
           ]
         },
         "attention": {
-          "description": "Whether the host is waiting for the user in this window (open-items A7): needed when the bound session's latest hook record is a Claude Code Notification, with the host's notification type (permission prompt, idle prompt, login or usage limit); none once a later record superseded it; null without a binding or any record. Says nothing about the window's MCP or instruction state.",
+          "description": "needed when the bound session's latest hook record is a host Notification (permission prompt, login or usage limit); none once superseded; null without a binding or record.",
           "oneOf": [
             {
               "type": "null"
@@ -991,7 +991,7 @@
           ]
         },
         "runtime": {
-          "description": "Runtime identity of the bound window. Hook records cannot establish its loaded MCP or instruction version, so a bound window is unverified by default; it is stale when its latest session-start record names an older artifact than the serving process (the session has not restarted since the update).",
+          "description": "Runtime identity of the bound window: unverified by default (hook records cannot prove the loaded MCP); stale when its latest session-start names an older artifact than the serving process.",
           "type": "object",
           "additionalProperties": false,
           "required": ["status", "reason"],
@@ -1016,7 +1016,7 @@
           }
         },
         "launchIntent": {
-          "description": "Whether the binding was registered under the launch intent the current config and host profile produce (open-items C18): current when the digests agree; drifted when the registered intent digest differs, so the window was launched or last resumed under an older intent (a relocate keeps the registered digest, only a replacing handshake renews it); null without a binding or when the host profile cannot compile intents. Information only: no gate fails on it.",
+          "description": "current when the registered launch intent digest matches what the current config and host profile produce; drifted when it differs (only a replacing handshake renews it); null without a binding. Information only.",
           "oneOf": [
             {
               "type": "null"
@@ -1243,7 +1243,7 @@
       }
     },
     "nullableBranch": {
-      "description": "仓库指针上观察到的分支名，按 git 自己的 ref 文法收：排除控制字符、空格、~ ^ : ? * [ 与反斜杠，排除首字符 '-' 与 '.'、'..'、'@{'、连续斜杠、以 '.' 开头的分段，以及以 '/'、'.' 或 '.lock' 结尾。",
+      "description": "仓库指针上观察到的分支名，按 git ref 文法收；不合文法为 null。",
       "oneOf": [
         {
           "type": "null"
@@ -1321,7 +1321,7 @@
           "type": "boolean"
         },
         "source": {
-          "description": "active：来自活动 Demand；archived：来自仍在配置里的 worktree pod 的终态 Demand（完成归档或取消撤回，§13.130），分支在 pod 关闭记下处置之前一直列出，同一 Demand 又活动时只列 active 的一份；primary pod 的归档不列，只占归档清单的读取上限。",
+          "description": "active：来自活动 Demand；archived：来自仍在配置里的 worktree pod 的终态 Demand，分支列到 pod 关闭记下处置为止；primary pod 的归档不列。",
           "enum": ["active", "archived"]
         }
       }

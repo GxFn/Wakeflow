@@ -210,9 +210,11 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "selectedAuthorityMemberRefs",
     "workType",
   ];
+  // R4（§13.210）：两个可选字段在属性里、不在必有里。
+  const optionalImplementationRequestFields = ["dependsOn", "requiredEvidenceKinds"];
   deepEqual(
     Object.keys(implementationTaskRequest.properties as JsonObject).sort(),
-    implementationRequestFields,
+    [...implementationRequestFields, ...optionalImplementationRequestFields].sort(),
   );
   // 能力卡 5 D3：plan review 是请求级可选回显，只携带用户确认时刻。
   deepEqual(Object.keys(planningRequest.properties as JsonObject), [
@@ -235,7 +237,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   );
   const domainFields = Object.keys(domainTaskPackage.properties as JsonObject);
   equal(domainFields.includes("selectedAuthorityRefs"), true);
-  for (const field of implementationRequestFields) {
+  for (const field of [...implementationRequestFields, ...optionalImplementationRequestFields]) {
     if (field === "selectedAuthorityMemberRefs") continue;
     equal(
       domainFields.includes(field),
@@ -255,11 +257,15 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "workType",
   ];
   deepEqual([...(testTaskRequest.required as string[])].sort(), testRequestFields);
-  deepEqual(Object.keys(testTaskRequest.properties as JsonObject).sort(), testRequestFields);
+  // R4（§13.210）：test 包只可带 requiredEvidenceKinds，不可带 dependsOn。
+  deepEqual(
+    Object.keys(testTaskRequest.properties as JsonObject).sort(),
+    [...testRequestFields, "requiredEvidenceKinds"].sort(),
+  );
   deepEqual((testTaskRequest.properties as JsonObject).workType, {
     const: "test",
   });
-  for (const field of testRequestFields) {
+  for (const field of [...testRequestFields, "requiredEvidenceKinds"]) {
     if (field === "selectedAuthorityMemberRefs") continue;
     equal(
       domainFields.includes(field),
@@ -500,6 +506,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       "resumptionBasis",
       "reviewUnitDigest",
       "status",
+      "supersededResults",
       "targetCompletion",
       "targetResult",
       "targetResultSourceEvent",
@@ -725,6 +732,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "idempotencyKey",
     "report",
     "root",
+    // R5（§13.210）：可选 supersedes。
+    "supersedes",
   ]);
   deepEqual(
     Object.keys(definition(resultImportResult, "callbackPermit").properties as JsonObject).sort(),

@@ -5420,3 +5420,24 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 验证（第 1 级，agent-text 经资源边选中制品测试）：制品重建，`tests/artifacts` 43/43，`smoke:artifacts` 通过（五幕与 lab 四个实验 4/4）。现场 L13（数一个 Demand 从认领到接受的 `/next` 与 status 次数）等用户推送并授权刷新缓存后做。H8 据此关闭，Q10 的“`/wakeflow:next` 一步即停”事实状态随之更新。
 
 **结论：通过（制品测试 43/43，冒烟通过）；提交 id 见 README 指针。**
+
+### 13.209 1.2 批 B：看板索引两列与陈旧索引重投影（V4，G11）（2026-10-22）
+
+按计划 §3.4：认领状态 Schema 加可选 `testingMode`（枚举同需求记录的 `testingDecision.mode`；旧状态文件没有它仍然合法），发布与重新上板时从记录带入；索引渲染器 v2 加 `Testing` 与 `Parked` 两列（Parked 列是触发词前 40 个码点，超出加省略号，经 `escapeCell`），标记 `board-projection:v2`，空索引摘要随之改变（fresh 计划摘要跟着变，没有测试钉它）。陈旧索引的出路：`wakeflow_maintain_workspace` 的 apply 收尾在刷活动投影之后调用已有的 `refreshRequirementBoardIndex`（CAS、四次重试），失败只吞 WakeflowError 留给 verify——现存工作区升级后第一次 reconcile（哪怕零步）即恢复一致；在此之前 `board-consistency` 报 `index-stale`、`next` 本来就指向 `workspace-maintenance`。`wakeflow_inspect_board` 的结果形状不动（列表视图已有 `parked.trigger`，包视图已有 `testingDecision`），目录预算不受影响。测试：渲染器（v2 标记、九列、无 parked 的行、`testingMode` 缺席渲染 `—`）、reconcile 零步 apply 重写被改成 v1 的索引且 verify 由 `index-stale` 回到 pass、认领状态夹具带 `testingMode`。
+
+验证：与批 C 合成一道门（用户 2026-10-20 一阶段一门的裁决），结果见 §13.210；第一次单独跑的门（run-ttkbD1）露出两件事：证据夹具钉的 Demand 标识随认领状态形状改变而变（按夹具自己的说明更新常量），以及机器被用户同时进行的 Codex 会话压到负载 16–22 时一条 47 秒的投递测试超过 120 秒超时——外部负载不是本批的缺陷，记在这里是为了解释为什么没有单独的绿门。
+
+**结论：见 §13.210。**
+
+### 13.210 1.2 批 C：R4 任务包依赖与证据要求、R5 评审前一次更正、Schema 描述减肥（V1、V2、V5）（2026-10-22）
+
+批 B（§13.209）与本批合成一道门（用户 2026-10-20 一阶段一门的裁决）。
+
+- **Schema 描述减肥（V5，先做以腾出预算）。** 目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB；把 41 条 240 字节以上的说明压成一句（23 个 Schema 文件），目录降到 101,812 字节；R4/R5 的字段加回后 102,996 字节（上限 104,448，余 1,452）。I12 的镜像测试要求维护请求 `hosts` 说明点名 `claude-code.tmux.sessionName`、`claude-code.launch.permissionMode` 与 "never from another workspace's config"，压缩时保住这三处；配置 Schema 的 `hosts` 定义与请求镜像逐字节一致。
+- **R4（V1）。** 任务包 Schema 加可选 `dependsOn`（实现包；`$defs.dependsOn`，≤32 个本 Demand 已规划的实现目标，test 包的 else 分支禁止）与 `requiredEvidenceKinds`（两种包；证据种类闭集 ≤7）；`createTaskPackage` 的键检查改为"必有 ⊆ 键 ⊆ 必有 ∪ 可选"，`normalizeWire` 原样带入；规划请求的两个分支同步，codegen 的字段清单钉子按"必有 + 可选"更新，评审检视结果里的任务包镜像同步加两个字段。规划时 `deriveDependencyBlockers` 拒绝未知或指向 test 目标的依赖（`dependency-unknown:<id>`）；投递准备先从已规划事件重读包（与 coverage 同一做法），`dependsOn` 里阶段不是 `accepted` 的目标以 `dependency-pending:<id>` 阻塞，排在 `awaiting-decision` 之后、阶段许可之前。完成新增 Demand 门 `required-evidence`：所有已规划包的并集都要出现在受管证据里，缺一报 `missing:<kinds>`，没有包声明时不设此门；取消跳过它（与 `research-evidence` 同列）。这是 Demand 完成报告的门，不是 `wakeflow_verify` 的十五门，计划 §3.1 "第 16 道门"的说法据此更正。
+- **R5（V2）。** 一个声明代际至多两份结果：序号 1 的身份照旧由声明派生（既有流不变），取代它的那份由同一声明加 `target-result-supersede` 派生（事件与提交 id 同理），wire 带可选 `supersedes`，解析时序号与 `supersedes` 的有无必须一致且 `supersedes` 必须是序号 1 的身份；两个结果构造器经同一个 `targetResultIdentityForClaim` 取身份字段（第一次合门在 4 秒内被 Biome 的认知复杂度 17 > 15 拦下，抽出这个助手后两处都回到上限内）。导入请求加可选 `supersedes`：目标须停在 `result-reported`/`test-result-reported`、点名当前那份、当前那份是序号 1，否则 `supersede-target-phase:<phase>`、`supersede-result-mismatch`、`supersede-exhausted`；通过后照常签发新回调（代际 1）。聚合转换按同一规则准入，目标级可选 `supersededTargetResultIds` 记下被取代者（旧流形状不变）；流审计允许同一声明第二份结果且必须点名第一份；评审快照把被取代的身份放进 `supersededResults`（只在非空时进入评审单元基底，既有单元摘要不变），检视结果与决定摘要的复算都带上它；对旧身份的决定自然失败（`result-unknown`）。技能：target 与 test 的第 5 步各一句"决定前可用 supersedes 再导入一次"，Controller 第 11 步一句"被取代的报告不是返工、不计刹车"。
+- **测试。** 任务包（可选字段进摘要与文档、旧名与重复仍拒、test 包不可带 dependsOn）、规划与准备的纯决定、完成门（声明 commit → `missing:commit`，记一条 commit 证据后通过）、取消跳过；结果身份序号与 relation 错；服务级取代（点错、成功、重放、第二次、旧身份决定失效、决定后拒绝）；场景链 card-07 在决定前加一次取代并让后续回调场景跟随新回调。
+- **门。** 第 2 级（contracts、governance、kernel、场景链），批 B 与批 C 合成一道。三次：run-27FvYU 在 4 秒内被 Biome 拦下（上文的复杂度 17）；run-Vwoz9f 跑在用户其他会话把负载压到 25–30 的机器上，1533 条里 1527 通过、0 失败、6 条被 120/240 秒超时取消（lab workflow 两条、lab sealing、hook-observations 退役、mixed-failure-remediation、投递查询不完整各一），整门 34.2 分钟，与 run-9xr332 相比 92 个可比文件的中位放慢 1.87 倍、p90 3.1 倍，两条场景链各 1850 秒对 550 秒——被取消的五个文件在负载回落到 11–16 时单独重跑 19/19 通过、无取消（run-dhVXle，5.7 分钟），超时是外部负载不是缺陷；run-3f84SM 把运行器预算降到 6 再跑（本机 1 分钟负载每分钟采样 32 次：中位 24.6、峰值 61.4，外部约 4 个核以上），1527 通过、5 条同类超时、1 条断言失败——lab 测试创建双产品实验时 MCP 客户端 60 秒请求超时（SDK 超时错误的 code 是数字，lab 据此报 `inspection-unavailable`），同一制品字节在 run-Vwoz9f 里这条通过，单独重跑（连同 permission-mode 的 60 秒超时那条）11/11 通过（run-VZZ2Df，负载 16–22 下 1.2 分钟）；预算 6 没有抵消外部负载（两条场景链仍各 1450 秒对 550 秒），所以这不是"预算 = 性能核数"的证据，耗时表不从这两次负载运行刷新。关掉负载看守并记下检查点（2026-10-22 10:09 UTC）之后，同一棵工作树（输入摘要 ed149ebf…，2894 个文件）上有一次不是本会话发起的门 run-3dzJwB：09:46:55 UTC 开始、缺省预算 8、15.5 分钟、1533/1533 通过、无取消、`schema:check` 与 `build:check` 都在其中、运行前后输入摘要一致；次日机器仍在负载 20 时用户要求跑门，本会话核对该回执直接采信，不再重跑——同一字节上的绿门就是本阶段的门。
+- **文档。** 能力卡 05/06/07/08 补充、技能三处、open-items V1/V2/V5、计划 §3.1 更正与跟踪表、耗时表刷新。
+
+**结论：通过（run-3dzJwB，1533/1533，15.5 分钟；`smoke:artifacts` 五幕通过、lab 四个实验 4/4，4.3 分钟）。批 B 与批 C 一并提交，制品重建另一提交，耗时表从 run-3dzJwB 刷新随指针提交；提交 id 见 README 指针。下一步按计划 §4 进批 D（C6/C11 版本轴）与批 E（detach）。**

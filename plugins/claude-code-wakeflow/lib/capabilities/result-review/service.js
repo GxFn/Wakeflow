@@ -1,3 +1,4 @@
+import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
@@ -23,6 +24,7 @@ import { managedEvidenceRecordAddress } from "../../governance/evidence/managed-
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { createImplementationTargetResult, ImplementationTargetResultError, } from "../../governance/result/implementation-target-result.js";
 import { createImplementationTargetResultReport, ImplementationTargetResultReportError, } from "../../governance/result/implementation-target-result-report.js";
+import { targetResultIdForClaim, } from "../../governance/result/target-result.js";
 import { computeTargetResultCallbackPromptDigest, deriveTargetResultCallbackId, deriveTargetResultCallbackStatus, parseTargetResultCallbackRecord, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
 import { createTestTargetResult, TestTargetResultError, } from "../../governance/result/test-target-result.js";
 import { createTestTargetResultReport, TestTargetResultReportError, } from "../../governance/result/test-target-result-report.js";
@@ -42,7 +44,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { collectEvidenceReferences, deriveCallbackLanding, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, summarizeResultForCallback, testPhaseForDecision, deriveCredentialBlockers, stringLeavesOf, } from "./decide.js";
+import { collectEvidenceReferences, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 const REPORT_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
@@ -305,6 +307,22 @@ const IMPORTABLE_PHASES = Object.freeze([
     "test-host-effect-accepted",
     "test-host-effect-indeterminate",
 ]);
+/**
+ * 评审前的一次更正（R5）：目标停在已回报、尚无决定的阶段，`supersedes` 点名当前那份结果，且当前那份
+ * 是本投递的第一份（序号 1）——第二次取代、决定之后的取代、点错结果都在这里拒绝；空列表即允许。
+ */
+function deriveSupersedeBlockers(target, supersedes) {
+    if (target.phase !== "result-reported" && target.phase !== "test-result-reported") {
+        return [`supersede-target-phase:${target.phase}`];
+    }
+    const current = target.currentDelivery.targetResult.targetResultId;
+    if (current !== supersedes)
+        return ["supersede-result-mismatch"];
+    if (current !== targetResultIdForClaim(target.currentDelivery.fence.claimId, 1)) {
+        return ["supersede-exhausted"];
+    }
+    return [];
+}
 async function loadEnvelope(repository, deliveryId, signal) {
     try {
         const located = await repository.findDeliveryPreparedEvent(deliveryId, signalOptions(signal));
@@ -449,19 +467,34 @@ function buildResult(input, target, envelope, taskPackage, options) {
         observedAt: outcome.observedAt,
     });
     const clock = options.clock === undefined ? {} : { clock: options.clock };
+    const supersedes = input.supersedes === undefined
+        ? undefined
+        : parseWakeflowDurableIdOfKind(input.supersedes, "target-result", "$request.supersedes");
     try {
         if (input.report.workType === "test") {
             if (taskPackage.workType !== "test") {
                 fail("precondition-failed", "work-type", "$request.report.workType");
             }
             const report = createTestTargetResultReport(input.report.content, clock);
-            return createTestTargetResult({ taskPackage, envelope, delivery, report });
+            return createTestTargetResult({
+                taskPackage,
+                envelope,
+                delivery,
+                report,
+                ...(supersedes === undefined ? {} : { supersedes }),
+            });
         }
         if (taskPackage.workType !== "implementation") {
             fail("precondition-failed", "work-type", "$request.report.workType");
         }
         const report = createImplementationTargetResultReport(input.report.content, clock);
-        return createImplementationTargetResult({ taskPackage, envelope, delivery, report });
+        return createImplementationTargetResult({
+            taskPackage,
+            envelope,
+            delivery,
+            report,
+            ...(supersedes === undefined ? {} : { supersedes }),
+        });
     }
     catch (error) {
         mapRecordError(error, "$request.report");
@@ -543,8 +576,15 @@ async function executeImport(context, input, binding) {
     }
     assertFreshRevision(context, binding);
     const target = deliveryTargetOf(context, input.deliveryId);
-    if (!IMPORTABLE_PHASES.includes(target.phase)) {
-        rejectWith([`target-phase:${target.phase}`], "$request.deliveryId");
+    if (input.supersedes === undefined) {
+        if (!IMPORTABLE_PHASES.includes(target.phase)) {
+            rejectWith([`target-phase:${target.phase}`], "$request.deliveryId");
+        }
+    }
+    else {
+        const blockers = deriveSupersedeBlockers(target, input.supersedes);
+        if (blockers.length > 0)
+            rejectWith(blockers, "$request.supersedes");
     }
     if (target.currentDelivery.hostId !== context.facade.hostId) {
         fail("precondition-failed", "delivery-host", "$request.deliveryId");
@@ -632,6 +672,7 @@ export async function executeTargetResultImportRequest(facade, value, options = 
                     deliveryId: request.deliveryId,
                     claimDigest: request.claimDigest,
                     report: request.report,
+                    ...(request.supersedes === undefined ? {} : { supersedes: request.supersedes }),
                 }),
             });
         },
@@ -680,7 +721,7 @@ function reviewUnitOf(history, target) {
     const reviewUnitDigest = computeReportedReviewUnitDigest(target.targetTaskId, target.taskPackageSourceEvent, target.taskPackage, target.targetResultSourceEvent, target.targetResult, [
         ...target.priorReviewHistory,
         { sourceEvent: target.reviewDecisionSourceEvent, decision: target.reviewDecision },
-    ]);
+    ], target.supersededResults ?? []);
     return Object.freeze({
         status,
         target,
@@ -910,6 +951,9 @@ async function inspectReview(context, request) {
                 sourceEvent: entry.sourceEvent,
                 decision: decisionSummary(entry.decision),
             })),
+            ...(unit.target.supersededResults === undefined
+                ? {}
+                : { supersededResults: unit.target.supersededResults }),
             reviewUnitDigest: unit.reviewUnitDigest,
             currentDecision: unit.currentDecision === null || unit.currentDecisionSourceEvent === null
                 ? null

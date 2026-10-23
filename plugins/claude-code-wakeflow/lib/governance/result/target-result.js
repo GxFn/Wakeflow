@@ -119,6 +119,7 @@ function resultBasis(value) {
             taskPackage: value.taskPackage,
             assignment: value.assignment,
             delivery: value.delivery,
+            ...(value.supersedes === undefined ? {} : { supersedes: value.supersedes }),
             testExecution: value.testExecution,
             report: value.report,
         })
@@ -134,6 +135,7 @@ function resultBasis(value) {
             taskPackage: value.taskPackage,
             assignment: value.assignment,
             delivery: value.delivery,
+            ...(value.supersedes === undefined ? {} : { supersedes: value.supersedes }),
             report: value.report,
         });
 }
@@ -160,6 +162,9 @@ export function parseTargetResult(value) {
         demandId: id(wire.demandId, "demand", "$/demandId"),
         targetTaskId: id(wire.targetTaskId, "target-task", "$/targetTaskId"),
         deliveryId: id(wire.deliveryId, "target-delivery", "$/deliveryId"),
+        ...(wire.supersedes === undefined
+            ? {}
+            : { supersedes: id(wire.supersedes, "target-result", "$/supersedes") }),
         taskPackage: Object.freeze({
             taskPackageId: id(wire.taskPackage.taskPackageId, "task-package", "$/taskPackage/taskPackageId"),
             ref: resourcePath(wire.taskPackage.ref, "$/taskPackage/ref"),
@@ -232,8 +237,15 @@ export function parseTargetResult(value) {
             report,
         });
     }
-    if (targetResultIdForClaim(basis.delivery.fence.claimId) !== basis.targetResultId) {
+    // 身份与取代的关系（R5）：第一份结果的身份由声明派生（序号 1），取代它的那份由同一声明加序号 2
+    // 派生，且必须点名被取代的那份；一个声明代际至多两份结果。
+    const sequence = targetResultSequenceOf(basis.delivery.fence.claimId, basis.targetResultId);
+    if (sequence === null || (sequence === 2) !== (basis.supersedes !== undefined)) {
         fail("relation", "$result");
+    }
+    if (basis.supersedes !== undefined &&
+        basis.supersedes !== targetResultIdForClaim(basis.delivery.fence.claimId, 1)) {
+        fail("relation", "$/supersedes");
     }
     // reportedAt 是Report来源时钟给出的审计事实；Result与Host Effect的因果关系
     // 由exact identity、Observation摘要、Event引用和Aggregate CAS闭合，不由墙钟排序推断。
@@ -243,18 +255,40 @@ export function parseTargetResult(value) {
     }
     return Object.freeze({ ...basis, resultDigest });
 }
-/** 结果身份由围栏声明的 UUID 派生：一个声明代际至多一份结果。 */
-export function targetResultIdForClaim(claimId) {
-    return derivedIdFromWorkClaim("target-result", claimId);
+/**
+ * 结果身份由围栏声明的 UUID 派生：序号 1 是一个声明代际的第一份结果（既有流的身份不变），
+ * 序号 2 是评审前取代它的那一份（R5）；没有第三份。
+ */
+export function targetResultIdForClaim(claimId, sequence = 1) {
+    return sequence === 1
+        ? derivedIdFromWorkClaim("target-result", claimId)
+        : deriveDurableId("target-result", "target-result-supersede", claimId);
 }
-/** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交。 */
+/** 一份结果的身份字段：首份只有身份，取代的那份还带上被取代者（R5）。 */
+export function targetResultIdentityForClaim(claimId, supersedes) {
+    return supersedes === undefined
+        ? Object.freeze({ targetResultId: targetResultIdForClaim(claimId, 1) })
+        : Object.freeze({ targetResultId: targetResultIdForClaim(claimId, 2), supersedes });
+}
+/** 一份结果身份相对它的声明是第几份；两者都不是即 null。 */
+function targetResultSequenceOf(claimId, targetResultId) {
+    if (targetResultId === targetResultIdForClaim(claimId, 1))
+        return 1;
+    if (targetResultId === targetResultIdForClaim(claimId, 2))
+        return 2;
+    return null;
+}
+function eventPurposeOf(result) {
+    return result.supersedes === undefined ? "target-result" : "target-result-supersede";
+}
+/** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交；取代的那份有自己的一对。 */
 export function targetResultRecordedEventIdFromResult(resultValue) {
     const result = parseTargetResult(resultValue);
-    return deriveDurableId("demand-event", "target-result", result.delivery.fence.claimId);
+    return deriveDurableId("demand-event", eventPurposeOf(result), result.delivery.fence.claimId);
 }
 export function targetResultRecordedCommitIdFromResult(resultValue) {
     const result = parseTargetResult(resultValue);
-    return deriveDurableId("demand-event-commit", "target-result", result.delivery.fence.claimId);
+    return deriveDurableId("demand-event-commit", eventPurposeOf(result), result.delivery.fence.claimId);
 }
 export function renderTargetResult(value) {
     return renderDeterministicJsonDocument(parseTargetResult(value), "$result");

@@ -267,6 +267,7 @@ export class DemandEventSourcingRepository {
         const targetDeliveryIds = new Set();
         const targetResultIds = new Set();
         const resultActionIds = new Set();
+        const supersededResultIds = new Set();
         const targetReviewDecisionIds = new Set();
         const reviewedGenerationKeys = new Set();
         const resumedDecisionIds = new Set();
@@ -312,10 +313,17 @@ export class DemandEventSourcingRepository {
                 }
                 if (event.eventType === "result.target-result-recorded") {
                     const result = event.data.result;
+                    // R5：同一声明至多两份结果——第二份必须点名第一份（已记录的序号 1 身份）。
+                    const supersede = result.supersedes !== undefined;
                     if (targetResultIds.has(result.targetResultId) ||
-                        resultActionIds.has(result.delivery.fence.claimId)) {
+                        resultActionIds.has(result.delivery.fence.claimId) !== supersede ||
+                        (supersede &&
+                            (!targetResultIds.has(result.supersedes) ||
+                                supersededResultIds.has(result.supersedes)))) {
                         fail("stream", "$events");
                     }
+                    if (supersede)
+                        supersededResultIds.add(result.supersedes);
                     targetResultIds.add(result.targetResultId);
                     resultActionIds.add(result.delivery.fence.claimId);
                     callbackByResultId.set(result.targetResultId, event.data.callback);

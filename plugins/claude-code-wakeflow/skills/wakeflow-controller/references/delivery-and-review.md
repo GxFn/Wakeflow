@@ -248,7 +248,10 @@ rework whose checks all passed is refused when recorded - it could never be
 delivered. Use rework when the change itself must be fixed. When the work is
 right and only the report lacks evidence - a `needs-review` result is the
 common case - do not send it back: record the evidence, verify each anchor
-yourself and accept with `anchorEvidence`. Rework's
+yourself and accept with `anchorEvidence`. A unit whose `supersededResults`
+names an earlier result was corrected by the target before you decided: review
+the current result only; a superseded report is not a rework and does not
+count toward the brake. Rework's
 `implementationQuality` says what you found: `satisfactory` when the change is
 right and only the report is redone, `unverified` when you could not verify it,
 `defective` when the change itself is wrong. Accept stays `satisfactory` only.

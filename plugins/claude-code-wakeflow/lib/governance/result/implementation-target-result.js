@@ -2,7 +2,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseDeliveryEnvelope, } from "../delivery/delivery-envelope.js";
 import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
 import { ImplementationTargetResultReportError, parseImplementationTargetResultReport, } from "./implementation-target-result-report.js";
-import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "./target-result.js";
+import { parseTargetResult, TargetResultError, targetResultIdentityForClaim, } from "./target-result.js";
 const ERROR_MESSAGES = {
     "task-package": "Implementation Target Result requires a valid implementation TaskPackage.",
     envelope: "Implementation Target Result requires a valid Delivery Envelope.",
@@ -96,7 +96,7 @@ export function createImplementationTargetResult(input) {
         kind: "WakeflowTargetResult",
         schemaVersion: 1,
         workType: "implementation",
-        targetResultId: targetResultIdForClaim(input.delivery.fence.claimId),
+        ...targetResultIdentityForClaim(input.delivery.fence.claimId, input.supersedes),
         programId: taskPackage.programId,
         demandId: taskPackage.demandId,
         targetTaskId: taskPackage.targetTaskId,

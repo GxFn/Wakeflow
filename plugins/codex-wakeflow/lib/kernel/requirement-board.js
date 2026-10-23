@@ -1,7 +1,7 @@
-import { WAKEFLOW_REQUIREMENT_CLAIM_STATE_SCHEMA, } from "../contracts/generated/governance/board/requirement-claim-state.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_REQUIREMENT_CLAIM_STATE_SCHEMA, } from "../contracts/generated/governance/board/requirement-claim-state.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, renderDeterministicJsonDocument, } from "../foundation/data/deterministic-json-document.js";
@@ -10,7 +10,7 @@ import { readDeterministicJsonFile, } from "../foundation/filesystem/determinist
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../foundation/filesystem/strict-text-file.js";
@@ -138,6 +138,7 @@ export function createRequirementClaimState(input) {
         title: input.title,
         demandType: input.demandType,
         priority: input.priority,
+        testingMode: input.testingMode,
         publishedAt: input.publishedAt,
         supersedes: input.supersedes,
         revision: 1,
@@ -396,13 +397,23 @@ function escapeCell(value) {
         .replace(/\\/gu, "\\\\")
         .replace(/\|/gu, "\\|");
 }
-const REQUIREMENT_BOARD_INDEX_MARKER = "<!-- wakeflow:board-projection:v1 -->";
+/** v2（G11，§13.209）：加 Testing 与 Parked 两列；维护 apply 之后陈旧的 v1 索引被重写。 */
+const REQUIREMENT_BOARD_INDEX_MARKER = "<!-- wakeflow:board-projection:v2 -->";
+/** Parked 列只给触发词的开头：整段触发词在状态文件与 `wakeflow_inspect_board` 里。 */
+const PARKED_CELL_MAXIMUM_CODE_POINTS = 40;
+function parkedCell(state) {
+    if (state.parked === null)
+        return "—";
+    const points = [...state.parked.trigger];
+    const shown = points.slice(0, PARKED_CELL_MAXIMUM_CODE_POINTS).join("");
+    return escapeCell(points.length > PARKED_CELL_MAXIMUM_CODE_POINTS ? `${shown}…` : shown);
+}
 /** 人读索引：只列 pending、parked、claimed；已撤回与已归档留在状态文件里。 */
 export function renderRequirementBoardIndex(states) {
     const rows = [...states]
         .filter((state) => state.status !== "withdrawn" && state.status !== "archived")
         .sort(compareRequirementClaimStates)
-        .map((state) => `| ${state.priority} | ${state.status} | \`${state.requirementId}\` | ${escapeCell(state.title)} | ${state.demandType} | ${state.publishedAt} | ${state.claim === null ? "—" : `\`${state.claim.demandId}\``} |`);
+        .map((state) => `| ${state.priority} | ${state.status} | \`${state.requirementId}\` | ${escapeCell(state.title)} | ${state.demandType} | ${state.testingMode ?? "—"} | ${parkedCell(state)} | ${state.publishedAt} | ${state.claim === null ? "—" : `\`${state.claim.demandId}\``} |`);
     const lines = [
         "# Requirement Board",
         "",
@@ -410,8 +421,8 @@ export function renderRequirementBoardIndex(states) {
         "",
         "This file is a deterministic projection of the claim states under `board/`; do not edit it by hand.",
         "",
-        "| Priority | Status | Requirement | Title | Type | Published | Demand |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Priority | Status | Requirement | Title | Type | Testing | Parked | Published | Demand |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ...rows,
     ];
     return `${lines.join("\n")}\n`;

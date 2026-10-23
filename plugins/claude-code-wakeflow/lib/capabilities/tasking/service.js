@@ -4,17 +4,17 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, } from "../../governance/demand/demand-operation-authority-context.js";
-import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
+import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { DemandPostAcceptanceRouteError, resolveDemandTestEnvironmentAuthority, } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { computeTaskPackageDigest, createTaskPackage, TaskPackageError, } from "../../governance/tasking/task-package.js";
 import { TaskPackageProjectionStore, TaskPackageProjectionStoreError, } from "../../governance/tasking/task-package-projection-store.js";
 import { runAppendCommand, } from "../../kernel/append-command.js";
@@ -23,7 +23,7 @@ import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../ker
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { admitTargetTaskPlanningResult, parseTargetTaskPlanningRequest, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveAnchorReferenceBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestPlanningBlockers, deriveTestContractCoverageBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
+import { deriveAnchorReferenceBlockers, deriveDependencyBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestContractCoverageBlockers, deriveTestPlanningBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
 const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
@@ -143,6 +143,7 @@ async function buildImplementationPackage(context, input, requested, binding) {
             podId: identity.podId,
         }),
         ...deriveSectionAnchorBlockers(requested.sectionAnchors, loaded.record.sections.map((section) => section.anchor)),
+        ...deriveDependencyBlockers(authority.loaded.aggregate.state, requested.dependsOn),
     ];
     if (blockers.length > 0)
         rejectWith(blockers, "$request.taskPackage");
@@ -170,6 +171,10 @@ async function buildImplementationPackage(context, input, requested, binding) {
             lineage: requested.lineage,
             planReview: review.planReview,
             sectionAnchors: requested.sectionAnchors,
+            ...(requested.dependsOn === undefined ? {} : { dependsOn: requested.dependsOn }),
+            ...(requested.requiredEvidenceKinds === undefined
+                ? {}
+                : { requiredEvidenceKinds: requested.requiredEvidenceKinds }),
         }, options.clock === undefined ? {} : { clock: options.clock });
     }
     catch (error) {
@@ -288,6 +293,9 @@ async function buildTestPackage(context, input, requested, binding) {
                 stopConditions: requested.testContract.stopConditions,
             },
             implementationBaselines: deriveImplementationBaselines(state),
+            ...(requested.requiredEvidenceKinds === undefined
+                ? {}
+                : { requiredEvidenceKinds: requested.requiredEvidenceKinds }),
             lineage: testLineageOf(context, requested),
         }, options.clock === undefined ? {} : { clock: options.clock });
     }

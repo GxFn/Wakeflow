@@ -438,6 +438,7 @@ async function ensureClaimState(context, loaded) {
         title: record.title,
         demandType: record.demandType,
         priority: record.priority,
+        testingMode: record.testingDecision.mode,
         publishedAt: readUtcWallClock(context.clock),
         supersedes: record.supersedes,
         parkedTrigger: record.parked?.trigger ?? null,

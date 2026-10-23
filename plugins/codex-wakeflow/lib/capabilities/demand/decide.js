@@ -114,7 +114,8 @@ function gateBlockers(input) {
         if (input.action === "cancel" &&
             (gate.gate === "work-claims-released" ||
                 gate.gate === "requirement-coverage" ||
-                gate.gate === "research-evidence"))
+                gate.gate === "research-evidence" ||
+                gate.gate === "required-evidence"))
             continue;
         blockers.push(`verify:${gate.gate}:${gate.status}`);
     }

@@ -86,6 +86,9 @@ export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseco
 export function derivePrepareBlockers(target) {
     if (target.awaitingDecision === true)
         return Object.freeze(["awaiting-decision"]);
+    if (target.pendingDependencies !== undefined && target.pendingDependencies.length > 0) {
+        return Object.freeze(target.pendingDependencies.map((targetTaskId) => `dependency-pending:${targetTaskId}`));
+    }
     // 阶段许可只有一份：contracts 的 Target 阶段表（open-items L1）。
     const admission = wakeflowTargetPhaseAdmission(target.workType, target.phase);
     if (admission === null || admission.prepare === "no") {

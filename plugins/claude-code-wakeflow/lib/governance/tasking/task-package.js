@@ -60,6 +60,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TASK_PACKAGE_SCHE
 ]);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+/** 两种草稿都可带的可选字段；`dependsOn` 只有实现包可带（Schema 的 else 分支禁止）。 */
+const OPTIONAL_DRAFT_FIELDS = Object.freeze(["dependsOn", "requiredEvidenceKinds"]);
 const DRAFT_FIELDS = Object.freeze([
     "acceptanceAnchors",
     "assignment",
@@ -377,6 +379,9 @@ function normalizeWire(wire) {
             forbidden: parseTextList(wire.boundaries.forbidden, "$/boundaries/forbidden"),
         }),
         completionExpectations,
+        ...(wire.requiredEvidenceKinds === undefined
+            ? {}
+            : { requiredEvidenceKinds: Object.freeze([...wire.requiredEvidenceKinds]) }),
     };
     const windowId = parseId(wire.assignment.windowId, "window", "$/assignment/windowId");
     const acceptanceAnchors = parseAcceptanceAnchors(wire.acceptanceAnchors);
@@ -405,6 +410,11 @@ function normalizeWire(wire) {
                 : wire.lineage, common.targetTaskId),
             planReview: parsePlanReview(wire.planReview),
             sectionAnchors: parseSectionAnchors(wire.sectionAnchors),
+            ...(wire.dependsOn === undefined
+                ? {}
+                : {
+                    dependsOn: Object.freeze(wire.dependsOn.map((value, index) => parseId(value, "target-task", `$/dependsOn/${index}`))),
+                }),
         };
         return Object.freeze(implementation);
     }
@@ -478,8 +488,10 @@ export function createTaskPackage(draft, options = {}) {
     }
     const keys = Object.keys(record).sort();
     const expectedFields = record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
-    if (keys.length !== expectedFields.length ||
-        keys.some((key, index) => key !== expectedFields[index])) {
+    const optional = OPTIONAL_DRAFT_FIELDS;
+    const required = keys.filter((key) => !optional.includes(key));
+    if (required.length !== expectedFields.length ||
+        required.some((key, index) => key !== expectedFields[index])) {
         fail("input", "$draft");
     }
     const admitted = parseTaskPackage({
@@ -500,17 +512,22 @@ export function createTaskPackage(draft, options = {}) {
         boundaries: record.boundaries,
         completionExpectations: record.completionExpectations,
         acceptanceAnchors: record.acceptanceAnchors,
+        ...("requiredEvidenceKinds" in record
+            ? { requiredEvidenceKinds: record.requiredEvidenceKinds }
+            : {}),
         ...(record.workType === "test"
             ? {
                 testContract: record.testContract,
                 implementationBaselines: record.implementationBaselines,
                 lineage: record.lineage,
+                ...("dependsOn" in record ? { dependsOn: record.dependsOn } : {}),
             }
             : {
                 commitExpectation: record.commitExpectation,
                 lineage: record.lineage,
                 planReview: record.planReview,
                 sectionAnchors: record.sectionAnchors,
+                ...("dependsOn" in record ? { dependsOn: record.dependsOn } : {}),
             }),
     });
     return Object.freeze({

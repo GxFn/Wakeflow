@@ -3,7 +3,7 @@ import { assertDeliveryEnvelopeMatchesTaskPackage, DeliveryEnvelopeError, parseD
 import { parseTaskPackage, TaskPackageError, } from "../tasking/task-package.js";
 import { assertTestExecutionAttemptMatchesPackage, TestExecutionAttemptError, } from "../testing/test-execution-attempt.js";
 import { assertDeliveryBindingFollowsEnvelope, ImplementationTargetResultError, } from "./implementation-target-result.js";
-import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "./target-result.js";
+import { parseTargetResult, TargetResultError, targetResultIdentityForClaim, } from "./target-result.js";
 import { parseTestTargetResultReport, TestTargetResultReportError, } from "./test-target-result-report.js";
 const ERROR_MESSAGES = {
     "task-package": "Test Target Result requires a valid Test TaskPackage.",
@@ -101,7 +101,7 @@ export function createTestTargetResult(input) {
         kind: "WakeflowTargetResult",
         schemaVersion: 1,
         workType: "test",
-        targetResultId: targetResultIdForClaim(input.delivery.fence.claimId),
+        ...targetResultIdentityForClaim(input.delivery.fence.claimId, input.supersedes),
         programId: taskPackage.programId,
         demandId: taskPackage.demandId,
         targetTaskId: taskPackage.targetTaskId,

@@ -67,7 +67,7 @@ function assertRoot(value) {
 function lexicalCompare(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
 }
-function reportedTargetBasis(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory) {
+function reportedTargetBasis(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory, supersededResults = []) {
     return {
         status: "reported",
         targetTaskId,
@@ -77,14 +77,24 @@ function reportedTargetBasis(targetTaskId, taskPackageSourceEvent, taskPackage, 
         targetResultSourceEvent,
         targetResult,
         priorReviewHistory,
+        ...(supersededResults.length === 0 ? {} : { supersededResults }),
     };
+}
+/** 本目标里被取代的结果：出现在某份结果 `supersedes` 里的身份，按流序（R5）。 */
+function supersededResultsOf(sources, targetTaskId) {
+    const superseded = new Set(sources.targetResults
+        .filter((entry) => entry.result.supersedes !== undefined)
+        .map((entry) => entry.result.supersedes));
+    return Object.freeze(sources.targetResults
+        .filter((entry) => entry.result.targetTaskId === targetTaskId && superseded.has(entry.result.targetResultId))
+        .map((entry) => entry.result.targetResultId));
 }
 /**
  * 一个已回报目标的评审单元摘要：与本快照核对下一决定 `reviewed.reviewUnitDigest` 时
  * 用的是同一份基底，服务端复现已决单元时应调用它而不是手抄形状。
  */
-export function computeReportedReviewUnitDigest(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory) {
-    return computeCanonicalJsonSha256Digest(reportedTargetBasis(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory));
+export function computeReportedReviewUnitDigest(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory, supersededResults = []) {
+    return computeCanonicalJsonSha256Digest(reportedTargetBasis(targetTaskId, taskPackageSourceEvent, taskPackage, targetResultSourceEvent, targetResult, priorReviewHistory, supersededResults));
 }
 /**
  * 已决单元的评审单元摘要按它被记录时的基底形状复现。§13.121 D7 之前，决定没有
@@ -178,7 +188,7 @@ function buildTargets(sources) {
             fail("relation");
         }
         if (target.phase === "result-reported" || target.phase === "test-result-reported") {
-            const reportedBasis = reportedTargetBasis(target.targetTaskId, taskPackageSource.sourceEvent, taskPackageSource.taskPackage, targetResultSource.sourceEvent, targetResultSource.result, priorReviewHistory(sources, target.targetTaskId, null));
+            const reportedBasis = reportedTargetBasis(target.targetTaskId, taskPackageSource.sourceEvent, taskPackageSource.taskPackage, targetResultSource.sourceEvent, targetResultSource.result, priorReviewHistory(sources, target.targetTaskId, null), supersededResultsOf(sources, target.targetTaskId));
             return Object.freeze({
                 ...reportedBasis,
                 reviewUnitDigest: computeCanonicalJsonSha256Digest(reportedBasis),
@@ -195,7 +205,7 @@ function buildTargets(sources) {
                 target.currentDelivery.reviewDecision.decisionDigest) {
             fail("relation");
         }
-        const reportedBasis = reportedTargetBasis(target.targetTaskId, taskPackageSource.sourceEvent, taskPackageSource.taskPackage, targetResultSource.sourceEvent, targetResultSource.result, priorReviewHistory(sources, target.targetTaskId, decisionSource.sourceEvent.streamRevision));
+        const reportedBasis = reportedTargetBasis(target.targetTaskId, taskPackageSource.sourceEvent, taskPackageSource.taskPackage, targetResultSource.sourceEvent, targetResultSource.result, priorReviewHistory(sources, target.targetTaskId, decisionSource.sourceEvent.streamRevision), supersededResultsOf(sources, target.targetTaskId));
         const reviewUnitDigest = reproduceDecidedReviewUnitDigest(reportedBasis, decisionSource.decision.reviewed.reviewUnitDigest);
         return Object.freeze({
             ...reportedBasis,

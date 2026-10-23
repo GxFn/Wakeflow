@@ -17,7 +17,7 @@ import { DeliveryOutcomeError, parseDeliveryOutcome, } from "../../delivery/deli
 import { DELIVERY_REARM_LIMIT, DeliveryRearmError, parseDeliveryRearm, } from "../../delivery/delivery-rearm.js";
 import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../../evidence/managed-evidence-manifest.js";
 import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
-import { parseTargetResult, TargetResultError, } from "../../result/target-result.js";
+import { parseTargetResult, TargetResultError, targetResultIdForClaim, } from "../../result/target-result.js";
 import { deriveTargetResultCallbackId, parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TargetResultCallbackError, } from "../../result/target-result-callback.js";
 import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, } from "../../review/controller-product-defect-remediation-authorization.js";
 import { ControllerReviewDecisionError, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
@@ -1119,6 +1119,36 @@ function callbackSummaryOf(result, callback) {
         bindingId: callback.bindingId,
     });
 }
+/**
+ * 结果准入的阶段（R5）：第一份结果要求投递已落地（accepted 或 indeterminate）；带 `supersedes` 的
+ * 结果要求目标正停在已回报、尚无决定的阶段，且点名的正是当前那份序号 1 的结果——一个投递只能
+ * 取代一次，决定之后只有返工。
+ */
+function resultAdmitted(target, result, reportedPhase, importablePhases) {
+    if (result.supersedes === undefined)
+        return importablePhases.includes(target.phase);
+    const delivery = target.currentDelivery;
+    return (target.phase === reportedPhase &&
+        delivery?.targetResult?.targetResultId === result.supersedes &&
+        result.supersedes === targetResultIdForClaim(result.delivery.fence.claimId, 1));
+}
+function isTestImportTarget(target) {
+    return (target.phase === "test-host-effect-accepted" ||
+        target.phase === "test-host-effect-indeterminate" ||
+        target.phase === "test-result-reported");
+}
+function isImplementationImportTarget(target) {
+    return (target.phase === "host-effect-accepted" ||
+        target.phase === "host-effect-indeterminate" ||
+        target.phase === "result-reported");
+}
+function supersededIdsAfter(target, result) {
+    return result.supersedes === undefined
+        ? {}
+        : {
+            supersededTargetResultIds: [...(target.supersededTargetResultIds ?? []), result.supersedes],
+        };
+}
 /** `result.target-result-recorded.v1` 使用的纯状态转换：结果与其回调记录一起进入摘要。 */
 export function recordTargetResultInDemandAggregateState(currentValue, resultValue, callbackValue) {
     const current = parseDemandAggregateState(currentValue);
@@ -1148,8 +1178,11 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
             result.demandId !== current.demandId ||
             target === undefined ||
             target.workType !== "test" ||
-            (target.phase !== "test-host-effect-accepted" &&
-                target.phase !== "test-host-effect-indeterminate") ||
+            !isTestImportTarget(target) ||
+            !resultAdmitted(target, result, "test-result-reported", [
+                "test-host-effect-accepted",
+                "test-host-effect-indeterminate",
+            ]) ||
             target.taskPackageId !== result.taskPackage.taskPackageId ||
             target.taskPackageDigest !== result.taskPackage.digest ||
             target.windowId !== result.assignment.windowId ||
@@ -1169,6 +1202,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
             targetTasks: current.targetTasks.map((entry) => entry.targetTaskId === target.targetTaskId
                 ? {
                     ...target,
+                    ...supersededIdsAfter(target, result),
                     phase: "test-result-reported",
                     currentDelivery: {
                         ...target.currentDelivery,
@@ -1198,7 +1232,11 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
             : result.report.repositoryChange.disposition !== "committed");
     if (current.lifecycle !== "active" ||
         result.demandId !== current.demandId ||
-        (target.phase !== "host-effect-accepted" && target.phase !== "host-effect-indeterminate") ||
+        !isImplementationImportTarget(target) ||
+        !resultAdmitted(target, result, "result-reported", [
+            "host-effect-accepted",
+            "host-effect-indeterminate",
+        ]) ||
         target.taskPackageId !== result.taskPackage.taskPackageId ||
         target.taskPackageDigest !== result.taskPackage.digest ||
         target.repositoryId !== result.assignment.repositoryId ||
@@ -1222,6 +1260,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
         targetTasks: current.targetTasks.map((entry) => entry.targetTaskId === target.targetTaskId
             ? {
                 ...entry,
+                ...supersededIdsAfter(target, result),
                 phase: "result-reported",
                 currentDelivery: {
                     ...target.currentDelivery,

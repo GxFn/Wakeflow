@@ -182,6 +182,17 @@ function testLineageBlockers(state, lineage) {
     }
     return Object.freeze(blockers);
 }
+/** `dependsOn` 只能指向本 Demand 已规划的实现目标（R4）：未知的、或指向 test 目标的，逐条点名。 */
+export function deriveDependencyBlockers(state, dependsOn) {
+    if (dependsOn === undefined)
+        return Object.freeze([]);
+    const implementationTargets = new Set(state.targetTasks
+        .filter((target) => target.workType !== "test")
+        .map((target) => target.targetTaskId));
+    return Object.freeze(dependsOn
+        .filter((targetTaskId) => !implementationTargets.has(targetTaskId))
+        .map((targetTaskId) => `dependency-unknown:${targetTaskId}`));
+}
 /**
  * 实现规划准入：聚合拒绝的条件在这里先说清楚——Demand 须活动，且测试一旦开始（待消费复测或
  * 已有 test 目标）就不再接受新的实现包。

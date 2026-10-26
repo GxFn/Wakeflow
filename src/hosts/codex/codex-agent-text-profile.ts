@@ -83,7 +83,8 @@ const FIRST_RUN_HANDOVER =
   "Test (where the test contract runs); long runs - keep the machine awake yourself, Wakeflow " +
   "runs no background process; what to do first - open the Design thread and describe the first " +
   "requirement in plain words, return to the Controller thread when Design says the package is " +
-  'published; `/wakeflow:status` in the Controller answers "what is next" from then on.';
+  'published; from then on, ask the Controller thread "what is next" in plain words - it ' +
+  "reads `wakeflow_status` and answers.";
 
 const DELIVERY_ACTION =
   "send the permit's prompt into the target window's thread with your Codex thread " +

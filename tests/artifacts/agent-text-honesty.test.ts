@@ -11,6 +11,7 @@ import {
   renderClaudeCodeAgentText,
 } from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
 import {
+  CODEX_AGENT_TEXT_COMMANDS_INCLUDED,
   CODEX_AGENT_TEXT_PLACEHOLDERS,
   renderCodexAgentText,
 } from "../../src/hosts/codex/codex-agent-text-profile.js";
@@ -23,7 +24,8 @@ import {
  * 命令闭合五条（D4），主流程每一步的唯一归属（D5），以及体积上限（D7）。
  *
  * 纯文件读取加两个常量导入：没有夹具、没有网络、不跑构建。宿主取值表也一并纳入前两条
- * 检查——占位符渲染出来的句子同样是出厂文本，里面点名假工具一样是说谎。
+ * 检查——占位符渲染出来的句子同样是出厂文本，里面点名假工具一样是说谎。R3（W18）再加一条：
+ * Codex 不发 slash 命令，它渲染出的文本与取值表不得点名 `/wakeflow:…`。
  */
 
 const AGENT_TEXT_ROOT = path.join(process.cwd(), "assets", "agent-text");
@@ -177,6 +179,29 @@ test("退役词汇不出现在任何源文件或宿主取值里（D4 c：黑名�
     }
     for (const value of HOST_VALUE_TEXTS) {
       equal(pattern.test(value), false, `a host value keeps retired vocabulary: ${phrase}`);
+    }
+  }
+});
+
+/**
+ * R3（W18）：Codex 不随制品发货命令（`CODEX_AGENT_TEXT_COMMANDS_INCLUDED` 为假），教用户敲
+ * `/wakeflow:status` 或 `/wakeflow:next` 就是教一条不存在的命令。按 Codex 渲染每一份出厂文本，
+ * 连同它的取值表，都不得出现 `/wakeflow:`；commands/ 目录只在宿主发货命令时才进检查面。
+ */
+test("Codex 渲染出的全部出厂文本与取值表都不含 `/wakeflow:`（R3，W18：该宿主不发 slash 命令）", () => {
+  const slashCommand = /\/wakeflow:/u;
+  for (const source of SOURCES) {
+    if (!CODEX_AGENT_TEXT_COMMANDS_INCLUDED && source.path.startsWith(COMMANDS_PREFIX)) continue;
+    const language = source.path.endsWith(".zh-CN.md") ? "zh" : "en";
+    equal(
+      slashCommand.test(renderCodexAgentText(source.text, language)),
+      false,
+      `${source.path} rendered for Codex names a slash command`,
+    );
+  }
+  for (const [key, value] of Object.entries(CODEX_AGENT_TEXT_PLACEHOLDERS)) {
+    for (const text of value.zh === undefined ? [value.en] : [value.en, value.zh]) {
+      equal(slashCommand.test(text), false, `Codex host value ${key} names a slash command`);
     }
   }
 });

@@ -29,8 +29,14 @@ export interface ImpactedTestSelection {
 
 const MAXIMUM_FOCUSED_SELECTION = 80;
 const MAXIMUM_SOURCE_BYTES = 4 * 1024 * 1024;
+/**
+ * 静态导入边：`import … from "…"`、`export … from "…"` 与副作用导入 `import "…"`。导入子句允许跨行
+ * （Biome 的 100 列会把 named import 折成多行），只在遇到引号或分号时停下，所以一条语句不会越过
+ * 字符串或下一条语句；注释里的导入会被当作真实边（只会多选，不会漏选）。动态 `import()` 不在
+ * 静态图里。
+ */
 const IMPORT_PATTERN =
-  /(?:^|\n)\s*(?:import|export)\b[^"'\n]*?from\s*["']([^"'\n]+)["']|(?:^|\n)\s*import\s*["']([^"'\n]+)["']/gu;
+  /(?:^|\n)\s*(?:import|export)\b[^"';]*?\bfrom\s*["']([^"'\n]+)["']|(?:^|\n)\s*import\s*["']([^"'\n]+)["']/gu;
 const SOURCE_ROOTS = ["src", "tooling", "tests"] as const;
 
 /** 这些输入改变时静态图说明不了影响范围，直接建议完整门。 */

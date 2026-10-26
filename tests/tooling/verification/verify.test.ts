@@ -25,6 +25,12 @@ import { runLoggedCommand } from "../../../tooling/verification/process.js";
 import { verifyRepository } from "../../../tooling/verification/verify.js";
 import { killChildProcess, waitForChildPid } from "../../support/child-process.js";
 
+/**
+ * `wf verify` and `wf ci export|verify` (level 4, maintainer tooling): real child runs in a disposable
+ * Git fixture leave private receipts, and the public CI export re-checks completeness from the facts
+ * the receipt records (open-items W35: a quick `--changed` run that selects no tests is complete).
+ */
+
 const RUNNER = fileURLToPath(
   new URL("../../../tooling/testing/run-typescript-tests.js", import.meta.url),
 );
@@ -44,6 +50,11 @@ function fixture(t: TestContext, body = "test('ok',()=>{});", testScript = "node
       type: "module",
       scripts: {
         test: testScript,
+        typecheck: "node noop.mjs",
+        "check:architecture": "node noop.mjs",
+        lint: "node noop.mjs",
+        "format:check": "node noop.mjs",
+        "check:unused": "node noop.mjs",
         "build:check": "node noop.mjs",
         "smoke:artifacts": "node noop.mjs",
       },
@@ -174,6 +185,41 @@ test("an already cancelled verification never runs its command and still leaves 
   equal(receipt.status, "interrupted");
   equal(typeof receipt.finishedAt, "string");
   throws(() => proposeTestDurations(root, path.join(root, result.receipt)), /full-gate/u);
+});
+
+test("a quick --changed run that selects no tests records five static stages without a test record and exports as complete", async (t) => {
+  const root = fixture(t);
+  const result = await verifyRepository(root, {
+    profile: "quick",
+    files: [],
+    changed: true,
+    concurrency: "1",
+  });
+  equal(result.status, "passed");
+  equal(result.exitCode, 0);
+  equal(result.counts, null);
+  equal(result.selection?.tests, 0);
+  const receipt = JSON.parse(readFileSync(path.join(root, result.receipt), "utf8"));
+  equal(receipt.tests, null);
+  deepEqual(receipt.selection.tests, []);
+  deepEqual(
+    receipt.stages.map((stage: { name: string }) => stage.name),
+    ["typecheck", "check:architecture", "lint", "format:check", "check:unused"],
+  );
+  const summaryFile = path.join(root, ".build/summary.json");
+  writeFileSync(summaryFile, JSON.stringify(result));
+  const exported = exportCiVerification(root, summaryFile);
+  equal(exported.verificationStatus, "passed");
+  const report = JSON.parse(
+    readFileSync(path.join(root, exported.directory, "report.json"), "utf8"),
+  );
+  equal(report.tests, null);
+  equal(report.stages.length, 5);
+  equal(verifyCiBundle(path.join(root, exported.directory)).integrity, "matched");
+  // The same five stages under a selection that named a test are still an incomplete run.
+  receipt.selection.tests = ["tests/case.test.ts"];
+  writeFileSync(path.join(root, result.receipt), JSON.stringify(receipt));
+  throws(() => exportCiVerification(root, summaryFile), /Incomplete verification/u);
 });
 
 test("child failure, absent test evidence and changed source all prevent green receipts", async (t) => {

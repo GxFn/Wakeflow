@@ -43,8 +43,16 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * 错误码只保留可公开的 token。MCP 客户端的 `SdkError` 用大写蛇形码（`REQUEST_TIMEOUT` 等），
+ * 以前整体落到 `inspection-unavailable`，负载下的请求超时与真正不可用分不开（§13.210）；现在
+ * 请求超时报 `inspection-timeout`，其余大写码转成同义的 kebab token。
+ */
 export function safeErrorCode(error: unknown): string {
-  if (isRecord(error) && typeof error.code === "string" && /^[a-zA-Z0-9-]{1,80}$/u.test(error.code))
-    return error.code;
+  if (!isRecord(error) || typeof error.code !== "string") return "inspection-unavailable";
+  const { code } = error;
+  if (/^[a-zA-Z0-9-]{1,80}$/u.test(code)) return code;
+  if (code === "REQUEST_TIMEOUT") return "inspection-timeout";
+  if (/^[A-Z][A-Z0-9_]{0,79}$/u.test(code)) return code.toLowerCase().replaceAll("_", "-");
   return "inspection-unavailable";
 }

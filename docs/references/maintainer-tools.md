@@ -219,7 +219,7 @@ npm run --silent wf -- ci export --summary "<verify-stdout-summary.json>"
 npm run --silent wf -- ci verify --bundle "<exported-report-directory>"
 ```
 
-export 仅接受标准验证 summary 指向的私有回执，重验测试事件摘要和统计，检查完整通过所需阶段、退出码与输入一致性。输出 `.build/ci/report-…/report.json` 和 `manifest.json`，只包含允许的版本/平台、时间、状态、摘要、计数、受限相对测试文件名，以及模型 seed/次数。原始命令、case 名、异常、日志、聊天句柄和任意环境字段不会被复制。失败结果也可导出，导出成功与验证通过是两个字段。
+export 仅接受标准验证 summary 指向的私有回执，重验测试事件摘要和统计，检查完整通过所需阶段、退出码与输入一致性；完整与否按回执记下的事实判定：gate 一个阶段加通过的测试记录，artifact 两个阶段，quick 五个静态阶段加聚焦测试，而 `verify quick --changed` 选中零个测试的回执（`selection.tests` 为空）以五个静态阶段、无测试记录为完整，照常导出（open-items W35）。输出 `.build/ci/report-…/report.json` 和 `manifest.json`，只包含允许的版本/平台、时间、状态、摘要、计数、受限相对测试文件名，以及模型 seed/次数。原始命令、case 名、异常、日志、聊天句柄和任意环境字段不会被复制。失败结果也可导出，导出成功与验证通过是两个字段。
 
 CI 即使失败也尝试导出，但只上传这两种文件，保留 14 天；原始 verification / live / lab 目录不上传。下载后用 `ci verify` 硬校验文件集合和 SHA-256，字节不符直接非零退出。摘要证明字节一致，不证明执行者或来源；bundle 校验始终注明 origin unverified，不能转成发布认证或原生通过。独立图谱仍维持自己的严格检查，本次没有把图谱接进根构建依赖。
 
@@ -349,7 +349,7 @@ npm run locked -- npm run test:typescript:focused -- tests/kernel
 npm run locked -- npm run build:artifacts:committed
 ```
 
-所有会编译进 `.build/` 或改写 `plugins/` 的命令都应持有同一把仓库构建锁：两个 `tsc -b` 写同一个输出目录，或一次聚焦编译落在正在读 `.build/` 的完整门中间，都会产生混合字节与偶发失败（§13.161）。声明是 `mkdir .build/locks/build.lock`，目录内的 `owner.json` 写明 pid、令牌、命令和开始时间；持有者进程已退出的声明视为陈旧并移除，活着的持有者则等待，每 30 秒在 stderr 报告一次，`WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS`（缺省 3600）用完后以 75 退出。被包装的命令继承 `WAKEFLOW_BUILD_LOCK_TOKEN`，同令牌的嵌套调用直接重入。`wf verify` 与 `wf handoff` 的 `build:check` 自带这把锁，所以 `npm run wf -- verify gate` 不必再包一层；`npm run wf` 本身先编译 tooling 的那一步仍在锁外，它只写 `.build/tooling`，并且是增量的。PID 复用只会让等待变长，不会让两个写者同时进入；这不是跨仓库或跨机器的锁。
+所有会编译进 `.build/` 或改写 `plugins/` 的命令都应持有同一把仓库构建锁：两个 `tsc -b` 写同一个输出目录，或一次聚焦编译落在正在读 `.build/` 的完整门中间，都会产生混合字节与偶发失败（§13.161）。声明是 `mkdir .build/locks/build.lock`，目录内的 `owner.json` 写明 pid、令牌、命令和开始时间；持有者进程已退出的声明视为陈旧，由等待者回收：先在目录里独占创建 `reclaim` 标记，重读目录身份与 owner 仍与刚才的观察一致才把目录改名后删除，所以两个等待者读到同一个死 owner 时不会互删对方刚建立的活锁，标记已存在就等别人回收完（open-items W24）；没有 `owner.json` 的目录 10 秒内当作声明者正在写 owner 等待，超过 10 秒才按同样方式回收，写 owner 失败的声明者立刻撤掉自己的目录（W25）；回收者恰在建好标记之后、删除之前被杀时标记会留下，所有等待者都把它当作回收进行中直到预算用完，确认没有回收者在跑后手动删除 `.build/locks/build.lock`。活着的持有者则等待，每 30 秒在 stderr 报告一次，`WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS`（缺省 3600）用完后以 75 退出。被包装的命令继承 `WAKEFLOW_BUILD_LOCK_TOKEN`，同令牌的嵌套调用直接重入。`wf verify` 与 `wf handoff` 的 `build:check` 自带这把锁，所以 `npm run wf -- verify gate` 不必再包一层；`npm run wf` 本身先编译 tooling 的那一步仍在锁外，它只写 `.build/tooling`，并且是增量的。PID 复用只会让等待变长，不会让两个写者同时进入；这不是跨仓库或跨机器的锁。
 
 ## 14. 受影响测试与聚焦选择
 
@@ -370,7 +370,7 @@ npm run --silent wf -- handoff
 npm run --silent wf -- handoff --no-artifacts
 ```
 
-把 CLAUDE.md 的交接规则变成一条只读命令，八项检查各自给出 passed / failed / unavailable（`version-bytes` 见 ADR-0021：本地存在当前版本的 `v<version>` tag 时，两份 `artifact-manifest.json` 的文件摘要必须与 tag 上的一致，字节变了先 bump；tag 不存在只记录未比较）：`git diff --check`（含 staged）；私有内容——新增行与未跟踪文本文件里的本机家目录（当前用户名）、`/private/tmp/claude-`、`/var/folders/` 路径按失败，凭证样式（提供商令牌含 JWT、私钥块、`password/secret/token/api_key=` 赋值）在 `tests/` 外按失败、在 `tests/` 内按 review 列出；`build:check`（`--no-artifacts` 跳过时该项 unavailable，不阻止整体通过，日志留在 `.build/handoff/run-…/`）；文档指针——docs/README 的"最新节点 §13.N"是否等于 gate-log 最后一节，`docs/reviews` 与 `docs/references` 的每个文件是否被索引，gate-log 里 `wf scaffold node` 的 `验证待填` 占位与 README 里的"（待填）"按失败，最后一节还写"未提交"而树里只有 `docs/` 改动时按 review 点名（§13.165）；耗时表覆盖——每个 `tests/**/*.test.ts` 在 `tooling/testing/test-durations.json` 里有条目、表里没有已消失的文件，缺口按 review 点名（完整门之后 `wf timings apply` 补上）；指令文件一致——`CLAUDE.md` 与 `AGENTS.md` 除标题与标题含 Host Boundary 的一节外逐节相同；Git 分支、修改/未跟踪计数与相对本地 origin/main 的领先/落后。它不改任何文件，也不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威。
+把 CLAUDE.md 的交接规则变成一条只读命令，八项检查各自给出 passed / failed / unavailable（`version-bytes` 见 ADR-0021：本地存在当前版本的 `v<version>` tag 时，两份 `artifact-manifest.json` 的文件摘要必须与 tag 上的一致，字节变了先 bump；tag 不存在只记录未比较）：`git diff --check`（含 staged）；私有内容——新增行与未跟踪文本文件里的本机家目录（当前用户名）、`/private/tmp/claude-`、`/var/folders/` 路径按失败，凭证样式（提供商令牌含 JWT、私钥块、`password/secret/token/api_key=` 赋值）在 `tests/` 外按失败、在 `tests/` 内按 review 列出；`build:check`（只有显式 `--no-artifacts` 跳过时该项 unavailable 而不计入整体；拿不到构建锁、等锁时被取消或没能派生 npm 时同样 unavailable，但那是必需检查没有执行，整体为 unavailable、退出码 2，不能当作通过，open-items W26；日志留在 `.build/handoff/run-…/`）；文档指针——docs/README 的"最新节点 §13.N"是否等于 gate-log 最后一节，`docs/reviews` 与 `docs/references` 的每个文件是否被索引，gate-log 里 `wf scaffold node` 的 `验证待填` 占位与 README 里的"（待填）"按失败，最后一节还写"未提交"而树里只有 `docs/` 改动时按 review 点名（§13.165）；耗时表覆盖——每个 `tests/**/*.test.ts` 在 `tooling/testing/test-durations.json` 里有条目、表里没有已消失的文件，缺口按 review 点名（完整门之后 `wf timings apply` 补上）；指令文件一致——`CLAUDE.md` 与 `AGENTS.md` 除标题与标题含 Host Boundary 的一节外逐节相同；Git 分支、修改/未跟踪计数与相对本地 origin/main 的领先/落后。它不改任何文件，也不是隐私门的替代：内核的隐私扫描仍是证据与归档的权威。
 
 ## 16. 版本准备
 
@@ -436,7 +436,7 @@ npm run --silent wf -- scaffold node --section 13.164 --title "下一批" --appl
 npm run --silent wf -- timings apply --receipt .build/verification/run-EXAMPLE/receipt.json
 ```
 
-与 `timings export` 同一套核验（只接受完整通过的 gate 回执、源码指纹与完整清单一致），把候选表写回 `tooling/testing/test-durations.json`。写回后耗时表是新的仓库输入：旧回执不再证明新字节，交接前要重新跑门。
+与 `timings export` 同一套核验（只接受完整通过的 gate 回执、源码指纹与完整清单一致——比的是输入摘要，不是提交指针，所以门过的树先提交再写回也合法），把候选表写回 `tooling/testing/test-durations.json`。写回后耗时表是新的仓库输入：旧回执不再证明新字节，交接前要重新跑门。
 
 `wf claude turn/read`（粘贴提示、等待回合、读会话记录）没有在本批实现：发货助手的 `deliver` 只接受 Wakeflow 投递许可，不能粘任意文本；另造一套 tmux 驱动与"不重建第二个 tmux 管理器"的边界冲突。可选方案是给助手加一条仅供维护者使用的 `type` 子命令，或继续用会话 scratchpad 脚本，待裁决。
 

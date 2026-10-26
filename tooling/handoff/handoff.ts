@@ -19,6 +19,10 @@ import { npmCommand, runLoggedCommand } from "../verification/process.js";
  * 有条目，按 review 点名缺口）、指令文件一致（`CLAUDE.md` 与 `AGENTS.md` 除标题与 Host
  * Boundary 一节外逐节相同）与 Git 概况。它不改任何文件，不是隐私门的替代：内核的隐私扫描
  * 仍是证据与归档的权威，这里只是提交前的维护者便利检查。
+ *
+ * 整体状态：任一项 failed 即 failed（退出码 1）；任一项 unavailable 即 unavailable（退出码 2），
+ * 唯一的例外是用户以 `--no-artifacts` 显式跳过的 build:check。拿不到构建锁、等锁时被取消或
+ * 没能派生 npm 时该项同样 unavailable，但那是必需检查没有执行，不能当作通过（open-items W26）。
  */
 
 export interface HandoffCheck {
@@ -44,7 +48,7 @@ export interface HandoffReport {
 }
 
 export interface HandoffOptions {
-  /** 运行 `npm run build:check`；缺省运行。关闭时该项报告 unavailable。 */
+  /** 运行 `npm run build:check`；缺省运行。显式关闭时该项报告 unavailable 且不计入整体状态。 */
   readonly artifacts?: boolean;
   readonly signal?: AbortSignal;
 }
@@ -218,7 +222,7 @@ async function artifactsCheck(root: string, options: HandoffOptions): Promise<Ha
     return {
       name: "artifacts",
       status: "unavailable",
-      details: ["build:check not run (--no-artifacts)"],
+      details: ["build:check skipped on request (--no-artifacts); not counted against the handoff"],
     };
   const parent = privateDirectory(root, ".build/handoff");
   const directory = mkdtempSync(path.join(parent, "run-"));
@@ -259,7 +263,11 @@ async function artifactsCheck(root: string, options: HandoffOptions): Promise<Ha
       error instanceof Error && "code" in error && typeof error.code === "string"
         ? error.code
         : "build-check-unavailable";
-    return { name: "artifacts", status: "unavailable", details: [code] };
+    return {
+      name: "artifacts",
+      status: "unavailable",
+      details: [`build:check did not run (${code}); the handoff is unavailable until it runs`],
+    };
   }
 }
 
@@ -575,9 +583,12 @@ export async function checkHandoff(
     instructionsParityCheck(root),
     gitCheck(root),
   );
+  // 只有用户显式跳过的 build:check 不计入整体；必需检查没能执行的 unavailable 照常阻止。
+  const skippedOnRequest = (check: HandoffCheck) =>
+    check.name === "artifacts" && options.artifacts === false;
   const status = checks.some((check) => check.status === "failed")
     ? "failed"
-    : checks.some((check) => check.status === "unavailable" && check.name !== "artifacts")
+    : checks.some((check) => check.status === "unavailable" && !skippedOnRequest(check))
       ? "unavailable"
       : "passed";
   return Object.freeze({

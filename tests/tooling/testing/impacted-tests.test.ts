@@ -80,6 +80,60 @@ test("受影响测试沿静态导入反向传播：直接与经由夹具的间�
   equal(selection.since, "HEAD");
 });
 
+test("多行 named import、import type、export … from 与默认加命名导入都是静态边（W27）", (t) => {
+  const root = fixture(t);
+  write(
+    root,
+    "tests/kernel/multiline.test.ts",
+    'import {\n  a,\n  // 注释行也在子句里\n} from "../../src/kernel/a.js";\nexport const m = a;\n',
+  );
+  write(
+    root,
+    "tests/kernel/type-only.test.ts",
+    'import type {\n  X,\n} from "../../src/kernel/a.js";\nexport const n: X | null = null;\n',
+  );
+  write(
+    root,
+    "tests/kernel/reexport.fixture.ts",
+    'export {\n  a,\n} from "../../src/kernel/a.js";\n',
+  );
+  write(
+    root,
+    "tests/kernel/reexport.test.ts",
+    'import { a } from "./reexport.fixture.js";\nexport const r = a;\n',
+  );
+  write(
+    root,
+    "tests/kernel/default-and-named.test.ts",
+    'import x, {\n  a,\n} from "../../src/kernel/a.js";\nexport const d = [x, a];\n',
+  );
+  write(
+    root,
+    "tests/kernel/unrelated-string.test.ts",
+    'const text = "from";\nexport const u = text;\n',
+  );
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "multiline"]);
+  write(root, "src/kernel/a.ts", "export const a = 3;\n");
+  const selection = selectImpactedTests(root);
+  deepEqual(selection.tests, [
+    "tests/capabilities/x/service.test.ts",
+    "tests/kernel/a.test.ts",
+    "tests/kernel/default-and-named.test.ts",
+    "tests/kernel/multiline.test.ts",
+    "tests/kernel/reexport.test.ts",
+    "tests/kernel/type-only.test.ts",
+  ]);
+  deepEqual([...testSourcesDependingOn(root, "src/kernel/a.ts")].sort(), [
+    "tests/capabilities/x/service.test.ts",
+    "tests/kernel/a.test.ts",
+    "tests/kernel/default-and-named.test.ts",
+    "tests/kernel/multiline.test.ts",
+    "tests/kernel/reexport.test.ts",
+    "tests/kernel/type-only.test.ts",
+  ]);
+});
+
 test("改动的夹具只影响它的消费者；新增的未跟踪测试本身入选；提交后按 --since 仍能回看", (t) => {
   const root = fixture(t);
   write(

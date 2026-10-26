@@ -20,8 +20,10 @@ export function proposeTestDurations(root: string, receiptPath: string) {
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(receipt.finishedAt)
   )
     throw new Error("A completed full-gate receipt is required.");
+  // 回执钉住的是输入字节（摘要覆盖 src、tests、tooling、assets 与根文件），不是提交指针：
+  // 门过的树先提交再刷新耗时表也合法（§13.210 的顺序陷阱）。
   const current = captureVerificationInput(root);
-  if (current.digest !== receipt.input.digest || current.commit !== receipt.input.commit)
+  if (current.digest !== receipt.input.digest)
     throw new Error("The measured repository inputs have changed.");
   const directory = path.dirname(receiptPath);
   for (const [key, name] of [

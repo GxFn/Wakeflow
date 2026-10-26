@@ -129,6 +129,11 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
     single-lane setting, not a local requirement. A test that times out only
     under eight workers gets the tag, not a longer timeout.
 - Each gate-log section states which tier ran and why.
+- A tier 2 receipt counts as the stage gate whoever launched it, when `wf verify`
+  recorded it as `gate`, `passed` and `inputsUnchanged` and its input digest
+  equals the tree's current digest: the receipt pins the bytes, not the
+  author. Say in the gate-log whose run it was. `wf timings apply` compares
+  that digest too, so it may run before or after the gated tree is committed.
 - Tests follow `docs/standards/testing-standard.md`: six levels (pure, component,
   capability, public-tool, tooling, artifact) with per-file budgets, placement
   mirroring `src/`, disposable roots with `durability: "none"` outside the

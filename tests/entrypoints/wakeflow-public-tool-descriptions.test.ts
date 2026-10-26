@@ -20,7 +20,9 @@ useDisposableDurability();
  * 最后一条把 Test 技能列出的判定、失败分类与归属词汇对着拥有它们的报告 Schema 核对：
  * 少一个值是撒谎，多一个 Schema 里没有的词也是撒谎。
  *
- * 纯对象遍历加两份技能文件读取：没有夹具、没有服务进程、不跑构建。
+ * 最后再把根 README 的 verify 门数钉在同一个描述上（W33：README 曾停在 "thirteen"）。
+ *
+ * 纯对象遍历加两份技能文件与两份根 README 读取：没有夹具、没有服务进程、不跑构建。
  */
 
 type SchemaNode = Readonly<Record<string, unknown>>;
@@ -303,5 +305,43 @@ test("Test 技能列出的判定、失败分类与归属词汇与报告 Schema �
     for (const value of values) {
       ok(listedAnywhere.has(value), `the Test skill never lists ${name} value \`${value}\``);
     }
+  }
+});
+
+/**
+ * 根 README 的 verify 门数跟着公共描述走（W33）：描述里的数词由 §13.129 钉在 `deriveWorkspaceGates`
+ * 上，README 再钉在描述上；中文版用汉字数词写同一个数。Demand 的完成门另述，带 `demandId` 才评，
+ * 不并进工作区门的总数。
+ */
+const GATE_COUNT_WORDS_ZH: Readonly<Record<string, string>> = Object.freeze({
+  thirteen: "十三",
+  fourteen: "十四",
+  fifteen: "十五",
+  sixteen: "十六",
+  seventeen: "十七",
+  eighteen: "十八",
+});
+
+test("根 README 的 verify 门数与公共描述一致：工作区门的数词相同，Demand 门按 demandId 另述（W33）", () => {
+  const verify = WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.find((tool) => tool.name === "wakeflow_verify");
+  ok(verify !== undefined, "wakeflow_verify is missing from the catalog");
+  const description = verify?.description ?? "";
+  const word = Object.keys(GATE_COUNT_WORDS_ZH).find((candidate) =>
+    description.includes(`${candidate} gates`),
+  );
+  ok(word !== undefined, `the verify description states no known gate count: ${description}`);
+  const english = readFileSync(path.join(process.cwd(), "README.md"), "utf8");
+  const chinese = readFileSync(path.join(process.cwd(), "README.zh-CN.md"), "utf8");
+  ok(english.includes(`${word} workspace gates`), `README.md must say "${word} workspace gates"`);
+  const zh = GATE_COUNT_WORDS_ZH[word ?? ""] ?? "";
+  ok(chinese.includes(`${zh}道工作区门`), `README.zh-CN.md must say "${zh}道工作区门"`);
+  for (const [name, text] of [
+    ["README.md", english],
+    ["README.zh-CN.md", chinese],
+  ] as const) {
+    ok(
+      text.includes("`demandId`"),
+      `${name} must describe the Demand gates separately, keyed on demandId`,
+    );
   }
 });

@@ -78,6 +78,28 @@ function modelSummary(value: unknown) {
   };
 }
 
+/** quick `--changed` 的回执记着它的选择（producer 的事实）；没有选择（显式文件）时为 null。 */
+function selectedTestCount(receipt: Record<string, unknown>): number | null {
+  if (receipt.selection === null || receipt.selection === undefined) return null;
+  const selection = object(receipt.selection);
+  if (!Array.isArray(selection.tests)) throw new Error("Invalid verification selection.");
+  return integer(selection.tests.length);
+}
+
+/**
+ * 完整通过所需的阶段与测试记录，按回执记下的事实判定：gate 一个阶段加通过的测试记录；artifact
+ * 两个阶段、不看记录；quick 五个静态阶段加聚焦测试，而 `--changed` 选中零个测试的回执
+ * （`selection.tests` 为空）合法地只有五个静态阶段、没有测试记录（open-items W35）。
+ */
+function completenessRule(profile: string, receipt: Record<string, unknown>) {
+  if (profile === "gate") return { stages: ["gate"], tests: "passed" as const };
+  if (profile === "artifact")
+    return { stages: ["build:check", "smoke:artifacts"], tests: "ignored" as const };
+  return selectedTestCount(receipt) === 0
+    ? { stages: STAGES.slice(0, 5), tests: "absent" as const }
+    : { stages: STAGES.slice(0, 6), tests: "passed" as const };
+}
+
 function testSummary(receipt: Record<string, unknown>, directory: string) {
   if (receipt.tests === null) return null;
   const proof = object(receipt.testEvidence);
@@ -170,18 +192,14 @@ export function exportCiVerification(repository: string, summaryFile: string) {
     };
   });
   const tests = testSummary(receipt, directory);
-  const expected =
-    profile === "gate"
-      ? ["gate"]
-      : profile === "artifact"
-        ? ["build:check", "smoke:artifacts"]
-        : STAGES.slice(0, 6);
+  const rule = completenessRule(profile, receipt);
   if (
     status === "passed" &&
-    (JSON.stringify(stages.map((s) => s.name)) !== JSON.stringify(expected) ||
+    (JSON.stringify(stages.map((s) => s.name)) !== JSON.stringify(rule.stages) ||
       stages.some((s) => s.status !== "passed" || s.exitCode !== 0) ||
       receipt.inputsUnchanged !== true ||
-      (profile !== "artifact" && tests?.passed !== true))
+      (rule.tests === "passed" && tests?.passed !== true) ||
+      (rule.tests === "absent" && tests !== null))
   )
     throw new Error("Incomplete verification cannot export as passed.");
   if (

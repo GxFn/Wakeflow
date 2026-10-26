@@ -293,6 +293,9 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
   const codexFirstRun = flat(codex("skills/wakeflow-controller/references/first-run.md"));
   ok(codexFirstRun.includes("the workspace project in the Codex app and its threads"));
   equal(codexFirstRun.includes("Ctrl-b"), false, "Codex gets no tmux keys");
+  // R3（W18）：Codex 不发 slash 命令，交接卡让用户用人话问 Controller，而不是教他敲 `/wakeflow:status`。
+  ok(codexFirstRun.includes('ask the Controller thread "what is next" in plain words'));
+  equal(codexFirstRun.includes("/wakeflow:"), false, "the Codex card names no slash command");
   for (const readme of [claude("README.md"), codex("README.md")]) {
     ok(readme.includes("## First run") && readme.includes("## Daily use"));
     ok(
@@ -322,9 +325,10 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
   ok(next.includes("you performed a delivery send and recorded its outcome"));
   ok(next.includes("asks for the user's confirmation or decision"));
   equal(next.includes("do that one step, and stop"), false);
+  // 技能正文宿主中立（R3，W18）：停点那句不点名 `/wakeflow:next`，两个宿主渲染出同一句。
   ok(
     flat(source("skills/wakeflow-controller/SKILL.md")).includes(
-      "A recorded decision ends the turn; the next `/wakeflow:next` resumes from `wakeflow_status`",
+      "A recorded decision ends the turn; the next Controller turn resumes from `wakeflow_status`",
     ),
   );
   // Agent 侧的四条引导：临时文件、逐条列出用例、环境前置、Controller 核对文件的位置。

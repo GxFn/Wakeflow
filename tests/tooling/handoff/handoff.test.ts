@@ -6,6 +6,12 @@ import { runGit } from "../../support/git-fixture.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 
+/**
+ * `wf handoff`（第 4 级，维护者工具）：只读交接检查单的八项判定与整体状态，夹具是一次性 Git
+ * 检出，`build:check` 由夹具脚本充当。整体状态的规则——显式 `--no-artifacts` 跳过的 build:check
+ * 不计入，必需检查没能执行即 unavailable（退出码 2）——见 open-items W26。
+ */
+
 function git(root: string, args: readonly string[]): void {
   runGit(root, ...args);
 }
@@ -217,6 +223,43 @@ test("build:check 在构建锁下真实运行：失败的脚本让制品项失�
     delete process.env.HANDOFF_FIXTURE_FAIL;
   }
   ok(check(passed, "git").details.some((line) => line.startsWith("branch ")));
+});
+
+test("必需的 build:check 没能执行（等锁前已取消、构建锁一直被占用）时该项 unavailable 并让整体 unavailable、退出码 2；只有显式 --no-artifacts 才不计入", async (t) => {
+  const root = fixture(t);
+  const controller = new AbortController();
+  controller.abort();
+  const cancelled = await checkHandoff(root, { artifacts: true, signal: controller.signal });
+  equal(cancelled.status, "unavailable");
+  equal(cancelled.exitCode, 2);
+  deepEqual(check(cancelled, "artifacts"), {
+    name: "artifacts",
+    status: "unavailable",
+    details: [
+      "build:check did not run (build-lock-aborted); the handoff is unavailable until it runs",
+    ],
+  });
+  // 另一条活着的进程持有夹具的构建锁：等待预算为零时立即报 busy，同样不能当作通过。
+  write(
+    root,
+    ".build/locks/build.lock/owner.json",
+    `${JSON.stringify({ pid: process.pid, token: "fixture-holder", command: "fixture" })}\n`,
+  );
+  const timeout = process.env.WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS;
+  process.env.WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS = "0";
+  try {
+    const busy = await checkHandoff(root, { artifacts: true });
+    equal(busy.status, "unavailable");
+    equal(busy.exitCode, 2);
+    match(check(busy, "artifacts").details.join("\n"), /did not run \(build-lock-busy\)/u);
+  } finally {
+    if (timeout === undefined) delete process.env.WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS;
+    else process.env.WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS = timeout;
+  }
+  const skipped = await checkHandoff(root, { artifacts: false });
+  equal(skipped.status, "passed");
+  equal(skipped.exitCode, 0);
+  match(check(skipped, "artifacts").details.join("\n"), /skipped on request \(--no-artifacts\)/u);
 });
 
 test("version-bytes（ADR-0021）：当前版本的 tag 存在时比较两份制品清单的文件摘要，同版本改字节必须先 bump；没有 tag 只记录未比较", async (t) => {

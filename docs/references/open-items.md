@@ -805,21 +805,21 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：待执行）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
 - **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：待执行）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
 - **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：待执行）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
-- **W18** [P2 / 触发高] CR-R3：Codex 文本教用户调用未提供的 slash 命令（批 F；状态：待执行）。修：Codex 交接文本改 wakeflow_status 措辞；SKILL.md:125 改宿主中性。
+- **W18** [P2 / 触发高] CR-R3：Codex 文本教用户调用未提供的 slash 命令（批 F；状态：已修 §13.211）。修：Codex 交接文本改 wakeflow_status 措辞；SKILL.md:125 改宿主中性。
 - **W19** [P2 / 触发低] CR-S1：归档后活动根只删了一部分，recover 无法重入（批 H；状态：待执行）。修：recover 以日志 + 已封归档为权威，retire 接受日志授权的残根清除。
 - **W20** [P2 / 触发低] CR-S2：取消理由按 UTF-16 截断使事务持续恢复失败（批 H；状态：待执行）。修：foundation/text boundedText 按码点；派生理由在 preview 先校验。
 - **W21** [P2 / 触发中] CR-S3：第三次 rework 提供的接受选项无法执行（批 G；状态：待执行）。修：修法 B：rework-brake 阻塞 + escalate{needs-decision}，回答后 accept 可达（待用户确认）。
 - **W22** [P2 / 触发中] CR-S4：快照暂存残留使公开入口挡住仓储 fallback（批 H；状态：待执行）。修：root-inventory 对暂存条目按 stage owner 状态分类，死 owner 容忍。
 - **W23** [P2 / 触发中] CR-S5：部分测试报告缺失的步骤无法补跑（批 G；状态：待执行）。修：未观察且无基线的步骤并入可点名集合，no-failed-step 改无未决步骤。
-- **W24** [P2 / 触发低] CR-T1：构建锁 stale 回收会删除新持有者活锁（批 F；状态：待执行）。修：回收前 wx 建标记并重读 owner 仍等于观察值才 rm；mjs 同步。
-- **W25** [P2 / 触发低] CR-T2：owner 写入失败留下无法自动回收的构建锁（批 F；状态：待执行）。修：写 owner 失败即删自己的目录；无主目录按 mtime 有界回收。
-- **W26** [P2 / 触发高] CR-T3：必需 artifact 检查不可用时 handoff 仍为绿色（批 F；状态：待执行）。修：只在 --no-artifacts 时豁免，其余 unavailable 整体不通过。
-- **W27** [P2 / 触发高] CR-T4：多行静态 import/export 从影响与负载依赖图中消失（批 F；状态：待执行）。修：导入图允许跨行/词法扫描；夹具加多行、export…from、import type。
+- **W24** [P2 / 触发低] CR-T1：构建锁 stale 回收会删除新持有者活锁（批 F；状态：已修 §13.211）。修：回收前 wx 建标记并重读 owner 仍等于观察值才 rm；mjs 同步。
+- **W25** [P2 / 触发低] CR-T2：owner 写入失败留下无法自动回收的构建锁（批 F；状态：已修 §13.211）。修：写 owner 失败即删自己的目录；无主目录按 mtime 有界回收。
+- **W26** [P2 / 触发高] CR-T3：必需 artifact 检查不可用时 handoff 仍为绿色（批 F；状态：已修 §13.211）。修：只在 --no-artifacts 时豁免，其余 unavailable 整体不通过。
+- **W27** [P2 / 触发高] CR-T4：多行静态 import/export 从影响与负载依赖图中消失（批 F；状态：已修 §13.211）。修：导入图允许跨行/词法扫描；夹具加多行、export…from、import type。
 - **W28** [P3 / 触发高] CR-H5：mark 重新加回 worktree 窗口标题前缀（批 J；状态：待执行）。修：configuredWindowName 与 launch 共用去前缀规则。
 - **W29** [P3 / 触发低] CR-R-ROOT-02：较旧看板刷新覆盖较新的状态投影（批 I；状态：待执行）。修：列举 + 发布进看板级锁。
 - **W30** [P3 / 触发低] CR-R-ROOT-05：摘要按 UTF-16 截断使合法 emoji 不能通过输出准入（批 H；状态：待执行）。修：同 W20 的助手替换 requirement summary、archive goal、active-projection。
 - **W31** [P3 / 触发极低] CR-R-ROOT-07：Git worktree 指针读不出被误标 prunable（批 J；状态：待执行）。修：collectWorktrees 用 readPointer，仅 missing→absent。
 - **W32** [P3 / 触发中] CR-R-ROOT-09：已记录的 Notification hook 不能转为受管证据（批 H；状态：待执行）。修：两份 Schema 加 notification，抽共享 hook-event 定义三处 $ref。
-- **W33** [P3 / 触发高] CR-R4：README 验证门数与实现不一致（批 F；状态：待执行）。修：两份 README 改十五道工作区门与 Demand 门分述。
+- **W33** [P3 / 触发高] CR-R4：README 验证门数与实现不一致（批 F；状态：已修 §13.211）。修：两份 README 改十五道工作区门与 Demand 门分述。
 - **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：待执行）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
-- **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：待执行）。修：export-ci 依回执 selection 判完整。
+- **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：已修 §13.211）。修：export-ci 依回执 selection 判完整。

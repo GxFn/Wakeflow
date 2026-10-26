@@ -235,6 +235,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     equal(completed.disposition, "completed");
     equal(completed.package.status, "archived");
     equal(completed.releasedClaims, 0);
+    // W34：非 research 的完成归档保留 continue 前沿（下面的 continue 预览随即 ready）。
     equal(completed.next.frontier, "demand-continuation");
     equal(demandRootExists(root, demandId), false, "active root survived");
     equal(
@@ -259,6 +260,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
     const archivedRoute = await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId });
     if (archivedRoute.archive === null) throw new Error("Expected an archived route.");
     equal(archivedRoute.archive.outcome, "completed");
+    equal(archivedRoute.next.frontier, "demand-continuation");
 
     const recovered = await executeDemandCompletionRequest({
       root,

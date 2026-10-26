@@ -145,3 +145,8 @@
 ## 修订（2026-10-22，1.2 批 C：R4，§13.210）
 
 - 投递准备先从已规划事件重读任务包（与完成覆盖同一做法），`dependsOn` 里阶段不是 `accepted` 的目标以 `dependency-pending:<targetTaskId>` 阻塞；顺序是 `awaiting-decision` → `dependency-pending` → 阶段许可（`target-phase` / `rearm-available`）。依赖目标被替代时以替代后的阶段为准由 Controller 重新规划依赖。
+## 修订（2026-10-26，Codex 审阅批 G：R1、R2，open-items W16、W17）
+
+- **发出许可只有一个边界，前置在边界前统一执行（R1，W16）。** `replayPermit`（同键重放）与各签发路径汇合到的 `materializedPermit` 是"发出许可"的唯一边界。Claude 宿主的已发布资产核对（6.2 的 F1，`assertHostAssetsCurrent`：状态栏资产与伴随的 tmux 助手字节）原来只在新 `prepare_delivery` 上；同键重放命中已绑定提交后直接重放、`rearm_delivery` 换代、回调重发及其重放全程不核对，于是助手字节漂移后新 prepare 被拒，重放仍交出同一许可、rearm 仍签发第二代。现在每条签发路径都在取得路由之后、追加或取声明之前核对：新 prepare、prepare 与 rearm 的同键重放、rearm 换代、回调重发与它的重放；漂移即 `precondition-failed/host-asset-drift`（伴随资产带 `:<fileName>`），prepare 路径指向 `$request.targetTaskId`，rearm 路径指向 `$request.deliveryId`；不追加事件、不取声明，字节恢复后同一请求照常签发或重放。不加字段、不改 Schema。结局记录不是发出许可，不受资产状态影响。Codex 的 facade 没有资产面，行为不变。
+- **回执内容只来自签发事件，当前状态只进 `next`（R2，W17）。** `prepare_delivery` 与 `rearm_delivery` 结果里的 `delivery.phase` 此前读当前聚合的目标阶段；prepare → `rejected-before-send` 之后目标在 `host-effect-rejected`，同键重放把它写进回执，被结果 Schema（只允许 `delivery-prepared` / `test-delivery-prepared`）拒为 `output-boundary/result-schema`，rearm 结果同理。现在 `delivery.phase` 由信封的 workType 推（implementation → `delivery-prepared`，test → `test-delivery-prepared`），与枚举一致、与首发时相同；`next` 仍按当前聚合给出前沿（例如 `implementation-host-effect-rearm`）。Schema 不放宽。
+- 覆盖：`tests/capabilities/delivery/host-assets.test.ts`（Claude facade：资产漂移下的新 prepare、同键重放、rearm、rearm 重放都拒，恢复后签发）；`tests/capabilities/delivery/service.test.ts`（结局记录之后 prepare 与 rearm 的同键重放仍是通过结果 Schema 的幂等回执）。

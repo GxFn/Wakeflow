@@ -52,7 +52,8 @@ useDisposableDurability();
 
 /**
  * demand 切片纯决定：标识派生、归档负载筛选、凭证扫描、阻塞项派生；
- * 决定器侧：第三次 rework 刹车附带升级事件、用户回答清除升级、续接回到 active。
+ * 决定器侧：第三次 rework 被刹车拒绝、escalate 附带升级事件、用户回答清除升级并放行恢复的
+ * accept 与一次 rework（W21 修法 B）、续接回到 active。级别 0（纯逻辑）。
  */
 
 const REQUIREMENT_ID = "requirement_11111111-1111-4111-8111-111111111111";
@@ -342,49 +343,73 @@ function withReworkCount(state: Readonly<DemandAggregateState>, reworkCount: num
   });
 }
 
-test("第三次 rework 刹车：同一提交附带升级事件，路由 awaiting-decision，用户回答后清除", () => {
+test("第三次 rework 刹车：阈值前照常记录；达到阈值的 rework 被拒，escalate 附带升级并等待用户；回答后带 resumption 的 accept 与一次 rework 可达", () => {
   const { state: reported, targetResult } = reportedState();
   equal(demandWindowIds(reported).length, 1);
   deepEqual(pendingReviewTargets(reported), [reported.targetTasks[0]?.targetTaskId]);
+  const review = (
+    state: Readonly<DemandAggregateState>,
+    decision: ReturnType<typeof createControllerImplementationReviewDecisionForState>,
+  ) =>
+    decideDemandEventSourcingCommand(state, {
+      commandType: "review.decide-target-result",
+      commandVersion: 1,
+      decision,
+    });
 
   const secondRework = withReworkCount(reported, DEMAND_REWORK_ESCALATION_THRESHOLD - 2);
-  const decision = createControllerImplementationReviewDecisionForState(
-    computeDemandAggregateStateDigest(secondRework),
-    "rework",
-    8,
-    targetResult,
+  const events = review(
+    secondRework,
+    createControllerImplementationReviewDecisionForState(
+      computeDemandAggregateStateDigest(secondRework),
+      "rework",
+      8,
+      targetResult,
+    ),
   );
-  const events = decideDemandEventSourcingCommand(secondRework, {
-    commandType: "review.decide-target-result",
-    commandVersion: 1,
-    decision,
-  });
-  equal(events.length, 1, "below the threshold no escalation is attached");
+  equal(events.length, 1, "below the threshold the rework is recorded without an escalation");
   const reworked = evolveDemandEventSourcingState(secondRework, events[0]);
   equal(reworkCountOf(reworked), DEMAND_REWORK_ESCALATION_THRESHOLD - 1);
 
+  // 第三次 rework 不再"先记录再升级"：决定器直接拒绝，计数不动，目标仍在 result-reported。
   const atThreshold = withReworkCount(reported, DEMAND_REWORK_ESCALATION_THRESHOLD - 1);
-  const brakeDecision = createControllerImplementationReviewDecisionForState(
+  throws(
+    () =>
+      review(
+        atThreshold,
+        createControllerImplementationReviewDecisionForState(
+          computeDemandAggregateStateDigest(atThreshold),
+          "rework",
+          8,
+          targetResult,
+        ),
+      ),
+    (error: unknown) =>
+      error instanceof DemandEventSourcingDecisionError && error.reason === "transition",
+  );
+
+  // Controller 改记 escalate：同一提交附带 review-decision 来源的升级事件，Demand 等待用户。
+  const escalateDecision = createControllerImplementationReviewDecisionForState(
     computeDemandAggregateStateDigest(atThreshold),
-    "rework",
+    "escalate",
     8,
     targetResult,
   );
-  const braked = decideDemandEventSourcingCommand(atThreshold, {
-    commandType: "review.decide-target-result",
-    commandVersion: 1,
-    decision: brakeDecision,
-  });
-  equal(braked.length, 2);
-  const escalated = braked[1];
-  equal(escalated?.eventType, "lifecycle.demand-escalated");
-  if (escalated?.eventType !== "lifecycle.demand-escalated") throw new Error("expected escalation");
-  equal(escalated.data.escalation.source.kind, "rework-brake");
-  equal(escalated.data.escalation.options.length, 3);
-  let state = evolveDemandEventSourcingState(atThreshold, braked[0]);
-  state = evolveDemandEventSourcingState(state, escalated);
-  equal(state.awaitingDecision?.escalationEventId, escalated.eventId);
-  equal(reworkCountOf(state), DEMAND_REWORK_ESCALATION_THRESHOLD);
+  const escalated = review(atThreshold, escalateDecision);
+  equal(escalated.length, 2);
+  const escalation = escalated[1];
+  if (escalation?.eventType !== "lifecycle.demand-escalated")
+    throw new Error("expected escalation");
+  equal(escalation.data.escalation.source.kind, "review-decision");
+  let state = evolveDemandEventSourcingState(atThreshold, escalated[0]);
+  state = evolveDemandEventSourcingState(state, escalation);
+  equal(state.awaitingDecision?.escalationEventId, escalation.eventId);
+  equal(state.targetTasks[0]?.phase, "escalated");
+  equal(
+    reworkCountOf(state),
+    DEMAND_REWORK_ESCALATION_THRESHOLD - 1,
+    "a refused rework is not counted",
+  );
 
   const [recorded] = decideDemandEventSourcingCommand(state, {
     commandType: "lifecycle.record-decision",
@@ -393,15 +418,53 @@ test("第三次 rework 刹车：同一提交附带升级事件，路由 awaiting
     eventId: eventId("44444444-4444-4444-8444-444444444444"),
     recordedAt: AT,
     decision: {
-      escalationEventId: escalated.eventId,
+      escalationEventId: escalation.eventId,
       text: "Accept the current result with the recorded residual risks.",
       chosenOption: "Accept the current result with the recorded residual risks.",
     },
   });
   equal(recorded.eventType, "lifecycle.decision-recorded");
-  const decided = evolveDemandEventSourcingState(state, recorded);
-  equal(decided.awaitingDecision, undefined);
-  equal(decided.lifecycle, "active");
+  const answered = evolveDemandEventSourcingState(state, recorded);
+  equal(answered.awaitingDecision, undefined);
+  equal(answered.lifecycle, "active");
+
+  // 回答后经既有 resumption 路径：accept 可达；用户要求再返工时同一依据放行这一次 rework，计数继续累计。
+  const resumption = {
+    previousDecisionId: escalateDecision.targetReviewDecisionId,
+    basis: { kind: "decision-recorded" as const, escalationEventId: escalation.eventId },
+    summary: "用户已回答升级。",
+  };
+  const answeredDigest = computeDemandAggregateStateDigest(answered);
+  const accepted = review(
+    answered,
+    createControllerImplementationReviewDecisionForState(
+      answeredDigest,
+      "accept",
+      8,
+      targetResult,
+      {
+        resumption,
+      },
+    ),
+  );
+  equal(accepted.length, 1);
+  equal(evolveDemandEventSourcingState(answered, accepted[0]).targetTasks[0]?.phase, "accepted");
+  const reworkedAgain = review(
+    answered,
+    createControllerImplementationReviewDecisionForState(
+      answeredDigest,
+      "rework",
+      8,
+      targetResult,
+      {
+        resumption,
+      },
+    ),
+  );
+  equal(reworkedAgain.length, 1, "the answered escalation releases the brake once");
+  const afterAnswer = evolveDemandEventSourcingState(answered, reworkedAgain[0]);
+  equal(afterAnswer.targetTasks[0]?.phase, "rework-requested");
+  equal(reworkCountOf(afterAnswer), DEMAND_REWORK_ESCALATION_THRESHOLD);
 });
 
 test("续接：已完成状态回到 active 并要求先规划；活动状态不能续接", () => {

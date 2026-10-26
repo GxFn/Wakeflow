@@ -902,6 +902,8 @@ test("归档 Demand：完成即归档后带 demandId 的 status 给归档回执�
       equal(target.branch === null || typeof target.branch === "string", true);
       equal(target.commit === null || typeof target.commit === "string", true);
     }
+    // W34：非 research 的完成归档保留 continue 前沿（看板上的认领仍以本 Demand 归档且类型不是 research）；
+    // research 的归档回执不指向 continue，见 tests/governance/demand/demand-research-completion.test.ts。
     deepEqual(plain(status.next), {
       frontier: "demand-continuation",
       owner: "controller",

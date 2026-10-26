@@ -276,7 +276,7 @@ function textList(values: readonly unknown[], path: string): readonly string[] {
 
 /**
  * 决定与升级、恢复依据的最小一致性：escalate 当且仅当携带升级内容；accept 必须有目标
- * 会话完成证据。决定准入的其余规则（结果 completed、锚点全映射、rework 计数）由切片与聚合承担。
+ * 会话完成证据。决定准入的其余规则（结果 completed、锚点全映射、rework 刹车）由切片与决定器承担。
  */
 function assertControllerImplementationReviewJudgment(
   judgment: Readonly<ControllerImplementationReviewJudgment>,

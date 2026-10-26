@@ -48,8 +48,10 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 useDisposableDurability();
 
 /**
- * delivery 切片效果：prepare 一次追加并返回可移植许可（声明、信封、围栏）；重放、异请求、
- * 过期修订、非法 phase 各有结局；结局按证据派生并处理声明；rearm 换代直至上限。
+ * delivery 切片效果（第 2 级，能力；能力卡 6）：prepare 一次追加并返回可移植许可（声明、信封、围栏）；
+ * 重放、异请求、过期修订、非法 phase 各有结局；结局按证据派生并处理声明；rearm 换代直至上限；
+ * 结局记录之后的同键重放仍是通过结果 Schema 的幂等回执，阶段来自签发事件、当前状态只进 next
+ * （open-items W17）。Claude 宿主的资产前置在 host-assets.test.ts。
  */
 
 /** 事件流里摘要为 outcomeDigest 的处置记录的 attempt.failure（复审 D6）。 */
@@ -399,6 +401,16 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
       }),
       rejectedWith("rearm-available"),
     );
+    // W17：结局已记录（目标在 host-effect-rejected）之后，同键重放仍是幂等回执并通过结果 Schema：
+    // delivery.phase 是签发时的阶段，当前状态只出现在 next。
+    const replayedAfterReject = await prepareFixtureDelivery(fixture);
+    equal(replayedAfterReject.status, "idempotent");
+    equal(replayedAfterReject.delivery.deliveryId, prepared.delivery.deliveryId);
+    equal(replayedAfterReject.delivery.phase, "delivery-prepared");
+    equal(replayedAfterReject.permit.fence.claimDigest, prepared.permit.fence.claimDigest);
+    equal(replayedAfterReject.event.eventId, prepared.event.eventId);
+    equal(replayedAfterReject.next.frontier, "implementation-host-effect-rearm");
+    equal(replayedAfterReject.next.suggestedTool, "wakeflow_rearm_delivery");
     await rejects(
       rearm(
         fixture,
@@ -467,6 +479,21 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
       equal(rejectedAgain.outcome.generation, generation);
       equal(rejectedAgain.outcome.disposition, "rejected-before-send");
       equal(existsSync(claimPath(fixture)), false);
+      // W17：这一代的结局记录之后，同键重放 rearm 仍是幂等回执，阶段取签发时的 delivery-prepared。
+      if (generation === 2) {
+        const replayAfterReject = await rearm(
+          fixture,
+          prepared.delivery.deliveryId,
+          `fixture-rearm-${generation}`,
+          streamRevision,
+        );
+        equal(replayAfterReject.status, "idempotent");
+        equal(replayAfterReject.rearm.generation, generation);
+        equal(replayAfterReject.delivery.phase, "delivery-prepared");
+        equal(replayAfterReject.permit.fence?.claimDigest, fence.claimDigest);
+        equal(replayAfterReject.next.frontier, "implementation-host-effect-rearm");
+        equal(existsSync(claimPath(fixture)), false, "a replay must not take a claim");
+      }
       streamRevision = rejectedAgain.event.streamRevision;
     }
     await rejects(

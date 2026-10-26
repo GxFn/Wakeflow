@@ -4625,7 +4625,8 @@ async function deliverTest(
 /**
  * 卡 7 测试重跑：flaky 失败步骤只允许 request-another-attempt 与 escalate；accept 被拒（verdict），范围外步骤被拒
  * （step-scope）；重跑投递只带失败子集，检查投影给出 attemptScope 与上一轮的通过基线；再重跑被拒
- * （no-failed-step）；accept 后 attemptCount 为 2，Demand 完成归档。
+ * （no-pending-step：没有失败步骤，也没有未观察且无基线的步骤，W23）；accept 后 attemptCount 为 2，
+ * Demand 完成归档。
  */
 async function scenarioTestRerun(context: ScenarioContext): Promise<string> {
   if (!context.testWindowId || !context.testHandle) {
@@ -4722,12 +4723,12 @@ async function scenarioTestRerun(context: ScenarioContext): Promise<string> {
   deepEqual([...second.reviewUnit.allowedDecisions], ["accept", "escalate"]);
   const secondRevision = await currentStreamRevision(context);
   await rejected(
-    "nothing failed in the rerun, so no further rerun",
+    "nothing failed or unobserved in the rerun, so no further rerun",
     testDecisionRequest(context, second, "scenario-rerun-again", secondRevision, {
       ...rerunJudgment,
       stepIds: ["ts-2"],
     }),
-    "no-failed-step",
+    "no-pending-step",
   );
   const accepted = (
     await call(
@@ -4745,7 +4746,7 @@ async function scenarioTestRerun(context: ScenarioContext): Promise<string> {
   equal(accepted.target.attemptCount, 2);
   equal((await inspectRoute(context)).route?.frontiers[0]?.kind, "demand-completion-preflight");
   const completed = await completeDemand(context);
-  return `previous=${previous}; flaky=request-another-attempt only; early-accept=verdict; scope=step-scope; rerun=${rerun.status}/${rerun.target.phase}; attempt2=ts-2 with baseline; rerun-again=no-failed-step; accept=attemptCount ${accepted.target.attemptCount}; demand=${completed}`;
+  return `previous=${previous}; flaky=request-another-attempt only; early-accept=verdict; scope=step-scope; rerun=${rerun.status}/${rerun.target.phase}; attempt2=ts-2 with baseline; rerun-again=no-pending-step; accept=attemptCount ${accepted.target.attemptCount}; demand=${completed}`;
 }
 
 /**

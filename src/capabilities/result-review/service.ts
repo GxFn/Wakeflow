@@ -1439,11 +1439,15 @@ function implementationAdmissionView(
   targetCompletion: ReviewEvidence["targetCompletion"],
   managedEvidenceIds: readonly string[],
 ): ImplementationAdmissionView {
+  const { aggregateTarget } = unit;
   return {
     outcome: unit.target.outcome,
     targetCompletion,
     acceptanceAnchorIds: unit.target.taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
     managedEvidenceIds,
+    // 刹车看聚合里的累计 rework 次数；用户已回答的 escalate 恢复放行一次（W21 修法 B）。
+    reworkCount: aggregateTarget.workType === "test" ? 0 : (aggregateTarget.reworkCount ?? 0),
+    escalationAnswered: unit.status === "escalated" && unit.escalationAnswered,
   };
 }
 

@@ -78,6 +78,7 @@
       "$ref": "#/$defs/resumption"
     },
     "stepIds": {
+      "description": "The contract steps the next attempt reruns: exactly the pending steps - those that failed plus those this attempt left unobserved without an approved baseline. A passed or baselined step is refused (step-scope), a pending step left out is refused (step-uncovered), and no pending step at all is refused (no-pending-step).",
       "type": "array",
       "minItems": 1,
       "maxItems": 20,

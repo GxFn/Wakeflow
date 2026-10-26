@@ -314,6 +314,7 @@
   - 2026-10-09（§13.165）：`wf handoff` 新增耗时表覆盖检查；本批完整门后以 `wf timings apply` 把耗时表刷新为 294 条、合计 2,787 秒。同批在外部负载（均值 11–12）下 endpoint 的 register/decommission 用例 60 秒超时、test-recording 的取消用例读到半写记录，单独重跑通过——时序敏感的证据又添两条，归批次 5。
   - 2026-10-21 后续（§13.204，用户追加需求：完整门每次 20 到 30 分钟，要求优化）：运行器分道——两个场景链文件与带 `loadSensitive` 标签的文件各以 2 worker 立即开始，其余文件等隔离道结束后用剩余预算；标签文件按静态导入闭包识别（`testSourcesDependingOn`），hook 观察的三条大目录测试与 permission-mode 的两条 fresh 初始化测试补上标签（8 worker 下曾超时）；`assets/agent-text/` 的改动经声明的资源边选中制品测试而不是整门；`impact report` 的建议命令只在第 2 级列整门。8 CPU 上整门从单道 2 worker 的约 36 分钟（run-g8SYkE，2134 秒测试阶段）降到约 18 分钟（run-2t0hxo，1528 项）。实测分道：链 601/589 秒，隔离道 1170 秒之和两 worker 约 590 秒，其余道 2825 秒之和 6 worker 约 470 秒，墙钟 ≈ 600 + 470 秒。 2026-10-22 分析（计划 §1–2，§13.205）：门的六级构成与最重文件已量；并发下的 fsync 排队是 1–3 级耗时的第一来源（Codex 链单独跑 319 秒、把 `FileHandle.sync()` 换成空操作后 289 秒、门里与三个进程同跑 589 秒、旧 2 worker 门两链互跑 668 秒；8858 次 sync），lab 矩阵 644 秒与链重叠且占住隔离道；设计 D1 一次性耐久性进 2–3 级（测试支持模块包装 `RootedDirectory.open`，不改生产字节）、D2 lab 的 dual-product/worktree 四个实验归 `smoke:artifacts`、D3 `.load.test.ts` 后缀与混合文件拆分、D4 重文件拆分与基线复制、D6 `wf test levels`、D7 道再平衡；预期整门约 10 分钟；测试开发标准已建（`docs/standards/testing-standard.md`）。T1+T2 已执行（§13.206，run-9xr332）：整门 18.2 → 14.2 分钟；机器是 M1 四性能核加四效率核，其余道在 8 进程下 CPU 受限，D1 对链一成、对 lab 实验一半，D2 是大头；T3（D4、D7）的三个量化选项见计划 §2.2。下一步杠杆（等门时长再成为问题时再动）：隔离道并发 2 → 3，或链与隔离文件合成一条 4 worker 重道、其余道用全预算（约省 2 分钟）。未做：场景链拆分（phase 1 的下限是链各约 10 分钟，要先有工作区快照）、重服务测试的夹具模板克隆（result-review service 303 秒、observation service 164 秒）、latch/锁等待的时钟注入。
   - 2026-10-22 后续（§13.210）：1.2 批 B+C 的门跑在与用户交互会话共用的机器上（外部约 4 个核），8 worker 下中位放慢 1.87 倍、p90 3.1 倍，六条重用例被 120/240 秒预算取消而单独重跑 19/19 通过；这些用例在安静机器上已用掉预算的 40–60%，D4 的拆分同时是对外部负载的余量。同批以预算 6 重跑作为"预算 = 性能核数"的数据点。
+  - 2026-10-26 后续（§13.212，D4 第一步）：最重的 `result-review/service.test.ts`（门内 448 秒）按合同拆成导入与回调、实现评审与检视、测试评审三份加共用夹具，只拆不改断言；三份门内折算约 156 / 151 / 140 秒，仍高于 2 级 90 秒的门内预算，D4 后续继续拆；图谱子项目 `maps/07`、`maps/10` 的 `testPaths` 仍引用旧文件名，下次刷新图谱时更新。耗时表删掉已不存在的旧条目后由绿门刷新。
 - **D10** [低 / 风险] 测试会继承开发者的全局和系统 git 配置（计划阶段 1；状态：已修（§13.166 批次 1）：测试运行器给每个测试子进程注入隔离的 git 环境（GIT_CONFIG_GLOBAL=/dev/null、GIT_CONFIG_NOSYSTEM=1、init.defaultBranch=main、夹具身份、无终端提示）；tests/support 新增 git-fixture、temp-root、write-tree、fake-cli 四个共享夹具，五个 git 助手副本、handoff 与 mcp call 的根夹具、tmux 桩改用共享实现；两个保留原始 stdout 的 git 助手与 148 处 mkdtemp 归批次 5）
   - 说明：在全局开启 commit.gpgsign 或 core.hooksPath 的机器上，临时仓库的提交会失败或弹出提示，pod 和场景测试会因与 Wakeflow 无关的原因失败，也会挡住以后接入 CI。
   - 证据：9 个测试文件设置了 GIT_AUTHOR_* 和 GIT_COMMITTER_*，但没有设置 GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM（例如 pod/service.test.ts:44、scenario test:2561）；只有 check-release-consistency.test.ts:54-55 和 tmux asset 测试做了隔离
@@ -803,14 +804,14 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W13** [P2 / 触发中] CR-R-ROOT-03：并发 prepare 误回收在途 claim（批 I；状态：待执行）。修：孤儿回收移到 appendCommand 成功之后，CAS 即围栏。
 - **W14** [P2 / 触发低] CR-R-ROOT-04：Codex 用自身制品摘要误判 Claude 窗口过期（批 D′；状态：待执行）。修：ObservationHost 增 per-host artifact，windowRuntimeOf 取绑定宿主条目；C6/C11 前置。
 - **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：待执行）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
-- **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：待执行）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
-- **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：待执行）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
+- **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：已修 §13.212）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
+- **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：已修 §13.212）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
 - **W18** [P2 / 触发高] CR-R3：Codex 文本教用户调用未提供的 slash 命令（批 F；状态：已修 §13.211）。修：Codex 交接文本改 wakeflow_status 措辞；SKILL.md:125 改宿主中性。
 - **W19** [P2 / 触发低] CR-S1：归档后活动根只删了一部分，recover 无法重入（批 H；状态：待执行）。修：recover 以日志 + 已封归档为权威，retire 接受日志授权的残根清除。
 - **W20** [P2 / 触发低] CR-S2：取消理由按 UTF-16 截断使事务持续恢复失败（批 H；状态：待执行）。修：foundation/text boundedText 按码点；派生理由在 preview 先校验。
-- **W21** [P2 / 触发中] CR-S3：第三次 rework 提供的接受选项无法执行（批 G；状态：待执行）。修：修法 B：rework-brake 阻塞 + escalate{needs-decision}，回答后 accept 可达（待用户确认）。
+- **W21** [P2 / 触发中] CR-S3：第三次 rework 提供的接受选项无法执行（批 G；状态：已修 §13.212）。修：修法 B：rework-brake 阻塞 + escalate{needs-decision}，回答后 accept 可达（待用户确认）。
 - **W22** [P2 / 触发中] CR-S4：快照暂存残留使公开入口挡住仓储 fallback（批 H；状态：待执行）。修：root-inventory 对暂存条目按 stage owner 状态分类，死 owner 容忍。
-- **W23** [P2 / 触发中] CR-S5：部分测试报告缺失的步骤无法补跑（批 G；状态：待执行）。修：未观察且无基线的步骤并入可点名集合，no-failed-step 改无未决步骤。
+- **W23** [P2 / 触发中] CR-S5：部分测试报告缺失的步骤无法补跑（批 G；状态：已修 §13.212）。修：未观察且无基线的步骤并入可点名集合，no-failed-step 改无未决步骤。
 - **W24** [P2 / 触发低] CR-T1：构建锁 stale 回收会删除新持有者活锁（批 F；状态：已修 §13.211）。修：回收前 wx 建标记并重读 owner 仍等于观察值才 rm；mjs 同步。
 - **W25** [P2 / 触发低] CR-T2：owner 写入失败留下无法自动回收的构建锁（批 F；状态：已修 §13.211）。修：写 owner 失败即删自己的目录；无主目录按 mtime 有界回收。
 - **W26** [P2 / 触发高] CR-T3：必需 artifact 检查不可用时 handoff 仍为绿色（批 F；状态：已修 §13.211）。修：只在 --no-artifacts 时豁免，其余 unavailable 整体不通过。
@@ -821,5 +822,5 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W31** [P3 / 触发极低] CR-R-ROOT-07：Git worktree 指针读不出被误标 prunable（批 J；状态：待执行）。修：collectWorktrees 用 readPointer，仅 missing→absent。
 - **W32** [P3 / 触发中] CR-R-ROOT-09：已记录的 Notification hook 不能转为受管证据（批 H；状态：待执行）。修：两份 Schema 加 notification，抽共享 hook-event 定义三处 $ref。
 - **W33** [P3 / 触发高] CR-R4：README 验证门数与实现不一致（批 F；状态：已修 §13.211）。修：两份 README 改十五道工作区门与 Demand 门分述。
-- **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：待执行）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
+- **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：已修 §13.212）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
 - **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：已修 §13.211）。修：export-ci 依回执 selection 判完整。

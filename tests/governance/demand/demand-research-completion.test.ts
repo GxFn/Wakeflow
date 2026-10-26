@@ -18,6 +18,7 @@ import {
 } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
+import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -54,6 +55,7 @@ import { readDemandResultReviewSnapshot } from "../../../src/governance/review/d
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
+import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
@@ -87,6 +89,9 @@ useDisposableDurability();
  * `work-available`，内核前沿表把 `research-completion-required` 交给 Controller 的
  * `wakeflow_complete_demand`。verify 只对 research 加 `research-evidence` 门；聚合完成对
  * `not-applicable` 允许零实现目标。全系统不再有 not-implemented 阻塞项。
+ * 完成归档后的 `next`（open-items W34）：research 不可 continue，变更结果与 status 的归档回执都不指向
+ * `wakeflow_continue_demand`。第 2 级（能力）：经 demand、evidence 与 observation 切片的
+ * execute…Request 在预备工作区的副本上验证，所在目录的缺省（1 级）不适用。
  */
 
 const RESEARCH_REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
@@ -139,6 +144,11 @@ const BASE_GATES = Object.freeze([
   "append-candidates-clear",
   "evidence-integrity",
 ]);
+
+/** 准入后的结果是 null 原型对象；与字面量 deepEqual 前先经 JSON 往返（observation 测试的 plain 同义）。 */
+function plain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
 
 interface ResearchDemandFacts {
   readonly demandId: string;
@@ -548,7 +558,7 @@ test("verify 门：非 research Demand 不设 research-evidence 门", async (t) 
   );
 });
 
-test("research Demand 完成：有 document 证据即完成并归档，终态记 not-applicable，归档 verify 报告带 research-evidence 门", async (t) => {
+test("research Demand 完成：有 document 证据即完成并归档，终态记 not-applicable，归档 verify 报告带 research-evidence 门，next 不指向 continue（W34）", async (t) => {
   const fixture = await createResearchDemandFixtureWithEvidence(t);
   const preview = await previewCompletion(fixture);
   if (preview.planDigest === null) throw new Error(preview.blockers.join(","));
@@ -564,11 +574,33 @@ test("research Demand 完成：有 document 证据即完成并归档，终态记
   equal(completed.disposition, "completed");
   equal(completed.package.status, "archived");
   equal(completed.releasedClaims, 0);
-  equal(completed.next.frontier, "demand-continuation");
+  // W34：continue 对 research 固定阻塞（demand-type:research），所以完成即终态——变更结果不再指向一次
+  // 必然阻塞的 wakeflow_continue_demand。
+  deepEqual(plain(completed.next), {
+    frontier: null,
+    owner: "none",
+    suggestedTool: null,
+    blockers: [],
+  });
   equal(existsSync(demandRootPath(fixture)), false, "active root survived");
   const claim = await readRequirementClaimState(fixture.workspaceRoot, RESEARCH_REQUIREMENT_ID);
   equal(claim?.state.status, "archived");
   equal(claim?.state.archive?.demandId, fixture.demandId);
+
+  // 同一规则在 status 的归档回执里：route 为 null，归档为 completed，next 同样到此为止。
+  const status = await executeStatusRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: fixture.root, demandId: fixture.demandId },
+    CLOCK,
+  );
+  equal(status.route, null);
+  equal(status.archive?.outcome, "completed");
+  deepEqual(plain(status.next), {
+    frontier: null,
+    owner: "none",
+    suggestedTool: null,
+    blockers: [],
+  });
 
   const archiveDirectory = path.join(
     fixture.ledgerPath,

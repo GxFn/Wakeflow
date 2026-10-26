@@ -22,6 +22,7 @@ import {
 import type { WakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { deriveTargetResultCallbackStatus } from "../../../src/governance/result/target-result-callback.js";
 import type { TestTargetResultStep } from "../../../src/governance/result/test-target-result-report.js";
 import type { TestContractStep } from "../../../src/governance/tasking/task-package.js";
@@ -29,7 +30,8 @@ import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../../src/kernel/privacy-scan.js
 
 /**
  * 结果导入与评审的纯决定（§13.87 D2 D3 D6 D7）：定位符计划、隐私规则、完成证据、回调状态、
- * 允许的决定与阻塞项、approved 基线与并集判定。这里没有 I/O。
+ * 允许的决定与阻塞项（含第三次 rework 的刹车，W21 修法 B）、approved 基线与并集判定、重跑范围
+ * 恰为未决步骤（W23）。这里没有 I/O。级别 0（纯逻辑）。
  */
 
 const EVIDENCE_ID = "evidence_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -239,13 +241,49 @@ test("实现决定：accept 要求 completed 与完成证据；resumption 只接
       typeof deriveImplementationAllowedDecisions
     >[0]["targetCompletion"],
     managedEvidenceIds: readonly string[] = [],
-  ) => ({ outcome, targetCompletion, acceptanceAnchorIds: ["ac-1", "ac-2"], managedEvidenceIds });
+  ) => ({
+    outcome,
+    targetCompletion,
+    acceptanceAnchorIds: ["ac-1", "ac-2"],
+    managedEvidenceIds,
+    reworkCount: 0,
+    escalationAnswered: false,
+  });
   deepEqual(deriveImplementationAllowedDecisions(view("completed", confirmed)), [
     "accept",
     "rework",
     "blocked",
     "escalate",
   ]);
+  // 第三次 rework 被刹车拒绝（W21 修法 B）：允许集去掉 rework，记录时阻塞 rework-brake:<reworkCount>；
+  // 第二次照常；用户回答当前升级后恢复的单元放行一次；escalate 本身不受刹车影响。
+  const braked = {
+    ...view("completed", confirmed),
+    reworkCount: DEMAND_REWORK_ESCALATION_THRESHOLD - 1,
+  };
+  deepEqual(deriveImplementationAllowedDecisions(braked), ["accept", "blocked", "escalate"]);
+  deepEqual(deriveImplementationDecisionBlockers("rework", braked, [{ outcome: "failed" }]), [
+    `rework-brake:${DEMAND_REWORK_ESCALATION_THRESHOLD - 1}`,
+  ]);
+  deepEqual(
+    deriveImplementationDecisionBlockers("rework", {
+      ...braked,
+      reworkCount: DEMAND_REWORK_ESCALATION_THRESHOLD - 2,
+    }),
+    [],
+  );
+  deepEqual(
+    deriveImplementationDecisionBlockers("rework", { ...braked, escalationAnswered: true }),
+    [],
+  );
+  deepEqual(deriveImplementationAllowedDecisions({ ...braked, escalationAnswered: true }), [
+    "accept",
+    "rework",
+    "blocked",
+    "escalate",
+  ]);
+  deepEqual(deriveImplementationDecisionBlockers("escalate", braked), []);
+  deepEqual(deriveImplementationDecisionBlockers("accept", braked), []);
   deepEqual(deriveImplementationAllowedDecisions(view("completed", { status: "pending" })), [
     "rework",
     "blocked",
@@ -682,28 +720,68 @@ test("测试决定的分类路由：accept、可重跑分类、容量、连续 f
   );
 });
 
-test("限定范围的重跑必须覆盖全部失败步骤", () => {
+test("限定范围的重跑必须恰好覆盖未决步骤：失败的，加上未观察且无基线的（W23）", () => {
   const contract = [contractStep("ts-2", "A"), contractStep("ts-3", "B")];
+  const rerun = (stepIds: readonly string[], view: TestAdmissionView) =>
+    deriveTestDecisionBlockers({ decision: "request-another-attempt", stepIds }, view);
   const twoFailed = deriveStepViews(
     contract,
     { steps: [step("ts-2", "fail", "flaky"), step("ts-3", "fail", "flaky")], stepIds: null },
     [],
     [],
   );
-  deepEqual(
-    deriveTestDecisionBlockers(
-      { decision: "request-another-attempt", stepIds: ["ts-3"] },
-      admission(twoFailed),
-    ),
-    ["step-uncovered:ts-2"],
-  );
-  deepEqual(
-    deriveTestDecisionBlockers(
-      { decision: "request-another-attempt", stepIds: ["ts-2", "ts-3"] },
-      admission(twoFailed),
-    ),
+  deepEqual(rerun(["ts-3"], admission(twoFailed)), ["step-uncovered:ts-2"]);
+  deepEqual(rerun(["ts-2", "ts-3"], admission(twoFailed)), []);
+  // needs-review 报告漏报的步骤没有记录也没有基线：它是未决步骤，必须和失败步骤一起点名补跑。
+  const unreported = deriveStepViews(
+    contract,
+    { steps: [step("ts-2", "fail", "flaky")], stepIds: null },
+    [],
     [],
   );
+  equal(unreported[1]?.verdict, null);
+  equal(unreported[1]?.baseline, null);
+  deepEqual(deriveTestAllowedDecisions(admission(unreported, { outcome: "needs-review" })), [
+    "request-another-attempt",
+    "escalate",
+  ]);
+  deepEqual(rerun(["ts-2"], admission(unreported)), ["step-uncovered:ts-3"]);
+  deepEqual(rerun(["ts-2", "ts-3"], admission(unreported)), []);
+  // 第一步重跑通过、第二步仍未观察：没有失败步骤也不是终点——并集 cannot-conclude 挡住 accept，
+  // 第二步可以单独补跑；已通过的第一步不能再点名。
+  const stillUnobserved = deriveStepViews(
+    contract,
+    { steps: [step("ts-2", "pass")], stepIds: ["ts-2", "ts-3"] },
+    [],
+    [],
+  );
+  equal(deriveUnionVerdict(stillUnobserved), "cannot-conclude");
+  deepEqual(deriveTestAllowedDecisions(admission(stillUnobserved)), [
+    "request-another-attempt",
+    "escalate",
+  ]);
+  deepEqual(deriveTestDecisionBlockers({ decision: "accept" }, admission(stillUnobserved)), [
+    "verdict:cannot-conclude",
+  ]);
+  deepEqual(rerun(["ts-3"], admission(stillUnobserved)), []);
+  deepEqual(rerun(["ts-2", "ts-3"], admission(stillUnobserved)), ["step-scope:ts-2"]);
+  // 有 approved 基线的未观察步骤不是未决步骤：全部步骤都已通过或有基线时没有可补跑的步骤。
+  const baselined = deriveStepViews(
+    contract,
+    { steps: [step("ts-2", "pass")], stepIds: ["ts-2"] },
+    [
+      {
+        targetTaskId: TARGET_A,
+        attemptOrdinal: 1,
+        steps: [step("ts-3", "pass")],
+        itemIdByStepId: new Map([["ts-3", "ac-3"]]),
+      },
+    ],
+    [],
+  );
+  equal(deriveUnionVerdict(baselined), "pass");
+  deepEqual(rerun(["ts-3"], admission(baselined)), ["no-pending-step", "step-scope:ts-3"]);
+  deepEqual(deriveTestAllowedDecisions(admission(baselined)), ["accept", "escalate"]);
 });
 
 test("Controller 决定文本只拒凭证类命中，字符串叶子递归收集（复审 G3）", () => {

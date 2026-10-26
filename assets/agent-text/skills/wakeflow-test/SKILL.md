@@ -100,7 +100,9 @@ of test work, and it overrides one target rule: you do record managed evidence
    `ts-2`, ... as the contract numbers them), what was observed, its evidence
    reference and digest, its verdict and, unless it passed, its failure
    classification. Wakeflow derives the overall verdict from these records -
-   do not assert it yourself. A wrong record noticed before the Controller
+   do not assert it yourself. A step you leave out of a `needs-review` report
+   is pending, not waived: the Controller's next attempt names it together
+   with the failed steps. A wrong record noticed before the Controller
    decides is replaced by importing again with the supersedes field naming
    the first import's result id; after a decision only another attempt can.
 6. Send the returned wake-controller callback prompt to the Controller window

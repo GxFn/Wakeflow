@@ -120,8 +120,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 12063,
-      "sha256": "sha256:39b937b5f650a30f136dfa008aeb2f8a157fda7afe00370743bbefda2b2720e7"
+      "bytes": 12062,
+      "sha256": "sha256:75011a11ee7dda951d73c1550eb939fa6b307dfccf35df6df16c8efc7c883d50"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
@@ -135,8 +135,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/first-run.md",
-      "bytes": 6611,
-      "sha256": "sha256:a84cf983da189236d457a9d31e18c0909a57d21efc5b7ed6bca7d210d26c1bed"
+      "bytes": 6649,
+      "sha256": "sha256:f24664c77e7656491f43bcdf59269b0e743f0abebb7f0bd1eb4b975d484ba2b8"
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
@@ -6526,8 +6526,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 12063,
-      "sha256": "sha256:39b937b5f650a30f136dfa008aeb2f8a157fda7afe00370743bbefda2b2720e7",
+      "bytes": 12062,
+      "sha256": "sha256:75011a11ee7dda951d73c1550eb939fa6b307dfccf35df6df16c8efc7c883d50",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6547,8 +6547,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/first-run.md",
-      "bytes": 6611,
-      "sha256": "sha256:a84cf983da189236d457a9d31e18c0909a57d21efc5b7ed6bca7d210d26c1bed",
+      "bytes": 6649,
+      "sha256": "sha256:f24664c77e7656491f43bcdf59269b0e743f0abebb7f0bd1eb4b975d484ba2b8",
       "mode": "0644",
       "scope": "agent-text"
     },

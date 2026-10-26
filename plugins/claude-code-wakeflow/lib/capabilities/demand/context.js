@@ -8,10 +8,12 @@ import { demandFinalRootRef } from "../../governance/demand/publication/demand-p
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
 import { fail } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
+import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import { findLatestDemandArchive, mapFoundationError, signalOptions, } from "./archive.js";
 import { WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME } from "./contract.js";
+import { deriveContinueBlockers } from "./decide.js";
 export { signalOptions };
 /** 三种 Demand 事务请求共用的发布事务信封：recover 带 operationId，apply 带 planDigest。 */
 export function publicationEnvelope(request) {
@@ -198,9 +200,24 @@ async function activeNext(handle, signal) {
     }
     return deriveNextProjection(buildDemandControllerRoute(handle.loaded, snapshot));
 }
-/** 已归档 Demand 的 `next`：完成可 continue，取消到此为止。 */
-function archivedNext(archive) {
-    if (archive !== null && archive.manifest.outcome === "completed") {
+/**
+ * 已归档 Demand 的 `next`：能 continue 才指向续接，否则到此为止。能不能 continue 只由
+ * `deriveContinueBlockers` 判——完成、需求包仍由本 Demand 归档且不是 research（W34：research 的完成
+ * 即终态，不再把 Controller 引向一次必然阻塞的 continue）。pod 占用与关闭要扫活动根，留给 continue
+ * 预览自己判；这里只读归档清单指向的认领状态。
+ */
+async function archivedNext(context, demandId, archive) {
+    const claim = archive === null
+        ? null
+        : await readRequirementClaimState(context.root, archive.manifest.requirementId, context.signal);
+    const blockers = deriveContinueBlockers({
+        rootPresent: false,
+        archiveOutcome: archive?.manifest.outcome ?? null,
+        demandId,
+        claim: claim?.state ?? null,
+        otherActiveDemandId: null,
+    });
+    if (blockers.length === 0) {
         return Object.freeze({
             frontier: "demand-continuation",
             owner: "controller",
@@ -215,12 +232,12 @@ function archivedNext(archive) {
         blockers: Object.freeze([]),
     });
 }
-/** 变更后的 `next`：根仍在读路由，根已删读归档。 */
+/** 变更后的 `next`：根仍在读路由，根已删读归档与它指向的认领状态。 */
 export async function nextAfterMutation(context, demandId) {
     const handle = await openDemandHandle(context, demandId, { reload: true });
     if (handle !== null)
         return activeNext(handle, context.signal);
-    return archivedNext(await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal));
+    return archivedNext(context, demandId, await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal));
 }
 export function previewNext(tool, frontier, planned) {
     return planned.status === "ready"

@@ -106,7 +106,10 @@ const CONTINUE_DEMAND_FIELDS = Object.freeze([
     "eventId",
     "recordedAt",
 ]);
-/** 同一任务第三次 rework 自动升级（ADR-0012 D5）；阈值进配置留作后续。 */
+/**
+ * 同一实现目标的第三次 rework 被刹车拒绝（ADR-0012 D5，W21 修法 B）：Controller 改记 escalate 交用户
+ * 决定，用户回答后带 `decision-recorded` resumption 的 rework 放行一次。阈值进配置留作后续。
+ */
 export const DEMAND_REWORK_ESCALATION_THRESHOLD = 3;
 const PLAN_TARGET_TASK_FIELDS = Object.freeze([
     "commandType",
@@ -1022,6 +1025,7 @@ function decideReview(state, command) {
         }
         throw error;
     }
+    assertReworkBrakeReleased(state, command.decision);
     const decidedEvent = parseDemandUncommittedEvent({
         eventId: controllerReviewDecisionEventId(command.decision),
         demandId: command.decision.demandId,
@@ -1052,10 +1056,28 @@ function decideReview(state, command) {
         ]);
     }
     const escalation = reviewEscalation(decided, command.decision, decidedEvent);
-    if (escalation !== null)
-        return Object.freeze([decidedEvent, escalation]);
-    const brake = reworkBrakeEscalation(decided, command.decision, decidedEvent);
-    return brake === null ? singleEvent(decidedEvent) : Object.freeze([decidedEvent, brake]);
+    return escalation === null
+        ? singleEvent(decidedEvent)
+        : Object.freeze([decidedEvent, escalation]);
+}
+/**
+ * 第三次 rework 刹车（ADR-0012 D5，W21 修法 B）：实现目标累计 rework 达到阈值减一后，再记 rework
+ * 被拒——Controller 改记 escalate 交用户决定；用户回答后带 `decision-recorded` resumption 的 rework
+ * 放行一次（resumption 的合法性已由聚合转换核对）。旧刹车附带的 `rework-brake` 升级事件留在历史流里，
+ * 仍按事件重放。
+ */
+function assertReworkBrakeReleased(state, decision) {
+    if (decision.kind !== "WakeflowControllerImplementationReviewDecision" ||
+        decision.decision !== "rework" ||
+        decision.resumption?.basis.kind === "decision-recorded") {
+        return;
+    }
+    const target = state.targetTasks.find((entry) => entry.targetTaskId === decision.targetTaskId);
+    if (target !== undefined &&
+        target.workType !== "test" &&
+        (target.reworkCount ?? 0) >= DEMAND_REWORK_ESCALATION_THRESHOLD - 1) {
+        fail("transition", "$state/targetTasks/reworkCount");
+    }
 }
 function reviewEscalationContent(decision) {
     if (decision.decision !== "escalate")
@@ -1106,61 +1128,6 @@ function reviewEscalation(decided, decision, decidedEvent) {
         throw error;
     }
     return escalationEvent;
-}
-/**
- * 第三次 rework 刹车：评审决定为 rework 且该目标累计 rework 次数达到阈值时，
- * 同一提交附带一个 `lifecycle.demand-escalated`；升级事件标识由决定事件派生。
- */
-function reworkBrakeEscalation(decided, decision, decidedEvent) {
-    if (decision.decision !== "rework" || decided.awaitingDecision !== undefined) {
-        return null;
-    }
-    const target = decided.targetTasks.find((entry) => entry.targetTaskId === decision.targetTaskId);
-    if (target === undefined ||
-        target.workType === "test" ||
-        (target.reworkCount ?? 0) < DEMAND_REWORK_ESCALATION_THRESHOLD) {
-        return null;
-    }
-    const reworkCount = target.reworkCount ?? 0;
-    return parseDemandUncommittedEvent({
-        eventId: derivedEventId("demand-event:rework-brake", decidedEvent.eventId),
-        demandId: decision.demandId,
-        recordedAt: decision.decidedAt,
-        eventType: "lifecycle.demand-escalated",
-        data: {
-            escalation: {
-                issue: `Target task ${decision.targetTaskId} was sent back for rework ${reworkCount} times; the rework brake (threshold ${DEMAND_REWORK_ESCALATION_THRESHOLD}) requires a user decision before further delivery.`,
-                requirementRefs: [],
-                evidence: [
-                    {
-                        kind: "review-decision",
-                        id: decision.targetReviewDecisionId,
-                        digest: decision.decisionDigest,
-                    },
-                ],
-                options: [
-                    {
-                        option: "Narrow or restate the requirement, then plan a replacement task package.",
-                        impact: "Record the user's answer with wakeflow_continue_demand (record-decision); a restated requirement arrives only as a new package after this Demand is cancelled and the package re-claimed - Design cannot supplement a claimed package.",
-                    },
-                    {
-                        option: "Accept the current result with the recorded residual risks.",
-                        impact: "The demand can complete without another rework round.",
-                    },
-                    {
-                        option: "Cancel the demand.",
-                        impact: "Results and evidence are archived; the requirement package is withdrawn.",
-                    },
-                ],
-                recommendation: `Review the ${reworkCount} rework decisions before choosing; repeated rework usually means the task package or the requirement is under-specified.`,
-                source: {
-                    kind: "rework-brake",
-                    targetTaskId: decision.targetTaskId,
-                    reworkCount,
-                },
-            },
-        },
-    });
 }
 function derivedEventId(namespace, decisionEventId) {
     return createWakeflowDurableId("demand-event", parseUuidV4(deriveUuidV4(namespace, decisionEventId), "$eventId"));

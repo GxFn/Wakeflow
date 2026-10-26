@@ -624,6 +624,11 @@ async function routeSection(context, demandId) {
         fail("not-found", "demand-unknown", "$request.demandId");
     // 裁决 R8（复审 G7/G1）：归档回执带业务读回——标题、目标、测试模式、证据数、verify 计数、已接受目标的落点。
     const readback = await describeDemandArchive(context.ledgerRoot, archive, context.options.signal);
+    // W34：归档的 next 读需求包的认领类型。完成、需求包仍以本 Demand 归档且不是 research 才指向 continue，
+    // 与 demand 切片 `deriveContinueBlockers` 的包级规则一致（切片不互引，这里从同一轮观察的看板取认领状态；
+    // 看板读不出即认领未知，和 continue 预览的 package-unknown 一样不给前沿）。pod 占用与关闭留给 continue 预览。
+    const claim = (context.observation.board.value?.states ?? []).find((state) => state.archive?.demandId === demandId) ?? null;
+    const continuable = archive.outcome === "completed" && claim !== null && claim.demandType !== "research";
     return Object.freeze({
         route: null,
         archive: {
@@ -640,7 +645,7 @@ async function routeSection(context, demandId) {
             verify: archive.verify,
             acceptedTargets: readback.acceptedTargets,
         },
-        next: archive.outcome === "completed"
+        next: continuable
             ? Object.freeze({
                 frontier: "demand-continuation",
                 owner: "controller",

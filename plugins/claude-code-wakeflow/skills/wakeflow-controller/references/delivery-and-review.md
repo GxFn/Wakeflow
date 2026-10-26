@@ -265,10 +265,13 @@ implementation targets in the same commit. Once the user has cleared the
 condition a blocked environment failure waited on (the unit resumes with
 `condition-cleared`), or has answered its escalation (`decision-recorded`),
 those environment steps may take another attempt of the same frozen contract,
-still inside the budget. Another attempt names exactly the failed steps -
-passed steps keep their results and are not rerun - and, like rework, carries
-at least one `failed` or `inconclusive` independent check with an
-`inconclusive` conclusion or `insufficient` evidence.
+still inside the budget. Another attempt names the failed steps and every
+step the report left unobserved without an approved baseline - a `needs-review`
+report may omit steps, and an omitted step is pending, not waived - while
+passed steps keep their results and are not rerun; naming a passed step or
+leaving a pending one out is refused. Like rework, it carries at least one
+`failed` or `inconclusive` independent check with an `inconclusive` conclusion
+or `insufficient` evidence.
 
 For a product-defect escalation, map every failed product-defect step to its
 affected implementation baseline; do not include flakiness, harness, missing
@@ -286,10 +289,14 @@ the wrong thing - the target did what was written, and the written thing is
 not what the user needs - is a requirement mismatch: do not loop point fixes
 on it; escalate, and the correction comes back from Design as a new package.
 The rules brake that loop regardless: every decision result carries
-`reworkCount`, and a target's third rework is refused in favor of an
-escalation. A missing input - a credential, a fixture, an answer only the
-user has - is routed to whoever owns it and never guessed on the target's
-behalf. You never write product code yourself: not to finish a target, not to
+`reworkCount`, and a target's third rework is refused (`rework-brake`) rather
+than delivered. Record `escalate` instead: state why the target keeps coming
+back, offer the user acceptance with the recorded residual risks, one more
+rework, or cancellation, and recommend one. Once their answer is recorded,
+accept or that one rework is reachable through the resumption; the brake
+catches the rework after it again. A missing input - a credential, a fixture,
+an answer only the user has - is routed to whoever owns it and never guessed
+on the target's behalf. You never write product code yourself: not to finish a target, not to
 prove a claim. A verification is a check you run, not a change you make.
 
 A decision states: the goal as you understood it, the independent check you

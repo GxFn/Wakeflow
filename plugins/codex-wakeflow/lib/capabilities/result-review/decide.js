@@ -1,4 +1,5 @@
 import { RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS, } from "../../contracts/vocabulary/test-step-vocabulary.js";
+import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, scanPrivacy, } from "../../kernel/privacy-scan.js";
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
@@ -225,7 +226,9 @@ function deriveAnchorEvidenceBlockers(view, anchorEvidence) {
  * 实现决定的机器阻塞项：accept 要求完成证据已确认，且结果是 completed，或是 needs-review 而
  * Controller 的 anchorEvidence 把每个验收锚点绑到本 Demand 已登记的托管证据（§13.121 D7）；rework
  * 在给出独立检查时至少一条 failed——failed 的检查就是返工投递交给目标的整改项，全部 passed 的
- * rework 永远投不出去，所以在记录时就拒绝；其余由 Controller 判断。
+ * rework 永远投不出去，所以在记录时就拒绝；同一目标的第 `DEMAND_REWORK_ESCALATION_THRESHOLD` 次
+ * rework 被刹车拒绝（`rework-brake:<reworkCount>`，W21 修法 B）——Controller 改记 escalate 交用户
+ * 决定，用户回答后恢复的单元放行一次 rework；其余由 Controller 判断。
  */
 export function deriveImplementationDecisionBlockers(decision, view, independentChecks, anchorEvidence) {
     const blockers = [];
@@ -239,10 +242,14 @@ export function deriveImplementationDecisionBlockers(decision, view, independent
         if (view.targetCompletion.status !== "confirmed")
             blockers.push("target-completion-pending");
     }
-    if (decision === "rework" &&
-        independentChecks !== undefined &&
-        !independentChecks.some((check) => check.outcome === "failed")) {
-        blockers.push("rework-checks:no-failed");
+    if (decision === "rework") {
+        if (independentChecks !== undefined &&
+            !independentChecks.some((check) => check.outcome === "failed")) {
+            blockers.push("rework-checks:no-failed");
+        }
+        if (view.reworkCount >= DEMAND_REWORK_ESCALATION_THRESHOLD - 1 && !view.escalationAnswered) {
+            blockers.push(`rework-brake:${view.reworkCount}`);
+        }
     }
     return Object.freeze(blockers);
 }
@@ -320,14 +327,23 @@ export function deriveUnionVerdict(views) {
     }
     return "pass";
 }
+/** 有记录且未通过的步骤：分类规则（可重跑分类、连续 flaky）只对它们生效。 */
 function failedViews(views) {
     return views.filter((view) => view.verdict !== null && view.verdict !== "pass");
+}
+/**
+ * 未决步骤：有失败记录的，加上本轮没有记录也没有 approved 基线的——needs-review 报告可以漏报，
+ * 漏报的步骤既不算通过也接受不了，只能点名补跑（W23）。重跑范围必须恰好覆盖它们。
+ */
+function pendingViews(views) {
+    return views.filter((view) => view.verdict === null ? view.baseline === null : view.verdict !== "pass");
 }
 function rerunBlockers(request, view) {
     const blockers = [];
     const failed = failedViews(view.steps);
-    if (failed.length === 0)
-        blockers.push("no-failed-step");
+    const pending = pendingViews(view.steps);
+    if (pending.length === 0)
+        blockers.push("no-pending-step");
     if (view.attemptCount >= view.maxAttempts)
         blockers.push(`attempt-capacity:${view.attemptCount}`);
     for (const step of failed) {
@@ -342,18 +358,21 @@ function rerunBlockers(request, view) {
             blockers.push(`flaky-repeat:${step.stepId}`);
         }
     }
-    blockers.push(...rerunScopeBlockers(request.stepIds, failed));
+    blockers.push(...rerunScopeBlockers(request.stepIds, pending));
     return blockers;
 }
-/** 重跑范围只能点名失败步骤，且必须覆盖全部失败步骤：范围外的失败步骤下一轮没有判定，也就没有出路。 */
-function rerunScopeBlockers(stepIds, failed) {
+/**
+ * 重跑范围只能点名未决步骤（已通过或有基线的步骤 `step-scope`），且必须覆盖全部未决步骤
+ * （`step-uncovered`）：范围外的未决步骤下一轮没有判定，也就没有出路。
+ */
+function rerunScopeBlockers(stepIds, pending) {
     if (stepIds === undefined)
         return [];
-    const failedIds = new Set(failed.map((step) => step.stepId));
+    const pendingIds = new Set(pending.map((step) => step.stepId));
     const scoped = new Set(stepIds);
     return [
-        ...stepIds.filter((stepId) => !failedIds.has(stepId)).map((stepId) => `step-scope:${stepId}`),
-        ...[...failedIds]
+        ...stepIds.filter((stepId) => !pendingIds.has(stepId)).map((stepId) => `step-scope:${stepId}`),
+        ...[...pendingIds]
             .filter((stepId) => !scoped.has(stepId))
             .map((stepId) => `step-uncovered:${stepId}`),
     ];
@@ -385,7 +404,8 @@ function escalateBlockers(request, view) {
 /**
  * 分类到决定的机器规则（D7）：accept 要求并集 pass、completed 与完成证据；request-another-attempt
  * 要求失败步骤全部可重跑（environment 只在 blocked 或已回答的 escalate 之后恢复时可重跑，§13.135）、
- * 容量未满、无连续 flaky、范围只含失败步骤；blocked 要求 environment 失败或报告整体 blocked；escalate{product-defect} 要求存在 product-defect 步骤且映射只含这些步骤。
+ * 容量未满、无连续 flaky、范围恰为未决步骤（失败的加上未观察且无基线的，W23）；blocked 要求
+ * environment 失败或报告整体 blocked；escalate{product-defect} 要求存在 product-defect 步骤且映射只含这些步骤。
  */
 export function deriveTestDecisionBlockers(request, view) {
     switch (request.decision) {

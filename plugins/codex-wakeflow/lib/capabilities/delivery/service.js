@@ -45,7 +45,11 @@ import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from 
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
 }
-/** 许可一经签发（含重放与重臂），prompt 就以文件落在 Demand 根下，助手按 `promptRef` 读取并核对摘要（K6）。 */
+/**
+ * 许可一经签发（含重放与重臂），prompt 就以文件落在 Demand 根下，助手按 `promptRef` 读取并核对摘要（K6）。
+ * 这里与 `replayPermit` 是"发出许可"的唯一边界：签发前置（本宿主资产核对，`assertHostAssetsCurrent`）
+ * 在每条签发路径取得路由之后、追加或取声明之前统一执行，而不是在边界之后补查（W16）。
+ */
 async function materializedPermit(context, outcome) {
     const permit = outcome;
     if (isCallbackPermit(permit)) {
@@ -544,6 +548,8 @@ async function replayPermit(context, commandResult, eventType) {
     const generation = event.eventType === "delivery.delivery-rearmed" ? event.data.rearm.generation : 1;
     const fence = event.eventType === "delivery.delivery-rearmed" ? event.data.rearm.fence : envelope.fence;
     const route = await loadRoute(context, envelope.route.windowId);
+    // 重放也是一次发出许可：助手字节已漂移就不再交出同一许可（W16）。
+    await assertHostAssetsCurrent(context, route, eventType === "delivery.delivery-prepared" ? "$request.targetTaskId" : "$request.deliveryId");
     return Object.freeze({
         commandResult: Object.freeze({ disposition: "idempotent", ...commandResult }),
         envelope,
@@ -642,15 +648,18 @@ async function executePrepare(context, input, binding) {
  * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的 tmux 助手去投递，所以
  * 签发前由服务器核对本宿主已发布资产（状态栏与伴随的助手）的字节。字节不是制品的就拒绝——被改写的助手
  * 不该跑；对账会重新发布它。只核对投递窗口所在宿主就是本宿主的情形。
+ *
+ * 这是发出许可的统一前置（W16）：新 prepare、prepare 与 rearm 的同键重放、rearm 换代、回调重发及其重放
+ * 都在取得路由之后、追加或取声明之前调用；`requestPath` 指向该工具请求里点名目标的字段。
  */
-async function assertHostAssetsCurrent(context, route) {
+async function assertHostAssetsCurrent(context, route, requestPath = "$request.targetTaskId") {
     const assets = context.facade.assets ?? null;
     if (assets === null || route.binding.hostId !== context.facade.hostId)
         return;
     const observed = await observeHostAssetState(context.workspaceRoot, context.facade.hostId, assets, context.options.signal);
     if (observed.status === "current")
         return;
-    rejectWith([`host-asset-${observed.status}${observed.companion === null ? "" : `:${observed.companion}`}`], "$request.targetTaskId");
+    rejectWith([`host-asset-${observed.status}${observed.companion === null ? "" : `:${observed.companion}`}`], requestPath);
 }
 async function prepareSources(context, repository, target, taskPackage, route, binding) {
     const signal = context.options.signal;
@@ -779,15 +788,19 @@ function createEnvelope(input, sources, claim, facts) {
         mapRecordError(error, "$request.targetTaskId");
     }
 }
+/**
+ * 回执里的阶段来自签发事件而不是当前聚合（W17）：信封的 workType 决定签发时目标所在的阶段
+ * （implementation → `delivery-prepared`，test → `test-delivery-prepared`，与结果 Schema 的枚举一致）。
+ * 同键重放时目标可能已记录结局（`host-effect-rejected` 等），那是当前状态，只进 `next`。
+ */
+function permitPhase(workType) {
+    return workType === "test" ? "test-delivery-prepared" : "delivery-prepared";
+}
 function permitBody(envelope, outcome, nextProjection) {
     const { commandResult, route } = outcome;
     const stored = commandResult.commit.events[0];
     if (stored === undefined)
         fail("unexpected", "commit-empty", "$result");
-    const targetTaskId = outcome.envelope.target.targetTaskId;
-    const target = commandResult.aggregate.state.targetTasks.find((entry) => entry.targetTaskId === targetTaskId);
-    if (target === undefined)
-        fail("unexpected", "target-missing", "$result");
     return {
         schemaVersion: WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION,
         demandId: envelope.demandId,
@@ -797,9 +810,9 @@ function permitBody(envelope, outcome, nextProjection) {
             promptDigest: outcome.envelope.promptDigest,
             generation: outcome.generation,
             workType: outcome.envelope.workType,
-            targetTaskId,
+            targetTaskId: outcome.envelope.target.targetTaskId,
             windowId: outcome.envelope.route.windowId,
-            phase: target.phase,
+            phase: permitPhase(outcome.envelope.workType),
         },
         permit: {
             prompt: outcome.envelope.portablePrompt,
@@ -1306,6 +1319,7 @@ async function replayCallbackReissue(context, commandResult) {
         fail("precondition-failed", "callback-phase", "$request.deliveryId");
     const located = await loadResultEvent(context, target.currentDelivery.fence.claimId);
     const route = await loadRoute(context, reissue.controllerWindowId);
+    await assertHostAssetsCurrent(context, route, "$request.deliveryId");
     return Object.freeze({
         kind: "callback",
         commandResult: Object.freeze({ disposition: "idempotent", ...commandResult }),
@@ -1345,6 +1359,7 @@ async function executeCallbackReissue(context, target, binding) {
         rejectWith([`callback-limit:${callback.generation}`], "$request.deliveryId");
     }
     const route = await loadRoute(context, callback.controllerWindowId);
+    await assertHostAssetsCurrent(context, route, "$request.deliveryId");
     const now = nowFrom(options);
     const records = await sessionRecords(context, route.binding.handle.value, callback.issuedAt);
     const status = deriveTargetResultCallbackStatus({
@@ -1437,6 +1452,8 @@ async function executeRearm(context, input, binding) {
     const current = target.currentDelivery;
     const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
     const route = await loadRoute(context, envelope.route.windowId);
+    // 与 prepare 同一前置：换代也是发出许可，取声明之前先核对本宿主资产（W16）。
+    await assertHostAssetsCurrent(context, route, "$request.deliveryId");
     if (route.binding.bindingId !== envelope.route.bindingId) {
         fail("precondition-failed", "binding-changed", "$request.deliveryId");
     }

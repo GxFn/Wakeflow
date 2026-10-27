@@ -1,5 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -494,6 +494,30 @@ test("捕获规划拒绝未配置的根、资源类型漂移和预取消请求",
           signal: controller.signal,
         }),
       "aborted",
+    );
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("目录树来源深 25 层超出能归档的深度：preview 以 capacity 拒绝，而不是记下完成与取消都读不回的证据（open-items W10）", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const deep = path.join(
+      fixture.repositoryRoot,
+      "artifacts",
+      "deep",
+      ...Array.from({ length: 25 }, (_, index) => `d${index}`),
+    );
+    mkdirSync(deep, { recursive: true, mode: 0o755 });
+    writeFileSync(path.join(deep, "leaf.txt"), "deep\n", { mode: 0o644 });
+    await expectPlanningError(
+      () =>
+        service(fixture).preview(fixture.demandId, {
+          ...treeSelection(),
+          source: { ...treeSelection().source, path: "artifacts/deep" },
+        }),
+      "capacity",
     );
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);

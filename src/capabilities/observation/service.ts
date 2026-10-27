@@ -19,6 +19,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
   closeDemandOperationRoot,
@@ -156,11 +157,7 @@ function residueDisplayName(name: string): string {
     const codePoint = character.codePointAt(0) ?? 0;
     cleaned += codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f) ? "?" : character;
   }
-  const characters = [...cleaned];
-  const bounded =
-    characters.length > RESIDUE_NAME_MAXIMUM
-      ? `${characters.slice(0, RESIDUE_NAME_MAXIMUM - 1).join("")}…`
-      : cleaned;
+  const bounded = truncateToCodePoints(cleaned, RESIDUE_NAME_MAXIMUM);
   return bounded.trim().length === 0 ? "?" : bounded;
 }
 

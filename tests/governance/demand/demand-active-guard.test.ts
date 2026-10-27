@@ -1,5 +1,13 @@
 import { equal, rejects } from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -13,15 +21,25 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createDemandAuthority } from "../../../src/governance/demand/model/demand-authority.js";
 import { createDemandIdentity } from "../../../src/governance/demand/model/demand-identity.js";
-import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
+import {
+  assertNoActiveDemand,
+  readDemandPodId,
+} from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { publishDemandFromPackage } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
-import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import {
+  DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  demandFinalRootRef,
+} from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import {
+  createMinimalWakeflowConfig,
+  serializeWakeflowConfigFixture,
+} from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
 import { placePendingClaimState, requirementLineageOf } from "./requirement-board.fixture.js";
@@ -31,14 +49,23 @@ useDisposableDurability();
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const OWNER_POD_ID = "pod_99999999-9999-4999-8999-999999999999";
 const OTHER_POD_ID = "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const ACTIVE_DEMAND_ID = "demand_22222222-2222-4222-8222-222222222222";
 
-/** 看板上一个已认领、未到终态、属于 OWNER_POD_ID 的 Demand。 */
+/**
+ * 看板上一个已认领、未到终态、属于 OWNER_POD_ID 的 Demand。工作区带最小配置，账本根指向 `../ledger`，
+ * 让 `readDemandPodId` 的归档分支能打开账本。
+ */
 async function activeDemandWorkspace() {
-  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-active-guard-"));
+  const fixtureRoot = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-active-guard-")));
   const workspacePath = path.join(fixtureRoot, "workspace");
   const ledgerPath = path.join(fixtureRoot, "ledger");
   mkdirSync(workspacePath, { mode: 0o700 });
   mkdirSync(ledgerPath, { mode: 0o700 });
+  const config = createMinimalWakeflowConfig();
+  config.storage = { ledgerRoot: "../ledger" };
+  const configPath = path.join(workspacePath, "wakeflow.config.json");
+  writeFileSync(configPath, serializeWakeflowConfigFixture(config), { mode: 0o644 });
+  chmodSync(configPath, 0o644);
   const workspaceRoot = await RootedDirectory.open(workspacePath);
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
   await materializeActiveLayout(workspaceRoot, { recovering: false });
@@ -52,10 +79,7 @@ async function activeDemandWorkspace() {
         "program_11111111-1111-4111-8111-111111111111",
         "program",
       ),
-      demandId: parseWakeflowDurableIdOfKind(
-        "demand_22222222-2222-4222-8222-222222222222",
-        "demand",
-      ),
+      demandId: parseWakeflowDurableIdOfKind(ACTIVE_DEMAND_ID, "demand"),
       title: "Active Guard",
       goal: "占用一个 pod",
       completionDefinition: "保持活动",
@@ -86,6 +110,7 @@ async function activeDemandWorkspace() {
   });
   return {
     workspaceRoot,
+    ledgerPath,
     async cleanup() {
       await workspaceRoot.close();
       await ledgerRoot.close();
@@ -106,6 +131,41 @@ function scriptedSignal(abortFrom: number) {
   });
   return { signal, stacks };
 }
+
+test("活动根在而身份记录读不出时 readDemandPodId 落到归档清单记下的 pod，没有归档仍为 null（W19）", async () => {
+  const workspace = await activeDemandWorkspace();
+  try {
+    const demandRoot = path.join(
+      workspace.workspaceRoot.absolutePath,
+      ...demandFinalRootRef(ACTIVE_DEMAND_ID).split("/"),
+    );
+    equal(await readDemandPodId(workspace.workspaceRoot, ACTIVE_DEMAND_ID), OWNER_POD_ID);
+    // 删根中断留下的残根：身份记录已删，其余仍在。
+    rmSync(path.join(demandRoot, "identity.json"));
+    equal(await readDemandPodId(workspace.workspaceRoot, ACTIVE_DEMAND_ID), null);
+    const archive = path.join(workspace.ledgerPath, "archives", ACTIVE_DEMAND_ID, "0000000002");
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(
+      path.join(archive, "manifest.json"),
+      serializeWakeflowConfigFixture({
+        kind: "WakeflowDemandArchiveManifest",
+        outcome: "completed",
+        archivedAt: "2026-08-26T11:00:00.000Z",
+        terminalEvent: {
+          eventId: "demand-event_55555555-5555-4555-8555-555555555555",
+          streamRevision: 2,
+          commitId: "demand-event-commit_88888888-8888-4888-8888-888888888888",
+        },
+        manifestDigest: `sha256:${"0".repeat(64)}`,
+        podId: OWNER_POD_ID,
+      }),
+    );
+    equal(await readDemandPodId(workspace.workspaceRoot, ACTIVE_DEMAND_ID), OWNER_POD_ID);
+    equal(existsSync(demandRoot), true, "readDemandPodId must not touch the residual root");
+  } finally {
+    await workspace.cleanup();
+  }
+});
 
 test("活动守卫在读取身份记录时被中止报告io-failure/aborted而不是pod-busy", async () => {
   const workspace = await activeDemandWorkspace();

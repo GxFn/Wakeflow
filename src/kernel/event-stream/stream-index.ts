@@ -111,6 +111,45 @@ function isNonEmptyToken(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 256;
 }
 
+/**
+ * 索引的五张字典都用无原型对象承载：commitId、eventId、事件类型和客户端幂等键是调用方给的词，
+ * `constructor`、`toString`、`__proto__` 这类名字必须落成自有键——放在普通对象上，`__proto__`
+ * 的赋值会被原型 setter 吞掉，括号读取又会命中 `Object.prototype` 上的函数（R-ROOT-01）。
+ */
+function emptyDictionary<Value>(): Record<string, Value> {
+  return Object.create(null) as Record<string, Value>;
+}
+
+function copyDictionary<Value>(source: Readonly<Record<string, Value>>): Record<string, Value> {
+  const copy = emptyDictionary<Value>();
+  for (const [key, value] of Object.entries(source)) copy[key] = value;
+  return copy;
+}
+
+function withEntry<Value>(
+  source: Readonly<Record<string, Value>>,
+  key: string,
+  value: Value,
+): Readonly<Record<string, Value>> {
+  const next = copyDictionary(source);
+  next[key] = value;
+  return Object.freeze(next);
+}
+
+function copyByType(byType: Readonly<Record<string, readonly number[]>>): Record<string, number[]> {
+  const copy = emptyDictionary<number[]>();
+  for (const [type, sequences] of Object.entries(byType)) copy[type] = [...sequences];
+  return copy;
+}
+
+function freezeByType(
+  byType: Readonly<Record<string, number[]>>,
+): Readonly<Record<string, readonly number[]>> {
+  const frozen = emptyDictionary<readonly number[]>();
+  for (const [type, sequences] of Object.entries(byType)) frozen[type] = Object.freeze(sequences);
+  return Object.freeze(frozen);
+}
+
 export function createStreamIndex(streamId: string): Readonly<StreamIndex> {
   if (!isNonEmptyToken(streamId)) fail("invalid-request", "stream-id", "$streamId");
   return Object.freeze({
@@ -121,11 +160,11 @@ export function createStreamIndex(streamId: string): Readonly<StreamIndex> {
     streamRevision: 0,
     lastCommitDigest: null,
     totalCommitBytes: 0,
-    commits: Object.freeze({}),
-    digests: Object.freeze({}),
-    events: Object.freeze({}),
-    byType: Object.freeze({}),
-    keys: Object.freeze({}),
+    commits: Object.freeze(emptyDictionary<number>()),
+    digests: Object.freeze(emptyDictionary<string>()),
+    events: Object.freeze(emptyDictionary<StreamIndexEvent>()),
+    byType: Object.freeze(emptyDictionary<readonly number[]>()),
+    keys: Object.freeze(emptyDictionary<number>()),
   });
 }
 
@@ -154,10 +193,8 @@ export function advanceStreamIndex(
   ) {
     fail("precondition-failed", "idempotency-key-conflict", "$commit.idempotencyKey");
   }
-  const events: Record<string, StreamIndexEvent> = { ...index.events };
-  const byType: Record<string, number[]> = Object.fromEntries(
-    Object.entries(index.byType).map(([type, sequences]) => [type, [...sequences]]),
-  );
+  const events = copyDictionary(index.events);
+  const byType = copyByType(index.byType);
   for (const [position, event] of commit.events.entries()) {
     if (
       !isNonEmptyToken(event.eventId) ||
@@ -184,19 +221,14 @@ export function advanceStreamIndex(
     streamRevision: commit.lastStreamRevision,
     lastCommitDigest: commit.digest,
     totalCommitBytes: index.totalCommitBytes + commit.byteLength,
-    commits: Object.freeze({ ...index.commits, [commit.commitId]: commit.commitSequence }),
-    digests: Object.freeze({ ...index.digests, [String(commit.commitSequence)]: commit.digest }),
+    commits: withEntry(index.commits, commit.commitId, commit.commitSequence),
+    digests: withEntry(index.digests, String(commit.commitSequence), commit.digest),
     events: Object.freeze(events),
-    byType: Object.freeze(
-      Object.fromEntries(
-        Object.entries(byType).map(([type, sequences]) => [type, Object.freeze(sequences)]),
-      ),
-    ),
-    keys: Object.freeze(
+    byType: freezeByType(byType),
+    keys:
       commit.idempotencyKey === undefined
         ? index.keys
-        : { ...index.keys, [commit.idempotencyKey]: commit.commitSequence },
-    ),
+        : withEntry(index.keys, commit.idempotencyKey, commit.commitSequence),
   });
 }
 
@@ -285,7 +317,7 @@ function parseIndexEvents(
   events: JsonObject,
   sequences: ReadonlySet<number>,
 ): Record<string, StreamIndexEvent> {
-  const parsedEvents: Record<string, StreamIndexEvent> = {};
+  const parsedEvents = emptyDictionary<StreamIndexEvent>();
   const revisions = new Set<number>();
   for (const [eventId, entry] of Object.entries(events)) {
     const located = record(entry, `$.events.${eventId}`);
@@ -316,7 +348,7 @@ function parseIndexEvents(
 }
 
 function parseIndexKeys(keys: JsonObject, sequences: ReadonlySet<number>): Record<string, number> {
-  const parsedKeys: Record<string, number> = {};
+  const parsedKeys = emptyDictionary<number>();
   for (const [key, sequence] of Object.entries(keys)) {
     if (!isNonEmptyToken(key) || !isSequence(sequence) || !sequences.has(sequence)) {
       fail("invalid-request", "index-shape", "$.keys");
@@ -330,7 +362,7 @@ function parseIndexByType(
   byType: JsonObject,
   sequences: ReadonlySet<number>,
 ): Record<string, readonly number[]> {
-  const parsedByType: Record<string, readonly number[]> = {};
+  const parsedByType = emptyDictionary<readonly number[]>();
   for (const [type, list] of Object.entries(byType)) {
     if (!isNonEmptyToken(type) || !Array.isArray(list) || list.length === 0) {
       fail("invalid-request", "index-shape", "$.byType");
@@ -388,8 +420,8 @@ export function parseStreamIndex(value: JsonValue): Readonly<StreamIndex> {
     streamRevision: header.streamRevision,
     lastCommitDigest: header.lastCommitDigest,
     totalCommitBytes: header.totalCommitBytes,
-    commits: Object.freeze({ ...(commits as Record<string, number>) }),
-    digests: Object.freeze({ ...(digests as Record<string, string>) }),
+    commits: Object.freeze(copyDictionary(commits as Record<string, number>)),
+    digests: Object.freeze(copyDictionary(digests as Record<string, string>)),
     events: Object.freeze(parsedEvents),
     byType: Object.freeze(parsedByType),
     keys: Object.freeze(parsedKeys),

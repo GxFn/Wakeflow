@@ -1291,8 +1291,16 @@ export class DemandEventSourcingRepository {
       null,
       signal === undefined ? undefined : { signal },
     );
-    const indexedSequence = located?.index.keys[key];
-    if (indexedSequence !== undefined) {
+    // 幂等键是调用方给的词：只认索引字典的自有键，且值必须是提交序号；`constructor`、
+    // `toString`、`__proto__` 这类名字不能把原型上的函数当成序号去读提交（R-ROOT-01）。
+    const indexedKeys = located?.index.keys;
+    const indexedSequence =
+      indexedKeys !== undefined && Object.hasOwn(indexedKeys, key) ? indexedKeys[key] : undefined;
+    if (
+      indexedSequence !== undefined &&
+      Number.isSafeInteger(indexedSequence) &&
+      indexedSequence >= 1
+    ) {
       let commit: Awaited<ReturnType<DemandFileEventStore["readCommitAt"]>>;
       try {
         commit = await this.#eventStore.readCommitAt(

@@ -623,33 +623,14 @@ export async function restoreDemandRoot(
   return "restored";
 }
 
-/**
- * 删除活动根：只在根内负载摘要等于已封归档的负载摘要、且树里只有普通文件与目录时执行。
- * 这是本仓库唯一一处递归删除用户内容的地方（其余递归删除只清理本进程自建的候选目录与回执）；
- * 归档已经是这些字节的权威副本。
- */
-export async function retireDemandRoot(
-  workspaceRoot: RootedDirectory,
-  demandId: string,
-  expectedPayloadTreeDigest: Sha256Digest,
+/** 打开待退役的活动根并稳定读取整棵树；关闭失败不遮盖读取错误。 */
+async function readRetiringRootSnapshot(
+  physicalPath: string,
   signal: AbortSignal | undefined,
-): Promise<"retired" | "absent"> {
-  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
-  try {
-    observation = await workspaceRoot.inspectExistingResource(
-      demandFinalRootRef(demandId),
-      "$demandRoot",
-    );
-  } catch (error: unknown) {
-    if (isNotFound(error)) return "absent";
-    mapFoundationError(error, "demand-root-inspect", "$demandRoot");
-  }
-  if (observation.node.kind !== "directory") {
-    fail("precondition-failed", "demand-root-not-directory", "$demandRoot");
-  }
+): Promise<DemandRootSnapshot> {
   let demandRoot: RootedDirectory;
   try {
-    demandRoot = await RootedDirectory.open(observation.physicalPath, "$demandRoot");
+    demandRoot = await RootedDirectory.open(physicalPath, "$demandRoot");
   } catch (error: unknown) {
     mapFoundationError(error, "demand-root-open", "$demandRoot");
   }
@@ -666,7 +647,46 @@ export async function retireDemandRoot(
     if (failure === undefined) failure = error;
   }
   if (failure !== undefined) throw failure;
-  if (snapshot === undefined || snapshot.payloadTreeDigest !== expectedPayloadTreeDigest) {
+  if (snapshot === undefined) fail("unexpected", "demand-root-snapshot", "$demandRoot");
+  return snapshot;
+}
+
+export interface RetireDemandRootOptions {
+  /**
+   * 残根清除（open-items W19）：生命周期日志在、绑定该计划的归档已封，根里剩下的只是上一次删根中断的残余，
+   * 负载摘要不再比对；树里仍只允许普通文件与目录，删后仍校验根已消失。
+   */
+  readonly residual?: boolean;
+}
+
+/**
+ * 删除活动根：只在根内负载摘要等于已封归档的负载摘要、且树里只有普通文件与目录时执行；
+ * `residual` 由日志与已封归档授权，跳过摘要比对。
+ * 这是本仓库唯一一处递归删除用户内容的地方（其余递归删除只清理本进程自建的候选目录与回执）；
+ * 归档已经是这些字节的权威副本。
+ */
+export async function retireDemandRoot(
+  workspaceRoot: RootedDirectory,
+  demandId: string,
+  expectedPayloadTreeDigest: Sha256Digest,
+  signal: AbortSignal | undefined,
+  options: Readonly<RetireDemandRootOptions> = {},
+): Promise<"retired" | "absent"> {
+  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
+  try {
+    observation = await workspaceRoot.inspectExistingResource(
+      demandFinalRootRef(demandId),
+      "$demandRoot",
+    );
+  } catch (error: unknown) {
+    if (isNotFound(error)) return "absent";
+    mapFoundationError(error, "demand-root-inspect", "$demandRoot");
+  }
+  if (observation.node.kind !== "directory") {
+    fail("precondition-failed", "demand-root-not-directory", "$demandRoot");
+  }
+  const snapshot = await readRetiringRootSnapshot(observation.physicalPath, signal);
+  if (options.residual !== true && snapshot.payloadTreeDigest !== expectedPayloadTreeDigest) {
     fail("precondition-failed", "demand-root-drift", "$demandRoot", { retryable: true });
   }
   try {

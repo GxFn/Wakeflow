@@ -2,7 +2,9 @@ import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  deriveDemandCapacityBlockers,
   deriveEvidenceEventIdentity,
+  MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY,
   deriveEvidencePlanDigest,
   evidencePlanSummary,
   evidencePreviewNext,
@@ -24,6 +26,7 @@ import {
   createManagedEvidenceCapturePlanFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
 } from "../../governance/evidence/managed-evidence-publication.fixture.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
@@ -182,5 +185,49 @@ test("来源键区分四种来源，同一来源不同负载得到不同身份",
   deepEqual(
     deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.authority),
     deriveManagedEvidenceId(plan.manifest.demandId, selection, digests.authority),
+  );
+});
+
+test("累计容量阻塞（open-items W10）：当前占用加计划成员恰在上限不阻塞，超出条目、文件或总字节上限的各成一项", () => {
+  const capacity = WAKEFLOW_DEMAND_TREE_CAPACITY;
+  // 记录事件在事件存储里追加 commit、index 与 snapshot 三个文件；service 测试用真实记录钉住这个数。
+  deepEqual(
+    { ...MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY },
+    { entries: 3, files: 3, totalBytes: 3 * 1024 * 1024 },
+  );
+  equal(Object.isFrozen(MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY), true);
+  const planned = { entries: 5, files: 2, totalBytes: 1024 };
+  deepEqual(
+    deriveDemandCapacityBlockers(
+      {
+        entries: capacity.maximumEntries - 5,
+        files: capacity.maximumFiles - 2,
+        totalBytes: capacity.maximumTotalBytes - 1024,
+      },
+      planned,
+    ),
+    [],
+  );
+  deepEqual(
+    deriveDemandCapacityBlockers(
+      {
+        entries: capacity.maximumEntries - 4,
+        files: capacity.maximumFiles - 1,
+        totalBytes: capacity.maximumTotalBytes - 1023,
+      },
+      planned,
+    ),
+    ["demand-capacity:entry-limit", "demand-capacity:file-count", "demand-capacity:total-bytes"],
+  );
+  deepEqual(
+    deriveDemandCapacityBlockers(
+      { entries: 0, files: 0, totalBytes: 0 },
+      { entries: 5, files: 2, totalBytes: capacity.maximumTotalBytes + 1 },
+    ),
+    ["demand-capacity:total-bytes"],
+  );
+  equal(
+    Object.isFrozen(deriveDemandCapacityBlockers({ entries: 0, files: 0, totalBytes: 0 }, planned)),
+    true,
   );
 });

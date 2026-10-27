@@ -1,6 +1,5 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
@@ -32,6 +31,7 @@ import {
   managedEvidencePublicationStageRef,
   managedEvidenceRecordRootRef,
 } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 
 const IDS = {
   evidence: parseWakeflowDurableIdOfKind(
@@ -213,9 +213,11 @@ test("Record plan对结构克隆保持确定，并严格重验所有派生字段
 });
 
 test("Managed Evidence payload预算为完整final record预留Foundation容量", () => {
+  // 深度按 Demand 树坐标换算（Codex 审阅 R-REC-03，W10）：payload 前缀四层，归档读取的上限 24。
+  equal(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxDepth, WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth - 4);
   equal(
-    MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxDepth,
-    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
+    MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxDepth <= LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
+    true,
   );
   equal(
     MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxEntries,

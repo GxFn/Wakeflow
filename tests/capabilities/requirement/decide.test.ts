@@ -252,3 +252,20 @@ test("看板投影：排序、过滤、计数、认领转移阻塞与 next", () 
     null,
   );
 });
+
+test("发布阻塞项按 256 码点截断：第 256 个码点是 emoji 时整个保留，结果 well-formed 并以省略号结尾（R-ROOT-05）", () => {
+  const analysis = analyzePackageDocuments("requirement", "示例需求", [REQUIREMENT, LANDING]);
+  const assessment = derivePublishAssessment({
+    analysis: { ...analysis, blockers: [`${"b".repeat(254)}😀${"x".repeat(8)}`] },
+    demandType: "requirement",
+    testingDecisionMode: "controller-only",
+    confirmedAt: "2026-09-04T10:00:00.000Z",
+    supersedes: null,
+    headerTexts: [],
+  });
+  const [blocker] = assessment.blockers;
+  if (blocker === undefined) throw new Error("expected the bounded blocker");
+  equal(blocker.isWellFormed(), true);
+  equal([...blocker].length, 256);
+  equal(blocker.endsWith("😀…"), true);
+});

@@ -95,7 +95,7 @@ export interface ObservationSource {
 kind: "observation"
 hostId: ("codex" | "claude-code")
 recordId: string
-event: ("session-start" | "user-prompt-submit" | "stop" | "session-end" | "turn-complete")
+event: ("session-start" | "user-prompt-submit" | "stop" | "session-end" | "turn-complete" | "notification")
 recordedAt: WakeflowUtcInstantText
 turnId: (null | string)
 promptDigest: (null | WakeflowSha256DigestText)

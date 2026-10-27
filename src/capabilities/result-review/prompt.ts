@@ -1,4 +1,5 @@
 import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { renderMarkdownJsonStringLiteral } from "../../foundation/text/markdown-json-string-literal.js";
 import { fail } from "../../kernel/error.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "./contract.js";
@@ -114,11 +115,8 @@ function section(title: string, lines: readonly string[]): readonly string[] {
 }
 
 function clip(text: string): string {
-  // 目标撰写的文本压成单行，避免在 Result 段内伪造 Next 等结构行。
-  const codePoints = Array.from(text.trim().replace(/\s+/gu, " "));
-  return codePoints.length <= MAXIMUM_SUMMARY_CODE_POINTS
-    ? codePoints.join("")
-    : `${codePoints.slice(0, MAXIMUM_SUMMARY_CODE_POINTS - 1).join("")}…`;
+  // 目标撰写的文本压成单行，避免在 Result 段内伪造 Next 等结构行；按码点截断（R-ROOT-05）。
+  return truncateToCodePoints(text.trim().replace(/\s+/gu, " "), MAXIMUM_SUMMARY_CODE_POINTS);
 }
 
 /** 确定性渲染回调 prompt；同一输入永远得到同一文本与摘要。 */

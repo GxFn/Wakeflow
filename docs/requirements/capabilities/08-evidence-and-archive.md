@@ -135,3 +135,15 @@
 ## 修订（2026-10-22，1.2 批 C：R4，§13.210）
 
 - Demand 完成报告新增门 `required-evidence`：所有已规划任务包 `requiredEvidenceKinds` 的并集都必须出现在本 Demand 的受管证据种类里，缺一报 `missing:<kinds>`；没有任何包声明时不设此门；取消跳过它（与 `work-claims-released`、`requirement-coverage`、`research-evidence` 同列）。它是 Demand 完成门，不是 `wakeflow_verify` 的工作区十五门。
+
+## 修订（2026-10-26，1.2 批 H：S1 W19、S2 W20）
+
+- 终态事务删活动根中断后留下的残根（`identity.json` 或 `authority.json` 已删、其余仍在）不再让 recover 永久失败。recover 不把"活动根存在"当作健康：生命周期日志加绑定该计划的已封归档（demandId、结局、需求包记录摘要、终态事件 commitId 一致）是权威——pod 身份取归档清单（身份记录读不出时 `readDemandPodId` 落到归档，和根缺失同一分支），不再打开活动根，残根按日志授权清除：跳过负载摘要比对，树里仍只允许普通文件与目录，删后校验根已消失。不改目录布局，不加状态；一次正常的 apply 仍走原来的五步。
+- 取消时写进需求包的撤回理由 `demand-cancelled:<demandId>: <理由>` 按码点截到 4096（看板 `withdrawal.reason` 的 `maxLength` 按码点计），不再按 UTF-16 码元切开边界上的 emoji 留下 lone surrogate；派生理由在 cancel 的 preview 就按 JSON 值准入校验，不合法记为阻塞项 `withdrawal-reason:<原因>`，而不是在终态事件提交、归档封好之后才失败。
+
+**修订（2026-10-26，1.2 批 H：R-REC-03 W10、R-REC-04 W11、R-ROOT-09 W32）**
+
+- **证据深度按 Demand 树坐标（W10）。** 证据 payload 的 ref 段数上限 = Demand 树深度上限（24）− payload 前缀四层（`artifacts/managed-evidence/<evidenceId>/payload`）= 20：归档与取消的 `readDemandRootSnapshot` 以 Demand 根为深 0、成员深度即路径段数，20 段 ref 落在第 24 层恰可读。超出的单条来源在 preview 以 `precondition-failed / capacity`（`$request.selection`）拒绝，沿用既有单记录容量语义。
+- **累计容量在 preview 可见（W10）。** 规划就绪后，preview（apply 重算同路）用归档同一组容量读 Demand 根整树，加上计划记录的成员（记录目录、缺失的前缀目录、清单、payload 目录与文件）及事件追加的 commit/index/snapshot（3 文件 / 3 条目，字节按 3×Manifest 上限预留），超出的上限以阻塞项 `demand-capacity:entry-limit` / `file-count` / `total-bytes` 返回（status blocked，planDigest 为 null）；当前树本身读不下时阻塞项为 `demand-capacity:<entry-limit|depth-limit|file-count|file-bytes|total-bytes>`；同内容已记录的重放不增加成员，不查。
+- **final 可见不等于耐久（W11）。** rename 后父目录同步失败原样为 `durability-failure` → Settlement `recovery-required`、journal 保留、Event 已提交；每条"final 可见 → current"路径（已存在 final 的幂等读取、并发同一结果识别、recover）都先补一次父目录同步，补同步失败仍是 `durability-failure`。
+- **hook 事件词汇单一来源（W32）。** `hookEvent` 以 kernel `HOST_HOOK_EVENTS` 为唯一来源，Manifest 与 `wakeflow_record_evidence` 结果 Schema 现含 `notification`，observation 来源的 notification 记录可记录；三份 Schema 的枚举由 `tests/contracts/vocabulary/host-hook-events.test.ts` 钉住逐字相等（入口 Schema 必须自包含，所以没有抽共享 `$ref`）。

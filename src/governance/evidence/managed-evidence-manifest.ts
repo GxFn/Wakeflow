@@ -51,6 +51,7 @@ import {
   type UtcWallClock,
   UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
+import { MANAGED_EVIDENCE_ROOT_REF } from "./managed-evidence-resource-paths.js";
 import {
   assertManagedEvidenceKindMatchesSource,
   type ManagedEvidenceSource,
@@ -81,11 +82,22 @@ export const MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES = 1024 * 1024;
  * `payload/`的8个UTF-8字节，以及最多1 MiB的Manifest文档容量。
  */
 /**
+ * payload 成员在 Demand 根下的前缀 `artifacts/managed-evidence/<evidenceId>/payload`：根引用的段数，加上
+ * 记录目录与 payload 目录。归档与取消按 Demand 树容量读 Demand 根整树（根深 0，成员深度即相对路径段数），
+ * 所以 payload 成员比自己的 ref 深这么多层。
+ */
+const MANAGED_EVIDENCE_PAYLOAD_PREFIX_DEPTH = MANAGED_EVIDENCE_ROOT_REF.split("/").length + 2;
+
+/**
  * 证据负载上限：树身份的上限减去清单保留，再由 Demand 树容量（kernel）压住——能记录的必须能归档
- * （复审 G12：此前单文件 32 MiB 大于归档的 16 MiB，记了就完成不了也取消不了）。
+ * （复审 G12：此前单文件 32 MiB 大于归档的 16 MiB，记了就完成不了也取消不了；open-items W10：深度同理，
+ * ref 的段数上限是 Demand 深度上限减去 payload 前缀的层数）。
  */
 export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
-  maxDepth: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
+  maxDepth: Math.min(
+    LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth - 1,
+    WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth - MANAGED_EVIDENCE_PAYLOAD_PREFIX_DEPTH,
+  ),
   maxEntries: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxEntries - 2,
   maxFileBytes: Math.min(
     LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,

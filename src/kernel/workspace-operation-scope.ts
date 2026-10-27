@@ -135,6 +135,11 @@ function assertBorrowable(
 function mapScopeError(error: unknown): never {
   if (error instanceof RootedReadWriteScopeError || error instanceof RootedExclusiveFileLockError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    // 操作已提交、租约却释放不掉（只在没有登记释放失败报告者时到这里）：残留需要恢复，不是并发冲突
+    //（open-items W8；与维护 gate 对 release-failure 的归类一致）。
+    if (error.reason === "release-failure") {
+      fail("recovery-required", "operation-scope-release-failure", "$workspace", { cause: error });
+    }
     fail("concurrency-conflict", `operation-scope-${error.reason}`, "$workspace", {
       cause: error,
       retryable: error.reason === "timeout",

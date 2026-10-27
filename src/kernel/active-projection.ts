@@ -48,6 +48,7 @@ import {
   StrictTextFileError,
 } from "../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
+import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { fail } from "./error.js";
 import {
@@ -539,9 +540,8 @@ function inline(value: string): string {
     stripped += isControlCodePoint(character.codePointAt(0) ?? 0) ? " " : character;
   }
   const cleaned = stripped.replace(/\|/gu, "\\|").replace(/\s+/gu, " ").trim();
-  return cleaned.length > INLINE_MAXIMUM_LENGTH
-    ? `${cleaned.slice(0, INLINE_MAXIMUM_LENGTH - 1)}…`
-    : cleaned;
+  // 按码点截断（Codex 审阅 R-ROOT-05）：标题在上限处是 emoji 时不能留下 lone surrogate。
+  return truncateToCodePoints(cleaned, INLINE_MAXIMUM_LENGTH);
 }
 
 function code(value: string): string {

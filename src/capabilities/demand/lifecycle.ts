@@ -83,6 +83,7 @@ import {
   sealDemandArchive,
   payloadTexts,
   type DemandArchiveManifest,
+  type LocatedArchive,
   type PayloadFile,
 } from "./archive.js";
 import {
@@ -119,8 +120,10 @@ import {
   type DemandContinuationResult,
 } from "./contract.js";
 import {
+  cancellationReasonBlockers,
   computePayloadTreeDigest,
   demandWindowIds,
+  deriveCancellationWithdrawalReason,
   deriveContinueBlockers,
   deriveDecisionBlockers,
   deriveLifecycleIds,
@@ -517,7 +520,13 @@ async function planTerminal(
     pendingReviews: pendingReviewTargets(state),
     gates: verify.gates,
     payloadBlockers,
-    textBlockers: input.reason === null ? [] : textPrivacyBlockers("reason", input.reason),
+    textBlockers:
+      input.reason === null
+        ? []
+        : [
+            ...textPrivacyBlockers("reason", input.reason),
+            ...cancellationReasonBlockers(demandId, input.reason),
+          ],
     archiveConflict: existingArchive !== null && existingArchive.archiveRef === archiveRef,
   });
   // 只有 complete 依赖接受后路由；cancel 在路由不可用时照常进行（路由不可用对 complete 已是阻塞项）。
@@ -760,18 +769,6 @@ function manifestLineage(manifest: DemandArchiveManifest) {
 }
 
 /** 步骤 3：需求包 claimed → archived（完成）或 withdrawn（取消）；已到位即 current。 */
-/**
- * 取消时需求包的撤回理由（复审 G2）：前缀 `demand-cancelled:<demandId>` 供观察侧识别（前缀匹配），后面带用户的
- * 取消理由，整体不超过看板理由上限。
- */
-const WITHDRAWAL_REASON_MAXIMUM = 4096;
-function cancellationWithdrawalReason(plan: TerminalPlan): string {
-  const prefix = `demand-cancelled:${plan.demandId}`;
-  const reason = plan.reason?.trim() ?? "";
-  if (reason.length === 0) return prefix;
-  return `${prefix}: ${reason}`.slice(0, WITHDRAWAL_REASON_MAXIMUM).trimEnd();
-}
-
 async function settlePackage(
   context: DemandSliceContext,
   plan: TerminalPlan,
@@ -795,7 +792,11 @@ async function settlePackage(
   const next =
     plan.action === "complete"
       ? archiveRequirementClaim(state, at)
-      : withdrawRequirementClaim(state, cancellationWithdrawalReason(plan), at);
+      : withdrawRequirementClaim(
+          state,
+          deriveCancellationWithdrawalReason(plan.demandId, plan.reason),
+          at,
+        );
   await replaceRequirementClaimStateFile(context.root, source, next, context.signal);
   const reread = await readClaim(context, plan.package.requirementId);
   if (reread === null) fail("recovery-required", "claim-state-vanished", "$board");
@@ -854,47 +855,106 @@ async function applyTerminalLocked(
     verify,
   });
   const lineage = { recordRef: plan.package.recordRef, recordDigest: plan.package.recordDigest };
-  let handle = await openDemandHandle(context, demandId, { reload: true });
-  let terminal: EventReceipt;
-  let archive: ArchiveReceipt;
-  let committed = false;
-  if (handle === null) {
-    const located = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
-    if (located === null)
-      fail("recovery-required", "demand-root-and-archive-absent", "$demandRoot");
-    terminal = located.manifest.terminalEvent;
-    archive = archiveReceipt(located.archiveRef, located.manifest);
-  } else {
-    const claim = await readClaim(context, plan.package.requirementId);
-    if (claim === null) fail("recovery-required", "claim-state-vanished", "$board");
-    const appended = await terminalEvent(context, handle, plan, claim);
-    terminal = appended.receipt;
-    committed = appended.committed;
-    handle = await openDemandHandle(context, demandId, { reload: true });
-    if (handle === null) fail("recovery-required", "demand-root-vanished", "$demandRoot");
-    archive = await sealArchive(context, handle, plan, terminal, verify);
-  }
+  const settled = await settleTerminalAndArchive(context, plan, verify);
   const packageState = await settlePackage(context, plan, lineage);
   const releasedClaims = await releaseClaims(context, plan);
   await releaseDemandHandle(context);
-  await retireDemandRoot(context.root, plan.demandId, archive.payloadTreeDigest, context.signal);
+  await retireDemandRoot(
+    context.root,
+    plan.demandId,
+    settled.archive.payloadTreeDigest,
+    context.signal,
+    { residual: settled.residual },
+  );
   await deleteJournal(context, plan.demandId);
   await refreshBoardIndexQuietly(context);
   return Object.freeze({
     disposition:
       disposition === "recover"
         ? "recovered"
-        : committed
+        : settled.committed
           ? plan.action === "complete"
             ? "completed"
             : "cancelled"
           : "current",
     demandId,
-    terminalEvent: terminal,
-    archive,
+    terminalEvent: settled.terminal,
+    archive: settled.archive,
     package: packageState,
     releasedClaims,
   });
+}
+
+interface TerminalSettlement {
+  readonly terminal: EventReceipt;
+  readonly archive: ArchiveReceipt;
+  readonly committed: boolean;
+  /** 进入事务前归档已封且绑定本计划：活动根若还在，只是删根中断留下的残根。 */
+  readonly residual: boolean;
+}
+
+/**
+ * 步骤 1 与 2：终态事件与归档包。绑定本计划的归档已封时两者都从清单取回，不再打开活动根（W19）；
+ * 根已删而归档在，同样取清单；否则追加（或找回）终态事件并封档。
+ */
+async function settleTerminalAndArchive(
+  context: DemandSliceContext,
+  plan: TerminalPlan,
+  verify: VerifyReport,
+): Promise<TerminalSettlement> {
+  const demandId = parseDemandId(plan.demandId);
+  const sealed = await sealedArchiveOfPlan(context, plan);
+  if (sealed !== null) {
+    return Object.freeze({
+      terminal: sealed.manifest.terminalEvent,
+      archive: archiveReceipt(sealed.archiveRef, sealed.manifest),
+      committed: false,
+      residual: true,
+    });
+  }
+  let handle = await openDemandHandle(context, demandId, { reload: true });
+  if (handle === null) {
+    const located = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
+    if (located === null)
+      fail("recovery-required", "demand-root-and-archive-absent", "$demandRoot");
+    return Object.freeze({
+      terminal: located.manifest.terminalEvent,
+      archive: archiveReceipt(located.archiveRef, located.manifest),
+      committed: false,
+      residual: false,
+    });
+  }
+  const claim = await readClaim(context, plan.package.requirementId);
+  if (claim === null) fail("recovery-required", "claim-state-vanished", "$board");
+  const appended = await terminalEvent(context, handle, plan, claim);
+  handle = await openDemandHandle(context, demandId, { reload: true });
+  if (handle === null) fail("recovery-required", "demand-root-vanished", "$demandRoot");
+  const archive = await sealArchive(context, handle, plan, appended.receipt, verify);
+  return Object.freeze({
+    terminal: appended.receipt,
+    archive,
+    committed: appended.committed,
+    residual: false,
+  });
+}
+
+/**
+ * 绑定本计划的已封归档（W19）：demandId、结局、需求包记录摘要与终态事件的 commitId 都与计划一致。
+ * 它在即说明终态事件已提交、归档已封；之后的步骤不再依赖活动根，残根按日志授权清除。
+ */
+async function sealedArchiveOfPlan(
+  context: DemandSliceContext,
+  plan: TerminalPlan,
+): Promise<LocatedArchive | null> {
+  const located = await findLatestDemandArchive(context.ledgerRoot, plan.demandId, context.signal);
+  if (located === null) return null;
+  const manifest = located.manifest;
+  const bound =
+    manifest.demandId === plan.demandId &&
+    manifest.outcome === (plan.action === "complete" ? "completed" : "cancelled") &&
+    manifest.package.recordDigest === plan.package.recordDigest &&
+    manifest.terminalEvent.commitId === plan.commitId;
+  return bound ? located : null;
 }
 
 /** recover：有日志按日志重放；无日志而归档已在，说明事务已经收尾。 */

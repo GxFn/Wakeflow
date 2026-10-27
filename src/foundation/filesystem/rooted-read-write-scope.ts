@@ -23,6 +23,8 @@ import {
   RootedExclusiveFileLockError,
   type RootedExclusiveFileLockLease,
   retireRootedExclusiveFileLockResidue,
+  settleRootedExclusiveFileLockLease,
+  withRootedExclusiveFileLockLease,
 } from "./rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError } from "./stable-directory-read.js";
 
@@ -242,6 +244,7 @@ export async function withRootedReadWriteScope<Result>(
       await latch.release();
     }
   };
+  const leaseRef = mode === "shared" ? readerRef : writerRef;
   try {
     while (lease === null) {
       try {
@@ -253,7 +256,7 @@ export async function withRootedReadWriteScope<Result>(
           }
           await options.beforeEnter?.();
           check();
-          const acquired = await acquire(mode === "shared" ? readerRef : writerRef);
+          const acquired = await acquire(leaseRef);
           // Ownership begins at acquisition, before the short latch can fail to settle.
           lease = acquired;
           return acquired;
@@ -280,10 +283,20 @@ export async function withRootedReadWriteScope<Result>(
       }
     }
     check();
-    return await operation();
-  } finally {
-    await lease?.release();
+  } catch (error: unknown) {
+    // Admission failed after the lease may have been acquired: the admission error is the outcome;
+    // a release failure behind it is only reported (B10, open-items W8).
+    if (lease !== null) {
+      await settleRootedExclusiveFileLockLease(root, leaseRef, lease, {
+        status: "rejected",
+        reason: error,
+      });
+    }
+    throw error;
   }
+  // The operation's result or error is the outcome. A release failure after a committed operation goes
+  // to the composition root's reporter instead of overriding the result (open-items W8).
+  return withRootedExclusiveFileLockLease(root, leaseRef, lease, operation);
 }
 
 function transientListing(error: unknown): boolean {

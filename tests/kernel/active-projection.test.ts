@@ -733,3 +733,19 @@ test("覆盖提示（§13.129）：incomplete 在两份工作区页的 Demand �
   notEqual(workspaceFingerprint(incomplete), workspaceFingerprint(complete));
   equal(demandFingerprint(incomplete), demandFingerprint(complete));
 });
+
+test("渲染：Demand 标题在 200 码点上限处恰为 emoji 时四份页面仍 well-formed，行内标题恰为上限个码点并以省略号结尾（R-ROOT-05）", () => {
+  // 第 199 个码点是 emoji：按码元 `slice(0, 199)` 会把它的代理对切开。
+  const title = `${"t".repeat(198)}😀${"x".repeat(8)}`;
+  const files = renderActiveProjectionFiles(facts({}, [demandFacts(DEMAND_A, { title })]));
+  for (const entry of files) {
+    equal(entry.content.isWellFormed(), true, entry.resourcePath);
+  }
+  const page = files.find((entry) => entry.resourcePath === demandProjectionIndexRef(DEMAND_A));
+  if (page === undefined) throw new Error("no demand index page");
+  const heading = page.content.split("\n").find((line) => line.startsWith("# Demand: "));
+  if (heading === undefined) throw new Error("no demand heading");
+  const rendered = heading.slice("# Demand: ".length);
+  equal([...rendered].length, 200);
+  equal(rendered.endsWith("😀…"), true);
+});

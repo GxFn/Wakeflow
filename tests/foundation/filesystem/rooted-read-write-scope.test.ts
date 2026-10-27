@@ -23,7 +23,10 @@ import {
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { RootedExclusiveFileLockError } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import {
+  RootedExclusiveFileLockError,
+  setRootedExclusiveFileLockReleaseFailureReporter,
+} from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   RootedReadWriteScopeError,
   withRootedReadWriteScope,
@@ -34,6 +37,12 @@ import {
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
+
+/**
+ * Level 1 (component): shared/exclusive admission on a disposable root — reader overlap, writer closure
+ * and draining, cancellation, latch settlement failures, unknown owners, dead-reader retirement
+ * (§13.161 F1/F2/F4) and lease settlement after the critical section (B10, open-items W8).
+ */
 
 const AREA = parsePortableResourcePath("admission");
 async function fixture(t: TestContext) {
@@ -452,4 +461,55 @@ test("shared admission retires dead reader leases once they pile up, so shared-o
   });
   equal(entered, true);
   deepEqual(readdirSync(f.area), []);
+});
+
+test("lease release failure after the critical section (open-items W8): the operation's result or error is the outcome and the residue goes to the reporter; without a reporter the release failure is thrown", async (t) => {
+  for (const mode of ["shared", "exclusive"] as const) {
+    await t.test(mode, async (t) => {
+      const f = await fixture(t);
+      t.after(() => setRootedExclusiveFileLockReleaseFailureReporter(null));
+      const leasePrefix = mode === "shared" ? "reader-" : "writer.lock";
+      const vanish = () => {
+        for (const name of readdirSync(f.area)) {
+          if (name.startsWith(leasePrefix)) rmSync(path.join(f.area, name));
+        }
+      };
+      await rejects(
+        withRootedReadWriteScope(f.root, AREA, mode, async () => {
+          vanish();
+          return "committed";
+        }),
+        (error: unknown) =>
+          error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
+      );
+      const reports: string[] = [];
+      setRootedExclusiveFileLockReleaseFailureReporter((failure) => {
+        reports.push(`${failure.lockPath}:${failure.error.reason}`);
+        throw new Error("a throwing reporter must not change the outcome");
+      });
+      equal(
+        await withRootedReadWriteScope(f.root, AREA, mode, async () => {
+          vanish();
+          return "committed";
+        }),
+        "committed",
+      );
+      equal(reports.length, 1);
+      equal(reports[0]?.startsWith(`${AREA}/${leasePrefix}`), true, reports[0]);
+      equal(reports[0]?.endsWith(":release-failure"), true, reports[0]);
+      // The operation's own error is the outcome; the release failure behind it is only reported.
+      await rejects(
+        withRootedReadWriteScope(f.root, AREA, mode, async () => {
+          vanish();
+          throw new Error("body-failed");
+        }),
+        /body-failed/u,
+      );
+      equal(reports.length, 2);
+      // A clean release reports nothing and admission stays usable.
+      equal(await withRootedReadWriteScope(f.root, AREA, mode, async () => "clean"), "clean");
+      equal(reports.length, 2);
+      deepEqual(readdirSync(f.area), []);
+    });
+  }
 });

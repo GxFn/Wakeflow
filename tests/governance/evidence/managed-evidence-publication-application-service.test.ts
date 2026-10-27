@@ -6,11 +6,18 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  RootedResourceParentHandle,
+  RootedResourceParentHandleError,
+} from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
-import { ManagedEvidencePublicationApplicationService } from "../../../src/governance/evidence/managed-evidence-publication-application-service.js";
+import {
+  ManagedEvidencePublicationApplicationService,
+  ManagedEvidencePublicationApplicationServiceError,
+} from "../../../src/governance/evidence/managed-evidence-publication-application-service.js";
 import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
@@ -296,6 +303,66 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
     equal(existsSync(physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF)), false);
   } finally {
     if (demandRoot !== undefined) await demandRoot.close();
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("final 同步失败：apply 以 recovery-required 失败、final 可见、journal 保留；recover 补同步后以 current 完成（open-items W11）", async (t) => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const prepared = await createTransaction(fixture);
+    const plan = deriveManagedEvidencePublicationRecordTreePlan(prepared.transaction);
+    const canonicalDemandRoot = path.join(
+      fixture.publication.workspaceRoot.absolutePath,
+      ".wakeflow-active",
+      "current",
+      fixture.demandId,
+    );
+    const finalPath = physical(canonicalDemandRoot, plan.destinationRootPath);
+    const managedRootPath = physical(canonicalDemandRoot, MANAGED_EVIDENCE_ROOT_REF);
+    const journalPath = physical(canonicalDemandRoot, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF);
+    const originalSync = RootedResourceParentHandle.prototype.sync;
+    let finalParentSyncs = 0;
+    let injected = false;
+    t.mock.method(
+      RootedResourceParentHandle.prototype,
+      "sync",
+      async function (this: RootedResourceParentHandle, ...args: Parameters<typeof originalSync>) {
+        if (this.parentAbsolutePath === managedRootPath && existsSync(finalPath)) {
+          finalParentSyncs += 1;
+          if (!injected) {
+            injected = true;
+            throw new RootedResourceParentHandleError("sync-failure", "$test");
+          }
+        }
+        return originalSync.apply(this, args);
+      },
+    );
+    const service = new ManagedEvidencePublicationApplicationService(
+      fixture.publication.workspaceRoot,
+    );
+    await rejects(
+      service.apply(prepared.transaction, prepared.transactionDigest),
+      (error: unknown) =>
+        error instanceof ManagedEvidencePublicationApplicationServiceError &&
+        error.reason === "recovery-required",
+    );
+    equal(injected, true);
+    equal(existsSync(finalPath), true);
+    equal(existsSync(journalPath), true, "the journal stays for recovery");
+    const syncsBefore = finalParentSyncs;
+    const recovered = await service.recover(fixture.demandId);
+    equal(recovered.disposition, "completed");
+    if (recovered.disposition !== "completed") {
+      throw new Error("Expected completed recovery.");
+    }
+    equal(recovered.eventDisposition, "existing");
+    equal(recovered.record.disposition, "current");
+    equal(finalParentSyncs > syncsBefore, true, "recovery synchronizes the visible final");
+    equal(existsSync(journalPath), false);
+    equal(recovered.loaded.aggregate.state.managedEvidence?.length, 1);
+  } finally {
+    t.mock.restoreAll();
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }
 });

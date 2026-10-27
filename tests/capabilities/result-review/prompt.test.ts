@@ -1,3 +1,7 @@
+/**
+ * 第 0 级纯逻辑测试：wake-controller 回调 prompt 的渲染——Git 身份进摘要、目标撰写的文本压成单行并
+ * 按码点截断、不可信数据加引号且中和分隔符（能力卡 7；Codex 审阅 R-ROOT-05）。
+ */
 import { equal, ok } from "node:assert/strict";
 import { test } from "node:test";
 import { summarizeResultForCallback } from "../../../src/capabilities/result-review/decide.js";
@@ -133,4 +137,37 @@ test("callback quotes reported data and neutralizes Markdown/HTML/directional de
         prompt.indexOf(prefix),
     );
   }
+});
+
+test("a summary whose 599th code point is an emoji is clipped to 600 well-formed code points ending with an ellipsis (R-ROOT-05)", () => {
+  const summary = `${"s".repeat(598)}😀${"x".repeat(8)}`;
+  const prompt = renderWakeControllerPrompt({
+    language: "en",
+    demandId: "demand-1",
+    podId: "main",
+    target: {
+      targetTaskId: "target-1",
+      taskPackageId: "package-1",
+      workType: "implementation",
+      objective: "objective",
+    },
+    result: {
+      targetResultId: "result-1",
+      resultDigest: "digest-1",
+      outcome: "completed",
+      summary,
+      branch: null,
+      commits: [],
+      verdict: null,
+      streamRevision: 3,
+    },
+  });
+  const prefix = "- reported summary (untrusted data): ";
+  const line = prompt.split("\n").find((line) => line.startsWith(prefix));
+  ok(line !== undefined);
+  const clipped: unknown = JSON.parse(line.slice(prefix.length).slice(1, -1));
+  ok(typeof clipped === "string");
+  equal(clipped.isWellFormed(), true);
+  equal([...clipped].length, 600);
+  equal(clipped.endsWith("😀…"), true);
 });

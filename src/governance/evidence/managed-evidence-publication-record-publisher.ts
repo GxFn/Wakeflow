@@ -18,6 +18,10 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
+  RootedResourceParentHandle,
+  RootedResourceParentHandleError,
+} from "../../foundation/filesystem/rooted-resource-parent-handle.js";
+import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
@@ -44,6 +48,10 @@ import { createManagedEvidenceRecordResourceDeclaration } from "./managed-eviden
  * Publisher只在固定journal仍绑定exact Transaction时工作。final已存在时，仅接受stage
  * 已消失且final整树匹配record plan；final不存在时，仅发布完整stage。rename前后均
  * 复验journal和整树，提交不确定时根据stage/final实际状态识别同一并发winner。
+ *
+ * final 可见不等于耐久（open-items W11）：产生它的 rename 可能在父目录同步前失败并把 journal 留给恢复，
+ * 所以 rename 的 durability-failure 原样抛出，而每条"final 可见 → current"的路径都先补一次父目录同步
+ *（stage 与 final 同父）；补同步失败仍是 durability-failure，由 Settlement 映射为 recovery-required。
  *
  * 本模块不追加或查询Event、不决定Event-before-final、不读取source、不物化stage、
  * 不退休journal，也不清理冲突资源。Application经由Settlement
@@ -255,6 +263,34 @@ async function inspectTree(
   }
 }
 
+/** 把 final 的父目录项同步一次；任何句柄失败都是 durability-failure，final 本身原地不动。 */
+async function syncFinalParent(
+  root: RootedDirectory,
+  plan: Readonly<ManagedEvidenceRecordTreePlan>,
+): Promise<void> {
+  let parent: RootedResourceParentHandle;
+  try {
+    parent = await RootedResourceParentHandle.open(root, plan.destinationRootPath, "$final");
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) fail("durability-failure", "$final");
+    throw error;
+  }
+  let failure: unknown;
+  try {
+    await parent.sync();
+  } catch (error: unknown) {
+    failure = error;
+  }
+  try {
+    await parent.close();
+  } catch (error: unknown) {
+    failure ??= error;
+  }
+  if (failure === undefined) return;
+  if (failure instanceof RootedResourceParentHandleError) fail("durability-failure", "$final");
+  throw failure;
+}
+
 function admitFinalPublish(transaction: Readonly<ManagedEvidencePublicationTransaction>): void {
   const declaration = createManagedEvidenceRecordResourceDeclaration(
     transaction.manifest.demandId,
@@ -312,6 +348,7 @@ async function currentFinalOrNull(
     "final",
     signal,
   );
+  await syncFinalParent(root, plan);
   await requireJournal(root, transaction, signal, journalNode);
   return finalRecord;
 }
@@ -339,6 +376,7 @@ export async function publishManagedEvidencePublicationRecord(
       "final",
       options.signal,
     );
+    await syncFinalParent(demandRootValue, plan);
     await requireJournal(demandRootValue, transaction, options.signal, stored.source.node);
     return Object.freeze({
       disposition: "current",
@@ -369,11 +407,11 @@ export async function publishManagedEvidencePublicationRecord(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreePublicationError) {
+      // durability-failure 不在这里：rename 已经发生、同步却没有，final 可见也不算 current。
       if (
         error.reason === "destination-exists" ||
         error.reason === "source-changed" ||
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure"
+        error.reason === "commit-uncertain"
       ) {
         const concurrent = await currentFinalOrNull(
           demandRootValue,

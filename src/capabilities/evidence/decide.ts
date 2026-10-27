@@ -2,8 +2,12 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { ManagedEvidenceCapturePlan } from "../../governance/evidence/managed-evidence-capture-plan.js";
-import type { ManagedEvidenceManifest } from "../../governance/evidence/managed-evidence-manifest.js";
+import {
+  MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+  type ManagedEvidenceManifest,
+} from "../../governance/evidence/managed-evidence-manifest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "./contract.js";
 
@@ -90,6 +94,48 @@ export function evidencePlanSummary(
     }),
     recorded,
   });
+}
+
+/** Demand 根整树的占用：条目数（文件与目录）、普通文件数与文件总字节数——归档读整树时核对的三个累计上限。 */
+export interface DemandTreeOccupancy {
+  readonly entries: number;
+  readonly files: number;
+  readonly totalBytes: number;
+}
+
+/**
+ * 一条记录在自己的成员之外还给 Demand 根追加的事件存储成员：一个 commit、一个 index 条目、一个 snapshot
+ *（三个文件、三个条目，均在 `event-sourcing/` 下）。commit 承载 Manifest（至多 1 MiB）加有界信封，index 与
+ * snapshot 远小于它，所以字节按三份 Manifest 容量预留。
+ */
+export const MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY: Readonly<DemandTreeOccupancy> = Object.freeze(
+  {
+    entries: 3,
+    files: 3,
+    totalBytes: 3 * MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+  },
+);
+
+/**
+ * 累计容量阻塞（open-items W10）：单条记录的上限只压住自己，归档与取消却按 Demand 树容量读整树。当前占用
+ * 加上计划记录的成员会超出的上限各成一项阻塞，码名沿用树读取的上限名；深度与单文件由记录自己的上限钉死，
+ * 不在这里累计。
+ */
+export function deriveDemandCapacityBlockers(
+  current: Readonly<DemandTreeOccupancy>,
+  planned: Readonly<DemandTreeOccupancy>,
+): readonly string[] {
+  const blockers: string[] = [];
+  if (current.entries + planned.entries > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumEntries) {
+    blockers.push("demand-capacity:entry-limit");
+  }
+  if (current.files + planned.files > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFiles) {
+    blockers.push("demand-capacity:file-count");
+  }
+  if (current.totalBytes + planned.totalBytes > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes) {
+    blockers.push("demand-capacity:total-bytes");
+  }
+  return Object.freeze(blockers);
 }
 
 /** preview 的 `next`：就绪指向 apply，阻塞时列出阻塞项。 */

@@ -1,12 +1,17 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { deriveEvidenceEventIdentity } from "../../../src/capabilities/evidence/decide.js";
+import {
+  deriveEvidenceEventIdentity,
+  MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY,
+} from "../../../src/capabilities/evidence/decide.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { readStableRootResourceTree } from "../../../src/foundation/filesystem/stable-resource-tree-read.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -18,6 +23,7 @@ import { createManagedEvidencePublicationTransactionJournal } from "../../../src
 import { DemandResultReviewSnapshotError } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -32,8 +38,9 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 useDisposableDurability();
 
 /**
- * evidence 切片效果（§13.89 D1 到 D3）：preview 零写、apply 重算并按内容摘要执行、同内容
- * `already-recorded`、源漂移 `plan-drift`、内容阻塞、四种来源各成一份记录、recover 的 healthy、recovered 与 retired 结局。
+ * 2 级（能力）：evidence 切片效果（§13.89 D1 到 D3）：preview 零写、apply 重算并按内容摘要执行、同内容
+ * `already-recorded`、源漂移 `plan-drift`、内容阻塞、四种来源各成一份记录、recover 的 healthy、recovered 与 retired 结局，
+ * 以及能归档的深度与累计容量阻塞（open-items W10）、notification 观察记录可记录（open-items W32）。
  */
 
 const CLOCK = { clock: () => EVIDENCE_CAPTURED_AT };
@@ -232,10 +239,24 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
       recordedAt: parseUtcInstant("2026-09-01T20:55:00.000Z"),
       promptDigest: `sha256:${"7".repeat(64)}` as never,
     });
+    // notification 是 HOST_HOOK_EVENTS 的一员，此前 Manifest 枚举漏了它，真实观察到的记录在准入处变成 unexpected（W32）。
+    const notification = await writeHostHookObservation(fixture.publication.workspaceRoot, {
+      hostId: "codex",
+      event: "notification",
+      sessionId: "codex-host-thread:evidence-service",
+      cwd: fixture.publication.workspacePath,
+      recordedAt: parseUtcInstant("2026-09-01T20:56:00.000Z"),
+      notificationType: "idle_prompt",
+    });
     const selections = [
       {
         kind: "hook-observation",
         source: { kind: "observation", hostId: "codex", recordId: written.record.recordId },
+        contentReview: "reject",
+      },
+      {
+        kind: "hook-observation",
+        source: { kind: "observation", hostId: "codex", recordId: notification.record.recordId },
         contentReview: "reject",
       },
       {
@@ -295,6 +316,16 @@ test("observation、link、commit 各成一份记录：payload 是来源投影�
     equal(source.event, "user-prompt-submit");
     equal(source.promptDigest, `sha256:${"7".repeat(64)}`);
     equal(source.transcript, "absent");
+    const notificationManifest = JSON.parse(
+      readFileSync(
+        evidenceManifestPath(
+          fixture,
+          (await preview(fixture, selections[1])).plan?.evidenceId as string,
+        ),
+        "utf8",
+      ),
+    ) as { source: { kind: string; event?: string } };
+    equal(notificationManifest.source.event, "notification");
     await rejects(
       preview(fixture, {
         kind: "transcript",
@@ -483,6 +514,110 @@ test("选择里 kind 与来源不配（文件来源配 transcript、link、hook-
     const matched = await preview(fixture, file);
     equal(matched.status, "ready");
     equal(matched.plan?.recorded, false);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+/** 归档与取消读 Demand 根整树所用的容量（demand 切片 `readDemandRootSnapshot` 的同一组上限）。 */
+const DEMAND_TREE_CAPACITY = {
+  maximumEntries: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumEntries,
+  maximumDepth: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth,
+  maximumFiles: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFiles,
+  maximumFileBytes: parseByteCount(WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFileBytes),
+  maximumTotalBytes: parseByteCount(WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes),
+};
+
+async function readDemandTree(fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>) {
+  const demandRoot = await RootedDirectory.open(demandRootPath(fixture));
+  try {
+    return await readStableRootResourceTree(demandRoot, DEMAND_TREE_CAPACITY);
+  } finally {
+    await demandRoot.close();
+  }
+}
+
+function treeSelection(relativePath: string) {
+  return {
+    kind: "test-output",
+    source: {
+      kind: "managed-path",
+      root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID },
+      path: relativePath,
+      resourceType: "tree",
+    },
+    contentReview: "reject",
+  };
+}
+
+/** `artifacts/<name>/d0/…/d<directories-1>/leaf.txt`：相对选择根的 ref 有 directories + 1 段。 */
+function writeDeepTree(
+  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
+  name: string,
+  directories: number,
+): void {
+  const deep = path.join(
+    fixture.repositoryRoot,
+    "artifacts",
+    name,
+    ...Array.from({ length: directories }, (_, index) => `d${index}`),
+  );
+  mkdirSync(deep, { recursive: true, mode: 0o755 });
+  writeFileSync(path.join(deep, "leaf.txt"), `${name}\n`, { mode: 0o644 });
+}
+
+test("能归档的深度（open-items W10）：25 层目录树在 preview 以 capacity 拒绝；ref 恰为 20 段的树记录后，归档用的 Demand 根整树读取落在第 24 层而不撞深度上限", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    writeDeepTree(fixture, "deep-25", 25);
+    await rejects(preview(fixture, treeSelection("artifacts/deep-25")), rejectedWith("capacity"));
+    writeDeepTree(fixture, "deep-20", 19);
+    const selection = treeSelection("artifacts/deep-20");
+    const previewed = await preview(fixture, selection);
+    equal(previewed.status, "ready", previewed.blockers.join(","));
+    const recorded = await apply(fixture, selection, previewed.planDigest as string);
+    equal(recorded.disposition, "recorded");
+    // 与 complete/cancel 的 readDemandRootSnapshot 同一容量、同一读法。
+    const tree = await readDemandTree(fixture);
+    const leaf = tree.files.find((file) => file.resourcePath.endsWith("/leaf.txt"));
+    equal(leaf?.depth, WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth);
+    equal(
+      leaf?.resourcePath,
+      `artifacts/managed-evidence/${recorded.publication?.evidenceId}/payload/${Array.from(
+        { length: 19 },
+        (_, index) => `d${index}`,
+      ).join("/")}/leaf.txt`,
+    );
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("累计容量的计数基础（open-items W10）：一条单文件记录给 Demand 根增加五个记录成员，事件追加再增加 commit、index 与 snapshot 三个文件；重放不再增加", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const selection = fileSelection("artifacts/test-run/logs/report.txt");
+    const before = await readDemandTree(fixture);
+    equal(
+      before.entries.some((entry) => entry.resourcePath === "artifacts/managed-evidence"),
+      false,
+    );
+    const previewed = await preview(fixture, selection);
+    const recorded = await apply(fixture, selection, previewed.planDigest as string);
+    equal(recorded.disposition, "recorded");
+    const after = await readDemandTree(fixture);
+    // managed-evidence 目录、记录目录、payload 目录、清单与 content 五个成员，其中两个是文件。
+    const event = MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY;
+    equal(after.entries.length - before.entries.length, 5 + event.entries);
+    equal(after.files.length - before.files.length, 2 + event.files);
+    const eventFiles = after.files.filter(
+      (file) =>
+        file.resourcePath.startsWith("event-sourcing/") &&
+        !before.files.some((known) => known.resourcePath === file.resourcePath),
+    );
+    equal(eventFiles.length, event.files);
+    await apply(fixture, selection, previewed.planDigest as string);
+    equal((await readDemandTree(fixture)).entries.length, after.entries.length);
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }

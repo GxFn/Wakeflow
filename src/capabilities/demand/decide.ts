@@ -1,7 +1,8 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { DemandAggregateState } from "../../governance/demand/model/demand-aggregate-state.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import {
@@ -128,6 +129,40 @@ export function textPrivacyBlockers(label: string, text: string): readonly strin
   return Object.freeze(blockers);
 }
 
+/**
+ * 取消时需求包的撤回理由（复审 G2）：前缀 `demand-cancelled:<demandId>` 供观察侧识别（前缀匹配），后面带用户的
+ * 取消理由，整体不超过看板理由上限。上限按码点截断（open-items W20）：看板 `withdrawal.reason` 的 `maxLength`
+ * 按码点计，而按 UTF-16 码元切会把边界上的 emoji 切成 lone surrogate，让看板状态在终态事件提交、归档封好之后
+ * 才写不进去，recover 重放同一截断永远失败。
+ */
+const WITHDRAWAL_REASON_MAXIMUM = 4096;
+export function deriveCancellationWithdrawalReason(
+  demandId: string,
+  reason: string | null,
+): string {
+  const prefix = `demand-cancelled:${demandId}`;
+  const text = reason?.trim() ?? "";
+  if (text.length === 0) return prefix;
+  return truncateToCodePoints(`${prefix}: ${text}`, WITHDRAWAL_REASON_MAXIMUM, {
+    ellipsis: "",
+  }).trimEnd();
+}
+
+/**
+ * 派生撤回理由在 cancel 的 preview 就按 JSON 值准入校验（看板状态落盘前的同一道门）：不合法记为
+ * `withdrawal-reason:<原因>`，阻塞出现在 preview 而不是终态提交之后。
+ */
+export function cancellationReasonBlockers(demandId: string, reason: string): readonly string[] {
+  try {
+    parseJsonValue(deriveCancellationWithdrawalReason(demandId, reason), "$withdrawal.reason");
+  } catch (error: unknown) {
+    if (error instanceof JsonValueError)
+      return Object.freeze([`withdrawal-reason:${error.reason}`]);
+    throw error;
+  }
+  return Object.freeze([]);
+}
+
 /** 等待 Controller 评审的结果：取消必须先把它们评掉（F5.5）。 */
 export function pendingReviewTargets(state: Readonly<DemandAggregateState>): readonly string[] {
   return Object.freeze(
@@ -157,7 +192,10 @@ export interface TerminalBlockerInput {
   readonly pendingReviews: readonly string[];
   readonly gates: readonly VerifyGateOutcome[];
   readonly payloadBlockers: readonly string[];
-  /** 取消理由的凭证命中（`textPrivacyBlockers`）；省略即无。 */
+  /**
+   * 取消理由的文本阻塞：凭证命中（`textPrivacyBlockers`）与派生撤回理由的准入
+   * （`cancellationReasonBlockers`）；省略即无。
+   */
   readonly textBlockers?: readonly string[];
   /** 归档目标已存在且负载摘要不同。 */
   readonly archiveConflict: boolean;

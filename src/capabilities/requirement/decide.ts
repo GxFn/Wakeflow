@@ -1,20 +1,20 @@
-import { parseMarkdownListItems } from "../../kernel/markdown-sections.js";
-import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
 import {
   REQUIRED_REQUIREMENT_SECTIONS,
   REQUIREMENT_SUMMARY_ANCHORS,
-  resolveRequirementSectionAnchor,
   type RequirementDemandType,
   type RequirementDocumentRole,
+  resolveRequirementSectionAnchor,
 } from "../../contracts/vocabulary/requirement-sections.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import {
   markdownSectionBodyDigest,
   normalizeMarkdownAnchor,
+  parseMarkdownListItems,
   parseMarkdownSections,
 } from "../../kernel/markdown-sections.js";
 import {
@@ -22,6 +22,7 @@ import {
   isSystemAbsolutePath,
   scanPrivacy,
 } from "../../kernel/privacy-scan.js";
+import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
 import type {
   RequirementClaimState,
   RequirementClaimStatus,
@@ -149,7 +150,8 @@ function requiredAnchors(demandType: RequirementDemandType, role: RequirementDoc
 }
 
 function summaryText(body: string): string {
-  return body.length > SUMMARY_TEXT_MAXIMUM ? `${body.slice(0, SUMMARY_TEXT_MAXIMUM - 1)}…` : body;
+  // 按码点截断（Codex 审阅 R-ROOT-05）：Schema 的上限按码点，公开结果要求 well-formed。
+  return truncateToCodePoints(body, SUMMARY_TEXT_MAXIMUM);
 }
 
 function missingSectionsOf(
@@ -259,10 +261,7 @@ const BLOCKER_TEXT_MAXIMUM = 256;
 
 /** 阻塞项带文档路径，路径可到 1024 码点；按结果 Schema 的 256 码点上限截断并加省略号。 */
 function boundedBlocker(blocker: string): string {
-  const codePoints = Array.from(blocker);
-  return codePoints.length > BLOCKER_TEXT_MAXIMUM
-    ? `${codePoints.slice(0, BLOCKER_TEXT_MAXIMUM - 1).join("")}…`
-    : blocker;
+  return truncateToCodePoints(blocker, BLOCKER_TEXT_MAXIMUM);
 }
 
 /** 披露判定独立于诊断展示；只有后者受 64 项上限约束。 */

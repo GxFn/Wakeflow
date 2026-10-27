@@ -4,6 +4,13 @@ import {
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import {
+  type DurableAtomicFileStageAddress,
+  DurableAtomicFileStageAddressError,
+  hasDurableAtomicFileStagePrefix,
+  parseDurableAtomicFileStageFileName,
+  readDurableAtomicFileStageOwnerState,
+} from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import {
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
 } from "../../../foundation/filesystem/file-node-snapshot.js";
@@ -58,7 +65,9 @@ import {
  * packet投影执行封闭命名和私有节点策略检查。Managed Evidence作为不可变业务内容，
  * 额外通过专用record-set inventory关闭healthy Manifest/顶层，并对当前事务stage/final
  * 执行完整tree分类；与Aggregate selector的关系仍由Root Authority验证。尚未出现真实
- * 消费者的可选投影目录不要求提前存在。
+ * 消费者的可选投影目录不要求提前存在。快照是可重建缓存：快照目录里 foundation 自己的
+ * 原子暂存按写者状态分类（§13.161 B3-2），死写者留下的残留被容忍而不计入快照数，
+ * 回收仍交给下一次同目标写入。
  */
 
 export type DemandEventSourcingRootInventoryPhase =
@@ -352,6 +361,26 @@ async function inspectPermitPrompts(
   return count;
 }
 
+/**
+ * 快照目录里 foundation 自己的原子暂存文件不是快照，也不是未知资源（§13.161 B3-2 的同一分类）：
+ * 写者还活着 → 一次检查点正在落盘，按 source-changed 让调用方稍后重来；写者已死 → 残留由下一次
+ * 同目标写入回收，这里容忍、不计入快照数也不删除；所有者未知或名字畸形 → 仍按 tree-shape 拒绝。
+ */
+function isToleratedSnapshotStageResidue(name: string, path: string): boolean {
+  if (!hasDurableAtomicFileStagePrefix(name)) return false;
+  let stage: Readonly<DurableAtomicFileStageAddress>;
+  try {
+    stage = parseDurableAtomicFileStageFileName(name);
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileStageAddressError) fail("tree-shape", path);
+    throw error;
+  }
+  const owner = readDurableAtomicFileStageOwnerState(stage);
+  if (owner === "active") fail("source-changed", path);
+  if (owner === "unknown") fail("tree-shape", path);
+  return true;
+}
+
 /** 稳定证明一个 normal-load Demand root 的完整允许集合。 */
 export async function inspectDemandEventSourcingRootInventory(
   root: RootedDirectory,
@@ -524,8 +553,10 @@ export async function inspectDemandEventSourcingRootInventory(
       fail("tree-shape", `$commits/${index}`);
     }
   });
+  let snapshotCount = 0;
   snapshots.entries.forEach((entry, index) => {
     assertFile(entry.node, `$snapshots/${index}`);
+    if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`)) return;
     try {
       parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
@@ -534,6 +565,7 @@ export async function inspectDemandEventSourcingRootInventory(
       }
       throw error;
     }
+    snapshotCount += 1;
   });
   assertDirectory(indexes.directoryNode, "$index");
   indexes.entries.forEach((entry, index) => {
@@ -578,7 +610,7 @@ export async function inspectDemandEventSourcingRootInventory(
   }
   return Object.freeze({
     commitCount: commits.entries.length,
-    snapshotCount: snapshots.entries.length,
+    snapshotCount,
     artifactCount: taskPackages.entries.length + managedEvidence.recordCount + permitCount,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,

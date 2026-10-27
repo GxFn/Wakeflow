@@ -781,6 +781,57 @@ export async function acquireRootedExclusiveFileLock(
   });
 }
 
+/**
+ * 用临界区的结局结算一份已持有的租约（B10，§13.167）：结局是失败时操作的错误就是结局，其后的释放失败只
+ * 报告；结局是成功时释放失败交给登记的报告者并照常返回结果，没有报告者才抛出。所有持有租约的临界区
+ * （本模块的 withRootedExclusiveFileLock 与读写作用域的 lease）都经这一处结算（open-items W8）。
+ */
+export async function settleRootedExclusiveFileLockLease<Result>(
+  root: RootedDirectory,
+  lockPath: PortableResourcePath,
+  lease: Readonly<RootedExclusiveFileLockLease>,
+  outcome: Readonly<PromiseSettledResult<Result>>,
+): Promise<Result> {
+  if (outcome.status === "rejected") {
+    try {
+      await lease.release();
+    } catch (releaseError: unknown) {
+      if (releaseError instanceof RootedExclusiveFileLockError) {
+        reportReleaseFailure(root, lockPath, releaseError);
+      }
+    }
+    throw outcome.reason;
+  }
+  try {
+    await lease.release();
+  } catch (releaseError: unknown) {
+    if (
+      releaseError instanceof RootedExclusiveFileLockError &&
+      reportReleaseFailure(root, lockPath, releaseError)
+    ) {
+      return outcome.value;
+    }
+    throw releaseError;
+  }
+  return outcome.value;
+}
+
+/** 在已持有的租约内执行临界区，并用它的结局结算租约。 */
+export async function withRootedExclusiveFileLockLease<Result>(
+  root: RootedDirectory,
+  lockPath: PortableResourcePath,
+  lease: Readonly<RootedExclusiveFileLockLease>,
+  operation: () => Result | Promise<Result>,
+): Promise<Result> {
+  let outcome: PromiseSettledResult<Result>;
+  try {
+    outcome = { status: "fulfilled", value: await operation() };
+  } catch (error: unknown) {
+    outcome = { status: "rejected", reason: error };
+  }
+  return settleRootedExclusiveFileLockLease(root, lockPath, lease, outcome);
+}
+
 /** 在指定根作用域锁记录存续期间执行异步临界区。 */
 export async function withRootedExclusiveFileLock<Result>(
   root: RootedDirectory,
@@ -791,29 +842,5 @@ export async function withRootedExclusiveFileLock<Result>(
   assertRoot(root);
   assertOperation<Result>(operation);
   const lease = await acquireRootedExclusiveFileLock(root, lockPath, options);
-  let result: Result;
-  try {
-    result = await operation();
-  } catch (error: unknown) {
-    try {
-      await lease.release();
-    } catch (releaseError: unknown) {
-      if (releaseError instanceof RootedExclusiveFileLockError) {
-        reportReleaseFailure(root, lockPath, releaseError);
-      }
-    }
-    throw error;
-  }
-  try {
-    await lease.release();
-  } catch (releaseError: unknown) {
-    if (
-      releaseError instanceof RootedExclusiveFileLockError &&
-      reportReleaseFailure(root, lockPath, releaseError)
-    ) {
-      return result;
-    }
-    throw releaseError;
-  }
-  return result;
+  return withRootedExclusiveFileLockLease(root, lockPath, lease, operation);
 }

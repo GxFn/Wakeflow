@@ -38,6 +38,7 @@ import {
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import {
   parseUtcInstant,
   type UtcInstant,
@@ -414,10 +415,7 @@ function summarizeReworkText(value: unknown, maximumCodePoints: number): string 
   ) {
     fail("rework", "$reworkSource");
   }
-  const codePoints = Array.from(value);
-  return codePoints.length <= maximumCodePoints
-    ? value
-    : `${codePoints.slice(0, maximumCodePoints - 1).join("")}…`;
+  return truncateToCodePoints(value, maximumCodePoints);
 }
 
 /** 把完整Review文本确定性压缩成可进入投递Intent的有界执行投影。 */
@@ -611,10 +609,7 @@ function summarizeRemediationText(value: unknown, maximumCodePoints: number): st
   ) {
     fail("product-defect-remediation", "$remediationSource");
   }
-  const codePoints = Array.from(value);
-  return codePoints.length <= maximumCodePoints
-    ? value
-    : `${codePoints.slice(0, maximumCodePoints - 1).join("")}…`;
+  return truncateToCodePoints(value, maximumCodePoints);
 }
 
 /** 把完整Authorization文本确定性压缩成Target执行所需的有界投影。 */

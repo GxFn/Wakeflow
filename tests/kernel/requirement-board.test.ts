@@ -117,6 +117,21 @@ test("转移是纯函数：修订链、状态载荷与拒绝的来源状态", ()
   );
 });
 
+test("索引的 Parked 列是触发词前 40 个码点加省略号：第 40 个码点是 emoji 时整个保留，索引 well-formed（§13.209，R-ROOT-05）", () => {
+  const trigger = `${"等".repeat(39)}😀${"x".repeat(5)}`;
+  const parked = createRequirementClaimState({ ...pending(), parkedTrigger: trigger } as never);
+  const index = renderRequirementBoardIndex([parked]);
+  equal(index.isWellFormed(), true);
+  equal(index.includes(`| ${"等".repeat(39)}😀… |`), true);
+  equal(index.includes("😀x"), false);
+  // 不超过 40 个码点的触发词原样进列，不加省略号。
+  const short = createRequirementClaimState({
+    ...pending(),
+    parkedTrigger: "等待接口冻结",
+  } as never);
+  equal(renderRequirementBoardIndex([short]).includes("| 等待接口冻结 |"), true);
+});
+
 test("状态文件独占创建、CAS 替换、目录列出与索引重写", async (t) => {
   const root = await fixture(t);
   const first = pending();

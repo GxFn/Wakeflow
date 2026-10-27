@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { setRootedExclusiveFileLockReleaseFailureReporter } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import {
   WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
@@ -22,6 +23,12 @@ import { useDisposableDurability } from "../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../support/workspace-operation-scope.fixture.js";
 
 useDisposableDurability();
+
+/**
+ * Level 1 (component): the workspace operation scope on a disposable root — no promotion, no crossing
+ * workspaces, no outliving its callback, maintenance reservations, and the settlement of a committed
+ * operation whose lease cannot be released (open-items W8).
+ */
 
 async function fixture(t: TestContext) {
   const absolute = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-scope-lifetime-")));
@@ -97,4 +104,40 @@ test("unfinished maintenance reserves the workspace even after its process and l
   equal(entered, false);
   equal(readFileSync(intent, "utf8"), "preserve\n");
   deepEqual(readdirSync(path.join(root.absolutePath, WORKSPACE_OPERATION_SCOPES_REF)), []);
+});
+
+test("a committed operation whose lease cannot be released keeps its result when a release-failure reporter is registered; without one the residue is recovery-required, not a conflict (open-items W8)", async (t) => {
+  const root = await fixture(t);
+  t.after(() => setRootedExclusiveFileLockReleaseFailureReporter(null));
+  const scopes = path.join(root.absolutePath, WORKSPACE_OPERATION_SCOPES_REF);
+  const vanish = () => {
+    for (const name of readdirSync(scopes)) {
+      if (name === "writer.lock" || name.startsWith("reader-")) rmSync(path.join(scopes, name));
+    }
+  };
+  for (const mode of ["shared", "exclusive"] as const) {
+    await rejects(
+      withWorkspaceOperationScope(root, mode, async () => {
+        vanish();
+        return "committed";
+      }),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "recovery-required" &&
+        error.reason === "operation-scope-release-failure",
+    );
+  }
+  const reports: string[] = [];
+  setRootedExclusiveFileLockReleaseFailureReporter((failure) => {
+    reports.push(`${failure.lockPath}:${failure.error.reason}`);
+  });
+  equal(
+    await withWorkspaceOperationScope(root, "exclusive", async () => {
+      vanish();
+      return "committed";
+    }),
+    "committed",
+  );
+  deepEqual(reports, [`${WORKSPACE_OPERATION_SCOPES_REF}/writer.lock:release-failure`]);
+  deepEqual(readdirSync(scopes), []);
 });

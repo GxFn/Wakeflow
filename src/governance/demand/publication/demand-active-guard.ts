@@ -192,7 +192,11 @@ export async function assertNoActiveDemand(
   }
 }
 
-/** 活动根或最近归档中的 pod 身份；旧或损坏数据无法定位时返回 null，守卫保持保守。 */
+/**
+ * 活动根或最近归档中的 pod 身份；旧或损坏数据无法定位时返回 null，守卫保持保守。
+ * 活动根在而身份记录读不出时同样落到归档（open-items W19）：终态事务删根中断留下的残根不是权威，
+ * 它的 Demand 属于归档清单记下的 pod。
+ */
 export async function readDemandPodId(
   root: RootedDirectory,
   demandId: string,
@@ -201,11 +205,13 @@ export async function readDemandPodId(
   const id = parseWakeflowDurableIdOfKind(demandId, "demand");
   if (await resourceExists(root, demandFinalRootRef(id))) {
     const demandRoot = await openDemandOperationRoot(root, id);
+    let podId: string | null;
     try {
-      return await identityPodId(demandRoot, signal);
+      podId = await identityPodId(demandRoot, signal);
     } finally {
       await closeDemandOperationRoot(demandRoot);
     }
+    if (podId !== null) return podId;
   }
   const options = signal === undefined ? {} : { signal };
   const config = await readWakeflowConfigAuthoritySnapshot(root, options);

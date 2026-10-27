@@ -17,6 +17,7 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import {
   parseUtcInstant,
   type UtcInstant,
@@ -164,7 +165,8 @@ function boundedText(value: unknown, maximum: number): string | null {
   if (typeof value !== "string") return null;
   const text = value.replace(/\s+/gu, " ").trim();
   if (text.length === 0) return null;
-  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+  // 按码点截断（Codex 审阅 R-ROOT-05）：旧归档的 goal/summary 在上限处是 emoji 时不能留下 lone surrogate。
+  return truncateToCodePoints(text, maximum);
 }
 
 /** 负载里的一份 JSON：读不到即 null（归档负载不完整只让读回变空，不让 status 失败）。 */

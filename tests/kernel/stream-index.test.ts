@@ -23,6 +23,12 @@ import { useDisposableDurability } from "../support/disposable-durability.js";
 
 useDisposableDurability();
 
+/**
+ * Kernel / Event Stream 的身份索引检查点（ADR-0005、ADR-0013 L0.3），1 级（组件）测试：按提交推进与
+ * 文档往返、链接与身份冲突、形状校验的失败路径、不可替换文件的发布/读取/退休，以及把 `constructor`、
+ * `toString`、`__proto__` 当 commitId、eventId、事件类型与幂等键时五张字典仍只认自有键（R-ROOT-01）。
+ */
+
 const DIGEST_A = `sha256:${"a".repeat(64)}`;
 const DIGEST_B = `sha256:${"b".repeat(64)}`;
 
@@ -65,11 +71,15 @@ test("索引按提交推进并可从文档往返解析", () => {
   equal(index.streamRevision, 3);
   equal(index.lastCommitDigest, DIGEST_B);
   equal(index.totalCommitBytes, 200);
-  deepEqual(index.commits, { "commit-1": 1, "commit-2": 2 });
-  deepEqual(index.byType, {
-    "demand.published": [1],
-    "tasking.target-task-planned": [2],
-  });
+  // 字典是无原型对象：按自有键比较。
+  deepEqual({ ...index.commits }, { "commit-1": 1, "commit-2": 2 });
+  deepEqual(
+    { ...index.byType },
+    {
+      "demand.published": [1],
+      "tasking.target-task-planned": [2],
+    },
+  );
   deepEqual(index.events.e3, { sequence: 2, revision: 3, type: "tasking.target-task-planned" });
   const text = renderStreamIndex(index);
   deepEqual(parseStreamIndex(parseDeterministicJsonDocument(text)), index);
@@ -158,4 +168,50 @@ test("索引以不可替换文件发布、读取最新可用者、退休旧文�
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
+});
+
+test("constructor、toString、__proto__ 作 commitId、eventId、事件类型与幂等键时只落成自有键：推进、往返命中与重复身份冲突照常（R-ROOT-01）", () => {
+  const names: readonly string[] = ["constructor", "toString", "__proto__"];
+  let index = createStreamIndex("demand_x");
+  let previous: string | null = null;
+  for (const [position, name] of names.entries()) {
+    const digest = `sha256:${String(position + 1).repeat(64)}`;
+    index = advanceStreamIndex(index, {
+      ...commit(position + 1, previous, digest, [{ eventId: name, eventType: name }], position),
+      commitId: name,
+      idempotencyKey: name,
+    });
+    previous = digest;
+  }
+  for (const dictionary of [index.commits, index.digests, index.events, index.byType, index.keys]) {
+    equal(Object.getPrototypeOf(dictionary), null);
+  }
+  const replayed = parseStreamIndex(parseDeterministicJsonDocument(renderStreamIndex(index)));
+  deepEqual(replayed, index);
+  for (const [position, name] of names.entries()) {
+    for (const candidate of [index, replayed]) {
+      equal(Object.hasOwn(candidate.keys, name), true);
+      equal(candidate.keys[name], position + 1);
+      equal(candidate.commits[name], position + 1);
+      equal(candidate.events[name]?.sequence, position + 1);
+      deepEqual([...(candidate.byType[name] ?? [])], [position + 1]);
+    }
+  }
+  const fourth = commit(4, previous, DIGEST_B, [{ eventId: "e4", eventType: "t" }], 3);
+  throws(
+    () => advanceStreamIndex(index, { ...fourth, idempotencyKey: "__proto__" }),
+    (error: unknown) => isWakeflowError(error) && error.reason === "idempotency-key-conflict",
+  );
+  throws(
+    () => advanceStreamIndex(index, { ...fourth, commitId: "constructor" }),
+    (error: unknown) => isWakeflowError(error) && error.reason === "commit-id-conflict",
+  );
+  throws(
+    () =>
+      advanceStreamIndex(
+        index,
+        commit(4, previous, DIGEST_B, [{ eventId: "toString", eventType: "t" }], 3),
+      ),
+    (error: unknown) => isWakeflowError(error) && error.reason === "event-id-conflict",
+  );
 });

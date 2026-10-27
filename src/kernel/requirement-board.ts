@@ -49,6 +49,7 @@ import {
 } from "../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
+import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
 import { fail, WakeflowError } from "./error.js";
@@ -577,9 +578,11 @@ const PARKED_CELL_MAXIMUM_CODE_POINTS = 40;
 
 function parkedCell(state: RequirementClaimState): string {
   if (state.parked === null) return "—";
-  const points = [...state.parked.trigger];
-  const shown = points.slice(0, PARKED_CELL_MAXIMUM_CODE_POINTS).join("");
-  return escapeCell(points.length > PARKED_CELL_MAXIMUM_CODE_POINTS ? `${shown}…` : shown);
+  // 列的约定是触发词前 40 个码点、超出时省略号跟在它们之后（§13.209）：码点切分用共享助手
+  // （R-ROOT-05），省略号不计入这 40 个，所以在这里补。
+  const trigger = state.parked.trigger;
+  const shown = truncateToCodePoints(trigger, PARKED_CELL_MAXIMUM_CODE_POINTS, { ellipsis: "" });
+  return escapeCell(shown === trigger ? shown : `${shown}…`);
 }
 
 /** 人读索引：只列 pending、parked、claimed；已撤回与已归档留在状态文件里。 */

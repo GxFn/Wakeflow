@@ -1,6 +1,10 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import {
+  LoadedArtifactTreeIdentityError,
+  validateLoadedArtifactTreeManifest,
+} from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -16,6 +20,7 @@ import {
   parseManagedEvidenceManifestDocument,
   renderManagedEvidenceManifest,
 } from "../../../src/governance/evidence/managed-evidence-manifest.js";
+import { MANAGED_EVIDENCE_ROOT_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 
 const UUIDS = {
@@ -387,5 +392,41 @@ test("能记录的证据必须能归档：证据单文件与总量上限不超�
     MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxTotalBytes <=
       WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes,
     true,
+  );
+});
+
+test("能归档的深度：payload ref 的段数上限是 Demand 树深度上限减去 artifacts/managed-evidence/<id>/payload 的四层（open-items W10）", () => {
+  // final record 的 payload 成员落在 Demand 根的第 (4 + ref 段数) 层；归档扫描以 Demand 根为深 0，成员深度即段数。
+  equal(MANAGED_EVIDENCE_ROOT_REF.split("/").length + 2, 4);
+  equal(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxDepth, WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth - 4);
+  equal(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxDepth, 20);
+  const treeManifestWithRefDepth = (depth: number) => ({
+    artifactKind: "wakeflow-loaded-artifact-tree",
+    schemaVersion: 1,
+    fileCount: 1,
+    files: [
+      {
+        bytes: 1,
+        digest: `sha256:${"0".repeat(64)}`,
+        executable: false,
+        ref: Array.from({ length: depth }, (_, index) => `d${index}`).join("/"),
+      },
+    ],
+    totalBytes: 1,
+  });
+  // 20 段的 ref 落在 Demand 根第 24 层，恰在归档容量之内；21 段被 depth-limit 拒绝。
+  equal(
+    validateLoadedArtifactTreeManifest(treeManifestWithRefDepth(20), {
+      limits: MANAGED_EVIDENCE_PAYLOAD_LIMITS,
+    }).fileCount,
+    1,
+  );
+  throws(
+    () =>
+      validateLoadedArtifactTreeManifest(treeManifestWithRefDepth(21), {
+        limits: MANAGED_EVIDENCE_PAYLOAD_LIMITS,
+      }),
+    (error: unknown) =>
+      error instanceof LoadedArtifactTreeIdentityError && error.reason === "depth-limit",
   );
 });

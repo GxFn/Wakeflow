@@ -24,8 +24,15 @@ import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/eve
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { disposableRoot } from "../../support/temp-root.js";
 
 useDisposableDurability();
+
+/**
+ * Governance / Demand Event Sourcing 仓储（ADR-0005），1 级（组件）测试：正常 load 走快照加尾部、audit
+ * 完整重放、崩溃残留的暂存与不兼容快照只让快照不可用而不拒绝加载，以及把 `constructor`、`toString`、
+ * `__proto__` 当客户端幂等键时经索引重放命中、未命中返回 null（R-ROOT-01）。
+ */
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -182,5 +189,65 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("constructor、toString、__proto__ 作客户端幂等键：已提交的键经索引重放命中，未提交的键返回 null 而不是把原型函数当序号（R-ROOT-01）", async (t) => {
+  const fixtureRoot = disposableRoot(t, "wakeflow-demand-repository-keys-");
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    const eventStore = new DemandFileEventStore(root);
+    const repository = new DemandEventSourcingRepository(root);
+    await eventStore.initialize();
+    const first = prepareDemandEventStreamCommit(null, {
+      commitId: FIRST_COMMIT_ID,
+      commandDigest: FIRST_COMMAND_DIGEST,
+      events: decideDemandEventSourcingCommand(null, {
+        commandType: "publication.publish-demand",
+        commandVersion: 1,
+        demandId: DEMAND_ID,
+        eventId: FIRST_EVENT_ID,
+        recordedAt: PUBLISHED_AT,
+        identityDigest: IDENTITY_DIGEST,
+        authorityDigest: AUTHORITY_DIGEST,
+      }),
+      idempotency: { key: "__proto__", requestDigest: FIRST_COMMAND_DIGEST },
+    });
+    await eventStore.append(first);
+    const second = prepareDemandEventStreamCommit(first.aggregate, {
+      commitId: SECOND_COMMIT_ID,
+      commandDigest: SECOND_COMMAND_DIGEST,
+      events: decideDemandEventSourcingCommand(first.aggregate.state, {
+        commandType: "lifecycle.cancel-demand",
+        commandVersion: 1,
+        demandId: DEMAND_ID,
+        eventId: SECOND_EVENT_ID,
+        recordedAt: CANCELLED_AT,
+        reason: "用户终止该 Demand",
+      }),
+      idempotency: { key: "constructor", requestDigest: SECOND_COMMAND_DIGEST },
+    });
+    await eventStore.append(second);
+
+    // 索引随追加发布；它的键字典只认自有键，`__proto__` 不会被原型 setter 吞掉。
+    const located = await eventStore.readIndex(DEMAND_ID);
+    ok(located);
+    equal(located.index.commitSequence, 2);
+    equal(Object.getPrototypeOf(located.index.keys), null);
+    const committed: readonly (readonly [string, number])[] = [
+      ["__proto__", 1],
+      ["constructor", 2],
+    ];
+    for (const [key, sequence] of committed) {
+      equal(Object.hasOwn(located.index.keys, key), true);
+      equal(located.index.keys[key], sequence);
+      const found = await repository.findCommitByIdempotencyKey(key);
+      equal(found?.commitSequence, sequence);
+      equal(found?.idempotency?.key, key);
+    }
+    // 没提交过的键：Object.prototype.toString 不是提交序号，查找是未命中而不是 io 失败。
+    equal(await repository.findCommitByIdempotencyKey("toString"), null);
+  } finally {
+    await root.close();
   }
 });

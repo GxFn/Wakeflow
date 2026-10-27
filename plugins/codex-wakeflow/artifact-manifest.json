@@ -2410,8 +2410,8 @@
     },
     {
       "path": "lib/governance/observation/repository-pointer-observation.js",
-      "bytes": 11110,
-      "sha256": "sha256:1427c5cff28f4ce11551841c18b9421a8d0fba3553065c7cf7c4b953368e148b",
+      "bytes": 11406,
+      "sha256": "sha256:055de697d32330eb803fbc751b55b6f0005dec516520f1ce3fa1938d220a8492",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2431,8 +2431,8 @@
     },
     {
       "path": "lib/governance/pod/worktree-disposal.js",
-      "bytes": 5099,
-      "sha256": "sha256:86140e72939ffcbe439ed19b88b7124b35c024f468b9f40967e4c0968c896afa",
+      "bytes": 5705,
+      "sha256": "sha256:a56adac29206cf24d0d0a5bcd50cfa6b003c07735c8d0911f1503a28cbdba469",
       "mode": "0644",
       "scope": "shared"
     },

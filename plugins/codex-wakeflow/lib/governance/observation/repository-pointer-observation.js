@@ -160,13 +160,15 @@ function resolveHead(text, branches) {
 /**
  * Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。
  * 指针文件在为 present、不在为 absent、无法观察为 unknown（G7）：只有 absent 才算 prunable。
+ * gitdir 文件本身按同一规则读：确认不存在（missing）是 absent，与 git 自己的 prune 判定一致；
+ * 读不出（io 失败、不是普通文件、超限）或不是严格文本都是 unknown——检出可能还在（W31）。
  */
-async function observeCheckout(entryDirectory, gitdirText) {
-    if (gitdirText === null)
-        return "absent";
-    const gitdirPath = path.isAbsolute(gitdirText)
-        ? gitdirText
-        : path.resolve(entryDirectory, gitdirText);
+async function observeCheckout(entryDirectory, gitdir) {
+    if (gitdir.text === null)
+        return gitdir.outcome === "missing" ? "absent" : "unknown";
+    const gitdirPath = path.isAbsolute(gitdir.text)
+        ? gitdir.text
+        : path.resolve(entryDirectory, gitdir.text);
     try {
         const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
         if (observed.state === "missing")
@@ -185,7 +187,7 @@ async function collectWorktrees(root, branches, signal) {
     for (const entry of listing.entries) {
         if (entry.kind !== "directory")
             continue;
-        const gitdir = await pointerText(root, parsePortableResourcePath(`${entry.resourcePath}/gitdir`, "$repository"), POINTER_MAXIMUM_BYTES, signal);
+        const gitdir = await readPointer(root, parsePortableResourcePath(`${entry.resourcePath}/gitdir`, "$repository"), POINTER_MAXIMUM_BYTES, signal);
         const head = await pointerText(root, parsePortableResourcePath(`${entry.resourcePath}/HEAD`, "$repository"), POINTER_MAXIMUM_BYTES, signal);
         const resolved = head === null ? null : resolveHead(head, branches);
         worktrees.push(Object.freeze({

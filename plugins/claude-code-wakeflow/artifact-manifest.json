@@ -2479,8 +2479,8 @@
     },
     {
       "path": "lib/governance/observation/repository-pointer-observation.js",
-      "bytes": 11110,
-      "sha256": "sha256:1427c5cff28f4ce11551841c18b9421a8d0fba3553065c7cf7c4b953368e148b",
+      "bytes": 11406,
+      "sha256": "sha256:055de697d32330eb803fbc751b55b6f0005dec516520f1ce3fa1938d220a8492",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2500,8 +2500,8 @@
     },
     {
       "path": "lib/governance/pod/worktree-disposal.js",
-      "bytes": 5099,
-      "sha256": "sha256:86140e72939ffcbe439ed19b88b7124b35c024f468b9f40967e4c0968c896afa",
+      "bytes": 5705,
+      "sha256": "sha256:a56adac29206cf24d0d0a5bcd50cfa6b003c07735c8d0911f1503a28cbdba469",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2710,8 +2710,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-tmux-asset.js",
-      "bytes": 103912,
-      "sha256": "sha256:6a258b0057ce2c20d608127446dfa59da61afb56bbf09bbe42446b933f9c3d29",
+      "bytes": 106538,
+      "sha256": "sha256:f4f183f51462cb7ad78f2fb02abb9d6fcb16b9cf5e35409bba23f793305aca67",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2724,8 +2724,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-window-launch-instructions.js",
-      "bytes": 4940,
-      "sha256": "sha256:87f3be03e42591157c7cde19f5b9cc861fd13f311c0a241d22fb3d4ed68aae67",
+      "bytes": 5644,
+      "sha256": "sha256:602d41587da6375d09db622ba874c04c28d7025f76644f8569b9c3b5ea832779",
       "mode": "0644",
       "scope": "current-host"
     },

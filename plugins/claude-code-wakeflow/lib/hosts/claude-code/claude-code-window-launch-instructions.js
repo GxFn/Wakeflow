@@ -28,12 +28,19 @@ export function claudeCodeTmuxSessionNameFor(configured, intent) {
     return `${base}${suffix}`;
 }
 /**
+ * pod 窗口显示名里 pod 名与模板标题之间的分隔（`<pod 名> · <标题>`，能力卡 9 Q6；生产者是 pod 切片的
+ * `derivePodWindows`）。去前缀规则只认这一个常量：launch 指令的渲染（下面的 `claudeCodeTmuxWindowNameFor`）
+ * 与 tmux 助手的 `mark`（`claude-code-tmux-asset.ts` 在构建脚本时填入同一常量）据此得到同一个窗口名，
+ * mark 才不会把 launch 去掉的前缀加回去（open-items W28）。profile 测试钉住它能还原派生的显示名。
+ */
+export const CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR = " · ";
+/**
  * 窗口在 tmux 里的名字（§13.186）：worktree pod 的窗口已经在 pod 自己的会话里，显示名里的
  * `<pod 名> · ` 前缀（能力卡 9 Q6 的逻辑显示名，保持不变）在会话内是冗余的，tmux 窗口名去掉它；
- * primary pod 与没有前缀的显示名原样使用。
+ * primary pod 与没有前缀的显示名原样使用。助手里的 `tmuxWindowNameFor` 是同一规则的脚本副本。
  */
 export function claudeCodeTmuxWindowNameFor(intent) {
-    const prefix = `${intent.podName} · `;
+    const prefix = `${intent.podName}${CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR}`;
     return intent.podPlacement === "worktree" && intent.displayTitle.startsWith(prefix)
         ? intent.displayTitle.slice(prefix.length)
         : intent.displayTitle;

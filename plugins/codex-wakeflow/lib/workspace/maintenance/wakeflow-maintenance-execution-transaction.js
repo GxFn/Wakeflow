@@ -14,6 +14,7 @@ import { beginWakeflowMaintenanceJournalStep, completeWakeflowMaintenanceJournal
 import { assertWakeflowMaintenanceJournalIsOnlyTransaction, assertWakeflowPreparedMaintenanceJournalCapacity, checkpointWakeflowMaintenanceJournal, publishPreparedWakeflowMaintenanceJournal, readWakeflowMaintenanceJournal, readWakeflowMaintenanceJournalOrNull, recoverWakeflowMaintenanceJournalStages, retireTerminalWakeflowMaintenanceJournal, WakeflowMaintenanceJournalStoreError, } from "./wakeflow-maintenance-journal-store.js";
 import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
 import { parseWakeflowStaticMaterializationPreviewRequest, } from "./wakeflow-static-materialization-preview-contract.js";
 import { executeWakeflowStaticMaterializationStep, WakeflowStaticMaterializationStepExecutionError, } from "./wakeflow-static-materialization-step-executor.js";
 const ERROR_MESSAGES = {
@@ -112,8 +113,18 @@ function parseOptions(value) {
     if (Object.keys(record).some((key) => key !== "acquireTimeoutMilliseconds" &&
         key !== "retryDelayMilliseconds" &&
         key !== "signal" &&
-        key !== "uuidFactory")) {
+        key !== "uuidFactory" &&
+        key !== "writer")) {
         fail("input", "$options");
+    }
+    let writer;
+    try {
+        writer = parseWakeflowMaintenanceWriter(record.writer, "$options.writer");
+    }
+    catch (error) {
+        if (error instanceof WakeflowMaintenanceWriterError)
+            fail("input", error.path);
+        throw error;
     }
     if (record.signal !== undefined &&
         (typeof record.signal !== "object" ||
@@ -131,6 +142,7 @@ function parseOptions(value) {
         retryDelayMilliseconds: positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
         signal: record.signal,
         uuidFactory: record.uuidFactory,
+        writer,
     });
 }
 async function currentConfigSnapshot(root, signal, operationId = null) {
@@ -402,9 +414,9 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
     const operationId = createOperationId(options.uuidFactory);
     let intent;
     try {
-        intent = createWakeflowMaintenanceExecutionIntent(operationId, plan, executionRequestValue, desiredConfig);
+        intent = createWakeflowMaintenanceExecutionIntent(operationId, plan, executionRequestValue, desiredConfig, options.writer);
         assertWakeflowMaintenanceExecutionIntentCapacity(intent);
-        assertWakeflowPreparedMaintenanceJournalCapacity(operationId, computeWakeflowMaintenanceExecutionIntentDigest(intent), plan);
+        assertWakeflowPreparedMaintenanceJournalCapacity(operationId, computeWakeflowMaintenanceExecutionIntentDigest(intent), plan, options.writer);
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceExecutionIntentError ||
@@ -443,7 +455,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
                 fail("plan-stale", "$plan.planDigest", null);
             }
             const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
-            const prepared = await publishPreparedWakeflowMaintenanceJournal(root, context, intentSource, intentPlan);
+            const prepared = await publishPreparedWakeflowMaintenanceJournal(root, context, intentSource, intentPlan, options.writer);
             const advanced = await advanceJournal(root, context, intentSource, prepared, intentPlan, intentRequestValue, intentRequest, current?.model ?? null, capability, false, signal);
             await assertTerminalConfig(root, intentPlan, operationId);
             await retireWakeflowMaintenanceExecutionIntent(root, context, intentSource);
@@ -581,7 +593,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
             }
             const existingJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
             const source = existingJournal ??
-                (await publishPreparedWakeflowMaintenanceJournal(root, context, currentIntent, plan));
+                (await publishPreparedWakeflowMaintenanceJournal(root, context, currentIntent, plan, options.writer));
             validateJournalPlan(source, currentIntent, plan);
             const advanced = await advanceJournal(root, context, currentIntent, source, plan, requestValue, request, sourceConfig, capability, true, options.signal);
             await assertTerminalConfig(root, plan, operationId);

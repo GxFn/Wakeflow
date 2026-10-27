@@ -209,6 +209,15 @@ async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
         fail("inspection", "$settings");
     return inspection;
 }
+/**
+ * 面根不在时仍能把规则计划成 create 的维护动作（open-items W5 / CR-H6）：fresh-initialize 建新根，
+ * reconcile 重建被用户删掉或移走的受管根。两者的共享预览都先计划 `materialize-support-root`，执行
+ * 计划又让每条宿主操作依赖前一共享步，所以写规则时根已经在。reconfigure 的缺根仍报
+ * `support-root-missing:<surfaceId>`：先 reconcile 修根，再改配置。状态行的支撑面计划共用这一条判据。
+ */
+export function claudeCodeMaintenanceMaterializesMissingSupportRoot(action) {
+    return action === "fresh-initialize" || action === "reconcile";
+}
 /** 为 Program 与 Wakeflow-managed Support roots 生成零写入 portable settings 计划。 */
 export async function planClaudeCodePortableSettingsComposition(workspaceRootValue, requestValue) {
     if (typeof workspaceRootValue !== "object" ||
@@ -250,7 +259,7 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
             if (placement === undefined)
                 fail("placement", "$supportRoot");
             if (placement.state === "missing") {
-                if (request.action !== "fresh-initialize") {
+                if (!claudeCodeMaintenanceMaterializesMissingSupportRoot(request.action)) {
                     blockerCodes.add(`support-root-missing:${root.rootId}`);
                     rootEntries.push(Object.freeze({
                         root,

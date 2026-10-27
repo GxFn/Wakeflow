@@ -15,6 +15,7 @@ import { countIncidents } from "../../kernel/incident.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
 import { listPodWorktreeReceiptsAnyHost, observeWorktreeCheckout, } from "../../kernel/pod-worktree-receipts.js";
 import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../kernel/requirement-board.js";
+import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
 import { scanWakeflowLegacyResidue, } from "../../workspace/wakeflow-legacy-residue-scan.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
@@ -258,6 +259,7 @@ async function observeHostHooks(root, hostId, current, signal) {
         const latestKeys = new Map();
         const startKeys = new Map();
         const startDigests = new Map();
+        const startVersions = new Map();
         const inventory = await scanHostHookObservations(root, hostId, {}, (record) => {
             if (!latestBySession.has(record.sessionId) &&
                 latestBySession.size >= HOOK_RECORDS_MAXIMUM) {
@@ -269,6 +271,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                 if (previousStart === undefined || previousStart <= key) {
                     startKeys.set(record.sessionId, key);
                     startDigests.set(record.sessionId, record.artifactManifestDigest);
+                    startVersions.set(record.sessionId, record.artifactVersion);
                 }
             }
             const previous = latestKeys.get(record.sessionId);
@@ -280,6 +283,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                     observerManifestDigest: record.artifactManifestDigest,
                     notificationType: record.notificationType,
                     sessionStartObserverManifestDigest: null,
+                    sessionStartArtifactVersion: null,
                 });
             }
         }, signalOptions(signal));
@@ -287,6 +291,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             latestBySession.set(sessionId, {
                 ...latest,
                 sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
+                sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
             });
         }
         const writeFailures = await countIncidents(root, { source: "hook-observer", hostId }, signalOptions(signal));
@@ -323,6 +328,42 @@ async function observeHostHooks(root, hostId, current, signal) {
             latestBySession: new Map(),
         });
     }
+}
+/**
+ * 所有给定宿主的 hook 会话里，各会话最新一条 session-start 记录所带的最高制品版本（1.2 计划
+ * §3.6 C6）：高于本进程的版本即有更新的制品已在这个工作区里启动过窗口。目录缺席是零条记录；读不出
+ * 的宿主跳过——通道的健康由 verify 的 host-hook-channel 门报，这里只回答"有没有看见更新的版本"；
+ * 中止上抛。维护的预览用它拒绝过期进程的 apply，与 status / verify 的 `superseded` 同一条规则。
+ */
+export async function observeNewestSessionStartArtifactVersion(root, hostIds, signal) {
+    const versions = [];
+    for (const hostId of hostIds) {
+        const startKeys = new Map();
+        const startVersions = new Map();
+        try {
+            await scanHostHookObservations(root, hostId, { event: "session-start" }, (record) => {
+                const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+                const previous = startKeys.get(record.sessionId);
+                if (previous === undefined || previous <= key) {
+                    startKeys.set(record.sessionId, key);
+                    startVersions.set(record.sessionId, record.artifactVersion);
+                }
+            }, signalOptions(signal));
+        }
+        catch (error) {
+            const reason = reasonOf(error);
+            if (reason === null)
+                throw error;
+            if (reason === "aborted") {
+                if (error instanceof WakeflowError)
+                    throw error;
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            }
+            continue;
+        }
+        versions.push(...startVersions.values());
+    }
+    return newestWakeflowArtifactVersion(versions);
 }
 async function observePods(root, snapshot, bindings, demands, scope, signal) {
     const bindingIdByWindowId = new Map();

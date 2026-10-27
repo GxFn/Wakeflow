@@ -23,10 +23,45 @@ import { DemandEventStreamPositionError, parseDemandEventCommitSequence, parseDe
  *
  * `commitSequence` 是不替换目标的物理槽位；事件流修订号是提交中事件的逻辑位置。
  * 一条提交记录可以承载一个命令产生的多个事件，并通过 `previousCommitDigest` 串联历史。
+ *
+ * 可选的 `writer` 记录追加这条提交的构建（制品版本与 manifest 摘要，C11 / 计划 §3.6）：它随提交
+ * 持久化并进入提交摘要链，但不进事件数据摘要、命令摘要与幂等判定；旧流的提交没有它。
  */
 const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND = "wakeflow-demand-event-stream-commit";
 const DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION = 1;
 const DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS = 64;
+const WRITER_VERSION_PATTERN = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/u;
+const WRITER_VERSION_MAXIMUM_LENGTH = 64;
+/**
+ * 准入一个写者戳；`undefined` 与 `null` 都表示没有戳（测试构建没有 manifest），返回 `null`。
+ * 戳由组合根从本进程的制品身份注入，不参与命令摘要、事件数据摘要与幂等判定。
+ */
+export function parseDemandEventStreamCommitWriter(value, path = "$writer") {
+    if (value === undefined || value === null)
+        return null;
+    let record;
+    try {
+        record = parsePlainRecord(value, path);
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", path);
+        throw error;
+    }
+    const keys = Object.keys(record).sort();
+    if (keys.length !== 2 ||
+        keys[0] !== "manifestDigest" ||
+        keys[1] !== "version" ||
+        typeof record.version !== "string" ||
+        record.version.length > WRITER_VERSION_MAXIMUM_LENGTH ||
+        !WRITER_VERSION_PATTERN.test(record.version)) {
+        fail("input", path);
+    }
+    return Object.freeze({
+        version: record.version,
+        manifestDigest: parseDigest(record.manifestDigest, `${path}/manifestDigest`),
+    });
+}
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 function parseIdempotency(value, path) {
     if (value === undefined)
@@ -85,7 +120,7 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_STRE
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
 const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"]);
-const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency"]);
+const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency", "writer"]);
 const ISSUED_PREPARED_COMMITS = new WeakSet();
 function fail(reason, path) {
     throw new DemandEventStreamCommitError(reason, path);
@@ -161,6 +196,7 @@ export function parseDemandEventStreamCommit(value) {
     }
     const demandId = parseDemandId(wire.demandId, "$/demandId");
     const idempotency = parseIdempotency(wire.idempotency, "$/idempotency");
+    const writer = parseDemandEventStreamCommitWriter(wire.writer, "$/writer");
     const events = [];
     const eventIds = new Set();
     for (const [index, eventValue] of wire.events.entries()) {
@@ -208,6 +244,7 @@ export function parseDemandEventStreamCommit(value) {
             : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
         events: Object.freeze(frozenEvents),
         ...(idempotency === undefined ? {} : { idempotency }),
+        ...(writer === null ? {} : { writer }),
     });
 }
 export function renderDemandEventStreamCommit(value) {
@@ -251,6 +288,7 @@ function parsePrepareInput(value) {
         fail("input", "$input");
     }
     const idempotency = parseIdempotency(record.idempotency, "$/idempotency");
+    const writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
     let values;
     try {
         values = parseDenseArray(record.events, DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS, "$/events");
@@ -278,6 +316,7 @@ function parsePrepareInput(value) {
         commandDigest: parseDigest(record.commandDigest, "$/commandDigest"),
         events: Object.freeze(events),
         idempotency,
+        writer,
     });
 }
 /**
@@ -487,6 +526,7 @@ function buildDemandEventStreamCommit(currentValue, inputValue) {
         previousCommitDigest: current?.lastCommitDigest ?? null,
         events: storedEvents,
         ...(input.idempotency === undefined ? {} : { idempotency: input.idempotency }),
+        ...(input.writer === null ? {} : { writer: input.writer }),
     });
     const aggregate = applyDemandEventStreamCommit(current, commit);
     const sourceExpectation = Object.freeze({

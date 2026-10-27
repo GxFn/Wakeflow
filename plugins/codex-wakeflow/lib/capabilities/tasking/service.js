@@ -8,7 +8,7 @@ import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingComma
 import { parseDemandEventSourcingCommand } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
@@ -376,6 +376,7 @@ async function execute(context, input, binding) {
             commitId: binding.commitId,
             expectedStreamRevision: binding.expectedStreamRevision,
             idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
+            writer: options.writer ?? null,
             ...signalOptions(options.signal),
         });
     }

@@ -116,12 +116,16 @@ export async function loadManagedEvidencePublicationHealthyAuthority(demandRoot,
         throw error;
     }
 }
-/** 在真实当前Aggregate上执行Transaction绑定的exact Event命令。 */
-export async function appendManagedEvidencePublicationEvent(demandRoot, transaction, signal) {
+/**
+ * 在真实当前Aggregate上执行Transaction绑定的exact Event命令。`writer` 是本进程的写者戳（C11）：
+ * 事务只绑定命令摘要与事件身份，戳不进它们，所以带戳的提交仍与事务对得上。
+ */
+export async function appendManagedEvidencePublicationEvent(demandRoot, transaction, signal, writer = null) {
     try {
         const result = await executeDemandEventSourcingCommand(new DemandEventSourcingRepository(demandRoot), deriveManagedEvidencePublicationEventSourcingCommand(transaction), {
             commitId: transaction.demandEventSourcingAppend.commitId,
             expectedStreamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
+            writer,
             ...(signal === undefined ? {} : { signal }),
         });
         assertCommitRelation(result.commit, transaction);

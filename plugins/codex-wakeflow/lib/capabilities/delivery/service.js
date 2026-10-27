@@ -18,7 +18,7 @@ import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingComma
 import { parseDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { observeHostAssetState, } from "../../governance/observation/workspace-observation.js";
@@ -259,13 +259,14 @@ async function boundCommit(repository, binding, signal) {
         mapRepositoryError(error);
     }
 }
-async function appendCommand(repository, command, binding, signal) {
+async function appendCommand(repository, command, binding, options) {
     try {
         return await executeDemandEventSourcingCommand(repository, command, {
             commitId: binding.commitId,
             expectedStreamRevision: binding.expectedStreamRevision,
             idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
-            ...signalOptions(signal),
+            writer: options.writer ?? null,
+            ...signalOptions(options.signal),
         });
     }
     catch (error) {
@@ -654,7 +655,7 @@ async function executePrepare(context, input, binding) {
                 ? {}
                 : { productDefectRemediationSource: sources.remediationSource }),
         });
-        commandResult = await appendCommand(repository, command, binding, options.signal);
+        commandResult = await appendCommand(repository, command, binding, options);
     }
     catch (error) {
         // 没有提交（含撞上 stream-revision）：只回滚本次新建的声明；延后回收的孤儿原样留给它的持有者。
@@ -1224,7 +1225,7 @@ async function executeOutcome(context, input, binding) {
         eventId: deriveDurableId("demand-event", "record-delivery-outcome", authority.loaded.identity.demandId, binding.idempotencyKey),
         outcome,
     });
-    const commandResult = await appendCommand(repository, command, binding, options.signal);
+    const commandResult = await appendCommand(repository, command, binding, options);
     const committed = committedEvent(commandResult, "delivery.delivery-outcome-recorded");
     if (outcome.claimHandling === "release-authorized") {
         await releaseClaimFor(context, route.binding.windowId, outcome.fence);
@@ -1430,7 +1431,7 @@ async function executeCallbackReissue(context, target, binding) {
         reissue,
     });
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
-    const commandResult = await appendCommand(repository, command, binding, options.signal);
+    const commandResult = await appendCommand(repository, command, binding, options);
     if (commandResult.disposition === "idempotent")
         return replayCallbackReissue(context, commandResult);
     const stored = commandResult.commit.events[0];
@@ -1521,7 +1522,7 @@ async function executeRearm(context, input, binding) {
             eventId: deriveDurableId("demand-event", "rearm-delivery", demandId, binding.idempotencyKey),
             rearm,
         });
-        commandResult = await appendCommand(repository, command, binding, options.signal);
+        commandResult = await appendCommand(repository, command, binding, options);
     }
     catch (error) {
         // 与 prepare 同一规则：没有提交就只回滚本次新建的声明，延后回收的孤儿不动。

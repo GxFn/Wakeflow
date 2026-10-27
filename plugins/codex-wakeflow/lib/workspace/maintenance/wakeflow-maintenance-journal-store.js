@@ -88,11 +88,11 @@ function admittedJournalByteCount(bytes) {
     }
     return parseByteCount(bytes.byteLength, "$journal.byteCount");
 }
-/** 在任何bootstrap/gate效果前验证initial journal的持久表示容量。 */
-export function assertWakeflowPreparedMaintenanceJournalCapacity(operationId, intentDigest, plan) {
+/** 在任何bootstrap/gate效果前验证initial journal的持久表示容量；`writer` 是可选写者戳。 */
+export function assertWakeflowPreparedMaintenanceJournalCapacity(operationId, intentDigest, plan, writer) {
     let journal;
     try {
-        journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan);
+        journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan, writer);
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceJournalError) {
@@ -245,12 +245,12 @@ export async function readWakeflowMaintenanceJournalOrNull(root, operationIdValu
     }
     return readWakeflowMaintenanceJournal(root, operationId);
 }
-/** 在有效 gate scope 内 absent-only 发布一份 prepared journal。 */
-export async function publishPreparedWakeflowMaintenanceJournal(root, context, intentSource, planValue) {
+/** 在有效 gate scope 内 absent-only 发布一份 prepared journal；`writerValue` 是可选写者戳。 */
+export async function publishPreparedWakeflowMaintenanceJournal(root, context, intentSource, planValue, writerValue) {
     assertGate(root, context);
     let journal;
     try {
-        journal = createPreparedWakeflowMaintenanceJournal(context.operationId, intentSource.intentDigest, planValue);
+        journal = createPreparedWakeflowMaintenanceJournal(context.operationId, intentSource.intentDigest, planValue, writerValue);
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceJournalError) {

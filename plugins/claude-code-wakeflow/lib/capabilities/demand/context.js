@@ -92,6 +92,7 @@ export async function openSliceContext(root, options) {
         store: new LedgerAuthorityStore(ledgerRoot),
         clock: options.clock,
         signal: options.signal,
+        writer: options.writer ?? null,
         holder: { handle: null },
     });
 }

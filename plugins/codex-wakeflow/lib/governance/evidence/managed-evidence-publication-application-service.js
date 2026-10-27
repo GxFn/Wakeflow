@@ -6,6 +6,7 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, openDemandOperationRoot, } from "../demand/demand-operation-authority-context.js";
+import { DemandEventStreamCommitError, parseDemandEventStreamCommitWriter, } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidenceSourceRoot, } from "./managed-evidence-configured-source-root.js";
 import { ManagedEvidencePublicationStageMaterializationError, materializeManagedEvidencePublicationStage, } from "./managed-evidence-publication-stage-materializer.js";
 import { computeManagedEvidencePublicationTransactionDigest, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
@@ -65,7 +66,7 @@ function parseOptions(value) {
             fail("input", error);
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal") ||
+    if (Object.keys(record).some((key) => key !== "signal" && key !== "writer") ||
         (record.signal !== undefined &&
             (typeof record.signal !== "object" ||
                 record.signal === null ||
@@ -73,7 +74,16 @@ function parseOptions(value) {
                 !(record.signal instanceof AbortSignal)))) {
         fail("input");
     }
-    return Object.freeze({ signal: record.signal });
+    let writer;
+    try {
+        writer = parseDemandEventStreamCommitWriter(record.writer, "$options.writer");
+    }
+    catch (error) {
+        if (error instanceof DemandEventStreamCommitError)
+            fail("input");
+        throw error;
+    }
+    return Object.freeze({ signal: record.signal, writer });
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
@@ -360,7 +370,7 @@ export class ManagedEvidencePublicationApplicationService {
                 if (sourceRoot !== null)
                     await closeSourceRoot(sourceRoot);
                 sourceRoot = undefined;
-                const event = await appendManagedEvidencePublicationEvent(context.demandRoot, transaction, options.signal);
+                const event = await appendManagedEvidencePublicationEvent(context.demandRoot, transaction, options.signal, options.writer);
                 const completion = await completeManagedEvidencePublicationTransaction(context.demandRoot, context.ledgerRoot, stored, event.disposition, options.signal);
                 result = Object.freeze({
                     disposition: "completed",
@@ -483,7 +493,7 @@ export class ManagedEvidencePublicationApplicationService {
                             await closeSourceRoot(sourceRoot);
                         sourceRoot = undefined;
                     }
-                    const event = await appendManagedEvidencePublicationEvent(roots.demandRoot, stored.transaction, options.signal);
+                    const event = await appendManagedEvidencePublicationEvent(roots.demandRoot, stored.transaction, options.signal, options.writer);
                     const completion = await completeManagedEvidencePublicationTransaction(roots.demandRoot, roots.ledgerRoot, stored, event.disposition, options.signal);
                     result = Object.freeze({
                         disposition: "completed",

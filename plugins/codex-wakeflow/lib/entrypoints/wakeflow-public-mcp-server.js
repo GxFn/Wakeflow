@@ -43,7 +43,7 @@ export function createWakeflowPublicMcpServer(options) {
             "Each tool description and Schema defines its exact input, effect, recovery, and disclosure boundary.",
         ].join(" "),
     });
-    const { serverName: _serverName, serverVersion: _serverVersion, beforeMutation, ...executors } = admitted;
-    registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors, beforeMutation);
+    const { serverName: _serverName, serverVersion: _serverVersion, beforeMutation, writer, ...executors } = admitted;
+    registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors, beforeMutation, writer ?? null);
     return server;
 }

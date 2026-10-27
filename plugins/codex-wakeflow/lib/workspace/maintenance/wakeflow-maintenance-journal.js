@@ -8,6 +8,7 @@ import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtim
 import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resource-declaration.js";
 import { parseWakeflowMaintenanceExecutionPlan, WakeflowMaintenanceExecutionPlanError, } from "./wakeflow-maintenance-execution-plan.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
+import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance journal input is invalid.",
     schema: "Wakeflow maintenance journal does not satisfy its Schema.",
@@ -44,8 +45,22 @@ function digest(value, path) {
 function nullableDigest(value, path) {
     return value === null ? null : digest(value, path);
 }
-/** 从 ready 且非空的 exact execution plan 创建初始 prepared journal。 */
-export function createPreparedWakeflowMaintenanceJournal(operationIdValue, intentDigestValue, planValue) {
+/** 可选写者戳的记录片段：没有戳即空片段，带戳即 `{ writer }`。 */
+function optionalWriterStamp(value, path, reason) {
+    let writer;
+    try {
+        writer = parseWakeflowMaintenanceWriter(value, path);
+    }
+    catch (error) {
+        if (error instanceof WakeflowMaintenanceWriterError)
+            fail(reason, error.path);
+        throw error;
+    }
+    return writer === null ? {} : { writer };
+}
+/** 从 ready 且非空的 exact execution plan 创建初始 prepared journal；`writerValue` 是可选写者戳。 */
+export function createPreparedWakeflowMaintenanceJournal(operationIdValue, intentDigestValue, planValue, writerValue) {
+    const stamp = optionalWriterStamp(writerValue, "$writer", "input");
     let operationId;
     try {
         operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
@@ -86,6 +101,7 @@ export function createPreparedWakeflowMaintenanceJournal(operationIdValue, inten
         checkpoint: 0,
         affectedStepId: null,
         state: "prepared",
+        ...stamp,
     });
 }
 /** 把任意内存值解析为严格、冻结的 maintenance journal（prepared、executing 或 terminal）。 */
@@ -138,6 +154,7 @@ export function parseWakeflowMaintenanceJournal(value) {
         checkpoint,
         affectedStepId,
         state,
+        ...optionalWriterStamp(validated.value.writer, "$journal.writer", "schema"),
     });
 }
 function journalRepresentation(journal) {
@@ -155,10 +172,17 @@ function journalRepresentation(journal) {
         checkpoint: journal.checkpoint,
         affectedStepId: journal.affectedStepId,
         state: journal.state,
+        ...(journal.writer === undefined ? {} : { writer: journal.writer }),
     };
 }
+function sameWriter(left, right) {
+    if (left === undefined || right === undefined)
+        return left === right;
+    return left.version === right.version && left.manifestDigest === right.manifestDigest;
+}
 function sameImmutableJournal(left, right) {
-    return (left.operationId === right.operationId &&
+    return (sameWriter(left.writer, right.writer) &&
+        left.operationId === right.operationId &&
         left.intentDigest === right.intentDigest &&
         left.action === right.action &&
         left.planDigest === right.planDigest &&

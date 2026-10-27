@@ -6,6 +6,7 @@ import { readStableResourceDirectory, StableDirectoryReadError, } from "../../fo
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandWindowIds, evaluateVerifyGates, } from "../../governance/demand/demand-verify-gates.js";
+import { DemandEventSourcingRepository } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { loadDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { inspectLedgerAuthorityLayout } from "../../governance/ledger/ledger-authority-layout.js";
 import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
@@ -17,12 +18,14 @@ import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
+import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
+import { readWakeflowMaintenanceJournalOrNull, WakeflowMaintenanceJournalStoreError, } from "../../workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { capStatusList, deriveNextActions, deriveWindowRuntime, deriveWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
+import { capStatusList, deriveNextActions, deriveServerRuntime, deriveWindowRuntime, deriveWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
 /** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
 const MAINTENANCE_RESIDUES_MAXIMUM = 64;
 const RESIDUE_NAME_MAXIMUM = 128;
@@ -252,55 +255,70 @@ function windowBindingOf(observation, windowId) {
     return null;
 }
 /**
- * 绑定窗口的运行身份：判定方式来自绑定所在宿主的画像（`surfaces.runtimeStaleness`），对照本进程
- * 路径上现在的制品——窗口重启后会加载的那份；规则本身在 decide.ts 的 `deriveWindowRuntime`。
+ * 绑定窗口的运行身份：判定方式来自绑定所在宿主的画像（`surfaces.runtimeStaleness`）；版本对照本进程
+ * 的制品版本（可跨宿主），摘要只对照绑定宿主条目自己读出的磁盘制品——对端宿主没有条目身份，摘要不比
+ * （R-ROOT-04）。规则本身在 decide.ts 的 `deriveWindowRuntime`。
  */
-function windowRuntimeOf(context, binding, bindingsObserved, installedManifestDigest) {
-    const staleness = binding === null
-        ? "unverified"
-        : (context.facade.hosts.find((host) => host.hostId === binding.hostId)?.resourceProfile
-            .surfaces.runtimeStaleness ?? "unverified");
+function windowRuntimeOf(context, binding, bindingsObserved, runtime) {
+    const host = binding === null
+        ? undefined
+        : context.facade.hosts.find((entry) => entry.hostId === binding.hostId);
+    const latest = binding === null
+        ? undefined
+        : context.observation.hooks
+            .find((entry) => entry.hostId === binding.hostId)
+            ?.latestBySession.get(binding.handleValue);
     return deriveWindowRuntime({
         bound: binding !== null,
         bindingsObserved,
-        staleness,
-        installedManifestDigest,
-        sessionStartObserverManifestDigest: binding === null
-            ? null
-            : (context.observation.hooks
-                .find((entry) => entry.hostId === binding.hostId)
-                ?.latestBySession.get(binding.handleValue)?.sessionStartObserverManifestDigest ?? null),
+        staleness: host?.resourceProfile.surfaces.runtimeStaleness ?? "unverified",
+        serverVersion: runtime.version,
+        installedManifestDigest: binding === null ? null : (runtime.installedByHost.get(binding.hostId) ?? null),
+        sessionStartObserverManifestDigest: latest?.sessionStartObserverManifestDigest ?? null,
+        sessionStartArtifactVersion: latest?.sessionStartArtifactVersion ?? null,
     });
 }
 /** 处于某一运行身份的绑定窗口（按拓扑顺序）；磁盘上的制品摘要每次调用只读一次。 */
 function runtimeWindowIds(context, status) {
     const bindingsObserved = context.observation.bindings.every((host) => host.status === "observed");
-    const installed = readRuntime(context).onDiskDigest;
+    const runtime = readRuntime(context);
     return context.snapshot.model.topology.windows
         .filter((window) => {
         const binding = windowBindingOf(context.observation, window.windowId);
         return (binding !== null &&
-            windowRuntimeOf(context, binding, bindingsObserved, installed).status === status);
+            windowRuntimeOf(context, binding, bindingsObserved, runtime).status === status);
     })
         .map((window) => window.windowId);
 }
 /**
- * 本进程脚下的制品是否已更新：启动时与现在磁盘上的 manifest 摘要不同。一次调用只读一次磁盘，
- * `view` 是 wire 上的 runtime 字段，`onDiskDigest` 供门使用。
+ * 本进程的制品状态（§13.127；版本轴 §3.6 C6）：启动时与现在磁盘上的 manifest 摘要不同即 `changed`；
+ * 任一宿主的会话曾在更高版本下启动即 `superseded`（规则在 decide.ts 的 `deriveServerRuntime`）。一次
+ * 调用只读一次磁盘：`view` 是 wire 上的 runtime 字段，其余供门与窗口比较使用——`installedByHost` 是
+ * 每个带身份的宿主条目读出的磁盘摘要，只有本进程所属的宿主带身份（R-ROOT-04）。
  */
 function readRuntime(context) {
     const artifact = context.facade.artifact;
     const manifestDigest = artifact?.manifestDigest ?? null;
-    const onDisk = artifact?.readCurrentManifestDigest() ?? null;
+    const version = artifact?.version ?? null;
+    const onDiskDigest = artifact?.readCurrentManifestDigest() ?? null;
+    const installedByHost = new Map(context.facade.hosts.map((host) => [host.hostId, host.artifact?.readCurrentManifestDigest() ?? null]));
+    const newestSessionStartVersion = newestWakeflowArtifactVersion(context.observation.hooks.flatMap((host) => [...host.latestBySession.values()].map((latest) => latest.sessionStartArtifactVersion)));
+    const server = deriveServerRuntime({
+        version,
+        manifestDigest,
+        onDiskDigest,
+        newestSessionStartVersion,
+    });
     return {
-        onDiskDigest: onDisk,
+        version,
+        onDiskDigest,
+        newestSessionStartVersion,
+        supersededBy: server.supersededBy,
+        installedByHost,
         view: {
             artifactManifestDigest: manifestDigest,
-            artifactOnDisk: manifestDigest === null || onDisk === null
-                ? "unknown"
-                : onDisk === manifestDigest
-                    ? "same"
-                    : "changed",
+            artifactVersion: version,
+            artifactOnDisk: server.artifactOnDisk,
         },
     };
 }
@@ -380,7 +398,7 @@ function windowRuntimeDomainView(observation) {
 function windowViews(context) {
     const { observation, snapshot } = context;
     const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
-    const installed = readRuntime(context).onDiskDigest;
+    const runtime = readRuntime(context);
     const intents = new Map();
     return snapshot.model.topology.windows.map((window) => {
         const binding = windowBindingOf(observation, window.windowId);
@@ -395,7 +413,7 @@ function windowViews(context) {
             lastObservation: lastObservationOf(observation, binding),
             attention: attentionOf(observation, binding),
             projection: windowProjectionOf(observation, window.windowId),
-            runtime: windowRuntimeOf(context, binding, bindingsObserved, installed),
+            runtime: windowRuntimeOf(context, binding, bindingsObserved, runtime),
             launchIntent: launchIntentOf(context, binding, window.windowId, intents),
         };
     });
@@ -571,11 +589,12 @@ function nextActionInput(context, runtime) {
     // pod 域读不出时 pods 是空列表，不是"没有 pod"：登记动作只在真的观察到 pod 时才排得出来。
     const podsObserved = observation.pods.status === "observed";
     return Object.freeze({
-        artifactServerOutdated: runtime.artifactOnDisk === "changed",
+        artifactServerOutdated: runtime.view.artifactOnDisk === "changed" || runtime.view.artifactOnDisk === "superseded",
+        artifactServerSupersededBy: runtime.supersededBy,
         artifactServerRefreshOwner: artifactServerRefreshOwnerOf(context),
         staleWindows: runtimeWindowIds(context, "stale").length,
         artifactServerUnavailable: context.facade.artifact !== undefined &&
-            (runtime.artifactManifestDigest === null || runtime.artifactOnDisk === "unknown"),
+            (runtime.view.artifactManifestDigest === null || runtime.view.artifactOnDisk === "unknown"),
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
         maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
         unregisteredWindows: bindingsObserved && podsObserved
@@ -706,7 +725,7 @@ function legacyResidueView(observation) {
 }
 async function assembleStatus(context, request) {
     const { observation, snapshot } = context;
-    const runtime = readRuntime(context).view;
+    const runtime = readRuntime(context);
     const actions = deriveNextActions(nextActionInput(context, runtime));
     const section = await routeSection(context, request.demandId);
     const claims = claimViews(observation);
@@ -743,7 +762,7 @@ async function assembleStatus(context, request) {
         hooks: hookViews(observation),
         unmergedAccepted: unmergedAccepted.entries,
         domains: domainViews(context),
-        runtime,
+        runtime: runtime.view,
         maintenance: maintenanceView(context.maintenance),
         hostAssets: observation.assets.map((asset) => ({
             hostId: asset.hostId,
@@ -901,16 +920,30 @@ async function strayJournals(context, activeDemandIds) {
         return null;
     }
 }
-/** 复用 demand 切片的门（治理层）：不扫描负载正文，所以没有 payload-privacy 门。 */
-async function demandGateReport(context, demand) {
+const UNREADABLE_WRITER = Object.freeze({
+    status: "unavailable",
+    newestVersion: null,
+});
+const UNREADABLE_DEMAND_READING = Object.freeze({
+    report: null,
+    writer: UNREADABLE_WRITER,
+});
+async function readDemandForVerify(context, demand) {
     if (demand.loaded === null)
-        return null;
+        return UNREADABLE_DEMAND_READING;
     let demandRoot = null;
+    let writer = UNREADABLE_WRITER;
     try {
         demandRoot = await openDemandOperationRoot(context.root, demand.demandId);
+        // 写者戳先于门报告：只读提交、不回放，根一打开就能读；之后门报告失败也不改变它。
+        const writers = await new DemandEventSourcingRepository(demandRoot).readWriters(signalOptions(context.options.signal));
+        writer = Object.freeze({
+            status: "observed",
+            newestVersion: newestWakeflowArtifactVersion(writers.map((entry) => entry?.version ?? null)),
+        });
         const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, new LedgerAuthorityStore(context.ledgerRoot), signalOptions(context.options.signal));
         const claim = await readRequirementClaimState(context.root, loaded.identity.source.requirementId, context.options.signal);
-        return await evaluateVerifyGates({
+        const report = await evaluateVerifyGates({
             workspaceRoot: context.root,
             ledgerRoot: context.ledgerRoot,
             snapshot: context.snapshot,
@@ -921,21 +954,48 @@ async function demandGateReport(context, demand) {
             payloadBlockers: null,
             signal: context.options.signal,
         });
+        return Object.freeze({ report, writer });
     }
     catch (error) {
         failIfAborted(error);
-        return null;
+        return Object.freeze({ report: null, writer });
     }
     finally {
         if (demandRoot !== null)
             await closeDemandOperationRoot(demandRoot);
     }
 }
+/**
+ * 维护日志（事务残留）里写者戳版本的最高值（C11）：维护协议读不出、或某份日志读不出即 unavailable；
+ * 没有日志或日志没有戳为 null。只读 `journal` 类残留，按 operationId 走日志仓库的读法，零写。
+ */
+async function maintenanceWriterFacts(context) {
+    if (context.maintenance.status !== "observed")
+        return UNREADABLE_WRITER;
+    const versions = [];
+    for (const residue of context.maintenance.residues) {
+        if (residue.kind !== "journal" || residue.operationId === null)
+            continue;
+        try {
+            const source = await readWakeflowMaintenanceJournalOrNull(context.root, residue.operationId);
+            versions.push(source?.journal.writer?.version ?? null);
+        }
+        catch (error) {
+            if (!(error instanceof WakeflowMaintenanceJournalStoreError))
+                throw error;
+            return UNREADABLE_WRITER;
+        }
+    }
+    return Object.freeze({
+        status: "observed",
+        newestVersion: newestWakeflowArtifactVersion(versions),
+    });
+}
 function gateStatus(report, name) {
     const found = report?.gates.find((entry) => entry.gate === name);
     return found?.status ?? "unavailable";
 }
-async function gateFacts(context, reports) {
+async function gateFacts(context, readings) {
     const { observation, snapshot } = context;
     const demands = observation.demands.value ?? [];
     const activeIds = new Set(demands.map((demand) => demand.demandId));
@@ -951,8 +1011,10 @@ async function gateFacts(context, reports) {
             server: context.facade.artifact === undefined
                 ? null
                 : {
+                    version: runtime.version,
                     manifestDigest: runtime.view.artifactManifestDigest,
                     onDiskDigest: runtime.onDiskDigest,
+                    newestSessionStartVersion: runtime.newestSessionStartVersion,
                 },
             staleWindows: runtimeWindowIds(context, "stale"),
             unverifiedWindows: runtimeWindowIds(context, "unverified"),
@@ -982,16 +1044,18 @@ async function gateFacts(context, reports) {
                 : [],
         },
         demands: demands.map((demand) => {
-            const report = reports.get(demand.demandId) ?? null;
+            const reading = readings.get(demand.demandId) ?? UNREADABLE_DEMAND_READING;
             return {
                 demandId: demand.demandId,
                 status: demand.status,
-                audit: gateStatus(report, "demand-root-audit"),
-                evidence: gateStatus(report, "evidence-integrity"),
+                audit: gateStatus(reading.report, "demand-root-audit"),
+                evidence: gateStatus(reading.report, "evidence-integrity"),
                 appendCandidates: demand.loaded?.inventory.appendCandidateCount ?? 0,
+                writer: reading.writer,
             };
         }),
         strayJournals: await strayJournals(context, activeIds),
+        maintenanceWriter: await maintenanceWriterFacts(context),
         claims: (observation.claims.value?.claims ?? []).map((claim) => ({
             windowId: claim.windowId,
             orphan: orphans.has(claim.claimId),
@@ -1060,20 +1124,20 @@ async function gateFacts(context, reports) {
 }
 async function assembleVerify(context, request) {
     const demands = context.observation.demands.value ?? [];
-    const reports = new Map();
+    const readings = new Map();
     for (const demand of demands)
-        reports.set(demand.demandId, await demandGateReport(context, demand));
-    const gates = deriveWorkspaceGates(await gateFacts(context, reports));
+        readings.set(demand.demandId, await readDemandForVerify(context, demand));
+    const gates = deriveWorkspaceGates(await gateFacts(context, readings));
     const { ok, summary } = summarizeGates(gates);
     let demandSection = null;
     if (request.demandId !== undefined) {
         // 活动集合本身读不出时不能替这个 Demand 下结论：它可能活着，只是这轮看不见（与 status 同一裁决）。
-        if (!reports.has(request.demandId) && context.observation.demands.status !== "observed") {
+        if (!readings.has(request.demandId) && context.observation.demands.status !== "observed") {
             fail("precondition-failed", "demands-unavailable", "$request.demandId");
         }
         // 在活动集合里但读不出（报告为 null）仍然是 current：它不是归档，也不是未知，只是这轮没有门。
-        if (reports.has(request.demandId)) {
-            const report = reports.get(request.demandId) ?? null;
+        if (readings.has(request.demandId)) {
+            const report = readings.get(request.demandId)?.report ?? null;
             demandSection = {
                 demandId: request.demandId,
                 status: "current",

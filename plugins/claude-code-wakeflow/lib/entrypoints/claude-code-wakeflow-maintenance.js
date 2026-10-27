@@ -1,4 +1,4 @@
-import { executeWakeflowMaintenancePublicRequest } from "../capabilities/workspace/maintain-workspace.js";
+import { executeWakeflowMaintenancePublicRequest, } from "../capabilities/workspace/maintain-workspace.js";
 import { executeClaudeCodeMaintenanceExecution, previewClaudeCodeMaintenanceExecution, recoverClaudeCodeMaintenanceExecution, } from "../hosts/claude-code/claude-code-maintenance-execution.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -24,7 +24,7 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
     apply: executeClaudeCodeMaintenanceExecution,
     recover: recoverClaudeCodeMaintenanceExecution,
 });
-/** 执行一个经过公共合同准入的 Claude Code workspace Maintenance 请求。 */
+/** 执行一个经过公共合同准入的 Claude Code workspace Maintenance 请求；`options.writer` 是执行上下文带来的本进程写者戳（C11）。 */
 export async function executeClaudeCodeWakeflowMaintenance(value, options = {}) {
     return executeWakeflowMaintenancePublicRequest(CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE, value, options);
 }

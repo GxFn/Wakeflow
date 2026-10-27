@@ -504,16 +504,30 @@ export async function listPodWorktreeReceipts(root, hostId, podId, options = {})
     return Object.freeze(receipts.sort((left, right) => left.repositoryId < right.repositoryId ? -1 : left.repositoryId > right.repositoryId ? 1 : 0));
 }
 /**
- * 不带宿主身份的消费者（demand 生命周期、证据）按 podId 在两个宿主目录里找回执：
- * 一个 pod 的窗口只在一个宿主上登记，取第一个有回执的宿主。
+ * 不带宿主身份的消费者（demand 生命周期、证据、观察、pod 关闭）按 podId 合并全部宿主目录里的
+ * 回执（open-items W9）：双宿主初始化的工作区里 pod 的产品窗口可以在任一宿主登记，尚未初始化的
+ * 宿主目录即空集；按仓库标识唯一且排序。同一仓库在两个宿主都有回执是矛盾的事实（两个宿主各认一个
+ * 检出），显式 `io-failure/receipt-conflict`，不任取其一。
  */
 export async function listPodWorktreeReceiptsAnyHost(root, podId, options = {}) {
+    const byRepositoryId = new Map();
     for (const hostId of WAKEFLOW_HOST_IDS) {
-        const receipts = await listPodWorktreeReceipts(root, hostId, podId, options);
-        if (receipts.length > 0)
-            return receipts;
+        for (const receipt of await listPodWorktreeReceipts(root, hostId, podId, options)) {
+            const existing = byRepositoryId.get(receipt.repositoryId);
+            if (existing !== undefined) {
+                fail("io-failure", "receipt-conflict", "$receipt", {
+                    details: {
+                        podId,
+                        repositoryId: receipt.repositoryId,
+                        hostId: existing.hostId,
+                        otherHostId: receipt.hostId,
+                    },
+                });
+            }
+            byRepositoryId.set(receipt.repositoryId, receipt);
+        }
     }
-    return Object.freeze([]);
+    return Object.freeze([...byRepositoryId.values()].sort((left, right) => left.repositoryId < right.repositoryId ? -1 : left.repositoryId > right.repositoryId ? 1 : 0));
 }
 /**
  * 本宿主上除 `excludePodId` 之外、回执路径等于该检出的第一份回执（§13.128，旧实现 T03
@@ -572,6 +586,18 @@ export async function retirePodWorktreeReceipt(root, hostId, podId, repositoryId
         }
         throw error;
     }
+}
+/**
+ * 删除一个 pod 在全部宿主目录里的回执目录（open-items W7）：pod 关闭完成与孤儿目录对账不看调用
+ * 方是哪个宿主；返回删掉的宿主目录数，尚未初始化的宿主目录不存在即不计。
+ */
+export async function retirePodReceiptsAllHosts(root, podId) {
+    let removed = 0;
+    for (const hostId of WAKEFLOW_HOST_IDS) {
+        if (await retirePodReceipts(root, hostId, podId))
+            removed += 1;
+    }
+    return removed;
 }
 /** 删除一个 pod 的整个回执目录（Wakeflow 自己的私有文件）；不存在即 false。 */
 export async function retirePodReceipts(root, hostId, podId) {

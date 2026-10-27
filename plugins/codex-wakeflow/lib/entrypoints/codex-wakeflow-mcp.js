@@ -9,7 +9,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wak
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
-import { resolveWakeflowArtifactIdentity } from "./wakeflow-artifact-identity.js";
+import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -29,26 +29,49 @@ const CODEX_HOST_FACADE = Object.freeze({
     /** Codex 没有已发布资产面，没有东西可核对（F1）。 */
     assets: null,
 });
+/** pod 读两个宿主的绑定与投影：对端仍握着的窗口登记也阻塞关闭完成（open-items W7）。 */
+const CODEX_POD_FACADE = Object.freeze({
+    hostId: "codex",
+    resourceProfile: codexWorkspaceHostResourceProfile,
+    identityProfile: codexWindowHostIdentityProfile,
+    hosts: Object.freeze([
+        Object.freeze({
+            hostId: "codex",
+            resourceProfile: codexWorkspaceHostResourceProfile,
+            identityProfile: codexWindowHostIdentityProfile,
+        }),
+        Object.freeze({
+            hostId: "claude-code",
+            resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+            identityProfile: claudeCodeWindowHostIdentityProfile,
+        }),
+    ]),
+});
 /**
  * 观察读两个宿主的绑定与 hook 通道：制品固定携带两份纯数据 profile（§13.94 D1）。
  * 状态栏资产是 Claude 宿主的执行内容，不进 Codex 制品；观察只核对当前宿主的资产，
  * 对端条目固定为 null。
  */
+const CODEX_ARTIFACT = resolveWakeflowArtifactIdentity(import.meta.url);
 const CODEX_OBSERVATION_FACADE = Object.freeze({
     hostId: "codex",
-    artifact: resolveWakeflowArtifactIdentity(import.meta.url),
+    // 本进程启动时固定的制品身份（§13.127；版本轴 §3.6 C6）。
+    artifact: CODEX_ARTIFACT,
     hosts: Object.freeze([
         Object.freeze({
             hostId: "codex",
             resourceProfile: codexWorkspaceHostResourceProfile,
             identityProfile: codexWindowHostIdentityProfile,
             statuslineAsset: null,
+            artifact: CODEX_ARTIFACT,
         }),
         Object.freeze({
             hostId: "claude-code",
             resourceProfile: claudeCodeWorkspaceHostResourceProfile,
             identityProfile: claudeCodeWindowHostIdentityProfile,
             statuslineAsset: null,
+            // 对端制品是另一份安装：本进程读不到它的摘要，窗口只按版本比（R-ROOT-04）。
+            artifact: null,
         }),
     ]),
 });
@@ -58,10 +81,12 @@ export function createCodexWakeflowMcpServer(serverVersion) {
         serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
         beforeMutation: CODEX_OBSERVATION_FACADE.artifact.assertUnchanged,
+        // C11：每次调用的执行上下文带本进程的写者戳；没有 manifest 的构建为 null。
+        writer: wakeflowArtifactWriterOf(CODEX_ARTIFACT),
         ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,
         executeMaintenance: executeCodexWakeflowMaintenance,
         registerWindowHostBinding: (value, options) => executeWindowBindingRequest(CODEX_HOST_FACADE, value, options),
-        managePod: (value, options) => executePodRequest(CODEX_HOST_FACADE, value, options),
+        managePod: (value, options) => executePodRequest(CODEX_POD_FACADE, value, options),
         inspectStatus: (value, options) => executeStatusRequest(CODEX_OBSERVATION_FACADE, value, options),
         verifyWorkspace: (value, options) => executeVerifyRequest(CODEX_OBSERVATION_FACADE, value, options),
         prepareDelivery: (value, options) => executePrepareDeliveryRequest(CODEX_HOST_FACADE, value, options),

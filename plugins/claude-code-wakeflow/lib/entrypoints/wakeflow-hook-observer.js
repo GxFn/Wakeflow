@@ -10,6 +10,7 @@ import { createHostHookObservation, writeHostHookObservation, } from "../kernel/
 import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { hostRuntimeRootRef, parseWakeflowHostId, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../kernel/layout.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
+import { parseWakeflowArtifactManifestIdentity, } from "../kernel/wakeflow-artifact-identity.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
  *
@@ -235,13 +236,14 @@ function withOptionalField(required, field, value) {
     }
 }
 /** 必填字段不合合同即 null（stdin-invalid）；可选字段各自降级；写入阶段只剩 I/O 失败。 */
-function recordInput(hostId, payload, event, clock, artifactManifestDigest) {
+function recordInput(hostId, payload, event, clock, artifactManifestDigest, artifactVersion) {
     const required = requiredInput(hostId, payload, event, clock);
     if (required === null)
         return null;
     return Object.freeze({
         ...required,
         artifactManifestDigest: artifactManifestDigest ?? null,
+        artifactVersion: artifactVersion ?? null,
         turnId: degradeToKernel(required, "turnId", payload.turnId),
         promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
         lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
@@ -636,7 +638,7 @@ async function observe(input, written) {
     if (payload.value.event === null)
         return outcome("event-unknown", written);
     const clock = typeof input.clock === "function" ? input.clock : defaultClock;
-    const record = recordInput(host.value, payload.value, payload.value.event, clock, input.artifactManifestDigest);
+    const record = recordInput(host.value, payload.value, payload.value.event, clock, input.artifactManifestDigest, input.artifactVersion);
     if (record === null)
         return outcome("stdin-invalid", written);
     const subject = await resolveSubject(payload.value.cwd, isRecord(input.env) ? input.env : {});
@@ -753,13 +755,14 @@ async function readStandardInput() {
     return Buffer.concat(chunks);
 }
 /**
- * 观察脚本所属制品的 manifest 摘要（§13.127）：制品根是 `lib/entrypoints/<本文件>` 的上两级；
- * 测试构建没有 manifest，读成 null。用 URL 相对解析而不引入 node:url，保持入口闭包不变（D1）。
+ * 观察脚本所属制品的身份（§13.127；版本轴 §3.6 C6）：制品根是 `lib/entrypoints/<本文件>` 的上两级，
+ * 摘要与 `version` 从同一次读出的 manifest 字节解析；测试构建没有 manifest，读成 null。用 URL 相对
+ * 解析而不引入 node:url，保持入口闭包不变（D1）。
  */
-async function artifactManifestDigestOf(importMetaUrl) {
+async function artifactIdentityOf(importMetaUrl) {
     try {
         const bytes = await readFile(new URL("../../artifact-manifest.json", importMetaUrl));
-        return computeSha256Digest(new Uint8Array(bytes), "$artifactManifest");
+        return parseWakeflowArtifactManifestIdentity(new Uint8Array(bytes));
     }
     catch {
         return null;
@@ -774,11 +777,13 @@ export async function main() {
     registerProcessGuards();
     try {
         const stdin = await readStandardInput();
+        const artifact = await artifactIdentityOf(import.meta.url);
         const result = await runWakeflowHookObserver({
             argv: process.argv.slice(2),
             env: process.env,
             stdin,
-            artifactManifestDigest: await artifactManifestDigestOf(import.meta.url),
+            artifactManifestDigest: artifact?.manifestDigest ?? null,
+            artifactVersion: artifact?.version ?? null,
         });
         if (result.code !== null)
             writeStderrLine(result.code);

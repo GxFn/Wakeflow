@@ -13,6 +13,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
+import { claudeCodeMaintenanceMaterializesMissingSupportRoot } from "./claude-code-portable-settings-composition.js";
 import { CLAUDE_CODE_SETTINGS_DIRECTORY_REF } from "./claude-code-portable-settings-publication.js";
 import { CLAUDE_CODE_STATUSLINE_MARKER, claudeCodeStatuslineCommand, } from "./claude-code-statusline-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-host-resource-profile.js";
@@ -249,7 +250,7 @@ function managedSurfaces(model) {
         .sort((left, right) => left.surfaceId < right.surfaceId ? -1 : left.surfaceId > right.surfaceId ? 1 : 0)
         .map((surface) => Object.freeze({ surfaceId: surface.surfaceId, configuredPlacement: surface.path })));
 }
-/** 支撑面根的实际位置：缺失即 missing（fresh-initialize 会先建它），别的准入失败即 `placement`。 */
+/** 支撑面根的实际位置：缺失即 missing（fresh-initialize 与 reconcile 会先建它），别的准入失败即 `placement`。 */
 async function surfacePlacement(workspaceRoot, model, surface) {
     let placements;
     try {
@@ -300,12 +301,14 @@ async function withSurfaceRoot(absolutePath, run) {
         fail("close-failure", "$supportRoot");
     return result.value;
 }
-/** 一个支撑面：面根不在时 fresh-initialize 当作缺文件，其他动作不计划；读不出即带 surfaceId 的 blocker。 */
+/** 一个支撑面：面根不在时 fresh-initialize 与 reconcile 当作缺文件（维护先重建根），reconfigure 不计划；读不出即带 surfaceId 的 blocker。 */
 async function planSurface(workspaceRoot, model, surface, action, entry, signal) {
     const placement = await surfacePlacement(workspaceRoot, model, surface);
     if (placement.state === "missing") {
         return {
-            operation: action === "fresh-initialize" ? planFromCurrent(null, entry, surface) : null,
+            operation: claudeCodeMaintenanceMaterializesMissingSupportRoot(action)
+                ? planFromCurrent(null, entry, surface)
+                : null,
         };
     }
     try {
@@ -322,8 +325,9 @@ async function planSurface(workspaceRoot, model, surface, action, entry, signal)
 }
 /**
  * 每个 wakeflow-managed 支撑面一条零写计划（复审 M2）：面根在就按它的本地设置算；面根不在时
- * fresh-initialize 当作缺文件（维护会先建根），其他动作跳过（portable settings 的组合已报
- * `support-root-missing`）；文件读不出不抛，记一条带 surfaceId 的 blocker。
+ * fresh-initialize 与 reconcile 当作缺文件（维护的共享步先重建根，宿主操作依赖它；open-items W5），
+ * reconfigure 跳过（portable settings 的组合已报 `support-root-missing`）；文件读不出不抛，记一条带
+ * surfaceId 的 blocker。
  */
 export async function planClaudeCodeStatuslineSettingsSurfaceOperations(workspaceRoot, options) {
     assertRoot(workspaceRoot);

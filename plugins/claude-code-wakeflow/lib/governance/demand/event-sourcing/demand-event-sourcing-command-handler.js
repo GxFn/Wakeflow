@@ -4,7 +4,7 @@ import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha2
 import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
 import { computeDemandEventSourcingCommandDigest, DemandEventSourcingDecisionError, decideDemandEventSourcingCommand, parseDemandEventSourcingCommand, } from "./demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "./demand-event-sourcing-repository.js";
-import { DemandEventStreamCommitError, prepareDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
+import { DemandEventStreamCommitError, parseDemandEventStreamCommitWriter, prepareDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
 import { DemandFileEventStoreError } from "./demand-file-event-store.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing Command Handler input is invalid.",
@@ -25,7 +25,13 @@ export class DemandEventSourcingCommandHandlerError extends Error {
         this.path = path;
     }
 }
-const OPTION_FIELDS = new Set(["commitId", "expectedStreamRevision", "idempotency", "signal"]);
+const OPTION_FIELDS = new Set([
+    "commitId",
+    "expectedStreamRevision",
+    "idempotency",
+    "writer",
+    "signal",
+]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 function fail(reason, path) {
     throw new DemandEventSourcingCommandHandlerError(reason, path);
@@ -97,10 +103,20 @@ function parseOptions(value) {
         }
         idempotency = Object.freeze({ key: bound.key, requestDigest });
     }
+    let writer;
+    try {
+        writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
+    }
+    catch (error) {
+        if (error instanceof DemandEventStreamCommitError)
+            fail("input", "$/writer");
+        throw error;
+    }
     return Object.freeze({
         commitId,
         expectedStreamRevision: expected,
         ...(idempotency === undefined ? {} : { idempotency }),
+        ...(writer === null ? {} : { writer }),
         ...(signal === undefined ? {} : { signal }),
     });
 }
@@ -242,6 +258,9 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
             commandDigest,
             events,
             ...(options.idempotency === undefined ? {} : { idempotency: options.idempotency }),
+            ...(options.writer === undefined || options.writer === null
+                ? {}
+                : { writer: options.writer }),
         });
     }
     catch (error) {

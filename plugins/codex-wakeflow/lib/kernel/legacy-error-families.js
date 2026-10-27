@@ -109,6 +109,7 @@ export const LEGACY_ERROR_CODE_FAMILIES = Object.freeze({
     "wakeflow-maintenance-journal": "precondition-failed",
     "wakeflow-maintenance-journal-store": "precondition-failed",
     "wakeflow-maintenance-operation-id": "precondition-failed",
+    "wakeflow-maintenance-writer": "invalid-request",
     "wakeflow-managed-block-file": "precondition-failed",
     "wakeflow-managed-support-resource-catalog": "precondition-failed",
     "wakeflow-managed-support-root-materialization": "precondition-failed",

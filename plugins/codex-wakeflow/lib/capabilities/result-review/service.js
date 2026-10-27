@@ -15,7 +15,7 @@ import { DemandEventSourcingCommandHandlerError, executeDemandEventSourcingComma
 import { parseDemandEventSourcingCommand, } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { parseDemandEventStreamRevision } from "../../governance/demand/event-sourcing/demand-event-stream-position.js";
 import { computeDemandAggregateStateDigest, decideTargetResultReviewInDemandAggregateState, } from "../../governance/demand/model/demand-aggregate-state.js";
 import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, MANAGED_EVIDENCE_PAYLOAD_LIMITS, } from "../../governance/evidence/managed-evidence-manifest.js";
@@ -250,13 +250,14 @@ async function boundCommit(repository, binding, signal) {
         mapRepositoryError(error);
     }
 }
-async function appendCommand(repository, command, binding, signal) {
+async function appendCommand(repository, command, binding, options) {
     try {
         return await executeDemandEventSourcingCommand(repository, command, {
             commitId: binding.commitId,
             expectedStreamRevision: binding.expectedStreamRevision,
             idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
-            ...signalOptions(signal),
+            writer: options.writer ?? null,
+            ...signalOptions(options.signal),
         });
     }
     catch (error) {
@@ -613,7 +614,7 @@ async function executeImport(context, input, binding) {
         callback: issued.callback,
         evidenceResolution,
     });
-    const commandResult = await appendCommand(repository, command, binding, options.signal);
+    const commandResult = await appendCommand(repository, command, binding, options);
     if (commandResult.disposition === "idempotent")
         return replayImport(context, commandResult);
     await releaseFence(context, envelope.route.windowId, result.delivery.fence);
@@ -1172,7 +1173,7 @@ async function executeImplementationDecision(context, input, binding) {
         commandVersion: 1,
         decision,
     });
-    const commandResult = await appendCommand(repository, command, binding, options.signal);
+    const commandResult = await appendCommand(repository, command, binding, options);
     if (commandResult.disposition === "idempotent") {
         return replayDecision(commandResult, "WakeflowControllerImplementationReviewDecision");
     }
@@ -1338,7 +1339,7 @@ async function executeTestDecision(context, input, binding) {
         decision,
         ...(authorization === undefined ? {} : { authorization }),
     });
-    const commandResult = await appendCommand(repository, command, binding, options.signal);
+    const commandResult = await appendCommand(repository, command, binding, options);
     if (commandResult.disposition === "idempotent") {
         return replayDecision(commandResult, "WakeflowControllerTestReviewDecision");
     }

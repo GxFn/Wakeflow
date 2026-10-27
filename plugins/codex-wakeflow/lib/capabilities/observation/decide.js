@@ -1,9 +1,12 @@
 import { WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, } from "../../kernel/layout.js";
+import { compareWakeflowArtifactVersions, newestWakeflowArtifactVersion, } from "../../kernel/wakeflow-artifact-identity.js";
 /**
- * 绑定窗口的运行身份（ADR-0017 D3，§13.161）：hook 记录只标识观察器，不证明窗口的 MCP 或指令已
- * 重载，所以绑定窗口缺省是 unverified。宿主声明可按启动记录判定时，会话最近一次启动记录的观察器
- * 摘要不等于磁盘上的制品 ⇒ 那个会话没有在更新之后重启过，报 stale，由 Controller 就地重启；
- * 反方向（启动记录新 ⇒ 已重载）仍不成立，所以 current 从不被断言。
+ * 绑定窗口的运行身份（ADR-0017 D3，§13.161；版本轴 1.2 计划 §3.6 C6）：hook 记录只标识观察器，不证明
+ * 窗口的 MCP 或指令已重载，所以绑定窗口缺省是 unverified。宿主声明可按启动记录判定时，先比版本：会话
+ * 最近一次启动记录的版本低于本进程 ⇒ 那个会话没有在更新之后重启过，报 stale；高于本进程 ⇒ 过期的是
+ * 服务进程（`superseded`），窗口不标 stale。版本相等或记录没有版本时再比摘要，而且只在绑定宿主的制品
+ * 摘要读得到时比（本宿主）；对端宿主一律 unverified。反方向（启动记录新 ⇒ 已重载）仍不成立，所以
+ * current 从不被断言。
  */
 export function deriveWindowRuntime(input) {
     if (!input.bound) {
@@ -11,13 +14,50 @@ export function deriveWindowRuntime(input) {
             ? Object.freeze({ status: "unregistered", reason: null })
             : Object.freeze({ status: "unverified", reason: "binding-unavailable" });
     }
-    if (input.staleness === "session-start-observer-digest" &&
-        input.installedManifestDigest !== null &&
+    const unverified = Object.freeze({
+        status: "unverified",
+        reason: "host-runtime-association-unavailable",
+    });
+    if (input.staleness !== "session-start-observer-digest")
+        return unverified;
+    const stale = Object.freeze({
+        status: "stale",
+        reason: "session-started-under-older-artifact",
+    });
+    if (input.serverVersion !== null && input.sessionStartArtifactVersion !== null) {
+        const order = compareWakeflowArtifactVersions(input.sessionStartArtifactVersion, input.serverVersion);
+        if (order < 0)
+            return stale;
+        if (order > 0)
+            return unverified;
+    }
+    if (input.installedManifestDigest !== null &&
         input.sessionStartObserverManifestDigest !== null &&
         input.sessionStartObserverManifestDigest !== input.installedManifestDigest) {
-        return Object.freeze({ status: "stale", reason: "session-started-under-older-artifact" });
+        return stale;
     }
-    return Object.freeze({ status: "unverified", reason: "host-runtime-association-unavailable" });
+    return unverified;
+}
+/**
+ * 服务进程自身的制品状态（§13.127；§3.6 C6）：先看版本轴——任一会话的启动版本高于本进程，本进程就是
+ * 过期的那一个，不管它脚下的 manifest 有没有变；再看摘要轴（同路径覆盖）。两条轴都要有 manifest。
+ */
+export function deriveServerRuntime(input) {
+    if (input.manifestDigest === null || input.onDiskDigest === null) {
+        return Object.freeze({ artifactOnDisk: "unknown", supersededBy: null });
+    }
+    if (input.version !== null &&
+        input.newestSessionStartVersion !== null &&
+        compareWakeflowArtifactVersions(input.newestSessionStartVersion, input.version) > 0) {
+        return Object.freeze({
+            artifactOnDisk: "superseded",
+            supersededBy: input.newestSessionStartVersion,
+        });
+    }
+    return Object.freeze({
+        artifactOnDisk: input.onDiskDigest === input.manifestDigest ? "same" : "changed",
+        supersededBy: null,
+    });
 }
 const NEXT_ACTIONS_MAXIMUM = 64;
 const WORKSPACE_MAINTENANCE_FRONTIER = "workspace-maintenance";
@@ -45,7 +85,7 @@ export function deriveNextActions(input) {
             owner: input.artifactServerRefreshOwner,
             tool: null,
             reason: "runtime-artifact-outdated",
-            subject: null,
+            subject: input.artifactServerSupersededBy,
         });
     }
     if (input.staleWindows > 0) {
@@ -389,6 +429,14 @@ function podsGate(facts) {
     const failing = codes.some((code) => !PENDING_POD_CODE_SUFFIXES.some((suffix) => code.endsWith(suffix)));
     return gate("pod-execution-location", "pod", failing ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes));
 }
+/** 服务进程过期的门码：就地覆盖报裸码；被更高版本取代时带上那个版本，Controller 据此知道要换到哪一份（§3.6 C6）。 */
+function serverOutdatedCode(view) {
+    if (view === null)
+        return null;
+    if (view.artifactOnDisk === "superseded")
+        return `server-outdated:${view.supersededBy}`;
+    return view.artifactOnDisk === "changed" ? "server-outdated" : null;
+}
 /**
  * Serving process and peer runtime evidence have distinct subjects (ADR-0017). A window whose
  * session started under an older artifact is proven stale (fail); a window without host
@@ -397,19 +445,49 @@ function podsGate(facts) {
  */
 function runtimeArtifactGate(facts) {
     const { server, staleWindows, unverifiedWindows } = facts.runtime;
-    const manifestDigest = server?.manifestDigest ?? null;
-    const onDiskDigest = server?.onDiskDigest ?? null;
-    const changed = manifestDigest !== null && onDiskDigest !== null && manifestDigest !== onDiskDigest;
-    const unavailable = server !== null && (manifestDigest === null || onDiskDigest === null);
+    const view = server === null ? null : deriveServerRuntime(server);
+    const outdated = serverOutdatedCode(view);
+    const unavailable = view?.artifactOnDisk === "unknown";
     const codes = [
         ...(unavailable ? ["manifest-unavailable"] : []),
-        ...(changed ? ["server-outdated"] : []),
+        ...(outdated === null ? [] : [outdated]),
         ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
         ...(unverifiedWindows.length > 0
             ? [`window-runtime-unverified:${unverifiedWindows.length}`]
             : []),
     ];
-    return gate("runtime-artifact", "runtime", changed || staleWindows.length > 0 ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes) ?? (manifestDigest === null ? "not-applicable" : null));
+    return gate("runtime-artifact", "runtime", outdated !== null || staleWindows.length > 0 ? "fail" : unavailable ? "unavailable" : "pass", joinCodes(codes) ?? (server === null ? "not-applicable" : null));
+}
+/**
+ * 版本轴反过来看（C11，计划 §3.6）：活动 Demand 流或维护日志里有记录是比本进程更新的构建写的，本进程
+ * 就不该再往这个工作区写——它会按旧规则续写新构建的流。任一写者戳的版本高于本进程版本即 fail，码
+ * `stream-newer:<version>`；没有流、没有戳或本进程没有版本（测试构建）即 pass；只有读不到流或维护日志时
+ * unavailable。与 runtime-artifact 的 `server-outdated` 同一条出路：刷新运行时。
+ */
+function artifactOlderThanStreamGate(facts) {
+    const name = "artifact-older-than-stream";
+    const domain = facts.domains.demands;
+    if (domain.status !== "observed") {
+        return gate(name, "runtime", "unavailable", domainCode("demands", domain));
+    }
+    const serverVersion = facts.runtime.server?.version ?? null;
+    const newest = newestWakeflowArtifactVersion([
+        ...facts.demands.map((demand) => demand.writer.newestVersion),
+        facts.maintenanceWriter.newestVersion,
+    ]);
+    if (serverVersion !== null &&
+        newest !== null &&
+        compareWakeflowArtifactVersions(newest, serverVersion) > 0) {
+        return gate(name, "runtime", "fail", `stream-newer:${newest}`);
+    }
+    const unreadableStreams = facts.demands.filter((demand) => demand.writer.status !== "observed").length;
+    const unreadable = [
+        ...(unreadableStreams > 0 ? [`streams-unreadable:${unreadableStreams}`] : []),
+        ...(facts.maintenanceWriter.status === "observed" ? [] : ["maintenance-journal:unavailable"]),
+    ];
+    if (unreadable.length > 0)
+        return gate(name, "runtime", "unavailable", joinCodes(unreadable));
+    return gate(name, "runtime", "pass", serverVersion === null ? "not-applicable" : null);
 }
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
 function assetsGate(facts) {
@@ -464,7 +542,7 @@ function projectionGate(facts) {
     }
     return gate("active-projection", "active-projection", "pass", null, evidence);
 }
-/** 十五道工作区门，按名字排序；每门只看纯事实。 */
+/** 十六道工作区门，按名字排序；每门只看纯事实。 */
 export function deriveWorkspaceGates(facts) {
     const gates = [
         configGate(facts),
@@ -479,6 +557,7 @@ export function deriveWorkspaceGates(facts) {
         assetsGate(facts),
         projectionGate(facts),
         runtimeArtifactGate(facts),
+        artifactOlderThanStreamGate(facts),
     ];
     return Object.freeze([...gates].sort((left, right) => left.name.localeCompare(right.name)));
 }
@@ -494,8 +573,8 @@ export function summarizeGates(gates) {
 }
 /**
  * verify 的 next：不通过时列出未通过的门。runtime-artifact 失败先于维护：`server-outdated`
- * 只能由用户重连服务。Peer runtime 缺证据时只报告，不能用 hook 代替；
- * 可修的其他门先交给维护。
+ * 只能由用户重连服务；artifact-older-than-stream 的 `stream-newer:<版本>` 是同一件事从流的
+ * 一侧看到，走同一条出路。Peer runtime 缺证据时只报告，不能用 hook 代替；可修的其他门先交给维护。
  */
 export function verifyNext(gates, artifactServerRefreshOwner) {
     const failing = gates.filter((entry) => entry.status !== "pass");
@@ -508,7 +587,9 @@ export function verifyNext(gates, artifactServerRefreshOwner) {
         });
     }
     const blockers = Object.freeze(failing.map((entry) => `${entry.name}:${entry.status}`));
-    const artifactCodes = failing.find((entry) => entry.name === "runtime-artifact")?.code?.split(",") ?? [];
+    const artifactCodes = failing
+        .filter((entry) => entry.name === "runtime-artifact" || entry.name === "artifact-older-than-stream")
+        .flatMap((entry) => entry.code?.split(",") ?? []);
     if (artifactCodes.includes("manifest-unavailable")) {
         return Object.freeze({
             frontier: "runtime-artifact-unavailable",
@@ -517,7 +598,9 @@ export function verifyNext(gates, artifactServerRefreshOwner) {
             blockers,
         });
     }
-    if (artifactCodes.includes("server-outdated")) {
+    if (artifactCodes.some((code) => code === "server-outdated" ||
+        code.startsWith("server-outdated:") ||
+        code.startsWith("stream-newer:"))) {
         return Object.freeze({
             frontier: "runtime-artifact-outdated",
             owner: artifactServerRefreshOwner,

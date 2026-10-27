@@ -186,7 +186,12 @@ function mapCommandError(error) {
 }
 async function appendLifecycleEvent(context, handle, command, commitId, expectedStreamRevision) {
     try {
-        const result = await executeDemandEventSourcingCommand(new DemandEventSourcingRepository(handle.demandRoot), command, { commitId: commitIdOf(commitId), expectedStreamRevision, ...signalOptions(context.signal) });
+        const result = await executeDemandEventSourcingCommand(new DemandEventSourcingRepository(handle.demandRoot), command, {
+            commitId: commitIdOf(commitId),
+            expectedStreamRevision,
+            writer: context.writer,
+            ...signalOptions(context.signal),
+        });
         return Object.freeze({
             receipt: Object.freeze({
                 eventId: result.commit.events[0].eventId,

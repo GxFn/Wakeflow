@@ -229,7 +229,23 @@ export class DemandEventSourcingRepository {
         return Object.freeze({
             aggregate: replayCommits(null, stream.commits),
             replayedCommitCount: stream.commits.length,
+            writers: Object.freeze(stream.commits.map((commit) => commit.writer ?? null)),
         });
+    }
+    /**
+     * 每条提交的写者戳，按 commitSequence（缺席为 `null`；空流为空列表）。只读提交、不回放事件：
+     * verify 的 `artifact-older-than-stream` 门拿它求流里写者版本的最高值（C11 的版本轴）。
+     */
+    async readWriters(options) {
+        const signal = parseSignal(options);
+        let stream;
+        try {
+            stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
+        }
+        catch (error) {
+            mapStoreError(error);
+        }
+        return Object.freeze(stream.commits.map((commit) => commit.writer ?? null));
     }
     /**
      * 从提交1开始只扫描一次完整事件流，同时返回TaskPackage与TargetResult历史来源。

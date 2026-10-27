@@ -20,6 +20,7 @@ import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
 import { HOST_HOOK_FILE_NAME_PATTERN as FILE_NAME_PATTERN, partitionedHostHookRef, visitHostHookDirectory, } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
+import { isWakeflowArtifactVersion } from "./wakeflow-artifact-identity.js";
 /**
  * Host hooks persist private facts, never message bodies. Record schema and ids
  * remain v1. New writes use UTC-day/digest-prefix partitions; flat v1 records are
@@ -102,8 +103,12 @@ const RECORD_KEYS = Object.freeze([
     "lastAssistantMessageDigest",
     "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167）。 */
-const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest", "notificationType"]);
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze([
+    "artifactManifestDigest",
+    "artifactVersion",
+    "notificationType",
+]);
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
  * 文件，名字精确符合 foundation 的暂存命名，且是 `create`、权限位 0600——`writeHostHookObservation`
@@ -152,6 +157,13 @@ function optionalNotificationType(value, path) {
 }
 function optionalDigest(value, path) {
     return value === null || value === undefined ? null : parseSha256Digest(value, path);
+}
+function optionalArtifactVersion(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (!isWakeflowArtifactVersion(value))
+        fail("invalid-request", "hook-artifact-version", path);
+    return value;
 }
 function cwd(value, path) {
     if (typeof value !== "string" ||
@@ -211,6 +223,7 @@ export function createHostHookObservation(input) {
         lastAssistantMessageDigest: optionalDigest(input.lastAssistantMessageDigest, "$observation.lastAssistantMessageDigest"),
         transcriptRef: optionalText(input.transcriptRef, "$observation.transcriptRef"),
         artifactManifestDigest: optionalDigest(input.artifactManifestDigest, "$observation.artifactManifestDigest"),
+        artifactVersion: optionalArtifactVersion(input.artifactVersion, "$observation.artifactVersion"),
         notificationType: optionalNotificationType(input.notificationType, "$observation.notificationType"),
     };
     return Object.freeze({
@@ -245,6 +258,7 @@ function parseHostHookObservation(value) {
         lastAssistantMessageDigest: object.lastAssistantMessageDigest,
         transcriptRef: object.transcriptRef,
         artifactManifestDigest: (object.artifactManifestDigest ?? null),
+        artifactVersion: (object.artifactVersion ?? null),
         notificationType: (object.notificationType ?? null),
     });
     if (record.recordId !== object.recordId) {

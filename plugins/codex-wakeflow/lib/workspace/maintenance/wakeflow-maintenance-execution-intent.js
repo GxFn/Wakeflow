@@ -11,13 +11,15 @@ import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resourc
 import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContributionError, } from "./wakeflow-host-maintenance-contribution.js";
 import { createWakeflowMaintenanceExecutionPlan, parseWakeflowMaintenanceExecutionPlan, WakeflowMaintenanceExecutionPlanError, } from "./wakeflow-maintenance-execution-plan.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, } from "./wakeflow-maintenance-operation-id.js";
+import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
 import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
 /**
  * Wakeflow Workspace / Maintenance：可在进程重启后重建 exact execution 的不可变意图。
  *
  * Intent 保存规范化 desired Config、完整 Host Profile 集合、shared preview 与宿主
  * contribution；聚合 steps 始终重新推导，不重复持久化。它不保存源文件正文、绝对
- * 路径、凭据、PID、锁 token、时间戳或可变 checkpoint。
+ * 路径、凭据、PID、锁 token、时间戳或可变 checkpoint。可选的 `writer` 是写出意图的构建
+ * 的写者戳（C11）；盖戳之前的意图没有它。
  */
 export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND = "wakeflow-maintenance-execution-intent";
 export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION = 1;
@@ -80,6 +82,16 @@ function normalizePreview(value) {
         throw error;
     }
 }
+function normalizeWriter(value, path, reason) {
+    try {
+        return parseWakeflowMaintenanceWriter(value, path);
+    }
+    catch (error) {
+        if (error instanceof WakeflowMaintenanceWriterError)
+            fail(reason, error.path);
+        throw error;
+    }
+}
 function normalizeContribution(value) {
     if (value === null)
         return null;
@@ -119,6 +131,7 @@ function sortedProfiles(values) {
 }
 function normalize(wire) {
     const operationId = normalizeOperationId(wire.operationId);
+    const writer = normalizeWriter(wire.writer, "$/writer", "schema");
     const desiredConfig = normalizeConfig(wire.desiredConfig);
     const sharedPreview = normalizePreview(wire.sharedPreview);
     const hostContribution = normalizeContribution(wire.hostContribution);
@@ -151,6 +164,7 @@ function normalize(wire) {
         sharedPreview,
         hostContribution,
         planDigest: plan.planDigest,
+        ...(writer === null ? {} : { writer }),
     });
     return Object.freeze({ intent, plan });
 }
@@ -165,6 +179,7 @@ function intentRepresentation(intent) {
         sharedPreview: intent.sharedPreview,
         hostContribution: intent.hostContribution,
         planDigest: intent.planDigest,
+        ...(intent.writer === undefined ? {} : { writer: intent.writer }),
     }, "$intent");
 }
 function parseWakeflowMaintenanceExecutionIntentWithPlan(value) {
@@ -187,9 +202,10 @@ export function parseWakeflowMaintenanceExecutionIntent(value) {
     return parseWakeflowMaintenanceExecutionIntentWithPlan(value).intent;
 }
 /**
- * 从已确认计划、原preview请求与resolved desired Config创建恢复意图。
+ * 从已确认计划、原preview请求与resolved desired Config创建恢复意图；`writerValue` 是可选写者戳。
  */
-export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planValue, requestValue, desiredConfigValue) {
+export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planValue, requestValue, desiredConfigValue, writerValue) {
+    const writer = normalizeWriter(writerValue, "$writer", "input");
     let plan;
     try {
         plan = parseWakeflowMaintenanceExecutionPlan(planValue);
@@ -229,6 +245,7 @@ export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planV
         sharedPreview: plan.sharedPreview,
         hostContribution: plan.hostContribution,
         planDigest: plan.planDigest,
+        ...(writer === null ? {} : { writer }),
     });
 }
 /** 一次准入并重建恢复执行所需的exact plan与无signal request。 */

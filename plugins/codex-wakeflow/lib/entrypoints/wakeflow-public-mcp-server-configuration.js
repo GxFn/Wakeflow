@@ -44,6 +44,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         "serverName",
         "serverVersion",
         ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
+        ...(record.writer === undefined ? [] : ["writer"]),
     ].sort();
     const keys = Object.keys(record).sort();
     if (keys.length !== expectedKeys.length ||
@@ -51,9 +52,8 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         fail("options");
     }
     const executors = {};
-    if (record.beforeMutation !== undefined &&
-        (typeof record.beforeMutation !== "function" || types.isProxy(record.beforeMutation)))
-        fail("options");
+    const beforeMutation = admitBeforeMutation(record.beforeMutation);
+    const writer = admitWriter(record.writer);
     for (const field of executorFields) {
         const executor = record[field];
         if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -65,8 +65,43 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         ...executors,
         serverName: nonEmptyText(record.serverName, "server-name"),
         serverVersion: nonEmptyText(record.serverVersion, "server-version"),
-        ...(record.beforeMutation === undefined
-            ? {}
-            : { beforeMutation: record.beforeMutation }),
+        ...(beforeMutation === undefined ? {} : { beforeMutation }),
+        ...(writer === undefined ? {} : { writer }),
     });
+}
+/** `beforeMutation` 省略即 undefined，否则必须是非 Proxy 的函数。 */
+function admitBeforeMutation(value) {
+    if (value === undefined)
+        return undefined;
+    if (typeof value !== "function" || types.isProxy(value))
+        fail("options");
+    return value;
+}
+/**
+ * `writer` 省略即 undefined；否则是 null，或恰好 `version` 与 `manifestDigest` 两个文本字段的非 Proxy
+ * 普通记录。严格准入归各持久写入。
+ */
+function admitWriter(value) {
+    if (value === undefined)
+        return undefined;
+    if (value === null)
+        return null;
+    let record;
+    try {
+        record = parsePlainRecord(value, "$options.writer");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("options");
+        throw error;
+    }
+    const keys = Object.keys(record).sort();
+    if (keys.length !== 2 ||
+        keys[0] !== "manifestDigest" ||
+        keys[1] !== "version" ||
+        typeof record.manifestDigest !== "string" ||
+        typeof record.version !== "string") {
+        fail("options");
+    }
+    return value;
 }

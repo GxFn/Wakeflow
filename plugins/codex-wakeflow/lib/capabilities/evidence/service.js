@@ -370,7 +370,7 @@ async function applyEvidence(context, input, plan) {
     }
     let completion;
     try {
-        completion = await new ManagedEvidencePublicationApplicationService(context.root).apply(transaction, computeManagedEvidencePublicationTransactionDigest(transaction), signalOptions(context.options.signal));
+        completion = await new ManagedEvidencePublicationApplicationService(context.root).apply(transaction, computeManagedEvidencePublicationTransactionDigest(transaction), { ...signalOptions(context.options.signal), writer: context.options.writer ?? null });
     }
     catch (error) {
         mapApplicationError(error);
@@ -385,7 +385,7 @@ async function recoverEvidence(context, operationId) {
     const demandId = parseDemandId(operationId);
     let recovered;
     try {
-        recovered = await new ManagedEvidencePublicationApplicationService(context.root).recover(demandId, signalOptions(context.options.signal));
+        recovered = await new ManagedEvidencePublicationApplicationService(context.root).recover(demandId, { ...signalOptions(context.options.signal), writer: context.options.writer ?? null });
     }
     catch (error) {
         mapApplicationError(error);

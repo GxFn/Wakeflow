@@ -1,20 +1,24 @@
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
+import { readStableRootResourceTree, StableResourceTreeReadError, } from "../../foundation/filesystem/stable-resource-tree-read.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import { closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandReadAuthorityContext, } from "../../governance/demand/demand-operation-authority-context.js";
 import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { ManagedEvidenceCapturePlanningService, ManagedEvidenceCapturePlanningServiceError, } from "../../governance/evidence/managed-evidence-capture-planning-service.js";
 import { ManagedEvidencePublicationApplicationService, ManagedEvidencePublicationApplicationServiceError, } from "../../governance/evidence/managed-evidence-publication-application-service.js";
 import { computeManagedEvidencePublicationTransactionDigest, createManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionError, } from "../../governance/evidence/managed-evidence-publication-transaction.js";
+import { ManagedEvidenceRecordTreePlanError, planManagedEvidenceRecordTree, } from "../../governance/evidence/managed-evidence-record-tree-plan.js";
 import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { admitRecordEvidenceResult, parseRecordEvidenceRequest, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_SCHEMA_VERSION, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveEvidenceEventIdentity, deriveEvidencePlanDigest, evidencePlanSummary, evidencePreviewNext, } from "./decide.js";
+import { deriveDemandCapacityBlockers, MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY, deriveEvidenceEventIdentity, deriveEvidencePlanDigest, evidencePlanSummary, evidencePreviewNext, } from "./decide.js";
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
@@ -172,6 +176,96 @@ async function withDemandContext(context, demandId, use) {
         fail("unexpected", "demand-context", "$request.demandId");
     return result;
 }
+/** 归档读 Demand 根整树的容量（kernel 常量）：与 demand 切片的归档读取同一组上限，切片之间不互相导入。 */
+const DEMAND_TREE_CAPACITY = Object.freeze({
+    maximumEntries: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumEntries,
+    maximumDepth: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth,
+    maximumFiles: WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFiles,
+    maximumFileBytes: parseByteCount(WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFileBytes, "$tree.maximumFileBytes"),
+    maximumTotalBytes: parseByteCount(WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes, "$tree.maximumTotalBytes"),
+});
+/** 整树读取因容量失败的原因：当前 Demand 树本身已经超出，再记什么都归档不了。 */
+const DEMAND_TREE_CAPACITY_REASONS = new Set([
+    "entry-limit",
+    "depth-limit",
+    "file-count",
+    "file-bytes",
+    "total-bytes",
+]);
+function mapDemandTreeReadError(error) {
+    if (error.reason === "aborted")
+        fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error.reason === "source-changed") {
+        fail("concurrency-conflict", "demand-root-read-source-changed", "$request.demandId", {
+            cause: error,
+            retryable: true,
+        });
+    }
+    fail("io-failure", `demand-root-read-${error.reason}`, "$request.demandId", { cause: error });
+}
+/** `resourcePath` 的祖先目录里当前树还没有的个数：记录会把它们一并建出来。 */
+function absentAncestorCount(resourcePath, present) {
+    const segments = resourcePath.split("/");
+    let absent = 0;
+    for (let length = 1; length < segments.length; length += 1) {
+        if (!present.has(segments.slice(0, length).join("/")))
+            absent += 1;
+    }
+    return absent;
+}
+/**
+ * 计划记录会给 Demand 根增加的成员：记录目录自身、缺失的前缀目录、清单与 payload 的目录和文件，再加上
+ * 记录事件追加到事件存储的 commit、index 与 snapshot。
+ */
+function plannedRecordOccupancy(plan, present) {
+    let record;
+    try {
+        record = planManagedEvidenceRecordTree(plan.manifest);
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidenceRecordTreePlanError) {
+            fail("unexpected", "record-tree-plan", "$plan", { cause: error });
+        }
+        throw error;
+    }
+    const members = record.directoryPlan.directories.length + record.directoryPlan.files.length;
+    const event = MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY;
+    return Object.freeze({
+        entries: 1 + absentAncestorCount(record.destinationRootPath, present) + members + event.entries,
+        files: record.directoryPlan.files.length + event.files,
+        totalBytes: Number(record.directoryPlan.totalBytes) + event.totalBytes,
+    });
+}
+/**
+ * 累计容量（open-items W10）：用归档的容量读当前 Demand 根整树，加上计划记录的成员，超出的上限成为阻塞项。
+ * 当前树本身已经读不下时阻塞项带读取给出的上限名。同内容已记录的重放不增加成员，调用方不查。
+ */
+async function deriveDemandCapacityBlockersFor(context, demandId, plan) {
+    return withDemandContext(context, demandId, async (demand) => {
+        let tree;
+        try {
+            tree = await readStableRootResourceTree(demand.demandRoot, {
+                ...DEMAND_TREE_CAPACITY,
+                ...signalOptions(context.options.signal),
+            });
+        }
+        catch (error) {
+            if (error instanceof StableResourceTreeReadError) {
+                if (DEMAND_TREE_CAPACITY_REASONS.has(error.reason)) {
+                    return Object.freeze([`demand-capacity:${error.reason}`]);
+                }
+                mapDemandTreeReadError(error);
+            }
+            throw error;
+        }
+        const present = new Set(tree.entries.map((entry) => entry.resourcePath));
+        return deriveDemandCapacityBlockers({
+            entries: tree.entries.length,
+            files: tree.files.length,
+            totalBytes: Number(tree.totalFileBytes),
+        }, plannedRecordOccupancy(plan, present));
+    });
+}
 async function planEvidence(context, input) {
     if (input.mode === "recover")
         fail("unexpected", "plan-mode", "$request.mode");
@@ -193,6 +287,12 @@ async function planEvidence(context, input) {
             plan: null,
             digest: null,
         });
+    }
+    if (preview.existing === null) {
+        const blockers = await deriveDemandCapacityBlockersFor(context, demandId, preview.plan);
+        if (blockers.length > 0) {
+            return Object.freeze({ status: "blocked", blockers, plan: null, digest: null });
+        }
     }
     return Object.freeze({
         status: "ready",

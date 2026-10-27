@@ -3,6 +3,7 @@ import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_FILE_REF, Wakeflow
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandWindowIds, evaluateVerifyGates, } from "../../governance/demand/demand-verify-gates.js";
 import { loadDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
@@ -35,10 +36,7 @@ function residueDisplayName(name) {
         const codePoint = character.codePointAt(0) ?? 0;
         cleaned += codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f) ? "?" : character;
     }
-    const characters = [...cleaned];
-    const bounded = characters.length > RESIDUE_NAME_MAXIMUM
-        ? `${characters.slice(0, RESIDUE_NAME_MAXIMUM - 1).join("")}…`
-        : cleaned;
+    const bounded = truncateToCodePoints(cleaned, RESIDUE_NAME_MAXIMUM);
     return bounded.trim().length === 0 ? "?" : bounded;
 }
 function maintenanceView(maintenance) {

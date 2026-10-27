@@ -3,6 +3,7 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { DurableDirectoryTreePublicationError, publishDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { deriveManagedEvidencePublicationRecordTreePlan, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
 import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-store.js";
@@ -143,6 +144,36 @@ async function inspectTree(root, path, plan, expectedNode, owner, signal) {
         throw error;
     }
 }
+/** 把 final 的父目录项同步一次；任何句柄失败都是 durability-failure，final 本身原地不动。 */
+async function syncFinalParent(root, plan) {
+    let parent;
+    try {
+        parent = await RootedResourceParentHandle.open(root, plan.destinationRootPath, "$final");
+    }
+    catch (error) {
+        if (error instanceof RootedResourceParentHandleError)
+            fail("durability-failure", "$final");
+        throw error;
+    }
+    let failure;
+    try {
+        await parent.sync();
+    }
+    catch (error) {
+        failure = error;
+    }
+    try {
+        await parent.close();
+    }
+    catch (error) {
+        failure ??= error;
+    }
+    if (failure === undefined)
+        return;
+    if (failure instanceof RootedResourceParentHandleError)
+        fail("durability-failure", "$final");
+    throw failure;
+}
 function admitFinalPublish(transaction) {
     const declaration = createManagedEvidenceRecordResourceDeclaration(transaction.manifest.demandId, transaction.manifest.evidenceId);
     try {
@@ -187,6 +218,7 @@ async function currentFinalOrNull(root, transaction, plan, journalNode, signal) 
         return null;
     }
     const finalRecord = await inspectTree(root, plan.destinationRootPath, plan, physical.finalNode, "final", signal);
+    await syncFinalParent(root, plan);
     await requireJournal(root, transaction, signal, journalNode);
     return finalRecord;
 }
@@ -203,6 +235,7 @@ export async function publishManagedEvidencePublicationRecord(demandRootValue, t
         if (physical.stageNode !== null)
             fail("stage-conflict", "$stage");
         const finalRecord = await inspectTree(demandRootValue, plan.destinationRootPath, plan, physical.finalNode, "final", options.signal);
+        await syncFinalParent(demandRootValue, plan);
         await requireJournal(demandRootValue, transaction, options.signal, stored.source.node);
         return Object.freeze({
             disposition: "current",
@@ -222,10 +255,10 @@ export async function publishManagedEvidencePublicationRecord(demandRootValue, t
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreePublicationError) {
+            // durability-failure 不在这里：rename 已经发生、同步却没有，final 可见也不算 current。
             if (error.reason === "destination-exists" ||
                 error.reason === "source-changed" ||
-                error.reason === "commit-uncertain" ||
-                error.reason === "durability-failure") {
+                error.reason === "commit-uncertain") {
                 const concurrent = await currentFinalOrNull(demandRootValue, transaction, plan, stored.source.node, undefined);
                 if (concurrent !== null) {
                     return Object.freeze({

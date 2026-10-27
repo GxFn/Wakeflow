@@ -14,6 +14,7 @@ import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-valu
 import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { computePromptDigest, DELIVERY_PROMPT_MAXIMUM_CHARACTERS, } from "../../kernel/prompt-digest.js";
 import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
@@ -180,10 +181,7 @@ function summarizeReworkText(value, maximumCodePoints) {
         CONTROL_EXCEPT_LF_PATTERN.test(value)) {
         fail("rework", "$reworkSource");
     }
-    const codePoints = Array.from(value);
-    return codePoints.length <= maximumCodePoints
-        ? value
-        : `${codePoints.slice(0, maximumCodePoints - 1).join("")}…`;
+    return truncateToCodePoints(value, maximumCodePoints);
 }
 /** 把完整Review文本确定性压缩成可进入投递Intent的有界执行投影。 */
 export function projectTargetDeliveryReworkContext(input) {
@@ -305,10 +303,7 @@ function summarizeRemediationText(value, maximumCodePoints) {
         CONTROL_EXCEPT_LF_PATTERN.test(value)) {
         fail("product-defect-remediation", "$remediationSource");
     }
-    const codePoints = Array.from(value);
-    return codePoints.length <= maximumCodePoints
-        ? value
-        : `${codePoints.slice(0, maximumCodePoints - 1).join("")}…`;
+    return truncateToCodePoints(value, maximumCodePoints);
 }
 /** 把完整Authorization文本确定性压缩成Target执行所需的有界投影。 */
 export function projectTargetDeliveryProductDefectRemediationContext(input) {

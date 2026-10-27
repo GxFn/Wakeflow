@@ -1,5 +1,7 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, } from "../../governance/evidence/managed-evidence-manifest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "./contract.js";
 /** 计划摘要不含 `capturedAt` 与 CAS 预期：时间在 apply 时取钟，流位置在 apply 时取当前聚合。 */
 export function deriveEvidencePlanDigest(plan) {
@@ -40,6 +42,34 @@ export function evidencePlanSummary(plan, recorded) {
         }),
         recorded,
     });
+}
+/**
+ * 一条记录在自己的成员之外还给 Demand 根追加的事件存储成员：一个 commit、一个 index 条目、一个 snapshot
+ *（三个文件、三个条目，均在 `event-sourcing/` 下）。commit 承载 Manifest（至多 1 MiB）加有界信封，index 与
+ * snapshot 远小于它，所以字节按三份 Manifest 容量预留。
+ */
+export const MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY = Object.freeze({
+    entries: 3,
+    files: 3,
+    totalBytes: 3 * MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
+});
+/**
+ * 累计容量阻塞（open-items W10）：单条记录的上限只压住自己，归档与取消却按 Demand 树容量读整树。当前占用
+ * 加上计划记录的成员会超出的上限各成一项阻塞，码名沿用树读取的上限名；深度与单文件由记录自己的上限钉死，
+ * 不在这里累计。
+ */
+export function deriveDemandCapacityBlockers(current, planned) {
+    const blockers = [];
+    if (current.entries + planned.entries > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumEntries) {
+        blockers.push("demand-capacity:entry-limit");
+    }
+    if (current.files + planned.files > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumFiles) {
+        blockers.push("demand-capacity:file-count");
+    }
+    if (current.totalBytes + planned.totalBytes > WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes) {
+        blockers.push("demand-capacity:total-bytes");
+    }
+    return Object.freeze(blockers);
 }
 /** preview 的 `next`：就绪指向 apply，阻塞时列出阻塞项。 */
 export function evidencePreviewNext(planned) {

@@ -47,6 +47,11 @@ import {
   wakeflowMaintenanceIntentRef,
 } from "./wakeflow-maintenance-operation-id.js";
 import {
+  parseWakeflowMaintenanceWriter,
+  type WakeflowMaintenanceWriter,
+  WakeflowMaintenanceWriterError,
+} from "./wakeflow-maintenance-writer.js";
+import {
   parseWakeflowStaticMaterializationPreview,
   parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreview,
@@ -59,7 +64,8 @@ import {
  *
  * Intent 保存规范化 desired Config、完整 Host Profile 集合、shared preview 与宿主
  * contribution；聚合 steps 始终重新推导，不重复持久化。它不保存源文件正文、绝对
- * 路径、凭据、PID、锁 token、时间戳或可变 checkpoint。
+ * 路径、凭据、PID、锁 token、时间戳或可变 checkpoint。可选的 `writer` 是写出意图的构建
+ * 的写者戳（C11）；盖戳之前的意图没有它。
  */
 
 export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND =
@@ -79,6 +85,7 @@ export interface WakeflowMaintenanceExecutionIntent {
   readonly sharedPreview: Readonly<WakeflowStaticMaterializationPreview>;
   readonly hostContribution: Readonly<WakeflowHostMaintenanceContribution> | null;
   readonly planDigest: Sha256Digest;
+  readonly writer?: Readonly<WakeflowMaintenanceWriter>;
 }
 
 export type WakeflowMaintenanceExecutionIntentErrorReason =
@@ -158,6 +165,19 @@ function normalizePreview(value: unknown): Readonly<WakeflowStaticMaterializatio
   }
 }
 
+function normalizeWriter(
+  value: unknown,
+  path: string,
+  reason: WakeflowMaintenanceExecutionIntentErrorReason,
+): Readonly<WakeflowMaintenanceWriter> | null {
+  try {
+    return parseWakeflowMaintenanceWriter(value, path);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path);
+    throw error;
+  }
+}
+
 function normalizeContribution(
   value: unknown,
 ): Readonly<WakeflowHostMaintenanceContribution> | null {
@@ -218,6 +238,7 @@ function normalize(
   wire: Readonly<WakeflowMaintenanceExecutionIntentWire>,
 ): Readonly<NormalizedWakeflowMaintenanceExecutionIntent> {
   const operationId = normalizeOperationId(wire.operationId);
+  const writer = normalizeWriter(wire.writer, "$/writer", "schema");
   const desiredConfig = normalizeConfig(wire.desiredConfig);
   const sharedPreview = normalizePreview(wire.sharedPreview);
   const hostContribution = normalizeContribution(wire.hostContribution);
@@ -260,6 +281,7 @@ function normalize(
     sharedPreview,
     hostContribution,
     planDigest: plan.planDigest,
+    ...(writer === null ? {} : { writer }),
   });
   return Object.freeze({ intent, plan });
 }
@@ -276,6 +298,7 @@ function intentRepresentation(intent: Readonly<WakeflowMaintenanceExecutionInten
       sharedPreview: intent.sharedPreview,
       hostContribution: intent.hostContribution,
       planDigest: intent.planDigest,
+      ...(intent.writer === undefined ? {} : { writer: intent.writer }),
     },
     "$intent",
   );
@@ -304,14 +327,16 @@ export function parseWakeflowMaintenanceExecutionIntent(
 }
 
 /**
- * 从已确认计划、原preview请求与resolved desired Config创建恢复意图。
+ * 从已确认计划、原preview请求与resolved desired Config创建恢复意图；`writerValue` 是可选写者戳。
  */
 export function createWakeflowMaintenanceExecutionIntent(
   operationIdValue: unknown,
   planValue: unknown,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   desiredConfigValue: unknown,
+  writerValue?: unknown,
 ): Readonly<WakeflowMaintenanceExecutionIntent> {
+  const writer = normalizeWriter(writerValue, "$writer", "input");
   let plan: Readonly<WakeflowMaintenanceExecutionPlan>;
   try {
     plan = parseWakeflowMaintenanceExecutionPlan(planValue);
@@ -351,6 +376,7 @@ export function createWakeflowMaintenanceExecutionIntent(
     sharedPreview: plan.sharedPreview,
     hostContribution: plan.hostContribution,
     planDigest: plan.planDigest,
+    ...(writer === null ? {} : { writer }),
   });
 }
 

@@ -4,6 +4,7 @@ import { VERIFY_TOOL_REGISTRATION } from "../../../src/capabilities/observation/
 import {
   capStatusList,
   deriveNextActions,
+  deriveServerRuntime,
   deriveWindowRuntime,
   deriveWorkspaceGates,
   IDLE_REQUIREMENT_AUTHORING,
@@ -27,7 +28,7 @@ import {
 } from "../../../src/kernel/layout.js";
 
 /**
- * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十五道工作区门
+ * 观察切片的纯决定（gate-log §13.94 D1、D3、D10）：下一步的排序、去重与上限；十六道工作区门
  * 按名字排序，每门只看纯事实；汇总里 unavailable 算不通过但分开计数；verify 的 next 指向维护
  * （制品过期先指向用户或 resume）；投影新鲜度取最坏目标。
  */
@@ -43,6 +44,7 @@ const REPOSITORY = "repository_22222222-2222-4222-8222-222222222222";
 const GATE_NAMES = Object.freeze([
   "active-projection",
   "append-candidates-clear",
+  "artifact-older-than-stream",
   "board-consistency",
   "config-authority",
   "demand-root-audit",
@@ -63,6 +65,8 @@ function digest(seed: string): Sha256Digest {
 }
 
 const OBSERVED = Object.freeze({ status: "observed" as const, issue: null });
+/** 读到了流或维护日志，但没有任何写者戳（旧流、测试构建写出的记录）。 */
+const OBSERVED_WRITER = Object.freeze({ status: "observed" as const, newestVersion: null });
 
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
@@ -83,9 +87,11 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
         audit: "pass",
         evidence: "pass",
         appendCandidates: 0,
+        writer: OBSERVED_WRITER,
       },
     ],
     strayJournals: [],
+    maintenanceWriter: OBSERVED_WRITER,
     claims: [{ windowId: WINDOW_A, orphan: false }],
     claimsUnreadable: 0,
     hooks: [
@@ -182,11 +188,22 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     demands: [],
     pendingPackages: [],
     artifactServerOutdated: false,
+    artifactServerSupersededBy: null,
     artifactServerRefreshOwner: "user",
     artifactServerUnavailable: false,
     staleWindows: 0,
     ...overrides,
   };
+}
+
+/** 服务进程的制品事实：缺省没有版本轴（旧制品或测试构建），只比摘要。 */
+function server(
+  manifestDigest: Sha256Digest | null,
+  onDiskDigest: Sha256Digest | null,
+  version: string | null = null,
+  newestSessionStartVersion: string | null = null,
+): WorkspaceGateFacts["runtime"]["server"] {
+  return { version, manifestDigest, onDiskDigest, newestSessionStartVersion };
 }
 
 test("deriveNextActions：维护 > 活动 pod 的未登记窗口（按 windowId）> Demand 前沿（primary 先，再按 demandId）> 待认领需求包；终态与无前沿的 Demand 不进列表", () => {
@@ -309,7 +326,7 @@ test("deriveNextActions：同一动作去重，总数上限 64", () => {
   equal(capped[63]?.subject, packages[62]?.requirementId);
 });
 
-test("deriveWorkspaceGates：健康事实十五门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
+test("deriveWorkspaceGates：健康事实十六门全 pass、按名字排序；汇总 ok 且 next 无前沿", () => {
   const gates = deriveWorkspaceGates(healthyFacts());
   deepEqual(
     gates.map((gate) => gate.name),
@@ -328,7 +345,7 @@ test("deriveWorkspaceGates：健康事实十五门全 pass、按名字排序；�
     gateOf(gates, "active-projection").evidence.map((entry) => entry.ref),
     [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF],
   );
-  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 15, fail: 0, unavailable: 0 } });
+  deepEqual(summarizeGates(gates), { ok: true, summary: { pass: 16, fail: 0, unavailable: 0 } });
   deepEqual(verifyNext(gates, "user"), {
     frontier: null,
     owner: "none",
@@ -421,6 +438,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
         audit: "fail",
         evidence: "fail",
         appendCandidates: 2,
+        writer: OBSERVED_WRITER,
       },
       {
         demandId: DEMAND_B,
@@ -428,6 +446,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
         audit: "unavailable",
         evidence: "unavailable",
         appendCandidates: 0,
+        writer: { status: "unavailable", newestVersion: null },
       },
     ],
     strayJournals: ["demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
@@ -454,6 +473,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             audit: "unavailable",
             evidence: "unavailable",
             appendCandidates: 0,
+            writer: { status: "unavailable", newestVersion: null },
           },
         ],
       }),
@@ -922,7 +942,7 @@ test("summarizeGates：至少一门且全部 pass 才 ok；unavailable 分开计
   const gates = deriveWorkspaceGates(
     healthyFacts({ configRecheck: "changed", ledger: "unavailable" }),
   );
-  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 13, fail: 1, unavailable: 1 } });
+  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 14, fail: 1, unavailable: 1 } });
   deepEqual(verifyNext(gates, "user"), {
     frontier: "workspace-maintenance",
     owner: "controller",
@@ -1191,7 +1211,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          server: { manifestDigest: same, onDiskDigest: same },
+          server: server(same, same),
           staleWindows: [],
           unverifiedWindows: [],
         },
@@ -1204,7 +1224,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          server: { manifestDigest: same, onDiskDigest: digest("artifact-b") },
+          server: server(same, digest("artifact-b")),
           staleWindows: [],
           unverifiedWindows: [],
         },
@@ -1217,7 +1237,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          server: { manifestDigest: same, onDiskDigest: null },
+          server: server(same, null),
           staleWindows: [],
           unverifiedWindows: [
             "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -1234,7 +1254,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          server: { manifestDigest: same, onDiskDigest: same },
+          server: server(same, same),
           staleWindows: [],
           unverifiedWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
         },
@@ -1247,7 +1267,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     verdictOf(
       healthyFacts({
         runtime: {
-          server: { manifestDigest: same, onDiskDigest: same },
+          server: server(same, same),
           staleWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
           unverifiedWindows: ["window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
         },
@@ -1304,7 +1324,7 @@ test("verify 的公共描述与门集合同步：门数的数词与每个门的�
 test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求检查安装，不冒充一致", () => {
   const facts = healthyFacts({
     runtime: {
-      server: { manifestDigest: digest("previous-artifact"), onDiskDigest: null },
+      server: server(digest("previous-artifact"), null),
       staleWindows: [],
       unverifiedWindows: [],
     },
@@ -1336,30 +1356,81 @@ test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求
   );
 });
 
-test("绑定窗口的运行身份（§13.161）：只有宿主声明按启动记录判定、且启动记录不等于磁盘制品时才是 stale；其余一律 unverified", () => {
+test("绑定窗口的运行身份（§13.161；版本轴 §3.6 C6，R-ROOT-04）：启动版本低于本进程 ⇒ stale，高于 ⇒ unverified（过期的是服务进程）；同版本或记录缺版本时只在绑定宿主的制品摘要读得到时比摘要，对端宿主一律 unverified；Codex 画像一律 unverified", () => {
   const installed = digest("artifact-installed");
   const older = digest("artifact-older");
   const base = {
     bound: true,
     bindingsObserved: true,
     staleness: "session-start-observer-digest" as const,
+    serverVersion: "1.2.0",
     installedManifestDigest: installed,
     sessionStartObserverManifestDigest: older,
+    sessionStartArtifactVersion: "1.2.0",
   };
-  deepEqual(deriveWindowRuntime(base), {
-    status: "stale",
-    reason: "session-started-under-older-artifact",
-  });
+  const stale = { status: "stale", reason: "session-started-under-older-artifact" };
   const unverified = { status: "unverified", reason: "host-runtime-association-unavailable" };
+  // 同版本、同宿主、摘要不同：就地更新之后没有重启过。
+  deepEqual(deriveWindowRuntime(base), stale);
   // 同一制品下启动不证明 MCP 已重载：仍是 unverified，不是 current。
   deepEqual(
     deriveWindowRuntime({ ...base, sessionStartObserverManifestDigest: installed }),
     unverified,
   );
-  deepEqual(deriveWindowRuntime({ ...base, sessionStartObserverManifestDigest: null }), unverified);
+  // 旧窗口 / 新服务器：启动版本低于本进程即 stale，不看摘要，对端宿主也判得出。
+  deepEqual(
+    deriveWindowRuntime({
+      ...base,
+      sessionStartArtifactVersion: "1.1.9",
+      sessionStartObserverManifestDigest: installed,
+    }),
+    stale,
+  );
+  deepEqual(
+    deriveWindowRuntime({
+      ...base,
+      sessionStartArtifactVersion: "1.1.9",
+      installedManifestDigest: null,
+    }),
+    stale,
+  );
+  // 新窗口 / 旧服务器：启动版本高于本进程，过期的是服务进程（superseded），窗口不标 stale。
+  deepEqual(deriveWindowRuntime({ ...base, sessionStartArtifactVersion: "1.3.0" }), unverified);
+  // 对端宿主（R-ROOT-04）：读不到它的制品摘要，同版本只能 unverified——此前这里被判 stale。
   deepEqual(deriveWindowRuntime({ ...base, installedManifestDigest: null }), unverified);
+  // 记录缺版本（旧记录）：退回摘要规则，同宿主 stale、对端 unverified。
+  deepEqual(deriveWindowRuntime({ ...base, sessionStartArtifactVersion: null }), stale);
+  deepEqual(
+    deriveWindowRuntime({
+      ...base,
+      sessionStartArtifactVersion: null,
+      installedManifestDigest: null,
+    }),
+    unverified,
+  );
+  // 本进程没有版本（测试构建）：只比摘要。
+  deepEqual(
+    deriveWindowRuntime({ ...base, serverVersion: null, sessionStartArtifactVersion: "1.1.0" }),
+    stale,
+  );
+  deepEqual(
+    deriveWindowRuntime({
+      ...base,
+      serverVersion: null,
+      sessionStartObserverManifestDigest: installed,
+    }),
+    unverified,
+  );
+  deepEqual(deriveWindowRuntime({ ...base, sessionStartObserverManifestDigest: null }), unverified);
   // Codex 宿主：安装按版本目录并存，不作方向性断言。
-  deepEqual(deriveWindowRuntime({ ...base, staleness: "unverified" }), unverified);
+  deepEqual(
+    deriveWindowRuntime({
+      ...base,
+      staleness: "unverified",
+      sessionStartArtifactVersion: "1.0.0",
+    }),
+    unverified,
+  );
   deepEqual(deriveWindowRuntime({ ...base, bound: false }), {
     status: "unregistered",
     reason: null,
@@ -1368,4 +1439,214 @@ test("绑定窗口的运行身份（§13.161）：只有宿主声明按启动记
     status: "unverified",
     reason: "binding-unavailable",
   });
+});
+
+test("服务进程的制品状态（§3.6 C6）：任一会话在更高版本下启动 ⇒ superseded 并带那个版本，先于摘要轴；同路径覆盖 ⇒ changed；没有 manifest ⇒ unknown；门报 server-outdated:<版本>，verify 与 nextActions 的下一步带该版本", () => {
+  const same = digest("artifact-a");
+  const facts = (
+    version: string | null,
+    newest: string | null,
+    onDisk: Sha256Digest | null = same,
+  ) =>
+    ({
+      version,
+      manifestDigest: same,
+      onDiskDigest: onDisk,
+      newestSessionStartVersion: newest,
+    }) as const;
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.3.0")), {
+    artifactOnDisk: "superseded",
+    supersededBy: "1.3.0",
+  });
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.2.0")), {
+    artifactOnDisk: "same",
+    supersededBy: null,
+  });
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.1.9")), {
+    artifactOnDisk: "same",
+    supersededBy: null,
+  });
+  deepEqual(deriveServerRuntime(facts("1.2.0", null)), {
+    artifactOnDisk: "same",
+    supersededBy: null,
+  });
+  // 本进程没有版本：版本轴不可用，只比摘要。
+  deepEqual(deriveServerRuntime(facts(null, "1.3.0")), {
+    artifactOnDisk: "same",
+    supersededBy: null,
+  });
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.1.0", digest("artifact-b"))), {
+    artifactOnDisk: "changed",
+    supersededBy: null,
+  });
+  // 版本轴先于摘要轴：被取代的进程脚下 manifest 也变了，报的仍是 superseded——换代目标是更高版本。
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.3.0", digest("artifact-b"))), {
+    artifactOnDisk: "superseded",
+    supersededBy: "1.3.0",
+  });
+  deepEqual(deriveServerRuntime(facts("1.2.0", "1.3.0", null)), {
+    artifactOnDisk: "unknown",
+    supersededBy: null,
+  });
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          server: server(same, same, "1.2.0", "1.3.0"),
+          staleWindows: [],
+          unverifiedWindows: [WINDOW_A],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["fail", "server-outdated:1.3.0,window-runtime-unverified:1"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          server: server(same, same, "1.2.0", "1.1.0"),
+          staleWindows: [],
+          unverifiedWindows: [],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["pass", null],
+  );
+  const artifactGate = (code: string): Readonly<VerifyGate> => ({
+    name: "runtime-artifact",
+    owner: "runtime",
+    status: "fail",
+    code,
+    evidence: [],
+  });
+  deepEqual(verifyNext([artifactGate("server-outdated:1.3.0,windows-stale:1")], "controller"), {
+    frontier: "runtime-artifact-outdated",
+    owner: "controller",
+    suggestedTool: null,
+    blockers: ["runtime-artifact:fail"],
+  });
+  deepEqual(
+    deriveNextActions(
+      nextInput({ artifactServerOutdated: true, artifactServerSupersededBy: "1.3.0" }),
+    ).map((action) => [action.owner, action.reason, action.subject]),
+    [["user", "runtime-artifact-outdated", "1.3.0"]],
+  );
+});
+
+test("artifact-older-than-stream 门（C11 版本轴）：流或维护日志里任一写者戳高于本进程版本即 fail 并带那个版本；相等、更低、没有戳或本进程没有版本都 pass；只有读不到流或日志时 unavailable（有更高戳时 fail 优先）；next 与 server-outdated 同款", () => {
+  const same = digest("artifact-a");
+  const GATE = "artifact-older-than-stream";
+  const serverAt = (version: string | null): Pick<WorkspaceGateFacts, "runtime"> => ({
+    runtime: { server: server(same, same, version), staleWindows: [], unverifiedWindows: [] },
+  });
+  const demandWriter = (
+    newestVersion: string | null,
+    status: "observed" | "unavailable" = "observed",
+    demandId: string = DEMAND_A,
+  ): WorkspaceGateFacts["demands"][number] => ({
+    demandId,
+    status: "observed",
+    audit: "pass",
+    evidence: "pass",
+    appendCandidates: 0,
+    writer: { status, newestVersion },
+  });
+  // 没有戳：本进程有版本 → pass 无码；没有服务进程身份或没有版本（测试构建）→ pass not-applicable。
+  deepEqual(verdictOf(healthyFacts(serverAt("1.2.0")), GATE), ["pass", null]);
+  deepEqual(verdictOf(healthyFacts(), GATE), ["pass", "not-applicable"]);
+  deepEqual(
+    verdictOf(healthyFacts({ ...serverAt(null), demands: [demandWriter("9.9.9")] }), GATE),
+    ["pass", "not-applicable"],
+  );
+  // 流里的戳高于本进程 → fail 并带那个版本；相等或更低 → pass。
+  deepEqual(
+    verdictOf(healthyFacts({ ...serverAt("1.2.0"), demands: [demandWriter("1.3.0")] }), GATE),
+    ["fail", "stream-newer:1.3.0"],
+  );
+  deepEqual(
+    verdictOf(healthyFacts({ ...serverAt("1.2.0"), demands: [demandWriter("1.2.0")] }), GATE),
+    ["pass", null],
+  );
+  deepEqual(
+    verdictOf(healthyFacts({ ...serverAt("1.2.0"), demands: [demandWriter("1.1.9")] }), GATE),
+    ["pass", null],
+  );
+  // 多个 Demand 取最高；维护日志的戳同样算。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        ...serverAt("1.2.0"),
+        demands: [demandWriter("1.2.5"), demandWriter("2.0.0", "observed", DEMAND_B)],
+      }),
+      GATE,
+    ),
+    ["fail", "stream-newer:2.0.0"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        ...serverAt("1.2.0"),
+        maintenanceWriter: { status: "observed", newestVersion: "1.4.0" },
+      }),
+      GATE,
+    ),
+    ["fail", "stream-newer:1.4.0"],
+  );
+  // 读不到流或日志 → unavailable 并点名；另有可比的更高戳时 fail 优先。
+  deepEqual(
+    verdictOf(
+      healthyFacts({ ...serverAt("1.2.0"), demands: [demandWriter(null, "unavailable")] }),
+      GATE,
+    ),
+    ["unavailable", "streams-unreadable:1"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        ...serverAt("1.2.0"),
+        maintenanceWriter: { status: "unavailable", newestVersion: null },
+      }),
+      GATE,
+    ),
+    ["unavailable", "maintenance-journal:unavailable"],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        ...serverAt("1.2.0"),
+        demands: [demandWriter(null, "unavailable"), demandWriter("1.3.0", "observed", DEMAND_B)],
+      }),
+      GATE,
+    ),
+    ["fail", "stream-newer:1.3.0"],
+  );
+  // 活动 Demand 集合读不出：任何流都读不到，码沿用域的原因。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        ...serverAt("1.2.0"),
+        domains: {
+          demands: { status: "unavailable", issue: "demands:unreadable" },
+          claims: OBSERVED,
+          pods: OBSERVED,
+        },
+      }),
+      GATE,
+    ),
+    ["unavailable", "demands:unreadable"],
+  );
+  // next：与 runtime-artifact 的 server-outdated 同一条出路，owner 按本进程宿主画像。
+  const gates = deriveWorkspaceGates(
+    healthyFacts({ ...serverAt("1.2.0"), demands: [demandWriter("1.3.0")] }),
+  );
+  deepEqual(verifyNext(gates, "controller"), {
+    frontier: "runtime-artifact-outdated",
+    owner: "controller",
+    suggestedTool: null,
+    blockers: ["artifact-older-than-stream:fail"],
+  });
+  equal(verifyNext(gates, "user").owner, "user");
+  deepEqual(summarizeGates(gates), { ok: false, summary: { pass: 15, fail: 1, unavailable: 0 } });
 });

@@ -12,13 +12,20 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
+import {
+  executeWindowBindingRequest,
+  type WindowBindingHostFacade,
+} from "../../../src/capabilities/endpoint/service.js";
 import { executeVerifyRequest } from "../../../src/capabilities/observation/service.js";
 import { executePodRequest, type PodHostFacade } from "../../../src/capabilities/pod/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -33,12 +40,14 @@ import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixt
 useDisposableDurability();
 
 /**
- * pod 切片效果（§13.91 D1 到 D7）：create preview 零写、apply 一次配置事务、同键重放、重名阻塞；
- * pod 窗口握手（产品窗口必须带 worktree 回执）后 ready；两段关闭：demand 归档与分支处置 →
- * closing → 窗口退役与检出处置 → closed，配置与回执目录都不再有该 pod。宿主由测试代替：
+ * 2 级（能力）：pod 切片效果（§13.91 D1 到 D7）：create preview 零写、apply 一次配置事务、同键重放、
+ * 重名阻塞；pod 窗口握手（产品窗口必须带 worktree 回执）后 ready；两段关闭：demand 归档与分支处置 →
+ * closing → 窗口退役与检出处置 → closed，配置与回执目录都不再有该 pod；双宿主初始化的工作区里对端
+ * 宿主仍握着的窗口绑定也阻塞关闭完成，两宿主的投影与回执一并清理（open-items W7）。宿主由测试代替：
  * hook 记录直接写入，worktree 用真实 `git worktree add` 造出。
  */
 
+/** 与 Codex 组合根一致的 pod facade：本宿主 Codex，两个宿主的 profile 都在（W7）。 */
 const CODEX: PodHostFacade & {
   readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions;
 } = {
@@ -46,7 +55,15 @@ const CODEX: PodHostFacade & {
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
+  hosts: CODEX_OBSERVATION_FACADE.hosts,
 };
+const CLAUDE: WindowBindingHostFacade = {
+  hostId: "claude-code",
+  resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+  identityProfile: claudeCodeWindowHostIdentityProfile,
+  renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
+};
+const CLAUDE_TMUX = { socketName: null, sessionName: "wakeflow", windowId: "@3", paneId: "%7" };
 const CLOCK = { clock: () => parseUtcInstant("2026-09-10T12:00:00.000Z") };
 
 function git(cwd: string, ...args: readonly string[]): string {
@@ -205,6 +222,129 @@ async function decommission(
   );
   if (result.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
   equal(result.disposition, "decommissioned");
+}
+
+/** 把 Claude 宿主也初始化到同一个工作区：reconcile 补齐它的运行时根、投影与资产（双宿主工作区）。 */
+async function initializeClaudeHost(fixture: Fixture): Promise<void> {
+  const preview = await executeClaudeCodeWakeflowMaintenance({
+    root: fixture.root,
+    action: "reconcile",
+    mode: "preview",
+    request: {},
+  });
+  if (preview.mode !== "preview" || preview.planDigest === null) {
+    throw new Error("Expected a ready Claude reconcile plan.");
+  }
+  await executeClaudeCodeWakeflowMaintenance({
+    root: fixture.root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: preview.planDigest,
+  });
+}
+
+function claudeLocatorFile(fixture: Fixture, windowId: string): string {
+  return path.join(
+    fixture.root,
+    ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
+    `${windowId}.json`,
+  );
+}
+
+/** 在 Claude 宿主登记一个 pod 窗口：该宿主的 session-start 记录加 tmux 坐标。 */
+async function registerOnClaude(
+  fixture: Fixture,
+  windowId: string,
+  sessionId: string,
+  cwd: string,
+) {
+  const inspection = await executeWindowBindingRequest(CLAUDE, {
+    root: fixture.root,
+    operation: "inspect",
+    windowId,
+  });
+  if (inspection.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected inspection.");
+  await writeHostHookObservation(fixture.rooted, {
+    hostId: "claude-code",
+    event: "session-start",
+    sessionId,
+    cwd,
+    recordedAt: parseUtcInstant("2026-09-10T11:59:00.000Z"),
+  });
+  const result = await executeWindowBindingRequest(
+    CLAUDE,
+    {
+      root: fixture.root,
+      operation: "register",
+      windowId,
+      observation: {
+        handle: { kind: "claude-session", value: sessionId },
+        launchIntentDigest: inspection.launchIntent.intentDigest,
+        observedAt: "2026-09-10T11:59:30.000Z",
+        tmux: CLAUDE_TMUX,
+      },
+    },
+    CLOCK,
+  );
+  if (result.kind !== "WakeflowWindowBindingMutation" || result.binding === null) {
+    throw new Error("Expected a registered Claude binding.");
+  }
+  return result;
+}
+
+/** 从 Claude 宿主退役：关前 pane 在、关后 pane 不在，没有 session-end 记录即 manual-host-gate。 */
+async function decommissionOnClaude(
+  fixture: Fixture,
+  windowId: string,
+  binding: { readonly bindingId: string; readonly bindingDigest: string },
+) {
+  const locator = JSON.parse(readFileSync(claudeLocatorFile(fixture, windowId), "utf8")) as {
+    readonly locatorId: string;
+    readonly programId: string;
+  };
+  const pane = {
+    ...CLAUDE_TMUX,
+    paneWindowId: "@3",
+    paneDead: false,
+    currentCommand: "claude",
+    options: {
+      programId: locator.programId,
+      hostId: "claude-code",
+      windowId,
+      bindingId: binding.bindingId,
+      locatorId: locator.locatorId,
+    },
+  };
+  const result = await executeWindowBindingRequest(
+    CLAUDE,
+    {
+      root: fixture.root,
+      operation: "decommission",
+      windowId,
+      expectedBindingId: binding.bindingId,
+      expectedBindingDigest: binding.bindingDigest,
+      closure: {
+        preClose: { kind: "tmux-panes", panes: [pane] },
+        closeResult: { status: "closed" },
+        postClose: { kind: "tmux-panes", panes: [] },
+      },
+    },
+    CLOCK,
+  );
+  if (result.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(result.disposition, "decommissioned");
+}
+
+function projectionFile(fixture: Fixture, hostId: "codex" | "claude-code", windowId: string) {
+  return path.join(
+    fixture.root,
+    ".wakeflow-local/runtime/hosts",
+    hostId,
+    "projections/window-runtime",
+    `${windowId}.json`,
+  );
 }
 
 test("create：preview 零写、apply 一次配置事务派生四个窗口与一条 worktree 意图、同键重放、重名与 main 被拒", {
@@ -648,4 +788,142 @@ test("生命周期：pod 窗口握手（产品窗口带 worktree 回执）到 re
   if (recovered.kind !== "WakeflowPodMutation") throw new Error("Expected mutation.");
   equal(recovered.disposition, "healthy");
   equal(recovered.pod, null);
+});
+
+test("跨宿主关闭：Claude 登记的 Controller 绑定阻塞 Codex 的 close-complete，退役后两宿主的投影与回执一并清理（W7）", {
+  timeout: 180_000,
+}, async (t) => {
+  const fx = await fixture(t);
+  await initializeClaudeHost(fx);
+  const intent = { kind: "create", name: "cross-host", idempotencyKey: "pod-x" };
+  const created = await pod(fx, {
+    mode: "apply",
+    intent,
+    planDigest: ((await pod(fx, { mode: "preview", intent })) as { readonly planDigest: string })
+      .planDigest,
+  });
+  if (created.kind !== "WakeflowPodMutation" || created.pod === null)
+    throw new Error("Expected pod.");
+  const podId = created.pod.podId;
+  const controller = created.windows.find((window) => window.role === "controller");
+  const product = created.windows.find((window) => window.role === "product");
+  if (!controller || !product) throw new Error("Expected controller and product windows.");
+  const productIntent = await inspect(fx, product.windowId);
+  const repositoryId = productIntent.launchIntent.worktree?.repositoryId;
+  if (repositoryId === undefined) throw new Error("Expected a worktree intent.");
+
+  // 产品窗口在 Codex 登记（带 worktree 回执），Controller 在 Claude 登记：同一个 pod 跨两个宿主。
+  const checkout = path.join(fx.root, ".wakeflow-test-worktrees", "wt-cross-host");
+  git(fx.product, "worktree", "add", "--quiet", checkout, "-b", "wakeflow-cross-host");
+  const productRegistered = await register(
+    fx,
+    product.windowId,
+    "codex-host-owned-thread:cross-host-product",
+    checkout,
+    {
+      porcelain: git(checkout, "worktree", "list", "--porcelain"),
+      commonDir: git(checkout, "rev-parse", "--git-common-dir").trim(),
+    },
+  );
+  const controllerRegistered = await registerOnClaude(
+    fx,
+    controller.windowId,
+    "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f",
+    fx.root,
+  );
+  const claudeControllerProjection = projectionFile(fx, "claude-code", controller.windowId);
+  equal(existsSync(claudeControllerProjection), true, "Claude registration published a projection");
+  // Codex 的 pod 视图看到对端的绑定：Controller 已绑定，design 与 test 未绑定即 creating。
+  const observed = await pod(fx, { mode: "recover", podId });
+  if (observed.kind !== "WakeflowPodMutation") throw new Error("Expected mutation.");
+  equal(observed.disposition, "healthy");
+  equal(observed.pod?.state, "creating");
+  deepEqual(
+    observed.windows.filter((window) => window.bound).map((window) => window.windowId),
+    [controller.windowId, product.windowId],
+  );
+
+  const branches = [{ repositoryId, disposition: "abandoned" }];
+  const closeRequest = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "close", podId, branches },
+  });
+  if (closeRequest.kind !== "WakeflowPodPreview" || closeRequest.plan === null) {
+    throw new Error("Expected a ready close preview.");
+  }
+  const closing = await pod(fx, {
+    mode: "apply",
+    intent: { kind: "close", podId, branches },
+    planDigest: closeRequest.planDigest,
+  });
+  if (closing.kind !== "WakeflowPodMutation") throw new Error("Expected mutation.");
+  equal(closing.pod?.state, "closing");
+  equal(closing.next.frontier, "pod-window-decommission");
+  deepEqual(closing.next.blockers, [
+    `window-bound:${controller.windowId}`,
+    `window-bound:${product.windowId}`,
+  ]);
+
+  // 本宿主的窗口已退役、检出已移除：只剩 Claude 握着的 Controller 绑定，它必须阻塞 close-complete
+  // （此前 Codex 看不到它，pod 会被删出配置，留下无工具可退的孤儿绑定）。
+  if (productRegistered.binding === null) throw new Error("Expected binding.");
+  await decommission(fx, product.windowId, productRegistered.binding);
+  git(fx.product, "worktree", "remove", "--force", checkout);
+  const blockedByClaude = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "close", podId, branches: [] },
+  });
+  if (blockedByClaude.kind !== "WakeflowPodPreview") throw new Error("Expected preview.");
+  equal(blockedByClaude.status, "blocked");
+  deepEqual(blockedByClaude.blockers, [`window-bound:${controller.windowId}`]);
+  const routed = await pod(fx, { mode: "recover", podId });
+  if (routed.kind !== "WakeflowPodMutation") throw new Error("Expected mutation.");
+  equal(routed.pod?.state, "closing");
+  equal(routed.next.frontier, "pod-window-decommission");
+  deepEqual(routed.next.blockers, [`window-bound:${controller.windowId}`]);
+  // 对账顺带退休了与已退役绑定不同代、检出已不在的 Codex 回执（既有规则）；关闭完成时只剩目录要清。
+  equal(routed.disposition, "retired");
+  equal(routed.retiredReceipts, 1);
+  equal(readConfig(fx).pods.length, 2, "the pod must still be in the config");
+
+  // 从 Claude 退役 Controller 后关闭完成：两宿主的 pod 窗口投影与 Codex 的回执目录都被清理，
+  // primary pod 的投影在两宿主都仍在。
+  if (controllerRegistered.binding === null) throw new Error("Expected Claude binding.");
+  await decommissionOnClaude(fx, controller.windowId, controllerRegistered.binding);
+  equal(existsSync(claudeControllerProjection), true, "decommission republishes the projection");
+  const completePreview = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "close", podId, branches: [] },
+  });
+  if (completePreview.kind !== "WakeflowPodPreview" || completePreview.plan === null) {
+    throw new Error("Expected a ready close-complete preview.");
+  }
+  equal(completePreview.plan.kind, "close-complete");
+  const closed = await pod(fx, {
+    mode: "apply",
+    intent: { kind: "close", podId, branches: [] },
+    planDigest: completePreview.planDigest,
+  });
+  if (closed.kind !== "WakeflowPodMutation") throw new Error("Expected mutation.");
+  equal(closed.disposition, "closed");
+  equal(closed.retiredReceipts, 0);
+  const finalConfig = readConfig(fx);
+  equal(finalConfig.pods.length, 1);
+  for (const hostId of ["codex", "claude-code"] as const) {
+    for (const window of created.windows) {
+      equal(
+        existsSync(projectionFile(fx, hostId, window.windowId)),
+        false,
+        `${hostId} projection of ${window.windowId} survived the pod close`,
+      );
+    }
+    for (const window of finalConfig.topology.windows) {
+      equal(existsSync(projectionFile(fx, hostId, window.windowId)), true);
+    }
+    equal(
+      existsSync(path.join(fx.root, ".wakeflow-local/runtime/hosts", hostId, "pods", podId)),
+      false,
+      `${hostId} receipt directory survived the pod close`,
+    );
+  }
 });

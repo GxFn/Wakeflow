@@ -28,6 +28,7 @@ import {
   parseGitWorktreePorcelain,
   readPodWorktreeReceipt,
   retirePodReceipts,
+  retirePodReceiptsAllHosts,
   retirePodWorktreeReceipt,
   writePodWorktreeReceipt,
 } from "../../src/kernel/pod-worktree-receipts.js";
@@ -36,8 +37,9 @@ import { useDisposableDurability } from "../support/disposable-durability.js";
 useDisposableDurability();
 
 /**
- * worktree 回执（§13.91 D4）：porcelain 解析、用 `.git` 指针文件与 admin 目录核对的准入、
- * 0700/0600 回执存储。宿主由测试代替：真实 `git worktree add` 造出检出。
+ * 1 级（组件）：worktree 回执（§13.91 D4）：porcelain 解析、用 `.git` 指针文件与 admin 目录核对的
+ * 准入、0700/0600 回执存储；跨宿主列举按仓库合并、同仓库两宿主都有回执即 receipt-conflict，全部宿主
+ * 的回执目录一次清除（open-items W9、W7）。宿主由测试代替：真实 `git worktree add` 造出检出。
  */
 
 const POD_ID = "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -261,6 +263,38 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   deepEqual(await listPodWorktreeReceipts(root, "codex", POD_ID), [receipt]);
   deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [receipt]);
   deepEqual(await listPodReceiptDirectories(root, "codex"), [POD_ID]);
+  // 跨宿主合并（W9）：对端宿主对另一仓库的回执并入同一集合（按仓库排序）；同一仓库在两个宿主都有
+  // 回执是矛盾事实，显式 receipt-conflict 而不是任取其一；单宿主列举不受影响。
+  mkdirSync(path.join(workspacePath, ".wakeflow-local", "runtime", "hosts", "claude-code"), {
+    recursive: true,
+  });
+  const otherRepositoryId = "repository_11111111-1111-4111-8111-111111111111";
+  const claudeDraft = (repositoryId: string) => ({
+    hostId: "claude-code" as const,
+    podId: POD_ID,
+    windowId: WINDOW_ID,
+    repositoryId,
+    bindingId: BINDING_ID,
+    worktree: { path: fixture.detached, head: fixture.head, branch: null, locked: false },
+    observedAt: OBSERVED_AT,
+  });
+  const claudeReceipt = createPodWorktreeReceipt(claudeDraft(otherRepositoryId));
+  await writePodWorktreeReceipt(root, claudeReceipt);
+  deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [claudeReceipt, receipt]);
+  await writePodWorktreeReceipt(root, createPodWorktreeReceipt(claudeDraft(REPOSITORY_ID)));
+  await rejects(
+    listPodWorktreeReceiptsAnyHost(root, POD_ID),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "io-failure" &&
+      error.reason === "receipt-conflict" &&
+      error.details?.repositoryId === REPOSITORY_ID &&
+      error.details?.hostId === "codex" &&
+      error.details?.otherHostId === "claude-code",
+  );
+  deepEqual(await listPodWorktreeReceipts(root, "codex", POD_ID), [receipt]);
+  equal(await retirePodWorktreeReceipt(root, "claude-code", POD_ID, REPOSITORY_ID), true);
+  deepEqual(await listPodWorktreeReceiptsAnyHost(root, POD_ID), [claudeReceipt, receipt]);
   equal(await observeWorktreeCheckout(receipt), "present");
   // 占用查找（§13.128）：同一检出被另一个 pod 的回执指着即命中；排除自己的 pod；别的路径不命中。
   const otherPod = "pod_ffffffff-ffff-4fff-8fff-ffffffffffff";
@@ -289,6 +323,14 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   equal(await retirePodReceipts(root, "codex", POD_ID), true);
   equal(existsSync(path.dirname(path.dirname(file))), false);
   equal(await retirePodReceipts(root, "codex", POD_ID), false);
+  // 全部宿主的回执目录一次清除（W7）：两个宿主目录都在即 2，再来即 0。
+  await writePodWorktreeReceipt(root, receipt);
+  equal(await retirePodReceiptsAllHosts(root, POD_ID), 2);
+  equal(
+    existsSync(path.join(workspacePath, ".wakeflow-local/runtime/hosts/claude-code/pods", POD_ID)),
+    false,
+  );
+  equal(await retirePodReceiptsAllHosts(root, POD_ID), 0);
   git(fixture.main, "worktree", "remove", "--force", fixture.linked);
   equal(await observeWorktreeCheckout(receipt), "absent");
 });

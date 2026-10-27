@@ -153,6 +153,7 @@ interface ObserveOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly argv?: readonly string[];
   readonly artifactManifestDigest?: string;
+  readonly artifactVersion?: string;
   readonly projectWindowState?: HookObserverWindowStateProjector;
 }
 
@@ -169,6 +170,7 @@ function observe(
     ...(options.artifactManifestDigest === undefined
       ? {}
       : { artifactManifestDigest: options.artifactManifestDigest as never }),
+    ...(options.artifactVersion === undefined ? {} : { artifactVersion: options.artifactVersion }),
     ...(options.projectWindowState === undefined
       ? {}
       : { projectWindowState: options.projectWindowState }),
@@ -1042,7 +1044,7 @@ test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥�
   }
 });
 
-test("launcher 交来的制品 manifest 摘要原样进记录，没交时为 null（§13.127）", async (t) => {
+test("launcher 交来的制品 manifest 摘要与版本原样进记录，没交时为 null（§13.127；§3.6 C6）", async (t) => {
   const fixture = createFixture(t);
   const host: HostId = "claude-code";
   const sessionId = SESSION_IDS[host];
@@ -1051,7 +1053,7 @@ test("launcher 交来的制品 manifest 摘要原样进记录，没交时为 nul
   const started = await observe(
     host,
     hookPayload("SessionStart", sessionId, fixture.workspace, fixture.transcriptPath, {}),
-    { artifactManifestDigest: artifact },
+    { artifactManifestDigest: artifact, artifactVersion: "1.2.0" },
   );
   equal(started.code, null);
   const stopped = await observe(
@@ -1065,7 +1067,9 @@ test("launcher 交来的制品 manifest 摘要原样进记录，没交时为 nul
   const inventory = await readBack(fixture.workspace, host);
   const byEvent = new Map(inventory.records.map((record) => [record.event, record]));
   equal(byEvent.get("session-start")?.artifactManifestDigest, artifact);
+  equal(byEvent.get("session-start")?.artifactVersion, "1.2.0");
   equal(byEvent.get("stop")?.artifactManifestDigest, null);
+  equal(byEvent.get("stop")?.artifactVersion, null);
 });
 
 test("ADR-0023：已绑定会话的事件投影为 tmux 窗口状态；未绑定、不在 tmux 里或其他通知类型不投影", async (t) => {

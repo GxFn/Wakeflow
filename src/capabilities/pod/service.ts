@@ -26,9 +26,11 @@ import {
   type JsonValue,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
-import type {
-  RootedDirectory,
-  RootedDirectoryDurability,
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  type RootedDirectory,
+  type RootedDirectoryDurability,
+  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
@@ -38,9 +40,9 @@ import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
-  listPodWorktreeReceipts,
+  listPodWorktreeReceiptsAnyHost,
   type PodWorktreeReceipt,
-  retirePodReceipts,
+  retirePodReceiptsAllHosts,
   retirePodWorktreeReceipt,
   observeWorktreeCheckout,
   type WorktreeCheckoutObservation,
@@ -94,13 +96,24 @@ import {
  * create 与两段 close 都是一次配置事务：在 preview 读到的配置快照上 CAS 替换 `wakeflow.config.json`，
  * 不写别的东西；worktree pod 的 creating / ready / closing / closed 由配置记录加绑定登记表与
  * worktree 回执派生。recover 只做回执对账。调用方身份不在线上："只有 main 的 Controller 调用"
- * 是 skills 文本规则。
+ * 是 skills 文本规则。绑定、投影退役与回执都按组合根提供的全部宿主读写（open-items W7、W9）：
+ * 双宿主初始化的工作区里 pod 的窗口可以在任一宿主登记，尚未初始化的宿主运行时即空集。
  */
 
-export interface PodHostFacade {
+/** 一个宿主的纯数据 profile：绑定登记表与窗口运行投影按它定位。 */
+export interface PodHost {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+}
+
+export interface PodHostFacade extends PodHost {
+  /**
+   * 组合根固定提供的全部宿主（本宿主在首位，open-items W7）：绑定按每个宿主读、投影按每个宿主
+   * 退役；同一窗口在多个宿主都有绑定时取首个。本宿主自己的 profile 只给处置引导与配置事务后的
+   * 投影刷新。
+   */
+  readonly hosts: readonly Readonly<PodHost>[];
 }
 
 export interface ExecutePodOptions {
@@ -240,15 +253,31 @@ function podWindowIds(context: PodSliceContext, podId: string): readonly string[
 
 // ---- 事实加载 ----------------------------------------------------------------------
 
-async function loadBindings(
+/** 宿主运行时尚未物化（该宿主的制品还没初始化过本工作区）：该宿主没有绑定，不是读失败。 */
+async function bindingRootAbsent(
+  root: RootedDirectory,
+  bindingRootRef: PortableResourcePath,
+): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(bindingRootRef, "$bindings");
+    return false;
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return true;
+    throw error;
+  }
+}
+
+async function loadHostBindings(
   context: PodSliceContext,
+  host: Readonly<PodHost>,
 ): Promise<readonly Readonly<WakeflowWindowHostBinding>[]> {
   try {
     const authority = compileWakeflowWindowHostBindingStoreAuthority(
       context.snapshot.model,
-      context.facade.resourceProfile,
-      context.facade.identityProfile,
+      host.resourceProfile,
+      host.identityProfile,
     );
+    if (await bindingRootAbsent(context.root, authority.bindingRootRef)) return Object.freeze([]);
     return (
       await inspectWakeflowWindowHostBindingInventory(
         context.root,
@@ -261,8 +290,25 @@ async function loadBindings(
       if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", "binding-store", "$request.root", { cause: error });
     }
+    if (error instanceof RootedDirectoryError) {
+      fail("precondition-failed", "binding-store", "$request.root", { cause: error });
+    }
     throw error;
   }
+}
+
+/**
+ * 全部宿主的绑定（open-items W7）：pod 的窗口可以在任一宿主登记，关闭完成前必须看到对端仍在的
+ * 绑定，否则 Codex 关掉 Claude 还握着的 pod 会留下无工具可退的孤儿绑定。按 `facade.hosts` 顺序拼接。
+ */
+async function loadBindings(
+  context: PodSliceContext,
+): Promise<readonly Readonly<WakeflowWindowHostBinding>[]> {
+  const bindings: Readonly<WakeflowWindowHostBinding>[] = [];
+  for (const host of context.facade.hosts) {
+    bindings.push(...(await loadHostBindings(context, host)));
+  }
+  return Object.freeze(bindings);
 }
 
 /** 回执的公开视图（G7）：unknown 以 checkout-unknown 报出，不冒充缺席。 */
@@ -282,13 +328,14 @@ async function loadPodFacts(
   const bindings = await loadBindings(context);
   const bindingIdByWindowId = new Map<string, string>();
   for (const binding of bindings) {
-    if (windowIds.includes(binding.windowId)) {
+    // 同一窗口在多个宿主都有绑定时取 hosts 顺序里的第一份（与观察切片同一规则）。
+    if (windowIds.includes(binding.windowId) && !bindingIdByWindowId.has(binding.windowId)) {
       bindingIdByWindowId.set(binding.windowId, binding.bindingId);
     }
   }
-  const stored = await listPodWorktreeReceipts(
+  // 回执按全部宿主合并、按仓库唯一（W9）：与归档、证据与观察读到的是同一个集合。
+  const stored = await listPodWorktreeReceiptsAnyHost(
     context.root,
-    context.facade.hostId,
     pod.podId,
     signalOptions(context.options.signal),
   );
@@ -494,26 +541,29 @@ async function replaceConfig(context: PodSliceContext, desired: JsonValue): Prom
 }
 
 /**
- * 窗口离开配置（pod 关闭完成）后退役本宿主的投影文件（§13.114 D3）：只按已知 windowId 精确
- * 删除，不枚举投影目录；与刷新同一裁决——失败不让配置事务失败，中止仍上抛。
+ * 窗口离开配置（pod 关闭完成）后退役每个宿主的投影文件（§13.114 D3，open-items W7）：只按已知
+ * windowId 精确删除，不枚举投影目录，尚未初始化的宿主没有文件即 absent；与刷新同一裁决——失败
+ * 不让配置事务失败，中止仍上抛。
  */
 async function retireProjectionsQuietly(
   context: PodSliceContext,
   windowIds: readonly string[],
 ): Promise<void> {
   if (windowIds.length === 0) return;
-  try {
-    await retireWakeflowWindowRuntimeProjections(context.root, {
-      resourceProfile: context.facade.resourceProfile,
-      windowIds,
-      ...signalOptions(context.options.signal),
-    });
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowRuntimeProjectionError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      return;
+  for (const host of context.facade.hosts) {
+    try {
+      await retireWakeflowWindowRuntimeProjections(context.root, {
+        resourceProfile: host.resourceProfile,
+        windowIds,
+        ...signalOptions(context.options.signal),
+      });
+    } catch (error: unknown) {
+      if (error instanceof WakeflowWindowRuntimeProjectionError) {
+        if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
 }
 
@@ -627,10 +677,15 @@ async function applyCloseComplete(
   };
   await replaceConfig(context, desired);
   await retireProjectionsQuietly(context, removedWindowIds);
+  // 回执目录是 Wakeflow 自己的私有文件：两个宿主目录都清（W7），计数与计划时看到的同一个合并集合。
   const receiptCount = (
-    await listPodWorktreeReceipts(context.root, context.facade.hostId, plan.podId)
+    await listPodWorktreeReceiptsAnyHost(
+      context.root,
+      plan.podId,
+      signalOptions(context.options.signal),
+    )
   ).length;
-  await retirePodReceipts(context.root, context.facade.hostId, plan.podId);
+  await retirePodReceiptsAllHosts(context.root, plan.podId);
   return Object.freeze({ disposition: "closed", podId: plan.podId, retiredReceipts: receiptCount });
 }
 
@@ -681,11 +736,12 @@ async function recoverPod(context: PodSliceContext, operationId: string): Promis
   const podId = operationId as WakeflowDurableId<"pod">;
   const pod = podOf(context, podId);
   if (pod === null) {
-    const removed = await retirePodReceipts(context.root, context.facade.hostId, podId);
+    // 孤儿目录可能留在任一宿主下（W7）：计数是删掉的宿主目录数。
+    const removed = await retirePodReceiptsAllHosts(context.root, podId);
     return Object.freeze({
-      disposition: removed ? ("retired" as const) : ("healthy" as const),
+      disposition: removed > 0 ? ("retired" as const) : ("healthy" as const),
       podId,
-      retiredReceipts: removed ? 1 : 0,
+      retiredReceipts: removed,
     });
   }
   const facts = await loadPodFacts(context, pod);
@@ -698,7 +754,7 @@ async function recoverPod(context: PodSliceContext, operationId: string): Promis
     if (
       await retirePodWorktreeReceipt(
         context.root,
-        context.facade.hostId,
+        entry.receipt.hostId,
         podId,
         entry.receipt.repositoryId,
         signalOptions(context.options.signal),

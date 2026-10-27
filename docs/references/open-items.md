@@ -782,7 +782,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：已执行 §13.208，现场 L13 待缓存刷新）
 - **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：已执行 §13.209）
 - **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：已执行 §13.210，目录 104,406 → 约 102,900 字节）
-- **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：待执行）
+- **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：已执行 §13.215（批 D′：版本轴、per-host 摘要比较、维护守卫、写者戳、artifact-older-than-stream 门；安装目录布局与升级方向仍待现场核对））
 - **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：待执行）
 
 ## W. Codex 审阅 35 项（2026-10-22）
@@ -793,16 +793,16 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W2** [P2 / 触发中] CR-H2：Claude worktree 普通 resume 输出不能用于 relocate（批 J；状态：待执行）。修：resume 带 --worktree 且 hook cwd 存在时 observeWorktree，pending 同 launch。
 - **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J；状态：待执行）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。
 - **W4** [P2 / 触发中] CR-H4：旧 SessionEnd 可释放恢复会话的新 claim（批 I；状态：已修 §13.214）。修：loadHookSessions 按 recordedAt 只计最新 end 晚于最新 start 的会话。
-- **W5** [P2 / 触发中] CR-H6：Claude reconcile 被自己的设置贡献阻止修复缺失支撑面（批 D′；状态：待执行）。修：composition 对 reconcile 的 missing 根走 planned-missing，statusline 同步。
+- **W5** [P2 / 触发中] CR-H6：Claude reconcile 被自己的设置贡献阻止修复缺失支撑面（批 D′；状态：已修 §13.215）。修：composition 对 reconcile 的 missing 根走 planned-missing，statusline 同步。
 - **W6** [P2 / 触发低] CR-H7：portable settings 在两次读取间变化后先写入再报 stale（批 I；状态：已修 §13.214）。修：发布器接 expectedSourceDigest，不等即 source-changed 不写。
-- **W7** [P2 / 触发低] CR-H8：跨宿主关闭 Pod 漏掉对端仍在的窗口绑定（批 D′；状态：待执行）。修：pod facade 增 hosts，loadPodFacts 与 retire 按全部宿主。
+- **W7** [P2 / 触发低] CR-H8：跨宿主关闭 Pod 漏掉对端仍在的窗口绑定（批 D′；状态：已修 §13.215）。修：pod facade 增 hosts，loadPodFacts 与 retire 按全部宿主。
 - **W8** [P2 / 触发低] CR-R-REC-01：工作区读写租约释放失败覆盖业务结果（批 H；状态：已修 §13.213）。修：rooted-read-write-scope 的 finally 改为与 withRootedExclusiveFileLock 同一结算。
-- **W9** [P2 / 触发低] CR-R-REC-02：跨宿主回执汇总提前返回（批 D′；状态：待执行）。修：listPodWorktreeReceiptsAnyHost 合并全部宿主、按仓库唯一、冲突显式失败。
+- **W9** [P2 / 触发低] CR-R-REC-02：跨宿主回执汇总提前返回（批 D′；状态：已修 §13.215）。修：listPodWorktreeReceiptsAnyHost 合并全部宿主、按仓库唯一、冲突显式失败。
 - **W10** [P2 / 触发中] CR-R-REC-03：可录入的深层证据使 Demand 无法归档/取消（批 H；状态：已修 §13.213）。修：maxDepth 从 Demand 树容量换算（减四层），preview 用同一容量给累计阻塞。
 - **W11** [P2 / 触发低] CR-R-REC-04：final 目录同步失败被回读改判成功并退休日志（批 H；状态：已修 §13.213）。修：durability-failure 不视作 current；final 可见前补父目录 sync，失败留 journal。
 - **W12** [P2 / 触发极低] CR-R-ROOT-01：合法幂等键命中继承属性时被误当提交序号（批 H；状态：已修 §13.213）。修：stream-index 用无原型字典；repository 用 Object.hasOwn 并校验序号。
 - **W13** [P2 / 触发中] CR-R-ROOT-03：并发 prepare 误回收在途 claim（批 I；状态：已修 §13.214）。修：孤儿回收移到 appendCommand 成功之后，CAS 即围栏。
-- **W14** [P2 / 触发低] CR-R-ROOT-04：Codex 用自身制品摘要误判 Claude 窗口过期（批 D′；状态：待执行）。修：ObservationHost 增 per-host artifact，windowRuntimeOf 取绑定宿主条目；C6/C11 前置。
+- **W14** [P2 / 触发低] CR-R-ROOT-04：Codex 用自身制品摘要误判 Claude 窗口过期（批 D′；状态：已修 §13.215）。修：ObservationHost 增 per-host artifact，windowRuntimeOf 取绑定宿主条目；C6/C11 前置。
 - **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：待执行）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
 - **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：已修 §13.212）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
 - **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：已修 §13.212）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
@@ -825,3 +825,4 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：已修 §13.212）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
 - **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：已修 §13.211）。修：export-ci 依回执 selection 判完整。
 - **W36** [P3 / 触发低] 新发现（§13.213，批 H）：apply 一条数千文件的受管证据记录耗时数分钟（stage 物化与发布链在数千文件时很慢，与目录是否扁平无关；4095 文件的来源只做 preview 就要约 9 秒捕获）。修法方向：发布链按目录批量物化或流式写入，单记录文件数上限是否下调由用户定。状态：待排。
+- **W37** [P3 / 触发中] 新发现（§13.215，批 D′ 接线）：`wakeflow_verify` 结果 Schema 的门码 `code` 模式不允许下划线，而既有 `demand-root-audit`、`evidence-integrity`、`append-candidates-clear` 的失败码带 `demand_…` id，带 Demand id 的失败码会在输出准入被拒——疑似既有缺陷，待复现并修（放宽模式或改用不带 id 的码加 details）。状态：待排。

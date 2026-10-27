@@ -28,6 +28,10 @@ import {
   WAKEFLOW_CONFIG_SCHEMA_VERSION,
 } from "../kernel/layout.js";
 import { computePromptDigest } from "../kernel/prompt-digest.js";
+import {
+  parseWakeflowArtifactManifestIdentity,
+  type WakeflowArtifactManifestIdentity,
+} from "../kernel/wakeflow-artifact-identity.js";
 
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
@@ -100,6 +104,8 @@ export interface HookObserverInput {
   readonly clock?: () => Date;
   /** 观察脚本所属制品的 manifest 摘要；launcher 在进程入口算一次，测试可注入（§13.127）。 */
   readonly artifactManifestDigest?: Sha256Digest | null;
+  /** 观察脚本所属制品的 manifest `version`；与摘要同源同时读出，测试可注入（1.2 计划 §3.6 C6）。 */
+  readonly artifactVersion?: string | null;
   /** 窗口状态投影器；缺省用一次短命的 tmux 客户端，测试注入桩（ADR-0023）。 */
   readonly projectWindowState?: HookObserverWindowStateProjector;
 }
@@ -372,12 +378,14 @@ function recordInput(
   event: HostHookEvent,
   clock: () => Date,
   artifactManifestDigest: Sha256Digest | null | undefined,
+  artifactVersion: string | null | undefined,
 ): Readonly<HostHookObservationInput> | null {
   const required = requiredInput(hostId, payload, event, clock);
   if (required === null) return null;
   return Object.freeze({
     ...required,
     artifactManifestDigest: artifactManifestDigest ?? null,
+    artifactVersion: artifactVersion ?? null,
     turnId: degradeToKernel(required, "turnId", payload.turnId),
     promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
     lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
@@ -849,6 +857,7 @@ async function observe(
     payload.value.event,
     clock,
     input.artifactManifestDigest,
+    input.artifactVersion,
   );
   if (record === null) return outcome("stdin-invalid", written);
   const subject = await resolveSubject(payload.value.cwd, isRecord(input.env) ? input.env : {});
@@ -975,13 +984,16 @@ async function readStandardInput(): Promise<Uint8Array> {
 }
 
 /**
- * 观察脚本所属制品的 manifest 摘要（§13.127）：制品根是 `lib/entrypoints/<本文件>` 的上两级；
- * 测试构建没有 manifest，读成 null。用 URL 相对解析而不引入 node:url，保持入口闭包不变（D1）。
+ * 观察脚本所属制品的身份（§13.127；版本轴 §3.6 C6）：制品根是 `lib/entrypoints/<本文件>` 的上两级，
+ * 摘要与 `version` 从同一次读出的 manifest 字节解析；测试构建没有 manifest，读成 null。用 URL 相对
+ * 解析而不引入 node:url，保持入口闭包不变（D1）。
  */
-async function artifactManifestDigestOf(importMetaUrl: string): Promise<Sha256Digest | null> {
+async function artifactIdentityOf(
+  importMetaUrl: string,
+): Promise<Readonly<WakeflowArtifactManifestIdentity> | null> {
   try {
     const bytes = await readFile(new URL("../../artifact-manifest.json", importMetaUrl));
-    return computeSha256Digest(new Uint8Array(bytes), "$artifactManifest");
+    return parseWakeflowArtifactManifestIdentity(new Uint8Array(bytes));
   } catch {
     return null;
   }
@@ -996,11 +1008,13 @@ export async function main(): Promise<void> {
   registerProcessGuards();
   try {
     const stdin = await readStandardInput();
+    const artifact = await artifactIdentityOf(import.meta.url);
     const result = await runWakeflowHookObserver({
       argv: process.argv.slice(2),
       env: process.env,
       stdin,
-      artifactManifestDigest: await artifactManifestDigestOf(import.meta.url),
+      artifactManifestDigest: artifact?.manifestDigest ?? null,
+      artifactVersion: artifact?.version ?? null,
     });
     if (result.code !== null) writeStderrLine(result.code);
   } catch {

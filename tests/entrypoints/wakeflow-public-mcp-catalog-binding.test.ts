@@ -44,6 +44,8 @@ test("登记表把二十个工具绑定到同名executor，且只公开请求Sch
   for (const field of WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS) {
     executors[field] = async (request, context): Promise<never> => {
       equal(context.signal, signal);
+      // 没有组合根提供写者戳时，执行上下文的 writer 固定为 null（C11）。
+      equal(context.writer, null);
       calls.push(Object.freeze({ field, request }));
       throw new Error(`sentinel:${field}`);
     };

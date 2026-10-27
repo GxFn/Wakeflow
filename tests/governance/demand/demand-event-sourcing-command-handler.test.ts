@@ -1,4 +1,4 @@
-import { equal, rejects } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -14,6 +14,7 @@ import {
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { disposableRoot } from "../../support/temp-root.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,
@@ -27,6 +28,12 @@ import {
 } from "../tasking/task-package.fixture.js";
 
 useDisposableDurability();
+
+/**
+ * Governance / Demand Event Sourcing 命令处理程序（ADR-0005），1 级（组件）测试：load-decide-append
+ * 管线、按 commitId 与幂等键的重试语义、决策边界拒绝，以及注入的写者戳随提交持久化而不参与幂等
+ * （C11，1.2 计划 §3.6）。
+ */
 
 const DEMAND_ID = TASKING_DEMAND_ID;
 const EVENT_ID = parseWakeflowDurableIdOfKind(
@@ -308,5 +315,70 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"e".repeat(64)}`),
+});
+const OTHER_WRITER = Object.freeze({
+  version: "1.3.0",
+  manifestDigest: parseSha256Digest(`sha256:${"f".repeat(64)}`),
+});
+
+test("命令处理程序把注入的写者戳写进提交，重试返回首次的戳，省略或 null 不盖戳，畸形戳按 input 拒绝（C11）", async (t) => {
+  const fixtureRoot = disposableRoot(t, "wakeflow-demand-command-handler-writer-");
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    const eventStore = new DemandFileEventStore(root);
+    const repository = new DemandEventSourcingRepository(root);
+    await eventStore.initialize();
+
+    await rejects(
+      executeDemandEventSourcingCommand(repository, COMMAND, {
+        commitId: COMMIT_ID,
+        expectedStreamRevision: 0,
+        writer: { version: "v1", manifestDigest: WRITER.manifestDigest },
+      }),
+      (error: unknown) =>
+        error instanceof DemandEventSourcingCommandHandlerError &&
+        error.reason === "input" &&
+        error.path === "$/writer",
+    );
+    equal((await eventStore.readCommits()).commits.length, 0);
+
+    const committed = await executeDemandEventSourcingCommand(repository, COMMAND, {
+      commitId: COMMIT_ID,
+      expectedStreamRevision: 0,
+      writer: WRITER,
+    });
+    equal(committed.disposition, "committed");
+    deepEqual(committed.commit.writer, WRITER);
+    deepEqual((await eventStore.readCommits()).commits[0]?.writer, WRITER);
+
+    // 另一构建按同一 commitId 重试：命中首次提交，戳不改写。
+    const retried = await executeDemandEventSourcingCommand(repository, COMMAND, {
+      commitId: COMMIT_ID,
+      expectedStreamRevision: 0,
+      writer: OTHER_WRITER,
+    });
+    equal(retried.disposition, "idempotent");
+    deepEqual(retried.commit.writer, WRITER);
+    equal((await eventStore.readCommits()).commits.length, 1);
+
+    // null 与省略同义：提交不带戳。
+    const cancelled = await executeDemandEventSourcingCommand(repository, cancellationCommand(), {
+      commitId: OTHER_COMMIT_ID,
+      expectedStreamRevision: 1,
+      writer: null,
+    });
+    equal(cancelled.disposition, "committed");
+    equal(Object.hasOwn(cancelled.commit, "writer"), false);
+
+    deepEqual((await repository.audit()).writers, [WRITER, null]);
+    deepEqual((await repository.findCommitById(COMMIT_ID))?.writer, WRITER);
+  } finally {
+    await root.close();
   }
 });

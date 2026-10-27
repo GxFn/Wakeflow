@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, equal, notEqual, throws } from "node:assert/strict";
 import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -11,11 +11,13 @@ import {
   parseDemandEventAppendCandidateFileName,
   parseDemandEventStreamCommitFileName,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
+import { computeDemandEventSourcingStoredEventDigest } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
 import {
   applyDemandEventStreamCommit,
   assertPreparedDemandEventStreamCommit,
   computeDemandEventStreamCommitDigest,
   DemandEventStreamCommitError,
+  parseDemandEventStreamCommit,
   parseDemandEventStreamCommitDocument,
   planDemandEventStreamCommit,
   prepareDemandEventStreamCommit,
@@ -26,6 +28,12 @@ import {
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+
+/**
+ * Governance / Demand Event Sourcing 提交记录（ADR-0005），0 级（纯逻辑）测试：流位置与文件名词汇、
+ * 一次 append 形成固定 commitSequence 的不可变提交、wire 往返，以及可选写者戳的持久化与摘要边界
+ * （C11，1.2 计划 §3.6）。
+ */
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -182,4 +190,128 @@ test("一次 Demand Event Sourcing append 形成一个固定 commitSequence 的 
       }),
     DemandEventStreamCommitError,
   );
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"e".repeat(64)}`),
+});
+const OTHER_WRITER = Object.freeze({
+  version: "1.3.0-rc.1",
+  manifestDigest: parseSha256Digest(`sha256:${"f".repeat(64)}`),
+});
+
+test("提交记录的可选写者戳随提交持久化并进提交摘要链，不进事件数据摘要，旧记录缺席读回为 null（C11，计划 §3.6）", () => {
+  const published = decideDemandEventSourcingCommand(null, {
+    commandType: "publication.publish-demand",
+    commandVersion: 1,
+    demandId: DEMAND_ID,
+    eventId: PUBLISHED_EVENT_ID,
+    recordedAt: PUBLISHED_AT,
+    identityDigest: IDENTITY_DIGEST,
+    authorityDigest: AUTHORITY_DIGEST,
+  });
+  const input = Object.freeze({
+    commitId: FIRST_COMMIT_ID,
+    commandDigest: FIRST_COMMAND_DIGEST,
+    events: published,
+  });
+  const unstamped = prepareDemandEventStreamCommit(null, input);
+  const stamped = prepareDemandEventStreamCommit(null, { ...input, writer: WRITER });
+  const restamped = planDemandEventStreamCommit(null, { ...input, writer: OTHER_WRITER });
+
+  // 戳随提交；省略与 null 同义，读回时缺席。
+  deepEqual(stamped.commit.writer, WRITER);
+  equal(Object.hasOwn(unstamped.commit, "writer"), false);
+  equal(unstamped.commit.writer ?? null, null);
+  equal(
+    Object.hasOwn(planDemandEventStreamCommit(null, { ...input, writer: null }), "writer"),
+    false,
+  );
+
+  // 事件数据摘要与状态摘要不含戳：同一命令带不同戳得到相同的事件与状态。
+  const unstampedEventDigest = computeDemandEventSourcingStoredEventDigest(
+    unstamped.commit.events[0],
+  );
+  equal(
+    computeDemandEventSourcingStoredEventDigest(stamped.commit.events[0]),
+    unstampedEventDigest,
+  );
+  equal(computeDemandEventSourcingStoredEventDigest(restamped.events[0]), unstampedEventDigest);
+  equal(
+    stamped.commit.events[0].resultingStateDigest,
+    unstamped.commit.events[0].resultingStateDigest,
+  );
+  equal(stamped.aggregate.lastEventDigest, unstamped.aggregate.lastEventDigest);
+  equal(stamped.aggregate.stateDigest, unstamped.aggregate.stateDigest);
+  // 提交摘要链覆盖戳。
+  notEqual(
+    computeDemandEventStreamCommitDigest(stamped.commit),
+    computeDemandEventStreamCommitDigest(unstamped.commit),
+  );
+  equal(stamped.aggregate.lastCommitDigest, computeDemandEventStreamCommitDigest(stamped.commit));
+
+  // wire 往返；盖戳之前写出的记录没有 writer 键，读回缺席。
+  const text = renderDemandEventStreamCommit(stamped.commit);
+  deepEqual((JSON.parse(text) as { writer?: unknown }).writer, {
+    version: "1.2.0",
+    manifestDigest: WRITER.manifestDigest,
+  });
+  deepEqual(parseDemandEventStreamCommitDocument(text), stamped.commit);
+  const legacy = parseDemandEventStreamCommitDocument(
+    renderDemandEventStreamCommit(unstamped.commit),
+  );
+  equal(Object.hasOwn(legacy, "writer"), false);
+
+  // 后继提交可以带另一构建的戳；链按前一提交的完整摘要串联。
+  const cancelled = decideDemandEventSourcingCommand(stamped.aggregate.state, {
+    commandType: "lifecycle.cancel-demand",
+    commandVersion: 1,
+    demandId: DEMAND_ID,
+    eventId: CANCELLED_EVENT_ID,
+    recordedAt: CANCELLED_AT,
+    reason: "用户终止该 Demand",
+  });
+  const second = prepareDemandEventStreamCommit(stamped.aggregate, {
+    commitId: SECOND_COMMIT_ID,
+    commandDigest: SECOND_COMMAND_DIGEST,
+    events: cancelled,
+    writer: OTHER_WRITER,
+  });
+  deepEqual(second.commit.writer, OTHER_WRITER);
+  equal(second.commit.previousCommitDigest, computeDemandEventStreamCommitDigest(stamped.commit));
+  equal(
+    applyDemandEventStreamCommit(stamped.aggregate, second.commit).lastCommitDigest,
+    computeDemandEventStreamCommitDigest(second.commit),
+  );
+
+  // 戳必须恰好是 {version: semver, manifestDigest}。
+  for (const writer of [
+    { version: "v1.2.0", manifestDigest: WRITER.manifestDigest },
+    { version: "1.2", manifestDigest: WRITER.manifestDigest },
+    { version: "1.2.0" },
+    { version: "1.2.0", manifestDigest: WRITER.manifestDigest, extra: true },
+    "1.2.0",
+  ]) {
+    throws(
+      () => planDemandEventStreamCommit(null, { ...input, writer }),
+      (error: unknown) => error instanceof DemandEventStreamCommitError && error.reason === "input",
+    );
+  }
+  throws(
+    () =>
+      planDemandEventStreamCommit(null, {
+        ...input,
+        writer: { version: "1.2.0", manifestDigest: "sha256:zz" },
+      }),
+    (error: unknown) => error instanceof DemandEventStreamCommitError && error.reason === "digest",
+  );
+  // wire 上 null 不是缺席，缺子字段不过 Schema。
+  for (const writer of [null, { version: "1.2.0" }]) {
+    throws(
+      () => parseDemandEventStreamCommit({ ...stamped.commit, writer }),
+      (error: unknown) =>
+        error instanceof DemandEventStreamCommitError && error.reason === "schema",
+    );
+  }
 });

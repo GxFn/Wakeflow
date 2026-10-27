@@ -1,10 +1,11 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowHostMaintenanceContribution } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
@@ -214,4 +215,82 @@ test("intent persistence budget rejects an oversized host payload", () => {
   if (caught instanceof WakeflowMaintenanceExecutionIntentStoreError) {
     equal(caught.reason, "capacity");
   }
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"5".repeat(64)}`),
+});
+
+test("intent carries the optional writer stamp, round-trips it and reconstructs the same plan (C11)", () => {
+  const value = fixture();
+  const unstamped = createWakeflowMaintenanceExecutionIntent(
+    OPERATION_ID,
+    value.plan,
+    value.request,
+    value.config,
+  );
+  equal(Object.hasOwn(unstamped, "writer"), false);
+  deepEqual(
+    createWakeflowMaintenanceExecutionIntent(
+      OPERATION_ID,
+      value.plan,
+      value.request,
+      value.config,
+      null,
+    ),
+    unstamped,
+  );
+  const intent = createWakeflowMaintenanceExecutionIntent(
+    OPERATION_ID,
+    value.plan,
+    value.request,
+    value.config,
+    WRITER,
+  );
+  deepEqual(intent.writer, WRITER);
+  equal(intent.planDigest, value.plan.planDigest);
+  equal(
+    reconstructWakeflowMaintenanceExecutionFromIntent(intent).plan.planDigest,
+    value.plan.planDigest,
+  );
+
+  const text = renderWakeflowMaintenanceExecutionIntent(intent);
+  deepEqual((JSON.parse(text) as { writer?: unknown }).writer, {
+    version: "1.2.0",
+    manifestDigest: WRITER.manifestDigest,
+  });
+  deepEqual(parseWakeflowMaintenanceExecutionIntentDocument(text), intent);
+  equal(
+    computeWakeflowMaintenanceExecutionIntentDigest(JSON.parse(text)),
+    computeWakeflowMaintenanceExecutionIntentDigest(intent),
+  );
+  const legacy = parseWakeflowMaintenanceExecutionIntentDocument(
+    renderWakeflowMaintenanceExecutionIntent(unstamped),
+  );
+  equal(Object.hasOwn(legacy, "writer"), false);
+
+  for (const writer of [
+    { version: "v1", manifestDigest: WRITER.manifestDigest },
+    { version: "1.2.0" },
+    "1.2.0",
+  ]) {
+    throws(
+      () =>
+        createWakeflowMaintenanceExecutionIntent(
+          OPERATION_ID,
+          value.plan,
+          value.request,
+          value.config,
+          writer,
+        ),
+      (error: unknown) =>
+        error instanceof WakeflowMaintenanceExecutionIntentError && error.reason === "input",
+    );
+  }
+  throws(
+    () => parseWakeflowMaintenanceExecutionIntent({ ...intent, writer: null }),
+    (error: unknown) =>
+      error instanceof WakeflowMaintenanceExecutionIntentError && error.reason === "schema",
+  );
 });

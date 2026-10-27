@@ -136,6 +136,8 @@ export async function materializeDemandPublicationStage(
     const snapshotStore = new DemandFileEventSnapshotStore(stageRoot);
     await snapshotStore.recoverPublicationStages(signal === undefined ? undefined : { signal });
     const repository = new DemandEventSourcingRepository(stageRoot);
+    // 有意不盖写者戳（C11）：初始提交由事务用 planDemandEventStreamCommit 规划并以 initialCommitDigest
+    // 绑定，戳进提交摘要链，带戳重算的摘要就对不上下面的比对；Demand 的后续提交才带戳。
     const result = await executeDemandEventSourcingCommand(repository, transaction.initialCommand, {
       commitId: transaction.initialCommit.commitId,
       expectedStreamRevision: 0,

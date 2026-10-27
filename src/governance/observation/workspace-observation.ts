@@ -59,6 +59,7 @@ import {
   type RequirementClaimState,
   renderRequirementBoardIndex,
 } from "../../kernel/requirement-board.js";
+import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import { inspectWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
 import {
   scanWakeflowLegacyResidue,
@@ -121,6 +122,16 @@ export interface ObservationHost {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+  /**
+   * 本宿主制品的身份（§13.127；1.2 计划 §3.6 C6）：只有本进程所属的宿主条目带它——进程启动时的
+   * `version` 与 manifest 摘要，加"现在磁盘上是多少"的读法；对端宿主的制品是另一份安装，本进程读
+   * 不到，条目为 null（或缺省）。摘要只在带身份的宿主上比（R-ROOT-04），版本可跨宿主比。
+   */
+  readonly artifact?: Readonly<{
+    readonly version: string | null;
+    readonly manifestDigest: Sha256Digest | null;
+    readonly readCurrentManifestDigest: () => Sha256Digest | null;
+  }> | null;
   /** 状态栏资产的期望字节摘要与本地设置里的期望条目；没有该表面的宿主为 null。 */
   readonly statuslineAsset: Readonly<{
     readonly fileName: string;
@@ -205,6 +216,8 @@ export interface ObservedHostHooks {
       /** 最近一条记录是 Notification 时它的类型（A7，§13.167）；其他事件为 null。 */
       readonly notificationType: string | null;
       readonly sessionStartObserverManifestDigest: Sha256Digest | null;
+      /** 同一条 session-start 记录里观察器制品的 `version`（§3.6 C6）；旧记录或没有启动记录为 null。 */
+      readonly sessionStartArtifactVersion: string | null;
     }>
   >;
 }
@@ -580,11 +593,13 @@ async function observeHostHooks(
         readonly observerManifestDigest: Sha256Digest | null;
         readonly notificationType: string | null;
         readonly sessionStartObserverManifestDigest: Sha256Digest | null;
+        readonly sessionStartArtifactVersion: string | null;
       }>
     >();
     const latestKeys = new Map<string, string>();
     const startKeys = new Map<string, string>();
     const startDigests = new Map<string, Sha256Digest | null>();
+    const startVersions = new Map<string, string | null>();
     const inventory = await scanHostHookObservations(
       root,
       hostId,
@@ -602,6 +617,7 @@ async function observeHostHooks(
           if (previousStart === undefined || previousStart <= key) {
             startKeys.set(record.sessionId, key);
             startDigests.set(record.sessionId, record.artifactManifestDigest);
+            startVersions.set(record.sessionId, record.artifactVersion);
           }
         }
         const previous = latestKeys.get(record.sessionId);
@@ -613,6 +629,7 @@ async function observeHostHooks(
             observerManifestDigest: record.artifactManifestDigest,
             notificationType: record.notificationType,
             sessionStartObserverManifestDigest: null,
+            sessionStartArtifactVersion: null,
           });
         }
       },
@@ -622,6 +639,7 @@ async function observeHostHooks(
       latestBySession.set(sessionId, {
         ...latest,
         sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
+        sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
       });
     }
     const writeFailures = await countIncidents(
@@ -659,6 +677,50 @@ async function observeHostHooks(
       latestBySession: new Map(),
     });
   }
+}
+
+/**
+ * 所有给定宿主的 hook 会话里，各会话最新一条 session-start 记录所带的最高制品版本（1.2 计划
+ * §3.6 C6）：高于本进程的版本即有更新的制品已在这个工作区里启动过窗口。目录缺席是零条记录；读不出
+ * 的宿主跳过——通道的健康由 verify 的 host-hook-channel 门报，这里只回答"有没有看见更新的版本"；
+ * 中止上抛。维护的预览用它拒绝过期进程的 apply，与 status / verify 的 `superseded` 同一条规则。
+ */
+export async function observeNewestSessionStartArtifactVersion(
+  root: RootedDirectory,
+  hostIds: readonly WakeflowHostId[],
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const versions: (string | null)[] = [];
+  for (const hostId of hostIds) {
+    const startKeys = new Map<string, string>();
+    const startVersions = new Map<string, string | null>();
+    try {
+      await scanHostHookObservations(
+        root,
+        hostId,
+        { event: "session-start" },
+        (record) => {
+          const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+          const previous = startKeys.get(record.sessionId);
+          if (previous === undefined || previous <= key) {
+            startKeys.set(record.sessionId, key);
+            startVersions.set(record.sessionId, record.artifactVersion);
+          }
+        },
+        signalOptions(signal),
+      );
+    } catch (error: unknown) {
+      const reason = reasonOf(error);
+      if (reason === null) throw error;
+      if (reason === "aborted") {
+        if (error instanceof WakeflowError) throw error;
+        fail("io-failure", "aborted", "$signal", { cause: error });
+      }
+      continue;
+    }
+    versions.push(...startVersions.values());
+  }
+  return newestWakeflowArtifactVersion(versions);
 }
 
 async function observePods(

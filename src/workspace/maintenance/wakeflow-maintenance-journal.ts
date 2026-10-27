@@ -30,6 +30,11 @@ import {
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceJournalRef,
 } from "./wakeflow-maintenance-operation-id.js";
+import {
+  parseWakeflowMaintenanceWriter,
+  type WakeflowMaintenanceWriter,
+  WakeflowMaintenanceWriterError,
+} from "./wakeflow-maintenance-writer.js";
 import type { WakeflowStaticMaterializationAction } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
@@ -38,6 +43,8 @@ import type { WakeflowStaticMaterializationAction } from "./wakeflow-static-mate
  * Journal 保存 operation identity、immutable intent摘要、计划/Config/Matrix摘要、按序
  * step ID和checkpoint。恢复事实位于同operation的0600 intent sidecar；journal不复制
  * Config或host payload。执行只允许prepared → affected step → checkpoint → terminal。
+ * 可选的 `writer` 是准备这份 journal 的构建的写者戳（C11）：随后继状态原样携带，不可换；
+ * 盖戳之前的 journal 没有它。
  */
 
 export interface WakeflowMaintenanceJournal {
@@ -54,6 +61,7 @@ export interface WakeflowMaintenanceJournal {
   readonly checkpoint: number;
   readonly affectedStepId: string | null;
   readonly state: "prepared" | "executing" | "terminal";
+  readonly writer?: Readonly<WakeflowMaintenanceWriter>;
 }
 
 export type WakeflowMaintenanceJournalErrorReason =
@@ -107,12 +115,30 @@ function nullableDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null ? null : digest(value, path);
 }
 
-/** 从 ready 且非空的 exact execution plan 创建初始 prepared journal。 */
+/** 可选写者戳的记录片段：没有戳即空片段，带戳即 `{ writer }`。 */
+function optionalWriterStamp(
+  value: unknown,
+  path: string,
+  reason: WakeflowMaintenanceJournalErrorReason,
+): Readonly<{ readonly writer?: Readonly<WakeflowMaintenanceWriter> }> {
+  let writer: Readonly<WakeflowMaintenanceWriter> | null;
+  try {
+    writer = parseWakeflowMaintenanceWriter(value, path);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path);
+    throw error;
+  }
+  return writer === null ? {} : { writer };
+}
+
+/** 从 ready 且非空的 exact execution plan 创建初始 prepared journal；`writerValue` 是可选写者戳。 */
 export function createPreparedWakeflowMaintenanceJournal(
   operationIdValue: unknown,
   intentDigestValue: unknown,
   planValue: unknown,
+  writerValue?: unknown,
 ): Readonly<WakeflowMaintenanceJournal> {
+  const stamp = optionalWriterStamp(writerValue, "$writer", "input");
   let operationId: WakeflowMaintenanceOperationId;
   try {
     operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
@@ -156,6 +182,7 @@ export function createPreparedWakeflowMaintenanceJournal(
     checkpoint: 0,
     affectedStepId: null,
     state: "prepared",
+    ...stamp,
   });
 }
 
@@ -218,6 +245,7 @@ export function parseWakeflowMaintenanceJournal(
     checkpoint,
     affectedStepId,
     state,
+    ...optionalWriterStamp(validated.value.writer, "$journal.writer", "schema"),
   });
 }
 
@@ -236,7 +264,16 @@ function journalRepresentation(journal: Readonly<WakeflowMaintenanceJournal>) {
     checkpoint: journal.checkpoint,
     affectedStepId: journal.affectedStepId,
     state: journal.state,
+    ...(journal.writer === undefined ? {} : { writer: journal.writer }),
   };
+}
+
+function sameWriter(
+  left: Readonly<WakeflowMaintenanceWriter> | undefined,
+  right: Readonly<WakeflowMaintenanceWriter> | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return left.version === right.version && left.manifestDigest === right.manifestDigest;
 }
 
 function sameImmutableJournal(
@@ -244,6 +281,7 @@ function sameImmutableJournal(
   right: Readonly<WakeflowMaintenanceJournal>,
 ): boolean {
   return (
+    sameWriter(left.writer, right.writer) &&
     left.operationId === right.operationId &&
     left.intentDigest === right.intentDigest &&
     left.action === right.action &&

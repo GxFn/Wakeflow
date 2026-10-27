@@ -21,6 +21,13 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
+/**
+ * Claude portable settings 的多根零写组合（能力卡 1 §1.1 / §1.4 宿主差异，gate-log §13.117 D5）。
+ * 1 级组件测试（目录缺省 2 级）：只在一次性根上做只读检查与计划，不进维护事务。覆盖 fresh 的
+ * planned-missing 根、external-owned 面的排除、节点政策与旧宽泛规则的 blocker，以及 reconcile 对
+ * 被删受管根的 planned-missing create（open-items W5 / CR-H6）。
+ */
+
 async function fixture(t: TestContext) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-claude-settings-composition-"));
   const root = await RootedDirectory.open(absolutePath);
@@ -96,6 +103,52 @@ test("Fresh Claude composition plans Program and managed Support roots without w
   );
   equal(blocked.status, "blocked");
   equal(blocked.blockerCodes.length, 2);
+});
+
+test("reconcile with a deleted managed Design root plans the rules into the root maintenance rebuilds first, instead of blocking", async (t) => {
+  const value = await fixture(t);
+  // 只有 Test 根在：Design 根是用户误删或移走的受管根（open-items W5 / CR-H6）。
+  mkdirSync(path.join(value.absolutePath, "Test"), { mode: 0o755 });
+  const plan = await planClaudeCodePortableSettingsComposition(
+    value.root,
+    request("reconcile", config()),
+  );
+  equal(plan.status, "ready");
+  deepEqual(plan.blockerCodes, []);
+  deepEqual(
+    plan.roots.map((entry) => ({
+      placement: entry.root.configuredPlacement,
+      status: entry.placementStatus,
+      settings: entry.settingsStatus,
+      reason: entry.transitionReason,
+    })),
+    [
+      { placement: ".", status: "present", settings: "create", reason: null },
+      { placement: "Design", status: "planned-missing", settings: "create", reason: null },
+      { placement: "Test", status: "present", settings: "create", reason: null },
+    ],
+  );
+  const design = plan.operations.find((entry) => entry.root.configuredPlacement === "Design");
+  if (design === undefined) throw new Error("Expected a Design operation.");
+  equal(design.action, "create");
+  equal(design.sourceDigest, null);
+  // 规则指向将被重建的根：与 fresh-initialize 为同一缺席根计划的操作逐字段相同（同一 authority、根与规则）。
+  const fresh = await planClaudeCodePortableSettingsComposition(
+    value.root,
+    request("fresh-initialize", config()),
+  );
+  deepEqual(
+    design,
+    fresh.operations.find((entry) => entry.root.configuredPlacement === "Design"),
+  );
+  // reconfigure 不放开：缺根仍是 support-root-missing（先 reconcile 修根，再改配置）。
+  const reconfigure = await planClaudeCodePortableSettingsComposition(
+    value.root,
+    request("reconfigure", config()),
+  );
+  equal(reconfigure.status, "blocked");
+  deepEqual(reconfigure.blockerCodes, [`support-root-missing:${design.root.rootId}`]);
+  equal(JSON.stringify(plan).includes(value.absolutePath), false);
 });
 
 test("composition reads present roots, excludes external Support, and never leaks bytes", async (t) => {

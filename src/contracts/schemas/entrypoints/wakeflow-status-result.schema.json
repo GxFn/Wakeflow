@@ -384,10 +384,10 @@
       }
     },
     "runtime": {
-      "description": "Serving process startup manifest and the current manifest at its own path. Does not identify the host-selected installation or any other window runtime.",
+      "description": "Serving process artifact: its startup manifest digest and version, and whether it is still current. same: the manifest at its own path is unchanged; changed: overwritten in place; superseded: some session started under a higher artifact version (the next action's subject names it); unknown: no manifest. Does not identify any window runtime.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["artifactManifestDigest", "artifactOnDisk"],
+      "required": ["artifactManifestDigest", "artifactVersion", "artifactOnDisk"],
       "properties": {
         "artifactManifestDigest": {
           "oneOf": [
@@ -399,8 +399,20 @@
             }
           ]
         },
+        "artifactVersion": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 64
+            }
+          ]
+        },
         "artifactOnDisk": {
-          "enum": ["same", "changed", "unknown"]
+          "enum": ["same", "changed", "superseded", "unknown"]
         }
       }
     },
@@ -991,7 +1003,7 @@
           ]
         },
         "runtime": {
-          "description": "Runtime identity of the bound window: unverified by default (hook records cannot prove the loaded MCP); stale when its latest session-start names an older artifact than the serving process.",
+          "description": "Runtime identity of the bound window: unverified by default (hook records cannot prove the loaded MCP); stale when its latest session-start names an artifact version below the serving process, or the same version with a different manifest digest on the serving process's own host. A peer host's digest is never compared.",
           "type": "object",
           "additionalProperties": false,
           "required": ["status", "reason"],

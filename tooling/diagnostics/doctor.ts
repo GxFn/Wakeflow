@@ -154,7 +154,7 @@ function importedRuntime(file: string, expected: string | null) {
     const onDisk = value.runtime.artifactOnDisk;
     if (
       !(digest === null || (typeof digest === "string" && /^sha256:[0-9a-f]{64}$/u.test(digest))) ||
-      !["same", "changed", "unknown"].includes(String(onDisk))
+      !["same", "changed", "superseded", "unknown"].includes(String(onDisk))
     )
       return unavailable;
     const observed =

@@ -29,6 +29,7 @@ import {
   loadDemandEventSourcingRootAuthority,
   type LoadedDemandEventSourcingRootAuthority,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
+import type { DemandEventStreamCommitWriter } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import {
   LedgerAuthorityStore,
@@ -62,6 +63,8 @@ export interface DemandServiceOptions {
   readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
+  /** 本进程的写者戳（C11），由组合根注入并盖在本切片追加的提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 export interface DemandHandle {
@@ -76,6 +79,7 @@ export interface DemandSliceContext {
   readonly store: LedgerAuthorityStore;
   readonly clock: UtcWallClock | undefined;
   readonly signal: AbortSignal | undefined;
+  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
   readonly holder: { handle: DemandHandle | null };
 }
 
@@ -170,6 +174,7 @@ export async function openSliceContext(
     store: new LedgerAuthorityStore(ledgerRoot),
     clock: options.clock,
     signal: options.signal,
+    writer: options.writer ?? null,
     holder: { handle: null },
   });
 }

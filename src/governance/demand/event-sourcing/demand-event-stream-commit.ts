@@ -77,6 +77,9 @@ import {
  *
  * `commitSequence` 是不替换目标的物理槽位；事件流修订号是提交中事件的逻辑位置。
  * 一条提交记录可以承载一个命令产生的多个事件，并通过 `previousCommitDigest` 串联历史。
+ *
+ * 可选的 `writer` 记录追加这条提交的构建（制品版本与 manifest 摘要，C11 / 计划 §3.6）：它随提交
+ * 持久化并进入提交摘要链，但不进事件数据摘要、命令摘要与幂等判定；旧流的提交没有它。
  */
 
 const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND = "wakeflow-demand-event-stream-commit" as const;
@@ -100,11 +103,56 @@ export interface DemandEventStreamCommit {
   ];
   /** 客户端幂等键与它绑定的请求摘要；没有客户端键的提交省略。 */
   readonly idempotency?: Readonly<DemandEventStreamCommitIdempotency>;
+  /** 追加这条提交的构建；旧流与没有 manifest 的构建写出的提交省略，读回按 `null` 处理。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter>;
 }
 
 export interface DemandEventStreamCommitIdempotency {
   readonly key: string;
   readonly requestDigest: Sha256Digest;
+}
+
+/** 写者戳：追加提交的构建在制品清单里的发布版本与清单字节摘要。 */
+export interface DemandEventStreamCommitWriter {
+  readonly version: string;
+  readonly manifestDigest: Sha256Digest;
+}
+
+const WRITER_VERSION_PATTERN =
+  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/u;
+const WRITER_VERSION_MAXIMUM_LENGTH = 64;
+
+/**
+ * 准入一个写者戳；`undefined` 与 `null` 都表示没有戳（测试构建没有 manifest），返回 `null`。
+ * 戳由组合根从本进程的制品身份注入，不参与命令摘要、事件数据摘要与幂等判定。
+ */
+export function parseDemandEventStreamCommitWriter(
+  value: unknown,
+  path = "$writer",
+): Readonly<DemandEventStreamCommitWriter> | null {
+  if (value === undefined || value === null) return null;
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, path);
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", path);
+    throw error;
+  }
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "manifestDigest" ||
+    keys[1] !== "version" ||
+    typeof record.version !== "string" ||
+    record.version.length > WRITER_VERSION_MAXIMUM_LENGTH ||
+    !WRITER_VERSION_PATTERN.test(record.version)
+  ) {
+    fail("input", path);
+  }
+  return Object.freeze({
+    version: record.version,
+    manifestDigest: parseDigest(record.manifestDigest, `${path}/manifestDigest`),
+  });
 }
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
@@ -202,7 +250,7 @@ const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
   ],
 );
 const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"] as const);
-const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency"] as const);
+const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency", "writer"] as const);
 const ISSUED_PREPARED_COMMITS = new WeakSet<object>();
 
 function fail(reason: DemandEventStreamCommitErrorReason, path: string): never {
@@ -283,6 +331,7 @@ export function parseDemandEventStreamCommit(value: unknown): Readonly<DemandEve
   }
   const demandId = parseDemandId(wire.demandId, "$/demandId");
   const idempotency = parseIdempotency(wire.idempotency, "$/idempotency");
+  const writer = parseDemandEventStreamCommitWriter(wire.writer, "$/writer");
   const events: DemandEventSourcingStoredEvent[] = [];
   const eventIds = new Set<string>();
   for (const [index, eventValue] of wire.events.entries()) {
@@ -336,6 +385,7 @@ export function parseDemandEventStreamCommit(value: unknown): Readonly<DemandEve
         : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
     events: Object.freeze(frozenEvents),
     ...(idempotency === undefined ? {} : { idempotency }),
+    ...(writer === null ? {} : { writer }),
   });
 }
 
@@ -371,6 +421,7 @@ function parsePrepareInput(value: unknown): Readonly<{
   readonly commandDigest: Sha256Digest;
   readonly events: readonly Readonly<DemandUncommittedEvent>[];
   readonly idempotency: Readonly<DemandEventStreamCommitIdempotency> | undefined;
+  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
 }> {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -389,6 +440,7 @@ function parsePrepareInput(value: unknown): Readonly<{
     fail("input", "$input");
   }
   const idempotency = parseIdempotency(record.idempotency, "$/idempotency");
+  const writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
   let values: readonly unknown[];
   try {
     values = parseDenseArray(record.events, DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS, "$/events");
@@ -412,6 +464,7 @@ function parsePrepareInput(value: unknown): Readonly<{
     commandDigest: parseDigest(record.commandDigest, "$/commandDigest"),
     events: Object.freeze(events),
     idempotency,
+    writer,
   });
 }
 
@@ -644,6 +697,7 @@ function buildDemandEventStreamCommit(
     previousCommitDigest: current?.lastCommitDigest ?? null,
     events: storedEvents,
     ...(input.idempotency === undefined ? {} : { idempotency: input.idempotency }),
+    ...(input.writer === null ? {} : { writer: input.writer }),
   });
   const aggregate = applyDemandEventStreamCommit(current, commit);
   const sourceExpectation = Object.freeze({

@@ -134,7 +134,7 @@
 
 ## 修订（2026-10-22，1.2 批 C：R4，§13.210）
 
-- Demand 完成报告新增门 `required-evidence`：所有已规划任务包 `requiredEvidenceKinds` 的并集都必须出现在本 Demand 的受管证据种类里，缺一报 `missing:<kinds>`；没有任何包声明时不设此门；取消跳过它（与 `work-claims-released`、`requirement-coverage`、`research-evidence` 同列）。它是 Demand 完成门，不是 `wakeflow_verify` 的工作区十五门。
+- Demand 完成报告新增门 `required-evidence`：所有已规划任务包 `requiredEvidenceKinds` 的并集都必须出现在本 Demand 的受管证据种类里，缺一报 `missing:<kinds>`；没有任何包声明时不设此门；取消跳过它（与 `work-claims-released`、`requirement-coverage`、`research-evidence` 同列）。它是 Demand 完成门，不是 `wakeflow_verify` 的工作区十六门。
 
 ## 修订（2026-10-26，1.2 批 H：S1 W19、S2 W20）
 
@@ -147,3 +147,8 @@
 - **累计容量在 preview 可见（W10）。** 规划就绪后，preview（apply 重算同路）用归档同一组容量读 Demand 根整树，加上计划记录的成员（记录目录、缺失的前缀目录、清单、payload 目录与文件）及事件追加的 commit/index/snapshot（3 文件 / 3 条目，字节按 3×Manifest 上限预留），超出的上限以阻塞项 `demand-capacity:entry-limit` / `file-count` / `total-bytes` 返回（status blocked，planDigest 为 null）；当前树本身读不下时阻塞项为 `demand-capacity:<entry-limit|depth-limit|file-count|file-bytes|total-bytes>`；同内容已记录的重放不增加成员，不查。
 - **final 可见不等于耐久（W11）。** rename 后父目录同步失败原样为 `durability-failure` → Settlement `recovery-required`、journal 保留、Event 已提交；每条"final 可见 → current"路径（已存在 final 的幂等读取、并发同一结果识别、recover）都先补一次父目录同步，补同步失败仍是 `durability-failure`。
 - **hook 事件词汇单一来源（W32）。** `hookEvent` 以 kernel `HOST_HOOK_EVENTS` 为唯一来源，Manifest 与 `wakeflow_record_evidence` 结果 Schema 现含 `notification`，observation 来源的 notification 记录可记录；三份 Schema 的枚举由 `tests/contracts/vocabulary/host-hook-events.test.ts` 钉住逐字相等（入口 Schema 必须自包含，所以没有抽共享 `$ref`）。
+
+## 修订（2026-10-26，Codex 审阅修复批 D′：[open-items W7 与 W9](../../references/open-items.md)）
+
+- **worktree 回执按全部宿主合并（W9）。** 归档清单的 worktree 成员、`pod-worktree` 证据来源根、捕获的隐私白名单与观察都经 `listPodWorktreeReceiptsAnyHost` 读回执；它此前按宿主顺序取第一个非空目录即返回，双宿主初始化的工作区里另一宿主登记的仓库回执被漏掉（归档成员缺 `branch` 与 `head`，`record_evidence` 的 `pod-worktree` 根报 `precondition-failed/source-root`）。现在合并全部宿主目录的回执、按仓库唯一并排序，尚未初始化的宿主目录即空集；同一仓库在两个宿主都有回执是矛盾事实，`io-failure/receipt-conflict`（details：podId、repositoryId 与两个 hostId）显式失败而不是任取其一。
+- **8.4 运行时清理清两个宿主（W7）。** `wakeflow_pod` 关闭完成与孤儿目录对账不再只删调用方宿主的 `hosts/<host>/pods/<podId>/`：两个宿主目录都清，`retiredReceipts` 在关闭完成时是合并集合的回执数、在对账孤儿目录时是删掉的宿主目录数。关闭本身的跨宿主规则见[能力卡 4 的同批修订](./04-demand-lifecycle.md)。

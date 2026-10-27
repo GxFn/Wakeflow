@@ -32,7 +32,10 @@ import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import type { DemandEventStreamCommit } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import type {
+  DemandEventStreamCommit,
+  DemandEventStreamCommitWriter,
+} from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import type { DemandManagedEvidenceSummary } from "../../governance/demand/model/demand-aggregate-state.js";
 import type { ManagedEvidenceCapturePlan } from "../../governance/evidence/managed-evidence-capture-plan.js";
 import {
@@ -104,6 +107,8 @@ export interface ExecuteEvidenceOptions {
   readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
+  /** 本进程的写者戳（C11），由组合根注入并盖在证据记录提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 interface EvidenceSliceContext {
@@ -538,7 +543,7 @@ async function applyEvidence(
     completion = await new ManagedEvidencePublicationApplicationService(context.root).apply(
       transaction,
       computeManagedEvidencePublicationTransactionDigest(transaction),
-      signalOptions(context.options.signal),
+      { ...signalOptions(context.options.signal), writer: context.options.writer ?? null },
     );
   } catch (error: unknown) {
     mapApplicationError(error);
@@ -559,7 +564,7 @@ async function recoverEvidence(
   try {
     recovered = await new ManagedEvidencePublicationApplicationService(context.root).recover(
       demandId,
-      signalOptions(context.options.signal),
+      { ...signalOptions(context.options.signal), writer: context.options.writer ?? null },
     );
   } catch (error: unknown) {
     mapApplicationError(error);

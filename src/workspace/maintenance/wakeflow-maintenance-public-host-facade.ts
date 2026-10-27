@@ -6,7 +6,14 @@ import type {
 import type { WakeflowMaintenanceExecutionPlan } from "./wakeflow-maintenance-execution-plan.js";
 import type { WakeflowMaintenanceExecutionTransactionReceipt } from "./wakeflow-maintenance-execution-transaction.js";
 import type { WakeflowMaintenanceOperationId } from "./wakeflow-maintenance-operation-id.js";
+import type { WakeflowMaintenanceWriter } from "./wakeflow-maintenance-writer.js";
 import type { WakeflowStaticMaterializationPreviewRequest } from "./wakeflow-static-materialization-preview-contract.js";
+
+/** 协调器交给 apply 与 recover 的执行选项：取消信号与本进程的写者戳（C11）。 */
+export interface WakeflowMaintenancePublicHostExecutionOptions {
+  readonly signal?: AbortSignal;
+  readonly writer?: Readonly<WakeflowMaintenanceWriter> | null;
+}
 
 /**
  * Wakeflow Workspace / Maintenance：公共协调器使用的单宿主固定端口。
@@ -31,10 +38,11 @@ export interface WakeflowMaintenancePublicHostFacade {
     root: RootedDirectory,
     plan: unknown,
     request: WakeflowStaticMaterializationPreviewRequest,
+    options?: Readonly<WakeflowMaintenancePublicHostExecutionOptions>,
   ) => Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>>;
   readonly recover: (
     root: RootedDirectory,
     operationId: WakeflowMaintenanceOperationId,
-    options?: Readonly<{ readonly signal?: AbortSignal }>,
+    options?: Readonly<WakeflowMaintenancePublicHostExecutionOptions>,
   ) => Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>>;
 }

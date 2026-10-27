@@ -138,6 +138,13 @@ idempotency?: {
 key: string
 requestDigest: WakeflowSha256DigestText
 }
+/**
+ * Optional writer stamp: the artifact version and manifest digest of the build that appended this commit; absent on commits written before the stamp or by a build without a manifest.
+ */
+writer?: {
+version: string
+manifestDigest: WakeflowSha256DigestText
+}
 }
 /**
  * Demand Event Store 中稳定的 persisted event envelope；eventType 与 eventVersion 由版本 Registry 路由到严格 payload codec。

@@ -50,6 +50,7 @@ import {
   visitHostHookDirectory,
 } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
+import { isWakeflowArtifactVersion } from "./wakeflow-artifact-identity.js";
 
 /**
  * Host hooks persist private facts, never message bodies. Record schema and ids
@@ -110,6 +111,11 @@ export interface HostHookObservation {
    */
   readonly artifactManifestDigest: Sha256Digest | null;
   /**
+   * 写记录的观察脚本所属制品的 `version`（1.2 计划 §3.6 C6）：窗口是在哪个发布版本下启动的，可跨宿主
+   * 比较；早于本字段的记录读成 null。
+   */
+  readonly artifactVersion: string | null;
+  /**
    * Notification 事件带的宿主通知类型（open-items A7，§13.167）：等待权限、空闲等待、登录或用量提示等
    * 阻塞状态只记类型标签，不记消息文本；其他事件与早于本字段的记录读成 null。
    */
@@ -127,6 +133,7 @@ export interface HostHookObservationInput {
   readonly lastAssistantMessageDigest?: Sha256Digest | null;
   readonly transcriptRef?: string | null;
   readonly artifactManifestDigest?: Sha256Digest | null;
+  readonly artifactVersion?: string | null;
   readonly notificationType?: string | null;
 }
 
@@ -206,8 +213,12 @@ const RECORD_KEYS = Object.freeze([
   "lastAssistantMessageDigest",
   "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167）。 */
-const OPTIONAL_RECORD_KEYS = Object.freeze(["artifactManifestDigest", "notificationType"]);
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6）。 */
+const OPTIONAL_RECORD_KEYS = Object.freeze([
+  "artifactManifestDigest",
+  "artifactVersion",
+  "notificationType",
+]);
 
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
@@ -263,6 +274,12 @@ function optionalNotificationType(value: unknown, path: string): string | null {
 
 function optionalDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null || value === undefined ? null : parseSha256Digest(value, path);
+}
+
+function optionalArtifactVersion(value: unknown, path: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (!isWakeflowArtifactVersion(value)) fail("invalid-request", "hook-artifact-version", path);
+  return value;
 }
 
 function cwd(value: unknown, path: string): string {
@@ -351,6 +368,7 @@ export function createHostHookObservation(
       input.artifactManifestDigest,
       "$observation.artifactManifestDigest",
     ),
+    artifactVersion: optionalArtifactVersion(input.artifactVersion, "$observation.artifactVersion"),
     notificationType: optionalNotificationType(
       input.notificationType,
       "$observation.notificationType",
@@ -391,6 +409,7 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     lastAssistantMessageDigest: object.lastAssistantMessageDigest as Sha256Digest | null,
     transcriptRef: object.transcriptRef as string | null,
     artifactManifestDigest: (object.artifactManifestDigest ?? null) as Sha256Digest | null,
+    artifactVersion: (object.artifactVersion ?? null) as string | null,
     notificationType: (object.notificationType ?? null) as string | null,
   });
   if (record.recordId !== object.recordId) {

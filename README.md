@@ -203,7 +203,7 @@ read tools never write.
 | Results and review | `wakeflow_import_target_result`, `wakeflow_inspect_target_result_review`, `wakeflow_record_implementation_review_decision`, `wakeflow_record_test_review_decision` |
 | Evidence | `wakeflow_record_evidence` — managed paths, hook observations, links, commits |
 | Pods | `wakeflow_pod` — create, inspect, recover, close |
-| Observation | `wakeflow_status` (one observation of every domain, plus the next action), `wakeflow_verify` (fifteen workspace gates that pass, fail, or are reported unavailable; with a `demandId` it also evaluates that Demand's own completion gates - seven fixed plus conditional ones) |
+| Observation | `wakeflow_status` (one observation of every domain, plus the next action), `wakeflow_verify` (sixteen workspace gates that pass, fail, or are reported unavailable; with a `demandId` it also evaluates that Demand's own completion gates - seven fixed plus conditional ones) |
 
 Unavailable is counted separately from failure on purpose: "we could not check"
 is never reported as "it is fine".

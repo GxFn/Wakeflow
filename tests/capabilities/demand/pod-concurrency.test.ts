@@ -20,6 +20,7 @@ import {
   publishPendingPackage,
 } from "../../governance/demand/demand-event-sourcing-publication-service.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 
 useDisposableDurability();
 
@@ -27,6 +28,7 @@ const CODEX = {
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  hosts: CODEX_OBSERVATION_FACADE.hosts,
 };
 
 for (const scenario of ["same-pod", "different-pods", "close"] as const) {

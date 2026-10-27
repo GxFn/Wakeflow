@@ -1,5 +1,7 @@
 import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import {
+  chmodSync,
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -14,7 +16,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, before, test } from "node:test";
+import { after, before, type TestContext, test } from "node:test";
 import {
   executeDemandCancellationRequest,
   executeDemandCompletionRequest,
@@ -35,11 +37,14 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   buildActiveProjectionFacts,
   unmergedAcceptedFacts,
@@ -57,6 +62,7 @@ import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
 } from "../../../src/governance/result/target-result-callback.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -111,6 +117,7 @@ import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
   PLANNING_POD_ID,
+  PLANNING_RECORDED_AT,
   PLANNING_REPOSITORY_ID,
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
@@ -122,7 +129,7 @@ useDisposableDurability();
 
 /**
  * 两个读工具的读路径（gate-log §13.94 D1、D2、D3、D4）：status 一次观察多域并给出下一步；
- * 带 demandId 附路由或归档回执；verify 十五门与汇总；hook 观察目录出现非法文件名即
+ * 带 demandId 附路由或归档回执；verify 十六门与汇总；hook 观察目录出现非法文件名即
  * host-hook-channel fail；结果不含私有路径与句柄。健康工作区经公共维护工具初始化。
  */
 
@@ -134,6 +141,7 @@ const UNKNOWN_DEMAND_ID = "demand_ffffffff-ffff-4fff-8fff-ffffffffffff";
 const GATE_NAMES = Object.freeze([
   "active-projection",
   "append-candidates-clear",
+  "artifact-older-than-stream",
   "board-consistency",
   "config-authority",
   "demand-root-audit",
@@ -734,7 +742,7 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     GATE_NAMES.map(() => "pass"),
   );
   equal(verified.ok, true);
-  deepEqual(plain(verified.summary), { pass: 15, fail: 0, unavailable: 0 });
+  deepEqual(plain(verified.summary), { pass: 16, fail: 0, unavailable: 0 });
   equal(
     verified.gates
       .find((gate) => gate.name === "runtime-artifact")
@@ -771,7 +779,7 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
     const channel = broken.gates.find((gate) => gate.name === "host-hook-channel");
     deepEqual([channel?.status, channel?.code], ["fail", "codex:skipped-1"]);
     equal(broken.ok, false);
-    deepEqual(plain(broken.summary), { pass: 14, fail: 1, unavailable: 0 });
+    deepEqual(plain(broken.summary), { pass: 15, fail: 1, unavailable: 0 });
     deepEqual(broken.next.blockers, ["host-hook-channel:fail"]);
     equal(broken.next.suggestedTool, "wakeflow_maintain_workspace");
     notEqual(broken.observationDigest, verified.observationDigest);
@@ -1450,6 +1458,7 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；hoo
   );
   deepEqual(plain(plainStatus.runtime), {
     artifactManifestDigest: null,
+    artifactVersion: null,
     artifactOnDisk: "unknown",
   });
   equal(
@@ -1464,7 +1473,11 @@ test("制品身份（§13.127）：没有 manifest 的门面一律 unknown；hoo
   const facadeWith = (onDisk: string | null) =>
     Object.freeze({
       ...CODEX_OBSERVATION_FACADE,
-      artifact: Object.freeze({ manifestDigest: current, readCurrentManifestDigest: () => onDisk }),
+      artifact: Object.freeze({
+        version: null,
+        manifestDigest: current,
+        readCurrentManifestDigest: () => onDisk,
+      }),
     }) as typeof CODEX_OBSERVATION_FACADE;
   // 共享的 healthy 工作区：本测试新写的 session-start 记录在 finally 里删掉，不影响后续测试。
   const hooksDirectory = path.join(
@@ -1502,7 +1515,11 @@ async function assertArtifactIdentity(
     await rooted.close();
   }
   const same = await executeStatusRequest(facadeWith(current), { root: healthy.root }, CLOCK);
-  deepEqual(plain(same.runtime), { artifactManifestDigest: current, artifactOnDisk: "same" });
+  deepEqual(plain(same.runtime), {
+    artifactManifestDigest: current,
+    artifactVersion: null,
+    artifactOnDisk: "same",
+  });
   const controller = same.windows.find((window) => window.role === "controller");
   equal(controller?.runtime.status, "unverified");
   equal(controller?.runtime.reason, "host-runtime-association-unavailable");
@@ -1528,7 +1545,11 @@ async function assertArtifactIdentity(
     await rootedAgain.close();
   }
   const stale = await executeStatusRequest(facadeWith(other), { root: healthy.root }, CLOCK);
-  deepEqual(plain(stale.runtime), { artifactManifestDigest: current, artifactOnDisk: "changed" });
+  deepEqual(plain(stale.runtime), {
+    artifactManifestDigest: current,
+    artifactVersion: null,
+    artifactOnDisk: "changed",
+  });
   equal(stale.windows.find((window) => window.role === "controller")?.runtime.status, "unverified");
   equal(
     stale.windows.find((window) => window.role === "controller")?.lastObservation
@@ -1564,6 +1585,190 @@ async function assertArtifactIdentity(
     `manifest-unavailable,window-runtime-unverified:${same.windows.filter((window) => window.identity === "registered").length}`,
   );
 }
+
+/**
+ * 把共享的健康工作区整棵复制到新的一次性目录（连兄弟产品仓库），目录权限按源对齐（`fs.cp` 按 umask
+ * 新建目录）：下面的用例要往里写对端宿主的绑定与 hook 记录，不能弄脏共享夹具。
+ */
+function copyHealthyWorkspace(t: TestContext): string {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-observation-copy-")));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  cpSync(healthy.base, base, { recursive: true, preserveTimestamps: true });
+  const align = (source: string, destination: string): void => {
+    chmodSync(destination, lstatSync(source).mode & 0o7777);
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        align(path.join(source, entry.name), path.join(destination, entry.name));
+      }
+    }
+  };
+  align(healthy.base, base);
+  return path.join(base, path.basename(healthy.root));
+}
+
+test("R-ROOT-04 与版本轴（1.2 计划 §3.6 C6）：对端宿主的绑定窗口只按版本比，同版本不同摘要是 unverified 而不是 stale；本宿主同版本不同摘要仍 stale；更高版本的启动记录把服务进程判为 superseded（门报 server-outdated:<版本>、next 带版本、owner 按本进程宿主画像）而窗口不 stale；更低版本的启动记录才是 stale", {
+  timeout: 120_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const config = parseWakeflowConfig(
+    JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
+  );
+  const designWindow = config.topology.windows.find((window) => window.role === "design");
+  if (designWindow === undefined) throw new Error("Expected a design window.");
+  const CLAUDE_SESSION = "claude-session-observation-design";
+  // 对端宿主（claude-code）的绑定直接按 Window Host Binding 的形状写入：登记握手是端点切片的事。
+  const bindingsDirectory = path.join(
+    root,
+    ...wakeflowWindowHostBindingRootRef(claudeCodeWorkspaceHostResourceProfile).split("/"),
+  );
+  mkdirSync(bindingsDirectory, { recursive: true, mode: 0o700 });
+  writeFileSync(
+    path.join(bindingsDirectory, `${designWindow.windowId}.json`),
+    `${JSON.stringify(
+      {
+        kind: "WakeflowWindowHostBinding",
+        schemaVersion: 1,
+        programId: config.program.programId,
+        hostId: "claude-code",
+        windowId: designWindow.windowId,
+        bindingId: "window_binding_a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1",
+        handle: { kind: "claude-session", value: CLAUDE_SESSION },
+        source: {
+          kind: "agent-host-create-result",
+          launchIntentDigest: `sha256:${"1".repeat(64)}`,
+          observedAt: "2026-09-18T07:59:00.000Z",
+        },
+        registeredAt: "2026-09-18T07:59:01.000Z",
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
+  const current = `sha256:${"d".repeat(64)}`;
+  const peer = `sha256:${"e".repeat(64)}`;
+  const start = async (recordedAt: string, artifactVersion: string | null): Promise<void> => {
+    const rooted = await RootedDirectory.open(root);
+    try {
+      await writeHostHookObservation(rooted, {
+        hostId: "claude-code",
+        event: "session-start",
+        sessionId: CLAUDE_SESSION,
+        cwd: root,
+        recordedAt: parseUtcInstant(recordedAt),
+        artifactManifestDigest: peer as never,
+        artifactVersion,
+      });
+    } finally {
+      await rooted.close();
+    }
+  };
+  // 两种进程看同一个工作区：Codex 进程与 Claude 进程，各自只给自己宿主的条目制品身份（对端为 null）。
+  const facadeFor = (hostId: "codex" | "claude-code", onDisk: string) => {
+    const artifact = Object.freeze({
+      version: "1.2.0",
+      manifestDigest: current as never,
+      readCurrentManifestDigest: () => onDisk as never,
+    });
+    return Object.freeze({
+      ...CODEX_OBSERVATION_FACADE,
+      hostId,
+      artifact,
+      hosts: CODEX_OBSERVATION_FACADE.hosts.map((host) =>
+        Object.freeze({ ...host, artifact: host.hostId === hostId ? artifact : null }),
+      ),
+    }) as typeof CODEX_OBSERVATION_FACADE;
+  };
+  const codexProcess = facadeFor("codex", current);
+  const claudeProcess = facadeFor("claude-code", current);
+  type Status = Awaited<ReturnType<typeof executeStatusRequest>>;
+  type Verify = Awaited<ReturnType<typeof executeVerifyRequest>>;
+  const designRuntime = (status: Status) => {
+    const design = status.windows.find((window) => window.windowId === designWindow.windowId);
+    if (design === undefined) throw new Error("Expected the design window.");
+    return plain(design.runtime);
+  };
+  const runtimeActions = (status: Status) =>
+    status.nextActions
+      .filter(
+        (action) =>
+          action.reason === "runtime-artifact-outdated" ||
+          action.reason === "window-artifact-stale",
+      )
+      .map((action) => [action.owner, action.reason, action.subject]);
+  const runtimeGate = (verify: Verify) => {
+    const gate = verify.gates.find((entry) => entry.name === "runtime-artifact");
+    return [gate?.status, gate?.code];
+  };
+  const registered = (status: Status) =>
+    status.windows.filter((window) => window.identity === "registered").length;
+
+  // 同版本、不同摘要：Codex 进程读不到 Claude 制品的磁盘摘要，只能 unverified——此前这里被判 stale（R-ROOT-04）。
+  await start("2026-09-18T09:00:00.000Z", "1.2.0");
+  const peerStatus = await executeStatusRequest(codexProcess, { root }, CLOCK);
+  deepEqual(plain(peerStatus.runtime), {
+    artifactManifestDigest: current,
+    artifactVersion: "1.2.0",
+    artifactOnDisk: "same",
+  });
+  deepEqual(designRuntime(peerStatus), {
+    status: "unverified",
+    reason: "host-runtime-association-unavailable",
+  });
+  deepEqual(runtimeActions(peerStatus), []);
+  deepEqual(runtimeGate(await executeVerifyRequest(codexProcess, { root }, CLOCK)), [
+    "pass",
+    `window-runtime-unverified:${registered(peerStatus)}`,
+  ]);
+  // 同一条记录在 Claude 进程眼里：同宿主、同版本、启动摘要不等于磁盘摘要 ⇒ stale；相等 ⇒ 仍只是 unverified。
+  deepEqual(designRuntime(await executeStatusRequest(claudeProcess, { root }, CLOCK)), {
+    status: "stale",
+    reason: "session-started-under-older-artifact",
+  });
+  equal(
+    designRuntime(await executeStatusRequest(facadeFor("claude-code", peer), { root }, CLOCK))
+      .status,
+    "unverified",
+  );
+
+  // 更高版本的启动记录：服务进程 superseded、门报 server-outdated:1.3.0、next 的 subject 是那个版本，
+  // owner 按本进程宿主画像（Codex 由用户重启应用，Claude 的 Controller 就地重启）；窗口不标 stale。
+  await start("2026-09-18T09:01:00.000Z", "1.3.0");
+  const superseded = await executeStatusRequest(codexProcess, { root }, CLOCK);
+  equal(superseded.runtime.artifactOnDisk, "superseded");
+  equal(designRuntime(superseded).status, "unverified");
+  deepEqual(runtimeActions(superseded), [["user", "runtime-artifact-outdated", "1.3.0"]]);
+  const supersededVerify = await executeVerifyRequest(codexProcess, { root }, CLOCK);
+  deepEqual(runtimeGate(supersededVerify), [
+    "fail",
+    `server-outdated:1.3.0,window-runtime-unverified:${registered(superseded)}`,
+  ]);
+  deepEqual(
+    [supersededVerify.next.frontier, supersededVerify.next.owner],
+    ["runtime-artifact-outdated", "user"],
+  );
+  const claudeSuperseded = await executeStatusRequest(claudeProcess, { root }, CLOCK);
+  deepEqual(runtimeActions(claudeSuperseded), [
+    ["controller", "runtime-artifact-outdated", "1.3.0"],
+  ]);
+  equal(designRuntime(claudeSuperseded).status, "unverified");
+
+  // 更低版本的启动记录：这才是旧窗口，对端进程也判得出 stale；服务进程回到 same。
+  await start("2026-09-18T09:02:00.000Z", "1.1.0");
+  const stale = await executeStatusRequest(codexProcess, { root }, CLOCK);
+  equal(stale.runtime.artifactOnDisk, "same");
+  deepEqual(designRuntime(stale), {
+    status: "stale",
+    reason: "session-started-under-older-artifact",
+  });
+  deepEqual(runtimeActions(stale), [["controller", "window-artifact-stale", null]]);
+  const staleVerify = await executeVerifyRequest(codexProcess, { root }, CLOCK);
+  deepEqual(runtimeGate(staleVerify), [
+    "fail",
+    `windows-stale:1,window-runtime-unverified:${registered(stale) - 1}`,
+  ]);
+  equal(staleVerify.next.frontier, "window-artifact-stale");
+});
 
 /** 旧实现 T08 的零写断言：逐节点的类型、模式、大小与 mtime/ctime（不含 atime：只读也会更新它）。 */
 function snapshotTree(root: string): Record<string, string> {
@@ -1969,6 +2174,80 @@ test("unmergedAccepted 跨过取消（§13.130）：worktree pod 的 Demand 接�
       status: "observed",
       issue: "archives:unreadable-1",
     });
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(planning);
+  }
+});
+
+test("artifact-older-than-stream 门（C11 版本轴）：规划提交盖上更高版本的写者戳后，版本更低的服务进程 verify 该门 fail 并带 stream-newer:<版本>、next 指向 runtime-artifact-outdated；版本相等或更高时 pass；没有服务进程身份时 pass 记 not-applicable；戳本身由 audit().writers 读回", {
+  timeout: 120_000,
+}, async () => {
+  const planning = await createTargetTaskPlanningWorkspaceFixture({ coverAllCriteria: true });
+  try {
+    const root = planning.workspacePath;
+    const writer = Object.freeze({
+      version: "1.3.0",
+      manifestDigest: parseSha256Digest(`sha256:${"9".repeat(64)}`),
+    });
+    const planned = await planFixtureTargetTask(
+      planning,
+      {},
+      {
+        clock: () => PLANNING_RECORDED_AT,
+        writer,
+      },
+    );
+    equal(planned.status, "committed");
+    const demandRoot = await RootedDirectory.open(
+      path.join(root, ...demandFinalRootRef(planning.request.demandId).split("/")),
+    );
+    try {
+      // 夹具的发布提交没有戳，规划提交带本次注入的戳。
+      deepEqual((await new DemandEventSourcingRepository(demandRoot).audit()).writers, [
+        null,
+        writer,
+      ]);
+    } finally {
+      await demandRoot.close();
+    }
+    const current = `sha256:${"d".repeat(64)}`;
+    const facadeAt = (version: string) => {
+      const artifact = Object.freeze({
+        version,
+        manifestDigest: current as never,
+        readCurrentManifestDigest: () => current as never,
+      });
+      return Object.freeze({
+        ...CODEX_OBSERVATION_FACADE,
+        artifact,
+        hosts: CODEX_OBSERVATION_FACADE.hosts.map((host) =>
+          Object.freeze({ ...host, artifact: host.hostId === "codex" ? artifact : null }),
+        ),
+      }) as typeof CODEX_OBSERVATION_FACADE;
+    };
+    type Verify = Awaited<ReturnType<typeof executeVerifyRequest>>;
+    const streamGate = (verify: Verify) => {
+      const gate = verify.gates.find((entry) => entry.name === "artifact-older-than-stream");
+      return [gate?.status, gate?.code];
+    };
+    const older = await executeVerifyRequest(facadeAt("1.2.0"), { root }, CLOCK);
+    deepEqual(streamGate(older), ["fail", "stream-newer:1.3.0"]);
+    equal(older.ok, false);
+    deepEqual([older.next.frontier, older.next.owner], ["runtime-artifact-outdated", "user"]);
+    equal(older.next.blockers.includes("artifact-older-than-stream:fail"), true);
+    deepEqual(streamGate(await executeVerifyRequest(facadeAt("1.3.0"), { root }, CLOCK)), [
+      "pass",
+      null,
+    ]);
+    deepEqual(streamGate(await executeVerifyRequest(facadeAt("2.0.0"), { root }, CLOCK)), [
+      "pass",
+      null,
+    ]);
+    // 源码调用没有制品身份：版本轴不可用，门 pass 并记 not-applicable。
+    deepEqual(streamGate(await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK)), [
+      "pass",
+      "not-applicable",
+    ]);
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(planning);
   }

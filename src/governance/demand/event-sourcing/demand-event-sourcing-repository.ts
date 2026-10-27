@@ -42,6 +42,7 @@ import {
   computeDemandEventStreamCommitDigest,
   type DemandEventStreamCommit,
   DemandEventStreamCommitError,
+  type DemandEventStreamCommitWriter,
   type PreparedDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import type {
@@ -82,6 +83,8 @@ export interface LoadedDemandEventSourcingAggregate {
 export interface AuditedDemandEventSourcingAggregate {
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
   readonly replayedCommitCount: number;
+  /** 每条提交的写者戳，按 commitSequence 排列；盖戳之前的提交与没有 manifest 的构建写出的提交为 `null`。 */
+  readonly writers: readonly (Readonly<DemandEventStreamCommitWriter> | null)[];
 }
 
 /** TargetResult消费者引用的一条已验证事件位置，不复制Commit或结果状态。 */
@@ -408,7 +411,25 @@ export class DemandEventSourcingRepository {
     return Object.freeze({
       aggregate: replayCommits(null, stream.commits),
       replayedCommitCount: stream.commits.length,
+      writers: Object.freeze(stream.commits.map((commit) => commit.writer ?? null)),
     });
+  }
+
+  /**
+   * 每条提交的写者戳，按 commitSequence（缺席为 `null`；空流为空列表）。只读提交、不回放事件：
+   * verify 的 `artifact-older-than-stream` 门拿它求流里写者版本的最高值（C11 的版本轴）。
+   */
+  async readWriters(options?: {
+    readonly signal?: AbortSignal;
+  }): Promise<readonly (Readonly<DemandEventStreamCommitWriter> | null)[]> {
+    const signal = parseSignal(options);
+    let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
+    try {
+      stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
+    } catch (error: unknown) {
+      mapStoreError(error);
+    }
+    return Object.freeze(stream.commits.map((commit) => commit.writer ?? null));
   }
 
   /**

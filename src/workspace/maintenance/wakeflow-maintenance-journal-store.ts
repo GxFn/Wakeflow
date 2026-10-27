@@ -182,15 +182,16 @@ function admittedJournalByteCount(bytes: Uint8Array): ByteCount {
   return parseByteCount(bytes.byteLength, "$journal.byteCount");
 }
 
-/** 在任何bootstrap/gate效果前验证initial journal的持久表示容量。 */
+/** 在任何bootstrap/gate效果前验证initial journal的持久表示容量；`writer` 是可选写者戳。 */
 export function assertWakeflowPreparedMaintenanceJournalCapacity(
   operationId: unknown,
   intentDigest: unknown,
   plan: unknown,
+  writer?: unknown,
 ): ByteCount {
   let journal: ReturnType<typeof createPreparedWakeflowMaintenanceJournal>;
   try {
-    journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan);
+    journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan, writer);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {
       fail("input", "$journal");
@@ -359,12 +360,13 @@ export async function readWakeflowMaintenanceJournalOrNull(
   return readWakeflowMaintenanceJournal(root, operationId);
 }
 
-/** 在有效 gate scope 内 absent-only 发布一份 prepared journal。 */
+/** 在有效 gate scope 内 absent-only 发布一份 prepared journal；`writerValue` 是可选写者戳。 */
 export async function publishPreparedWakeflowMaintenanceJournal(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   intentSource: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   planValue: unknown,
+  writerValue?: unknown,
 ): Promise<Readonly<WakeflowMaintenanceJournalSource>> {
   assertGate(root, context);
   let journal: Readonly<WakeflowMaintenanceJournal>;
@@ -373,6 +375,7 @@ export async function publishPreparedWakeflowMaintenanceJournal(
       context.operationId,
       intentSource.intentDigest,
       planValue,
+      writerValue,
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {

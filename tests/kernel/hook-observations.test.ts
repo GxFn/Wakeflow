@@ -441,6 +441,70 @@ test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 nul
   );
 });
 
+test("制品 version 是后加的可选键（1.2 计划 §3.6 C6）：合法版本原样往返、不参与标识，旧记录没有它读成 null 且重试仍是 current，不合文法的版本以 invalid-request 拒绝", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const written = await writeHostHookObservation(
+    root,
+    observation(workspace, "2026-09-18T12:00:00.000Z" as UtcInstant, {
+      event: "session-start",
+      artifactVersion: "1.2.0",
+    }),
+  );
+  equal(written.record.artifactVersion, "1.2.0");
+  // 版本不进标识：同一事实换个版本仍是同一条记录（hook 重复触发不会造出第二条）。
+  equal(
+    createHostHookObservation(
+      observation(workspace, "2026-09-18T12:00:00.000Z" as UtcInstant, {
+        event: "session-start",
+        artifactVersion: "1.3.0",
+      }),
+    ).recordId,
+    written.record.recordId,
+  );
+  // 旧记录：没有 artifactVersion 键——把内核自己写出的规范文件去掉这个键再放回去。
+  const legacy = await writeHostHookObservation(
+    root,
+    observation(workspace, "2026-09-18T11:00:00.000Z" as UtcInstant, { event: "session-start" }),
+  );
+  const legacyPath = path.join(workspace, legacy.resourceRef);
+  const rendered = readFileSync(legacyPath, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  equal("artifactVersion" in parsed, true);
+  delete parsed.artifactVersion;
+  writeFileSync(
+    legacyPath,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(parsed, null, 2)}\n`
+      : `${JSON.stringify(parsed)}\n`,
+  );
+  const legacyBytes = readFileSync(legacyPath);
+  const retried = await writeHostHookObservation(root, legacy.record);
+  equal(retried.disposition, "current");
+  deepEqual(readFileSync(legacyPath), legacyBytes);
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    inventory.records.map((record) => [record.recordId, record.artifactVersion]),
+    [
+      [legacy.record.recordId, null],
+      [written.record.recordId, "1.2.0"],
+    ],
+  );
+  await rejects(
+    writeHostHookObservation(
+      root,
+      observation(workspace, "2026-09-18T13:00:00.000Z" as UtcInstant, {
+        event: "session-start",
+        artifactVersion: "v1.2",
+      }),
+    ),
+    (error: unknown) =>
+      isWakeflowError(error) &&
+      error.code === "invalid-request" &&
+      error.reason === "hook-artifact-version",
+  );
+});
+
 test("Notification 类型是后加的可选键：合文法的标签原样往返并参与标识，旧记录没有它读成 null，不合文法的标签以 invalid-request 拒绝（A7，§13.167）", async (t) => {
   const { root, path: workspace } = await fixture(t);
   const at = "2026-09-18T13:00:00.000Z" as UtcInstant;

@@ -32,7 +32,10 @@ import {
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import {
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommitWriter,
+} from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
@@ -107,6 +110,8 @@ export interface ExecuteTargetTaskPlanningOptions {
   readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
+  /** 本进程的写者戳（C11），由组合根注入并盖在规划提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 type ImplementationRequest = Extract<
@@ -590,6 +595,7 @@ async function execute(
       commitId: binding.commitId,
       expectedStreamRevision: binding.expectedStreamRevision,
       idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
+      writer: options.writer ?? null,
       ...signalOptions(options.signal),
     });
   } catch (error: unknown) {

@@ -3498,10 +3498,11 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
 
 // ---- card-09/status-and-verify 与 card-09/active-projection（能力卡 9，§13.94 D1、D3、D5） ----------
 
-/** 工作区级十五门，按名字排序（§13.94 D3；window-runtime-projection 见 §13.111）。 */
+/** 工作区级十六门，按名字排序（§13.94 D3；window-runtime-projection 见 §13.111；artifact-older-than-stream 见 1.2 批 D′ C11）。 */
 const WORKSPACE_GATE_NAMES = Object.freeze([
   "active-projection",
   "append-candidates-clear",
+  "artifact-older-than-stream",
   "board-consistency",
   "config-authority",
   "demand-root-audit",
@@ -4007,7 +4008,7 @@ async function assertVerifyGates(
     WORKSPACE_GATE_NAMES,
   );
   equal(clean.ok, false, failingGatesText(clean));
-  deepEqual(clean.summary, { pass: 14, fail: 0, unavailable: 1 });
+  deepEqual(clean.summary, { pass: 15, fail: 0, unavailable: 1 });
   equal(gateOf(clean, "runtime-artifact").code, "manifest-unavailable,window-runtime-unverified:7");
   equal(clean.repairsApplied, false);
   equal(clean.demand, null);
@@ -4059,15 +4060,15 @@ async function assertVerifyGates(
       ["runtime-artifact", "manifest-unavailable,window-runtime-unverified:7"],
     ],
   );
-  deepEqual(broken.summary, { pass: 13, fail: 1, unavailable: 1 });
+  deepEqual(broken.summary, { pass: 14, fail: 1, unavailable: 1 });
   equal(broken.next.frontier, "runtime-artifact-unavailable");
   deepEqual(broken.next.blockers, ["host-hook-channel:fail", "runtime-artifact:unavailable"]);
   equal((await readStatus(context)).view.overall, "degraded", "skipped hook records degrade");
   rmSync(stray);
   const restored = await readVerify(context);
   equal(restored.ok, false, failingGatesText(restored));
-  deepEqual(restored.summary, { pass: 14, fail: 0, unavailable: 1 });
-  return `verify=14/0/1 (source manifest and peer runtime unverified); demand gates=work-claims-released+requirement-coverage fail; hook-file→host-hook-channel=fail(${hookGate.code}) summary=13/1/1 overall=degraded; removed→14/0/1`;
+  deepEqual(restored.summary, { pass: 15, fail: 0, unavailable: 1 });
+  return `verify=15/0/1 (source manifest and peer runtime unverified); demand gates=work-claims-released+requirement-coverage fail; hook-file→host-hook-channel=fail(${hookGate.code}) summary=14/1/1 overall=degraded; removed→15/0/1`;
 }
 
 async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string> {
@@ -4236,7 +4237,7 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
   equal(projectionGate.status, "pass");
   equal(projectionGate.code, "handwritten,blocked:3");
   equal(unsafeVerify.ok, false, failingGatesText(unsafeVerify));
-  deepEqual(unsafeVerify.summary, { pass: 14, fail: 0, unavailable: 1 });
+  deepEqual(unsafeVerify.summary, { pass: 15, fail: 0, unavailable: 1 });
 
   // 恢复标记后再变更：重建为 current，四份文件都换了字节。
   writeFileSync(progress.path, original);
@@ -4250,7 +4251,7 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
   const currentVerify = await readVerify(context);
   equal(gateOf(currentVerify, "active-projection").code, null);
   equal(currentVerify.ok, false, failingGatesText(currentVerify));
-  deepEqual(currentVerify.summary, { pass: 14, fail: 0, unavailable: 1 });
+  deepEqual(currentVerify.summary, { pass: 15, fail: 0, unavailable: 1 });
   assertPodSection(context, state);
   return `evidence→4 files current; handwritten→zero-write, status=unsafe/handwritten, gate=pass(${projectionGate.code}); restored→current; pod section=2 pods`;
 }

@@ -28,7 +28,10 @@ import {
   DemandEventSourcingUpcasterError,
   upcastDemandEventSourcingStoredEvent,
 } from "../demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
+import type {
+  DemandEventStreamCommit,
+  DemandEventStreamCommitWriter,
+} from "../demand/event-sourcing/demand-event-stream-commit.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import {
@@ -224,11 +227,15 @@ export async function loadManagedEvidencePublicationHealthyAuthority(
   }
 }
 
-/** 在真实当前Aggregate上执行Transaction绑定的exact Event命令。 */
+/**
+ * 在真实当前Aggregate上执行Transaction绑定的exact Event命令。`writer` 是本进程的写者戳（C11）：
+ * 事务只绑定命令摘要与事件身份，戳不进它们，所以带戳的提交仍与事务对得上。
+ */
 export async function appendManagedEvidencePublicationEvent(
   demandRoot: RootedDirectory,
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
   signal: AbortSignal | undefined,
+  writer: Readonly<DemandEventStreamCommitWriter> | null = null,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
   try {
     const result = await executeDemandEventSourcingCommand(
@@ -237,6 +244,7 @@ export async function appendManagedEvidencePublicationEvent(
       {
         commitId: transaction.demandEventSourcingAppend.commitId,
         expectedStreamRevision: transaction.demandEventSourcingAppend.expectedStreamRevision,
+        writer,
         ...(signal === undefined ? {} : { signal }),
       },
     );

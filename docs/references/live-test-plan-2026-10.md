@@ -19,7 +19,7 @@
 
 | # | 场景 | 做什么 | 看哪里 | 什么算过 |
 | --- | --- | --- | --- | --- |
-| L1 | 初始化与开窗 | 在工作区目录开 Claude Code，说"初始化一个 Wakeflow 工作区"；按 Controller 第 0/1 步走到所有窗口登记完 | `wakeflow_status`、`wakeflow_verify`、tmux 窗口列表 | `verify` 十五门全 pass；status 的 `windows[]` 全部 `registered`；第 1 步只按参考开窗，Controller 没有去读插件实现 |
+| L1 | 初始化与开窗 | 在工作区目录开 Claude Code，说"初始化一个 Wakeflow 工作区"；按 Controller 第 0/1 步走到所有窗口登记完 | `wakeflow_status`、`wakeflow_verify`、tmux 窗口列表 | `verify` 十六门全 pass；status 的 `windows[]` 全部 `registered`；第 1 步只按参考开窗，Controller 没有去读插件实现 |
 | L2 | 需求包与 Demand（多仓库） | Design 窗口发布一个跨两个仓库（如 AlembicCore 与 AlembicDashboard）、两条验收标准的需求包；Controller 认领成 Demand，为每个仓库各规划一个实现目标 | `inspect_board`、`status --demandId` | 包上板为 `pending` → 认领后 Route 到 `implementation-delivery-planning` |
 | L3 | **按引用投递（K6）** | Controller 准备投递后，用助手 `deliver --window … --handle-digest … --prompt-ref … --prompt-digest …` 发送 | Controller 的 Bash 调用、`record_delivery_outcome` 的 attempt/readback/landing、产品窗口的 `user-prompt-submit` 记录 | Controller **没有**把 prompt 从 stdin 重打，也没有读 `.wakeflow-active` 里的事件文件；`landing` 由 hook 记录证明；`promptRef` 指向的文件确实存在于 `artifacts/permits/delivery/` |
 | L4 | 产品窗口实现与回传 | 产品窗口按任务包实现，导入结果，把回调按引用发回 Controller | `import_target_result` 的 `callback.permit.promptRef`、Controller 窗口的 hook 记录 | 回调落地（`callback.status: landed`），完成证据 `confirmed` |

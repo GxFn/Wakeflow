@@ -382,3 +382,44 @@ test("controller-only 的 Demand 不能规划 test 任务包（testing-mode）",
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }
 });
+
+test("plan_target_task 把注入的写者戳盖在规划提交上（C11）：audit().writers 按提交序列给出戳，夹具的发布提交没有戳；省略即不盖", async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const writer = Object.freeze({
+      version: "1.2.0",
+      manifestDigest: parseSha256Digest(`sha256:${"c".repeat(64)}`),
+    });
+    const stamped = await planFixtureTargetTask(
+      fixture,
+      {},
+      {
+        clock: () => PLANNING_RECORDED_AT,
+        writer,
+      },
+    );
+    equal(stamped.status, "committed");
+    const writers = await withDemandRoot(fixture, (root) =>
+      new DemandEventSourcingRepository(root).audit().then((audited) => audited.writers),
+    );
+    deepEqual(writers, [null, writer]);
+    // 同键重放返回首次提交的戳，不改写；再规划一个不带戳的提交，戳缺席而不是沿用。
+    const replayed = await planFixtureTargetTask(
+      fixture,
+      {},
+      {
+        clock: () => PLANNING_RECORDED_AT,
+        writer: null,
+      },
+    );
+    equal(replayed.status, "idempotent");
+    deepEqual(
+      await withDemandRoot(fixture, (root) =>
+        new DemandEventSourcingRepository(root).readWriters(),
+      ),
+      [null, writer],
+    );
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});

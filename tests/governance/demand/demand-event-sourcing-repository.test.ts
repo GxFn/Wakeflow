@@ -1,4 +1,4 @@
-import { equal, ok, rejects, throws } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects, throws } from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,7 +31,8 @@ useDisposableDurability();
 /**
  * Governance / Demand Event Sourcing 仓储（ADR-0005），1 级（组件）测试：正常 load 走快照加尾部、audit
  * 完整重放、崩溃残留的暂存与不兼容快照只让快照不可用而不拒绝加载，以及把 `constructor`、`toString`、
- * `__proto__` 当客户端幂等键时经索引重放命中、未命中返回 null（R-ROOT-01）。
+ * `__proto__` 当客户端幂等键时经索引重放命中、未命中返回 null（R-ROOT-01），以及 audit 按
+ * commitSequence 暴露每条提交的写者戳、盖戳之前的提交读回 null（C11，1.2 计划 §3.6）。
  */
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
@@ -247,6 +248,63 @@ test("constructor、toString、__proto__ 作客户端幂等键：已提交的键
     }
     // 没提交过的键：Object.prototype.toString 不是提交序号，查找是未命中而不是 io 失败。
     equal(await repository.findCommitByIdempotencyKey("toString"), null);
+  } finally {
+    await root.close();
+  }
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"e".repeat(64)}`),
+});
+
+test("audit 按 commitSequence 列出每条提交的写者戳，盖戳之前的提交读回 null，读取路径原样暴露 commit.writer（C11）", async (t) => {
+  const fixtureRoot = disposableRoot(t, "wakeflow-demand-repository-writer-");
+  const root = await RootedDirectory.open(fixtureRoot);
+  try {
+    const eventStore = new DemandFileEventStore(root);
+    const repository = new DemandEventSourcingRepository(root);
+    await eventStore.initialize();
+
+    const first = prepareDemandEventStreamCommit(null, {
+      commitId: FIRST_COMMIT_ID,
+      commandDigest: FIRST_COMMAND_DIGEST,
+      events: decideDemandEventSourcingCommand(null, {
+        commandType: "publication.publish-demand",
+        commandVersion: 1,
+        demandId: DEMAND_ID,
+        eventId: FIRST_EVENT_ID,
+        recordedAt: PUBLISHED_AT,
+        identityDigest: IDENTITY_DIGEST,
+        authorityDigest: AUTHORITY_DIGEST,
+      }),
+    });
+    await eventStore.append(first);
+    const second = prepareDemandEventStreamCommit(first.aggregate, {
+      commitId: SECOND_COMMIT_ID,
+      commandDigest: SECOND_COMMAND_DIGEST,
+      events: decideDemandEventSourcingCommand(first.aggregate.state, {
+        commandType: "lifecycle.cancel-demand",
+        commandVersion: 1,
+        demandId: DEMAND_ID,
+        eventId: SECOND_EVENT_ID,
+        recordedAt: CANCELLED_AT,
+        reason: "用户终止该 Demand",
+      }),
+      writer: WRITER,
+    });
+    await eventStore.append(second);
+
+    const audited = await repository.audit();
+    equal(audited.replayedCommitCount, 2);
+    deepEqual(audited.writers, [null, WRITER]);
+    equal(Object.isFrozen(audited.writers), true);
+    deepEqual((await repository.findCommitById(SECOND_COMMIT_ID))?.writer, WRITER);
+    equal(Object.hasOwn((await repository.findCommitById(FIRST_COMMIT_ID)) ?? {}, "writer"), false);
+    equal(
+      (await repository.load())?.aggregate.lastCommitDigest,
+      audited.aggregate.lastCommitDigest,
+    );
   } finally {
     await root.close();
   }

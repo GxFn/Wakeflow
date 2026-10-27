@@ -28,6 +28,8 @@ import {
 import {
   type DemandEventStreamCommit,
   DemandEventStreamCommitError,
+  type DemandEventStreamCommitWriter,
+  parseDemandEventStreamCommitWriter,
   prepareDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import { DemandFileEventStoreError } from "./demand-file-event-store.js";
@@ -51,6 +53,11 @@ export interface ExecuteDemandEventSourcingCommandOptions {
     readonly key: string;
     readonly requestDigest: Sha256Digest;
   }>;
+  /**
+   * 写者戳：本进程制品身份的发布版本与 manifest 摘要，由组合根注入并随提交持久化。
+   * 省略或 `null` 即不盖戳（测试构建没有 manifest）；它不参与命令摘要、事件数据摘要与幂等判定。
+   */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
   readonly signal?: AbortSignal;
 }
 
@@ -98,7 +105,13 @@ export class DemandEventSourcingCommandHandlerError extends Error {
   }
 }
 
-const OPTION_FIELDS = new Set(["commitId", "expectedStreamRevision", "idempotency", "signal"]);
+const OPTION_FIELDS = new Set([
+  "commitId",
+  "expectedStreamRevision",
+  "idempotency",
+  "writer",
+  "signal",
+]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 
 function fail(reason: DemandEventSourcingCommandHandlerErrorReason, path: string): never {
@@ -171,10 +184,18 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
     }
     idempotency = Object.freeze({ key: bound.key, requestDigest });
   }
+  let writer: Readonly<DemandEventStreamCommitWriter> | null;
+  try {
+    writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamCommitError) fail("input", "$/writer");
+    throw error;
+  }
   return Object.freeze({
     commitId,
     expectedStreamRevision: expected as number,
     ...(idempotency === undefined ? {} : { idempotency }),
+    ...(writer === null ? {} : { writer }),
     ...(signal === undefined ? {} : { signal }),
   });
 }
@@ -338,6 +359,9 @@ export async function executeDemandEventSourcingCommand(
       commandDigest,
       events,
       ...(options.idempotency === undefined ? {} : { idempotency: options.idempotency }),
+      ...(options.writer === undefined || options.writer === null
+        ? {}
+        : { writer: options.writer }),
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamCommitError) {

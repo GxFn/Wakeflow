@@ -210,3 +210,17 @@
 | --- | --- | --- |
 | Q11 工作区根与产品仓库根 | 必须是不同目录；同目录一律拒绝初始化，理由是产品 worktree 会带着 Controller 规则文件（ADR-0010 后果） | 1.1 不变量；fresh-initialize 拒绝规则 |
 | Q12 pods 拓扑 | `wakeflow.config.json` 增加 `pods[]`，初始化生成 `placement: primary` 的 `main`；pod 创建与关闭走配置事务（ADR-0010 D1、D6）。已落地 2026-09-10（pod 切片 9）：`pods[]{podId, name, placement, lifecycle: open \| closing, worktrees[], closing}`，每个窗口带 `podId`，codec 按 pod 分组校验基数，reconfigure 对 `pods` 差异报 `reconfigure-pods-change-unsupported`；gate-log §13.92 | 1.2；config schema |
+
+## 修订（2026-10-26，Codex 审阅修复批 D′：[open-items W5](../../references/open-items.md)，CR-H6）
+
+原则：**宿主贡献与共享预览对同一缺席根必须作同一判断。** 共享预览自 §13.107 起对 reconcile 的缺席受管支撑根计划 `materialize-support-root`，执行计划又让每条宿主操作依赖前一共享步并按计划顺序逐步记日志执行，所以宿主在"根将被重建"这一前提下计划写入是安全的；宿主贡献不能再为同一缺席根报出阻塞，否则整份维护被自己阻住。
+
+| 项 | 修订后 |
+| --- | --- |
+| 1.4 支撑面根的对账修复（Claude，W5） | 此前 Claude 的 portable settings 组合只对 fresh-initialize 把缺席面根计划成 planned-missing create，其他动作一律报 `support-root-missing:<surfaceId>`；状态行的支撑面计划同样只在 fresh 下当作缺文件。用户误删或移走 Design / Test 目录后，共享预览已计划重建根，但宿主阻塞合入 `combinedBlockers` 让整份 reconcile preview blocked，fresh 又因 Active 已在（`fresh-active-not-absent`）被拒，没有任何文本解释，只能手建目录；Codex 贡献没有这个参与者，所以这是宿主代码与共享层在 reconcile 上条件不一致，不是共享层问题。现在 reconcile 与 fresh-initialize 走同一条 planned-missing 路径（`claudeCodeMaintenanceMaterializesMissingSupportRoot`，组合与状态行两处共用一条判据）：规则与状态行条目计划成 create，执行时根已由前一共享步重建，宿主执行器对根仍要求 present 的检查不变；修好后再次 reconcile 为零步骤。reconfigure 的缺根仍报 `support-root-missing`（先 reconcile 修根，再改配置），fresh-initialize 不变。无新状态、Schema 或托管文本变化；Codex 不受影响。 |
+
+## 修订（2026-10-26，1.2 批 D′：C11 写者戳，[计划 §3.6](../../reviews/2026-10-22-test-gate-and-1.2-plan.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 1.5 维护意图与 journal 的写者戳 | 意图与 journal 各加可选 `writer {version, manifestDigest}`：写出它的构建在制品清单里的发布版本与清单字节摘要，由组合根经 `executeWakeflowMaintenanceExecutionTransaction` / `recover…` 的 `options.writer` 注入；意图在创建时盖戳，journal 在 prepared 时盖戳并随 affected / checkpoint / terminal 后继原样携带（换戳的后继不是合法后继）。戳进入两份记录的表示与语义摘要（journal 绑定的 `intentDigest` 与磁盘意图同源计算，恢复不受影响），不是签名也不授权执行；盖戳之前的记录与没有 manifest 的测试构建没有它，读回为缺席。 |

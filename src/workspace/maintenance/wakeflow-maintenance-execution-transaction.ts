@@ -84,6 +84,11 @@ import {
 } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import {
+  parseWakeflowMaintenanceWriter,
+  type WakeflowMaintenanceWriter,
+  WakeflowMaintenanceWriterError,
+} from "./wakeflow-maintenance-writer.js";
+import {
   parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
@@ -107,6 +112,11 @@ export interface WakeflowMaintenanceExecutionTransactionOptions {
   readonly retryDelayMilliseconds?: number;
   readonly signal?: AbortSignal;
   readonly uuidFactory?: UuidV4Factory;
+  /**
+   * 写者戳：本进程制品身份的发布版本与 manifest 摘要，由组合根注入，盖在本次事务写出的
+   * intent 与 journal 上。省略或 `null` 即不盖戳（测试构建没有 manifest）。
+   */
+  readonly writer?: Readonly<WakeflowMaintenanceWriter> | null;
 }
 
 export interface WakeflowMaintenanceExecutionStepReceipt {
@@ -201,6 +211,7 @@ interface ParsedOptions {
   readonly retryDelayMilliseconds: number | undefined;
   readonly signal: AbortSignal | undefined;
   readonly uuidFactory: UuidV4Factory | undefined;
+  readonly writer: Readonly<WakeflowMaintenanceWriter> | null;
 }
 
 function fail(
@@ -287,10 +298,18 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
         key !== "acquireTimeoutMilliseconds" &&
         key !== "retryDelayMilliseconds" &&
         key !== "signal" &&
-        key !== "uuidFactory",
+        key !== "uuidFactory" &&
+        key !== "writer",
     )
   ) {
     fail("input", "$options");
+  }
+  let writer: Readonly<WakeflowMaintenanceWriter> | null;
+  try {
+    writer = parseWakeflowMaintenanceWriter(record.writer, "$options.writer");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceWriterError) fail("input", error.path);
+    throw error;
   }
   if (
     record.signal !== undefined &&
@@ -318,6 +337,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     ),
     signal: record.signal as AbortSignal | undefined,
     uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
+    writer,
   });
 }
 
@@ -716,12 +736,14 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
       plan,
       executionRequestValue,
       desiredConfig,
+      options.writer,
     );
     assertWakeflowMaintenanceExecutionIntentCapacity(intent);
     assertWakeflowPreparedMaintenanceJournalCapacity(
       operationId,
       computeWakeflowMaintenanceExecutionIntentDigest(intent),
       plan,
+      options.writer,
     );
   } catch (error: unknown) {
     if (
@@ -773,6 +795,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           context,
           intentSource,
           intentPlan,
+          options.writer,
         );
         const advanced = await advanceJournal(
           root,
@@ -960,7 +983,13 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         const existingJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
         const source =
           existingJournal ??
-          (await publishPreparedWakeflowMaintenanceJournal(root, context, currentIntent, plan));
+          (await publishPreparedWakeflowMaintenanceJournal(
+            root,
+            context,
+            currentIntent,
+            plan,
+            options.writer,
+          ));
         validateJournalPlan(source, currentIntent, plan);
         const advanced = await advanceJournal(
           root,

@@ -31,7 +31,12 @@ import {
 } from "../demand/demand-operation-authority-context.js";
 import type { DemandEventSourcingAggregate } from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import type { DemandEventStreamCommit } from "../demand/event-sourcing/demand-event-stream-commit.js";
+import {
+  type DemandEventStreamCommit,
+  DemandEventStreamCommitError,
+  type DemandEventStreamCommitWriter,
+  parseDemandEventStreamCommitWriter,
+} from "../demand/event-sourcing/demand-event-stream-commit.js";
 import {
   ManagedEvidenceConfiguredSourceRootError,
   openConfiguredManagedEvidenceSourceRoot,
@@ -77,6 +82,8 @@ import {
 
 export interface ManagedEvidencePublicationApplicationOptions {
   readonly signal?: AbortSignal;
+  /** 本进程的写者戳（C11），盖在证据记录的事件提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 export interface ManagedEvidencePublicationCompletionResult {
@@ -171,6 +178,7 @@ export class ManagedEvidencePublicationApplicationServiceError extends Error {
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
+  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 interface RecoveryRoots {
@@ -209,7 +217,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal") ||
+    Object.keys(record).some((key) => key !== "signal" && key !== "writer") ||
     (record.signal !== undefined &&
       (typeof record.signal !== "object" ||
         record.signal === null ||
@@ -218,7 +226,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   ) {
     fail("input");
   }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
+  let writer: Readonly<DemandEventStreamCommitWriter> | null;
+  try {
+    writer = parseDemandEventStreamCommitWriter(record.writer, "$options.writer");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamCommitError) fail("input");
+    throw error;
+  }
+  return Object.freeze({ signal: record.signal as AbortSignal | undefined, writer });
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
@@ -602,6 +617,7 @@ export class ManagedEvidencePublicationApplicationService {
           context.demandRoot,
           transaction,
           options.signal,
+          options.writer,
         );
         const completion = await completeManagedEvidencePublicationTransaction(
           context.demandRoot,
@@ -775,6 +791,7 @@ export class ManagedEvidencePublicationApplicationService {
             roots.demandRoot,
             stored.transaction,
             options.signal,
+            options.writer,
           );
           const completion = await completeManagedEvidencePublicationTransaction(
             roots.demandRoot,

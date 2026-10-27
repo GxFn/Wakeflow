@@ -28,8 +28,17 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  RootedDirectory,
+  RootedDirectoryError,
+} from "../../foundation/filesystem/rooted-directory.js";
 import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
+import {
+  readStableFile,
+  StableFileReadError,
+} from "../../foundation/filesystem/stable-file-read.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
 import {
@@ -39,6 +48,7 @@ import {
 } from "../../governance/demand/demand-runtime-recovery.js";
 import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -48,6 +58,11 @@ import {
   runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
 import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
+import {
+  compareWakeflowArtifactVersions,
+  parseWakeflowArtifactManifestIdentity,
+  WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME,
+} from "../../kernel/wakeflow-artifact-identity.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
@@ -62,6 +77,7 @@ import {
   WakeflowMaintenanceOperationIdError,
 } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import type { WakeflowMaintenancePublicHostFacade } from "../../workspace/maintenance/wakeflow-maintenance-public-host-facade.js";
+import type { WakeflowMaintenanceWriter } from "../../workspace/maintenance/wakeflow-maintenance-writer.js";
 import {
   convergeWakeflowPrivateModes,
   inspectWakeflowPrivateModes,
@@ -117,11 +133,20 @@ interface AdmittedHostProfiles {
   readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
 }
 
+/** 公共维护请求的执行选项：取消信号，加组合根注入的本进程写者戳（C11，盖在 apply / recover 写出的意图与日志上）。 */
+export interface WakeflowMaintenancePublicRequestOptions {
+  readonly signal?: AbortSignal;
+  readonly writer?: Readonly<WakeflowMaintenanceWriter> | null;
+}
+
 interface SliceContext {
   readonly root: RootedDirectory;
   readonly facade: Readonly<WakeflowMaintenancePublicHostFacade>;
   readonly profiles: Readonly<AdmittedHostProfiles>;
+  /** 只含取消信号：它会被原样铺进预览请求与各项只读检查的选项，写者戳不能混进去。 */
   readonly options: Readonly<{ readonly signal?: AbortSignal }>;
+  /** 本进程的写者戳；preview 零写不用它，apply 与 recover 交给宿主事务。 */
+  readonly writer: Readonly<WakeflowMaintenanceWriter> | null;
 }
 
 interface MaterializationPlan {
@@ -417,6 +442,60 @@ function deriveArtifactOverlapBlockers(
   return Object.freeze(blockers);
 }
 
+/** 制品 manifest 的读取上限：清单列出每个文件的摘要，今天约 230 KB。 */
+const ARTIFACT_MANIFEST_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$artifactManifest");
+
+/**
+ * 已装载制品 manifest 的 `version`：制品根未知、manifest 读不出或没有合法版本为 null——不知道不阻塞。
+ * 制品根在工作区之外，所以单独开一个只读的根作用域；同路径覆盖由入口的 `assertUnchanged` 在 apply 前拒绝。
+ */
+async function runningArtifactVersion(context: SliceContext): Promise<string | null> {
+  const artifactRoot = context.facade.artifactRoot;
+  if (artifactRoot === null) return null;
+  let rooted: RootedDirectory;
+  try {
+    rooted = await RootedDirectory.open(artifactRoot, "$facade.artifactRoot");
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError) return null;
+    throw error;
+  }
+  try {
+    const read = await readStableFile(
+      rooted,
+      parsePortableResourcePath(WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME, "$artifactManifest"),
+      { maximumBytes: ARTIFACT_MANIFEST_MAXIMUM_BYTES, ...context.options },
+    );
+    return parseWakeflowArtifactManifestIdentity(read.bytes).version;
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      return null;
+    }
+    throw error;
+  } finally {
+    await rooted.close();
+  }
+}
+
+/**
+ * 过期进程的守卫（1.2 计划 §3.6 C6）：任一宿主的 hook 会话曾在更高版本的制品下启动，本进程就不该再
+ * 维护这个工作区——它会把旧资产与旧渲染写回去。preview 以 `runtime-artifact-outdated:<newest>` 阻塞；
+ * apply 重算同一计划，所以同样被挡。与 status / verify 的 `superseded` 是同一条规则。
+ */
+async function deriveRuntimeArtifactBlockers(context: SliceContext): Promise<readonly string[]> {
+  const version = await runningArtifactVersion(context);
+  if (version === null) return Object.freeze([]);
+  const newest = await observeNewestSessionStartArtifactVersion(
+    context.root,
+    context.profiles.hostProfiles.map((profile) => profile.hostId),
+    context.options.signal,
+  );
+  if (newest === null || compareWakeflowArtifactVersions(newest, version) <= 0) {
+    return Object.freeze([]);
+  }
+  return Object.freeze([`runtime-artifact-outdated:${newest}`]);
+}
+
 function blockedPlan(blockers: readonly string[]): Readonly<PublicationTransactionPlan<SlicePlan>> {
   return Object.freeze({
     status: "blocked",
@@ -569,6 +648,8 @@ async function planMaintenance(
     context.facade.artifactRoot,
   );
   if (overlap.length > 0) return blockedPlan(overlap);
+  const outdated = await deriveRuntimeArtifactBlockers(context);
+  if (outdated.length > 0) return blockedPlan(outdated);
   const privateModes = await privateModePlan(context, input.action);
   if (privateModes !== null) return privateModes;
   if (input.action === "reconcile") {
@@ -811,9 +892,11 @@ async function refreshRequirementBoardIndexQuietly(
 export async function executeWakeflowMaintenancePublicRequest(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
   value: unknown,
-  options: Readonly<{ readonly signal?: AbortSignal }> = {},
+  options: Readonly<WakeflowMaintenancePublicRequestOptions> = {},
 ): Promise<WakeflowMaintenancePublicResult> {
   const profiles = admitHostFacade(facade);
+  const signalOptions = options.signal === undefined ? {} : { signal: options.signal };
+  const writer = options.writer ?? null;
   return runPublicationTransaction<
     SliceInput,
     SliceContext,
@@ -825,7 +908,8 @@ export async function executeWakeflowMaintenancePublicRequest(
       mutationScope: "maintenance",
       tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
       parseRequest,
-      open: async (root) => Object.freeze({ root, facade, profiles, options }),
+      open: async (root) =>
+        Object.freeze({ root, facade, profiles, options: signalOptions, writer }),
       close: async () => {},
       plan: planMaintenance,
       apply: async (context, _input, plan) => {
@@ -849,7 +933,10 @@ export async function executeWakeflowMaintenancePublicRequest(
         try {
           // 维护 apply 之后刷新一次活动投影：reconfigure 换语言或配置摘要、reconcile 重建派生文件（§13.94 D5）。
           const applied = await afterMutationRefresh(context.root, options.signal, () =>
-            context.facade.apply(context.root, plan.executionPlan, plan.executionRequest),
+            context.facade.apply(context.root, plan.executionPlan, plan.executionRequest, {
+              ...signalOptions,
+              writer: context.writer,
+            }),
           );
           // 看板索引是认领状态的投影：渲染器升级后现存工作区的索引陈旧（board-consistency 报 index-stale），
           // 任何一次维护 apply——含零步的 reconcile——之后按当前渲染重写一次；写不动留给 verify（G11，§13.209）。
@@ -864,7 +951,7 @@ export async function executeWakeflowMaintenancePublicRequest(
           return await context.facade.recover(
             context.root,
             parseWakeflowMaintenanceOperationId(operationId, "$request.operationId"),
-            options,
+            { ...signalOptions, writer: context.writer },
           );
         } catch (error: unknown) {
           mapTransactionError(error);

@@ -141,3 +141,20 @@
 | 完成 | 完成即归档：`complete_demand` 的 preview 内嵌 verify 门与归档前置，apply 在一个事务里写终态事件、封归档包、删活动根、置需求包 archived；verify 报告作为归档成员保存。取消同理。旧的独立 archive 步骤与"已完成未归档"中间态取消 |
 | 机器刹车 | 同一任务第三次 `rework` 自动 `escalate`，阈值进 `governance`，默认 3 |
 | 调用形状 | 创建、继续、取消为效果或追加型调用；每个变更结果带 `next{frontier, owner, suggestedTool, blockers}`，`inspect_demand_route` 只保留给从头定向，`wakeflow_status` 带 demandId 即附路由 |
+
+## 修订（2026-10-26，1.2 批 D′：C11 写者戳，[计划 §3.6](../../reviews/2026-10-22-test-gate-and-1.2-plan.md)）
+
+原则：**持久记录说出是谁写的，但不改变它证明什么。** 事件流的提交记录加可选 `writer {version, manifestDigest}`——追加这条提交的构建在制品清单里的发布版本与清单字节摘要——由组合根从本进程的制品身份注入；盖戳之前的提交与没有 manifest 的测试构建都没有它，读回按 `null`。
+
+| 项 | 修订后 |
+| --- | --- |
+| 4.2 审计 | 戳随提交持久化并进入提交摘要链（`previousCommitDigest` 与快照的 `lastCommitDigest` 覆盖它），但不进事件数据摘要、命令摘要与幂等判定：同一命令带不同戳得到相同的事件摘要与状态摘要；按 `commitId` 或幂等键重试返回首次提交及其戳，不改写。仓储的 `audit()` 按 commitSequence 列出每条提交的 `writers`（缺席为 `null`），`findCommitById` 等读取路径原样暴露 `commit.writer`。注入点是命令处理程序的选项 `writer`（`executeDemandEventSourcingCommand` 的 options）与 `prepareDemandEventStreamCommit` 输入的 `writer`；入口组合根已接线（接线桶）：两份 MCP 入口把本进程制品身份映射的戳放进每次调用的执行上下文，demand 生命周期（continue / complete / cancel）、tasking、evidence、delivery、result-review 的每次提交都带它；发布事务里规划的初始提交有意不盖戳（`initialCommitDigest` 比对）。`wakeflow_verify` 的 `artifact-older-than-stream` 门见能力卡 09。 |
+
+## 修订（2026-10-26，Codex 审阅修复批 D′：[open-items W7 与 W9](../../references/open-items.md)）
+
+原则：**双宿主初始化的工作区里，pod 的事实按全部宿主读；尚未初始化的宿主运行时即空集。** 观察切片早已如此（`observeHostBindings` 对缺席的宿主根返回 observed-empty），pod 切片与不带宿主身份的回执消费者现在用同一条规则，不新增状态、标记文件或策略字段。
+
+| 项 | 修订后 |
+| --- | --- |
+| 4.4 pod 关闭看全部宿主（W7） | 此前 `wakeflow_pod` 只按调用方宿主的 profile 读绑定登记表与 worktree 回执：Claude 登记了 pod 的 Controller 之后从 Codex 关闭，close-complete 看不到那份绑定，`window-bound` 不阻塞，pod 连同窗口被删出配置，绑定成为无工具可退的孤儿（decommission 对不在配置的窗口报 `window-unknown`）。现在 pod facade 带 `hosts`——两份 entrypoints 各供两个宿主的 resource/identity profile（本宿主在首位），共享代码不判断宿主名：事实加载按每个宿主读绑定（宿主根缺席即空集，读失败仍 `precondition-failed/binding-store`），同一窗口多宿主绑定时取首个（与观察同一规则）；close-complete 的 `window-bound:<windowId>` 因此也列出对端的绑定，变更结果的 `next` 指向 `pod-window-decommission`；关闭完成退役每个宿主的投影文件并清两个宿主的回执目录；recover 对配置里没有的 pod 清全部宿主的孤儿目录，按回执自带的 hostId 退休过期回执。配置事务后的投影刷新仍只刷本宿主（对端由它自己的 reconcile 收敛，既有规则）。退役对端的绑定仍要在那个宿主的窗口里调用 `wakeflow_register_window_binding`。 |
+| worktree 回执跨宿主合并（W9） | `listPodWorktreeReceiptsAnyHost` 此前按宿主顺序取第一个非空目录即返回，另一宿主登记的仓库回执被漏掉；现在合并全部宿主的回执、按仓库唯一并排序，同一仓库在两个宿主都有回执即 `io-failure/receipt-conflict` 显式失败而不是任取其一。pod 切片的事实加载、归档的 worktree 成员、证据来源根、捕获白名单与观察读到的是同一个集合（细节见[能力卡 8 的同批修订](./08-evidence-and-archive.md)）。`prepare_delivery` 与 `register_window_binding` 的同宿主回执读取语义正确，不动。 |

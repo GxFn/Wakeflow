@@ -451,7 +451,7 @@ test("real generated collection preserves workspace bytes and explicitly injecte
   equal(
     (object(object(bundle.probe.diagnosis).facts).verification as { gates: unknown[] }).gates
       .length,
-    15,
+    16,
   );
   const e = await runToolingCli(["doctor", "export", "--id", r.id], repository);
   ok("file" in e && typeof e.file === "string");

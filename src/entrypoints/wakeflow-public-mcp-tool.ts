@@ -12,6 +12,7 @@ import { canonicalizeJson } from "../foundation/data/canonical-json.js";
 import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
+import type { DemandEventStreamCommitWriter } from "../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { fail, toWakeflowError, type WakeflowError } from "../kernel/error.js";
 import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";
@@ -30,9 +31,14 @@ import { publicToolDefinition, type WakeflowToolCatalog } from "../kernel/tool-r
 /** 进程级脱敏边界：用户 home 路径永不进入任何公共结果，与各 owner 的根扫描叠加。 */
 const PROCESS_REDACTION_BOUNDARY = createRedactionBoundary([os.homedir()]);
 
-/** SDK 签发的执行上下文；不是 Agent 可填写的 wire 请求。 */
+/**
+ * SDK 签发的执行上下文；不是 Agent 可填写的 wire 请求。`writer` 是组合根固定的本进程写者戳
+ * （C11：制品发布版本与 manifest 摘要），每个 executor 原样转交给自己的持久写入；没有 manifest 的
+ * 构建为 null。
+ */
 export interface WakeflowPublicMcpExecutionContext {
   readonly signal: AbortSignal;
+  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 /** 公共 executor 接收已解析的 wire 值和请求取消信号，返回领域公共结果。 */
@@ -249,6 +255,7 @@ export function registerWakeflowPublicMcpCatalog(
   catalog: Readonly<WakeflowToolCatalog>,
   executors: Readonly<Record<string, WakeflowPublicMcpExecutor<unknown>>>,
   beforeMutation?: () => void,
+  writer: Readonly<DemandEventStreamCommitWriter> | null = null,
 ): void {
   for (const registration of catalog.tools) {
     const execute = executors[registration.executor];
@@ -277,7 +284,7 @@ export function registerWakeflowPublicMcpCatalog(
               ("operation" in input && input.operation === "inspect"));
           if (definition.annotations.readOnlyHint !== true && !inspected) beforeMutation?.();
           return successfulToolResult(
-            await execute(request, Object.freeze({ signal: context.mcpReq.signal })),
+            await execute(request, Object.freeze({ signal: context.mcpReq.signal, writer })),
           );
         } catch (error: unknown) {
           return await failedToolResult(registration.name, error, request);

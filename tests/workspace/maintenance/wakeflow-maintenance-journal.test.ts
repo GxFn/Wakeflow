@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -181,4 +181,87 @@ test("journal parser rejects a null desired config digest", () => {
   if (caught instanceof WakeflowMaintenanceJournalError) {
     equal(caught.reason, "schema");
   }
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"3".repeat(64)}`),
+});
+const OTHER_WRITER = Object.freeze({
+  version: "1.3.0",
+  manifestDigest: parseSha256Digest(`sha256:${"4".repeat(64)}`),
+});
+
+test("journal carries the optional writer stamp through its successors and rejects a swapped stamp (C11)", () => {
+  const executionPlan = plan();
+  const unstamped = createPreparedWakeflowMaintenanceJournal(
+    OPERATION_ID,
+    OTHER_DIGEST,
+    executionPlan,
+  );
+  equal(Object.hasOwn(unstamped, "writer"), false);
+  deepEqual(
+    createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, executionPlan, null),
+    unstamped,
+  );
+  const prepared = createPreparedWakeflowMaintenanceJournal(
+    OPERATION_ID,
+    OTHER_DIGEST,
+    executionPlan,
+    WRITER,
+  );
+  deepEqual(prepared.writer, WRITER);
+  const text = renderWakeflowMaintenanceJournal(prepared);
+  deepEqual((JSON.parse(text) as { writer?: unknown }).writer, {
+    version: "1.2.0",
+    manifestDigest: WRITER.manifestDigest,
+  });
+  deepEqual(parseWakeflowMaintenanceJournal(JSON.parse(text)), prepared);
+  equal(
+    computeWakeflowMaintenanceJournalDigest(JSON.parse(text)),
+    computeWakeflowMaintenanceJournalDigest(prepared),
+  );
+  equal(
+    Object.hasOwn(
+      parseWakeflowMaintenanceJournal(JSON.parse(renderWakeflowMaintenanceJournal(unstamped))),
+      "writer",
+    ),
+    false,
+  );
+
+  const affected = beginWakeflowMaintenanceJournalStep(prepared);
+  const checkpointed = completeWakeflowMaintenanceJournalStep(affected);
+  const terminal = terminalizeWakeflowMaintenanceJournal(checkpointed);
+  deepEqual(affected.writer, WRITER);
+  deepEqual(checkpointed.writer, WRITER);
+  deepEqual(terminal.writer, WRITER);
+  equal(isWakeflowMaintenanceJournalSuccessor(prepared, affected), true);
+  equal(
+    isWakeflowMaintenanceJournalSuccessor(prepared, { ...affected, writer: OTHER_WRITER }),
+    false,
+  );
+  equal(
+    isWakeflowMaintenanceJournalSuccessor(prepared, beginWakeflowMaintenanceJournalStep(unstamped)),
+    false,
+  );
+  equal(isWakeflowMaintenanceJournalSuccessor(unstamped, affected), false);
+
+  for (const writer of [
+    { version: "v1", manifestDigest: WRITER.manifestDigest },
+    { version: "1.2.0" },
+    { version: "1.2.0", manifestDigest: "sha256:zz" },
+    "1.2.0",
+  ]) {
+    throws(
+      () =>
+        createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, executionPlan, writer),
+      (error: unknown) =>
+        error instanceof WakeflowMaintenanceJournalError && error.reason === "input",
+    );
+  }
+  throws(
+    () => parseWakeflowMaintenanceJournal({ ...prepared, writer: null }),
+    (error: unknown) =>
+      error instanceof WakeflowMaintenanceJournalError && error.reason === "schema",
+  );
 });

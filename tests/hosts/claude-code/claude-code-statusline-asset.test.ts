@@ -549,7 +549,7 @@ test("状态栏设置维护操作：缺文件创建只含 statusLine 的 0600 �
   await rejects(planClaudeCodeStatuslineSettingsOperation(root), isUnreadable);
 });
 
-test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面各一条操作，条目仍由工作区根派生，面根缺失时只有 fresh-initialize 计划创建，执行时对照配置核对", async (t) => {
+test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面各一条操作，条目仍由工作区根派生，面根缺失时 fresh-initialize 与 reconcile 计划创建而 reconfigure 不计划，执行时对照配置核对", async (t) => {
   const workspace = temporaryDirectory(t, "wakeflow-claude-statusline-surfaces-");
   const root = await RootedDirectory.open(workspace);
   t.after(async () => {
@@ -582,7 +582,7 @@ test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面�
       targetDigest: operation.targetDigest,
       recoveringAffectedOperation,
     });
-  const plan = (action: "fresh-initialize" | "reconcile") =>
+  const plan = (action: "fresh-initialize" | "reconfigure" | "reconcile") =>
     planClaudeCodeStatuslineSettingsSurfaceOperations(root, { action, config: model });
 
   // fresh-initialize：Design 根在（缺文件）、Test 根不在（维护会先建根）→ 两条创建，按 surfaceId 排序，
@@ -618,9 +618,12 @@ test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面�
     "surface operations sort after the workspace root's",
   );
 
-  // reconcile：Test 根不在 → 跳过（portable settings 的组合已报 support-root-missing），只剩 Design。
+  // reconcile：Test 根不在 → 与 fresh 同样计划创建（维护的共享步先重建被删的根，宿主操作依赖它；
+  // open-items W5）。此前这里跳过并靠组合的 support-root-missing 阻塞，整份 reconcile 因此修不了根。
+  deepEqual(await plan("reconcile"), fresh);
+  // reconfigure 不放开：缺根的面不计划，只剩 Design（组合仍报 support-root-missing）。
   deepEqual(
-    (await plan("reconcile")).operations.map((operation) => operation.operationId),
+    (await plan("reconfigure")).operations.map((operation) => operation.operationId),
     [claudeCodeStatuslineSettingsSurfaceOperationId(design.surfaceId)],
   );
 

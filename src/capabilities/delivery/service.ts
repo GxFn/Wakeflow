@@ -69,7 +69,10 @@ import {
   DemandEventSourcingRepositoryError,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import {
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommitWriter,
+} from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import type {
   DemandCurrentDeliveryBase,
   DemandDeliveryOutcomeSummary,
@@ -206,6 +209,8 @@ export interface ExecuteDeliveryOptions {
   readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
+  /** 本进程的写者戳（C11），由组合根注入并盖在投递切片追加的提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 interface SliceContext {
@@ -591,14 +596,15 @@ async function appendCommand(
   repository: DemandEventSourcingRepository,
   command: Readonly<DemandEventSourcingCommand>,
   binding: Readonly<AppendCommandBinding>,
-  signal: AbortSignal | undefined,
+  options: Readonly<Pick<ExecuteDeliveryOptions, "signal" | "writer">>,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
   try {
     return await executeDemandEventSourcingCommand(repository, command, {
       commitId: binding.commitId,
       expectedStreamRevision: binding.expectedStreamRevision,
       idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
-      ...signalOptions(signal),
+      writer: options.writer ?? null,
+      ...signalOptions(options.signal),
     });
   } catch (error: unknown) {
     mapHandlerError(error);
@@ -1193,7 +1199,7 @@ async function executePrepare(
         ? {}
         : { productDefectRemediationSource: sources.remediationSource }),
     });
-    commandResult = await appendCommand(repository, command, binding, options.signal);
+    commandResult = await appendCommand(repository, command, binding, options);
   } catch (error: unknown) {
     // 没有提交（含撞上 stream-revision）：只回滚本次新建的声明；延后回收的孤儿原样留给它的持有者。
     if (taken.created) await releaseQuietly(context, taken.claim);
@@ -1937,7 +1943,7 @@ async function executeOutcome(
     ),
     outcome,
   });
-  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  const commandResult = await appendCommand(repository, command, binding, options);
   const committed = committedEvent(commandResult, "delivery.delivery-outcome-recorded");
   if (outcome.claimHandling === "release-authorized") {
     await releaseClaimFor(context, route.binding.windowId, outcome.fence);
@@ -2205,7 +2211,7 @@ async function executeCallbackReissue(
     reissue,
   });
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
-  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  const commandResult = await appendCommand(repository, command, binding, options);
   if (commandResult.disposition === "idempotent")
     return replayCallbackReissue(context, commandResult);
   const stored = commandResult.commit.events[0];
@@ -2303,7 +2309,7 @@ async function executeRearm(
       eventId: deriveDurableId("demand-event", "rearm-delivery", demandId, binding.idempotencyKey),
       rearm,
     });
-    commandResult = await appendCommand(repository, command, binding, options.signal);
+    commandResult = await appendCommand(repository, command, binding, options);
   } catch (error: unknown) {
     // 与 prepare 同一规则：没有提交就只回滚本次新建的声明，延后回收的孤儿不动。
     if (taken.created) await releaseQuietly(context, taken.claim);

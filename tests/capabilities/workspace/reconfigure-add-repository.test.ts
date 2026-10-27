@@ -43,6 +43,7 @@ const CODEX_POD: PodHostFacade = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
+  hosts: CODEX_OBSERVATION_FACADE.hosts,
 };
 const NEW_REPOSITORY_ID = "repository_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const NEW_WINDOW_ID = "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc";

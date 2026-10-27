@@ -1,5 +1,5 @@
 /** shared-only 路径也必须经过唯一聚合 maintenance transaction。 */
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -16,6 +16,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -1038,5 +1039,31 @@ test("recovery retires a terminal journal after intent retirement", async (t) =>
   const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
   equal(recovered.stepReceipts.length, 0);
+  equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
+});
+
+test("maintenance transaction validates the writer stamp option before any durable work and completes with a stamp (C11)", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desiredConfig();
+  const input = request(desired);
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
+  await rejects(
+    executeSharedMaintenanceTransaction(workspace.root, preview, input, {
+      writer: { version: "v1", manifestDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`) },
+    }),
+    (error: unknown) =>
+      error instanceof WakeflowMaintenanceExecutionTransactionError &&
+      error.reason === "input" &&
+      error.path === "$options.writer",
+  );
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
+  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
+
+  const completed = await executeSharedMaintenanceTransaction(workspace.root, preview, input, {
+    uuidFactory: () => UUID,
+    writer: { version: "1.2.0", manifestDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`) },
+  });
+  equal(completed.status, "completed");
+  equal(completed.operationId, OPERATION_ID);
   equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
 });

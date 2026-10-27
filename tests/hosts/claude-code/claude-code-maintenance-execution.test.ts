@@ -69,11 +69,19 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
+/**
+ * Claude 宿主的聚合维护事务（能力卡 1 §1.1 / §1.4 / §1.5，gate-log §13.94 D6、§13.117 D4–D5，复审 M2）。
+ * 2 级能力测试：在一次性 Git 工作区上跑完整的 preview → apply → recover，覆盖 fresh 的三条 portable
+ * settings、两份资产与三条本地设置条目、affected 操作的恢复重放、设置漂移的 plan-stale 拒绝、读不出的
+ * 资产 blocker，以及 reconcile 对被删受管 Design 根的重建与规则回写（open-items W5 / CR-H6）。
+ */
+
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
 ]);
 const UUID = "11111111-1111-4111-8111-111111111111";
+const RECONCILE_UUID = "22222222-2222-4222-8222-222222222222";
 const OPERATION_ID = parseWakeflowMaintenanceOperationId(`maintenance_operation_${UUID}`);
 
 async function fixture(t: TestContext) {
@@ -252,6 +260,98 @@ test("Claude aggregate transaction publishes three portable settings, the two as
   );
   equal(noOp.status, "no-op");
   equal(noOp.operationId, null);
+});
+
+test("reconcile rebuilds a deleted managed Design root and writes Claude's rules into it instead of blocking on its own contribution", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desiredConfig();
+  const input = request(desired);
+  const initialized = await executeClaudeCodeMaintenanceExecution(
+    workspace.root,
+    await previewClaudeCodeMaintenanceExecution(workspace.root, input),
+    input,
+    { uuidFactory: () => UUID },
+  );
+  equal(initialized.status, "completed");
+  const [designSurface] = desired.topology.supportSurfaces;
+  if (designSurface === undefined) throw new Error("The fixture config declares a Design surface.");
+  const designRoot = path.join(workspace.absolutePath, designSurface.path);
+  // 用户误删（或移走）了受管 Design 根，连同里面的 Claude 设置（open-items W5 / CR-H6）。
+  rmSync(designRoot, { recursive: true, force: true });
+  equal(existsSync(designRoot), false);
+
+  const reconcileInput = Object.freeze({
+    action: "reconcile" as const,
+    desiredConfig: null,
+    currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
+    hostProfiles: PROFILES,
+  });
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, reconcileInput);
+  deepEqual(
+    plan.blockerCodes,
+    [],
+    "the host contribution no longer blocks the root it needs rebuilt",
+  );
+  equal(plan.status, "ready");
+  equal(plan.hostContribution?.status, "ready");
+  // 共享步先重建根；宿主为它计划的两条 create（规则与状态行条目）都排在该步之后。
+  const rootStepIndex = plan.steps.findIndex(
+    (entry) => entry.stepId === `support-root:${designSurface.surfaceId}`,
+  );
+  const rootStep = plan.steps[rootStepIndex];
+  equal(
+    rootStep?.boundary === "shared-static" ? rootStep.stepKind : null,
+    "materialize-support-root",
+  );
+  const designOperations = [
+    `claude-portable-settings:support-surface:${designSurface.surfaceId}`,
+    claudeCodeStatuslineSettingsSurfaceOperationId(designSurface.surfaceId),
+  ].map((operationId) => ({
+    operationId,
+    sourceDigest: plan.hostContribution?.operations.find(
+      (entry) => entry.operationId === operationId,
+    )?.sourceDigest,
+    stepIndex: plan.steps.findIndex((entry) => entry.stepId === `host-effect:${operationId}`),
+  }));
+  deepEqual(
+    designOperations.map((entry) => entry.sourceDigest),
+    [null, null],
+    "both Design operations are creates into the rebuilt root",
+  );
+  equal(
+    designOperations.every((entry) => entry.stepIndex > rootStepIndex),
+    true,
+    "the Design host operations run after the root is rebuilt",
+  );
+
+  const completed = await executeClaudeCodeMaintenanceExecution(
+    workspace.root,
+    plan,
+    reconcileInput,
+    { uuidFactory: () => RECONCILE_UUID },
+  );
+  equal(completed.status, "completed");
+  equal(
+    statSync(path.join(designRoot, "drafts")).isDirectory(),
+    true,
+    "the shared step rebuilt the root with its scaffold",
+  );
+  deepEqual(settingsPermission(designRoot), [
+    ...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role: "design" }),
+  ]);
+  const localSettingsPath = path.join(designRoot, ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"));
+  equal(statSync(localSettingsPath).mode & 0o777, 0o600);
+  deepEqual(JSON.parse(readFileSync(localSettingsPath, "utf8")), {
+    statusLine: {
+      type: "command",
+      command: claudeCodeStatuslineCommand(workspace.root.absolutePath),
+    },
+  });
+  // 修好之后再对账：零步骤、无阻塞，即只读校验通过。
+  const verified = await previewClaudeCodeMaintenanceExecution(workspace.root, reconcileInput);
+  equal(verified.status, "ready");
+  deepEqual(verified.blockerCodes, []);
+  equal(verified.steps.length, 0);
 });
 
 test("recovery replays only the affected Claude operation from the exact journal", async (t) => {

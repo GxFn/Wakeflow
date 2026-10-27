@@ -396,7 +396,12 @@ async function appendLifecycleEvent(
     const result = await executeDemandEventSourcingCommand(
       new DemandEventSourcingRepository(handle.demandRoot),
       command,
-      { commitId: commitIdOf(commitId), expectedStreamRevision, ...signalOptions(context.signal) },
+      {
+        commitId: commitIdOf(commitId),
+        expectedStreamRevision,
+        writer: context.writer,
+        ...signalOptions(context.signal),
+      },
     );
     return Object.freeze({
       receipt: Object.freeze({

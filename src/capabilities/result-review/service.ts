@@ -56,7 +56,10 @@ import {
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import type { DemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
-import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
+import {
+  computeDemandEventStreamCommitDigest,
+  type DemandEventStreamCommitWriter,
+} from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { parseDemandEventStreamRevision } from "../../governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
   computeDemandAggregateStateDigest,
@@ -235,6 +238,8 @@ export interface ExecuteResultReviewOptions {
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
   readonly uuidFactory?: UuidV4Factory;
+  /** 本进程的写者戳（C11），由组合根注入并盖在导入与评审决定的提交上；省略或 null 即不盖戳。 */
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 interface SliceContext {
@@ -535,14 +540,15 @@ async function appendCommand(
   repository: DemandEventSourcingRepository,
   command: Readonly<DemandEventSourcingCommand>,
   binding: Readonly<AppendCommandBinding>,
-  signal: AbortSignal | undefined,
+  options: Readonly<Pick<ExecuteResultReviewOptions, "signal" | "writer">>,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
   try {
     return await executeDemandEventSourcingCommand(repository, command, {
       commitId: binding.commitId,
       expectedStreamRevision: binding.expectedStreamRevision,
       idempotency: { key: binding.idempotencyKey, requestDigest: binding.requestDigest },
-      ...signalOptions(signal),
+      writer: options.writer ?? null,
+      ...signalOptions(options.signal),
     });
   } catch (error: unknown) {
     mapHandlerError(error);
@@ -1052,7 +1058,7 @@ async function executeImport(
     callback: issued.callback,
     evidenceResolution,
   });
-  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  const commandResult = await appendCommand(repository, command, binding, options);
   if (commandResult.disposition === "idempotent") return replayImport(context, commandResult);
   await releaseFence(context, envelope.route.windowId, result.delivery.fence);
   return Object.freeze({
@@ -1853,7 +1859,7 @@ async function executeImplementationDecision(
     commandVersion: 1,
     decision,
   });
-  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  const commandResult = await appendCommand(repository, command, binding, options);
   if (commandResult.disposition === "idempotent") {
     return replayDecision(commandResult, "WakeflowControllerImplementationReviewDecision");
   }
@@ -2078,7 +2084,7 @@ async function executeTestDecision(
     decision,
     ...(authorization === undefined ? {} : { authorization }),
   });
-  const commandResult = await appendCommand(repository, command, binding, options.signal);
+  const commandResult = await appendCommand(repository, command, binding, options);
   if (commandResult.disposition === "idempotent") {
     return replayDecision(commandResult, "WakeflowControllerTestReviewDecision");
   }

@@ -124,7 +124,7 @@ enabled = true
 | 结果与评审 | `wakeflow_import_target_result`、`wakeflow_inspect_target_result_review`、`wakeflow_record_implementation_review_decision`、`wakeflow_record_test_review_decision` |
 | 证据 | `wakeflow_record_evidence`——受管路径、hook 观察、链接、提交 |
 | Pod | `wakeflow_pod`——创建、查看、恢复、关闭 |
-| 观察 | `wakeflow_status`（一次观察所有域并给出下一步）、`wakeflow_verify`（十五道工作区门：通过、失败或不可用；带 `demandId` 时另评该 Demand 的完成门——七道固定门加条件门） |
+| 观察 | `wakeflow_status`（一次观察所有域并给出下一步）、`wakeflow_verify`（十六道工作区门：通过、失败或不可用；带 `demandId` 时另评该 Demand 的完成门——七道固定门加条件门） |
 
 "不可用"与"失败"故意分开计数："没能检查"永远不会被报成"没问题"。
 

@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -15,6 +15,7 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
   publishWakeflowMaintenanceExecutionIntent,
+  readWakeflowMaintenanceExecutionIntent,
   retireWakeflowMaintenanceExecutionIntent,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
@@ -366,4 +367,93 @@ test("maintenance gate validates its operation ID factory before bootstrap", asy
     equal(caught.reason, "input");
   }
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
+});
+
+const WRITER = Object.freeze({
+  version: "1.2.0",
+  manifestDigest: parseSha256Digest(`sha256:${"5".repeat(64)}`),
+});
+const OTHER_WRITER = Object.freeze({
+  version: "1.3.0",
+  manifestDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
+});
+
+test("journal store persists the writer stamp on intent and prepared journal, keeps it across checkpoints and rejects a swapped stamp (C11)", async (t) => {
+  const workspace = await fixture(t);
+  const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
+  const plan = preview(core.inspectionDigest);
+  await withWakeflowMaintenanceGate(
+    workspace.root,
+    {
+      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
+      uuidFactory: () => UUID,
+    },
+    async (context) => {
+      const intent = createWakeflowMaintenanceExecutionIntent(
+        context.operationId,
+        plan,
+        REQUEST,
+        DESIRED_CONFIG,
+        WRITER,
+      );
+      const intentSource = await publishWakeflowMaintenanceExecutionIntent(
+        workspace.root,
+        context,
+        intent,
+      );
+      deepEqual(
+        (await readWakeflowMaintenanceExecutionIntent(workspace.root, context.operationId)).intent
+          .writer,
+        WRITER,
+      );
+      let source = await publishPreparedWakeflowMaintenanceJournal(
+        workspace.root,
+        context,
+        intentSource,
+        plan,
+        WRITER,
+      );
+      deepEqual(
+        (await readWakeflowMaintenanceJournal(workspace.root, context.operationId)).journal.writer,
+        WRITER,
+      );
+      await rejects(
+        checkpointWakeflowMaintenanceJournal(workspace.root, context, intentSource, source, {
+          ...beginWakeflowMaintenanceJournalStep(source.journal),
+          writer: OTHER_WRITER,
+        }),
+        (error: unknown) =>
+          error instanceof WakeflowMaintenanceJournalStoreError && error.reason === "input",
+      );
+      source = await checkpointWakeflowMaintenanceJournal(
+        workspace.root,
+        context,
+        intentSource,
+        source,
+        beginWakeflowMaintenanceJournalStep(source.journal),
+      );
+      source = await checkpointWakeflowMaintenanceJournal(
+        workspace.root,
+        context,
+        intentSource,
+        source,
+        completeWakeflowMaintenanceJournalStep(source.journal),
+      );
+      source = await checkpointWakeflowMaintenanceJournal(
+        workspace.root,
+        context,
+        intentSource,
+        source,
+        terminalizeWakeflowMaintenanceJournal(source.journal),
+      );
+      equal(source.journal.state, "terminal");
+      deepEqual(
+        (await readWakeflowMaintenanceJournal(workspace.root, context.operationId)).journal.writer,
+        WRITER,
+      );
+      await retireWakeflowMaintenanceExecutionIntent(workspace.root, context, intentSource);
+      await retireTerminalWakeflowMaintenanceJournal(workspace.root, context, source);
+    },
+  );
+  equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
 });

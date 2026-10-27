@@ -1,4 +1,7 @@
-import { executeWakeflowMaintenancePublicRequest } from "../capabilities/workspace/maintain-workspace.js";
+import {
+  executeWakeflowMaintenancePublicRequest,
+  type WakeflowMaintenancePublicRequestOptions,
+} from "../capabilities/workspace/maintain-workspace.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import {
   executeCodexMaintenanceExecution,
@@ -33,10 +36,10 @@ const CODEX_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
   recover: recoverCodexMaintenanceExecution,
 }) satisfies Readonly<WakeflowMaintenancePublicHostFacade>;
 
-/** 执行一个经过公共合同准入的 Codex workspace Maintenance 请求。 */
+/** 执行一个经过公共合同准入的 Codex workspace Maintenance 请求；`options.writer` 是执行上下文带来的本进程写者戳（C11）。 */
 export async function executeCodexWakeflowMaintenance(
   value: unknown,
-  options: { readonly signal?: AbortSignal } = {},
+  options: WakeflowMaintenancePublicRequestOptions = {},
 ) {
   return executeWakeflowMaintenancePublicRequest(
     CODEX_MAINTENANCE_PUBLIC_HOST_FACADE,

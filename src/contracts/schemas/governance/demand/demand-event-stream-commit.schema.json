@@ -90,6 +90,22 @@
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
+    },
+    "writer": {
+      "description": "Optional writer stamp: the artifact version and manifest digest of the build that appended this commit; absent on commits written before the stamp or by a build without a manifest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "manifestDigest"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$"
+        },
+        "manifestDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
     }
   },
   "$defs": {

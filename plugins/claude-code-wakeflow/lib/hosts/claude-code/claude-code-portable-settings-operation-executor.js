@@ -279,6 +279,8 @@ async function executeAtRoot(root, request) {
         published = await publishClaudeCodePortableSettings(root, {
             rules: claudeCodePortableSettingsRulesFor(request.operation.root),
             retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+            // 发布器的 CAS 基底是这里已确认的 source，不是它自己的二次读（W6）。
+            expectedSourceDigest: request.operation.sourceDigest,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
     }

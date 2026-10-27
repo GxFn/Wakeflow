@@ -323,7 +323,6 @@ async function next(context, outcome) {
     const route = buildDemandControllerRoute({ ...context.authority.loaded, aggregate: outcome.commandResult.aggregate }, snapshot);
     return deriveNextProjection(route);
 }
-// ---- 声明 ---------------------------------------------------------------------
 async function takeClaim(context, route, holder, claimId, now) {
     const signal = signalOptions(context.options.signal);
     const windowId = route.binding.windowId;
@@ -331,12 +330,16 @@ async function takeClaim(context, route, holder, claimId, now) {
     const knownDeliveryIds = context.authority.loaded.aggregate.state.targetTasks.flatMap((entry) => entry.phase === "planned" || entry.phase === "superseded"
         ? []
         : [entry.currentDelivery.deliveryId]);
+    let orphan = null;
     if (existing !== null && existing.claimId !== claimId) {
         const decision = deriveClaimBlocker(existing.holder, holder.demandId, holder.targetTaskId, knownDeliveryIds);
         if (decision.blocker !== null)
             rejectWith([decision.blocker], "$request.targetTaskId");
+        // 孤儿判定来自上下文加载时的聚合快照，不受流修订 CAS 保护：持有者可能是一次已取声明、尚未追加
+        // 的并发 prepare。这里不释放它；等本次追加以 CAS 提交、证明没有并发 prepare 赢在前面，再由
+        // `settleClaim` 精确回收（open-items W13）。
         if (decision.reclaim)
-            await releaseWorkClaim(context.workspaceRoot, existing, signal);
+            orphan = existing;
     }
     const claim = createWorkClaim({
         claimId,
@@ -346,21 +349,46 @@ async function takeClaim(context, route, holder, claimId, now) {
         holder,
         claimedAt: now,
     });
+    if (orphan !== null) {
+        await assertBindingUnchanged(context, route);
+        return Object.freeze({ claim, created: false, deferredOrphan: orphan });
+    }
     const taken = await takeWorkClaim(context.workspaceRoot, claim, signal);
     const created = taken.disposition === "created";
-    // 声明与绑定存储各自加锁：取得声明后复核绑定摘要，窗口在检查与声明之间被重绑时拒绝。
     try {
-        const current = await readBinding(context, windowId);
-        if (digestBinding(current) !== route.bindingDigest) {
-            fail("precondition-failed", "binding-changed", "$request.targetTaskId");
-        }
+        await assertBindingUnchanged(context, route);
     }
     catch (error) {
         if (created)
             await releaseQuietly(context, taken.claim);
         throw error;
     }
-    return Object.freeze({ claim: taken.claim, created });
+    return Object.freeze({ claim: taken.claim, created, deferredOrphan: null });
+}
+/** 声明与绑定存储各自加锁：取得声明后复核绑定摘要，窗口在检查与声明之间被重绑时拒绝。 */
+async function assertBindingUnchanged(context, route) {
+    const current = await readBinding(context, route.binding.windowId);
+    if (digestBinding(current) !== route.bindingDigest) {
+        fail("precondition-failed", "binding-changed", "$request.targetTaskId");
+    }
+}
+/**
+ * 追加提交之后落实声明。延后回收的孤儿此刻才精确释放：流修订 CAS 已经证明它的持有者不可能再提交
+ * 带着那份围栏的事件；持有者已自行回滚（claim-absent）不是错误。随后以独占创建写入本声明。
+ * 没有延后孤儿时声明早已在盘上，这里什么都不做。
+ */
+async function settleClaim(context, taken) {
+    if (taken.deferredOrphan === null)
+        return;
+    const signal = signalOptions(context.options.signal);
+    try {
+        await releaseWorkClaim(context.workspaceRoot, taken.deferredOrphan, signal);
+    }
+    catch (error) {
+        if (!(isWakeflowError(error) && error.reason === "claim-absent"))
+            throw error;
+    }
+    await takeWorkClaim(context.workspaceRoot, taken.claim, signal);
 }
 async function releaseQuietly(context, claim) {
     try {
@@ -598,6 +626,8 @@ async function executePrepare(context, input, binding) {
     const now = nowFrom(options);
     const sources = await prepareSources(context, repository, target, taskPackage, route, binding);
     const taken = await takeClaim(context, route, { demandId, targetTaskId: target.targetTaskId, deliveryId, generation: 1 }, claimId, now);
+    let envelope;
+    let commandResult;
     try {
         const portablePrompt = renderPrompt(context, input, sources.prompt, {
             deliveryId,
@@ -605,7 +635,7 @@ async function executePrepare(context, input, binding) {
             streamRevision: binding.expectedStreamRevision + 1,
             generation: 1,
         });
-        const envelope = createEnvelope(input, sources, taken.claim, {
+        envelope = createEnvelope(input, sources, taken.claim, {
             deliveryId,
             taskPackage,
             route,
@@ -624,25 +654,27 @@ async function executePrepare(context, input, binding) {
                 ? {}
                 : { productDefectRemediationSource: sources.remediationSource }),
         });
-        const commandResult = await appendCommand(repository, command, binding, options.signal);
-        if (commandResult.disposition === "idempotent") {
-            return replayPermit(context, commandResult, "delivery.delivery-prepared");
-        }
-        return Object.freeze({
-            commandResult,
-            envelope,
-            route,
-            generation: 1,
-            fence: Object.freeze({ claimId: taken.claim.claimId, claimDigest: taken.claim.claimDigest }),
-            issuedAt: now,
-            eventId: committedEvent(commandResult, "delivery.delivery-prepared").stored.eventId,
-        });
+        commandResult = await appendCommand(repository, command, binding, options.signal);
     }
     catch (error) {
+        // 没有提交（含撞上 stream-revision）：只回滚本次新建的声明；延后回收的孤儿原样留给它的持有者。
         if (taken.created)
             await releaseQuietly(context, taken.claim);
         throw error;
     }
+    if (commandResult.disposition === "idempotent") {
+        return replayPermit(context, commandResult, "delivery.delivery-prepared");
+    }
+    await settleClaim(context, taken);
+    return Object.freeze({
+        commandResult,
+        envelope,
+        route,
+        generation: 1,
+        fence: Object.freeze({ claimId: taken.claim.claimId, claimDigest: taken.claim.claimDigest }),
+        issuedAt: now,
+        eventId: committedEvent(commandResult, "delivery.delivery-prepared").stored.eventId,
+    });
 }
 /**
  * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的 tmux 助手去投递，所以
@@ -1462,6 +1494,7 @@ async function executeRearm(context, input, binding) {
     const now = nowFrom(options);
     const generation = current.generation + 1;
     const taken = await takeClaim(context, route, { demandId, targetTaskId: target.targetTaskId, deliveryId: envelope.deliveryId, generation }, claimId, now);
+    let commandResult;
     try {
         let rearm;
         try {
@@ -1488,25 +1521,27 @@ async function executeRearm(context, input, binding) {
             eventId: deriveDurableId("demand-event", "rearm-delivery", demandId, binding.idempotencyKey),
             rearm,
         });
-        const commandResult = await appendCommand(repository, command, binding, options.signal);
-        if (commandResult.disposition === "idempotent") {
-            return replayPermit(context, commandResult, "delivery.delivery-rearmed");
-        }
-        return Object.freeze({
-            commandResult,
-            envelope,
-            route,
-            generation,
-            fence: Object.freeze({ claimId: taken.claim.claimId, claimDigest: taken.claim.claimDigest }),
-            issuedAt: now,
-            eventId: committedEvent(commandResult, "delivery.delivery-rearmed").stored.eventId,
-        });
+        commandResult = await appendCommand(repository, command, binding, options.signal);
     }
     catch (error) {
+        // 与 prepare 同一规则：没有提交就只回滚本次新建的声明，延后回收的孤儿不动。
         if (taken.created)
             await releaseQuietly(context, taken.claim);
         throw error;
     }
+    if (commandResult.disposition === "idempotent") {
+        return replayPermit(context, commandResult, "delivery.delivery-rearmed");
+    }
+    await settleClaim(context, taken);
+    return Object.freeze({
+        commandResult,
+        envelope,
+        route,
+        generation,
+        fence: Object.freeze({ claimId: taken.claim.claimId, claimDigest: taken.claim.claimDigest }),
+        issuedAt: now,
+        eventId: committedEvent(commandResult, "delivery.delivery-rearmed").stored.eventId,
+    });
 }
 /** 执行一次 `wakeflow_rearm_delivery`。 */
 export async function executeRearmDeliveryRequest(facade, value, options = {}) {

@@ -1,4 +1,5 @@
 import { types } from "node:util";
+import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
@@ -44,10 +45,31 @@ export class ClaudeCodePortableSettingsPublicationError extends Error {
     }
 }
 const MAXIMUM_SETTINGS_BYTES = parseByteCount(1024 * 1024);
+const PUBLICATION_OPTION_KEYS = Object.freeze([
+    "signal",
+    "rules",
+    "retiredRules",
+]);
+const PUBLISH_OPTION_KEYS = Object.freeze([
+    ...PUBLICATION_OPTION_KEYS,
+    "expectedSourceDigest",
+]);
 function fail(reason, path, transitionReason = null) {
     throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason);
 }
-function parseOptions(value) {
+function parseExpectedSourceDigest(value) {
+    if (value === undefined || value === null)
+        return value;
+    try {
+        return parseSha256Digest(value, "$options.expectedSourceDigest");
+    }
+    catch (error) {
+        if (error instanceof Sha256Error)
+            fail("input", "$options.expectedSourceDigest");
+        throw error;
+    }
+}
+function parseOptions(value, allowedKeys) {
     let record;
     try {
         record = parsePlainRecord(value === undefined ? {} : value, "$options");
@@ -57,7 +79,7 @@ function parseOptions(value) {
             fail("input", "$options");
         throw error;
     }
-    if (Object.keys(record).some((key) => key !== "signal" && key !== "rules" && key !== "retiredRules") ||
+    if (Object.keys(record).some((key) => !allowedKeys.includes(key)) ||
         (record.signal !== undefined &&
             (typeof record.signal !== "object" ||
                 record.signal === null ||
@@ -78,6 +100,7 @@ function parseOptions(value) {
         retiredRules: record.retiredRules === undefined
             ? undefined
             : Object.freeze([...record.retiredRules]),
+        expectedSourceDigest: parseExpectedSourceDigest(record.expectedSourceDigest),
     });
 }
 function currentUserId() {
@@ -175,7 +198,7 @@ export async function inspectClaudeCodePortableSettings(rootValue, optionsValue 
         !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
-    const options = parseOptions(optionsValue);
+    const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
     const inspection = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
@@ -212,6 +235,14 @@ function assertTransitionReady(transition) {
         transition.desiredText === null ||
         transition.desiredDigest === null) {
         fail("transition-blocked", "$transition", transition.reason);
+    }
+}
+/** 发布器的 CAS 基底是调用方确认过的 source：自己读到的 before 不是它就拒绝，目录和文件都不动（W6）。 */
+function assertExpectedSource(before, expectedSourceDigest) {
+    if (expectedSourceDigest === undefined)
+        return;
+    if ((before.source?.digest ?? null) !== expectedSourceDigest) {
+        fail("source-changed", "$settings");
     }
 }
 async function publishTransition(root, inspection, signal) {
@@ -260,7 +291,11 @@ async function publishTransition(root, inspection, signal) {
         throw error;
     }
 }
-/** 创建、最小更新或幂等复用一个已授权根的 portable settings。 */
+/**
+ * 创建、最小更新或幂等复用一个已授权根的 portable settings。
+ * 带 `expectedSourceDigest` 时，发布器读到的 before 必须就是它，否则在建目录和写入之前以
+ * `source-changed` 拒绝（W6）。
+ */
 export async function publishClaudeCodePortableSettings(rootValue, optionsValue = {}) {
     if (typeof rootValue !== "object" ||
         rootValue === null ||
@@ -268,10 +303,11 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
         !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
-    const options = parseOptions(optionsValue);
+    const options = parseOptions(optionsValue, PUBLISH_OPTION_KEYS);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
     const before = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+    assertExpectedSource(before, options.expectedSourceDigest);
     if (before.transition.status === "blocked") {
         fail("transition-blocked", "$transition", before.transition.reason);
     }
@@ -315,7 +351,7 @@ export async function settleClaudeCodePortableSettingsPublicationStages(rootValu
         !(rootValue instanceof RootedDirectory)) {
         fail("input", "$root");
     }
-    const options = parseOptions(optionsValue);
+    const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
     const directory = await directoryNodeOrNull(rootValue);
     if (directory !== null) {
         try {

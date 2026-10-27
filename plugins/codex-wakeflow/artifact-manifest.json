@@ -247,8 +247,8 @@
     },
     {
       "path": "lib/capabilities/delivery/decide.js",
-      "bytes": 7006,
-      "sha256": "sha256:c470e959742bf2fdc9e61175aa4fb97ad9889d5c7b44662a434862395f58a0de",
+      "bytes": 7219,
+      "sha256": "sha256:ca2cb465c2c70f62d3c3e2bbfdc1923b50fcfb5aebe0b9e08438a8f11c262884",
       "mode": "0644",
       "scope": "shared"
     },
@@ -261,8 +261,8 @@
     },
     {
       "path": "lib/capabilities/delivery/service.js",
-      "bytes": 76321,
-      "sha256": "sha256:750c4a7f0c0108856b915dbee459bf356a414207a159f0948ec059b727084234",
+      "bytes": 77947,
+      "sha256": "sha256:5c85eb7ae9b662fe59bcb350809d2191d18fc1ebdd9f5b3f7e5e46faacd5d0e7",
       "mode": "0644",
       "scope": "shared"
     },
@@ -324,8 +324,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/decide.js",
-      "bytes": 6854,
-      "sha256": "sha256:97d07c42903619bcb86d485ba913bc81964ad7f7e807460d7190f885de37998b",
+      "bytes": 7277,
+      "sha256": "sha256:f82e18b0df93220869781e00d0fca8131595323aa35e5aa09be43bbe2468750b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -352,8 +352,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/service.js",
-      "bytes": 44952,
-      "sha256": "sha256:78dbd5f4af7d21d4986dddf5e50cc88a602610bdcdacc2c3964f957e8620ff35",
+      "bytes": 47254,
+      "sha256": "sha256:64c6e6a864fa901c0fd666735781ffa194b1bae6b190463b95f1415c702a94a4",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2753,8 +2753,8 @@
     },
     {
       "path": "lib/kernel/requirement-board.js",
-      "bytes": 24737,
-      "sha256": "sha256:73d8c1f5d8fb93b54145b0b5f0079c544438b5ad3458f7ea75f497cefa75cd66",
+      "bytes": 26950,
+      "sha256": "sha256:65b54db2c0185d34c5419c7d48f503927e461806c75e717fc9641bff3f01e40d",
       "mode": "0644",
       "scope": "shared"
     },

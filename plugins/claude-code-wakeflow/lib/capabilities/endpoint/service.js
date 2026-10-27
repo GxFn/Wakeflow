@@ -31,7 +31,7 @@ import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../wor
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { parseWakeflowWorkspaceHostResourceProfile, } from "../../workspace/workspace-host-resource-profile.js";
 import { admitWindowBindingResult, parseWindowBindingRequest, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { decideEndpointCommand, } from "./decide.js";
+import { decideEndpointCommand, rejectForeignHandleOwner, } from "./decide.js";
 import { createWindowLocatorRecord, readWindowLocator, retireWindowLocator, toTmuxLocator, writeWindowLocator, } from "./locator-store.js";
 import { classifyTmuxPanes } from "./pane-classification.js";
 import { deriveEndpointNext, publishProjectionDocument, } from "./projection.js";
@@ -209,7 +209,17 @@ async function sessionRootMatcher(context, window, observation, receipts) {
         return real !== null && candidates.has(real);
     };
 }
-/** hook 观察是端点的会话证据：`session-start` 按窗口根匹配，`session-end` 按会话汇总。 */
+/** 每个会话最新一条记录的时刻；记录自带 `recordedAt`，不依赖读取顺序。 */
+function noteLatest(latest, sessionId, recordedAt) {
+    const at = Date.parse(recordedAt);
+    const previous = latest.get(sessionId);
+    if (previous === undefined || previous < at)
+        latest.set(sessionId, at);
+}
+/**
+ * hook 观察是端点的会话证据：`session-start` 按窗口根匹配，`session-end` 按会话汇总，且只有晚于该会话
+ * 最新 `session-start` 的 end 才算会话已结束。
+ */
 async function loadHookSessions(context, window, observation, receipts) {
     const matches = await sessionRootMatcher(context, window, observation, receipts);
     const options = signalOptions(context.signal);
@@ -222,7 +232,10 @@ async function loadHookSessions(context, window, observation, receipts) {
         fail("io-failure", "observation-query-incomplete", "$observations");
     if (startRecords.unreadable > 0)
         fail("io-failure", "observation-query-unavailable", "$observations");
+    const latestStart = new Map();
     for (const record of startRecords.records) {
+        // 会话的生命周期按它全部的 start 记录算（resume 从别的目录起也是活过来）；窗口根匹配只决定登记证据。
+        noteLatest(latestStart, record.sessionId, record.recordedAt);
         if (!(await matches(record.cwd)))
             continue;
         started.add(record.sessionId);
@@ -233,8 +246,17 @@ async function loadHookSessions(context, window, observation, receipts) {
         fail("io-failure", "observation-query-incomplete", "$observations");
     if (endRecords.unreadable > 0)
         fail("io-failure", "observation-query-unavailable", "$observations");
-    for (const record of endRecords.records)
-        ended.add(record.sessionId);
+    const latestEnd = new Map();
+    for (const record of endRecords.records) {
+        noteLatest(latestEnd, record.sessionId, record.recordedAt);
+    }
+    // 只有最新 end 晚于该会话最新 start 的会话才算已结束：Claude 的 `--resume` 续同一会话并再触发
+    // SessionStart，旧的 end 不能再给 release-claim 开恢复门、也不再升级退役核实（open-items W4）。
+    for (const [sessionId, endedAt] of latestEnd) {
+        const startedAt = latestStart.get(sessionId);
+        if (startedAt === undefined || startedAt < endedAt)
+            ended.add(sessionId);
+    }
     return Object.freeze({ started, ended, cwdBySession });
 }
 async function loadWorktreeReceipts(context) {
@@ -284,10 +306,14 @@ async function loadState(context, observation) {
         now,
     });
 }
-function endpointState(context, loaded) {
+/** 句柄值到持有窗口的映射：锁外用加载快照路由，锁内用重读的 inventory 复验（open-items W1）。 */
+function handleOwnersOf(bindings) {
     const handleOwners = new Map();
-    for (const binding of loaded.bindings)
+    for (const binding of bindings)
         handleOwners.set(binding.handle.value, binding.windowId);
+    return handleOwners;
+}
+function endpointState(context, loaded) {
     return Object.freeze({
         windowKnown: context.window !== null && context.intent !== null,
         launchIntentDigest: context.intent?.intentDigest ?? "",
@@ -308,7 +334,7 @@ function endpointState(context, loaded) {
                 claimDigest: loaded.claim.claimDigest,
                 expired: loaded.claimExpired,
             }),
-        handleOwners,
+        handleOwners: handleOwnersOf(loaded.bindings),
         startedSessions: loaded.sessions.started,
         endedSessions: loaded.sessions.ended,
     });
@@ -729,6 +755,18 @@ async function assertUnchangedUnderLock(context, loaded, request, current) {
         fail("concurrency-conflict", "claim-changed", "$request.windowId", { retryable: true });
     }
 }
+/**
+ * 锁内复验跨窗口句柄唯一性（open-items W1）：加载快照里的 handleOwners 只用于路由（早拒绝），两个窗口
+ * 可以都在锁外看到对方尚未登记；进锁后用重读的 inventory 再算一次，别的窗口已持有同一句柄即
+ * handle-conflict——否则绑定库（只查 bindingId 唯一）会写下第二份同句柄绑定，inventory 从此读不出来。
+ */
+function assertHandleUnclaimedUnderLock(bindings, windowId, request) {
+    if (request.operation === "decommission")
+        return;
+    const rejection = rejectForeignHandleOwner(handleOwnersOf(bindings), request.observation.handle.value, windowId);
+    if (rejection !== null)
+        fail(rejection.code, rejection.reason, rejection.path);
+}
 async function mutateBinding(context, loaded, request, decision) {
     const window = context.window;
     const entry = context.unregisteredEntry;
@@ -744,6 +782,7 @@ async function mutateBinding(context, loaded, request, decision) {
             const current = store.inventory.bindings.find((candidate) => candidate.windowId === window.windowId) ??
                 null;
             await assertUnchangedUnderLock(context, loaded, request, current);
+            assertHandleUnclaimedUnderLock(store.inventory.bindings, window.windowId, request);
             const applied = await applyMutation(context, store, window, current, request, decision, loaded);
             const observation = request.operation === "decommission" ? null : request.observation;
             await refreshLocator(context, window, applied.binding, observation);

@@ -114,7 +114,8 @@ export function deriveRearmBlockers(target) {
 }
 /**
  * 窗口声明占用判定：另一 Demand 或另一目标持有即阻塞；同一目标的孤儿声明（聚合里没有
- * 对应投递）允许回收。
+ * 对应投递）允许回收。孤儿判定基于调用方加载时的聚合快照，持有者可能是一次尚未追加的并发
+ * prepare，所以回收由调用方在自己的追加以流修订 CAS 提交之后执行（open-items W13）。
  */
 export function deriveClaimBlocker(holder, demandId, targetTaskId, knownDeliveryIds) {
     if (holder === null)

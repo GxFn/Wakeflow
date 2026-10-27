@@ -29,7 +29,8 @@ import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, requirementCla
  * `previousStateDigest`。变更只有一种方式：带期望节点与摘要的整文件替换，两个
  * Controller 同时认领时恰有一个成功。转移是纯函数；requirement 切片写 pending、
  * parked、withdrawn，Demand 侧写 claimed、archived 与取消后的 withdrawn。人读索引
- * `board/index.md` 由状态确定性重写，任何人不得手改。
+ * `board/index.md` 由状态确定性重写，刷新在看板级锁 `locks/index.lock` 内列举并发布（W29），
+ * 任何人不得手改。
  */
 export const REQUIREMENT_CLAIM_STATUSES = Object.freeze([
     "pending",
@@ -52,14 +53,18 @@ const BOARD_LOCKS_ROOT_REF = parsePortableResourcePath(`${REQUIREMENT_BOARD_ROOT
 function claimStateLockRef(requirementId) {
     return parsePortableResourcePath(`${BOARD_LOCKS_ROOT_REF}/${requirementId}.lock`, "$layout");
 }
-/** 每个需求包一把互斥锁：期望检查与替换在锁内连成一步，两个认领者恰有一个成功。 */
-async function withClaimStateLock(root, requirementId, signal, operation) {
+/** 看板级锁：索引刷新的列举、渲染与发布在它里面连成一步（W29）；状态文件名是 `requirement_<uuid>`，不会与它同名。 */
+const INDEX_LOCK_REF = parsePortableResourcePath(`${BOARD_LOCKS_ROOT_REF}/index.lock`, "$layout");
+/**
+ * 看板锁目录下的一把互斥锁：已证明失活的持有者残留先退休，活动或未知 owner 由 acquire 等待；
+ * 锁本身的失败由调用方按自己的边界映射，临界区的错误原样穿过。
+ */
+async function withBoardLock(root, lockRef, signal, operation, mapLockError) {
     try {
         await materializeDirectoryPath(root, BOARD_LOCKS_ROOT_REF, {
             mode: DIRECTORY_MODE,
             ...signalOptions(signal),
         });
-        const lockRef = claimStateLockRef(requirementId);
         const observed = await inspectRootedExclusiveFileLock(root, lockRef);
         if (observed.status === "held" && observed.ownerState === "inactive") {
             // 看板 owner 只退休已证明失活且仍匹配的锁；活动或未知 owner 仍由 acquire 等待。
@@ -74,14 +79,31 @@ async function withClaimStateLock(root, requirementId, signal, operation) {
         if (error instanceof DurableDirectoryMaterializationError) {
             fail("io-failure", `board-locks-${error.reason}`, "$board", { cause: error });
         }
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("concurrency-conflict", `claim-state-lock-${error.reason}`, "$claimState", {
-                cause: error,
-                retryable: true,
-            });
-        }
+        if (error instanceof RootedExclusiveFileLockError)
+            mapLockError(error);
         throw error;
     }
+}
+/** 每个需求包一把互斥锁：期望检查与替换在锁内连成一步，两个认领者恰有一个成功。 */
+function withClaimStateLock(root, requirementId, signal, operation) {
+    return withBoardLock(root, claimStateLockRef(requirementId), signal, operation, (error) => fail("concurrency-conflict", `claim-state-lock-${error.reason}`, "$claimState", {
+        cause: error,
+        retryable: true,
+    }));
+}
+/**
+ * 索引锁（W29，R-ROOT-02）：一次刷新从列举到发布都持有它，所以任何一次刷新看到的列举都不早于另一次
+ * 正在发布的索引。它与状态文件锁互不嵌套——状态写入只持 `<requirementId>.lock`，刷新只持这一把，
+ * 调用方在状态提交之后、锁外调用刷新。等不到锁沿用索引争用的既有语义（可重试的
+ * `board-index-contended`，调用方静默自愈，下次刷新补齐）；中止仍以 `-aborted` 结尾原样穿出。
+ */
+function withIndexLock(root, signal, operation) {
+    return withBoardLock(root, INDEX_LOCK_REF, signal, operation, (error) => {
+        if (error.reason === "aborted") {
+            fail("io-failure", "board-index-lock-aborted", "$boardIndex", { cause: error });
+        }
+        fail("io-failure", "board-index-contended", "$boardIndex", { cause: error, retryable: true });
+    });
 }
 const validateState = createRuntimeJsonSchemaValidator(WAKEFLOW_REQUIREMENT_CLAIM_STATE_SCHEMA, [
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
@@ -498,10 +520,16 @@ function isIndexRace(error) {
             error.reason === "board-index-write-target-exists"));
 }
 /**
- * 重新列出状态并重写索引；变更状态的调用方在提交后调用一次。索引是投影：
- * 与并发写者相撞就重列重写，几次后仍撞即报可重试的失败，权威状态已提交不受影响。
+ * 重新列出状态并重写索引；变更状态的调用方在提交后调用一次。索引是投影：列举、渲染与发布在索引锁内
+ * 连成一步（W29，R-ROOT-02）——此前锁外列举、只对索引文件自身做 CAS，一次读完 pending 后被挂起的旧刷新
+ * 可以在 withdrawn 的新刷新之后发布，把索引写回 pending；现在它要么先拿到锁先发布，要么在锁内才列举、
+ * 看到的已是新状态。与锁外写者相撞就重列重写，几次后仍撞即报可重试的失败，权威状态已提交不受影响。
  */
 export async function refreshRequirementBoardIndex(root, signal) {
+    return withIndexLock(root, signal, () => publishCurrentRequirementBoardIndex(root, signal));
+}
+/** 索引锁内的一步：列举当前状态并发布它们的投影；与锁外写者相撞就重列重写。 */
+async function publishCurrentRequirementBoardIndex(root, signal) {
     for (let attempt = 1;; attempt += 1) {
         const listing = await listRequirementClaimStates(root, signal);
         try {

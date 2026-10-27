@@ -35,7 +35,10 @@ export interface EndpointState {
   readonly handleOwners: ReadonlyMap<string, string>;
   /** 有 `session-start` hook 记录且 cwd 与宿主规定的启动根一致的会话标识。 */
   readonly startedSessions: ReadonlySet<string>;
-  /** 有 `session-end` hook 记录的会话标识。 */
+  /**
+   * 已结束的会话标识：最新的 `session-end` 记录晚于该会话最新的 `session-start`（open-items W4）。
+   * resume 让同一会话再次 `session-start`，之前的 end 就不再算结束。
+   */
   readonly endedSessions: ReadonlySet<string>;
 }
 
@@ -120,6 +123,22 @@ function reject(code: WakeflowErrorCode, reason: string, path: string): Endpoint
   return Object.freeze({ accepted: false, code, reason, path });
 }
 
+/**
+ * 跨窗口句柄唯一性：句柄已被别的窗口持有即冲突。服务层在锁外用加载快照路由（早拒绝），进锁后用重读的
+ * inventory 再算一次——锁外读只用于路由，锁内重读才用于决定（open-items W1）。
+ */
+export function rejectForeignHandleOwner(
+  handleOwners: ReadonlyMap<string, string>,
+  handleValue: string,
+  windowId: string,
+): EndpointRejection | null {
+  const owner = handleOwners.get(handleValue);
+  if (owner !== undefined && owner !== windowId) {
+    return reject("precondition-failed", "handle-conflict", "$request.observation.handle");
+  }
+  return null;
+}
+
 function admitCreation(
   state: EndpointState,
   observation: EndpointCreationObservation,
@@ -141,11 +160,7 @@ function admitCreation(
   if (!state.startedSessions.has(observation.handleValue)) {
     return reject("precondition-failed", "hook-evidence-missing", "$request.observation.handle");
   }
-  const owner = state.handleOwners.get(observation.handleValue);
-  if (owner !== undefined && owner !== windowId) {
-    return reject("precondition-failed", "handle-conflict", "$request.observation.handle");
-  }
-  return null;
+  return rejectForeignHandleOwner(state.handleOwners, observation.handleValue, windowId);
 }
 
 function assertBindingExpectation(

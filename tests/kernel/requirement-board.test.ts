@@ -1,10 +1,18 @@
+/**
+ * 1 级组件测试：`src/kernel/requirement-board.ts` 在一次性根上的真实读写——认领状态文件的独占创建与
+ * CAS 替换、每包锁的残留退休、看板列举、索引渲染，以及索引刷新的看板级锁（ADR-0011 D1 D5；§13.126、
+ * §13.209；open-items W29 / R-ROOT-02）。锁的"他人持有"用本进程的租约表示，残留退休需要真实进程死亡，
+ * 所以那两个用例起一个子进程持锁再 SIGKILL。
+ */
 import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { acquireRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { REQUIREMENT_BOARD_INDEX_REF } from "../../src/kernel/layout.js";
@@ -19,6 +27,7 @@ import {
   listRequirementClaimStates,
   publishRequirementBoardIndex,
   readRequirementClaimState,
+  refreshRequirementBoardIndex,
   renderRequirementBoardIndex,
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
@@ -33,6 +42,12 @@ const LATER = parseUtcInstant("2026-09-04T11:00:00.000Z");
 const REQUIREMENT = "requirement_77777777-7777-4777-8777-777777777777";
 const OTHER = "requirement_88888888-8888-4888-8888-888888888888";
 const DEMAND = "demand_99999999-9999-4999-8999-999999999999";
+const INDEX_LOCK = ".wakeflow-active/current/board/locks/index.lock";
+const INDEX_LOCK_REF = parsePortableResourcePath(INDEX_LOCK, "$test");
+
+function indexPath(root: RootedDirectory): string {
+  return path.join(root.absolutePath, ...REQUIREMENT_BOARD_INDEX_REF.split("/"));
+}
 
 test("claim 锁的真实持有进程死亡后，正常 CAS 退休残留并继续", async (t) => {
   const root = await fixture(t);
@@ -84,6 +99,88 @@ async function fixture(t: TestContext): Promise<RootedDirectory> {
   });
   return root;
 }
+
+// W29（R-ROOT-02）：旧实现锁外列举、只对索引文件做 CAS，一次读完 pending 后被挂起的旧刷新会在
+// withdrawn 的新刷新之后把索引写回 pending。现在列举与发布都在 `locks/index.lock` 内：锁被他人持有时
+// 刷新既不列举也不发布，拿到锁后看到的已是新状态。本进程持有的租约对刷新而言是活动 owner，不会被退休。
+test("索引刷新在看板级锁内列举并发布：锁被他人持有时不发布，释放后列举到的是 withdrawn，索引不再写回 pending（W29，R-ROOT-02）", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const source = await readRequirementClaimState(root, REQUIREMENT);
+  if (source === null) throw new Error("expected a state");
+  const lease = await acquireRootedExclusiveFileLock(root, INDEX_LOCK_REF);
+  const refresh = refreshRequirementBoardIndex(root);
+  try {
+    // 状态写入只持状态锁：索引锁被占不阻塞权威状态的提交（两把锁互不嵌套）。
+    await replaceRequirementClaimStateFile(
+      root,
+      source,
+      withdrawRequirementClaim(source.state, "不做了", LATER),
+    );
+    equal((await readRequirementClaimState(root, REQUIREMENT))?.state.status, "withdrawn");
+    // 刷新还在等锁：它没有在锁外列举到 pending 后把索引写出来。
+    equal(existsSync(indexPath(root)), false);
+  } finally {
+    await lease.release();
+  }
+  const digest = await refresh;
+  const index = readFileSync(indexPath(root), "utf8");
+  equal(index, renderRequirementBoardIndex((await listRequirementClaimStates(root)).states));
+  equal(index.includes(REQUIREMENT), false);
+  equal(index.includes("| pending |"), false);
+  // 再刷新一次是幂等的：同一投影，同一摘要。
+  equal(await refreshRequirementBoardIndex(root), digest);
+});
+
+test("索引锁的真实持有进程死亡后，刷新退休残留并继续；排在活动持有者之后的两次刷新各自在锁内列举，索引收敛到当前状态（W29）", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const held = await holdLockInChildProcess(root.absolutePath, INDEX_LOCK);
+  try {
+    await held.crash();
+    await refreshRequirementBoardIndex(root);
+  } finally {
+    await held.close();
+  }
+  equal(
+    readFileSync(indexPath(root), "utf8").includes(`| P1 | pending | \`${REQUIREMENT}\` |`),
+    true,
+  );
+  // 活动持有者释放之前排队的两次刷新都在释放后才列举：两次看到同一状态，索引与权威一致。
+  const lease = await acquireRootedExclusiveFileLock(root, INDEX_LOCK_REF);
+  const refreshes = Promise.all([
+    refreshRequirementBoardIndex(root),
+    refreshRequirementBoardIndex(root),
+  ]);
+  try {
+    equal(await createRequirementClaimStateFile(root, pending(OTHER, "P0")), "created");
+  } finally {
+    await lease.release();
+  }
+  const [first, second] = await refreshes;
+  equal(first, second);
+  const index = readFileSync(indexPath(root), "utf8");
+  equal(index, renderRequirementBoardIndex((await listRequirementClaimStates(root)).states));
+  equal(index.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)).length, 2);
+});
+
+test("索引锁被活动持有者占着时，带信号的刷新按中止收敛（io-failure，reason 以 -aborted 结尾），不发布索引（W29）", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const lease = await acquireRootedExclusiveFileLock(root, INDEX_LOCK_REF);
+  try {
+    await rejects(
+      refreshRequirementBoardIndex(root, AbortSignal.timeout(100)),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "io-failure" &&
+        error.reason.endsWith("-aborted"),
+    );
+  } finally {
+    await lease.release();
+  }
+  equal(existsSync(indexPath(root)), false);
+});
 
 test("转移是纯函数：修订链、状态载荷与拒绝的来源状态", () => {
   const first = pending();

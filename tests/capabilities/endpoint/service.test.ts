@@ -25,14 +25,15 @@ import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
 import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { wakeflowWindowHostBindingMutationLockRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 
 /**
- * 端点切片测试：一次性工作区经 Fresh 初始化后，走 inspect、register、replace、
- * relocate、decommission、release-claim 六种操作。宿主窗口本身从不被创建；会话证据由
+ * 端点切片效果（第 2 级，能力；能力卡 2，open-items W1 与 W4）：一次性工作区经 Fresh 初始化后，走 inspect、
+ * register、replace、relocate、decommission、release-claim 六种操作。宿主窗口本身从不被创建；会话证据由
  * `session-start` / `session-end` hook 记录提供。
  */
 
@@ -104,6 +105,22 @@ async function sessionStart(
   await writeHostHookObservation(rooted, {
     hostId,
     event: "session-start",
+    sessionId,
+    cwd: hostId === "codex" ? rooted.absolutePath : path.resolve(rooted.absolutePath, placement),
+    recordedAt,
+  });
+}
+
+async function sessionEnd(
+  rooted: RootedDirectory,
+  hostId: "codex" | "claude-code",
+  sessionId: string,
+  placement: string,
+  recordedAt: UtcInstant,
+): Promise<void> {
+  await writeHostHookObservation(rooted, {
+    hostId,
+    event: "session-end",
     sessionId,
     cwd: hostId === "codex" ? rooted.absolutePath : path.resolve(rooted.absolutePath, placement),
     recordedAt,
@@ -321,6 +338,123 @@ test("Codex：inspect 给出启动意图与执行参数，register 需要 hook �
   equal(after.binding.bindingId, registered.binding.bindingId);
   equal(after.next.frontier, "window-registration");
   equal(after.next.blockers.length, intents.length - 1);
+});
+
+test("Codex：两个窗口以同一句柄交错登记——都在锁外看到无人持有，锁内复验让后进锁的以 handle-conflict 拒绝，登记表仍可读（open-items W1）", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeCodexWakeflowMaintenance);
+  const [firstIntent, secondIntent] = intents;
+  if (firstIntent === undefined || secondIntent === undefined)
+    throw new Error("Expected two launch intents.");
+  const clock = () => parseUtcInstant("2026-09-04T10:00:00.000Z");
+  const handle = { kind: "codex-thread", value: "codex-host-owned-thread:raced" };
+  await sessionStart(
+    rooted,
+    "codex",
+    handle.value,
+    ".",
+    parseUtcInstant("2026-09-04T09:58:00.000Z"),
+  );
+  const lockRef = wakeflowWindowHostBindingMutationLockRef(codexWorkspaceHostResourceProfile);
+  type Lane = "first" | "second";
+  const lanes: readonly Lane[] = ["first", "second"];
+  const loaded: Record<Lane, boolean> = { first: false, second: false };
+  const atDoor: Record<Lane, boolean> = { first: false, second: false };
+  const doors = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
+  const releases = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
+  // 锁外加载完成（注入时钟被读到）之后的第一次锁文件观察就是绑定库的门口：停在那里，让另一个窗口也在
+  // 锁外完成加载并同样看到无人持有这个句柄，再先后放行进锁。
+  const inspect = RootedDirectory.prototype.inspectExistingResource;
+  t.mock.method(
+    RootedDirectory.prototype,
+    "inspectExistingResource",
+    async function (this: RootedDirectory, ...args: Parameters<typeof inspect>) {
+      if (args[0] === lockRef) {
+        const lane = lanes.find((candidate) => loaded[candidate] && !atDoor[candidate]);
+        if (lane !== undefined) {
+          atDoor[lane] = true;
+          doors[lane].resolve();
+          await releases[lane].promise;
+        }
+      }
+      return inspect.apply(this, args);
+    },
+  );
+  const register = (lane: Lane, intent: Intent) =>
+    executeWindowBindingRequest(
+      CODEX,
+      {
+        root,
+        operation: "register",
+        windowId: intent.windowId,
+        observation: {
+          handle,
+          launchIntentDigest: intent.intentDigest,
+          observedAt: "2026-09-04T09:59:00.000Z",
+        },
+      },
+      {
+        clock: () => {
+          loaded[lane] = true;
+          return clock();
+        },
+      },
+    );
+  type Settled =
+    | { readonly ok: true; readonly value: Awaited<ReturnType<typeof register>> }
+    | { readonly ok: false; readonly error: unknown };
+  let first: ReturnType<typeof register> | undefined;
+  let second: Promise<Settled> | undefined;
+  try {
+    first = register("first", firstIntent);
+    await Promise.race([
+      doors.first.promise,
+      first.then(() => {
+        throw new Error("The first registration skipped the store door.");
+      }),
+    ]);
+    second = register("second", secondIntent).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await Promise.race([
+      doors.second.promise,
+      second.then(() => {
+        throw new Error("The second registration skipped the store door.");
+      }),
+    ]);
+    releases.first.resolve();
+    const registered = await first;
+    if (registered.kind !== "WakeflowWindowBindingMutation")
+      throw new Error("Expected a mutation.");
+    equal(registered.disposition, "registered");
+    releases.second.resolve();
+    const outcome = await second;
+    if (outcome.ok || !(outcome.error instanceof WakeflowError))
+      throw new Error("Expected the second registration to be rejected.");
+    equal(`${outcome.error.code}/${outcome.error.reason}`, "precondition-failed/handle-conflict");
+  } finally {
+    releases.first.resolve();
+    releases.second.resolve();
+    await first?.catch(() => undefined);
+    await second;
+    t.mock.restoreAll();
+  }
+  // 登记表仍可读：第一个窗口已登记、第二个仍未登记，而不是整张表 io-failure/binding-inventory。
+  for (const [intent, status] of [
+    [firstIntent, "registered"],
+    [secondIntent, "unregistered"],
+  ] as const) {
+    const inspected = await executeWindowBindingRequest(
+      CODEX,
+      { root, operation: "inspect", windowId: intent.windowId },
+      { clock },
+    );
+    if (inspected.kind !== "WakeflowWindowBindingInspection")
+      throw new Error("Expected an inspection.");
+    equal(inspected.binding.status, status);
+  }
 });
 
 test("Codex：replace 以 CAS 换代，decommission 走人工宿主门，声明持有时都被拒绝并可强制释放", {
@@ -860,4 +994,94 @@ test("Claude Code：relocate 保留绑定、换定位器代际，句柄变了被
     "precondition-failed",
     "handle-changed",
   );
+});
+
+test("Claude Code：session-end 按最新 start/end 顺序判定——resume 之后旧的 end 不再给 release-claim 开恢复门，晚于最新 start 的 end 才算会话已结束（open-items W4）", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const intent = intents[0];
+  if (intent === undefined) throw new Error("Expected a launch intent.");
+  const clock = () => parseUtcInstant("2026-09-04T10:10:00.000Z");
+  const sessionId = "2e2e2e2e-2e2e-4e2e-8e2e-2e2e2e2e2e2e";
+  const placement = intent.root.configuredPlacement;
+  await sessionStart(
+    rooted,
+    "claude-code",
+    sessionId,
+    placement,
+    parseUtcInstant("2026-09-04T09:58:00.000Z"),
+  );
+  const registered = await executeWindowBindingRequest(
+    CLAUDE,
+    {
+      root,
+      operation: "register",
+      windowId: intent.windowId,
+      observation: {
+        handle: { kind: "claude-session", value: sessionId },
+        launchIntentDigest: intent.intentDigest,
+        observedAt: "2026-09-04T09:59:00.000Z",
+        tmux: { socketName: null, sessionName: "wakeflow", windowId: "@5", paneId: "%11" },
+      },
+    },
+    { clock },
+  );
+  if (registered.kind !== "WakeflowWindowBindingMutation" || registered.binding === null)
+    throw new Error("Expected a mutation.");
+  // 会话结束过一次，随后被 `claude --resume` 续上：同一会话 id 的新 session-start 晚于那条 end。
+  await sessionEnd(
+    rooted,
+    "claude-code",
+    sessionId,
+    placement,
+    parseUtcInstant("2026-09-04T10:02:00.000Z"),
+  );
+  await sessionStart(
+    rooted,
+    "claude-code",
+    sessionId,
+    placement,
+    parseUtcInstant("2026-09-04T10:03:00.000Z"),
+  );
+  // Controller 向恢复后的窗口投递：一份未过期的工作声明。
+  const claim = createWorkClaim({
+    claimId: createWakeflowDurableId("work-claim"),
+    hostId: "claude-code",
+    windowId: intent.windowId as never,
+    bindingId: parseWakeflowWindowHostBindingId(registered.binding.bindingId),
+    holder: {
+      demandId: createWakeflowDurableId("demand"),
+      targetTaskId: createWakeflowDurableId("target-task"),
+      deliveryId: createWakeflowDurableId("target-delivery"),
+      generation: 1,
+    },
+    claimedAt: parseUtcInstant("2026-09-04T10:05:00.000Z"),
+  });
+  await takeWorkClaim(rooted, claim);
+  const release = {
+    root,
+    operation: "release-claim",
+    windowId: intent.windowId,
+    expectedClaimDigest: claim.claimDigest,
+    evidence: { liveness: { kind: "unobserved" } },
+  };
+  // 旧的 end 记录不是"持有窗口已消失"：活声明不能被它释放。
+  await expectFailure(
+    executeWindowBindingRequest(CLAUDE, release, { clock }),
+    "precondition-failed",
+    "claim-active",
+  );
+  // 会话再次结束，且晚于最新的 start：恢复门打开。
+  await sessionEnd(
+    rooted,
+    "claude-code",
+    sessionId,
+    placement,
+    parseUtcInstant("2026-09-04T10:08:00.000Z"),
+  );
+  const released = await executeWindowBindingRequest(CLAUDE, release, { clock });
+  if (released.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(released.disposition, "claim-released");
+  equal(released.claim?.claimId, claim.claimId);
 });

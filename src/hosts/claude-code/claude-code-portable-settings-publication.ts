@@ -1,6 +1,10 @@
 import { types } from "node:util";
 
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
   DurableAtomicFileStageRecoveryError,
@@ -51,6 +55,16 @@ export interface ClaudeCodePortableSettingsPublicationOptions {
   readonly rules?: readonly string[];
   /** 这个根上曾拥有、现在要精确删除的规则（§13.168）。 */
   readonly retiredRules?: readonly string[];
+}
+
+export interface ClaudeCodePortableSettingsPublishOptions
+  extends ClaudeCodePortableSettingsPublicationOptions {
+  /**
+   * 调用方已确认的 source 摘要，`null` 表示期望文件不存在（open-items W6 / CR-H7）。
+   * 发布器自己读到的 `before` 与之不同就以 `source-changed` 拒绝、不建目录也不写：CAS 基底是
+   * 调用方确认过的 source，而不是发布器的二次读。缺省不校验。只有发布接受这个选项。
+   */
+  readonly expectedSourceDigest?: Sha256Digest | null;
 }
 
 export interface ClaudeCodePortableSettingsPublicationResult {
@@ -116,7 +130,18 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
   readonly rules: readonly string[] | undefined;
   readonly retiredRules: readonly string[] | undefined;
+  readonly expectedSourceDigest: Sha256Digest | null | undefined;
 }
+
+const PUBLICATION_OPTION_KEYS: readonly string[] = Object.freeze([
+  "signal",
+  "rules",
+  "retiredRules",
+]);
+const PUBLISH_OPTION_KEYS: readonly string[] = Object.freeze([
+  ...PUBLICATION_OPTION_KEYS,
+  "expectedSourceDigest",
+]);
 
 interface SettingsSourceInspection {
   readonly directoryNode: Readonly<FileNodeSnapshot> | null;
@@ -133,7 +158,17 @@ function fail(
   throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason);
 }
 
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
+function parseExpectedSourceDigest(value: unknown): Sha256Digest | null | undefined {
+  if (value === undefined || value === null) return value;
+  try {
+    return parseSha256Digest(value, "$options.expectedSourceDigest");
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail("input", "$options.expectedSourceDigest");
+    throw error;
+  }
+}
+
+function parseOptions(value: unknown, allowedKeys: readonly string[]): Readonly<ParsedOptions> {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
@@ -142,9 +177,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     throw error;
   }
   if (
-    Object.keys(record).some(
-      (key) => key !== "signal" && key !== "rules" && key !== "retiredRules",
-    ) ||
+    Object.keys(record).some((key) => !allowedKeys.includes(key)) ||
     (record.signal !== undefined &&
       (typeof record.signal !== "object" ||
         record.signal === null ||
@@ -168,6 +201,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
       record.retiredRules === undefined
         ? undefined
         : Object.freeze([...(record.retiredRules as readonly string[])]),
+    expectedSourceDigest: parseExpectedSourceDigest(record.expectedSourceDigest),
   });
 }
 
@@ -281,7 +315,7 @@ export async function inspectClaudeCodePortableSettings(
   ) {
     fail("input", "$root");
   }
-  const options = parseOptions(optionsValue);
+  const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
   const inspection = await inspectSource(
     rootValue,
@@ -335,6 +369,17 @@ function assertTransitionReady(
   }
 }
 
+/** 发布器的 CAS 基底是调用方确认过的 source：自己读到的 before 不是它就拒绝，目录和文件都不动（W6）。 */
+function assertExpectedSource(
+  before: Readonly<SettingsSourceInspection>,
+  expectedSourceDigest: Sha256Digest | null | undefined,
+): void {
+  if (expectedSourceDigest === undefined) return;
+  if ((before.source?.digest ?? null) !== expectedSourceDigest) {
+    fail("source-changed", "$settings");
+  }
+}
+
 async function publishTransition(
   root: RootedDirectory,
   inspection: Readonly<SettingsSourceInspection>,
@@ -383,10 +428,14 @@ async function publishTransition(
   }
 }
 
-/** 创建、最小更新或幂等复用一个已授权根的 portable settings。 */
+/**
+ * 创建、最小更新或幂等复用一个已授权根的 portable settings。
+ * 带 `expectedSourceDigest` 时，发布器读到的 before 必须就是它，否则在建目录和写入之前以
+ * `source-changed` 拒绝（W6）。
+ */
 export async function publishClaudeCodePortableSettings(
   rootValue: RootedDirectory,
-  optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
+  optionsValue: ClaudeCodePortableSettingsPublishOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsPublicationResult>> {
   if (
     typeof rootValue !== "object" ||
@@ -396,7 +445,7 @@ export async function publishClaudeCodePortableSettings(
   ) {
     fail("input", "$root");
   }
-  const options = parseOptions(optionsValue);
+  const options = parseOptions(optionsValue, PUBLISH_OPTION_KEYS);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
   const before = await inspectSource(
     rootValue,
@@ -404,6 +453,7 @@ export async function publishClaudeCodePortableSettings(
     options.rules,
     options.retiredRules,
   );
+  assertExpectedSource(before, options.expectedSourceDigest);
   if (before.transition.status === "blocked") {
     fail("transition-blocked", "$transition", before.transition.reason);
   }
@@ -460,7 +510,7 @@ export async function settleClaudeCodePortableSettingsPublicationStages(
   ) {
     fail("input", "$root");
   }
-  const options = parseOptions(optionsValue);
+  const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
   const directory = await directoryNodeOrNull(rootValue);
   if (directory !== null) {
     try {

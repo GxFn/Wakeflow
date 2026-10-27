@@ -5,6 +5,7 @@ import {
   decideEndpointCommand,
   type EndpointCommand,
   type EndpointState,
+  rejectForeignHandleOwner,
 } from "../../../src/capabilities/endpoint/decide.js";
 import {
   classifyTmuxPanes,
@@ -12,7 +13,14 @@ import {
   type TmuxPaneObservation,
 } from "../../../src/capabilities/endpoint/pane-classification.js";
 
+/**
+ * 端点纯决定（第 0 级，纯逻辑；能力卡 2 §2.2–2.4，open-items W1 与 W4）：register / replace / relocate /
+ * decommission / release-claim 在给定端点状态下的结局，跨窗口句柄唯一性的单一判据，以及 tmux pane
+ * 分类的固定顺序。状态由服务层加载后交进来，这里不读文件、不看时钟。
+ */
+
 const WINDOW = "window_55555555-5555-4555-8555-555555555555";
+const OTHER_WINDOW = "window_66666666-6666-4666-8666-666666666666";
 const INTENT = `sha256:${"1".repeat(64)}`;
 const BINDING = {
   bindingId: "window_binding_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -82,7 +90,7 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
   const elsewhere = decideEndpointCommand(
     WINDOW,
     state({
-      handleOwners: new Map([["session-a", "window_66666666-6666-4666-8666-666666666666"]]),
+      handleOwners: new Map([["session-a", OTHER_WINDOW]]),
     }),
     register("session-a"),
   );
@@ -104,6 +112,21 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
     register("session-a"),
   );
   equal(unknown.accepted === false && unknown.code, "not-found");
+});
+
+test("跨窗口句柄唯一性：别的窗口已持有即 handle-conflict，自己持有或无人持有都放行——锁外路由与锁内复验共用这一条判据（open-items W1）", () => {
+  const owners = new Map([
+    ["session-a", WINDOW],
+    ["session-b", OTHER_WINDOW],
+  ]);
+  equal(rejectForeignHandleOwner(owners, "session-a", WINDOW), null);
+  equal(rejectForeignHandleOwner(owners, "session-c", WINDOW), null);
+  deepEqual(rejectForeignHandleOwner(owners, "session-b", WINDOW), {
+    accepted: false,
+    code: "precondition-failed",
+    reason: "handle-conflict",
+    path: "$request.observation.handle",
+  });
 });
 
 test("replace：CAS 旧绑定、拒绝持有声明与未变句柄，接受新句柄", () => {
@@ -295,6 +318,13 @@ test("release-claim：只在过期、持有会话已结束或端点缺席时释�
     release({ kind: "tmux-panes", status: "live" }),
   );
   equal(active.accepted === false && active.reason, "claim-active");
+  // 持有会话没有算作已结束（例如 end 之后又 resume 出新的 start）、声明未过期、端点未观察：仍是 claim-active（W4）。
+  const resumed = decideEndpointCommand(
+    WINDOW,
+    state({ binding: BINDING, claim }),
+    release({ kind: "unobserved" }),
+  );
+  equal(resumed.accepted === false && resumed.reason, "claim-active");
   deepEqual(
     decideEndpointCommand(
       WINDOW,

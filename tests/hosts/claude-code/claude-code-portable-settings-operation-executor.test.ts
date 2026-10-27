@@ -1,9 +1,15 @@
-import { equal } from "node:assert/strict";
+/**
+ * 2 级（能力）：confirmed portable settings 单 operation executor 在一次性根上的完整效果——一次执行、
+ * 只有 affected 恢复接受已提交目标、恢复前结算 inactive stage、authority/operation/source 漂移在写前
+ * 失败，以及 executor 自己的检查与发布器读取之间的漂移以 source-stale 拒绝且不写（open-items W6 / CR-H7）。
+ */
+import { deepEqual, equal } from "node:assert/strict";
 import {
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -25,7 +31,10 @@ import {
   type ClaudeCodePortableSettingsOperationExecutionErrorReason,
   executeClaudeCodePortableSettingsOperation,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-operation-executor.js";
-import { CLAUDE_CODE_PORTABLE_SETTINGS_REF } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
+import {
+  CLAUDE_CODE_PORTABLE_SETTINGS_REF,
+  CLAUDE_CODE_SETTINGS_DIRECTORY_REF,
+} from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
 import { planClaudeCodePortableSettingsTransition } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -244,4 +253,57 @@ test("source, authority, and operation drift fail before mutation", async (t) =>
     "operation",
   );
   equal(readFileSync(sourceFile, "utf8"), changedSource);
+});
+
+test("source drift between the executor's inspection and the publisher's read fails source-stale before mutation and the restored source still executes the same operation", async (t) => {
+  const value = await fixture(t);
+  const configValue = config();
+  const sourceDirectory = path.join(value.absolutePath, ".claude");
+  mkdirSync(sourceDirectory, { mode: 0o755 });
+  const sourceFile = path.join(sourceDirectory, "settings.json");
+  const confirmedSource = '{"theme":"dark"}\n';
+  writeFileSync(sourceFile, confirmedSource, { mode: 0o644 });
+  const plan = await planClaudeCodePortableSettingsComposition(
+    value.root,
+    planRequest(configValue),
+  );
+  const operation = plan.operations.find((entry) => entry.root.rootKind === "program");
+  if (operation === undefined) throw new Error("Expected Program operation.");
+
+  // 交错钩子：发布器模块每次 inspectSource 都先查 .claude 目录——第 1 次是 executor 自己的检查
+  // （看到已确认的源，operationDigest 相符），第 2 次是发布器读自己的 before。在第 2 次之前写入
+  // 用户的合法修改，就是 W6 的两次读取之间的漂移。
+  const driftedSource = '{"theme":"light"}\n';
+  const inspect = RootedDirectory.prototype.inspectExistingResource;
+  let directoryInspections = 0;
+  value.root.inspectExistingResource = (resourcePath, errorPath) => {
+    if (resourcePath === CLAUDE_CODE_SETTINGS_DIRECTORY_REF) {
+      directoryInspections += 1;
+      if (directoryInspections === 2) writeFileSync(sourceFile, driftedSource, { mode: 0o644 });
+    }
+    return inspect.call(value.root, resourcePath, errorPath);
+  };
+  await expectExecutionError(
+    () =>
+      executeClaudeCodePortableSettingsOperation(
+        value.root,
+        executeRequest(configValue, operation, false),
+      ),
+    "source-stale",
+  );
+  // 发布器在自己的 before 读之后就停下：没有把漂移后的源当新基底合并写入，没有读回，目录里没有 stage 残留。
+  equal(readFileSync(sourceFile, "utf8"), driftedSource);
+  equal(directoryInspections, 2);
+  deepEqual(readdirSync(sourceDirectory), ["settings.json"]);
+
+  // 用户改回已确认的源：同一个已确认 operation 仍然成立，并收敛到它自己的 targetDigest。
+  writeFileSync(sourceFile, confirmedSource, { mode: 0o644 });
+  const executed = await executeClaudeCodePortableSettingsOperation(
+    value.root,
+    executeRequest(configValue, operation, false),
+  );
+  equal(executed.disposition, "updated");
+  equal(executed.sourceDigest, operation.sourceDigest);
+  equal(executed.targetDigest, operation.targetDigest);
+  equal(computeSha256Digest(readFileSync(sourceFile)), operation.targetDigest);
 });

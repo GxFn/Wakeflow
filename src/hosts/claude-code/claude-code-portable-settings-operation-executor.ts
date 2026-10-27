@@ -52,6 +52,8 @@ import {
  * Executor 重新解析 Config/Profile、重建Root Authority、解析逻辑根与当前物理位置，
  * 并只执行一个 source→target CAS。普通执行要求当前source精确匹配；只有明确的
  * affected-operation恢复才接受目标已提交或先结算同目标Foundation stage。
+ * 已确认的 sourceDigest 同时作为发布器的 CAS 基底传入：executor 自己的检查与发布器读取之间的
+ * 漂移在写前以 source-stale 拒绝，而不是把漂移后的源当新基底合并写入（open-items W6 / CR-H7）。
  */
 
 export interface ExecuteClaudeCodePortableSettingsOperationRequest {
@@ -399,6 +401,8 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
     published = await publishClaudeCodePortableSettings(root, {
       rules: claudeCodePortableSettingsRulesFor(request.operation.root),
       retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+      // 发布器的 CAS 基底是这里已确认的 source，不是它自己的二次读（W6）。
+      expectedSourceDigest: request.operation.sourceDigest,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
   } catch (error: unknown) {

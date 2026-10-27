@@ -109,7 +109,7 @@
 
 **旧实现**：四个 ledger 投影 `requirement-designs/index.md`、`goal-stage-confirmation/index.md`、`workspace/workspace-record-map.md`、`workspace/archive/index.md`，带 `<!-- wakeflow:ledger-projection:v1:… -->` 标记，按 recordId 排序，转义与单尾换行确定；部分失败时权威已提交而投影记为 stale。活动投影 `.wakeflow-active/index.md` 与 `current/workspace-current-status.md` 只链接 TODO 板，不列行。`wakeflow-ledger-projector.mjs:33-38`、`:759-845`、`wakeflow-active-projector.mjs:1039-1108`。
 
-**现 TS 状态**：ledger 记录不带 Markdown 投影；看板索引 `board/index.md` 由内核确定性重写（v2 九列：Priority、Status、Requirement、Title、Type、Testing、Parked、Published、Demand；认领状态 2026-10-22 起带可选 `testingMode`，Parked 列是触发词前 40 个码点；维护 apply 之后陈旧索引按当前渲染重写，§13.209）；活动投影链接看板索引。
+**现 TS 状态**：ledger 记录不带 Markdown 投影；看板索引 `board/index.md` 由内核确定性重写（v2 九列：Priority、Status、Requirement、Title、Type、Testing、Parked、Published、Demand；认领状态 2026-10-22 起带可选 `testingMode`，Parked 列是触发词前 40 个码点；维护 apply 之后陈旧索引按当前渲染重写，§13.209；刷新的列举与发布在看板级锁 `board/locks/index.lock` 内连成一步，见文末 2026-10-26 批 I 修订）；活动投影链接看板索引。
 
 **实现判断**：投影语义按资源处理标准的 derived-projection 角色，`deterministic-rewrite`，不引入新问题。
 
@@ -155,3 +155,9 @@
 | Q5 角色表 | 六个角色文件改为 `requirement.md` 与 `landing.md` 加按 demandType 的必需章节表（ADR-0011 D3） |
 | 认领 | 一个总控一次一个；取消领取一组与 `autoClaim`；板按优先级排序 |
 | 词汇 | pod 不进入需求入口；并行是用户要求开启的一套开发环境（ADR-0010） |
+
+## 修订（2026-10-26，1.2 批 I：R-ROOT-02 W29）
+
+- **索引刷新进看板级锁。** `refreshRequirementBoardIndex` 此前在锁外调用 `listRequirementClaimStates` 列举状态，发布时只对索引文件自身的 node/digest 做 CAS，决定所依赖的列举不在期望里：一次读完 pending 后被挂起的旧刷新，可以在 withdrawn 的新刷新发布之后再发布，两次都成功而索引回到 pending（权威状态文件与 `wakeflow_inspect_board` 不受影响，下一次刷新自愈，P3）。现在"列举 → 渲染 → 发布"在 `board/locks/index.lock` 内连成一步：任何一次刷新看到的列举都不早于另一次正在发布的索引。
+- **两把锁互不嵌套。** 状态写入（`createRequirementClaimStateFile`、`replaceRequirementClaimStateFile`）只持 `board/locks/<requirementId>.lock`，刷新只持 `index.lock`，调用方（requirement 切片、Demand 终态、维护 apply、Demand 发布）仍在状态提交之后、锁外调用一次刷新；签名、渲染、`board-projection:v2` 标记与初始化权威摘要（Fresh 初始化写空索引的那一步不经本锁）都不变。
+- **失败语义沿用。** 等不到索引锁（活动或未知持有者，与状态锁相同的 10 秒上限）仍以可重试的 `board-index-contended` 返回，调用方的静默自愈不变；已证明失活的持有者残留先退休再进入；带信号的中止以 `board-index-lock-aborted` 穿出，发布包按 `-aborted` 识别。锁内与锁外写者相撞的重列重写与几次后仍撞的 `board-index-contended` 保留。

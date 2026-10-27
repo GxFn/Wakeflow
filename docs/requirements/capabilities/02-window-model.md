@@ -184,3 +184,12 @@
 | 项 | 修订后 |
 | --- | --- |
 | Q3 宿主 hook 记录的语义边界 | 记录由观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 写入，两宿主同名同形，但它证明的是"发生过"而不是"现在如何"，四条边界随之成立：被打断或 API 失败的回合不触发 `Stop`，所以没有 `stop` 记录只等于本轮未完成，消费者照旧把缺席当 pending，不得读成失败；Codex 的 `SessionEnd` 只在归档、删除、正常退出或空闲 30 分钟后触发，`session-end` 最迟滞后 30 分钟，只作退役的缺席证据，不是活性信号；hook 在会话**当前目录**运行，`cwd` 随 Agent 的 `cd` 移动而不钉在窗口根，所以登记准入仍以 `session-start` 的 `cwd` 等于窗口根为准，后续事件的 `cwd` 只是事实不是判据；同一处理器被插件与用户设置各注册一次会得到两条时间不同的记录，重复无害，消费者取首条匹配 |
+
+## 修订（2026-10-26，Codex 审阅修复批 I：[open-items W1 与 W4](../../references/open-items.md)）
+
+原则：**锁外读只用于路由，锁内重读才用于决定。** 端点服务在绑定登记表的互斥门外加载一次状态（绑定登记表、work claim、定位器、hook 观察）并做纯决定，这份快照只负责把请求路由到正确的结局并早拒绝；进锁之后以重读的 inventory 复验一切会被并发改变的事实——绑定摘要、work claim（replace / decommission）与跨窗口句柄唯一性——锁内复验不过即拒绝，锁外快照不能替它作决定。
+
+| 项 | 修订后 |
+| --- | --- |
+| 2.2 跨窗口句柄唯一性（W1） | 此前只在纯决定 `admitCreation` 里用锁外快照的 `handleOwners` 检查；两个窗口以同一句柄交错登记时都在锁外看到无人持有，进锁后 `assertUnchangedUnderLock` 只比同窗口摘要，绑定库的 create 又只查 `bindingId` 唯一，于是第二份同句柄绑定写入，下一次 inventory 读取撞到重复句柄即 `io-failure/binding-inventory`，所有入口随之失败且没有修复工具。现在 `mutateBinding` 在 store 回调里用锁内 `store.inventory.bindings` 重算 `handleOwners`，对 register / replace / relocate 复验：别的窗口已持有同一句柄即 `precondition-failed/handle-conflict`（既有 reason，Schema 不枚举 reason，无合同变更）；锁外的 `handleOwners` 继续用于路由（早拒绝）。两处共用 `decide.ts` 的 `rejectForeignHandleOwner` 一条判据。 |
+| 2.4 `session-end` 作为缺席证据（W4） | 此前 `loadHookSessions` 把所有 `session-end` 记录的会话无序计入 `ended`，`release-claim` 命中即释放、不看过期与活性；Claude 的 `--resume` 续同一会话并再触发 SessionStart，所以任何一次 resume 之后该窗口的 end 记录永久存在、恢复门长开，Controller 对"看起来卡住"的窗口 release-claim 会释放活声明并可能向同一窗口二次投递。现在按记录自带的 `recordedAt` 只把"最新 end 晚于该会话最新 start"的会话计入 `ended`——start 按该会话的全部记录算（从别的目录 resume 也是活过来），窗口根匹配只决定登记证据（§13.97 D3：后续事件的 cwd 是事实不是判据）；消费者只有 decommission 的 `machine-verified` 升级与 `release-claim` 的 `holderEnded`，都随之收紧。技能文本"only when the holding window is gone"本就如此，不改。 |

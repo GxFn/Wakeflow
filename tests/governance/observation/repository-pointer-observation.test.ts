@@ -1,5 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -24,11 +25,13 @@ import { runGit } from "../../support/git-fixture.js";
 useDisposableDurability();
 
 /**
- * 仓库指针事实（gate-log §13.94 D2）：只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与
+ * 仓库指针事实（gate-log §13.94 D2），1 级（组件）测试：被测模块只在一次性根上读指针文件，
+ * 真实 git 只用来造夹具。只读 `.git/HEAD`、`refs/heads/**`、`packed-refs` 与
  * `.git/worktrees/<name>/{gitdir, HEAD}`；报告 HEAD、当前分支、分支尖端、登记的 worktree 与
- * prunable；`.git` 或 HEAD 读不出才整仓 unavailable；从不 spawn git。夹具用真实 git 造出。
+ * prunable；`.git` 或 HEAD 读不出才整仓 unavailable；从不 spawn git。
  * 分支清单另有第三种结果：读得出但看不全——引用来源读不出时 `issue` 为 `branches-incomplete`，
- * 因为"branches 里没有它"与"仓库里没有它"必须能分辨。
+ * 因为"branches 里没有它"与"仓库里没有它"必须能分辨。worktree 的 gitdir 同样分三种结局：
+ * 确认不存在才是 prunable，读不出或不是严格文本是"没看见"，prunable 保持 false（open-items W31）。
  */
 
 const REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
@@ -133,6 +136,54 @@ test("gitdir 写相对路径且检出在场：相对该 worktree 管理目录解
   const observed = await observe(repository);
   equal(observed.status, "observed");
   deepEqual(observed.worktrees, [{ name: "wt-rel", head: c1, branch: null, prunable: false }]);
+});
+
+test("gitdir 读不出或不是严格文本：检出状态未知，条目保留且 prunable 为 false；gitdir 文件确认不存在才是 prunable（W31）", {
+  timeout: 60_000,
+}, async (t) => {
+  const { base, repository } = fixture(t);
+  git(repository, "commit", "--quiet", "--allow-empty", "-m", "c1");
+  const c1 = git(repository, "rev-parse", "HEAD");
+  git(repository, "worktree", "add", "--quiet", "--detach", path.join(base, "wt-io"));
+  equal(existsSync(path.join(base, "wt-io", ".git")), true);
+  const gitdirFile = path.join(repository, ".git", "worktrees", "wt-io", "gitdir");
+  const pointer = readFileSync(gitdirFile, "utf8");
+  const unknown = [{ name: "wt-io", head: c1, branch: null, prunable: false }];
+
+  // 读不出（这里是"不是普通文件"，与符号链接、超出 4 KiB、io 失败同一类）：检出明明还在，
+  // 不能因为没读到指针就报成可清理。
+  rmSync(gitdirFile);
+  mkdirSync(gitdirFile);
+  const notFile = await observe(repository);
+  equal(notFile.status, "observed");
+  equal(notFile.issue, null);
+  deepEqual(notFile.worktrees, unknown);
+
+  // 不是严格文本（CRLF 行尾，git 自己读得懂）：同样只是没看见，不是缺席。
+  rmSync(gitdirFile, { recursive: true, force: true });
+  writeFileSync(gitdirFile, `${pointer.replace(/\n$/u, "")}\r\n`, { mode: 0o600 });
+  deepEqual((await observe(repository)).worktrees, unknown);
+
+  // 真正打不开（EACCES，io 失败）：root 不受权限位约束，以 root 运行时这一段没有可断言的事实。
+  if (!(typeof process.getuid === "function" && process.getuid() === 0)) {
+    writeFileSync(gitdirFile, pointer);
+    chmodSync(gitdirFile, 0o000);
+    try {
+      deepEqual((await observe(repository)).worktrees, unknown);
+    } finally {
+      chmodSync(gitdirFile, 0o600);
+    }
+  }
+
+  // gitdir 文件确认不存在：缺席就是事实，与 git 自己的 prune 判定一致。
+  rmSync(gitdirFile);
+  deepEqual((await observe(repository)).worktrees, [
+    { name: "wt-io", head: c1, branch: null, prunable: true },
+  ]);
+
+  // 对照：指针恢复后检出在场，prunable 回到 false。
+  writeFileSync(gitdirFile, pointer, { mode: 0o600 });
+  deepEqual((await observe(repository)).worktrees, unknown);
 });
 
 test("不可用：没有 .git、根是 worktree 检出、HEAD 读不出、根打不开各自带原因；单个指针读不出只让对应项为 null", {

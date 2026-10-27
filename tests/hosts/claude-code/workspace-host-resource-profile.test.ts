@@ -1,16 +1,37 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
 import { test } from "node:test";
+import { derivePodId, derivePodWindows } from "../../../src/capabilities/pod/decide.js";
+import {
+  buildWakeflowConfigIndexes,
+  parseWakeflowConfig,
+} from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
+  CLAUDE_CODE_TMUX_ASSET_CONTENT,
   CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
   CLAUDE_CODE_TMUX_ASSET_REF,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import {
+  CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR,
   claudeCodeTmuxSessionNameFor,
   claudeCodeTmuxWindowNameFor,
 } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../../src/workspace/workspace-host-resource-catalog.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
+
+/**
+ * Claude Code 宿主的资源画像与它派生的 tmux 命名规则（0 级，纯函数）：画像的精确形状与资产文件名、
+ * worktree pod 的会话名 `<配置名>-<pod 名>`（§13.186）、tmux 窗口名去掉显示名的 `<pod 名> · ` 前缀
+ * （§13.186 补充裁决），以及去前缀规则的单一来源——分隔常量同时进 launch 指令与助手资产（open-items W28）。
+ */
+
+const PROGRAM_ID = "program_11111111-1111-4111-8111-111111111111";
+const REPOSITORY_ID = parseWakeflowDurableIdOfKind(
+  "repository_22222222-2222-4222-8222-222222222222",
+  "repository",
+);
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -116,5 +137,34 @@ test("worktree pod 的 tmux 窗口名去掉显示名里的 `<pod> · ` 前缀，
       displayTitle: "main · Controller",
     }),
     "main · Controller",
+  );
+});
+
+test("去前缀规则只有一处来源：分隔常量既进 launch 指令的渲染也在构建时填进助手资产，且能还原 pod 切片派生的显示名（open-items W28）", () => {
+  equal(CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR, " · ");
+  ok(
+    CLAUDE_CODE_TMUX_ASSET_CONTENT.includes(
+      `const POD_WINDOW_TITLE_SEPARATOR = ${JSON.stringify(CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR)};`,
+    ),
+    "the helper's mark strips the prefix with the separator the launch instructions use",
+  );
+  // pod 切片派生的显示名是 `<pod 名> · <模板标题>`；launch 的规则必须恰好还原模板标题。
+  const indexes = buildWakeflowConfigIndexes(parseWakeflowConfig(createMinimalWakeflowConfig()));
+  const derived = derivePodWindows(
+    indexes.primaryPod,
+    [REPOSITORY_ID],
+    derivePodId(PROGRAM_ID, "key-w28"),
+    "feature-x",
+    PROGRAM_ID,
+  );
+  deepEqual(
+    derived.map((window) =>
+      claudeCodeTmuxWindowNameFor({
+        podPlacement: "worktree",
+        podName: "feature-x",
+        displayTitle: window.displayName,
+      }),
+    ),
+    ["Controller", "Design", "Test", "Product A"],
   );
 });

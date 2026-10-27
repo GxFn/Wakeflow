@@ -26,8 +26,10 @@ import { fail } from "../../kernel/error.js";
  *
  * 不 spawn git。只读主检出 `.git/HEAD`、`refs/heads/*`、`packed-refs` 与
  * `.git/worktrees/<name>/{gitdir, HEAD}`，报告 HEAD、当前分支、分支尖端、登记的 worktree 与
- * prunable（gitdir 指向的检出已不存在）。工作树是否干净不观察：Wakeflow 没有任何判定依赖它。
- * 单个指针读不出只让对应项为 null；`.git` 或 `HEAD` 读不出才让整个仓库 `unavailable`。
+ * prunable（gitdir 指向的检出已不存在，或 gitdir 文件本身确认不存在）。工作树是否干净不观察：
+ * Wakeflow 没有任何判定依赖它。单个指针读不出只让对应项为 null；`.git` 或 `HEAD` 读不出才让
+ * 整个仓库 `unavailable`。worktree 的 gitdir 读不出或不是严格文本时检出状态未知，`prunable`
+ * 为 false（open-items W31）：false 只说明没有证据说它可清理，不证明检出在。
  *
  * 分支清单有第三种结果：读得出但看不全。`refs/heads` 列不出、某个松散引用文件读不出、或
  * `packed-refs` 读不出时，`status` 仍是 `observed`（HEAD、当前分支与 worktree 这些读得到的
@@ -299,15 +301,17 @@ function resolveHead(
 /**
  * Git 可在 gitdir 中写相对路径（worktree.useRelativePaths），它相对该 worktree 管理目录解析。
  * 指针文件在为 present、不在为 absent、无法观察为 unknown（G7）：只有 absent 才算 prunable。
+ * gitdir 文件本身按同一规则读：确认不存在（missing）是 absent，与 git 自己的 prune 判定一致；
+ * 读不出（io 失败、不是普通文件、超限）或不是严格文本都是 unknown——检出可能还在（W31）。
  */
 async function observeCheckout(
   entryDirectory: string,
-  gitdirText: string | null,
+  gitdir: Readonly<PointerRead>,
 ): Promise<"present" | "absent" | "unknown"> {
-  if (gitdirText === null) return "absent";
-  const gitdirPath = path.isAbsolute(gitdirText)
-    ? gitdirText
-    : path.resolve(entryDirectory, gitdirText);
+  if (gitdir.text === null) return gitdir.outcome === "missing" ? "absent" : "unknown";
+  const gitdirPath = path.isAbsolute(gitdir.text)
+    ? gitdir.text
+    : path.resolve(entryDirectory, gitdir.text);
   try {
     const observed = await observeAbsoluteNode(gitdirPath, { follow: true });
     if (observed.state === "missing") return "absent";
@@ -327,7 +331,7 @@ async function collectWorktrees(
   const worktrees: Readonly<RepositoryWorktreeFact>[] = [];
   for (const entry of listing.entries) {
     if (entry.kind !== "directory") continue;
-    const gitdir = await pointerText(
+    const gitdir = await readPointer(
       root,
       parsePortableResourcePath(`${entry.resourcePath}/gitdir`, "$repository"),
       POINTER_MAXIMUM_BYTES,

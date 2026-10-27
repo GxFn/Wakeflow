@@ -790,8 +790,8 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 来源：用户用 Codex 做的只读审阅（35 项：33 动态反例、2 静态），本会话在 HEAD c304f106 上分四组只读核实，全部成立；根因归类、设计优化点与批次见[Codex 审阅的核实与修复计划](../reviews/2026-10-22-codex-review-response-and-replan.md)。CR-<id> 是报告原编号（与本文件 H 节等编号无关）。批次 F、G、H、I、D′、J、E 一批一门。
 
 - **W1** [P2 / 触发低] CR-H1：并发注册未锁内复验跨窗口 handle 唯一性（批 I；状态：已修 §13.214）。修：mutateBinding 的 store 回调里用锁内 inventory 重算 handleOwners，异窗口持有即 handle-conflict。
-- **W2** [P2 / 触发中] CR-H2：Claude worktree 普通 resume 输出不能用于 relocate（批 J；状态：待执行）。修：resume 带 --worktree 且 hook cwd 存在时 observeWorktree，pending 同 launch。
-- **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J；状态：待执行）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。
+- **W2** [P2 / 触发中] CR-H2：Claude worktree 普通 resume 输出不能用于 relocate（批 J；状态：已修 §13.216，现场 L16 待做）。修：resume 带 --worktree 且 hook cwd 存在时 observeWorktree，pending 同 launch。
+- **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J；状态：等现场 L15 看真实多行草稿渲染后再改）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。
 - **W4** [P2 / 触发中] CR-H4：旧 SessionEnd 可释放恢复会话的新 claim（批 I；状态：已修 §13.214）。修：loadHookSessions 按 recordedAt 只计最新 end 晚于最新 start 的会话。
 - **W5** [P2 / 触发中] CR-H6：Claude reconcile 被自己的设置贡献阻止修复缺失支撑面（批 D′；状态：已修 §13.215）。修：composition 对 reconcile 的 missing 根走 planned-missing，statusline 同步。
 - **W6** [P2 / 触发低] CR-H7：portable settings 在两次读取间变化后先写入再报 stale（批 I；状态：已修 §13.214）。修：发布器接 expectedSourceDigest，不等即 source-changed 不写。
@@ -803,7 +803,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W12** [P2 / 触发极低] CR-R-ROOT-01：合法幂等键命中继承属性时被误当提交序号（批 H；状态：已修 §13.213）。修：stream-index 用无原型字典；repository 用 Object.hasOwn 并校验序号。
 - **W13** [P2 / 触发中] CR-R-ROOT-03：并发 prepare 误回收在途 claim（批 I；状态：已修 §13.214）。修：孤儿回收移到 appendCommand 成功之后，CAS 即围栏。
 - **W14** [P2 / 触发低] CR-R-ROOT-04：Codex 用自身制品摘要误判 Claude 窗口过期（批 D′；状态：已修 §13.215）。修：ObservationHost 增 per-host artifact，windowRuntimeOf 取绑定宿主条目；C6/C11 前置。
-- **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：待执行）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
+- **W15** [P2 / 触发低] CR-R-ROOT-08：worktree 清理建议改变真实路径中的空白（批 J；状态：已修 §13.216，现场 L16 待做）。修：只做 POSIX 引用不压空白，不可表示时不返回带路径的命令。
 - **W16** [P2 / 触发低] CR-R1：Claude prepare 重放与 rearm 漏掉助手资产检查（批 G；状态：已修 §13.212）。修：assertHostAssetsCurrent 作为发出许可的统一前置。
 - **W17** [P2 / 触发中] CR-R2：投递记录结局后的 prepare 重放违反结果 Schema（批 G；状态：已修 §13.212）。修：幂等回放的 phase 由签发事件推导，当前阶段只进 next。
 - **W18** [P2 / 触发高] CR-R3：Codex 文本教用户调用未提供的 slash 命令（批 F；状态：已修 §13.211）。修：Codex 交接文本改 wakeflow_status 措辞；SKILL.md:125 改宿主中性。
@@ -816,10 +816,10 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W25** [P2 / 触发低] CR-T2：owner 写入失败留下无法自动回收的构建锁（批 F；状态：已修 §13.211）。修：写 owner 失败即删自己的目录；无主目录按 mtime 有界回收。
 - **W26** [P2 / 触发高] CR-T3：必需 artifact 检查不可用时 handoff 仍为绿色（批 F；状态：已修 §13.211）。修：只在 --no-artifacts 时豁免，其余 unavailable 整体不通过。
 - **W27** [P2 / 触发高] CR-T4：多行静态 import/export 从影响与负载依赖图中消失（批 F；状态：已修 §13.211）。修：导入图允许跨行/词法扫描；夹具加多行、export…from、import type。
-- **W28** [P3 / 触发高] CR-H5：mark 重新加回 worktree 窗口标题前缀（批 J；状态：待执行）。修：configuredWindowName 与 launch 共用去前缀规则。
+- **W28** [P3 / 触发高] CR-H5：mark 重新加回 worktree 窗口标题前缀（批 J；状态：已修 §13.216，现场 L16 待做）。修：configuredWindowName 与 launch 共用去前缀规则。
 - **W29** [P3 / 触发低] CR-R-ROOT-02：较旧看板刷新覆盖较新的状态投影（批 I；状态：已修 §13.214）。修：列举 + 发布进看板级锁。
 - **W30** [P3 / 触发低] CR-R-ROOT-05：摘要按 UTF-16 截断使合法 emoji 不能通过输出准入（批 H；状态：已修 §13.213）。修：同 W20 的助手替换 requirement summary、archive goal、active-projection。
-- **W31** [P3 / 触发极低] CR-R-ROOT-07：Git worktree 指针读不出被误标 prunable（批 J；状态：待执行）。修：collectWorktrees 用 readPointer，仅 missing→absent。
+- **W31** [P3 / 触发极低] CR-R-ROOT-07：Git worktree 指针读不出被误标 prunable（批 J；状态：已修 §13.216，现场 L16 待做）。修：collectWorktrees 用 readPointer，仅 missing→absent。
 - **W32** [P3 / 触发中] CR-R-ROOT-09：已记录的 Notification hook 不能转为受管证据（批 H；状态：已修 §13.213）。修：两份 Schema 加 notification，抽共享 hook-event 定义三处 $ref。
 - **W33** [P3 / 触发高] CR-R4：README 验证门数与实现不一致（批 F；状态：已修 §13.211）。修：两份 README 改十五道工作区门与 Demand 门分述。
 - **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：已修 §13.212）。修：归档 next 读 claim 类型，research 不给 continue 前沿。

@@ -152,3 +152,7 @@
 
 - **worktree 回执按全部宿主合并（W9）。** 归档清单的 worktree 成员、`pod-worktree` 证据来源根、捕获的隐私白名单与观察都经 `listPodWorktreeReceiptsAnyHost` 读回执；它此前按宿主顺序取第一个非空目录即返回，双宿主初始化的工作区里另一宿主登记的仓库回执被漏掉（归档成员缺 `branch` 与 `head`，`record_evidence` 的 `pod-worktree` 根报 `precondition-failed/source-root`）。现在合并全部宿主目录的回执、按仓库唯一并排序，尚未初始化的宿主目录即空集；同一仓库在两个宿主都有回执是矛盾事实，`io-failure/receipt-conflict`（details：podId、repositoryId 与两个 hostId）显式失败而不是任取其一。
 - **8.4 运行时清理清两个宿主（W7）。** `wakeflow_pod` 关闭完成与孤儿目录对账不再只删调用方宿主的 `hosts/<host>/pods/<podId>/`：两个宿主目录都清，`retiredReceipts` 在关闭完成时是合并集合的回执数、在对账孤儿目录时是删掉的宿主目录数。关闭本身的跨宿主规则见[能力卡 4 的同批修订](./04-demand-lifecycle.md)。
+
+## 修订（2026-10-26，Codex 审阅修复批 J：R-ROOT-08 [open-items W15](../../references/open-items.md)）
+
+- **8.4 处置建议不改路径（W15）。** closing pod 的 `disposal.suggested`（`wakeflow_pod` 关闭结果与 `wakeflow_status` 的 pod 段）此前在引用之前把检出路径单行化——连续空白压成一个空格、越过 512 时截断加省略号——合法路径 `worktree  alpha`（两个空格）的建议命令于是指向不存在的 `worktree alpha`。现在可执行命令只做 POSIX 单引号引用，回执路径的每个码位原样保留（含连续与首尾空白）；路径含控制字符（Cc 与 U+2028/2029）、为空，或连引号后整条命令越过 `singleLineText` 的 512 时，`suggested` 改为一句不含路径的说明（按 `git worktree list` 的输出自行确认后 remove，登记时加锁的先 unlock），从不返回改变身份的命令。`alternative` 与两份结果 Schema 不变（`src/governance/pod/worktree-disposal.ts`，覆盖 `tests/governance/pod/worktree-disposal.test.ts`）。

@@ -148,3 +148,9 @@
 | 写者戳接线（C11 接线桶） | 两份 MCP 入口把 `wakeflowArtifactWriterOf(<制品身份>)`（有版本的身份 ⇒ `{version, manifestDigest}`；没有 manifest、没有版本或戳准入不接受的版本文本 ⇒ null，不盖戳而不是让每次提交失败）交给 `createWakeflowPublicMcpServer` 的 `writer`，服务放进每次调用的执行上下文 `{signal, writer}`；各切片的 options 多一项 `writer`，demand 生命周期、tasking、evidence（经应用服务与结算）、delivery、result-review 的每次 `executeDemandEventSourcingCommand` 都带它；发布事务规划的初始提交有意不带（`initialCommitDigest` 比对）。维护：公共协调器把 `writer` 交给宿主 facade 的 `apply` / `recover` 选项（preview 零写不用它，取消信号与戳分开传，戳不混进预览请求），两份维护入口原样转发执行上下文。`tooling/diagnostics/doctor.ts` 读导入的 status 报告时接受 `superseded`。 |
 | 未做 | Codex 安装目录布局仍是现场核对项。 |
 | 覆盖 | `tests/kernel/wakeflow-artifact-identity.test.ts`（版本形状、数值序、newest、manifest 解析）；`tests/capabilities/observation/decide.test.ts`（窗口方向矩阵、服务进程状态、门码与 next）；`tests/capabilities/observation/service.test.ts`（Codex 进程下的 Claude 绑定：同版本不同摘要 unverified、更高版本 superseded、更低版本 stale，Claude 进程下同宿主仍 stale）；`tests/kernel/hook-observations.test.ts` 与 `tests/entrypoints/wakeflow-hook-observer.test.ts`（`artifactVersion` 往返与旧记录）；`tests/entrypoints/wakeflow-artifact-mutation-guard.test.ts`（身份读到版本）；`tests/capabilities/workspace/maintain-workspace.test.ts`（preview 被过期进程阻塞）。 |
+
+## 修订（2026-10-26，Codex 审阅修复批 J：R-ROOT-07，[open-items W31](../../references/open-items.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 9.1 `repositories[].worktrees[].prunable`（R-ROOT-07，W31） | 此前 `collectWorktrees` 把 gitdir 的 missing / unreadable / malformed 都压成 null，`observeCheckout` 再把 null 当 absent：gitdir 读不出（io 失败、不是普通文件、超过 4 KiB）或不是严格文本（CRLF、空文件）的真实检出被报成可清理，而同文件的松散引用读取早已区分 unreadable。现在 gitdir 走区分结局的 `readPointer`：只有文件确认不存在（missing，与 git 自己的 prune 判定一致）才是 absent ⇒ `prunable: true`；读不出与不是严格文本都是 unknown ⇒ `prunable: false`，条目照常保留。Schema 不变（`prunable` 仍是 boolean），false 只说明"没有证据说它可清理"，不证明检出在。覆盖：`tests/governance/observation/repository-pointer-observation.test.ts`（不是普通文件、CRLF、EACCES、文件不存在与恢复对照）。 |

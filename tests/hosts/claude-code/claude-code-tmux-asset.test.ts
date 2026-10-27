@@ -35,6 +35,7 @@ import {
   executeClaudeCodeTmuxAssetOperation,
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
+import { claudeCodeTmuxWindowNameFor } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { hostWindowLocatorsRootRef } from "../../../src/kernel/layout.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -52,6 +53,9 @@ useDisposableDurability();
 const PROGRAM_ID = "program_11111111-1111-4111-8111-111111111111";
 const CONTROLLER_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
 const PRODUCT_WINDOW_ID = "window_88888888-8888-4888-8888-888888888888";
+/** 测试里另加的 worktree pod `live` 与它的产品窗口（显示名 `live · Product A`，open-items W28）。 */
+const POD_LIVE_ID = "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const POD_LIVE_PRODUCT_WINDOW_ID = "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const INTENT_DIGEST = `sha256:${"ab".repeat(32)}`;
 const SESSION_ID = "0f0f0f0f-1111-4222-8333-444444444444";
 const BINDING_ID = "binding_77777777-7777-4777-8777-777777777777";
@@ -341,7 +345,10 @@ function launchIntent(
 function writeLocator(
   current: Fixture,
   windowId: string,
-  tmux: { readonly windowId: string; readonly paneId: string } = { windowId: "@5", paneId: "%9" },
+  tmux: { readonly windowId: string; readonly paneId: string; readonly sessionName?: string } = {
+    windowId: "@5",
+    paneId: "%9",
+  },
 ): void {
   writeFileSync(
     path.join(
@@ -884,6 +891,94 @@ test("a worktree pod's window opens in the intent's own tmux session, the observ
   });
   equal(gone.json.reason, "launch-exited");
   deepEqual(gone.json.tmux, { windowId: "@6", paneId: "%6", pane: "absent" });
+});
+
+test("mark leaves a worktree pod window's tmux name as launch set it and converges a drifted name to that same prefix-free name, never back to the display name（open-items W28）", async (t) => {
+  const current = await fixture(t);
+  // 配置里加一个 worktree pod `live` 与它的产品窗口：显示名按 pod 切片的规则带 `live · ` 前缀。
+  const config = createMinimalWakeflowConfig();
+  (config.pods as Record<string, unknown>[]).push({
+    podId: POD_LIVE_ID,
+    name: "live",
+    placement: "worktree",
+    lifecycle: "open",
+    worktrees: [],
+    closing: null,
+  });
+  (config.topology as { windows: Record<string, unknown>[] }).windows.push({
+    windowId: POD_LIVE_PRODUCT_WINDOW_ID,
+    podId: POD_LIVE_ID,
+    role: "product",
+    displayName: "live · Product A",
+    root: { kind: "repository", repositoryId: "repository_22222222-2222-4222-8222-222222222222" },
+  });
+  writeFileSync(
+    path.join(current.root, "wakeflow.config.json"),
+    `${JSON.stringify(config, null, 2)}\n`,
+  );
+  // launch 开窗用意图里的 tmux 窗口名：启动指令模块按 §13.186 去掉前缀，窗口开在 pod 自己的会话里。
+  const windowName = claudeCodeTmuxWindowNameFor({
+    podPlacement: "worktree",
+    podName: "live",
+    displayTitle: "live · Product A",
+  });
+  equal(windowName, "Product A");
+  const intent = launchIntent("live · Product A", "../ProductA");
+  Object.assign(intent, { podId: POD_LIVE_ID, podName: "live", podPlacement: "worktree" });
+  const execution = intent.execution as { tmux: { sessionName: string; windowName: string } };
+  execution.tmux.sessionName = "wakeflow-live";
+  execution.tmux.windowName = windowName;
+  const launched = runHelper(
+    current,
+    ["launch", "--window", POD_LIVE_PRODUCT_WINDOW_ID, "--wait", "1"],
+    {
+      input: JSON.stringify({ windowId: POD_LIVE_PRODUCT_WINDOW_ID, launchIntent: intent }),
+      env: { WAKEFLOW_STUB_HOOKS: current.hooks },
+    },
+  );
+  equal(launched.status, 0, JSON.stringify(launched.json));
+  deepEqual(launched.json.window, {
+    name: "Product A",
+    cwd: "../ProductA",
+    created: "new-session",
+  });
+  const creation = tmuxLog(current).find((entry) => entry[0] === "new-session") ?? [];
+  equal(creation[creation.indexOf("-n") + 1], "Product A");
+  // 登记后 mark：pane 行的窗口名就是 launch 起的名字 → 不改名，也不报 renamed（此前每次都加回 `live · `）。
+  writeLocator(current, POD_LIVE_PRODUCT_WINDOW_ID, {
+    sessionName: "wakeflow-live",
+    windowId: "@1",
+    paneId: "%1",
+  });
+  const liveRow = (name: string): string =>
+    `${paneRow({ session: "wakeflow-live", window: "@1", pane: "%1", windowName: name })}\n`;
+  writeFileSync(path.join(current.state, "panes.txt"), liveRow("Product A"));
+  resetLog(current);
+  const kept = runHelper(current, ["mark", "--window", POD_LIVE_PRODUCT_WINDOW_ID]);
+  equal(kept.status, 0, JSON.stringify(kept.json));
+  deepEqual(kept.json.windows, [{ windowId: POD_LIVE_PRODUCT_WINDOW_ID, status: "marked" }]);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "rename-window"),
+    false,
+    "mark must not put the pod prefix back onto a window launch named without it",
+  );
+  // 名字漂移了（旧 mark 加回的前缀，或 shell 改的名）：收敛到 launch 的那个名字，不是配置的显示名。
+  for (const drifted of ["live · Product A", "zsh"]) {
+    writeFileSync(path.join(current.state, "panes.txt"), liveRow(drifted));
+    resetLog(current);
+    const renamed = runHelper(current, ["mark", "--window", POD_LIVE_PRODUCT_WINDOW_ID]);
+    equal(renamed.status, 0, JSON.stringify(renamed.json));
+    deepEqual(
+      renamed.json.windows,
+      [{ windowId: POD_LIVE_PRODUCT_WINDOW_ID, status: "marked", renamed: true }],
+      drifted,
+    );
+    deepEqual(
+      tmuxLog(current).filter((entry) => entry[0] === "rename-window"),
+      [["rename-window", "-t", "@1", "Product A"]],
+      drifted,
+    );
+  }
 });
 
 test("launch refuses malformed intents before touching tmux", async (t) => {
@@ -1770,6 +1865,80 @@ test("resume restarts the bound session in a new pane and launch refuses while t
     tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session"),
     true,
     "a pane marked for another window does not block the launch",
+  );
+});
+
+test("resume of a worktree pod's product window observes the checkout exactly as launch does, and reports worktreeObservation pending while the hook record is missing（open-items W2）", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(
+    path.join(current.hooks, "20260924T000000000Z-session-start-legacy.json"),
+    JSON.stringify({ kind: "stub", event: "session-start", sessionId: SESSION_ID }),
+  );
+  writeFileSync(path.join(current.state, "panes.txt"), "");
+  const intent = JSON.stringify(
+    launchIntent("Product A", "../ProductA", ["--worktree", "wakeflow-feature"]),
+  );
+  // 新的 session-start 记录到了：按它的 cwd 读 git 事实，observation 与 launch 同形（worktree{porcelain, commonDir}），
+  // relocate 的 worktree 准入才拿得到它；此前这里固定不带 worktree，relocate 被拒 worktree-receipt-required。
+  const resumed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "2"], {
+    input: intent,
+    env: { WAKEFLOW_STUB_HOOKS: current.hooks },
+    allowPaths: true,
+  });
+  equal(resumed.status, 0, JSON.stringify(resumed.json));
+  deepEqual(resumed.json.hook, { sessionStart: "observed" });
+  const observation = resumed.json.observation as {
+    readonly handle: { readonly value: string };
+    readonly worktree?: { readonly porcelain: string; readonly commonDir: string };
+  };
+  equal(observation.handle.value, SESSION_ID);
+  ok(
+    observation.worktree !== undefined,
+    "a worktree resume must observe the checkout for relocate",
+  );
+  equal(observation.worktree.porcelain.startsWith("worktree "), true);
+  equal(observation.worktree.commonDir, "/stub/common/.git");
+  equal("worktreeObservation" in resumed.json, false);
+  const created =
+    tmuxLog(current).find((entry) => entry[0] === "new-session" || entry[0] === "new-window") ?? [];
+  const command = created[created.length - 1] ?? "";
+  equal(command.includes("'--worktree' 'wakeflow-feature'"), true, command);
+  equal(command.includes(`'--resume' '${SESSION_ID}'`), true, command);
+  // 记录没到但新 pane 活着：observation 不带 worktree，另以 worktreeObservation: "pending" 说明，与 launch 同形。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@2", pane: "%2" })}\n`,
+  );
+  const pending = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: intent,
+  });
+  equal(pending.status, 0, JSON.stringify(pending.json));
+  deepEqual(pending.json.hook, { sessionStart: "pending" });
+  equal((pending.json.observation as { readonly worktree?: unknown }).worktree, undefined);
+  equal(pending.json.worktreeObservation, "pending");
+  // 不带 --worktree 的 resume 不多出任何字段。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@3", pane: "%3" })}\n`,
+  );
+  const plain = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: JSON.stringify(launchIntent("Product A", "../ProductA")),
+  });
+  equal(plain.status, 0, JSON.stringify(plain.json));
+  equal("worktreeObservation" in plain.json, false);
+  equal((plain.json.observation as { readonly worktree?: unknown }).worktree, undefined);
+  // 坏的 worktree 名按 launch 的同一判据在开窗之前拒绝。
+  resetLog(current);
+  const malformed = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--wait", "0"], {
+    input: JSON.stringify(launchIntent("Product A", "../ProductA", ["--worktree", "Bad Name"])),
+  });
+  equal(malformed.status, 1);
+  deepEqual([malformed.json.reason, malformed.json.field], ["intent-invalid", "worktree-name"]);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "new-window" || entry[0] === "new-session"),
+    false,
   );
 });
 

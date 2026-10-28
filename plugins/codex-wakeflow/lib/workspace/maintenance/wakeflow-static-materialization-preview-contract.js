@@ -11,7 +11,25 @@ export const WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS = Object.freeze([
     "fresh-initialize",
     "reconfigure",
     "reconcile",
+    "detach-repository",
+    "detach-workspace",
 ]);
+/** 退出路径的两个动作（ADR-0024）：detach-repository 以 publish-config 收尾，detach-workspace 以 retire-config 收尾。 */
+export const WAKEFLOW_DETACH_ACTIONS = Object.freeze([
+    "detach-repository",
+    "detach-workspace",
+]);
+export function isWakeflowDetachAction(action) {
+    return action === "detach-repository" || action === "detach-workspace";
+}
+/**
+ * 以当前 Config 为期望 Config 的动作：reconcile 收敛到它，detach-workspace 把它改名为
+ * `wakeflow.detached.json`（改名后的文件仍带同一摘要）。两者的请求都不带 desiredConfig，
+ * 计划的 desiredConfigDigest 等于 currentConfigDigest。
+ */
+export function wakeflowStaticMaterializationActionUsesCurrentConfig(action) {
+    return action === "reconcile" || action === "detach-workspace";
+}
 const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
     "materialize-local-protocol",
     "materialize-shared-coordination-layout",
@@ -28,6 +46,11 @@ const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
     "recompose-external-instruction",
     "publish-support-memory",
     "publish-config",
+    "remove-managed-block",
+    "retire-window-projections",
+    "remove-portable-settings-rules",
+    "remove-statusline-entry",
+    "retire-config",
 ]);
 const ERROR_MESSAGES = {
     input: "Wakeflow static materialization preview input is invalid.",
@@ -81,8 +104,12 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         failWakeflowStaticMaterializationPreview("input", "$request");
     }
     const action = record.action;
-    if ((action === "reconcile" && record.desiredConfig !== null) ||
-        (action !== "reconcile" && record.desiredConfig === null)) {
+    // reconcile and detach-workspace carry no desired Config: the first converges onto the
+    // current one, the second retires it (its plan digests the current Config, which the
+    // retired file keeps). detach-repository carries the current Config minus the detached
+    // repository, which the planner re-derives and checks (ADR-0024).
+    if (wakeflowStaticMaterializationActionUsesCurrentConfig(action) !==
+        (record.desiredConfig === null)) {
         failWakeflowStaticMaterializationPreview("input", "$request.desiredConfig");
     }
     let desiredConfig = null;
@@ -157,7 +184,8 @@ function sameStaticResourceMatrix(matching, current) {
 const STEP_KIND_SET = new Set(WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS);
 const STEP_ID_PATTERN = /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
-const BLOCKER_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+// 阻塞码是短横线词，可带冒号分隔的目标段（ADR-0024 的 `detach-unknown-managed-body:<targetKey>`）。
+const BLOCKER_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::[a-z0-9_.][a-z0-9_.-]*)*$/u;
 const TARGET_KEY_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,255}$/u;
 const MAXIMUM_STEPS = 256;
 const MAXIMUM_BLOCKERS = 256;
@@ -284,10 +312,14 @@ export function parseWakeflowStaticMaterializationPreview(value) {
         }
         stepPositions.set(entry.stepId, index);
     }
+    // The Config authority step (publish-config, or retire-config for detach-workspace) is the
+    // single terminal step and depends on every step before it.
     const configIndexes = steps.flatMap((entry, index) => entry.kind === "publish-config" ? [index] : []);
-    if (configIndexes.length > 1 ||
-        (configIndexes.length === 1 &&
-            (configIndexes[0] !== steps.length - 1 ||
+    const retireIndexes = steps.flatMap((entry, index) => entry.kind === "retire-config" ? [index] : []);
+    const terminalIndexes = [...configIndexes, ...retireIndexes];
+    if (terminalIndexes.length > 1 ||
+        (terminalIndexes.length === 1 &&
+            (terminalIndexes[0] !== steps.length - 1 ||
                 steps.at(-1)?.dependsOn.length !== steps.length - 1))) {
         failWakeflowStaticMaterializationPreview("input", "$preview.steps");
     }
@@ -295,14 +327,18 @@ export function parseWakeflowStaticMaterializationPreview(value) {
     const status = record.status;
     const currentConfigDigest = nullableDigest(record.currentConfigDigest, "$preview.currentConfigDigest");
     const desiredConfigDigest = nullableDigest(record.desiredConfigDigest, "$preview.desiredConfigDigest");
-    if (((action === "fresh-initialize" || action === "reconfigure") && desiredConfigDigest === null) ||
-        (action === "reconcile" && desiredConfigDigest !== currentConfigDigest) ||
-        (action === "reconcile" && configIndexes.length !== 0) ||
+    const publishesConfig = !wakeflowStaticMaterializationActionUsesCurrentConfig(action);
+    if ((publishesConfig && desiredConfigDigest === null) ||
+        (!publishesConfig && desiredConfigDigest !== currentConfigDigest) ||
+        (!publishesConfig && configIndexes.length !== 0) ||
+        (action !== "detach-workspace" && retireIndexes.length !== 0) ||
+        (action === "detach-repository" && desiredConfigDigest === currentConfigDigest) ||
         (status === "ready" &&
             ((action === "fresh-initialize" && currentConfigDigest !== null) ||
                 (action !== "fresh-initialize" && currentConfigDigest === null) ||
-                (action !== "reconcile" &&
-                    configIndexes.length !== (currentConfigDigest === desiredConfigDigest ? 0 : 1))))) {
+                (publishesConfig &&
+                    configIndexes.length !== (currentConfigDigest === desiredConfigDigest ? 0 : 1)) ||
+                (action === "detach-workspace" && retireIndexes.length !== 1)))) {
         failWakeflowStaticMaterializationPreview("input", "$preview");
     }
     const plan = Object.freeze({

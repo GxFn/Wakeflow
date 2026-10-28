@@ -183,6 +183,40 @@ failure on purpose: "we could not check" is never reported as "it is fine".
   performs through the host, visible as its own commands; Wakeflow's process
   never performs one.
 
+## Deactivating Wakeflow
+
+Leaving is a maintenance intent, not a manual clean-up: tell the Controller,
+and it previews the plan, shows you every blocker, and applies only when you
+confirm. Do not delete Wakeflow's files by hand - the managed blocks are
+admitted by exact body, so a hand edit is reported as drift instead.
+
+- **"Take repository X out of Wakeflow"** removes Wakeflow's managed block
+  from that repository's `AGENTS.md` (only a block whose body
+  Wakeflow wrote), retires the repository's window projections and publishes
+  the configuration without the repository and its product window.
+- **"Stop using Wakeflow here"** does that for every repository and window,
+  removes the Wakeflow blocks from the workspace `.gitignore` and `AGENTS.md`, removes - where
+  the host has settings (Claude Code) - Wakeflow's allow rules from
+  `.claude/settings.json` and its own `statusLine` entry from
+  `.claude/settings.local.json` at the workspace root and the managed Design
+  and Test surfaces, leaving your own rules and status line in place, and
+  finally renames `wakeflow.config.json` to `wakeflow.detached.json`.
+
+Both refuse while a pod is open or a Demand is active; close the pod or finish
+the Demand first. A block whose body Wakeflow cannot prove it wrote, or a
+settings file it cannot read, is left alone and reported.
+
+Not touched, and listed in the result under `leftBehind`: `.wakeflow-active/`,
+`.wakeflow-local/`, the ledger, the Design and Test surface directories,
+worktree checkouts, branches, and the plugin's own hooks. They are yours to
+keep, archive or delete.
+
+Afterwards the directory is a detached workspace: asking for the status answers
+`detached` with nothing to do, verification does not fail, and maintenance
+refuses to run there. `wakeflow.detached.json` is deliberate evidence that
+Wakeflow was here; to use Wakeflow in that directory again, move the file out
+of the directory yourself, then initialize as on the first run.
+
 ## What Wakeflow will not do
 
 - Accept work on your behalf. Acceptance is a decision your Controller agent

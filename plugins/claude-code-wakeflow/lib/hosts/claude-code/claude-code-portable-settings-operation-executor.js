@@ -8,7 +8,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { compileClaudeCodePortableSettingsRootAuthority, createClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-composition.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, publishClaudeCodePortableSettings, settleClaudeCodePortableSettingsPublicationStages, } from "./claude-code-portable-settings-publication.js";
-import { claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, } from "./claude-code-portable-settings-transition.js";
+import { claudeCodePortableSettingsRemovedRulesFor, claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, } from "./claude-code-portable-settings-transition.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings operation execution input is invalid.",
     config: "Claude portable settings operation Config is invalid.",
@@ -137,7 +137,7 @@ function parseOperation(value) {
         keys[4] !== "root" ||
         keys[5] !== "sourceDigest" ||
         keys[6] !== "targetDigest" ||
-        (record.action !== "create" && record.action !== "update") ||
+        (record.action !== "create" && record.action !== "update" && record.action !== "remove") ||
         typeof record.operationId !== "string") {
         fail("operation", "$operation");
     }
@@ -145,8 +145,8 @@ function parseOperation(value) {
     const authorityDigest = digest(record.authorityDigest, "$operation.authorityDigest");
     const sourceDigest = record.sourceDigest === null ? null : digest(record.sourceDigest, "$operation.sourceDigest");
     const targetDigest = digest(record.targetDigest, "$operation.targetDigest");
-    if ((record.action === "create" && sourceDigest !== null) ||
-        (record.action === "update" && sourceDigest === null)) {
+    // create 从无到有；update 与 remove 都要求一份已确认的现有源。
+    if ((record.action === "create") !== (sourceDigest === null)) {
         fail("operation", "$operation.sourceDigest");
     }
     const expected = createClaudeCodePortableSettingsOperation(authorityDigest, root, record.action, sourceDigest, targetDigest);
@@ -223,6 +223,15 @@ function sameRoot(left, right) {
             right.rootKind !== "support-surface" ||
             left.role === right.role));
 }
+/** 写入操作按托管规则表检查与发布；删除操作只按删除表（ADR-0024）。同一组选项交给检查与发布两步。 */
+function transitionOptions(operation) {
+    return operation.action === "remove"
+        ? { removedRules: claudeCodePortableSettingsRemovedRulesFor(operation.root) }
+        : {
+            rules: claudeCodePortableSettingsRulesFor(operation.root),
+            retiredRules: claudeCodePortableSettingsRetiredRulesFor(operation.root),
+        };
+}
 async function executeAtRoot(root, request) {
     if (request.recoveringAffectedOperation) {
         try {
@@ -237,11 +246,11 @@ async function executeAtRoot(root, request) {
             throw error;
         }
     }
+    const options = transitionOptions(request.operation);
     let inspection;
     try {
         inspection = await inspectClaudeCodePortableSettings(root, {
-            rules: claudeCodePortableSettingsRulesFor(request.operation.root),
-            retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+            ...options,
             ...(request.signal === undefined ? {} : { signal: request.signal }),
         });
     }
@@ -270,15 +279,15 @@ async function executeAtRoot(root, request) {
     if (inspection.transition.desiredDigest === null) {
         fail("owner", "$transition");
     }
-    const expected = createClaudeCodePortableSettingsOperation(request.operation.authorityDigest, request.operation.root, inspection.transition.status, inspection.transition.sourceDigest, inspection.transition.desiredDigest);
+    // 删除规划器的 update 就是这条 remove 操作；写入操作按规划器判定的 create/update 重建。
+    const expected = createClaudeCodePortableSettingsOperation(request.operation.authorityDigest, request.operation.root, request.operation.action === "remove" ? "remove" : inspection.transition.status, inspection.transition.sourceDigest, inspection.transition.desiredDigest);
     if (expected.operationDigest !== request.operation.operationDigest) {
         fail("source-stale", "$operation.operationDigest");
     }
     let published;
     try {
         published = await publishClaudeCodePortableSettings(root, {
-            rules: claudeCodePortableSettingsRulesFor(request.operation.root),
-            retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+            ...options,
             // 发布器的 CAS 基底是这里已确认的 source，不是它自己的二次读（W6）。
             expectedSourceDigest: request.operation.sourceDigest,
             ...(request.signal === undefined ? {} : { signal: request.signal }),

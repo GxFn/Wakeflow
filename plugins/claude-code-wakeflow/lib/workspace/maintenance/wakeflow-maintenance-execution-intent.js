@@ -12,7 +12,7 @@ import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContri
 import { createWakeflowMaintenanceExecutionPlan, parseWakeflowMaintenanceExecutionPlan, WakeflowMaintenanceExecutionPlanError, } from "./wakeflow-maintenance-execution-plan.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, } from "./wakeflow-maintenance-operation-id.js";
 import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
-import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
 /**
  * Wakeflow Workspace / Maintenance：可在进程重启后重建 exact execution 的不可变意图。
  *
@@ -109,7 +109,10 @@ function normalizedRequest(preview, desiredConfig, currentHostProfileValue, host
     try {
         return parseWakeflowStaticMaterializationPreviewRequest({
             action: preview.action,
-            desiredConfig: preview.action === "reconcile" ? null : desiredConfig,
+            // reconcile 与 detach-workspace 的请求不带期望 Config（意图里存的是当前 Config）。
+            desiredConfig: wakeflowStaticMaterializationActionUsesCurrentConfig(preview.action)
+                ? null
+                : desiredConfig,
             currentHostProfile: currentHostProfileValue,
             hostProfiles: hostProfileValues,
         });
@@ -256,7 +259,10 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(value) {
         plan: normalized.plan,
         request: Object.freeze({
             action: intent.sharedPreview.action,
-            desiredConfig: intent.sharedPreview.action === "reconcile" ? null : intent.desiredConfig,
+            // reconcile 与 detach-workspace 的请求不带期望 Config；意图里存的是当前 Config。
+            desiredConfig: wakeflowStaticMaterializationActionUsesCurrentConfig(intent.sharedPreview.action)
+                ? null
+                : intent.desiredConfig,
             currentHostProfile: intent.currentHostProfile,
             hostProfiles: intent.hostProfiles,
         }),

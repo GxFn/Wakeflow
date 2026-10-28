@@ -136,6 +136,31 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
 - 窗口、会话与 prompt 是宿主效果，由 Controller 里的 Agent 经宿主执行、以它自己的
   命令可见；Wakeflow 的进程从不执行任何一个。
 
+## 停用 Wakeflow
+
+退出是一个维护意图，不是手工清理：告诉 Controller，它先预览计划、给你看每一条阻塞，
+你确认后才应用。不要手删 Wakeflow 的文件——托管块按精确正文准入，手改只会被报成漂移。
+
+- **"把仓库 X 从 Wakeflow 分离出去"**：删除该仓库 `AGENTS.md` 里 Wakeflow 的
+  托管块（只删正文确系 Wakeflow 写出的块），退役它的窗口投影，发布去掉该仓库及其产品
+  窗口的配置。
+- **"在这里停用 Wakeflow"**：对每个仓库与窗口做同样的事，删除工作区 `.gitignore` 与 `AGENTS.md` 里的
+  Wakeflow 块，在有宿主设置的宿主（Claude Code）上从工作区根与受管的 Design、Test 面的
+  `.claude/settings.json` 删除 Wakeflow 的允许规则、从 `.claude/settings.local.json`
+  删除 Wakeflow 自己的那条 `statusLine`（你自己的规则与状态栏保留），最后把
+  `wakeflow.config.json` 改名为 `wakeflow.detached.json`。
+
+pod 打开或 Demand 活动时两者都拒绝：先关闭 pod 或完成 Demand。正文无法证明是 Wakeflow
+写出的块、读不出的设置文件，只报告、不碰。
+
+不碰、并在结果的 `leftBehind` 里列出：`.wakeflow-active/`、`.wakeflow-local/`、账本、
+Design 与 Test 支撑面目录、worktree 检出、分支，以及插件自己的 hooks。它们归你保留、
+归档或删除。
+
+之后这个目录是一个已分离的工作区：问状态会回答 `detached` 且无事可做，严格校验不失败，
+维护在这里拒绝运行。`wakeflow.detached.json` 是有意留下的证据，说明这里曾是 Wakeflow
+工作区；要在这个目录重新使用 Wakeflow，先自己把这个文件移出目录，再像第一次那样初始化。
+
 ## Wakeflow 不会做的事
 
 - 代你接受工作。接受是 Controller Agent 自己措辞记录的决定，且对着你能复读的证

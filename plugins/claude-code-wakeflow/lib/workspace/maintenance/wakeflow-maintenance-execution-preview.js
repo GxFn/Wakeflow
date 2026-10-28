@@ -5,7 +5,7 @@ import { assertWakeflowHostMaintenanceCapability, assertWakeflowHostMaintenanceC
 import { parseWakeflowHostMaintenanceContribution, WakeflowHostMaintenanceContributionError, } from "./wakeflow-host-maintenance-contribution.js";
 import { createWakeflowMaintenanceExecutionPlan, } from "./wakeflow-maintenance-execution-plan.js";
 import { previewWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
-import { parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+import { isWakeflowDetachAction, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance execution preview input is invalid.",
     "shared-preview": "Wakeflow maintenance shared preview is unavailable.",
@@ -33,9 +33,20 @@ function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
-async function resolveDesiredConfig(root, request, expectedDigest) {
+/**
+ * 宿主贡献拿到的 Config：退出路径一律是当前 Config——要清理的就是它声明的托管面（ADR-0024），
+ * detach-repository 的宿主也看去掉仓库之前的配置；其余动作是期望 Config（reconcile 从快照读当前）。
+ */
+async function resolveHostConfig(root, request, sharedPreview) {
+    if (isWakeflowDetachAction(request.action)) {
+        return resolveSnapshotConfig(root, request, sharedPreview.currentConfigDigest);
+    }
     if (request.desiredConfig !== null)
         return request.desiredConfig;
+    return resolveSnapshotConfig(root, request, sharedPreview.desiredConfigDigest);
+}
+/** 当前 Config 的稳定快照，摘要必须等于共享预览记下的那一个；预览没记（null）时快照也必须不在。 */
+async function resolveSnapshotConfig(root, request, expectedDigest) {
     assertNotAborted(request.signal);
     let snapshot;
     try {
@@ -101,20 +112,20 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
         }
         throw error;
     }
-    let desiredConfig = request.desiredConfig;
+    let hostConfig = request.desiredConfig;
     if (capability !== undefined) {
-        desiredConfig = await resolveDesiredConfig(rootValue, request, sharedPreview.desiredConfigDigest);
+        hostConfig = await resolveHostConfig(rootValue, request, sharedPreview);
     }
     let contribution = null;
-    if (capability !== undefined && desiredConfig === null) {
+    if (capability !== undefined && hostConfig === null) {
         if (sharedPreview.status === "ready")
             fail("source-config", "$config");
     }
-    else if (capability !== undefined && desiredConfig !== null) {
+    else if (capability !== undefined && hostConfig !== null) {
         try {
             contribution = parseWakeflowHostMaintenanceContribution(await capability.planContribution(rootValue, {
                 action: request.action,
-                config: desiredConfig,
+                config: hostConfig,
                 profile: request.currentHostProfile,
                 ...(request.signal === undefined ? {} : { signal: request.signal }),
             }));

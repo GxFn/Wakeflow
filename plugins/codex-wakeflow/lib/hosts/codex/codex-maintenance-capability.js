@@ -1,5 +1,6 @@
 import { createWakeflowHostMaintenanceContribution } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
+import { isWakeflowDetachAction } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-profile.js";
@@ -9,6 +10,7 @@ import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-pro
  * Codex 没有 settings 或 statusline 这类宿主文件，唯一的宿主维护贡献是对账时用当前 Config
  * 与 Binding inventory 重建缺失或过期的窗口运行投影（需要 Codex 的 identity profile）。
  * 共享层不依赖本模块；唯一的 operationKind 在这里显式分派，不注册动态 handler。
+ * 退出路径（ADR-0024）对 Codex 没有宿主步：两个 detach 动作的贡献显式为空集，投影由共享步退役。
  */
 const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance";
 const ERROR_MESSAGES = {
@@ -37,6 +39,16 @@ export const codexMaintenanceCapability = Object.freeze({
     hostId: "codex",
     capabilityId: CODEX_MAINTENANCE_CAPABILITY_ID,
     planContribution: async (root, request) => {
+        if (isWakeflowDetachAction(request.action)) {
+            // 退出路径没有 Codex 宿主步；不规划投影重建，退役由共享步 retire-window-projections 完成。
+            return createWakeflowHostMaintenanceContribution({
+                hostId: "codex",
+                capabilityId: CODEX_MAINTENANCE_CAPABILITY_ID,
+                status: "ready",
+                blockerCodes: [],
+                operations: [],
+            });
+        }
         let plan;
         try {
             plan = await planWakeflowWindowRuntimeProjectionMaintenance(root, {

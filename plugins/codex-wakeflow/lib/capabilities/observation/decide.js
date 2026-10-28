@@ -223,6 +223,23 @@ function gate(name, owner, status, code = null, evidence = Object.freeze([])) {
 function verdict(pass, unavailable) {
     return unavailable ? "unavailable" : pass ? "pass" : "fail";
 }
+/** 终态的 next（ADR-0024）：这里曾是 Wakeflow 工作区，已停用；没有人要做什么。 */
+export const DETACHED_WORKSPACE_NEXT = Object.freeze({
+    frontier: "workspace-detached",
+    owner: "none",
+    suggestedTool: null,
+    blockers: Object.freeze([]),
+});
+/**
+ * 终态的 verify（ADR-0024）：配置文件不在而 `wakeflow.detached.json` 在，verify 只报 config-authority
+ * 一门且通过（code `detached`），证据是退役文件与它带着的配置摘要——不失败，也不再对一个已停用的
+ * 工作区评布局、投影与宿主资产。
+ */
+export function detachedWorkspaceGates(configRef, configDigest) {
+    return Object.freeze([
+        gate("config-authority", "config-authority", "pass", "detached", Object.freeze([Object.freeze({ ref: configRef, digest: configDigest })])),
+    ]);
+}
 function aggregate(statuses) {
     if (statuses.some((status) => status === "fail"))
         return "fail";

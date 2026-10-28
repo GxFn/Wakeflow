@@ -9,13 +9,15 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import { planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
+import { planClaudeCodePortableSettingsRemovalTransition, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 /**
  * Wakeflow Host / Claude Code：单个已授权根的 portable settings CAS owner。
  *
  * 本 owner 只创建或精确替换 `.claude/settings.json`，写入内容完全来自 portable
  * transition。它不处理 local settings、statusline、Git ignore、Repository 授权或多根
- * transaction；这些仍由上层 maintenance participant 排序和授权。
+ * transaction；这些仍由上层 maintenance participant 排序和授权。退出路径（ADR-0024）
+ * 用同一个 CAS 精确删除 Wakeflow 的条目：`removedRules` 选项换掉 transition 的规划器，
+ * 读取、期望源核对、替换与读回不变。
  */
 export const CLAUDE_CODE_SETTINGS_DIRECTORY_REF = parsePortableResourcePath(".claude");
 export const CLAUDE_CODE_PORTABLE_SETTINGS_REF = parsePortableResourcePath(".claude/settings.json");
@@ -49,6 +51,7 @@ const PUBLICATION_OPTION_KEYS = Object.freeze([
     "signal",
     "rules",
     "retiredRules",
+    "removedRules",
 ]);
 const PUBLISH_OPTION_KEYS = Object.freeze([
     ...PUBLICATION_OPTION_KEYS,
@@ -69,6 +72,13 @@ function parseExpectedSourceDigest(value) {
         throw error;
     }
 }
+function isStringArrayOrAbsent(value) {
+    return (value === undefined ||
+        (Array.isArray(value) && value.every((entry) => typeof entry === "string")));
+}
+function stringArrayOrUndefined(value) {
+    return value === undefined ? undefined : Object.freeze([...value]);
+}
 function parseOptions(value, allowedKeys) {
     let record;
     try {
@@ -85,21 +95,19 @@ function parseOptions(value, allowedKeys) {
                 record.signal === null ||
                 types.isProxy(record.signal) ||
                 !(record.signal instanceof AbortSignal))) ||
-        (record.rules !== undefined &&
-            (!Array.isArray(record.rules) || record.rules.some((entry) => typeof entry !== "string"))) ||
-        (record.retiredRules !== undefined &&
-            (!Array.isArray(record.retiredRules) ||
-                record.retiredRules.some((entry) => typeof entry !== "string")))) {
+        !isStringArrayOrAbsent(record.rules) ||
+        !isStringArrayOrAbsent(record.retiredRules) ||
+        !isStringArrayOrAbsent(record.removedRules) ||
+        // 删除表与写入表互斥：一次发布要么写规则，要么删条目（ADR-0024）。
+        (record.removedRules !== undefined &&
+            (record.rules !== undefined || record.retiredRules !== undefined))) {
         fail("input", "$options");
     }
     return Object.freeze({
         signal: record.signal,
-        rules: record.rules === undefined
-            ? undefined
-            : Object.freeze([...record.rules]),
-        retiredRules: record.retiredRules === undefined
-            ? undefined
-            : Object.freeze([...record.retiredRules]),
+        rules: stringArrayOrUndefined(record.rules),
+        retiredRules: stringArrayOrUndefined(record.retiredRules),
+        removedRules: stringArrayOrUndefined(record.removedRules),
         expectedSourceDigest: parseExpectedSourceDigest(record.expectedSourceDigest),
     });
 }
@@ -173,9 +181,15 @@ async function sourceOrNull(root, signal) {
         throw error;
     }
 }
-async function inspectSource(root, signal, rules, retiredRules) {
+/** 写入路径按托管规则表规划，退出路径只按删除表规划（ADR-0024）；两者互斥由选项准入保证。 */
+function planTransition(sourceText, options) {
+    return options.removedRules === undefined
+        ? planClaudeCodePortableSettingsTransition(sourceText, options.rules, options.retiredRules)
+        : planClaudeCodePortableSettingsRemovalTransition(sourceText, options.removedRules);
+}
+async function inspectSource(root, options) {
     const directoryNode = await directoryNodeOrNull(root);
-    const source = directoryNode === null ? null : await sourceOrNull(root, signal);
+    const source = directoryNode === null ? null : await sourceOrNull(root, options.signal);
     let sourceText = null;
     if (source !== null) {
         try {
@@ -187,7 +201,7 @@ async function inspectSource(root, signal, rules, retiredRules) {
             throw error;
         }
     }
-    const transition = planClaudeCodePortableSettingsTransition(sourceText, rules, retiredRules);
+    const transition = planTransition(sourceText, options);
     return Object.freeze({ directoryNode, source, sourceText, transition });
 }
 /** 只读检查一个已授权根的 portable settings，不返回用户源文本或节点身份。 */
@@ -201,7 +215,7 @@ export async function inspectClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const inspection = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+    const inspection = await inspectSource(rootValue, options);
     return Object.freeze({
         kind: "ClaudeCodePortableSettingsInspection",
         directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -306,7 +320,7 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     const options = parseOptions(optionsValue, PUBLISH_OPTION_KEYS);
     if (options.signal?.aborted === true)
         fail("aborted", "$signal");
-    const before = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+    const before = await inspectSource(rootValue, options);
     assertExpectedSource(before, options.expectedSourceDigest);
     if (before.transition.status === "blocked") {
         fail("transition-blocked", "$transition", before.transition.reason);
@@ -324,13 +338,13 @@ export async function publishClaudeCodePortableSettings(rootValue, optionsValue 
     }
     await ensureSettingsDirectory(rootValue, before, options.signal);
     if (before.directoryNode === null) {
-        const afterDirectory = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+        const afterDirectory = await inspectSource(rootValue, options);
         if (afterDirectory.source !== null || afterDirectory.transition.status !== "create") {
             fail("source-changed", "$settings");
         }
     }
     await publishTransition(rootValue, before, options.signal);
-    const after = await inspectSource(rootValue, options.signal, options.rules, options.retiredRules);
+    const after = await inspectSource(rootValue, options);
     if (after.transition.status !== "current" ||
         before.transition.desiredDigest === null ||
         after.source?.digest !== before.transition.desiredDigest) {

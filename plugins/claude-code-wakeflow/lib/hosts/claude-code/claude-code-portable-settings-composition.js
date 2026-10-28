@@ -4,21 +4,10 @@ import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError,
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { isWakeflowDetachAction, WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS, } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
-import { claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
-/**
- * Wakeflow Host / Claude Code：portable settings 的多根只读 composition。
- *
- * Program 根与 `wakeflow-managed` Support 根是当前唯一 writer-eligible 集合；
- * external-owned Support 和所有 Repository 均不进入 authority。计划只保存逻辑根、
- * source/target digest 与 action，不保存绝对路径或用户 settings 字节。
- */
-export const CLAUDE_CODE_PORTABLE_SETTINGS_COMPOSITION_ACTIONS = Object.freeze([
-    "fresh-initialize",
-    "reconfigure",
-    "reconcile",
-]);
+import { claudeCodePortableSettingsRemovedRulesFor, claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings composition input is invalid.",
     config: "Claude portable settings composition Config is invalid.",
@@ -59,7 +48,7 @@ function parseRequest(value) {
         !Object.hasOwn(record, "profile") ||
         Object.keys(record).some((key) => key !== "action" && key !== "config" && key !== "profile" && key !== "signal") ||
         typeof record.action !== "string" ||
-        !CLAUDE_CODE_PORTABLE_SETTINGS_COMPOSITION_ACTIONS.includes(record.action) ||
+        !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(record.action) ||
         (record.signal !== undefined &&
             (typeof record.signal !== "object" ||
                 record.signal === null ||
@@ -145,6 +134,14 @@ export function createClaudeCodePortableSettingsOperation(authorityDigest, root,
         operationDigest: computeCanonicalJsonSha256Digest(basis),
     });
 }
+/** 退出路径的宿主步种类（ADR-0024）：与共享步骤表里的名字逐字相同，宿主贡献用它做 operationKind。 */
+export const CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND = "remove-portable-settings-rules";
+/** 退出路径里 settings.json 读不出、不是对象或不合写入策略时的 blocker 前缀；后缀是该根的 targetKey。 */
+export const CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_BLOCKER = "detach-settings-unreadable";
+/** 退出路径宿主步的 targetKey（ADR-0024）：程序根 `program`，托管支撑面 `support:<surfaceId>`。 */
+export function claudeCodePortableSettingsRemovalTargetKey(root) {
+    return root.rootKind === "program" ? "program" : `support:${root.rootId}`;
+}
 const BLOCKING_PUBLICATION_REASONS = new Set([
     "source-policy",
     "directory-policy",
@@ -172,7 +169,7 @@ async function inspectRootSettings(root, options) {
         fail("inspection", "$settings");
     }
 }
-async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
+async function inspectPresentRoot(absolutePath, options) {
     let root;
     try {
         root = await RootedDirectory.open(absolutePath, "$configuredRoot");
@@ -185,11 +182,7 @@ async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
     let inspection;
     let primaryError;
     try {
-        inspection = await inspectRootSettings(root, {
-            rules,
-            retiredRules,
-            ...(signal === undefined ? {} : { signal }),
-        });
+        inspection = await inspectRootSettings(root, options);
     }
     catch (error) {
         primaryError = error;
@@ -218,7 +211,133 @@ async function inspectPresentRoot(absolutePath, signal, rules, retiredRules) {
 export function claudeCodeMaintenanceMaterializesMissingSupportRoot(action) {
     return action === "fresh-initialize" || action === "reconcile";
 }
-/** 为 Program 与 Wakeflow-managed Support roots 生成零写入 portable settings 计划。 */
+function rootEntry(root, placementStatus, settingsStatus, transitionReason) {
+    return Object.freeze({ root, placementStatus, settingsStatus, transitionReason });
+}
+async function rootPlacements(workspaceRoot, model) {
+    try {
+        return await validateWakeflowConfigRootPlacements(workspaceRoot, model);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigRootPlacementError) {
+            fail("placement", error.path);
+        }
+        throw error;
+    }
+}
+function supportPlacement(placements, root) {
+    const placement = placements.roots.find((entry) => entry.key === `support.${root.rootId}.root`);
+    if (placement === undefined)
+        fail("placement", "$supportRoot");
+    return placement;
+}
+function signalOptions(signal) {
+    return signal === undefined ? {} : { signal };
+}
+/** 写入动作的一个根：程序根直接读；支撑面缺根时按动作决定计划 create 还是报 `support-root-missing`。 */
+async function planPublicationRoot(context, root) {
+    const { request, authority, plan } = context;
+    const rules = claudeCodePortableSettingsRulesFor(root);
+    const retiredRules = claudeCodePortableSettingsRetiredRulesFor(root);
+    const options = { rules, retiredRules, ...signalOptions(request.signal) };
+    let placementStatus;
+    let inspection;
+    if (root.rootKind === "program") {
+        placementStatus = "present";
+        inspection = await inspectRootSettings(context.workspaceRoot, options);
+    }
+    else {
+        const placement = supportPlacement(context.placements, root);
+        if (placement.state === "missing") {
+            if (!claudeCodeMaintenanceMaterializesMissingSupportRoot(request.action)) {
+                plan.blockerCodes.add(`support-root-missing:${root.rootId}`);
+                plan.rootEntries.push(rootEntry(root, "planned-missing", "blocked", null));
+                return;
+            }
+            placementStatus = "planned-missing";
+            inspection = {
+                transition: planClaudeCodePortableSettingsTransition(null, rules, retiredRules),
+            };
+        }
+        else {
+            placementStatus = "present";
+            inspection = await inspectPresentRoot(placement.absolutePath, options);
+        }
+    }
+    if ("blockedReason" in inspection) {
+        plan.blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${inspection.blockedReason}`);
+        plan.rootEntries.push(rootEntry(root, placementStatus, "blocked", null));
+        return;
+    }
+    const { transition } = inspection;
+    if (transition.status === "blocked") {
+        plan.blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${transition.reason}`);
+    }
+    else if (transition.status === "create" || transition.status === "update") {
+        if (transition.desiredDigest === null)
+            fail("inspection", "$transition");
+        plan.operations.push(createClaudeCodePortableSettingsOperation(authority.authorityDigest, root, transition.status, transition.sourceDigest, transition.desiredDigest));
+    }
+    plan.rootEntries.push(rootEntry(root, placementStatus, transition.status, transition.reason));
+}
+/**
+ * 退出路径（ADR-0024 `remove-portable-settings-rules`）的一个根：支撑面根不在即无可删（absent）；
+ * 文件读不出、不是对象或不合写入策略即 `detach-settings-unreadable:<targetKey>`，不猜；有 Wakeflow
+ * 当前或退役的条目即一条 remove；没有即 current，零写。
+ */
+async function planRemovalRoot(context, root) {
+    const { request, authority, plan } = context;
+    const options = {
+        removedRules: claudeCodePortableSettingsRemovedRulesFor(root),
+        ...signalOptions(request.signal),
+    };
+    let inspection;
+    if (root.rootKind === "program") {
+        inspection = await inspectRootSettings(context.workspaceRoot, options);
+    }
+    else {
+        const placement = supportPlacement(context.placements, root);
+        if (placement.state === "missing") {
+            plan.rootEntries.push(rootEntry(root, "absent", "current", null));
+            return;
+        }
+        inspection = await inspectPresentRoot(placement.absolutePath, options);
+    }
+    if ("blockedReason" in inspection || inspection.transition.status === "blocked") {
+        plan.blockerCodes.add(`${CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_BLOCKER}:${claudeCodePortableSettingsRemovalTargetKey(root)}`);
+        const reason = "blockedReason" in inspection ? null : inspection.transition.reason;
+        plan.rootEntries.push(rootEntry(root, "present", "blocked", reason));
+        return;
+    }
+    const { transition } = inspection;
+    if (transition.status === "update") {
+        if (transition.sourceDigest === null || transition.desiredDigest === null) {
+            fail("inspection", "$transition");
+        }
+        plan.operations.push(createClaudeCodePortableSettingsOperation(authority.authorityDigest, root, "remove", transition.sourceDigest, transition.desiredDigest));
+    }
+    else if (transition.status !== "current") {
+        // 删除规划器从不产生 create：文件不存在就是 current。
+        fail("inspection", "$transition");
+    }
+    plan.rootEntries.push(rootEntry(root, "present", transition.status, transition.reason));
+}
+function assemblePlan(action, authority, plan) {
+    const sortedBlockers = Object.freeze([...plan.blockerCodes].sort());
+    return Object.freeze({
+        action,
+        status: sortedBlockers.length === 0 ? "ready" : "blocked",
+        authorityDigest: authority.authorityDigest,
+        roots: Object.freeze([...plan.rootEntries]),
+        operations: Object.freeze([...plan.operations]),
+        blockerCodes: sortedBlockers,
+    });
+}
+/**
+ * 为 Program 与 Wakeflow-managed Support roots 生成零写入 portable settings 计划：写入动作计划规则的
+ * 创建或最小更新，detach-workspace 计划 Wakeflow 条目的精确删除，detach-repository 计划为空（规则
+ * 没有仓库维度，ADR-0024）。
+ */
 export async function planClaudeCodePortableSettingsComposition(workspaceRootValue, requestValue) {
     if (typeof workspaceRootValue !== "object" ||
         workspaceRootValue === null ||
@@ -230,90 +349,20 @@ export async function planClaudeCodePortableSettingsComposition(workspaceRootVal
     if (request.signal?.aborted === true)
         fail("aborted", "$signal");
     const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
-    let placements;
-    try {
-        placements = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.model);
+    const plan = { rootEntries: [], operations: [], blockerCodes: new Set() };
+    if (request.action === "detach-repository") {
+        return assemblePlan(request.action, authority, plan);
     }
-    catch (error) {
-        if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("placement", error.path);
-        }
-        throw error;
-    }
-    const rootEntries = [];
-    const operations = [];
-    const blockerCodes = new Set();
+    const context = {
+        workspaceRoot: workspaceRootValue,
+        request,
+        authority,
+        placements: await rootPlacements(workspaceRootValue, request.model),
+        plan,
+    };
+    const planRoot = isWakeflowDetachAction(request.action) ? planRemovalRoot : planPublicationRoot;
     for (const root of authority.roots) {
-        let placementStatus;
-        let inspection;
-        if (root.rootKind === "program") {
-            placementStatus = "present";
-            inspection = await inspectRootSettings(workspaceRootValue, {
-                rules: claudeCodePortableSettingsRulesFor(root),
-                retiredRules: claudeCodePortableSettingsRetiredRulesFor(root),
-                ...(request.signal === undefined ? {} : { signal: request.signal }),
-            });
-        }
-        else {
-            const placement = placements.roots.find((entry) => entry.key === `support.${root.rootId}.root`);
-            if (placement === undefined)
-                fail("placement", "$supportRoot");
-            if (placement.state === "missing") {
-                if (!claudeCodeMaintenanceMaterializesMissingSupportRoot(request.action)) {
-                    blockerCodes.add(`support-root-missing:${root.rootId}`);
-                    rootEntries.push(Object.freeze({
-                        root,
-                        placementStatus: "planned-missing",
-                        settingsStatus: "blocked",
-                        transitionReason: null,
-                    }));
-                    continue;
-                }
-                placementStatus = "planned-missing";
-                inspection = {
-                    transition: planClaudeCodePortableSettingsTransition(null, claudeCodePortableSettingsRulesFor(root), claudeCodePortableSettingsRetiredRulesFor(root)),
-                };
-            }
-            else {
-                placementStatus = "present";
-                inspection = await inspectPresentRoot(placement.absolutePath, request.signal, claudeCodePortableSettingsRulesFor(root), claudeCodePortableSettingsRetiredRulesFor(root));
-            }
-        }
-        if ("blockedReason" in inspection) {
-            blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${inspection.blockedReason}`);
-            rootEntries.push(Object.freeze({
-                root,
-                placementStatus,
-                settingsStatus: "blocked",
-                transitionReason: null,
-            }));
-            continue;
-        }
-        const { transition } = inspection;
-        if (transition.status === "blocked") {
-            blockerCodes.add(`settings-blocked:${root.rootKind}:${root.rootId}:${transition.reason}`);
-        }
-        else if (transition.status === "create" || transition.status === "update") {
-            if (transition.desiredDigest === null)
-                fail("inspection", "$transition");
-            operations.push(createClaudeCodePortableSettingsOperation(authority.authorityDigest, root, transition.status, transition.sourceDigest, transition.desiredDigest));
-        }
-        rootEntries.push(Object.freeze({
-            root,
-            placementStatus,
-            settingsStatus: transition.status,
-            transitionReason: transition.reason,
-        }));
+        await planRoot(context, root);
     }
-    const sortedBlockers = Object.freeze([...blockerCodes].sort());
-    const frozenRoots = Object.freeze(rootEntries);
-    const frozenOperations = Object.freeze(operations);
-    return Object.freeze({
-        action: request.action,
-        status: sortedBlockers.length === 0 ? "ready" : "blocked",
-        authorityDigest: authority.authorityDigest,
-        roots: frozenRoots,
-        operations: frozenOperations,
-        blockerCodes: sortedBlockers,
-    });
+    return assemblePlan(request.action, authority, plan);
 }

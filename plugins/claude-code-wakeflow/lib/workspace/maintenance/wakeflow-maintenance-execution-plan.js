@@ -91,9 +91,10 @@ function hostStep(hostId, capabilityId, operation, dependencies) {
     });
 }
 function orderedSteps(preview, contribution) {
-    const config = preview.steps.find((entry) => entry.kind === "publish-config");
+    // Config 权威步收尾：publish-config，或 detach-workspace 的 retire-config（ADR-0024）；宿主操作在它之前。
+    const config = preview.steps.find((entry) => entry.kind === "publish-config" || entry.kind === "retire-config");
     const steps = preview.steps
-        .filter((entry) => entry.kind !== "publish-config")
+        .filter((entry) => entry.kind !== "publish-config" && entry.kind !== "retire-config")
         .map((entry) => sharedStep(entry));
     if (contribution !== null) {
         for (const operation of contribution.operations) {

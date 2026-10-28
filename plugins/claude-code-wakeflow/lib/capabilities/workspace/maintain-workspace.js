@@ -1,22 +1,27 @@
 import path from "node:path";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { deriveWakeflowDetachRepositoryConfig } from "../../configuration/wakeflow-config-detach.js";
 import { compileWakeflowFreshConfigSelection, WakeflowFreshConfigSelectionError, } from "../../configuration/wakeflow-fresh-config-selection.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
+import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
-import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { StableDirectoryReadError } from "../../foundation/filesystem/stable-directory-read.js";
+import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
-import { DemandOperationAuthorityContextError } from "../../governance/demand/demand-operation-authority-context.js";
+import { closeDemandOperationRoot, DemandOperationAuthorityContextError, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { applyDemandRuntimeRecovery, inspectDemandRuntimeRecovery, } from "../../governance/demand/demand-runtime-recovery.js";
+import { loadDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
+import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
+import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../kernel/layout.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
 import { compareWakeflowArtifactVersions, parseWakeflowArtifactManifestIdentity, WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME, } from "../../kernel/wakeflow-artifact-identity.js";
@@ -25,7 +30,7 @@ import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/mainte
 import { WakeflowMaintenanceExecutionTransactionError, } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { convergeWakeflowPrivateModes, inspectWakeflowPrivateModes, WakeflowPrivateModeCensusError, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
-import { parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
+import { isWakeflowDetachAction, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { compileWakeflowWindowLaunchIntents, WakeflowWindowLaunchIntentError, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 /**
  * Wakeflow Capabilities / Workspace：`wakeflow_maintain_workspace` 切片（ADR-0013 试点）。
@@ -406,10 +411,261 @@ async function planRuntimeRecovery(context) {
         throw error;
     }
 }
+const DEMAND_DIRECTORY_PATTERN = /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const DEMAND_DIRECTORY_MAXIMUM_ENTRIES = 4096;
+async function resourceExists(context, resourcePath) {
+    try {
+        await context.root.inspectExistingResource(resourcePath, "$request.root");
+        return true;
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+            return false;
+        }
+        if (error instanceof RootedDirectoryError) {
+            fail("io-failure", "inspection", "$request.root", { cause: error });
+        }
+        throw error;
+    }
+}
+/**
+ * 终态之后（ADR-0024）：`wakeflow.config.json` 不在而 `wakeflow.detached.json` 在，reconcile、reconfigure
+ * 与两个 detach 的 preview 阻塞 `workspace-detached`；fresh-initialize 只要退役文件在就阻塞
+ * `detached-file-present`——用户先把它移走，再重新启用。
+ */
+async function detachedBlockers(context, action) {
+    if (!(await resourceExists(context, WAKEFLOW_DETACHED_CONFIG_FILE_REF))) {
+        return Object.freeze([]);
+    }
+    if (action === "fresh-initialize")
+        return Object.freeze(["detached-file-present"]);
+    return (await resourceExists(context, WAKEFLOW_CONFIG_FILE_REF))
+        ? Object.freeze([])
+        : Object.freeze(["workspace-detached"]);
+}
+/** detach-repository 要求 `repositoryId`，detach-workspace 不接受它（Schema 共用一个请求体，这里准入）。 */
+function detachRepositoryIdOf(input) {
+    const value = input.body.repositoryId;
+    if (input.action === "detach-repository") {
+        if (typeof value !== "string") {
+            fail("invalid-request", "repository-id-required", "$request.request.repositoryId");
+        }
+        return value;
+    }
+    if (value !== undefined) {
+        fail("invalid-request", "repository-id-unexpected", "$request.request.repositoryId");
+    }
+    return null;
+}
+async function currentSnapshotOrNull(context) {
+    try {
+        return await readWakeflowConfigAuthoritySnapshot(context.root, context.options);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            return null;
+        }
+        throw error;
+    }
+}
+/** 未关闭的 worktree pod：detach-repository 看含该仓库检出的，detach-workspace 看全部。 */
+function detachPodBlockers(model, repositoryId) {
+    return model.pods
+        .filter((pod) => pod.placement !== "primary" &&
+        (repositoryId === null ||
+            pod.worktrees.some((worktree) => worktree.repositoryId === repositoryId)))
+        .map((pod) => `detach-pod-open:${pod.podId}`);
+}
+/** 活动目录里的 Demand 目录名；目录不在即没有 Demand；读不出为 "unavailable"。 */
+async function activeDemandDirectoryNames(context) {
+    try {
+        const listing = await readStableResourceDirectory(context.root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, {
+            maximumEntries: DEMAND_DIRECTORY_MAXIMUM_ENTRIES,
+            ...context.options,
+        });
+        return listing.entries
+            .filter((entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name))
+            .map((entry) => entry.name)
+            .sort();
+    }
+    catch (error) {
+        if (error instanceof StableDirectoryReadError) {
+            if (error.reason === "not-found")
+                return Object.freeze([]);
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            return "unavailable";
+        }
+        throw error;
+    }
+}
+function reasonOf(error) {
+    if (typeof error !== "object" || error === null)
+        return null;
+    const reason = error.reason;
+    return typeof reason === "string" ? reason : null;
+}
+/**
+ * 一个 Demand 是否占用：lifecycle 为 active，且 detach-workspace 不看目标、detach-repository 要有该仓库
+ * 的实现目标（test 目标没有仓库）。读不出的 Demand 按占用对待——不知道不放行；中止照常收敛。
+ */
+async function demandOccupies(context, store, demandId, repositoryId) {
+    let demandRoot = null;
+    try {
+        demandRoot = await openDemandOperationRoot(context.root, demandId);
+        const loaded = await loadDemandEventSourcingRootAuthority(demandRoot, store, context.options);
+        const state = loaded.aggregate.state;
+        return (state.lifecycle === "active" &&
+            (repositoryId === null ||
+                state.targetTasks.some((target) => "repositoryId" in target && target.repositoryId === repositoryId)));
+    }
+    catch (error) {
+        if (isWakeflowError(error) && error.reason === "aborted")
+            throw error;
+        if (reasonOf(error) === "aborted")
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        return true;
+    }
+    finally {
+        if (demandRoot !== null)
+            await closeDemandOperationRoot(demandRoot);
+    }
+}
+/** 活动 Demand：detach-repository 看有该仓库目标的，detach-workspace 看全部。 */
+async function detachDemandBlockers(context, snapshot, repositoryId) {
+    const names = await activeDemandDirectoryNames(context);
+    if (names === "unavailable")
+        return Object.freeze(["detach-demands-unavailable"]);
+    if (names.length === 0)
+        return Object.freeze([]);
+    let ledgerRoot;
+    try {
+        ledgerRoot = await RootedDirectory.open(snapshot.ledgerRoot, "$ledgerRoot", {
+            durability: context.root.durability,
+        });
+    }
+    catch (error) {
+        if (error instanceof RootedDirectoryError)
+            return Object.freeze(["ledger-root-unavailable"]);
+        throw error;
+    }
+    try {
+        const store = new LedgerAuthorityStore(ledgerRoot);
+        const blockers = [];
+        for (const name of names) {
+            const demandId = parseWakeflowDurableIdOfKind(name, "demand");
+            if (await demandOccupies(context, store, demandId, repositoryId)) {
+                blockers.push(`detach-demand-active:${demandId}`);
+            }
+        }
+        return Object.freeze(blockers);
+    }
+    finally {
+        await ledgerRoot.close();
+    }
+}
+/**
+ * 退出路径不碰并列出的东西（ADR-0024）：工作区根下的相对路径，或 `<种类>:<相对路径>` / 种类名；
+ * 不含绝对路径。
+ */
+function detachWorkspaceLeftBehind(model) {
+    return Object.freeze([
+        ".wakeflow-active",
+        ".wakeflow-local",
+        `ledger-root:${String(model.storage.ledgerRoot)}`,
+        ...model.topology.supportSurfaces
+            .filter((surface) => surface.ownership === "wakeflow-managed")
+            .map((surface) => `support-surface:${String(surface.path)}`),
+        "worktree-checkouts",
+        "branches",
+        "plugin-hooks",
+    ]);
+}
+/**
+ * 退出路径的前提阻塞（ADR-0024）与 detach-repository 的期望 Config：未知或最后一个仓库、含该仓库
+ * 检出的 worktree pod、有该仓库目标的活动 Demand（detach-workspace 对任何 pod 与 Demand），加私有树
+ * 的模式漂移（先 reconcile）；一并排序报出，Controller 一次看全。
+ */
+async function detachOccupancy(context, input, snapshot, repositoryId) {
+    const blockers = new Set();
+    let desiredConfig = null;
+    if (repositoryId !== null) {
+        const derivation = deriveWakeflowDetachRepositoryConfig(snapshot.model, repositoryId);
+        if (derivation.kind === "blocked")
+            blockers.add(derivation.blockerCode);
+        else
+            desiredConfig = derivation.model;
+    }
+    for (const code of detachPodBlockers(snapshot.model, repositoryId))
+        blockers.add(code);
+    for (const code of await detachDemandBlockers(context, snapshot, repositoryId))
+        blockers.add(code);
+    const privateModes = await privateModePlan(context, input.action);
+    for (const code of privateModes?.blockers ?? [])
+        blockers.add(code);
+    return Object.freeze({ blockers: Object.freeze([...blockers].sort()), desiredConfig });
+}
+/**
+ * 退出路径的计划（ADR-0024）：先算前提阻塞，再让共享预览按精确准入算出步骤。阻塞让 preview 为
+ * blocked、planDigest 为 null，apply 重算同路得 plan-blocked。
+ */
+async function planDetach(context, input) {
+    const repositoryId = detachRepositoryIdOf(input);
+    const overlap = deriveArtifactOverlapBlockers(context.root.absolutePath, null, context.facade.artifactRoot);
+    if (overlap.length > 0)
+        return blockedPlan(overlap);
+    const outdated = await deriveRuntimeArtifactBlockers(context);
+    if (outdated.length > 0)
+        return blockedPlan(outdated);
+    const snapshot = await currentSnapshotOrNull(context);
+    if (snapshot === null)
+        return blockedPlan(["current-config-unavailable"]);
+    const occupancy = await detachOccupancy(context, input, snapshot, repositoryId);
+    if (occupancy.blockers.length > 0)
+        return blockedPlan(occupancy.blockers);
+    const desiredConfig = occupancy.desiredConfig;
+    const executionRequest = Object.freeze({
+        action: input.action,
+        desiredConfig,
+        currentHostProfile: context.profiles.currentHostProfile,
+        hostProfiles: context.profiles.hostProfiles,
+        ...context.options,
+    });
+    let executionPlan;
+    try {
+        executionPlan = await context.facade.preview(context.root, executionRequest);
+    }
+    catch (error) {
+        mapPreviewError(error);
+    }
+    const ready = executionPlan.status === "ready";
+    return Object.freeze({
+        status: executionPlan.status,
+        blockers: executionPlan.blockerCodes,
+        plan: ready
+            ? Object.freeze({
+                kind: "materialization",
+                executionPlan,
+                executionRequest,
+                compilation: null,
+                launchIntentSet: null,
+                leftBehind: input.action === "detach-workspace" ? detachWorkspaceLeftBehind(snapshot.model) : null,
+            })
+            : null,
+        digest: ready ? executionPlan.planDigest : null,
+    });
+}
 async function planMaintenance(context, input) {
     if (input.kind !== "effect") {
         fail("invalid-request", "mode", "$request.mode");
     }
+    const detached = await detachedBlockers(context, input.action);
+    if (detached.length > 0)
+        return blockedPlan(detached);
+    if (isWakeflowDetachAction(input.action))
+        return planDetach(context, input);
     const { desiredConfig, compilation } = desiredConfigFor(input, context.root.absolutePath);
     const overlap = deriveArtifactOverlapBlockers(context.root.absolutePath, desiredConfig, context.facade.artifactRoot);
     if (overlap.length > 0)
@@ -452,6 +708,7 @@ async function planMaintenance(context, input) {
                 executionRequest,
                 compilation,
                 launchIntentSet,
+                leftBehind: null,
             })
             : null,
         digest: ready ? executionPlan.planDigest : null,
@@ -558,7 +815,9 @@ function assembleResult(facade, input, phase, next) {
     if (phase.mode === "apply") {
         if (input.kind !== "effect")
             fail("unexpected", "phase-input", "$request");
-        const launchIntentSet = materializationOf(phase.plan)?.launchIntentSet ?? null;
+        const materialization = materializationOf(phase.plan);
+        const launchIntentSet = materialization?.launchIntentSet ?? null;
+        const leftBehind = materialization?.leftBehind ?? null;
         return publicResult({
             kind: "WakeflowMaintenancePublicMutationResult",
             ...base,
@@ -570,6 +829,8 @@ function assembleResult(facade, input, phase, next) {
             stepReceipts: phase.outcome.stepReceipts,
             launchIntents: launchIntentSet?.intents ?? [],
             launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
+            // detach-workspace 的结果列出不碰的东西（ADR-0024）；其余动作没有这一项。
+            ...(leftBehind === null ? {} : { leftBehind }),
         });
     }
     return publicResult({

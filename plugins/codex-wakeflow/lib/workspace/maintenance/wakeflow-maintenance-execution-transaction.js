@@ -1,6 +1,6 @@
 import { types } from "node:util";
 import { computeWakeflowConfigDigest, } from "../../configuration/wakeflow-config.js";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigRecord, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
@@ -15,7 +15,7 @@ import { assertWakeflowMaintenanceJournalIsOnlyTransaction, assertWakeflowPrepar
 import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
-import { parseWakeflowStaticMaterializationPreviewRequest, } from "./wakeflow-static-materialization-preview-contract.js";
+import { isWakeflowDetachAction, parseWakeflowStaticMaterializationPreviewRequest, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
 import { executeWakeflowStaticMaterializationStep, WakeflowStaticMaterializationStepExecutionError, } from "./wakeflow-static-materialization-step-executor.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance execution transaction input is invalid.",
@@ -203,15 +203,49 @@ function validateJournalPlan(source, intentSource, plan) {
         fail("journal", "$journal", source.operationId);
     }
 }
+/** 退役配置记录（ADR-0024 终态）：不在为 null；读不出即源 Config 不可信。 */
+async function detachedConfigRecord(root, signal, operationId) {
+    try {
+        return await readWakeflowDetachedConfigRecord(root, signal === undefined ? undefined : { signal });
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal", operationId);
+            fail("source-config", "$detached", operationId);
+        }
+        throw error;
+    }
+}
+/**
+ * 终态核对：publish-config 之后配置文件带期望摘要；detach-workspace 的 retire-config 之后配置文件
+ * 不在而退役文件带同一摘要（ADR-0024）。
+ */
 async function assertTerminalConfig(root, plan, operationId) {
+    const expected = plan.sharedPreview.desiredConfigDigest;
+    if (expected === null)
+        fail("terminal-closure", "$config", operationId);
     const current = await currentConfigSnapshot(root, undefined, operationId);
-    if (plan.sharedPreview.desiredConfigDigest === null ||
-        current?.configDigest !== plan.sharedPreview.desiredConfigDigest) {
+    if (plan.sharedPreview.action === "detach-workspace") {
+        const retired = await detachedConfigRecord(root, undefined, operationId);
+        if (current !== null || retired?.configDigest !== expected) {
+            fail("terminal-closure", "$config", operationId);
+        }
+        return;
+    }
+    if (current?.configDigest !== expected) {
         fail("terminal-closure", "$config", operationId);
     }
 }
-function desiredConfigForExecution(request, sourceConfig, operationId) {
-    const config = request.action === "reconcile" ? sourceConfig : request.desiredConfig;
+/**
+ * 宿主操作拿到的 Config：退出路径一律是当前 Config——要清理的就是它声明的托管面（ADR-0024）；
+ * reconcile 也是当前 Config；fresh 与 reconfigure 是期望 Config。
+ */
+function hostConfigForExecution(request, sourceConfig, operationId) {
+    const config = isWakeflowDetachAction(request.action) ||
+        wakeflowStaticMaterializationActionUsesCurrentConfig(request.action)
+        ? sourceConfig
+        : request.desiredConfig;
     if (config === null)
         fail("source-config", "$config", operationId);
     return config;
@@ -258,7 +292,7 @@ async function executeStep(root, context, plan, requestValue, request, sourceCon
     }
     try {
         const executed = await capability.executeOperation(root, context, {
-            config: desiredConfigForExecution(request, sourceConfig, context.operationId),
+            config: hostConfigForExecution(request, sourceConfig, context.operationId),
             profile: request.currentHostProfile,
             operation,
             recoveringAffectedOperation,
@@ -406,7 +440,9 @@ export async function executeWakeflowMaintenanceExecutionTransaction(root, planV
         });
     }
     const current = await currentConfigSnapshot(root, signal);
-    const desiredConfig = request.action === "reconcile" ? (current?.model ?? null) : request.desiredConfig;
+    const desiredConfig = wakeflowStaticMaterializationActionUsesCurrentConfig(request.action)
+        ? (current?.model ?? null)
+        : request.desiredConfig;
     if (desiredConfig === null ||
         computeWakeflowConfigDigest(desiredConfig) !== plan.sharedPreview.desiredConfigDigest) {
         fail("source-config", "$config");
@@ -493,7 +529,14 @@ async function recoverTerminalJournalWithoutIntent(root, operationId, initial, o
     }
     assertNotAborted(options.signal, operationId);
     const current = await currentConfigSnapshot(root, options.signal, operationId);
-    if (current?.configDigest !== initial.journal.desiredConfigDigest) {
+    if (initial.journal.action === "detach-workspace") {
+        // 终态是退役文件带同一摘要、配置文件不在（ADR-0024）。
+        const retired = await detachedConfigRecord(root, options.signal, operationId);
+        if (current !== null || retired?.configDigest !== initial.journal.desiredConfigDigest) {
+            fail("terminal-closure", "$config", operationId);
+        }
+    }
+    else if (current?.configDigest !== initial.journal.desiredConfigDigest) {
         fail("terminal-closure", "$config", operationId);
     }
     await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, initial);
@@ -515,7 +558,37 @@ async function recoverTerminalJournalWithoutIntent(root, operationId, initial, o
         });
     }, gateOptions(options));
 }
-function assertRecoveryConfigState(plan, journal, current, operationId) {
+/**
+ * detach-workspace 的恢复源 Config（ADR-0024）：配置文件还在即它（退役步必未完成）；配置文件不在则
+ * 退役文件必须带同一摘要且退役步已开始，源 Config 就是退役文件里的那份。
+ */
+function detachRecoveryConfigState(plan, journal, current, retired, operationId) {
+    const expected = plan.sharedPreview.currentConfigDigest;
+    if (expected === null)
+        fail("source-config", "$config", operationId);
+    const retireIndex = plan.steps.findIndex((entry) => entry.boundary === "shared-static" && entry.stepKind === "retire-config");
+    const retireStepId = plan.steps[retireIndex]?.stepId;
+    if (current !== null) {
+        if (current.configDigest !== expected ||
+            (journal !== null && retireIndex >= 0 && journal.journal.checkpoint > retireIndex)) {
+            fail("source-config", "$config", operationId);
+        }
+        return current.model;
+    }
+    if (retired === null ||
+        retired.configDigest !== expected ||
+        journal === null ||
+        (retireIndex >= 0 &&
+            journal.journal.checkpoint <= retireIndex &&
+            journal.journal.affectedStepId !== retireStepId)) {
+        fail("source-config", "$config", operationId);
+    }
+    return retired.model;
+}
+function assertRecoveryConfigState(plan, journal, current, retired, operationId) {
+    if (plan.sharedPreview.action === "detach-workspace") {
+        return detachRecoveryConfigState(plan, journal, current, retired, operationId);
+    }
     if (journal === null) {
         if ((current?.configDigest ?? null) !== plan.sharedPreview.currentConfigDigest) {
             fail("source-config", "$config", operationId);
@@ -581,7 +654,10 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
             await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, intentSource);
         }
         const current = await currentConfigSnapshot(root, options.signal, operationId);
-        const sourceConfig = assertRecoveryConfigState(plan, initialJournal, current, operationId);
+        const retired = plan.sharedPreview.action === "detach-workspace"
+            ? await detachedConfigRecord(root, options.signal, operationId)
+            : null;
+        const sourceConfig = assertRecoveryConfigState(plan, initialJournal, current, retired, operationId);
         await retireInactiveCorrelatedGate(root, operationId);
         return await withExistingWakeflowMaintenanceGate(root, operationId, async (context) => {
             const currentIntent = await readWakeflowMaintenanceExecutionIntent(root, operationId);

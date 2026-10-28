@@ -2,6 +2,8 @@ import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { publishWakeflowConfigAuthority, WakeflowConfigAuthorityPublicationError, } from "../../configuration/wakeflow-config-authority-publication.js";
 import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError, } from "../../configuration/wakeflow-config-authority-replacement.js";
+import { retireWakeflowConfigAuthority, WakeflowConfigAuthorityRetirementError, } from "../../configuration/wakeflow-config-authority-retirement.js";
+import { wakeflowDetachedWindowIds } from "../../configuration/wakeflow-config-detach.js";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -20,9 +22,10 @@ import { ensureWakeflowHostCapabilityLayout, materializeWakeflowHostCapabilityLa
 import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, WakeflowExternalInstructionBodyAuthorityError, wakeflowExternalInstructionPlacementKey, wakeflowExternalInstructionTargetKey, } from "../managed-integration/wakeflow-external-instruction-body-authority.js";
 import { recomposeWakeflowExternalInstruction, WakeflowExternalInstructionRecompositionError, } from "../managed-integration/wakeflow-external-instruction-recomposition.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { recomposeWakeflowWorkspaceGitignore, WakeflowGitignoreRecompositionError, } from "../managed-integration/wakeflow-gitignore-recomposition.js";
-import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
-import { historicalWakeflowManagedTextTargets, WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, } from "../managed-integration/wakeflow-managed-text-history.js";
+import { recomposeWakeflowManagedBlockFile, removeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "../managed-integration/wakeflow-managed-block-file.js";
+import { historicalWakeflowManagedTextTargets, WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY, WAKEFLOW_GITIGNORE_BODY_HISTORY, WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY, } from "../managed-integration/wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import { recomposeWakeflowProgramInstruction, WakeflowProgramInstructionRecompositionError, } from "../managed-integration/wakeflow-program-instruction-recomposition.js";
 import { createWakeflowSupportGitignoreBodyAuthority, WAKEFLOW_SUPPORT_GITIGNORE_FILE_NAME, } from "../managed-integration/wakeflow-support-gitignore-body-authority.js";
@@ -37,10 +40,11 @@ import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspa
 import { compileWakeflowFreshWindowRuntimeAuthority } from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import { publishFreshWakeflowWindowRuntime, WakeflowFreshWindowRuntimePublicationError, } from "../window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { WakeflowWindowRuntimeProjectionError } from "../window-runtime/wakeflow-window-runtime-projection-inspection.js";
-import { ensureWakeflowWindowRuntimeSkeleton } from "../window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { ensureWakeflowWindowRuntimeSkeleton, retireWakeflowWindowRuntimeProjections, } from "../window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { WAKEFLOW_DETACH_WORKSPACE_TARGET_KEY, wakeflowConfigRetirementAuthorityDigest, wakeflowManagedBlockRemovalAuthorityDigest, wakeflowWindowProjectionRetirementAuthorityDigest, } from "./wakeflow-detach-step-authority.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
-import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, } from "./wakeflow-static-materialization-preview-contract.js";
+import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 /**
  * Wakeflow Workspace / Maintenance：静态物化计划的闭合 step dispatcher。
@@ -133,8 +137,11 @@ function receipt(stepId, disposition, value) {
         observationDigest: authorityDigest(value),
     });
 }
+/** 执行时的期望 Config：reconcile 收敛到源 Config，detach-workspace 改名它（ADR-0024），其余带在请求里。 */
 function desiredConfig(request, sourceConfig) {
-    const desired = request.action === "reconcile" ? sourceConfig : request.desiredConfig;
+    const desired = wakeflowStaticMaterializationActionUsesCurrentConfig(request.action)
+        ? sourceConfig
+        : request.desiredConfig;
     if (desired === null)
         fail("source-config", "$options.sourceConfig");
     return desired;
@@ -942,6 +949,19 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     if (step.kind === "initialize-requirement-board") {
         return executeRequirementBoardInitialization(root, step, recovering, signal);
     }
+    if (step.kind === "remove-managed-block") {
+        return executeRemoveManagedBlock(root, step, request, requireSourceConfig(sourceConfig), signal);
+    }
+    if (step.kind === "retire-window-projections") {
+        return executeRetireWindowProjections(root, step, request, requireSourceConfig(sourceConfig), signal);
+    }
+    if (step.kind === "retire-config") {
+        return executeRetireConfig(root, step, preview, signal);
+    }
+    if (step.kind === "remove-portable-settings-rules" || step.kind === "remove-statusline-entry") {
+        // 退出路径的宿主步由宿主贡献计划并执行，共享 dispatcher 从不碰它们（ADR-0024）。
+        return fail("plan", `$step.kind:${step.kind}`);
+    }
     if (step.kind === "publish-fresh-active-workspace-projection") {
         return executeActiveWorkspaceProjection(root, step, desired, recovering, signal);
     }
@@ -977,4 +997,221 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     const unsupportedKind = step.kind;
     return fail("plan", `$step.kind:${unsupportedKind}`);
+}
+// ---- 退出路径的三个共享步（ADR-0024）------------------------------------------------------------
+/** 退出路径的步都以当前 Config 为准：被分离的仓库只在它里面。 */
+function requireSourceConfig(sourceConfig) {
+    if (sourceConfig === null)
+        fail("source-config", "$options.sourceConfig");
+    return sourceConfig;
+}
+/** 当前宿主的 targetKey 就是 target 键；对等宿主的以 `:<hostId>` 结尾（与 recompose 同形）。 */
+function resolveExternalInstructionStepTarget(request, config, targetKey) {
+    const targets = listWakeflowExternalInstructionTargets(config);
+    const exact = targets.find((candidate) => wakeflowExternalInstructionTargetKey(candidate) === targetKey);
+    if (exact !== undefined)
+        return { target: exact, profile: request.currentHostProfile };
+    const separator = targetKey.lastIndexOf(":");
+    if (separator <= 0)
+        fail("plan", "$step.targetKey");
+    const baseKey = targetKey.slice(0, separator);
+    const target = targets.find((candidate) => wakeflowExternalInstructionTargetKey(candidate) === baseKey);
+    if (target === undefined)
+        fail("plan", "$step.targetKey");
+    return { target, profile: hostProfileFor(request, targetKey.slice(separator + 1)) };
+}
+/** 外部根的绝对路径；根不在（用户已清走仓库）为 null，放置报告算不出即失去根作用域。 */
+async function externalRootPathOrNull(root, config, target) {
+    let placements;
+    try {
+        placements = await validateWakeflowConfigRootPlacements(root, config);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigRootPlacementError)
+            fail("root-scope", "$externalRoot");
+        throw error;
+    }
+    const placement = placements.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target));
+    if (placement === undefined)
+        fail("root-scope", "$externalRoot");
+    return placement.state === "present" ? placement.absolutePath : null;
+}
+const PROGRAM_INSTRUCTION_TARGET_KEY = "program-instruction";
+const WORKSPACE_IGNORE_TARGET_KEY = "workspace.ignore-integration";
+/**
+ * 按 targetKey 解出要删的托管块（与预览同一命名）：`workspace.ignore-integration` 是工作区根
+ * `.gitignore` 的块，`program-instruction[:<hostId>]` 是根指令文件里的程序指令块，其余是外部
+ * 指令目标的块（对等宿主以 `:<hostId>` 结尾）。
+ */
+function resolveManagedBlockRemovalSpec(request, config, targetKey) {
+    try {
+        if (targetKey === WORKSPACE_IGNORE_TARGET_KEY) {
+            const ignore = createWakeflowGitignoreBodyAuthority(request.hostProfiles);
+            return Object.freeze({
+                scope: Object.freeze({ kind: "workspace" }),
+                resourcePath: WAKEFLOW_GITIGNORE_REF,
+                admittedTargets: [
+                    ignore.envelopeTarget,
+                    ...historicalWakeflowManagedTextTargets(WAKEFLOW_GITIGNORE_BODY_HISTORY, ignore.envelopeTarget, request.hostProfiles),
+                ],
+            });
+        }
+        if (targetKey === PROGRAM_INSTRUCTION_TARGET_KEY ||
+            targetKey.startsWith(`${PROGRAM_INSTRUCTION_TARGET_KEY}:`)) {
+            const profile = targetKey === PROGRAM_INSTRUCTION_TARGET_KEY
+                ? request.currentHostProfile
+                : hostProfileFor(request, targetKey.slice(PROGRAM_INSTRUCTION_TARGET_KEY.length + 1));
+            const authority = createWakeflowProgramInstructionBodyAuthority(config, profile);
+            return Object.freeze({
+                scope: Object.freeze({ kind: "workspace" }),
+                resourcePath: authority.instructionFileName,
+                admittedTargets: [
+                    authority.envelopeTarget,
+                    ...historicalWakeflowManagedTextTargets(WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, authority.envelopeTarget, config, profile),
+                ],
+            });
+        }
+        const { target, profile } = resolveExternalInstructionStepTarget(request, config, targetKey);
+        const authority = createWakeflowExternalInstructionBodyAuthority(config, profile, target);
+        return Object.freeze({
+            scope: Object.freeze({ kind: "external", target }),
+            resourcePath: authority.instructionFileName,
+            admittedTargets: [
+                authority.envelopeTarget,
+                ...historicalWakeflowManagedTextTargets(WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY, authority.envelopeTarget, config, profile, target),
+            ],
+        });
+    }
+    catch (error) {
+        if (error instanceof WakeflowStaticMaterializationStepExecutionError)
+            throw error;
+        if (error instanceof Error && "reason" in error)
+            fail("owner", "$managedBlock");
+        throw error;
+    }
+}
+/**
+ * 删一处托管块：只有正文等于当前渲染或某条已登记的历史渲染才删；块删掉后文件为空则删文件；
+ * 外部根、文件或块已不在即 current。
+ */
+async function executeRemoveManagedBlock(root, step, request, sourceConfig, signal) {
+    const spec = resolveManagedBlockRemovalSpec(request, sourceConfig, step.targetKey);
+    const identity = spec.admittedTargets[0];
+    if (identity === undefined)
+        fail("plan", "$step.targetKey");
+    assertStepTarget(step, wakeflowManagedBlockRemovalAuthorityDigest(identity, spec.resourcePath));
+    let fileRoot = root;
+    if (spec.scope.kind === "external") {
+        const externalPath = await externalRootPathOrNull(root, sourceConfig, spec.scope.target);
+        if (externalPath === null) {
+            return receipt(step.stepId, "current", { disposition: "root-absent" });
+        }
+        try {
+            fileRoot = await RootedDirectory.open(externalPath, "$externalRoot", {
+                durability: root.durability,
+            });
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError)
+                fail("root-scope", "$externalRoot");
+            throw error;
+        }
+    }
+    let result;
+    let primaryError;
+    try {
+        result = await removeWakeflowManagedBlockFile(fileRoot, {
+            resourcePath: spec.resourcePath,
+            admittedTargets: spec.admittedTargets,
+            ...(signal === undefined ? {} : { signal }),
+        });
+    }
+    catch (error) {
+        primaryError = error;
+    }
+    let closeError;
+    if (fileRoot !== root) {
+        try {
+            await fileRoot.close();
+        }
+        catch (error) {
+            closeError = error;
+        }
+    }
+    if (primaryError !== undefined) {
+        if (primaryError instanceof WakeflowManagedBlockFileError) {
+            if (primaryError.reason === "aborted")
+                fail("aborted", "$signal");
+            if (primaryError.reason === "root-scope")
+                fail("root-scope", "$managedBlockRoot");
+            fail("owner", "$managedBlock");
+        }
+        throw primaryError;
+    }
+    if (closeError !== undefined || result === undefined)
+        fail("owner", "$managedBlockRoot");
+    return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+        disposition: result.disposition,
+        sourceDigest: result.inspection.source?.digest ?? null,
+    });
+}
+/** 退役被分离窗口在每个宿主的投影文件：按 windowId 精确删除，文件不在即 absent（§13.114 D3）。 */
+async function executeRetireWindowProjections(root, step, request, sourceConfig, signal) {
+    const repositoryId = step.targetKey === WAKEFLOW_DETACH_WORKSPACE_TARGET_KEY ? null : step.targetKey;
+    if (repositoryId !== null &&
+        !sourceConfig.topology.repositories.some((entry) => entry.repositoryId === repositoryId)) {
+        fail("plan", "$step.targetKey");
+    }
+    const windowIds = wakeflowDetachedWindowIds(sourceConfig, repositoryId);
+    assertStepTarget(step, wakeflowWindowProjectionRetirementAuthorityDigest(windowIds));
+    let retired = 0;
+    let absent = 0;
+    for (const profile of request.hostProfiles) {
+        try {
+            const result = await retireWakeflowWindowRuntimeProjections(root, {
+                resourceProfile: profile,
+                windowIds,
+                ...(signal === undefined ? {} : { signal }),
+            });
+            retired += result.retired;
+            absent += result.absent;
+        }
+        catch (error) {
+            if (error instanceof WakeflowWindowRuntimeProjectionError) {
+                if (error.reason === "aborted")
+                    fail("aborted", "$signal");
+                fail("owner", "$windowProjections");
+            }
+            throw error;
+        }
+    }
+    return receipt(step.stepId, retired > 0 ? "updated" : "current", {
+        windowIds,
+        retired,
+        absent,
+    });
+}
+/** detach-workspace 的终态：把带当前摘要的配置文件改名为 `wakeflow.detached.json`；已改名即 current。 */
+async function executeRetireConfig(root, step, preview, signal) {
+    const expected = preview.currentConfigDigest;
+    if (expected === null)
+        fail("plan", "$preview.currentConfigDigest");
+    assertStepTarget(step, wakeflowConfigRetirementAuthorityDigest(expected));
+    try {
+        const result = await retireWakeflowConfigAuthority(root, expected, signal === undefined ? undefined : { signal });
+        return receipt(step.stepId, result.disposition === "current" ? "current" : "updated", {
+            configDigest: result.configDigest,
+            sourceDigest: result.detached.source.digest,
+        });
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigAuthorityRetirementError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal");
+            if (error.reason === "root-scope")
+                fail("root-scope", "$root");
+            fail("owner", "$config");
+        }
+        throw error;
+    }
 }

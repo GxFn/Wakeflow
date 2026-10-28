@@ -111,7 +111,7 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   branches and the plugin's hooks. Afterwards `wakeflow_status` reports
   `overall: detached` with no owner in `next`, `wakeflow_verify` does not
   fail, reconcile and reconfigure block as `workspace-detached`, and a fresh
-  initialize blocks as `detached-file-present` until the user moves that file.
+  initialize blocks as `detached-file-present`; re-enable = rename it back and reconcile.
 
 Procedure, every time:
 

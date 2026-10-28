@@ -222,10 +222,11 @@ Afterwards the directory is a detached workspace: `wakeflow_status` reports
 `overall: detached` with no owner in `next`, `wakeflow_verify` does not fail
 and reports the same, reconcile and reconfigure are blocked
 (`workspace-detached`), and a fresh initialization is blocked
-(`detached-file-present`) until you move `wakeflow.detached.json` out of the
-directory yourself. The file is deliberate evidence that Wakeflow was here;
-re-enabling starts with that explicit step, followed by a normal
-initialization.
+(`detached-file-present`) while `wakeflow.detached.json` is there. The file is
+deliberate evidence that Wakeflow was here. To use Wakeflow here again, rename it
+back to `wakeflow.config.json` and reconcile: the blocks, rules and status line
+return. A fresh initialization instead needs the file moved out and the items
+listed in `leftBehind` removed too; it names each leftover (`fresh-*-present`).
 
 ## The tool surface
 

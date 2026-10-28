@@ -122,7 +122,7 @@ enabled = true
 
 不碰、并在结果的 `leftBehind` 里列出：`.wakeflow-active/`、`.wakeflow-local/`、账本、Design 与 Test 支撑面目录、worktree 检出、分支，以及插件自己的 hooks。要清掉它们由你自己归档或删除。
 
-之后这个目录是一个已分离的工作区：`wakeflow_status` 报 `overall: detached` 且 `next` 没有 owner，`wakeflow_verify` 不失败并同样报 detached，reconcile 与 reconfigure 被阻塞（`workspace-detached`），重新初始化被阻塞（`detached-file-present`），直到你自己把 `wakeflow.detached.json` 移出目录。这个文件是有意留下的证据，说明这里曾是 Wakeflow 工作区；重新启用从这一步显式开始，然后像第一次那样初始化。
+之后这个目录是一个已分离的工作区：`wakeflow_status` 报 `overall: detached` 且 `next` 没有 owner，`wakeflow_verify` 不失败并同样报 detached，reconcile 与 reconfigure 被阻塞（`workspace-detached`），`wakeflow.detached.json` 还在时重新初始化被阻塞（`detached-file-present`）。这个文件是有意留下的证据，说明这里曾是 Wakeflow 工作区。要在这里重新使用 Wakeflow，把它改回 `wakeflow.config.json` 再 reconcile，块、规则与状态栏就回来了；要全新初始化，则还得把 `leftBehind` 列出的残留一并清掉，fresh 会逐项点名（`fresh-*-present`）。
 
 ## 工具面
 

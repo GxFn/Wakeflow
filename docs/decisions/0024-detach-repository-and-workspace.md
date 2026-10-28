@@ -46,7 +46,7 @@
 
 **不碰并列出**：`.wakeflow-active`、`.wakeflow-local`、账本、支撑面目录、worktree 检出、分支、插件级 hooks 一律不碰；detach-workspace 的结果带 `leftBehind: string[]`（`.wakeflow-active`、`.wakeflow-local`、`ledger-root:<相对路径>`、`support-surface:<相对路径>`、`worktree-checkouts`、`branches`、`plugin-hooks`），README 的"停用 Wakeflow"一节同样列出。
 
-**终态之后**：`wakeflow.config.json` 不在而 `wakeflow.detached.json` 在时，`wakeflow_status` 以该文件为只读来源报 `overall: "detached"`、`next` 无 owner；`wakeflow_verify` 不失败、同样报 detached；reconcile 与 reconfigure 的 preview 阻塞 `workspace-detached`；fresh-initialize 的 preview 阻塞 `detached-file-present`（用户先把 detached 文件移走）。
+**终态之后**：`wakeflow.config.json` 不在而 `wakeflow.detached.json` 在时，`wakeflow_status` 以该文件为只读来源报 `overall: "detached"`、`next` 无 owner；`wakeflow_verify` 不失败、同样报 detached；reconcile 与 reconfigure 的 preview 阻塞 `workspace-detached`；fresh-initialize 的 preview 阻塞 `detached-file-present`。重新启用的路径是把 `wakeflow.detached.json` 改回 `wakeflow.config.json` 再 reconcile（L14 实测：块、规则、状态行回来，verify 16/16）；移走 detached 文件后的 fresh 会被残留逐项阻塞（`fresh-active-not-absent`、`fresh-ledger-root-present`、`fresh-local-not-bootstrap-prefix`、`fresh-shared-coordination-present`、`fresh-support-root-present`），全新初始化要先清掉 `leftBehind` 列出的东西。
 
 **文本**：根 README 与制品 README 加"停用 Wakeflow"一节（两条意图、会删什么、不会碰什么），`commands/init.md` 一句指向，Controller 的 `workspace-and-windows.md` 把"删除被拒绝"改为"删除走 detach"（该文件在 400 行预算上，需压缩他处）。
 
@@ -56,7 +56,7 @@
 
 - 退出路径与进入路径共用事务、journal、recover 与受管文本准入；没有第二套状态机。
 - 受管文本只在"正文可证明是 Wakeflow 写的"时删除——历史渲染表是删除的授权来源，所以改渲染器时登记旧渲染的纪律（CLAUDE.md）同时保护退出路径。
-- `wakeflow.detached.json` 是有意留下的证据：它让 status/verify 能说"这里曾是 Wakeflow 工作区"而不是报配置缺失；重新启用要用户显式移走它。
+- `wakeflow.detached.json` 是有意留下的证据：它让 status/verify 能说"这里曾是 Wakeflow 工作区"而不是报配置缺失；重新启用是把它改回配置文件名再 reconcile，或移走它并清掉残留后全新初始化——都是用户的显式步骤。
 - 公开目录预算：两支请求与 `leftBehind` 约 600 字节，当前余 1,086；若不够，先压维护请求 Schema 里的长说明。
 
 ## 未决问题

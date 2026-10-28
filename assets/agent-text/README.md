@@ -197,8 +197,9 @@ keep, archive or delete.
 Afterwards the directory is a detached workspace: asking for the status answers
 `detached` with nothing to do, verification does not fail, and maintenance
 refuses to run there. `wakeflow.detached.json` is deliberate evidence that
-Wakeflow was here; to use Wakeflow in that directory again, move the file out
-of the directory yourself, then initialize as on the first run.
+Wakeflow was here; to use Wakeflow there again, rename it back to
+`wakeflow.config.json` and ask the Controller to reconcile. A fresh
+initialization instead needs that file and the listed leftovers removed first.
 
 ## What Wakeflow will not do
 

@@ -1,6 +1,6 @@
 import { deepEqual, equal, ok } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -58,6 +58,8 @@ import {
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
 } from "../../src/governance/result/target-result-callback.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
+import { WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE } from "../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
+import { CLAUDE_CODE_STATUSLINE_MARKER } from "../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
   HOST_HOOK_RETENTION_MILLISECONDS,
   readHostHookObservations,
@@ -75,6 +77,7 @@ import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
 } from "../../src/kernel/work-claims.js";
+import { WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX } from "../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {
   type ConnectedWakeflowMcpTestClient,
@@ -101,13 +104,15 @@ import {
 } from "./wakeflow-scenario-acceptance.fixture.js";
 
 /**
- * 二十个场景在同一个一次性工作区上顺序运行：初始化 → 健康工作区对账零步 → 重新配置一条声明差异 →
+ * 二十六个场景在同一个一次性工作区上顺序运行：初始化 → 健康工作区对账零步 → 重新配置一条声明差异 →
  * 窗口握手 → 窗口替换 → 需求包 → 创建 Demand →
  * 规划任务 → 投递准备与 indeterminate 结局 → 落地证据后 accepted → 四种来源的受管证据 → 结果导入与评审检查 → 回调落地 →
  * 升级、用户回答与带 resumption 的接受 → 实现接受后规划测试合同、投递测试并由 Controller 审查接受 →
  * 完成即归档 → 续接与取消 → pod 创建、握手、一 pod 一 Demand、worktree 投递与结果、两段关闭 →
  * 状态与校验（再建一个 ready 的 worktree pod 与活动 Demand；status 全域、带 demandId 的路由与归档回执、
- * 15 门与 hook 通道故障）→ 活动投影（Demand 变更后的四份文件、手写整轮零写、恢复后重建）。所有调用都
+ * 15 门与 hook 通道故障）→ 活动投影（Demand 变更后的四份文件、手写整轮零写、恢复后重建）→ 评审分支五条
+ * → 退出路径（ADR-0024：两种 detach 的前提阻塞、关闭观察 pod、detach-repository、detach-workspace 与
+ * detached 终态）。所有调用都
  * 经过公共 MCP 工具，即 Agent 真实使用的入口；宿主效果不在本骨架内，宿主 hook 记录由场景代替宿主写入，
  * worktree 由场景用真实 git 造出。
  */
@@ -499,7 +504,14 @@ interface MaintenancePreviewResult {
   readonly status: string;
   readonly blockerCodes: readonly string[];
   readonly planDigest: string | null;
-  readonly plan: { readonly steps: readonly { readonly stepKind?: string }[] } | null;
+  /** 共享步带 `stepKind`；宿主步（`boundary: host-capability`）带 `operationKind`。 */
+  readonly plan: {
+    readonly steps: readonly {
+      readonly boundary?: string;
+      readonly stepKind?: string;
+      readonly operationKind?: string;
+    }[];
+  } | null;
   readonly launchIntents: readonly unknown[];
 }
 
@@ -2915,8 +2927,13 @@ interface PodPreview {
 }
 
 function gitInProduct(context: ScenarioContext, ...args: readonly string[]): string {
+  return gitAt(context.workspace.productPath, ...args);
+}
+
+/** 在任一目录里跑 git：隔离的作者身份，失败即抛。 */
+function gitAt(cwd: string, ...args: readonly string[]): string {
   const result = spawnSync("git", [...args], {
-    cwd: context.workspace.productPath,
+    cwd,
     encoding: "utf8",
     shell: false,
     env: {
@@ -3603,7 +3620,7 @@ interface StatusView {
     readonly frontiers: readonly { readonly kind: string }[];
   };
   readonly archive: null | { readonly demandId: string; readonly outcome: string };
-  readonly next: { readonly frontier: string | null };
+  readonly next: { readonly frontier: string | null; readonly owner?: string | null };
   readonly nextActions: readonly { readonly reason: string; readonly subject: string | null }[];
 }
 
@@ -3629,6 +3646,11 @@ interface VerifyView {
   readonly next: { readonly frontier: string | null; readonly blockers: readonly string[] };
 }
 
+interface PodWindowBinding {
+  readonly bindingId: string;
+  readonly bindingDigest: string;
+}
+
 interface ReadyPod {
   readonly podId: string;
   readonly name: string;
@@ -3636,6 +3658,8 @@ interface ReadyPod {
   readonly checkout: string;
   readonly handles: readonly string[];
   readonly windowOf: (role: string) => string;
+  /** 四次握手登记得到的绑定：card-11 关闭这个 pod 时据此退役窗口。 */
+  readonly bindingOf: (role: string) => PodWindowBinding;
 }
 
 interface ObservationScenarioState {
@@ -3713,17 +3737,27 @@ async function createReadyPod(
     return window.windowId;
   };
   const handleOf = (role: string) => context.driver.handle(`${spec.handlePrefix}-${role}`);
-  await registerPodWindow(context, windowOf("controller"), handleOf("controller"), root);
-  await registerPodWindow(
-    context,
-    windowOf("design"),
-    handleOf("design"),
-    path.join(root, "Design"),
-  );
-  await registerPodWindow(context, windowOf("test"), handleOf("test"), path.join(root, "Test"));
+  const bindings = new Map<string, PodWindowBinding>();
+  const register = async (
+    role: string,
+    cwd: string,
+    worktree?: Parameters<typeof registerPodWindow>[4],
+  ) => {
+    const registered = await registerPodWindow(
+      context,
+      windowOf(role),
+      handleOf(role),
+      cwd,
+      worktree,
+    );
+    bindings.set(role, registered.binding);
+  };
+  await register("controller", root);
+  await register("design", path.join(root, "Design"));
+  await register("test", path.join(root, "Test"));
   const checkout = path.join(context.workspace.fixtureRoot, spec.checkoutName);
   gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", spec.branch);
-  await registerPodWindow(context, windowOf("product"), handleOf("product"), checkout, {
+  await register("product", checkout, {
     porcelain: gitInProduct(context, "-C", checkout, "worktree", "list", "--porcelain"),
     commonDir: gitInProduct(context, "-C", checkout, "rev-parse", "--git-common-dir").trim(),
   });
@@ -3740,6 +3774,11 @@ async function createReadyPod(
     checkout,
     handles: ["controller", "design", "test", "product"].map(handleOf),
     windowOf,
+    bindingOf: (role: string) => {
+      const binding = bindings.get(role);
+      if (binding === undefined) throw new Error(`pod window ${role} binding missing`);
+      return binding;
+    },
   };
 }
 
@@ -5353,6 +5392,544 @@ async function scenarioBlockedAndResume(context: ScenarioContext): Promise<strin
   return `resumption-on-reported=resumption-unexpected; blocked=${blocked.status}/${blocked.target.phase}; route=${route.kinds[0]}; basis=${waiting.reviewUnit.resumptionBasis?.kind}; gates=missing+previous-decision+basis rejected; resumed-accept=${accepted.target.phase}; next=${accepted.next.frontier}`;
 }
 
+// ---- card-11/detach-workspace（ADR-0024：退出路径） ------------------------------------------------------
+
+/** 计划里每一步的种类：共享步取 `stepKind`，宿主步取 `operationKind`（ADR-0024 把 Claude 的两个宿主步也按步骤种类命名）。 */
+function planKinds(previewed: MaintenancePreviewResult): readonly string[] {
+  return (previewed.plan?.steps ?? []).map(
+    (step) => step.stepKind ?? step.operationKind ?? "<host-step>",
+  );
+}
+
+/** 一次维护 preview：结果脱敏并按公共形状返回。 */
+async function previewMaintenance(
+  context: ScenarioContext,
+  request: Readonly<Record<string, unknown>>,
+): Promise<MaintenancePreviewResult> {
+  const result = await maintain(context, { ...request, mode: "preview" });
+  assertNoPrivatePath(context, result);
+  return result.structuredContent as MaintenancePreviewResult;
+}
+
+/** 以 preview 返回的 planDigest apply 同一请求。 */
+async function applyMaintenance<T extends MaintenanceMutationResult>(
+  context: ScenarioContext,
+  request: Readonly<Record<string, unknown>>,
+  planDigest: string | null,
+): Promise<T> {
+  const result = await maintain(context, { ...request, mode: "apply", planDigest });
+  assertNoPrivatePath(context, result);
+  return result.structuredContent as T;
+}
+
+/** detach-workspace 的结果多一个 `leftBehind`：不碰并列出的相对路径或种类名（ADR-0024）。 */
+interface DetachMutationResult extends MaintenanceMutationResult {
+  readonly leftBehind?: readonly string[];
+}
+
+/** ADR-0024 的两个 Claude 宿主步：只在 Claude 链的 detach-workspace 计划里出现。 */
+const DETACH_CLAUDE_HOST_STEP_KINDS: readonly string[] = Object.freeze([
+  "remove-portable-settings-rules",
+  "remove-statusline-entry",
+]);
+const CLAUDE_SETTINGS_REF = ".claude/settings.json";
+const CLAUDE_LOCAL_SETTINGS_REF = ".claude/settings.local.json";
+/** 用户自己的条目都不含 wakeflow 字样：detach 之后必须原样留下。 */
+const USER_ALLOW_RULE = "Read(./docs/**)";
+const USER_STATUS_LINE = Object.freeze({ type: "command", command: "echo scenario-status" });
+const USER_IGNORE_RULE = "scenario-user-ignored/";
+const OWNER_INSTRUCTION_TEXT = "# Product C\n\nOwner notes that Wakeflow must keep.\n";
+
+/** 与 ProductA 同一父目录下的另一个产品仓库：配置里的相对放置（两种布局都成立）与磁盘绝对路径。 */
+function siblingProduct(
+  context: ScenarioContext,
+  name: string,
+): { readonly placement: string; readonly root: string } {
+  const placement = path.posix.join(path.posix.dirname(context.workspace.productPlacement), name);
+  return { placement, root: path.resolve(context.workspace.workspacePath, placement) };
+}
+
+interface AddedRepository {
+  readonly name: string;
+  readonly repositoryId: string;
+  readonly windowId: string;
+  readonly root: string;
+  readonly instructionPath: string;
+}
+
+/**
+ * 新建一个产品 Git 仓库（一次空提交，可带所有者自己的指令文件），再经 reconfigure 把它作为 `managed-block`
+ * 仓库连同 primary pod 的产品窗口加进配置（能力卡 1.3）：apply 把托管块写进新仓库的指令文件。
+ */
+async function addManagedBlockRepository(
+  context: ScenarioContext,
+  name: string,
+  ownerInstruction?: string,
+): Promise<AddedRepository> {
+  const { placement, root } = siblingProduct(context, name);
+  mkdirSync(root, { mode: 0o755 });
+  gitAt(root, "init", "--quiet");
+  gitAt(root, "commit", "--quiet", "--allow-empty", "-m", "init");
+  const instructionPath = path.join(root, context.driver.instructionFile);
+  if (ownerInstruction !== undefined)
+    writeFileSync(instructionPath, ownerInstruction, { mode: 0o644 });
+  const desired = cloneConfigDocument(readConfigDocument(context.workspace.workspacePath));
+  const topology = desired.topology as {
+    readonly repositories: Record<string, unknown>[];
+    readonly windows: Record<string, unknown>[];
+  };
+  const pods = desired.pods as readonly { readonly podId: string; readonly placement: string }[];
+  const primary = pods.find((pod) => pod.placement === "primary");
+  if (primary === undefined) throw new Error("current config lacks the primary pod");
+  const repositoryId = `repository_${randomUUID()}`;
+  const windowId = `window_${randomUUID()}`;
+  topology.repositories.push({
+    repositoryId,
+    path: placement,
+    displayName: name,
+    instructionManagement: "managed-block",
+  });
+  topology.windows.push({
+    windowId,
+    podId: primary.podId,
+    role: "product",
+    displayName: name,
+    root: { kind: "repository", repositoryId },
+  });
+  const request = { action: "reconfigure", request: { desiredConfig: desired } };
+  const previewed = await previewMaintenance(context, request);
+  equal(previewed.status, "ready", `${name}: ${previewed.blockerCodes.join(",")}`);
+  const applied = await applyMaintenance(context, request, previewed.planDigest);
+  equal(applied.status, "completed");
+  const instruction = readFileSync(instructionPath, "utf8");
+  ok(instruction.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX), `${name} lacks the managed block`);
+  if (ownerInstruction !== undefined) {
+    ok(instruction.startsWith(ownerInstruction.trimEnd()), `${name} owner text was not kept`);
+  }
+  return { name, repositoryId, windowId, root, instructionPath };
+}
+
+function windowRuntimeProjectionPath(context: ScenarioContext, windowId: string): string {
+  return path.join(
+    context.workspace.workspacePath,
+    `.wakeflow-local/runtime/hosts/${context.driver.hostId}/projections/window-runtime`,
+    `${windowId}.json`,
+  );
+}
+
+function configWindowIds(document: Record<string, unknown>): readonly string[] {
+  const topology = document.topology as {
+    readonly windows: readonly { readonly windowId: string }[];
+  };
+  return topology.windows.map((window) => window.windowId);
+}
+
+function configRepositoryIds(document: Record<string, unknown>): readonly string[] {
+  const topology = document.topology as {
+    readonly repositories: readonly { readonly repositoryId: string }[];
+  };
+  return topology.repositories.map((repository) => repository.repositoryId);
+}
+
+/** 多个根的字节快照：preview 零写与"只碰声明的根"都靠它。 */
+function snapshotRoots(roots: readonly string[]): ReadonlyMap<string, ReadonlyMap<string, Buffer>> {
+  return new Map(
+    roots.map((directory) => [
+      directory,
+      snapshotWorkspaceBytes(directory, WORKSPACE_SNAPSHOT_SKIPPED_PREFIXES),
+    ]),
+  );
+}
+
+function assertRootsUnchanged(
+  before: ReadonlyMap<string, ReadonlyMap<string, Buffer>>,
+  roots: readonly string[],
+  label: string,
+): void {
+  for (const directory of roots) {
+    const snapshot = before.get(directory);
+    if (snapshot === undefined) throw new Error(`no snapshot for ${label}`);
+    const now = snapshotWorkspaceBytes(directory, WORKSPACE_SNAPSHOT_SKIPPED_PREFIXES);
+    deepEqual(changedWorkspacePaths(snapshot, now), [], label);
+  }
+}
+
+/** 前提阻塞：observe pod 仍打开且其 Demand 仍活动时，两种 detach 的 preview 都 blocked、不给 planDigest。 */
+async function assertDetachPreconditionBlockers(
+  context: ScenarioContext,
+  state: ObservationScenarioState,
+): Promise<void> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const previews = [
+    await previewMaintenance(context, { action: "detach-workspace", request: {} }),
+    await previewMaintenance(context, {
+      action: "detach-repository",
+      request: { repositoryId: context.repositoryId },
+    }),
+  ];
+  for (const blocked of previews) {
+    const codes = blocked.blockerCodes.join(",");
+    equal(blocked.status, "blocked", codes);
+    equal(blocked.planDigest, null);
+    equal(blocked.plan, null);
+    ok(blocked.blockerCodes.includes(`detach-pod-open:${state.pod.podId}`), codes);
+    ok(blocked.blockerCodes.includes(`detach-demand-active:${state.demandId}`), codes);
+  }
+  // detach-workspace 不接受 repositoryId（ADR-0024：在代码里准入）。
+  const misdirected = await context.connection.client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: {
+      root,
+      action: "detach-workspace",
+      mode: "preview",
+      request: { repositoryId: context.repositoryId },
+    },
+  });
+  equal(misdirected.isError, true, "detach-workspace must not accept a repositoryId");
+}
+
+/** 取消 card-09 留下的 observe Demand 并按 card-10 的同一条路两段关闭其 pod：detach 的两个前提阻塞由此清除。 */
+async function closeObservePod(
+  context: ScenarioContext,
+  state: ObservationScenarioState,
+): Promise<void> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId) throw new Error("scenario ordering: fresh-initialize must run first");
+  const reason = "Detach scenario cancels the observation Demand before closing its pod.";
+  const cancelPreview = await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: state.demandId,
+    reason,
+  });
+  const cancelPlanned = cancelPreview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(cancelPlanned.status, "ready", cancelPlanned.blockers.join(","));
+  const cancelled = await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: state.demandId,
+    reason,
+    planDigest: cancelPlanned.planDigest,
+  });
+  equal((cancelled.structuredContent as { readonly disposition: string }).disposition, "cancelled");
+  const closeIntent = (branches: readonly unknown[]) => ({
+    kind: "close",
+    podId: state.pod.podId,
+    branches,
+  });
+  const closing = await podApply(
+    context,
+    closeIntent([{ repositoryId: context.repositoryId, disposition: "abandoned" }]),
+  );
+  equal(closing.disposition, "closing");
+  for (const role of ["product", "controller", "design", "test"]) {
+    await decommissionPodWindow(context, state.pod.windowOf(role), state.pod.bindingOf(role));
+  }
+  gitInProduct(context, "worktree", "remove", "--force", state.pod.checkout);
+  const closed = await podApply(context, closeIntent([]));
+  equal(closed.disposition, "closed");
+  equal(closed.pod, null);
+}
+
+/**
+ * detach-repository ProductB：preview 零写，步骤含托管块删除与窗口投影退役并以 publish-config 收尾（没有
+ * retire-config）；apply 后配置不再含该仓库与其窗口，只含托管块的指令文件随块一起消失，投影不在，ProductC 不动。
+ */
+async function detachRepository(
+  context: ScenarioContext,
+  productB: AddedRepository,
+  productC: AddedRepository,
+): Promise<string> {
+  const root = context.workspace.workspacePath;
+  ok(
+    existsSync(windowRuntimeProjectionPath(context, productB.windowId)),
+    "ProductB projection missing",
+  );
+  const request = { action: "detach-repository", request: { repositoryId: productB.repositoryId } };
+  const roots = [root, productB.root, productC.root];
+  const before = snapshotRoots(roots);
+  const previewed = await previewMaintenance(context, request);
+  equal(previewed.status, "ready", previewed.blockerCodes.join(","));
+  const kinds = planKinds(previewed);
+  ok(kinds.includes("remove-managed-block"), kinds.join(","));
+  ok(kinds.includes("retire-window-projections"), kinds.join(","));
+  equal(kinds.at(-1), "publish-config", kinds.join(","));
+  equal(kinds.includes("retire-config"), false, kinds.join(","));
+  assertRootsUnchanged(before, roots, "detach-repository preview wrote");
+  const applied = await applyMaintenance(context, request, previewed.planDigest);
+  equal(applied.status, "completed");
+  const after = readConfigDocument(root);
+  equal(
+    configRepositoryIds(after).includes(productB.repositoryId),
+    false,
+    "ProductB still configured",
+  );
+  equal(
+    configWindowIds(after).includes(productB.windowId),
+    false,
+    "ProductB window still configured",
+  );
+  ok(configRepositoryIds(after).includes(productC.repositoryId), "ProductC left the config");
+  equal(
+    existsSync(productB.instructionPath),
+    false,
+    "a block-only instruction file must be removed",
+  );
+  equal(
+    existsSync(windowRuntimeProjectionPath(context, productB.windowId)),
+    false,
+    "projection kept",
+  );
+  assertRootsUnchanged(before, [productC.root], "detach-repository touched ProductC");
+  return `detach-repository=${applied.status} (${kinds.join("+")}; block-only file gone; projection gone)`;
+}
+
+function readJsonDocument(file: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+}
+
+function allowRulesOf(file: string): readonly string[] {
+  const permissions = readJsonDocument(file).permissions as
+    | { readonly allow?: unknown }
+    | undefined;
+  return Array.isArray(permissions?.allow) ? permissions.allow.map(String) : [];
+}
+
+/** Wakeflow 自己的状态行条目：命令里带现行标记（与维护操作的所有权判定同一常量）。 */
+function statusLineIsWakeflows(file: string): boolean {
+  const entry = readJsonDocument(file).statusLine as { readonly command?: unknown } | undefined;
+  return (
+    typeof entry?.command === "string" && entry.command.includes(CLAUDE_CODE_STATUSLINE_MARKER)
+  );
+}
+
+/**
+ * Claude 链：detach 之前程序根带 Wakeflow 的 MCP 规则与状态行条目；再放一条用户自己的允许规则、把 Test 面的
+ * `statusLine` 换成用户自己的——detach 必须精确删 Wakeflow 的条目、留下用户的（ADR-0024）。
+ */
+function prepareClaudeUserSettings(context: ScenarioContext): void {
+  const root = context.workspace.workspacePath;
+  const programSettings = path.join(root, CLAUDE_SETTINGS_REF);
+  const rules = allowRulesOf(programSettings);
+  ok(
+    rules.some((rule) => rule.startsWith(WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE)),
+    "program root lacks Wakeflow's MCP rule before detach",
+  );
+  const document = readJsonDocument(programSettings);
+  document.permissions = {
+    ...(document.permissions as Record<string, unknown>),
+    allow: [...rules, USER_ALLOW_RULE],
+  };
+  writeFileSync(programSettings, `${JSON.stringify(document, null, 2)}\n`);
+  ok(
+    statusLineIsWakeflows(path.join(root, CLAUDE_LOCAL_SETTINGS_REF)),
+    "program root lacks Wakeflow's statusLine before detach",
+  );
+  const testLocal = path.join(root, "Test", CLAUDE_LOCAL_SETTINGS_REF);
+  ok(statusLineIsWakeflows(testLocal), "Test surface lacks Wakeflow's statusLine before detach");
+  const local = readJsonDocument(testLocal);
+  local.statusLine = { ...USER_STATUS_LINE };
+  writeFileSync(testLocal, `${JSON.stringify(local, null, 2)}\n`);
+}
+
+/** Claude 链 detach 之后：三处 settings 都没有含 wakeflow 的允许规则，用户规则与用户状态行原样留下。 */
+function assertClaudeSettingsDetached(context: ScenarioContext): string {
+  const root = context.workspace.workspacePath;
+  for (const surface of ["", "Design", "Test"]) {
+    const label = surface === "" ? "program root" : surface;
+    const settings = path.join(root, surface, CLAUDE_SETTINGS_REF);
+    if (existsSync(settings)) {
+      const wakeflowRules = allowRulesOf(settings).filter((rule) => /wakeflow/iu.test(rule));
+      deepEqual(wakeflowRules, [], `${label} still allows a Wakeflow rule`);
+    }
+    const local = path.join(root, surface, CLAUDE_LOCAL_SETTINGS_REF);
+    if (existsSync(local)) {
+      equal(statusLineIsWakeflows(local), false, `${label} still carries Wakeflow's statusLine`);
+    }
+  }
+  ok(
+    allowRulesOf(path.join(root, CLAUDE_SETTINGS_REF)).includes(USER_ALLOW_RULE),
+    "user rule lost",
+  );
+  deepEqual(
+    readJsonDocument(path.join(root, "Test", CLAUDE_LOCAL_SETTINGS_REF)).statusLine,
+    { ...USER_STATUS_LINE },
+    "user statusLine lost",
+  );
+  return "claude: no Wakeflow rules, user rule kept, Wakeflow statusLine gone, user statusLine kept";
+}
+
+interface DetachWorkspaceEvidence {
+  readonly configDocumentBefore: Record<string, unknown>;
+  readonly text: string;
+}
+
+/**
+ * detach-workspace：用户自己的内容先放进去（工作区 .gitignore 一行；Claude 链的用户规则与用户状态行），preview 零写、
+ * 步骤种类按宿主、retire-config 收尾；apply 后配置改名为 wakeflow.detached.json（字节不变），托管块只删 Wakeflow 的、
+ * 所有者正文与用户行留下，全部窗口投影不在，不碰的目录都在且列入 leftBehind，owner-managed 的 ProductA 整树不动。
+ */
+async function detachWholeWorkspace(
+  context: ScenarioContext,
+  productC: AddedRepository,
+): Promise<DetachWorkspaceEvidence> {
+  const root = context.workspace.workspacePath;
+  if (!context.productWindowId)
+    throw new Error("scenario ordering: fresh-initialize must run first");
+  const isClaude = context.driver.hostId === "claude-code";
+  const gitignorePath = path.join(root, ".gitignore");
+  const gitignoreBefore = readFileSync(gitignorePath, "utf8");
+  ok(gitignoreBefore.includes(".wakeflow-local"), "workspace .gitignore lacks Wakeflow's block");
+  const separator = gitignoreBefore.endsWith("\n") ? "" : "\n";
+  writeFileSync(gitignorePath, `${gitignoreBefore}${separator}${USER_IGNORE_RULE}\n`);
+  if (isClaude) prepareClaudeUserSettings(context);
+  else equal(existsSync(path.join(root, ".claude")), false, "Codex wrote host settings");
+  const configBefore = readFileSync(path.join(root, "wakeflow.config.json"));
+  const configDocumentBefore = readConfigDocument(root);
+  const windowIds = configWindowIds(configDocumentBefore);
+  ok(
+    existsSync(windowRuntimeProjectionPath(context, context.productWindowId)),
+    "projection missing",
+  );
+
+  const request = { action: "detach-workspace", request: {} };
+  const roots = [root, context.workspace.productPath, productC.root];
+  const before = snapshotRoots(roots);
+  const previewed = await previewMaintenance(context, request);
+  equal(previewed.status, "ready", previewed.blockerCodes.join(","));
+  const kinds = planKinds(previewed);
+  ok(kinds.includes("remove-managed-block"), kinds.join(","));
+  ok(kinds.includes("retire-window-projections"), kinds.join(","));
+  equal(kinds.at(-1), "retire-config", kinds.join(","));
+  equal(kinds.includes("publish-config"), false, kinds.join(","));
+  for (const kind of DETACH_CLAUDE_HOST_STEP_KINDS) {
+    equal(
+      kinds.includes(kind),
+      isClaude,
+      `${kind} on ${context.driver.hostId}: ${kinds.join(",")}`,
+    );
+  }
+  assertRootsUnchanged(before, roots, "detach-workspace preview wrote");
+  const detached = await applyMaintenance<DetachMutationResult>(
+    context,
+    request,
+    previewed.planDigest,
+  );
+  equal(detached.status, "completed");
+  const leftBehind = detached.leftBehind ?? [];
+  for (const pattern of [/ledger/iu, /active/iu, /local/iu]) {
+    ok(
+      leftBehind.some((entry) => pattern.test(entry)),
+      `leftBehind lacks ${pattern}: ${leftBehind.join(",")}`,
+    );
+  }
+  equal(existsSync(path.join(root, "wakeflow.config.json")), false, "config survived detach");
+  ok(
+    readFileSync(path.join(root, "wakeflow.detached.json")).equals(configBefore),
+    "wakeflow.detached.json is not the renamed config",
+  );
+  for (const directory of [".wakeflow-active", ".wakeflow-local", "Ledger", "Design", "Test"]) {
+    ok(existsSync(path.join(root, directory)), `${directory} was removed by detach`);
+  }
+  for (const windowId of windowIds) {
+    equal(
+      existsSync(windowRuntimeProjectionPath(context, windowId)),
+      false,
+      `${windowId} projection kept`,
+    );
+  }
+  const gitignoreAfter = readFileSync(gitignorePath, "utf8");
+  equal(
+    gitignoreAfter.includes(".wakeflow-local"),
+    false,
+    "workspace .gitignore still carries the block",
+  );
+  ok(gitignoreAfter.includes(USER_IGNORE_RULE), "the user's .gitignore rule was lost");
+  const ownerInstruction = readFileSync(productC.instructionPath, "utf8");
+  equal(
+    ownerInstruction.includes(WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX),
+    false,
+    "ProductC block kept",
+  );
+  ok(ownerInstruction.startsWith(OWNER_INSTRUCTION_TEXT.trimEnd()), "ProductC owner text damaged");
+  assertRootsUnchanged(
+    before,
+    [context.workspace.productPath],
+    "detach touched owner-managed ProductA",
+  );
+  const host = isClaude
+    ? assertClaudeSettingsDetached(context)
+    : "codex: no host steps, no .claude";
+  return {
+    configDocumentBefore,
+    text: `detach-workspace=${detached.status} (${kinds.join("+")}; leftBehind=${leftBehind.length}; config→detached.json byte-equal; user .gitignore rule kept; ProductC owner text kept; projections gone; ProductA untouched; ${host})`,
+  };
+}
+
+/** detached 终态：status 与 verify 的只读回答，reconcile / reconfigure / fresh-initialize 的阻塞码。 */
+async function assertDetachedTerminalState(
+  context: ScenarioContext,
+  configDocumentBefore: Record<string, unknown>,
+): Promise<string> {
+  const status = await readStatus(context);
+  equal(status.view.overall, "detached");
+  const owner = status.view.next.owner;
+  ok(owner === null || owner === "none", `next has an owner: ${JSON.stringify(status.view.next)}`);
+  const verify = await readVerify(context);
+  equal(verify.ok, true, failingGatesText(verify));
+  equal(verify.summary.fail, 0, failingGatesText(verify));
+  ok(JSON.stringify(verify).includes("detached"), "verify does not report the detached state");
+  const reconcile = await previewMaintenance(context, { action: "reconcile", request: {} });
+  equal(reconcile.status, "blocked", reconcile.blockerCodes.join(","));
+  equal(reconcile.planDigest, null);
+  ok(reconcile.blockerCodes.includes("workspace-detached"), reconcile.blockerCodes.join(","));
+  const reconfigure = await previewMaintenance(context, {
+    action: "reconfigure",
+    request: { desiredConfig: configDocumentBefore },
+  });
+  equal(reconfigure.status, "blocked", reconfigure.blockerCodes.join(","));
+  ok(reconfigure.blockerCodes.includes("workspace-detached"), reconfigure.blockerCodes.join(","));
+  const selection = createMinimalWakeflowFreshConfigSelection();
+  (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  const repositorySelection = selection.topology.repositories[0] as
+    | Record<string, unknown>
+    | undefined;
+  if (repositorySelection === undefined) {
+    throw new Error("fresh selection lacks the product repository");
+  }
+  repositorySelection.path = context.workspace.productPlacement;
+  const fresh = await previewMaintenance(context, {
+    action: "fresh-initialize",
+    request: { selection },
+  });
+  equal(fresh.status, "blocked", fresh.blockerCodes.join(","));
+  ok(fresh.blockerCodes.includes("detached-file-present"), fresh.blockerCodes.join(","));
+  return `status=${status.view.overall} (next owner ${String(owner)}); verify ok=${verify.ok} fail=${verify.summary.fail}; reconcile+reconfigure=workspace-detached; fresh=detached-file-present`;
+}
+
+/**
+ * card-11/detach-workspace（ADR-0024）：退出路径与进入路径共用一个事务。card-09 留下的 observe pod 仍打开、其 Demand
+ * 仍活动，所以两种 detach 先都被前提阻塞；取消 Demand、关闭 pod 后，经 reconfigure 加两个 managed-block 仓库，用
+ * detach-repository 分离其中一个，再 detach-workspace 整个工作区，最后核对 detached 终态下五个入口的回答。
+ */
+async function scenarioDetachWorkspace(context: ScenarioContext): Promise<string> {
+  const state = context.observe;
+  if (state === undefined) throw new Error("scenario ordering: status-and-verify must run first");
+  await assertDetachPreconditionBlockers(context, state);
+  await closeObservePod(context, state);
+  const productB = await addManagedBlockRepository(context, "ProductB");
+  const productC = await addManagedBlockRepository(context, "ProductC", OWNER_INSTRUCTION_TEXT);
+  const repository = await detachRepository(context, productB, productC);
+  const workspace = await detachWholeWorkspace(context, productC);
+  const terminal = await assertDetachedTerminalState(context, workspace.configDocumentBefore);
+  return `blocked=detach-pod-open+detach-demand-active (both intents), repositoryId on detach-workspace rejected; observe pod closed; ${repository}; ${workspace.text}; ${terminal}`;
+}
+
 const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Promise<string>>> =
   Object.freeze({
     "card-01/fresh-initialize": scenarioFreshInitialize,
@@ -5380,6 +5957,7 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-07/blocked-and-resume": scenarioBlockedAndResume,
     "card-07/test-rerun": scenarioTestRerun,
     "card-07/product-defect-remediation": scenarioProductDefectRemediation,
+    "card-11/detach-workspace": scenarioDetachWorkspace,
   });
 
 /**

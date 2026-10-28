@@ -36,7 +36,13 @@
       "enum": ["codex", "claude-code"]
     },
     "action": {
-      "enum": ["fresh-initialize", "reconfigure", "reconcile"]
+      "enum": [
+        "fresh-initialize",
+        "reconfigure",
+        "reconcile",
+        "detach-repository",
+        "detach-workspace"
+      ]
     },
     "domainObject": {
       "type": "object",
@@ -292,6 +298,16 @@
         },
         "launchSetDigest": {
           "$ref": "#/$defs/nullableSha256Digest"
+        },
+        "leftBehind": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": "detach-workspace apply only: relative paths and kinds the exit path leaves in place (.wakeflow-active, .wakeflow-local, the ledger root, support surface directories, worktree checkouts, branches, plugin hooks)."
         },
         "next": {
           "$ref": "#/$defs/next"

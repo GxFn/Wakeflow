@@ -224,3 +224,14 @@
 | 项 | 修订后 |
 | --- | --- |
 | 1.5 维护意图与 journal 的写者戳 | 意图与 journal 各加可选 `writer {version, manifestDigest}`：写出它的构建在制品清单里的发布版本与清单字节摘要，由组合根经 `executeWakeflowMaintenanceExecutionTransaction` / `recover…` 的 `options.writer` 注入；意图在创建时盖戳，journal 在 prepared 时盖戳并随 affected / checkpoint / terminal 后继原样携带（换戳的后继不是合法后继）。戳进入两份记录的表示与语义摘要（journal 绑定的 `intentDigest` 与磁盘意图同源计算，恢复不受影响），不是签名也不授权执行；盖戳之前的记录与没有 manifest 的测试构建没有它，读回为缺席。 |
+
+## 修订（2026-10-26，1.2 批 E：[ADR-0024](../../decisions/0024-detach-repository-and-workspace.md)）
+
+原则：**进得去就出得来，退出路径与进入路径共用同一事务。** 维护请求的封闭 `oneOf` 加 `detach-repository {repositoryId}` 与 `detach-workspace {}` 两支（各 preview|apply，apply 带 `planDigest`，recover 同路）；步骤种类闭合清单加 `remove-managed-block`、`retire-window-projections`、`remove-portable-settings-rules`（仅 Claude，宿主步）、`remove-statusline-entry`（仅 Claude，宿主步）、`retire-config`（仅 detach-workspace 的终态步）。没有第二套状态机；受管文本只在正文等于期望渲染或某条已登记的历史渲染时才删——历史渲染表既是对账的准入，也是退出的授权来源。
+
+| 项 | 修订后 |
+| --- | --- |
+| 1.3 删除不是 reconfigure | reconfigure 仍拒绝删改已有仓库与窗口（`reconfigure-repository-removal-unsupported` 等六个码不变）；删一个仓库走 `detach-repository`：删该仓库的外部指令块（文件只剩空则删文件，否则保留其余内容）、退役其窗口投影，以既有 `publish-config` 发布去掉该仓库及其 primary-pod 窗口的配置。Codex 没有宿主步。 |
+| 1.5 退出事务的前提阻塞与终态步 | `detach-pod-open:<podId>`（含该仓库的 worktree pod 未关闭；detach-workspace 对任何打开的 pod）、`detach-demand-active:<demandId>`（活动 Demand 有该仓库的目标；detach-workspace 对任何活动 Demand）、`detach-unknown-managed-body:<targetKey>`（正文未知即不碰，另一个工作区的块同样未知）、`detach-settings-unreadable:<root>`（Claude 设置文件读不出或不是 JSON）；阻塞让 preview `blocked`、`planDigest` 为 null，apply 重算同路得 `plan-blocked`。`detach-workspace` 的终态步 `retire-config` 把 `wakeflow.config.json` 改名为 `wakeflow.detached.json`（不删，留证据），结果带 `leftBehind: string[]`。`.wakeflow-active`、`.wakeflow-local`、账本、支撑面目录、worktree 检出、分支、插件级 hooks 一律不碰并列出。 |
+| 1.4 detached 终态的观察与只读校验 | `wakeflow.config.json` 不在而 `wakeflow.detached.json` 在：`wakeflow_status` 以该文件为只读来源报 `overall: "detached"`、`next` 无 owner；`wakeflow_verify` 不失败、同样报 detached；reconcile 与 reconfigure 的 preview 阻塞 `workspace-detached`；fresh-initialize 的 preview 阻塞 `detached-file-present`（用户先把 detached 文件移走再初始化）。 |
+| 文本与场景 | 根 README 与制品 README 加"停用 Wakeflow"一节（两条意图、会删什么、不会碰什么、detached 终态与重新启用），`commands/init.md` 一句指向，Controller 的 `workspace-and-windows.md` 把"删除被拒绝"改为"删除走 detach"；场景链末尾加 `card-11/detach-workspace`（25 → 26）。 |

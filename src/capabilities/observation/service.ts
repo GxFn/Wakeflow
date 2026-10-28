@@ -2,7 +2,9 @@ import path from "node:path";
 
 import {
   readWakeflowConfigAuthoritySnapshot,
+  readWakeflowDetachedConfigSnapshot,
   WAKEFLOW_CONFIG_FILE_REF,
+  WAKEFLOW_DETACHED_CONFIG_FILE_REF,
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
@@ -90,10 +92,12 @@ import {
 } from "./contract.js";
 import {
   capStatusList,
+  DETACHED_WORKSPACE_NEXT,
   deriveNextActions,
   deriveServerRuntime,
   deriveWindowRuntime,
   deriveWorkspaceGates,
+  detachedWorkspaceGates,
   disposalGuidance,
   type NextActionInput,
   nextFromActions,
@@ -189,6 +193,8 @@ function maintenanceView(maintenance: Readonly<MaintenanceObservation>) {
 interface SliceContext {
   readonly root: RootedDirectory;
   readonly snapshot: Readonly<WakeflowConfigAuthoritySnapshot>;
+  /** 终态（ADR-0024）：配置文件不在而退役文件在，快照来自 `wakeflow.detached.json`。 */
+  readonly detached: boolean;
   readonly ledgerRoot: RootedDirectory;
   readonly facade: Readonly<ObservationHostFacade>;
   readonly options: ExecuteObservationOptions;
@@ -231,18 +237,52 @@ function failIfAborted(error: unknown): void {
 
 // ---- 上下文 ----------------------------------------------------------------------
 
+async function configFileAbsent(root: RootedDirectory): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
+    return false;
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+      return true;
+    }
+    throw error;
+  }
+}
+
+/**
+ * 配置快照；配置文件不在而 `wakeflow.detached.json` 在时以退役文件为只读来源（ADR-0024 终态），
+ * 这样 status / verify 说得出"这里曾是 Wakeflow 工作区"，而不是报配置缺失。
+ */
+/** 退役快照：配置文件不在而退役文件可读才有；不在或读不出为 null，中止照常收敛。 */
+async function detachedSnapshotOrNull(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<WakeflowConfigAuthoritySnapshot> | null> {
+  if (!(await configFileAbsent(root))) return null;
+  try {
+    return await readWakeflowDetachedConfigSnapshot(root, signalOptions(signal));
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowConfigAuthoritySnapshotError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    return null;
+  }
+}
+
 async function readSnapshot(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
-): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
+): Promise<Readonly<{ snapshot: Readonly<WakeflowConfigAuthoritySnapshot>; detached: boolean }>> {
   try {
-    return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
+    return {
+      snapshot: await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal)),
+      detached: false,
+    };
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      fail("precondition-failed", "config-authority", "$request.root", { cause: error });
-    }
-    throw error;
+    if (!(error instanceof WakeflowConfigAuthoritySnapshotError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    const detached = error.reason === "source" ? await detachedSnapshotOrNull(root, signal) : null;
+    if (detached !== null) return { snapshot: detached, detached: true };
+    fail("precondition-failed", "config-authority", "$request.root", { cause: error });
   }
 }
 
@@ -294,7 +334,7 @@ async function openContext(
   facade: Readonly<ObservationHostFacade>,
   options: ExecuteObservationOptions,
 ): Promise<SliceContext> {
-  const snapshot = await readSnapshot(root, options.signal);
+  const { snapshot, detached } = await readSnapshot(root, options.signal);
   const ledgerRoot = await openLedgerRoot(root, snapshot);
   try {
     const observation = await observeWorkspace(root, snapshot, ledgerRoot, {
@@ -309,6 +349,7 @@ async function openContext(
     return Object.freeze({
       root,
       snapshot,
+      detached,
       ledgerRoot,
       facade,
       options,
@@ -327,7 +368,11 @@ function maintenancePending(maintenance: Readonly<MaintenanceObservation>): bool
   return maintenance.status === "observed" && maintenance.protocol !== "idle";
 }
 
-function overallOf(context: SliceContext): WorkspaceOverallStatus {
+/** status 的总体状态：观察层的五个值加终态 `detached`（ADR-0024），终态压过维护与一切。 */
+type StatusOverall = WorkspaceOverallStatus | "detached";
+
+function overallOf(context: SliceContext): StatusOverall {
+  if (context.detached) return "detached";
   return maintenancePending(context.maintenance)
     ? "maintenance"
     : deriveOverallStatus(context.observation);
@@ -1001,7 +1046,8 @@ async function assembleStatus(
 ): Promise<StatusResult> {
   const { observation, snapshot } = context;
   const runtime = readRuntime(context);
-  const actions = deriveNextActions(nextActionInput(context, runtime));
+  // 终态没有下一步动作：工作区已停用，next 无 owner（ADR-0024）。
+  const actions = context.detached ? [] : deriveNextActions(nextActionInput(context, runtime));
   const section = await routeSection(context, request.demandId);
   const claims = claimViews(observation);
   const repositories = repositoryViews(observation);
@@ -1063,7 +1109,7 @@ async function assembleStatus(
     policy: observation.policy,
     route: section.route,
     archive: section.archive,
-    next: section.next ?? nextFromActions(actions),
+    next: section.next ?? (context.detached ? DETACHED_WORKSPACE_NEXT : nextFromActions(actions)),
     nextActions: actions,
   });
 }
@@ -1467,6 +1513,39 @@ async function gateFacts(
   });
 }
 
+/** 带 demandId 的 verify 附该 Demand 的门：活动即 current，归档即 archived，都不是即 unknown。 */
+async function verifyDemandSection(
+  context: SliceContext,
+  demandId: string,
+  readings: ReadonlyMap<string, Readonly<DemandVerifyReading>>,
+): Promise<unknown> {
+  // 活动集合本身读不出时不能替这个 Demand 下结论：它可能活着，只是这轮看不见（与 status 同一裁决）。
+  if (!readings.has(demandId) && context.observation.demands.status !== "observed") {
+    fail("precondition-failed", "demands-unavailable", "$request.demandId");
+  }
+  // 在活动集合里但读不出（报告为 null）仍然是 current：它不是归档，也不是未知，只是这轮没有门。
+  if (readings.has(demandId)) {
+    const report = readings.get(demandId)?.report ?? null;
+    return {
+      demandId,
+      status: "current",
+      gates: report?.gates ?? [],
+      observationDigest: report?.observationDigest ?? null,
+    };
+  }
+  const archive = await locateLatestDemandArchive(
+    context.ledgerRoot,
+    demandId,
+    context.options.signal,
+  );
+  return {
+    demandId,
+    status: archive === null ? "unknown" : "archived",
+    gates: [],
+    observationDigest: null,
+  };
+}
+
 async function assembleVerify(
   context: SliceContext,
   request: VerifyRequest,
@@ -1475,37 +1554,15 @@ async function assembleVerify(
   const readings = new Map<string, Readonly<DemandVerifyReading>>();
   for (const demand of demands)
     readings.set(demand.demandId, await readDemandForVerify(context, demand));
-  const gates = deriveWorkspaceGates(await gateFacts(context, readings));
+  // 终态只报一门且通过（ADR-0024）：已停用的工作区不再评布局、投影与宿主资产。
+  const gates = context.detached
+    ? detachedWorkspaceGates(WAKEFLOW_DETACHED_CONFIG_FILE_REF, context.snapshot.configDigest)
+    : deriveWorkspaceGates(await gateFacts(context, readings));
   const { ok, summary } = summarizeGates(gates);
-  let demandSection: unknown = null;
-  if (request.demandId !== undefined) {
-    // 活动集合本身读不出时不能替这个 Demand 下结论：它可能活着，只是这轮看不见（与 status 同一裁决）。
-    if (!readings.has(request.demandId) && context.observation.demands.status !== "observed") {
-      fail("precondition-failed", "demands-unavailable", "$request.demandId");
-    }
-    // 在活动集合里但读不出（报告为 null）仍然是 current：它不是归档，也不是未知，只是这轮没有门。
-    if (readings.has(request.demandId)) {
-      const report = readings.get(request.demandId)?.report ?? null;
-      demandSection = {
-        demandId: request.demandId,
-        status: "current",
-        gates: report?.gates ?? [],
-        observationDigest: report?.observationDigest ?? null,
-      };
-    } else {
-      const archive = await locateLatestDemandArchive(
-        context.ledgerRoot,
-        request.demandId,
-        context.options.signal,
-      );
-      demandSection = {
-        demandId: request.demandId,
-        status: archive === null ? "unknown" : "archived",
-        gates: [],
-        observationDigest: null,
-      };
-    }
-  }
+  const demandSection =
+    request.demandId === undefined
+      ? null
+      : await verifyDemandSection(context, request.demandId, readings);
   return admitVerifyResult({
     kind: "WakeflowVerification",
     schemaVersion: WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
@@ -1518,7 +1575,9 @@ async function assembleVerify(
     demand: demandSection,
     repairsApplied: false,
     observationDigest: computeGatesDigest(gates),
-    next: verifyNext(gates, artifactServerRefreshOwnerOf(context)),
+    next: context.detached
+      ? DETACHED_WORKSPACE_NEXT
+      : verifyNext(gates, artifactServerRefreshOwnerOf(context)),
   });
 }
 

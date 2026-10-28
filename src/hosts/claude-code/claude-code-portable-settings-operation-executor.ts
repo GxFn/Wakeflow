@@ -37,11 +37,13 @@ import {
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
   ClaudeCodePortableSettingsPublicationError,
+  type ClaudeCodePortableSettingsPublicationOptions,
   inspectClaudeCodePortableSettings,
   publishClaudeCodePortableSettings,
   settleClaudeCodePortableSettingsPublicationStages,
 } from "./claude-code-portable-settings-publication.js";
 import {
+  claudeCodePortableSettingsRemovedRulesFor,
   claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
 } from "./claude-code-portable-settings-transition.js";
@@ -54,6 +56,7 @@ import {
  * affected-operation恢复才接受目标已提交或先结算同目标Foundation stage。
  * 已确认的 sourceDigest 同时作为发布器的 CAS 基底传入：executor 自己的检查与发布器读取之间的
  * 漂移在写前以 source-stale 拒绝，而不是把漂移后的源当新基底合并写入（open-items W6 / CR-H7）。
+ * 退出路径的 `remove` 操作（ADR-0024）走同一条路，只是检查与发布都按删除表而不是托管规则表规划。
  */
 
 export interface ExecuteClaudeCodePortableSettingsOperationRequest {
@@ -230,7 +233,7 @@ function parseOperation(value: unknown): Readonly<ClaudeCodePortableSettingsOper
     keys[4] !== "root" ||
     keys[5] !== "sourceDigest" ||
     keys[6] !== "targetDigest" ||
-    (record.action !== "create" && record.action !== "update") ||
+    (record.action !== "create" && record.action !== "update" && record.action !== "remove") ||
     typeof record.operationId !== "string"
   ) {
     fail("operation", "$operation");
@@ -240,10 +243,8 @@ function parseOperation(value: unknown): Readonly<ClaudeCodePortableSettingsOper
   const sourceDigest =
     record.sourceDigest === null ? null : digest(record.sourceDigest, "$operation.sourceDigest");
   const targetDigest = digest(record.targetDigest, "$operation.targetDigest");
-  if (
-    (record.action === "create" && sourceDigest !== null) ||
-    (record.action === "update" && sourceDigest === null)
-  ) {
+  // create 从无到有；update 与 remove 都要求一份已确认的现有源。
+  if ((record.action === "create") !== (sourceDigest === null)) {
     fail("operation", "$operation.sourceDigest");
   }
   const expected = createClaudeCodePortableSettingsOperation(
@@ -338,6 +339,18 @@ function sameRoot(
   );
 }
 
+/** 写入操作按托管规则表检查与发布；删除操作只按删除表（ADR-0024）。同一组选项交给检查与发布两步。 */
+function transitionOptions(
+  operation: Readonly<ClaudeCodePortableSettingsOperation>,
+): Pick<ClaudeCodePortableSettingsPublicationOptions, "rules" | "retiredRules" | "removedRules"> {
+  return operation.action === "remove"
+    ? { removedRules: claudeCodePortableSettingsRemovedRulesFor(operation.root) }
+    : {
+        rules: claudeCodePortableSettingsRulesFor(operation.root),
+        retiredRules: claudeCodePortableSettingsRetiredRulesFor(operation.root),
+      };
+}
+
 async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequest>) {
   if (request.recoveringAffectedOperation) {
     try {
@@ -353,11 +366,11 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
       throw error;
     }
   }
+  const options = transitionOptions(request.operation);
   let inspection: Awaited<ReturnType<typeof inspectClaudeCodePortableSettings>>;
   try {
     inspection = await inspectClaudeCodePortableSettings(root, {
-      rules: claudeCodePortableSettingsRulesFor(request.operation.root),
-      retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+      ...options,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
   } catch (error: unknown) {
@@ -386,10 +399,11 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
   if (inspection.transition.desiredDigest === null) {
     fail("owner", "$transition");
   }
+  // 删除规划器的 update 就是这条 remove 操作；写入操作按规划器判定的 create/update 重建。
   const expected = createClaudeCodePortableSettingsOperation(
     request.operation.authorityDigest,
     request.operation.root,
-    inspection.transition.status,
+    request.operation.action === "remove" ? "remove" : inspection.transition.status,
     inspection.transition.sourceDigest,
     inspection.transition.desiredDigest,
   );
@@ -399,8 +413,7 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
   let published: Awaited<ReturnType<typeof publishClaudeCodePortableSettings>>;
   try {
     published = await publishClaudeCodePortableSettings(root, {
-      rules: claudeCodePortableSettingsRulesFor(request.operation.root),
-      retiredRules: claudeCodePortableSettingsRetiredRulesFor(request.operation.root),
+      ...options,
       // 发布器的 CAS 基底是这里已确认的 source，不是它自己的二次读（W6）。
       expectedSourceDigest: request.operation.sourceDigest,
       ...(request.signal === undefined ? {} : { signal: request.signal }),

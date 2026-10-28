@@ -783,7 +783,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：已执行 §13.209）
 - **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：已执行 §13.210，目录 104,406 → 约 102,900 字节）
 - **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：已执行 §13.215（批 D′：版本轴、per-host 摘要比较、维护守卫、写者戳、artifact-older-than-stream 门；安装目录布局与升级方向仍待现场核对））
-- **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：待执行）
+- **V7** [中 / 缺口] J1/M4 退出路径：`detach-repository` 与 `detach-workspace`，五种步骤、三个阻塞，终态改名 `wakeflow.detached.json`，README"停用 Wakeflow"一节；ADR 先行（计划 §3.7；批 E；级别 2；状态：已执行 §13.217（批 E，ADR-0024：两个动作、五种删除步骤、detached 终态、README 停用一节；现场 L14 待缓存刷新））
 
 ## W. Codex 审阅 35 项（2026-10-22）
 

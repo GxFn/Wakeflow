@@ -178,6 +178,12 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
     title:
       "product-defect 失败步骤只允许 escalate；escalate{product-defect} 同一提交追加修复授权并把实现目标送回返工，修复投递 prompt 带修复依据；接受后复测合同必须带 retest 谱系；复测通过接受，Demand 完成归档",
   },
+  {
+    scenarioId: "card-11/detach-workspace",
+    card: "ADR-0024",
+    title:
+      "退出路径：pod 打开且 Demand 活动时两种 detach 的 preview 都 blocked；关闭观察 pod 后经 reconfigure 加两个 managed-block 仓库，detach-repository 删一个仓库的托管块（只剩空即不在）、退役其窗口投影并以 publish-config 收尾；detach-workspace preview 零写，apply 删外部指令块与工作区 .gitignore 块（所有者内容保留）、退役全部窗口投影、Claude 精确删允许规则与 Wakeflow 的 statusLine（用户的保留）、把配置改名为 wakeflow.detached.json 并列出 leftBehind；之后 status 报 detached、verify 不失败、reconcile 与 reconfigure 阻塞 workspace-detached、fresh 阻塞 detached-file-present",
+  },
 ]);
 
 /** 产品仓库相对工作区根的位置：`sibling` 是兄弟目录（`../ProductA`），`nested` 嵌套在根下面（`ProductA`）。 */

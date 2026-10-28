@@ -20,6 +20,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 - [一件工作怎么流转](#一件工作怎么流转)
 - [安装](#安装)
 - [初始化工作区](#初始化工作区)
+- [停用 Wakeflow](#停用-wakeflow)
 - [工具面](#工具面)
 - [两个宿主，一套模型](#两个宿主一套模型)
 - [在本仓库开发](#在本仓库开发)
@@ -101,7 +102,7 @@ enabled = true
 
 | 路径 | 归属 | 用途 |
 | --- | --- | --- |
-| `wakeflow.config.json` | Wakeflow，tracked | 程序身份、拓扑（仓库、支持面、窗口、pod）、ledger 根、治理、宿主偏好。只有 `fresh-initialize`、`reconfigure`（也可以新增一个产品仓库）与 `wakeflow_pod` 写它。 |
+| `wakeflow.config.json` | Wakeflow，tracked | 程序身份、拓扑（仓库、支持面、窗口、pod）、ledger 根、治理、宿主偏好。只有 `fresh-initialize`、`reconfigure`（也可以新增一个产品仓库）、`detach-repository` 与 `wakeflow_pod` 写它；`detach-workspace` 把它改名为 `wakeflow.detached.json`。 |
 | `.wakeflow-active/` | Wakeflow，ignored | 活动状态：`index.md`、`current/workspace-current-status.md`、每个 Demand 的根与进度投影、需求看板。 |
 | `.wakeflow-local/` | Wakeflow，ignored | 宿主私有运行时：窗口绑定（真实会话或线程标识只住在这里）、hook 观察记录、pod 回执、维护日志。 |
 | `../wakeflow-ledger/`（可配置） | Wakeflow，tracked | 需求包记录与 Demand 归档。 |
@@ -110,13 +111,26 @@ enabled = true
 
 对账（`wakeflow_maintain_workspace` 的 `reconcile`）修复 Wakeflow 拥有的文件并报告漂移；它不改配置、不登记窗口、不删任何它不拥有的东西。私有树（`.wakeflow-local`、`.wakeflow-active`）若只是被安全地放宽（例如 `chmod -R go+rX`），它的第一个计划就是把它们收回 0700 / 0600；别人拥有或可写的私有节点只报告。
 
+## 停用 Wakeflow
+
+退出是一个维护意图，不是手工清理。在 Controller 窗口里说出来，Agent 先预览、给你看计划与全部阻塞，你确认后才应用（`wakeflow_maintain_workspace`，ADR-0024）：
+
+- **"把仓库 X 从 Wakeflow 分离出去"**——`detach-repository`。删除该仓库指令文件里 Wakeflow 的托管块（只删正文确系 Wakeflow 写出的块），退役它的窗口投影，发布去掉该仓库及其产品窗口的配置。
+- **"在这里停用 Wakeflow"**——`detach-workspace`。对每个仓库与窗口做同样的事，删除工作区 `.gitignore` 与 `CLAUDE.md`/`AGENTS.md` 里的 Wakeflow 块，在 Claude Code 上从工作区根与受管的 Design、Test 面的 `.claude/settings.json` 删除 Wakeflow 的允许规则、从 `.claude/settings.local.json` 删除 Wakeflow 自己的那条 `statusLine`（你自己的规则与状态栏保留），最后把 `wakeflow.config.json` 改名为 `wakeflow.detached.json`。
+
+两者在 worktree pod 打开（`detach-pod-open:<podId>`）或 Demand 活动（`detach-demand-active:<demandId>`）时都拒绝：先关闭 pod 或完成 Demand。正文无法证明是 Wakeflow 写出的托管块只报告、不碰（`detach-unknown-managed-body:<targetKey>`），读不出的设置文件也是（`detach-settings-unreadable:<root>`）。
+
+不碰、并在结果的 `leftBehind` 里列出：`.wakeflow-active/`、`.wakeflow-local/`、账本、Design 与 Test 支撑面目录、worktree 检出、分支，以及插件自己的 hooks。要清掉它们由你自己归档或删除。
+
+之后这个目录是一个已分离的工作区：`wakeflow_status` 报 `overall: detached` 且 `next` 没有 owner，`wakeflow_verify` 不失败并同样报 detached，reconcile 与 reconfigure 被阻塞（`workspace-detached`），重新初始化被阻塞（`detached-file-present`），直到你自己把 `wakeflow.detached.json` 移出目录。这个文件是有意留下的证据，说明这里曾是 Wakeflow 工作区；重新启用从这一步显式开始，然后像第一次那样初始化。
+
 ## 工具面
 
 二十个公共 MCP 工具。效果工具先 `preview` 再按预览的计划摘要 `apply`；追加工具带幂等键，重放干净；读工具从不写。
 
 | 领域 | 工具 |
 | --- | --- |
-| 工作区 | `wakeflow_maintain_workspace`——fresh-initialize、reconfigure、reconcile |
+| 工作区 | `wakeflow_maintain_workspace`——fresh-initialize、reconfigure、reconcile、detach-repository、detach-workspace |
 | 窗口 | `wakeflow_register_window_binding`——查看启动意图、登记握手、替换窗口、释放工作声明 |
 | 需求 | `wakeflow_publish_requirement`——预览摘要、发布上板；`wakeflow_inspect_board` |
 | Demand | `wakeflow_create_demand`（认领即创建）、`wakeflow_complete_demand`（完成即归档，一个事务）、`wakeflow_cancel_demand`、`wakeflow_continue_demand`（续接已归档的 Demand，或记录用户对升级的回答） |
@@ -153,13 +167,13 @@ enabled = true
 | `assets/agent-text/` | 两个制品里技能、命令与 README 的唯一来源；宿主差异是九个占位符，由各宿主的 profile 填值。 |
 | `assets/brand/`、`assets/release/version.json` | 品牌资产与唯一的发布版本输入。 |
 | `tooling/` | 构建、codegen、架构、测试与发布工具。 |
-| `tests/` | 单元、能力、宿主、制品与场景测试；`tests/scenarios/` 在一次性工作区里经公共工具跑二十个端到端场景。 |
+| `tests/` | 单元、能力、宿主、制品与场景测试；`tests/scenarios/` 在一次性工作区里经公共工具跑二十六个端到端场景。 |
 | `plugins/` | 两个生成的插件制品。重建它们，不要编辑它们。 |
 | `docs/` | 开发文档系统，从 `docs/README.md` 开始。 |
 
 ```sh
 npm test                       # typecheck、架构规则、lint、format、knip、测试、Schema 漂移、制品校验
-npm run scenario:acceptance    # 只跑二十个端到端场景
+npm run scenario:acceptance    # 只跑二十六个端到端场景
 npm run build:artifacts        # 把两个制品构建到 .build/artifacts（候选）
 npm run build:artifacts:committed  # 从源码重建 plugins/
 npm run build:check            # 重建并与 plugins/ 逐字节对比

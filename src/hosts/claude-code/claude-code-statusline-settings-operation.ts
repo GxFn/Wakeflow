@@ -54,7 +54,11 @@ import {
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { WakeflowHostMaintenanceOperationInput } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
-import type { WakeflowStaticMaterializationAction } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
+import {
+  isWakeflowDetachAction,
+  type WakeflowStaticMaterializationAction,
+  type WakeflowStaticMaterializationStepKind,
+} from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { claudeCodeMaintenanceMaterializesMissingSupportRoot } from "./claude-code-portable-settings-composition.js";
 import { CLAUDE_CODE_SETTINGS_DIRECTORY_REF } from "./claude-code-portable-settings-publication.js";
 import {
@@ -77,6 +81,10 @@ import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-hos
  * `.claude/settings.local.json`，所以每个 wakeflow-managed 支撑面也各写一份同一条目（命令里仍是
  * 工作区根）。支撑面操作的负载多一个 `surface`（surfaceId 与配置里的放置），执行时对照配置核对并
  * 以该面的根为写入根；支撑面根的 `.gitignore` 托管块本来就忽略这个文件。
+ *
+ * 退出路径（ADR-0024 `remove-statusline-entry`）：对同一组根只删所有权判定为 Wakeflow 的那一条
+ * `statusLine`，用户自己的不碰，没有即 current；其他键、顺序与文件本身原样保留。删除负载与安装负载
+ * 同形再加 `effect: "remove"`，两边的 executor 互不接受对方的负载。
  */
 
 export const CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND = "statusline-settings" as const;
@@ -110,6 +118,30 @@ export function claudeCodeStatuslineSettingsSurfaceBlocker(
 ): string {
   return `${CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER}:${SURFACE_SUFFIX}:${surfaceId}`;
 }
+
+/** 退出路径的宿主步种类（ADR-0024）：与共享步骤表里的名字逐字相同，宿主贡献用它做 operationKind。 */
+export const CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND =
+  "remove-statusline-entry" as const satisfies WakeflowStaticMaterializationStepKind;
+export const CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_ID =
+  "claude-statusline-settings:remove" as const;
+const REMOVAL_TARGET_KEY = "statusline" as const;
+const REMOVAL_EFFECT = "remove" as const;
+
+/** 退出路径里支撑面那一条的操作标识；程序根仍用无后缀的标识。 */
+export function claudeCodeStatuslineSettingsRemovalOperationId(
+  surfaceId: WakeflowDurableId<"surface">,
+): string {
+  return `${CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_ID}:${SURFACE_SUFFIX}:${surfaceId}`;
+}
+
+/** 退出路径宿主步的 targetKey（ADR-0024）：程序根 `statusline`，托管支撑面 `statusline:support:<surfaceId>`。 */
+export function claudeCodeStatuslineRemovalTargetKey(
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+): string {
+  return surface === null
+    ? REMOVAL_TARGET_KEY
+    : `${REMOVAL_TARGET_KEY}:support:${surface.surfaceId}`;
+}
 const SETTINGS_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$settings.maximumBytes");
 const SETTINGS_MODE = 0o600;
 const DIRECTORY_MODE = 0o755;
@@ -125,6 +157,12 @@ export interface ClaudeCodeStatuslineSettingsOperationPayload {
   readonly key: typeof CLAUDE_CODE_STATUSLINE_SETTINGS_KEY;
   /** 缺省即工作区根；给出即该支撑面根下的同一文件（复审 M2）。 */
   readonly surface?: Readonly<ClaudeCodeStatuslineSettingsSurface>;
+}
+
+/** 退出路径的负载（ADR-0024）：与安装负载同形再加 `effect`，安装与删除的 executor 互不接受对方的负载。 */
+export interface ClaudeCodeStatuslineSettingsRemovalPayload
+  extends ClaudeCodeStatuslineSettingsOperationPayload {
+  readonly effect: typeof REMOVAL_EFFECT;
 }
 
 export interface ExecuteClaudeCodeStatuslineSettingsOperationRequest {
@@ -533,6 +571,120 @@ export async function planClaudeCodeStatuslineSettingsSurfaceOperations(
   });
 }
 
+function removalOperationIdFor(
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+): string {
+  return surface === null
+    ? CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_ID
+    : claudeCodeStatuslineSettingsRemovalOperationId(surface.surfaceId);
+}
+
+function removalPayloadFor(
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+): Readonly<ClaudeCodeStatuslineSettingsRemovalPayload> {
+  return Object.freeze({ ...payloadFor(surface), effect: REMOVAL_EFFECT });
+}
+
+/** 只删 `statusLine` 一键；其他键与顺序原样保留，文件不删（删空也留 `{}`）。 */
+function renderWithoutEntry(document: Readonly<Record<string, JsonValue>>): Uint8Array {
+  const next: Record<string, JsonValue> = {};
+  for (const [key, value] of Object.entries(document)) {
+    if (key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY) next[key] = value;
+  }
+  return encodeUtf8(`${JSON.stringify(next, null, 2)}\n`, "$settings");
+}
+
+/** 退出路径的零写计划：有 Wakeflow 自己的 `statusLine` 才一条操作；没有文件、没有键或键是用户的都为 null。 */
+function planRemovalFromCurrent(
+  current: CurrentSettings | null,
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+): WakeflowHostMaintenanceOperationInput | null {
+  const existing = current?.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
+  if (
+    current === null ||
+    existing === undefined ||
+    !claudeCodeStatuslineEntryIsWakeflows(existing)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    operationId: removalOperationIdFor(surface),
+    operationKind: CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND,
+    ownerId: CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID,
+    targetKey: claudeCodeStatuslineRemovalTargetKey(surface),
+    sourceDigest: current.source.digest,
+    targetDigest: computeSha256Digest(renderWithoutEntry(current.document)),
+    payload: removalPayloadFor(surface),
+  });
+}
+
+/** 读一个根的本地设置并计划删除；读不出不抛，记调用方给的 blocker。 */
+async function planRemovalAt(
+  read: () => Promise<CurrentSettings | null>,
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+  blockerCode: string,
+): Promise<SurfacePlanOutcome> {
+  try {
+    return { operation: planRemovalFromCurrent(await read(), surface) };
+  } catch (error: unknown) {
+    if (
+      error instanceof ClaudeCodeStatuslineSettingsOperationError &&
+      error.reason === "settings-unreadable"
+    ) {
+      return { blockerCode };
+    }
+    throw error;
+  }
+}
+
+/**
+ * 退出路径（ADR-0024 `remove-statusline-entry`）：程序根与每个 wakeflow-managed 支撑面各算一次，只删
+ * 所有权判定为 Wakeflow 的那一条；面根不在即无可删；文件读不出不猜，记一条与安装路径同名的 blocker
+ * （程序根一条，支撑面带 surfaceId）。detach-repository 没有状态行维度，返回空集；非退出动作是调用错误。
+ */
+export async function planClaudeCodeStatuslineSettingsRemoval(
+  workspaceRoot: RootedDirectory,
+  options: PlanClaudeCodeStatuslineSettingsSurfaceOperationsOptions,
+): Promise<Readonly<ClaudeCodeStatuslineSettingsSurfacePlan>> {
+  assertRoot(workspaceRoot);
+  if (!isWakeflowDetachAction(options.action)) fail("input", "$action");
+  const model = parseModel(options.config);
+  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  const operations: WakeflowHostMaintenanceOperationInput[] = [];
+  const blockerCodes: string[] = [];
+  const collect = (planned: SurfacePlanOutcome): void => {
+    if ("blockerCode" in planned) blockerCodes.push(planned.blockerCode);
+    else if (planned.operation !== null) operations.push(planned.operation);
+  };
+  if (options.action === "detach-workspace") {
+    collect(
+      await planRemovalAt(
+        () => currentSettings(workspaceRoot, options.signal),
+        null,
+        CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER,
+      ),
+    );
+    for (const surface of managedSurfaces(model)) {
+      const placement = await surfacePlacement(workspaceRoot, model, surface);
+      if (placement.state === "missing") continue;
+      collect(
+        await planRemovalAt(
+          () =>
+            withSurfaceRoot(placement.absolutePath, (surfaceRoot) =>
+              currentSettings(surfaceRoot, options.signal),
+            ),
+          surface,
+          claudeCodeStatuslineSettingsSurfaceBlocker(surface.surfaceId),
+        ),
+      );
+    }
+  }
+  return Object.freeze({
+    operations: Object.freeze(operations),
+    blockerCodes: Object.freeze(blockerCodes),
+  });
+}
+
 function parsePayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsOperationPayload> {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -722,6 +874,82 @@ async function executeAt(
     fail("source-stale", "$settings");
   }
   const bytes = renderTarget(current?.document ?? {}, entry);
+  if (computeSha256Digest(bytes) !== digests.targetDigest) fail("source-stale", "$settings");
+  const disposition = await writeTarget(settingsRoot, current, bytes, request.signal);
+  return Object.freeze({ operationId, disposition, targetDigest: digests.targetDigest });
+}
+
+function parseRemovalPayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsRemovalPayload> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, "$operation");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("operation", error.path);
+    throw error;
+  }
+  const keys = Object.keys(record).sort().join(" ");
+  if (
+    (keys !== "effect key path" && keys !== "effect key path surface") ||
+    record.effect !== REMOVAL_EFFECT ||
+    record.path !== CLAUDE_CODE_LOCAL_SETTINGS_REF ||
+    record.key !== CLAUDE_CODE_STATUSLINE_SETTINGS_KEY
+  ) {
+    fail("operation", "$operation");
+  }
+  return removalPayloadFor(keys === "effect key path" ? null : parseSurface(record.surface));
+}
+
+/** 退出路径的执行（ADR-0024）：只接受删除负载；支撑面负载同样对照当前配置核对，以该面的根为写入根。 */
+export async function executeClaudeCodeStatuslineSettingsRemoval(
+  workspaceRoot: RootedDirectory,
+  request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
+): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
+  assertRoot(workspaceRoot);
+  const model = parseModel(request.config);
+  const payload = parseRemovalPayload(request.operation);
+  const digests = parseDigests(request);
+  if (payload.surface === undefined) {
+    return executeRemovalAt(workspaceRoot, null, digests, request);
+  }
+  const surface = authorizedSurface(model, payload.surface);
+  const placement = await surfacePlacement(workspaceRoot, model, surface);
+  if (placement.state !== "present") fail("placement", "$supportRoot");
+  return withSurfaceRoot(placement.absolutePath, (surfaceRoot) =>
+    executeRemovalAt(surfaceRoot, surface, digests, request),
+  );
+}
+
+/**
+ * 删除：文件已是目标字节即 current；文件已不在时只有 affected 恢复算 current（无可删），常规执行是
+ * source-stale；否则来源摘要必须等于计划时的（affected 恢复放开），键必须仍是 Wakeflow 的（用户换成
+ * 自己的就不碰），去掉它重渲染必须得到计划的目标摘要，再 CAS 替换，0600。
+ */
+async function executeRemovalAt(
+  settingsRoot: RootedDirectory,
+  surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
+  digests: ReturnType<typeof parseDigests>,
+  request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
+): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
+  const operationId = removalOperationIdFor(surface);
+  const current = await currentSettings(settingsRoot, request.signal);
+  const asCurrent = Object.freeze({
+    operationId,
+    disposition: "current" as const,
+    targetDigest: digests.targetDigest,
+  });
+  if (current === null) {
+    if (!request.recoveringAffectedOperation) fail("source-stale", "$settings");
+    return asCurrent;
+  }
+  if (current.source.digest === digests.targetDigest) return asCurrent;
+  if (!request.recoveringAffectedOperation && current.source.digest !== digests.sourceDigest) {
+    fail("source-stale", "$settings");
+  }
+  const existing = current.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
+  if (existing === undefined || !claudeCodeStatuslineEntryIsWakeflows(existing)) {
+    fail("source-stale", "$settings");
+  }
+  const bytes = renderWithoutEntry(current.document);
   if (computeSha256Digest(bytes) !== digests.targetDigest) fail("source-stale", "$settings");
   const disposition = await writeTarget(settingsRoot, current, bytes, request.signal);
   return Object.freeze({ operationId, disposition, targetDigest: digests.targetDigest });

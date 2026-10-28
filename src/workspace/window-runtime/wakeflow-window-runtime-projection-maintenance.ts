@@ -155,7 +155,8 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(
     request.resourceProfile,
     request.identityProfile,
   );
-  if (request.action === "fresh-initialize") {
+  // fresh 由共享步整体发布投影；detach-workspace 的共享步整体退役投影（ADR-0024），宿主不再补发。
+  if (request.action === "fresh-initialize" || request.action === "detach-workspace") {
     return Object.freeze({ operations: Object.freeze([]), blockerCodes: Object.freeze([]) });
   }
   let expected = await resolveWakeflowWindowRuntimeProjectionExpectedEntries(

@@ -57,6 +57,7 @@ import {
   type WakeflowStaticMaterializationPreview,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
+  wakeflowStaticMaterializationActionUsesCurrentConfig,
 } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
@@ -201,7 +202,10 @@ function normalizedRequest(
   try {
     return parseWakeflowStaticMaterializationPreviewRequest({
       action: preview.action,
-      desiredConfig: preview.action === "reconcile" ? null : desiredConfig,
+      // reconcile 与 detach-workspace 的请求不带期望 Config（意图里存的是当前 Config）。
+      desiredConfig: wakeflowStaticMaterializationActionUsesCurrentConfig(preview.action)
+        ? null
+        : desiredConfig,
       currentHostProfile: currentHostProfileValue,
       hostProfiles: hostProfileValues,
     });
@@ -391,7 +395,12 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown
     plan: normalized.plan,
     request: Object.freeze({
       action: intent.sharedPreview.action,
-      desiredConfig: intent.sharedPreview.action === "reconcile" ? null : intent.desiredConfig,
+      // reconcile 与 detach-workspace 的请求不带期望 Config；意图里存的是当前 Config。
+      desiredConfig: wakeflowStaticMaterializationActionUsesCurrentConfig(
+        intent.sharedPreview.action,
+      )
+        ? null
+        : intent.desiredConfig,
       currentHostProfile: intent.currentHostProfile,
       hostProfiles: intent.hostProfiles,
     }),

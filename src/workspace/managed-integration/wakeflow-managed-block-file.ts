@@ -1,5 +1,6 @@
 import { types } from "node:util";
 
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   createFileAtomically,
   type DurableAtomicFileReplaceResult,
@@ -7,6 +8,10 @@ import {
   type DurableAtomicFileWriteResult,
   replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import {
+  ExactRegularFileUnlinkError,
+  unlinkRegularFileExactly,
+} from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   type PortableResourcePath,
@@ -32,7 +37,15 @@ import {
   type WakeflowManagedTextAuthorityTransition,
   WakeflowManagedTextAuthorityTransitionError,
 } from "./wakeflow-managed-text-authority-transition.js";
-import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
+import {
+  inspectWakeflowManagedTextEnvelope,
+  parseWakeflowManagedTextEnvelopeTarget,
+  removeWakeflowManagedTextEnvelope,
+  WakeflowManagedTextEnvelopeError,
+  type WakeflowManagedTextEnvelopeIdentity,
+  type WakeflowManagedTextEnvelopeTarget,
+  type WakeflowManagedTextRemovalResult,
+} from "./wakeflow-managed-text-envelope.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：任意根目录里一个文件中 Wakeflow 托管块的
@@ -125,12 +138,16 @@ export class WakeflowManagedBlockFileError extends Error {
 
 const DEFAULT_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$managedBlockFile.maximumBytes");
 
-interface ParsedRequest {
+/** 读源文件只需要路径、字节预算与信号：重组请求与删除请求共用。 */
+interface SourceReadRequest {
   readonly resourcePath: PortableResourcePath;
-  readonly currentTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
-  readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
   readonly maximumBytes: ByteCount;
   readonly signal: AbortSignal | undefined;
+}
+
+interface ParsedRequest extends SourceReadRequest {
+  readonly currentTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
+  readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
 function fail(reason: WakeflowManagedBlockFileErrorReason, path: string): never {
@@ -228,7 +245,7 @@ async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigi
 
 async function readSource(
   root: RootedDirectory,
-  request: Readonly<ParsedRequest>,
+  request: Readonly<SourceReadRequest>,
   expectedUserId: bigint,
 ): Promise<Readonly<{
   readonly facts: Readonly<StableFileSource>;
@@ -272,7 +289,7 @@ async function readSource(
 
 async function revalidateSource(
   root: RootedDirectory,
-  request: Readonly<ParsedRequest>,
+  request: Readonly<SourceReadRequest>,
   initial: Awaited<ReturnType<typeof readSource>>,
 ): Promise<void> {
   try {
@@ -503,4 +520,277 @@ export async function recomposeWakeflowManagedBlockFile(
     effect,
     inspection: after,
   });
+}
+
+// ---- 删除托管块（ADR-0024 的 remove-managed-block）---------------------------------------------
+
+export interface WakeflowManagedBlockRemovalRequest {
+  readonly resourcePath: unknown;
+  /** 可删的已知渲染：当前渲染与已登记的历史渲染，同 component、同 owner、正文互不相同。 */
+  readonly admittedTargets: readonly unknown[];
+  readonly maximumBytes?: ByteCount;
+  readonly signal?: AbortSignal;
+}
+
+export interface WakeflowManagedBlockRemovalTarget {
+  readonly bytes: Uint8Array;
+  readonly byteCount: ByteCount;
+  readonly digest: Sha256Digest;
+  /** 删掉块之后文件为空（或只剩空白）即删文件，否则保留其余内容。 */
+  readonly deletesFile: boolean;
+}
+
+export interface WakeflowManagedBlockRemovalInspection {
+  /** absent：文件不在或没有我们的块；removal-required：块在且正文是已知渲染。 */
+  readonly status: "absent" | "removal-required";
+  readonly resourcePath: PortableResourcePath;
+  readonly identity: Readonly<WakeflowManagedTextEnvelopeIdentity>;
+  readonly source: Readonly<StableFileSource> | null;
+  readonly target: Readonly<WakeflowManagedBlockRemovalTarget> | null;
+}
+
+export interface WakeflowManagedBlockRemovalReceipt {
+  readonly disposition: "current" | "replaced" | "deleted";
+  readonly inspection: Readonly<WakeflowManagedBlockRemovalInspection>;
+}
+
+interface ParsedRemovalRequest extends SourceReadRequest {
+  readonly identity: Readonly<WakeflowManagedTextEnvelopeIdentity>;
+  readonly admittedBodies: readonly string[];
+}
+
+const MAXIMUM_ADMITTED_TARGETS = 8;
+
+function parseRemovalRequest(
+  value: WakeflowManagedBlockRemovalRequest,
+): Readonly<ParsedRemovalRequest> {
+  if (typeof value !== "object" || value === null || types.isProxy(value)) {
+    fail("input", "$request");
+  }
+  let resourcePath: PortableResourcePath;
+  try {
+    resourcePath = parsePortableResourcePath(value.resourcePath, "$request.resourcePath");
+  } catch (error: unknown) {
+    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath");
+    throw error;
+  }
+  if (value.signal !== undefined && !isAbortSignal(value.signal)) {
+    fail("input", "$request.signal");
+  }
+  if (
+    !Array.isArray(value.admittedTargets) ||
+    value.admittedTargets.length === 0 ||
+    value.admittedTargets.length > MAXIMUM_ADMITTED_TARGETS
+  ) {
+    fail("input", "$request.admittedTargets");
+  }
+  const targets = value.admittedTargets.map((target, index) => {
+    try {
+      return parseWakeflowManagedTextEnvelopeTarget(target);
+    } catch (error: unknown) {
+      if (error instanceof WakeflowManagedTextEnvelopeError) {
+        fail("input", `$request.admittedTargets/${index}`);
+      }
+      throw error;
+    }
+  });
+  const first = targets[0];
+  if (first === undefined) fail("input", "$request.admittedTargets");
+  const admittedBodies: string[] = [];
+  for (const [index, target] of targets.entries()) {
+    if (
+      target.component !== first.component ||
+      target.owner !== first.owner ||
+      admittedBodies.includes(target.body)
+    ) {
+      fail("input", `$request.admittedTargets/${index}`);
+    }
+    admittedBodies.push(target.body);
+  }
+  let maximumBytes = DEFAULT_MAXIMUM_BYTES;
+  if (value.maximumBytes !== undefined) {
+    try {
+      maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
+    } catch (error: unknown) {
+      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes");
+      throw error;
+    }
+  }
+  return Object.freeze({
+    resourcePath,
+    identity: Object.freeze({ component: first.component, owner: first.owner }),
+    admittedBodies: Object.freeze(admittedBodies),
+    maximumBytes,
+    signal: value.signal,
+  });
+}
+
+/** 删掉块之后只剩空格、制表与换行的文件视为空：没有用户内容可保留。 */
+function blankBytes(bytes: Uint8Array): boolean {
+  return bytes.every((byte) => byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d);
+}
+
+async function inspectRemovalParsed(
+  root: RootedDirectory,
+  request: Readonly<ParsedRemovalRequest>,
+  expectedUserId: bigint,
+): Promise<Readonly<WakeflowManagedBlockRemovalInspection>> {
+  assertNotAborted(request.signal);
+  const read = await readSource(root, request, expectedUserId);
+  const absent = (source: Readonly<StableFileSource> | null) =>
+    Object.freeze({
+      status: "absent" as const,
+      resourcePath: request.resourcePath,
+      identity: request.identity,
+      source,
+      target: null,
+    });
+  if (read === null) return absent(null);
+  let envelope: ReturnType<typeof inspectWakeflowManagedTextEnvelope>;
+  try {
+    envelope = inspectWakeflowManagedTextEnvelope(read.bytes);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source");
+    throw error;
+  }
+  if (envelope.kind !== "managed") {
+    await revalidateSource(root, request, read);
+    return absent(read.facts);
+  }
+  if (
+    envelope.component !== request.identity.component ||
+    envelope.owner !== request.identity.owner
+  ) {
+    fail("envelope", "$source");
+  }
+  // 只有正文可证明是 Wakeflow 写的（当前渲染或已登记的历史渲染）才删；另一个工作区的块同样未知。
+  if (!request.admittedBodies.includes(envelope.body)) fail("unknown-managed-body", "$source");
+  let removal: Readonly<WakeflowManagedTextRemovalResult>;
+  try {
+    removal = removeWakeflowManagedTextEnvelope(read.bytes, request.identity);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source");
+    throw error;
+  }
+  await revalidateSource(root, request, read);
+  return Object.freeze({
+    status: "removal-required",
+    resourcePath: request.resourcePath,
+    identity: request.identity,
+    source: read.facts,
+    target: Object.freeze({
+      bytes: removal.bytes,
+      byteCount: removal.byteCount,
+      digest: removal.digest,
+      deletesFile: blankBytes(removal.bytes),
+    }),
+  });
+}
+
+/** 零写入检查一个文件里能否删掉 Wakeflow 托管块：不在或没有块即 absent，正文未知即 unknown-managed-body。 */
+export async function inspectWakeflowManagedBlockRemoval(
+  rootValue: RootedDirectory,
+  requestValue: WakeflowManagedBlockRemovalRequest,
+): Promise<Readonly<WakeflowManagedBlockRemovalInspection>> {
+  assertRoot(rootValue);
+  const request = parseRemovalRequest(requestValue);
+  return inspectRemovalParsed(rootValue, request, currentUserId());
+}
+
+function mapUnlinkError(error: ExactRegularFileUnlinkError): never {
+  if (error.reason === "input") fail("input", error.path);
+  if (error.reason === "aborted") fail("aborted", "$signal");
+  if (error.reason === "root-scope" || error.reason === "parent-changed") {
+    fail("root-scope", "$root");
+  }
+  if (error.reason === "source-changed" || error.reason === "source-not-found") {
+    fail("conflict", "$source");
+  }
+  if (
+    error.reason === "commit-uncertain" ||
+    error.reason === "durability-failure" ||
+    error.reason === "close-failure"
+  ) {
+    fail("commit-uncertain", "$resourcePath");
+  }
+  fail("effect-failure", "$resourcePath");
+}
+
+async function publishRemoval(
+  root: RootedDirectory,
+  request: Readonly<ParsedRemovalRequest>,
+  inspection: Readonly<WakeflowManagedBlockRemovalInspection>,
+): Promise<void> {
+  const target = inspection.target;
+  const source = inspection.source;
+  if (inspection.status !== "removal-required" || target === null || source === null) {
+    fail("source", "$target");
+  }
+  const signal = request.signal === undefined ? {} : { signal: request.signal };
+  if (target.deletesFile) {
+    try {
+      await unlinkRegularFileExactly(root, request.resourcePath, {
+        expectedNode: source.node,
+        ...signal,
+      });
+    } catch (error: unknown) {
+      if (error instanceof ExactRegularFileUnlinkError) mapUnlinkError(error);
+      fail("effect-failure", "$resourcePath");
+    }
+    return;
+  }
+  try {
+    await replaceFileAtomically(root, request.resourcePath, target.bytes, {
+      mode: source.node.permissionBits,
+      expected: source,
+      ...signal,
+    });
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
+    fail("effect-failure", "$resourcePath");
+  }
+}
+
+/**
+ * 在调用方持有的事务内幂等删除一个文件里的 Wakeflow 托管块：块已不在即 current；删掉块后文件
+ * 为空则精确删文件，否则 CAS 替换并保留所有者权限位；提交后读回闭合。
+ */
+export async function removeWakeflowManagedBlockFile(
+  rootValue: RootedDirectory,
+  requestValue: WakeflowManagedBlockRemovalRequest,
+): Promise<Readonly<WakeflowManagedBlockRemovalReceipt>> {
+  assertRoot(rootValue);
+  const request = parseRemovalRequest(requestValue);
+  assertNotAborted(request.signal);
+  const expectedUserId = currentUserId();
+  await assertCurrentUserRoot(rootValue, expectedUserId);
+  const before = await inspectRemovalParsed(rootValue, request, expectedUserId);
+  if (before.status !== "removal-required" || before.target === null) {
+    return Object.freeze({ disposition: "current", inspection: before });
+  }
+  await assertCurrentUserRoot(rootValue, expectedUserId);
+  assertNotAborted(request.signal);
+  await publishRemoval(rootValue, request, before);
+  let after: Readonly<WakeflowManagedBlockRemovalInspection>;
+  try {
+    after = await inspectRemovalParsed(
+      rootValue,
+      Object.freeze({ ...request, signal: undefined }),
+      expectedUserId,
+    );
+  } catch {
+    fail("commit-uncertain", "$resourcePath");
+  }
+  const deleted = before.target.deletesFile;
+  if (
+    after.status !== "absent" ||
+    (deleted
+      ? after.source !== null
+      : after.source === null ||
+        after.source.digest !== before.target.digest ||
+        after.source.byteCount !== before.target.byteCount)
+  ) {
+    fail("commit-uncertain", "$resourcePath");
+  }
+  return Object.freeze({ disposition: deleted ? "deleted" : "replaced", inspection: after });
 }

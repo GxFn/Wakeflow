@@ -9,7 +9,10 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import {
+  RootedDirectory,
+  RootedDirectoryError,
+} from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
 import { type ByteCount, parseByteCount } from "../foundation/numeric/byte-count.js";
@@ -41,14 +44,27 @@ import {
  */
 
 export const WAKEFLOW_CONFIG_FILE_REF = parsePortableResourcePath("wakeflow.config.json");
+/**
+ * detach-workspace 的终态（ADR-0024）：`wakeflow.config.json` 原样改名到这里，字节、权限与摘要不变。
+ * 它是有意留下的证据——status / verify 以它为只读来源报 detached；重新启用要用户显式移走它。
+ */
+export const WAKEFLOW_DETACHED_CONFIG_FILE_REF =
+  parsePortableResourcePath("wakeflow.detached.json");
 export const WAKEFLOW_CONFIG_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 export const WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE = 0o644;
 
-interface WakeflowConfigAuthoritySource {
+export interface WakeflowConfigAuthoritySource {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
+}
+
+/** 退役配置文件的只读记录：源事实、模型与配置摘要；不验证根放置（根可能已被用户清走）。 */
+export interface WakeflowDetachedConfigRecord {
+  readonly source: Readonly<WakeflowConfigAuthoritySource>;
+  readonly model: WakeflowConfigModel;
+  readonly configDigest: Sha256Digest;
 }
 
 export interface WakeflowConfigAuthoritySnapshot {
@@ -176,19 +192,59 @@ function mapDeterministicJsonError(error: DeterministicJsonDocumentError): never
   fail("config", error.path);
 }
 
-async function readConfigSource(root: RootedDirectory, signal: AbortSignal | undefined) {
+async function readConfigSource(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  signal: AbortSignal | undefined,
+) {
   const options = {
     maximumBytes: WAKEFLOW_CONFIG_MAXIMUM_BYTES,
     ...(signal === undefined ? {} : { signal }),
   };
   try {
-    return await readDeterministicJsonFile(root, WAKEFLOW_CONFIG_FILE_REF, options);
+    return await readDeterministicJsonFile(root, resourcePath, options);
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) mapStableReadError(error);
     if (error instanceof StrictTextFileError) mapStrictTextError(error);
     if (error instanceof DeterministicJsonDocumentError) {
       mapDeterministicJsonError(error);
     }
+    throw error;
+  }
+}
+
+/** 同 readConfigSource，但文件不在时返回 null 而不是 `source` 错误。 */
+async function readConfigSourceOrNull(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  signal: AbortSignal | undefined,
+) {
+  try {
+    return await readConfigSource(root, resourcePath, signal);
+  } catch (error: unknown) {
+    if (
+      error instanceof WakeflowConfigAuthoritySnapshotError &&
+      error.reason === "source" &&
+      !(await resourceExists(root, resourcePath))
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function resourceExists(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+): Promise<boolean> {
+  try {
+    await root.inspectExistingResource(resourcePath, "$source");
+    return true;
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+      return false;
+    }
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }
 }
@@ -241,20 +297,16 @@ function requiredLedgerRoot(placements: Readonly<WakeflowConfigRootPlacementRepo
   return ledger.absolutePath;
 }
 
-async function loadSnapshot(
-  root: RootedDirectory,
-  options: Readonly<ParsedOptions>,
-): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
-  const read = await readConfigSource(root, options.signal);
+type ConfigSourceRead = NonNullable<Awaited<ReturnType<typeof readConfigSourceOrNull>>>;
+
+/** 源字节到模型与摘要：节点政策、严格表示与配置文法三道准入，配置文件与退役文件相同。 */
+function admitConfigRecord(read: ConfigSourceRead): Readonly<WakeflowDetachedConfigRecord> {
   assertSourcePolicy(read.node);
   const model = parseConfigModel(read.value);
   if (renderWakeflowConfig(model) !== read.text) {
     fail("representation", "$document");
   }
-  const configDigest = computeWakeflowConfigDigest(model);
-  const placements = await validatePlacements(root, model);
   return Object.freeze({
-    workspaceRoot: root.absolutePath,
     source: Object.freeze({
       resourcePath: read.resourcePath,
       node: read.node,
@@ -262,11 +314,31 @@ async function loadSnapshot(
       digest: read.digest,
     }),
     model,
-    indexes: buildWakeflowConfigIndexes(model),
-    configDigest,
+    configDigest: computeWakeflowConfigDigest(model),
+  });
+}
+
+async function loadSnapshot(
+  root: RootedDirectory,
+  options: Readonly<ParsedOptions>,
+  resourcePath: PortableResourcePath,
+): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
+  const record = admitConfigRecord(await readConfigSource(root, resourcePath, options.signal));
+  const placements = await validatePlacements(root, record.model);
+  return Object.freeze({
+    workspaceRoot: root.absolutePath,
+    source: record.source,
+    model: record.model,
+    indexes: buildWakeflowConfigIndexes(record.model),
+    configDigest: record.configDigest,
     placements,
     ledgerRoot: requiredLedgerRoot(placements),
   });
+}
+
+function mapLoadFailure(error: unknown): never {
+  if (error instanceof WakeflowConfigAuthoritySnapshotError) throw error;
+  throw new WakeflowConfigAuthoritySnapshotError("load-failure", "$snapshot");
 }
 
 /** 从已经打开的 Workspace 根目录读取并构造完整的 配置权威快照。 */
@@ -278,9 +350,49 @@ export async function readWakeflowConfigAuthoritySnapshot(
     assertRoot(root);
     const parsed = parseOptions(options);
     if (parsed.signal?.aborted === true) fail("aborted", "$signal");
-    return await loadSnapshot(root, parsed);
+    return await loadSnapshot(root, parsed, WAKEFLOW_CONFIG_FILE_REF);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) throw error;
-    throw new WakeflowConfigAuthoritySnapshotError("load-failure", "$snapshot");
+    mapLoadFailure(error);
+  }
+}
+
+/**
+ * 以 `wakeflow.detached.json` 为只读来源构造完整快照（ADR-0024 终态）：status / verify 用它说
+ * "这里曾是 Wakeflow 工作区"；文件不在即 `source`，与配置文件缺失同一准入。
+ */
+export async function readWakeflowDetachedConfigSnapshot(
+  root: RootedDirectory,
+  options?: WakeflowConfigAuthoritySnapshotOptions,
+): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
+  try {
+    assertRoot(root);
+    const parsed = parseOptions(options);
+    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    return await loadSnapshot(root, parsed, WAKEFLOW_DETACHED_CONFIG_FILE_REF);
+  } catch (error: unknown) {
+    mapLoadFailure(error);
+  }
+}
+
+/**
+ * 读退役配置记录：不在即 null；在但读不出、不是当前用户的 0644 单链接文件或不是严格 Config 表示即抛。
+ * 维护事务的终态核对与恢复用它——它不验证根放置，所以用户清走账本或支撑面之后仍能读出摘要。
+ */
+export async function readWakeflowDetachedConfigRecord(
+  root: RootedDirectory,
+  options?: WakeflowConfigAuthoritySnapshotOptions,
+): Promise<Readonly<WakeflowDetachedConfigRecord> | null> {
+  try {
+    assertRoot(root);
+    const parsed = parseOptions(options);
+    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    const read = await readConfigSourceOrNull(
+      root,
+      WAKEFLOW_DETACHED_CONFIG_FILE_REF,
+      parsed.signal,
+    );
+    return read === null ? null : admitConfigRecord(read);
+  } catch (error: unknown) {
+    mapLoadFailure(error);
   }
 }

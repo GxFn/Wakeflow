@@ -87,6 +87,7 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-config": "precondition-failed",
     "wakeflow-config-authority-publication": "precondition-failed",
     "wakeflow-config-authority-replacement": "precondition-failed",
+    "wakeflow-config-authority-retirement": "precondition-failed",
     "wakeflow-config-authority-snapshot": "precondition-failed",
     "wakeflow-config-root-placement": "precondition-failed",
     "wakeflow-fresh-config-selection": "precondition-failed",

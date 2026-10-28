@@ -36,7 +36,13 @@
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "action": {
-      "enum": ["fresh-initialize", "reconfigure", "reconcile"]
+      "enum": [
+        "fresh-initialize",
+        "reconfigure",
+        "reconcile",
+        "detach-repository",
+        "detach-workspace"
+      ]
     },
     "planDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"

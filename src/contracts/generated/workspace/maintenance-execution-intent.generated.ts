@@ -451,7 +451,7 @@ codex?: CodexHost
 "claude-code"?: ClaudeHost
 }
 /**
- * Codex-specific durable launch preferences; real thread handles and live model observations are forbidden.
+ * Codex launch preferences; live handles and observations never belong here.
  */
 export interface CodexHost {
 launch?: CodexLaunch
@@ -468,23 +468,23 @@ reasoningEffortByRole?: ReasoningEffortByRole
  */
 export interface ModelByRole {
 /**
- * Optional host model identifier for Controller launches.
+ * Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.
  */
 controller?: string
 /**
- * Optional host model identifier for Design launches.
+ * Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.
  */
 design?: string
 /**
- * Optional host model identifier for Test launches.
+ * Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.
  */
 test?: string
 /**
- * Optional host model identifier for product-window launches.
+ * Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.
  */
 product?: string
 /**
- * Optional fallback host model identifier when a role-specific value is absent.
+ * Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.
  */
 default?: string
 }
@@ -493,28 +493,28 @@ default?: string
  */
 export interface ReasoningEffortByRole {
 /**
- * Optional tested reasoning effort for Controller launches.
+ * A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.
  */
 controller?: ("medium" | "high" | "xhigh" | "max")
 /**
- * Optional tested reasoning effort for Design launches.
+ * A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.
  */
 design?: ("medium" | "high" | "xhigh" | "max")
 /**
- * Optional tested reasoning effort for Test launches.
+ * A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.
  */
 test?: ("medium" | "high" | "xhigh" | "max")
 /**
- * Optional tested reasoning effort for product-window launches.
+ * A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.
  */
 product?: ("medium" | "high" | "xhigh" | "max")
 /**
- * Optional fallback reasoning effort when a role-specific value is absent.
+ * A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.
  */
 default?: ("medium" | "high" | "xhigh" | "max")
 }
 /**
- * Claude Code durable launch and desired tmux-container preferences; actual socket/session/window/pane locators remain host-local runtime facts.
+ * Claude Code launch and tmux-container preferences; live locators stay host-local.
  */
 export interface ClaudeHost {
 launch?: ClaudeLaunch

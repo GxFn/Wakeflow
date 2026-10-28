@@ -25,6 +25,12 @@
       "$ref": "#/$defs/reconcileApplyRequest"
     },
     {
+      "$ref": "#/$defs/detachPreviewRequest"
+    },
+    {
+      "$ref": "#/$defs/detachApplyRequest"
+    },
+    {
       "$ref": "#/$defs/recoverRequest"
     }
   ],
@@ -60,12 +66,12 @@
     },
     "root": {
       "type": "string",
-      "description": "Absolute path of the existing workspace root. Physical root validation remains owned by RootedDirectory."
+      "description": "Absolute path of the existing workspace root."
     },
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "description": "Algorithm-prefixed lowercase SHA-256 digest of the exact execution plan returned by preview. Apply re-derives the plan and rejects a different digest."
+      "description": "planDigest returned by preview; apply re-derives the plan and rejects a different digest."
     },
     "maintenanceOperationId": {
       "type": "string",
@@ -97,6 +103,62 @@
       "type": "object",
       "additionalProperties": false,
       "maxProperties": 0
+    },
+    "detachAction": {
+      "enum": ["detach-repository", "detach-workspace"],
+      "description": "detach-repository removes one repository and its windows; detach-workspace retires the config to wakeflow.detached.json."
+    },
+    "detachBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "description": "Required by detach-repository, rejected by detach-workspace."
+        }
+      }
+    },
+    "detachPreviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "action", "request"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "action": {
+          "$ref": "#/$defs/detachAction"
+        },
+        "request": {
+          "$ref": "#/$defs/detachBody"
+        }
+      }
+    },
+    "detachApplyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "action", "request", "planDigest"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/root"
+        },
+        "mode": {
+          "const": "apply"
+        },
+        "action": {
+          "$ref": "#/$defs/detachAction"
+        },
+        "request": {
+          "$ref": "#/$defs/detachBody"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
     },
     "freshInitializePreviewRequest": {
       "type": "object",
@@ -462,7 +524,7 @@
       }
     },
     "codexHost": {
-      "description": "Codex-specific durable launch preferences; real thread handles and live model observations are forbidden.",
+      "description": "Codex launch preferences; live handles and observations never belong here.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -472,7 +534,7 @@
       }
     },
     "claudeHost": {
-      "description": "Claude Code durable launch and desired tmux-container preferences; actual socket/session/window/pane locators remain host-local runtime facts.",
+      "description": "Claude Code launch and tmux-container preferences; live locators stay host-local.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -520,24 +582,19 @@
       "additionalProperties": false,
       "properties": {
         "controller": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Controller launches."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "design": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Design launches."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "test": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Test launches."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "product": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for product-window launches."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "default": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional fallback host model identifier when a role-specific value is absent."
+          "$ref": "#/$defs/nonEmptyString"
         }
       }
     },
@@ -547,24 +604,19 @@
       "additionalProperties": false,
       "properties": {
         "controller": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Controller launches."
+          "$ref": "#/$defs/reasoningEffort"
         },
         "design": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Design launches."
+          "$ref": "#/$defs/reasoningEffort"
         },
         "test": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Test launches."
+          "$ref": "#/$defs/reasoningEffort"
         },
         "product": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for product-window launches."
+          "$ref": "#/$defs/reasoningEffort"
         },
         "default": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional fallback reasoning effort when a role-specific value is absent."
+          "$ref": "#/$defs/reasoningEffort"
         }
       }
     },

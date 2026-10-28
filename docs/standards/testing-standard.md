@@ -34,7 +34,7 @@
 | 0 | 纯逻辑（pure） | 只调用纯函数：解析、渲染、判定（`decide`）、摘要、词汇、Schema 形状 | 内存值、固定时钟值、读取仓库内的 Schema/夹具文本 | 写文件系统、子进程、真实时间、网络 | 1 秒 |
 | 1 | 组件（component） | 一个模块或存储在**一次性根目录**上的真实读写：原子写、锁、事件流、账本、投影 | `disposableRoot`、`DISPOSABLE_ROOT_OPTIONS`、注入时钟 | 子进程、公共工具、宿主 CLI | 20 秒 |
 | 2 | 能力（capability） | 一个能力服务（`execute…Request`）或维护事务在**预备工作区**上的完整效果，含它的阻塞项与恢复 | 预备基线复制、`fake-cli` 替身、隔离 git、`loadSensitive` | 真实宿主会话、网络、读开发者环境 | 90 秒 |
-| 3 | 公共工具（public-tool） | 经 MCP 客户端调用公共工具：单工具协议测试在 `entrypoints`，端到端在 `scenarios`（每宿主一条链，25 个场景顺序跑在同一个一次性工作区上） | 组合根、内存 Transport、合成 hook 记录 | 真实 tmux/Claude/Codex 进程 | 单工具 30 秒；链每宿主 10 分钟 |
+| 3 | 公共工具（public-tool） | 经 MCP 客户端调用公共工具：单工具协议测试在 `entrypoints`，端到端在 `scenarios`（每宿主一条链，26 个场景顺序跑在同一个一次性工作区上） | 组合根、内存 Transport、合成 hook 记录 | 真实 tmux/Claude/Codex 进程 | 单工具 30 秒；链每宿主 10 分钟 |
 | 4 | 维护者工具（tooling） | `wf` 子命令、运行器、lab 实验、capture/live/diagnostics 的真实子进程行为 | 真实子进程、已构建制品、墙钟等待（带标签） | 本机账号登录、网络 | 6 分钟 |
 | 5 | 制品与发布（artifact） | 已提交制品的字节、依赖闭包、agent-text 诚实预算与现场指引钉子、Schema 代码生成、发布一致性 | 读 `plugins/`、`assets/`、`src/contracts/generated` | 重建制品、改写任何已提交字节 | 30 秒 |
 

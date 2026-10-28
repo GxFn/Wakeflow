@@ -48,7 +48,7 @@
       "$ref": "#/$defs/utcInstant"
     },
     "overall": {
-      "enum": ["maintenance", "blocked", "degraded", "active", "idle"]
+      "enum": ["maintenance", "blocked", "degraded", "active", "idle", "detached"]
     },
     "config": {
       "type": "object",

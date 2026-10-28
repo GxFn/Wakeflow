@@ -86,6 +86,57 @@ test("Codex fixed composition executes shared maintenance with an empty projecti
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
 });
 
+test("Codex contributes an explicit empty set to both detach actions and refuses the Claude-only exit step kinds（ADR-0024）", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desiredConfig();
+  for (const action of ["detach-workspace", "detach-repository"] as const) {
+    const contribution = await codexMaintenanceCapability.planContribution(workspace.root, {
+      action,
+      config: desired,
+      profile: codexWorkspaceHostResourceProfile,
+    });
+    equal(contribution.hostId, "codex");
+    equal(contribution.status, "ready");
+    deepEqual([...contribution.blockerCodes], []);
+    deepEqual([...contribution.operations], [], `${action} has no Codex host step`);
+  }
+  const plan = await previewCodexMaintenanceExecution(workspace.root, {
+    action: "fresh-initialize" as const,
+    desiredConfig: desired,
+    currentHostProfile: codexWorkspaceHostResourceProfile,
+    hostProfiles: PROFILES,
+  });
+  await withWakeflowMaintenanceGate(
+    workspace.root,
+    { expectedCoreLayoutInspectionDigest: plan.sharedPreview.coreLayoutInspectionDigest },
+    async (context) => {
+      for (const operationKind of ["remove-portable-settings-rules", "remove-statusline-entry"]) {
+        await rejects(
+          codexMaintenanceCapability.executeOperation(workspace.root, context, {
+            config: desired,
+            profile: codexWorkspaceHostResourceProfile,
+            operation: Object.freeze({
+              operationId: `claude-exit:${operationKind}`,
+              operationKind,
+              ownerId: "claude-code-portable-settings",
+              targetKey: "program",
+              sourceDigest: null,
+              targetDigest: `sha256:${"0".repeat(64)}`,
+              payload: {},
+              payloadDigest: `sha256:${"0".repeat(64)}`,
+            }) as unknown as WakeflowHostMaintenanceOperation,
+            recoveringAffectedOperation: false,
+          }),
+          (error: unknown) =>
+            error instanceof CodexMaintenanceCapabilityError &&
+            error.reason === "operation" &&
+            error.path === "$operation",
+        );
+      }
+    },
+  );
+});
+
 test("Codex maintenance capability maps a foreign gate context and a foreign operation to its own error", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();

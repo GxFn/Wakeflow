@@ -915,7 +915,7 @@
       }
     },
     "codexHost": {
-      "description": "Codex-specific durable launch preferences; real thread handles and live model observations are forbidden.",
+      "description": "Codex launch preferences; live handles and observations never belong here.",
       "examples": [
         {},
         {
@@ -935,7 +935,7 @@
       }
     },
     "claudeHost": {
-      "description": "Claude Code durable launch and desired tmux-container preferences; actual socket/session/window/pane locators remain host-local runtime facts.",
+      "description": "Claude Code launch and tmux-container preferences; live locators stay host-local.",
       "examples": [
         {},
         {
@@ -1011,78 +1011,45 @@
     },
     "modelByRole": {
       "description": "Optional non-empty host model identifiers keyed only by supported protocol roles or default.",
-      "examples": [
-        {},
-        {
-          "product": "gpt-5.6-codex"
-        }
-      ],
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "controller": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Controller launches.",
-          "examples": ["gpt-5.6-codex"]
+          "$ref": "#/$defs/nonEmptyString"
         },
         "design": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Design launches.",
-          "examples": ["gpt-5.6-codex"]
+          "$ref": "#/$defs/nonEmptyString"
         },
         "test": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for Test launches.",
-          "examples": ["gpt-5.6-codex"]
+          "$ref": "#/$defs/nonEmptyString"
         },
         "product": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional host model identifier for product-window launches.",
-          "examples": ["gpt-5.6-codex"]
+          "$ref": "#/$defs/nonEmptyString"
         },
         "default": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional fallback host model identifier when a role-specific value is absent.",
-          "examples": ["gpt-5.6-codex"]
+          "$ref": "#/$defs/nonEmptyString"
         }
       }
     },
     "reasoningEffortByRole": {
       "description": "Optional tested reasoning-effort preferences keyed only by supported protocol roles or default.",
-      "examples": [
-        {},
-        {
-          "controller": "max",
-          "product": "xhigh"
-        }
-      ],
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "controller": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Controller launches.",
-          "examples": ["max"]
+          "$ref": "#/$defs/reasoningEffort"
         },
         "design": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Design launches.",
-          "examples": ["high"]
+          "$ref": "#/$defs/reasoningEffort"
         },
         "test": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for Test launches.",
-          "examples": ["high"]
+          "$ref": "#/$defs/reasoningEffort"
         },
         "product": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional tested reasoning effort for product-window launches.",
-          "examples": ["xhigh"]
+          "$ref": "#/$defs/reasoningEffort"
         },
         "default": {
-          "$ref": "#/$defs/reasoningEffort",
-          "description": "Optional fallback reasoning effort when a role-specific value is absent.",
-          "examples": ["high"]
+          "$ref": "#/$defs/reasoningEffort"
         }
       }
     },

@@ -28,7 +28,7 @@ clone. `fresh-legacy-residue-present` lists what it found as
 `fresh-legacy-residue-<kind>` codes; the user removes residue themselves - a
 sibling `../wakeflow-ledger` directory that is another workspace's live ledger is not residue. Residue listed under a repository root is removed by the user before a window is launched there. When the user wants to add a product
 repository to an existing workspace, preview the reconfigure intent the
-reference describes for that. The directory must already be a Git repository
+reference describes for that. When they want a repository taken out of Wakeflow, or Wakeflow stopped here, preview the `detach-repository` or `detach-workspace` intent the reference describes - never delete Wakeflow's files by hand. The directory must already be a Git repository
 of its own; if the preview reports `gitignore-git-repository`, tell the user,
 run `git init` there yourself once they agree, and preview again.
 

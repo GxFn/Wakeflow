@@ -26,6 +26,7 @@ from a single TypeScript source.
 - [How a piece of work flows](#how-a-piece-of-work-flows)
 - [Install](#install)
 - [Initialize a workspace](#initialize-a-workspace)
+- [Deactivating Wakeflow](#deactivating-wakeflow)
 - [The tool surface](#the-tool-surface)
 - [Two hosts, one model](#two-hosts-one-model)
 - [Working in this repository](#working-in-this-repository)
@@ -173,7 +174,7 @@ appears:
 
 | Path | Owner | Purpose |
 | --- | --- | --- |
-| `wakeflow.config.json` | Wakeflow, tracked | Program identity, topology (repositories, support surfaces, windows, pods), ledger root, governance, host preferences. Only `fresh-initialize`, `reconfigure` (which can also add a product repository) and `wakeflow_pod` write it. |
+| `wakeflow.config.json` | Wakeflow, tracked | Program identity, topology (repositories, support surfaces, windows, pods), ledger root, governance, host preferences. Only `fresh-initialize`, `reconfigure` (which can also add a product repository), `detach-repository` and `wakeflow_pod` write it; `detach-workspace` renames it to `wakeflow.detached.json`. |
 | `.wakeflow-active/` | Wakeflow, ignored | Active state: `index.md`, `current/workspace-current-status.md`, per-Demand roots and progress projections, the requirement board. |
 | `.wakeflow-local/` | Wakeflow, ignored | Host-private runtime: window bindings (the only place a real session or thread id lives), hook observations, pod receipts, maintenance journals. |
 | `../wakeflow-ledger/` (configurable) | Wakeflow, tracked | Requirement package records and Demand archives. |
@@ -187,6 +188,45 @@ window, or deletes something it does not own. If the private trees
 `chmod -R go+rX` - its first plan takes them back to 0700 / 0600; a private
 node someone else owns or can write is only reported.
 
+## Deactivating Wakeflow
+
+Leaving is a maintenance intent, not a manual clean-up. Say it in the
+Controller window; the agent previews, shows you the plan and its blockers, and
+applies only when you confirm (`wakeflow_maintain_workspace`, ADR-0024):
+
+- **"Take repository X out of Wakeflow"** — `detach-repository`. Removes
+  Wakeflow's managed block from that repository's instruction file (only a
+  block whose body Wakeflow wrote), retires the repository's window projections
+  and publishes the configuration without the repository and its product
+  window.
+- **"Stop using Wakeflow here"** — `detach-workspace`. Does that for every
+  repository and window, removes the Wakeflow block from the workspace
+  `.gitignore` and from the workspace `CLAUDE.md`/`AGENTS.md`, on Claude Code removes Wakeflow's allow rules from
+  `.claude/settings.json` and its own `statusLine` entry from
+  `.claude/settings.local.json` at the workspace root and the managed Design
+  and Test surfaces (your own rules and status line stay), then renames
+  `wakeflow.config.json` to `wakeflow.detached.json`.
+
+Both refuse while a worktree pod is open (`detach-pod-open:<podId>`) or a
+Demand is active (`detach-demand-active:<demandId>`): close the pod or finish
+the Demand first. A managed block whose body Wakeflow cannot prove it wrote is
+left alone and reported (`detach-unknown-managed-body:<targetKey>`), as is a
+settings file that cannot be read (`detach-settings-unreadable:<root>`).
+
+Not touched, and listed in the result as `leftBehind`: `.wakeflow-active/`,
+`.wakeflow-local/`, the ledger, the Design and Test surface directories,
+worktree checkouts, branches, and the plugin's own hooks. Archive or delete
+them yourself if you want them gone.
+
+Afterwards the directory is a detached workspace: `wakeflow_status` reports
+`overall: detached` with no owner in `next`, `wakeflow_verify` does not fail
+and reports the same, reconcile and reconfigure are blocked
+(`workspace-detached`), and a fresh initialization is blocked
+(`detached-file-present`) until you move `wakeflow.detached.json` out of the
+directory yourself. The file is deliberate evidence that Wakeflow was here;
+re-enabling starts with that explicit step, followed by a normal
+initialization.
+
 ## The tool surface
 
 Twenty public MCP tools. Effect tools run as `preview` then `apply` against the
@@ -195,7 +235,7 @@ read tools never write.
 
 | Area | Tools |
 | --- | --- |
-| Workspace | `wakeflow_maintain_workspace` — fresh-initialize, reconfigure, reconcile |
+| Workspace | `wakeflow_maintain_workspace` — fresh-initialize, reconfigure, reconcile, detach-repository, detach-workspace |
 | Windows | `wakeflow_register_window_binding` — inspect a launch intent, register a handshake, replace a window, release a work claim |
 | Requirements | `wakeflow_publish_requirement` — preview the summary, publish to the board; `wakeflow_inspect_board` |
 | Demand | `wakeflow_create_demand` (claiming a package creates the Demand), `wakeflow_complete_demand` (complete and archive in one transaction), `wakeflow_cancel_demand`, `wakeflow_continue_demand` (continue an archived Demand, or record the user's answer to an escalation) |
@@ -235,7 +275,7 @@ Everything hand-written is TypeScript under `src/`, `tooling/` and `tests/`;
 | `assets/agent-text/` | The single source of the skills, commands and READMEs shipped in both artifacts; host differences are twelve placeholders filled by each host's profile. |
 | `assets/brand/`, `assets/release/version.json` | Brand assets and the single release version input. |
 | `tooling/` | Build, codegen, architecture, test and release tooling. |
-| `tests/` | Unit, capability, host, artifact and scenario tests; `tests/scenarios/` runs the 25 end-to-end scenarios through the public tools in a disposable workspace, once per host (Codex and Claude Code). |
+| `tests/` | Unit, capability, host, artifact and scenario tests; `tests/scenarios/` runs the 26 end-to-end scenarios through the public tools in a disposable workspace, once per host (Codex and Claude Code). |
 | `plugins/` | The two generated plugin artifacts. Rebuild them; do not edit them. |
 | `docs/` | The development documentation system; start at `docs/README.md`. |
 

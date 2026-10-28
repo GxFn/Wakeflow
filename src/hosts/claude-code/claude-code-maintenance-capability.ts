@@ -1,3 +1,4 @@
+import type { JsonValue } from "../../foundation/data/json-value.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
   ExecuteWakeflowHostMaintenanceOperationRequest,
@@ -14,6 +15,7 @@ import {
   type WakeflowMaintenanceGateContext,
   WakeflowMaintenanceGateError,
 } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
+import { isWakeflowDetachAction } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   executeWakeflowWindowRuntimeProjectionOperation,
@@ -22,7 +24,11 @@ import {
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
-import { planClaudeCodePortableSettingsComposition } from "./claude-code-portable-settings-composition.js";
+import {
+  CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND,
+  claudeCodePortableSettingsRemovalTargetKey,
+  planClaudeCodePortableSettingsComposition,
+} from "./claude-code-portable-settings-composition.js";
 import {
   ClaudeCodePortableSettingsOperationExecutionError,
   executeClaudeCodePortableSettingsOperation,
@@ -34,12 +40,15 @@ import {
   planClaudeCodeStatuslineAssetOperation,
 } from "./claude-code-statusline-asset-operation.js";
 import {
+  CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND,
   CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND,
   CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID,
   ClaudeCodeStatuslineSettingsOperationError,
   executeClaudeCodeStatuslineSettingsOperation,
+  executeClaudeCodeStatuslineSettingsRemoval,
   planClaudeCodeStatuslineSettingsOperation,
+  planClaudeCodeStatuslineSettingsRemoval,
   planClaudeCodeStatuslineSettingsSurfaceOperations,
 } from "./claude-code-statusline-settings-operation.js";
 import {
@@ -59,9 +68,15 @@ import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-i
  * operation。共享层不依赖本模块；每种 operationKind 都在这里显式分派，不注册动态 handler。
  * 资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
+ *
+ * 退出路径（ADR-0024）的贡献只有两种宿主删除步：`remove-portable-settings-rules`（targetKey 程序根
+ * `program`、支撑面 `support:<surfaceId>`）与 `remove-statusline-entry`（`statusline`、
+ * `statusline:support:<surfaceId>`）；operationKind 就是共享步骤表里的种类名。
  */
 
 const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance" as const;
+const PORTABLE_SETTINGS_OPERATION_KIND = "portable-settings" as const;
+const PORTABLE_SETTINGS_OWNER_ID = "claude-code-portable-settings" as const;
 
 export type ClaudeCodeMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner";
 
@@ -151,10 +166,66 @@ async function planStatuslineSettings(
   }
 }
 
+/** 退出路径的状态行删除计划；读不出的根已在计划里记为 blocker，其余宿主错误按 owner 失败。 */
+async function planStatuslineRemoval(
+  root: RootedDirectory,
+  request: PlanWakeflowHostMaintenanceContributionRequest,
+): Promise<StatuslineSettingsPlan> {
+  try {
+    return await planClaudeCodeStatuslineSettingsRemoval(root, {
+      action: request.action,
+      config: request.config,
+      ...(request.signal === undefined ? {} : { signal: request.signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodeStatuslineSettingsOperationError) fail("owner", error.path);
+    throw error;
+  }
+}
+
+/**
+ * 退出路径（ADR-0024）的宿主贡献只有两种删除步：程序根与托管支撑面里 Wakeflow 的允许规则条目、Wakeflow
+ * 自己的状态行条目。资产在 `.wakeflow-local` 下一律不碰，窗口投影由共享步退役，规则与条目都不再写入；
+ * detach-repository 没有宿主维度，两处计划都是空集。宿主步的顺序由共享执行计划给出（每步依赖前一步）。
+ * detach-workspace 的 `config` 是当前配置：要清理的就是它声明的托管支撑面。
+ */
+async function planDetachContribution(
+  root: RootedDirectory,
+  request: PlanWakeflowHostMaintenanceContributionRequest,
+) {
+  const composition = await planClaudeCodePortableSettingsComposition(root, {
+    action: request.action,
+    config: request.config,
+    profile: request.profile,
+    ...(request.signal === undefined ? {} : { signal: request.signal }),
+  });
+  const statusline = await planStatuslineRemoval(root, request);
+  const blockerCodes = [...composition.blockerCodes, ...statusline.blockerCodes];
+  return createWakeflowHostMaintenanceContribution({
+    hostId: "claude-code",
+    capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
+    status: blockerCodes.length === 0 ? "ready" : "blocked",
+    blockerCodes,
+    operations: [
+      ...composition.operations.map((operation) => ({
+        operationId: operation.operationId,
+        operationKind: CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND,
+        ownerId: PORTABLE_SETTINGS_OWNER_ID,
+        targetKey: claudeCodePortableSettingsRemovalTargetKey(operation.root),
+        sourceDigest: operation.sourceDigest,
+        targetDigest: operation.targetDigest,
+        payload: operation,
+      })),
+      ...statusline.operations,
+    ],
+  });
+}
+
 async function planContribution(
   root: RootedDirectory,
   request: PlanWakeflowHostMaintenanceContributionRequest,
 ) {
+  if (isWakeflowDetachAction(request.action)) return planDetachContribution(root, request);
   const composition = await planClaudeCodePortableSettingsComposition(root, {
     action: request.action,
     config: request.config,
@@ -189,8 +260,8 @@ async function planContribution(
     operations: [
       ...composition.operations.map((operation) => ({
         operationId: operation.operationId,
-        operationKind: "portable-settings",
-        ownerId: "claude-code-portable-settings",
+        operationKind: PORTABLE_SETTINGS_OPERATION_KIND,
+        ownerId: PORTABLE_SETTINGS_OWNER_ID,
         targetKey: `settings:${operation.root.rootKind}:${operation.root.rootId}`,
         sourceDigest: operation.sourceDigest,
         targetDigest: operation.targetDigest,
@@ -275,12 +346,14 @@ async function executeHostAssetOperation(
   }
 }
 
+/** 安装与删除共用一条核对路：executor 由 operationKind 选定，负载形状由 executor 自己准入。 */
 async function executeStatuslineSettingsOperation(
   root: RootedDirectory,
   request: ExecuteWakeflowHostMaintenanceOperationRequest,
+  execute: typeof executeClaudeCodeStatuslineSettingsOperation,
 ): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
   try {
-    const executed = await executeClaudeCodeStatuslineSettingsOperation(root, {
+    const executed = await execute(root, {
       config: request.config,
       operation: request.operation.payload,
       sourceDigest: request.operation.sourceDigest,
@@ -298,6 +371,12 @@ async function executeStatuslineSettingsOperation(
     if (error instanceof ClaudeCodeStatuslineSettingsOperationError) fail("owner", error.path);
     throw error;
   }
+}
+
+/** 退出路径的 portable settings 负载带 `action: "remove"`（ADR-0024）；只看这一个判别字段，完整准入在 executor。 */
+function portableSettingsPayloadRemoves(payload: JsonValue): boolean {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return false;
+  return (payload as Readonly<Record<string, JsonValue>>).action === "remove";
 }
 
 async function executeOperation(
@@ -330,7 +409,21 @@ async function executeOperation(
     request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND &&
     request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
   ) {
-    return executeStatuslineSettingsOperation(root, request);
+    return executeStatuslineSettingsOperation(
+      root,
+      request,
+      executeClaudeCodeStatuslineSettingsOperation,
+    );
+  }
+  if (
+    request.operation.operationKind === CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND &&
+    request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID
+  ) {
+    return executeStatuslineSettingsOperation(
+      root,
+      request,
+      executeClaudeCodeStatuslineSettingsRemoval,
+    );
   }
   if (
     request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND &&
@@ -338,9 +431,13 @@ async function executeOperation(
   ) {
     return executeProjectionOperation(root, request);
   }
+  // 写入与删除共用一个 executor；种类与负载的 action 不一致的操作在任何效果前拒绝。
+  const removal =
+    request.operation.operationKind === CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND;
   if (
-    request.operation.operationKind !== "portable-settings" ||
-    request.operation.ownerId !== "claude-code-portable-settings"
+    (!removal && request.operation.operationKind !== PORTABLE_SETTINGS_OPERATION_KIND) ||
+    request.operation.ownerId !== PORTABLE_SETTINGS_OWNER_ID ||
+    portableSettingsPayloadRemoves(request.operation.payload) !== removal
   ) {
     fail("operation", "$operation");
   }

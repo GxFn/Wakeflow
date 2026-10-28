@@ -159,7 +159,8 @@ Design 与 Test 支撑面目录、worktree 检出、分支，以及插件自己�
 
 之后这个目录是一个已分离的工作区：问状态会回答 `detached` 且无事可做，严格校验不失败，
 维护在这里拒绝运行。`wakeflow.detached.json` 是有意留下的证据，说明这里曾是 Wakeflow
-工作区；要在这个目录重新使用 Wakeflow，先自己把这个文件移出目录，再像第一次那样初始化。
+工作区；要在这个目录重新使用 Wakeflow，把它改回 `wakeflow.config.json`，再让 Controller
+reconcile；要全新初始化，先把这个文件与列出的残留一并移走。
 
 ## Wakeflow 不会做的事
 

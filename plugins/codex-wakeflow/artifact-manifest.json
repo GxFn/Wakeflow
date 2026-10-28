@@ -110,13 +110,13 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 12688,
-      "sha256": "sha256:27ef0e10cfee6f14a1078fb3430b266cd9469e3714cbb15bd87448df290f520f"
+      "bytes": 12759,
+      "sha256": "sha256:645b4fd77c1e503692865bd7b5fb05b6f186200c35750a83eee78259dcd5282f"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 11687,
-      "sha256": "sha256:3c5b8f5142a4ff2e149c8feaba25c5a232ef17ed8bc4a2d616f5fd7d2267e8cf"
+      "bytes": 11755,
+      "sha256": "sha256:5882bd38076116b0f75f56849d9c8dcc68530cea22fcbb94cddcf73b06f52eaf"
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 28231,
-      "sha256": "sha256:88026b5aa548618b092d4c10560e1394ee268a99fe8d3549779aad17950e0aae"
+      "bytes": 28242,
+      "sha256": "sha256:05a387bdd43f66cf6a08e3dd392833778f7568f38603a11a708ecace4b4850a1"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -198,15 +198,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 12688,
-      "sha256": "sha256:27ef0e10cfee6f14a1078fb3430b266cd9469e3714cbb15bd87448df290f520f",
+      "bytes": 12759,
+      "sha256": "sha256:645b4fd77c1e503692865bd7b5fb05b6f186200c35750a83eee78259dcd5282f",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 11687,
-      "sha256": "sha256:3c5b8f5142a4ff2e149c8feaba25c5a232ef17ed8bc4a2d616f5fd7d2267e8cf",
+      "bytes": 11755,
+      "sha256": "sha256:5882bd38076116b0f75f56849d9c8dcc68530cea22fcbb94cddcf73b06f52eaf",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6596,8 +6596,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 28231,
-      "sha256": "sha256:88026b5aa548618b092d4c10560e1394ee268a99fe8d3549779aad17950e0aae",
+      "bytes": 28242,
+      "sha256": "sha256:05a387bdd43f66cf6a08e3dd392833778f7568f38603a11a708ecace4b4850a1",
       "mode": "0644",
       "scope": "agent-text"
     },

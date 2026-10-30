@@ -831,9 +831,9 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W40** [P3 / 触发低] 新发现（§13.218，现场 L14）：fresh-initialize 的 selection 要求 selectionKey 在整份选择里全局唯一（窗口键与支撑面键同名即 invalid-request/selection），Schema 描述与 init 技能都没写。修法方向：Schema description 与技能各补一句。状态：待排。
 - **W41** [P3 / 触发中] 新发现（§13.218，现场 L13）：制品更新后整批窗口 window-artifact-stale，Controller 第一轮 `/wakeflow:next` 花 10 分钟逐窗口 inspect 与 resume（从未对话的旧会话必然 resume-exited）才到第一个确认点，而 status 已点名 windows-stale:8。修法方向：nextActions 对整批 stale 窗口直接给 close → launch → replace → mark 的批处理建议；技能文本写明从未对话的会话不必 resume。状态：待排。
 
-## X. Claude 桌面会话树作为第二种窗口传输（2026-10-29）
+## X. Claude 宿主 desktop 传输（2026-10-29 起）
 
-来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219）。
+桌面传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；tmux 分册在 Y 节）。来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219、§13.220）与[适配方案](../reviews/2026-10-29-claude-desktop-transport-design.md)。
 
 - **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：等用户决定。
 - **X2** [中 / 前置] 现场 L17：三步开窗、fence、回调、pod 检出。状态：主干已做（2026-10-29，§13.220，调研文档第 8 节）；剩换代路径（归档/取消归档）等用户同意归档具体会话，`start_session` 有无等用户在新会话里看。
@@ -843,3 +843,27 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：进设计。
 - **X8** [低 / 改进] hook 输入自带 `permission_mode` 与 `session_title`，观察记录尚未落字段；落下后模式与 mark 都能靠记录核对。状态：进设计（K2）。
 - **X3** [低 / 外部] `start_session` 由服务端开关控制、每次弹确认、自动回合里不可用、子会话回合末必唤父会话（issue 100913、104101、105099、104683）：在这些控制出现前不作基线。状态：观察。
+- **X9** [中 / 差距] 桌面传输无法无头自动化：lab 的 claude-code 实验靠 tmux 起真实进程，桌面 app 不能在测试里启动；K1 只能到"录制观察 + 场景链卡"，真实闭环靠 L18 与每次 tag 前的现场回归。状态：已知差距，进规划第 3 节。
+- **X10** [中 / 外部] 桌面会话工具是 app 内部接口，随版本与服务端开关变动（10 月内 `start_session` 出现又消失、确认卡新增）；传输层必须可替换，所有桌面知识只放 `src/hosts/claude-code/`。状态：约束，进设计。
+- **X11** [低 / 前提] `claude --desktop` 要求订阅登录（API key 不可）与真实或伪终端；桌面内置 Claude Code 自动更新、与终端 CLI 并存。状态：约束，交接卡与 preflight 写明。
+- **X12** [低 / 行为] 向忙碌的桌面会话发消息在其回合结束后才送达；投递到被用户占用的 Design/Test 窗口要按 queued 处理，沿用 landing-silence。状态：进设计。
+- **X13** [低 / 待验] `set_session_title` 对 `--name` 给的标题是否弹确认未验（K1 前核对）。状态：待验。
+- **X14** [低 / 差距] 状态行与 `@wakeflow_state` attention 投影在桌面没有落点，只剩侧栏原生标记与标题。状态：已知差距，K2 看是否用标题前缀承载。
+
+## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
+
+tmux 传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；桌面分册在 X 节）。条目只做汇总与指向，修法与状态以被指向的原条目为准；原条目关闭时同步改这里。
+
+- **Y1** [P2] 输入框首行空而续行有草稿时仍发送或重启 → W3 / H3（等现场 L15）。
+- **Y2** [P3] 制品更新后整批窗口 stale，首轮 `/wakeflow:next` 逐窗口探测耗时 → W41（T1）。
+- **Y3** [P3] 第一次 reconcile apply 报 completed 却没改写助手副本与索引 → W38（T1）。
+- **Y4** [P3] replace / relocate 缺 expectedBindingId 与 Digest 时的拒绝码措辞 → W39（T1）。
+- **Y5** [高] 助手是约两千行无类型的 JS 字符串，游离在静态门之外 → D5（与 desktop.mjs 一起做类型化与合同共享）。
+- **Y6** [高] 屏幕抓取与 wrapper 剥离依赖未公开的 UI 文本，Claude Code 版本不检测不固定 → A3。
+- **Y7** [高] 产品与 Test 窗口可改写 Controller 免提示运行的助手 → F1（部分缓解：投递前核对已发布资产字节）。
+- **Y8** [中] 长寿会话按旧技能文字行事，插件更新后照旧流程刷新窗口 → I9（部分）。
+- **Y9** [低] pod 配置事务后 main pod 全部窗口显示 `drifted` → D11（T1）。
+- **Y10** [中] 宿主观察经模型逐字转抄，pod 开关每窗口约一万输出 token，16 窗格上限 → K2。
+- **Y11** [设计限制] 从未对话的会话不能 `claude --resume`，助手拒绝为 resume-exited；与桌面的 `--desktop --resume` 同源。状态：文本已写明。
+- **Y12** [固有] tmux 服务器退出（终端关闭、重启）即全部窗口退出，下次由 Controller 重开并 replace。状态：行为已知，交接卡写明保活。
+- **Y13** [固有] 每个窗口一次信任对话，只能由用户接受。状态：行为已知。

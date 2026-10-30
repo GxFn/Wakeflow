@@ -47,6 +47,16 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   settings and status-line assets. Shared code consumes values a host profile
   supplies; it must not infer Codex-versus-Claude behavior through ad hoc host
   checks.
+- The Claude Code host has two window transports, tmux and desktop sessions,
+  and both are first-class and maintained together; neither replaces the
+  other. A change to the window transport layer (launch instructions, the
+  helper asset, binding observations, liveness observations, the maintenance
+  asset set, handover text) lands on both transports in the same batch, or
+  registers the gap in `docs/references/open-items.md` (section Y for tmux,
+  section X for desktop) with the batch that restores parity. Shared code
+  consumes transport values from the host profile and never checks the
+  transport name ad hoc. The plan is
+  `docs/reviews/2026-10-30-claude-host-dual-transport-plan.md`.
 - `src/contracts/schemas/` holds the portable JSON Schemas;
   `src/contracts/generated/` is derived by `npm run schema:build` and checked
   for drift by `npm run schema:check`. Do not hand-edit generated files.

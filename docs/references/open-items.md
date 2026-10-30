@@ -825,8 +825,16 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W34** [P3 / 触发低] CR-S6：research 完成后的 next 指向被禁止的 continue（批 G；状态：已修 §13.212）。修：归档 next 读 claim 类型，research 不给 continue 前沿。
 - **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：已修 §13.211）。修：export-ci 依回执 selection 判完整。
 - **W36** [P3 / 触发低] 新发现（§13.213，批 H）：apply 一条数千文件的受管证据记录耗时数分钟（stage 物化与发布链在数千文件时很慢，与目录是否扁平无关；4095 文件的来源只做 preview 就要约 9 秒捕获）。修法方向：发布链按目录批量物化或流式写入，单记录文件数上限是否下调由用户定。状态：待排。
-- **W37** [P3 / 触发中] 新发现（§13.215，批 D′ 接线）：`wakeflow_verify` 结果 Schema 的门码 `code` 模式不允许下划线，而既有 `demand-root-audit`、`evidence-integrity`、`append-candidates-clear` 的失败码带 `demand_…` id，带 Demand id 的失败码会在输出准入被拒——疑似既有缺陷，待复现并修（放宽模式或改用不带 id 的码加 details）。状态：待排。
+- **W37** [P3 / 触发中] 新发现（§13.215，批 D′ 接线）：`wakeflow_verify` 结果 Schema 的门码 `code` 模式不允许下划线，而既有 `demand-root-audit`、`evidence-integrity`、`append-candidates-clear` 的失败码带 `demand_…` id，带 Demand id 的失败码会在输出准入被拒——疑似既有缺陷。状态：不成立（2026-10-29，§13.219）：模式 `^[A-Za-z0-9][A-Za-z0-9._:,/-]{0,255}$` 的字符类本就含下划线，用户的子会话以真实 Schema 做 Ajv 探针核实三种形状都通过；它加的两个断言测试留在其 worktree 未提交。
 - **W38** [P3 / 触发低] 新发现（§13.218，现场 L16 准备）：reconcile 第一次 apply 报 completed 却没有改写 tmux 助手副本与看板索引，verify 仍报 tmux.mjs:drift 与 index-stale；第二次同样的 preview + apply 正常生效（stepReceipt disposition updated）。两次计划摘要不同，原因未查明；待用带过期助手副本的工作区复现并修。状态：待排。
 - **W39** [P3 / 触发中] 新发现（§13.218，现场 L16）：`wakeflow_register_window_binding` 的 replace/relocate 请求缺 expectedBindingId 与 expectedBindingDigest 时，Schema 拒绝码是 additional:observation，没有点名缺的两个字段，措辞误导。修法方向：按 mode 分支报缺字段，或工具描述写明两字段必填。状态：待排。
 - **W40** [P3 / 触发低] 新发现（§13.218，现场 L14）：fresh-initialize 的 selection 要求 selectionKey 在整份选择里全局唯一（窗口键与支撑面键同名即 invalid-request/selection），Schema 描述与 init 技能都没写。修法方向：Schema description 与技能各补一句。状态：待排。
 - **W41** [P3 / 触发中] 新发现（§13.218，现场 L13）：制品更新后整批窗口 window-artifact-stale，Controller 第一轮 `/wakeflow:next` 花 10 分钟逐窗口 inspect 与 resume（从未对话的旧会话必然 resume-exited）才到第一个确认点，而 status 已点名 windows-stale:8。修法方向：nextActions 对整批 stale 窗口直接给 close → launch → replace → mark 的批处理建议；技能文本写明从未对话的会话不必 resume。状态：待排。
+
+## X. Claude 桌面会话树作为第二种窗口传输（2026-10-29）
+
+来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219）。
+
+- **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：等用户决定。
+- **X2** [中 / 前置] 现场 L17（调研文档第 5 节）：B 路径 `claude --bg` → `claude stop` → 伪终端 `claude --desktop --resume` 三步连跑、`send_message` 投递的 fence 是否原样进 hook 记录、回调方向、pod 检出的 cwd 与 `CLAUDE_PROJECT_DIR`。状态：待用户安排。
+- **X3** [低 / 外部] `start_session` 由服务端开关控制、每次弹确认、自动回合里不可用、子会话回合末必唤父会话（issue 100913、104101、105099、104683）：在这些控制出现前不作基线。状态：观察。

@@ -5566,3 +5566,14 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **门。** 第 1 级（只有 agent-text 与文档改动；`impact report` 定级 1：制品重建、`verify quick --changed`、`smoke:artifacts`、handoff）。制品重建后 8 个文件变化（两份 README 两种语言、Controller 窗口参考、两份 manifest）。`wf verify quick --changed`：run-kKeoBC，24 个受影响测试文件、124/124 通过（4.0 分钟，含 tests/artifacts 与 lab 负载测试），inputsUnchanged；`smoke:artifacts` 五幕通过、lab 四个实验 4/4（2.4 分钟）；`git diff --check` 干净；`wf handoff` 全部通过（build:check、docs-pointers、instructions-parity、test-durations 通过，树 18 处修改、与本地 origin/main 平齐）。
 
 **结论：通过（三项现场全部通过：L13 连续 `/wakeflow:next` 从认领到归档只用 2 次 `/next` 与 2 次确认，停点与 V3 一致；L14 两个 detach 动作与重新启用路径按 ADR-0024 运行；L16 worktree 窗口 resume 带 worktree 观察、relocate 接受、mark 不加前缀）。第 1 级门通过（run-kKeoBC 124/124、smoke 4/4、handoff 通过）。文案修正与文档随本节提交，制品重建另一提交；新记 W38–W41；W3 仍等现场 L15；本机缓存里装的仍是 687011da 的制品（本节只改文本，是否再刷新由用户决定）。**
+
+### 13.219 桌面会话传输调研与 L17 前置试验（2026-10-29）
+
+用户看到 Claude 桌面客户端把会话嵌套成树，问能否把 Claude 宿主做到桌面上。只做调研，不改运行时：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)汇总本机核实、官方五页文档与十三个 GitHub issue。
+
+- **本机核实。** 桌面 4.29.0 内置 Claude Code 2.1.309（终端 CLI 2.1.303）；本会话有 `list_sessions`/`get_session`/`send_message`/`list_events`/`set_session_title`/`stop_session`/`set_session_permission_mode`/`archive`/`detach`/`open_session_in`/`spawn_task`，没有 `start_session`（桌面构建里有、服务端开关控制，issue 100913）。在 WakeflowTestWorkspace9 经伪终端 `claude --desktop --resume <已结束的 CLI 会话>`：命令打印 Opening session 后退出 0，4 秒后 `.wakeflow-local` 出现 `session-start` 记录（sessionId 同 CLI id、cwd 工作区根、artifactVersion 1.2.0、manifest 摘要为当前制品）——hook 在桌面会话里照常触发，观察器同形；重定向输出下同一命令被拒（不能非交互运行）。`list_sessions` 给该会话 `local_<同一 uuid>`；`claude agents --json` 把桌面会话列为 interactive 并带 status/cwd/name/sessionId/pid；裸 `claude --desktop` 只切目录不起进程。副作用：工作区 verify 变为 `runtime-artifact windows-stale:9`（桌面会话跑的是当天重建后的制品、9 个 tmux 窗口是重建前开的，C6/C11 的正确结果），侧栏多一个无标题的 workspace9 会话，留给用户归档。
+- **结论。** 可行：桌面会话是持久对象（resume-exited 与 relocate 两类问题消失），`send_message` 有 delivered/queued 返回值、落地仍由 hook 记录证明，与 Codex 宿主同形。基线开窗路径是不依赖开关的 CLI 组合 `claude --bg` → `claude stop` → 伪终端 `claude --desktop --resume`（本机验了后两步），`start_session` 等开关与父唤醒控制出现后再切换。立项前先做 L17（文档第 5 节），再写 ADR；设计为 `claude-code` 宿主的 `windowTransport` 轴，两道门。
+- **顺带。** W37 不成立：子会话核实 verify 结果 Schema 的门码模式 `^[A-Za-z0-9][A-Za-z0-9._:,/-]{0,255}$` 本就含下划线，`demand_…` id 可通过；它在自己的 worktree 里加的两个测试未提交，由用户决定取舍。
+- **门。** 无代码改动，文档级：`wf verify quick --changed` 与 `wf handoff`。
+
+**结论：调研完成，等用户决定是否做 L17；W37 关闭为不成立。**

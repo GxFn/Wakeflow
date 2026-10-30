@@ -1,6 +1,6 @@
 # Claude 桌面端 Wakeflow 适配方案（设计提案，2026-10-29）
 
-状态：proposed（等用户裁定第 11 节的决定点；通过后写 ADR，再按第 10 节分批）。前置：[调研文档](./2026-10-29-claude-desktop-window-transport-research.md)与现场 L17（§13.220）。
+状态：accepted（用户 2026-10-30 对第 11 节四个决定点按推荐裁定；ADR 随 K1 的首个提交落下，再按第 10 节分批）。前置：[调研文档](./2026-10-29-claude-desktop-window-transport-research.md)与现场 L17（§13.220）。
 
 ## 0. 目标与非目标
 
@@ -57,13 +57,13 @@
 - (b) 用户在每个目录的选择器里选一次 auto（按目录记忆）：一次性动作，交接卡列出。
 - (c) 用户级 `permissions.defaultMode: auto`：所有会话都 auto，范围最大。
 
-方案建议 (b)，并把模式进证据：hook 通用输入里有 `permission_mode`，观察记录加可选字段，登记时模式不是 auto 就阻塞 `permission-mode-mismatch:<windowId>`，文本指向 (b)。(a) 不自动做；(c) 由用户自己选。
+方案建议 (b)，并把模式进证据：hooks 文档核实 `permission_mode` 是通用输入字段（值 default / plan / acceptEdits / auto / dontAsk / bypassPermissions），UserPromptSubmit 示例带它、SessionStart 示例没有，所以证据来自第一条 user-prompt-submit 记录而不是登记时：观察记录加可选字段 `permissionMode`，投递落地时该记录的模式不是 auto 就在窗口上记阻塞 `permission-mode-mismatch:<windowId>`（投递本身已落地，窗口仍可工作，只是会向用户要权限），Controller 据此提醒用户按 (b) 处理一次。(a) 不自动做；(c) 由用户自己选。
 
 ## 4. 登记与定位子
 
 - 绑定 Schema：`creationObservation` 加可选 `desktop` 分支（`sessionId` `local_…`、`cwd`、`title`），与 `tmux` 二选一；宿主准入由 `tmux-coordinates-required` 改为按传输要求对应的定位子。
 - 观察类型：`tmux-panes` 旁加 `desktop-sessions`——`claude agents --json` 的行（sessionId、status、cwd、name、pid）；Wakeflow 分类 present-busy / present-idle / absent，Agent 不判存活。
-- 身份不变：句柄仍是 hook 的 session_id；桌面 id 只是定位子。
+- 身份不变：句柄仍是 hook 的 session_id；桌面 id 只是定位子。B 路径开出的窗口桌面 id 恒为 `local_<session_id>`（L17 三个会话一致）；UI 建的会话（引导会话、Controller 自己）两者不同，Controller 用 `get_session self` 读自己的桌面 id 作为回传指针，观察里的 `desktop.sessionId` 一律显式填写、不派生。
 - 观察记录新增可选字段 `permissionMode` 与 `sessionTitle`（hook 输入自带），让模式与标题都有证据，`mark` 可以靠记录核对而不是读屏。
 
 ## 5. 投递与回调
@@ -102,9 +102,13 @@
 - K2 生命周期与投影：观察记录的 permissionMode / sessionTitle、pod 分组、换代路径（验证后）、交接卡、detach 对应。第 2 级门。
 - L18：真实桌面 Controller 从认领到归档走一遍。
 
-## 11. 决定点
+## 11. 决定点与裁定
 
-1. 权限模式一致性选 (b) 还是 (c)，或接受 (a) 的每窗确认。
-2. 换代路径：先验归档/取消归档，还是先以"重启 app"为准。
-3. 接受 `--bg` 首回合"只回 ok"的额外一回合。
-4. 是否允许已有 tmux 工作区经 reconfigure 切到 desktop。
+用户 2026-10-30 按推荐裁定：
+
+1. 权限模式一致性取 (b)：用户在每个窗口目录的选择器里选一次 auto，交接卡列出；模式证据来自第一条 user-prompt-submit 记录（第 3.4 节），不自动调 `set_session_permission_mode`。
+2. 换代路径：K1 的文本以"重启桌面 app 后 reconcile"为准；K2 开头先在可丢弃工作区验证归档 + 取消归档是否重起进程并换代，验证通过再改文本与助手。
+3. 接受 `--bg` 首回合"只回 ok"的额外一回合（几秒、极少 token），它是 `--desktop --resume` 的前提。
+4. 允许已有 tmux 工作区经 reconfigure 切到 desktop：退役全部窗口投影后按新传输开窗；K1 只支持 fresh-initialize 时选择传输，切换放 K2。
+
+K1 开始前的三项核对（不阻塞 ADR）：`set_session_title` 对 `--name` 标题是否弹确认；`claude agents --json` 在桌面 app 未运行时的行为（preflight 的 `desktop-unavailable` 判据）；Controller 窗口参考压缩 tmux 段腾出的行数是否够放 desktop 分步。

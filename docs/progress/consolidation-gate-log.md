@@ -5586,6 +5586,7 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **约束。** `--bg` 忽略 `--session-id`（id 由宿主分配、读回）；桌面接手后 permissionMode 回到目录记忆值（default），auto 不跨过；登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面定位子要进 Schema；`--worktree` 起的会话被 app 当成自己的 worktree（`claude rm` 与归档会删检出），pod 窗口必须以检出为 cwd、永不 `claude rm`。
 - **未验。** 换代路径（归档/取消归档）等用户同意归档具体会话；`start_session` 是否出现等用户在新会话里看。
 - **方案。** 一个宿主两种传输（`windowTransport`），助手 `desktop.mjs` 六个子命令，绑定 Schema 加 `desktop` 定位子与 `desktop-sessions` 观察，观察记录加 `permissionMode`/`sessionTitle`，投递用 `send_message` 返回值作 sendReturn、落地不变，pod 分组为侧栏投影，状态行与 tmux 资产不发布；两批（K1 核心、K2 生命周期），各一道第 2 级门，然后 L18。四个决定点留给用户（权限模式一致性做法、换代路径、首回合 ok、tmux 工作区可否切换）。
+- **裁定。** 用户 2026-10-30 按推荐裁定四个决定点（权限模式一致性取"用户按目录选一次 auto"，证据来自第一条 user-prompt-submit 记录的 `permission_mode`——hooks 文档核实它是通用输入字段、SessionStart 示例没有；换代先以重启 app 为准、K2 开头再验归档/取消归档；接受首回合 ok；tmux 工作区可经 reconfigure 切换，放 K2）。设计提案状态改为 accepted，ADR 随 K1 首个提交落下。
 - **门。** 无代码改动，文档级：`wf verify quick --changed` 与 `wf handoff`。
 
-**结论：L17 主干通过，设计提案 proposed，等用户裁定四个决定点后写 ADR。**
+**结论：L17 主干通过，四个决定点已裁定，设计提案 accepted，下一步是 ADR 与批 K1。**

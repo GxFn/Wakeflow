@@ -1,6 +1,6 @@
 # Claude 桌面会话树作为 Wakeflow 第二种窗口传输的调研（2026-10-29）
 
-状态：proposed（调研结论与现场 L17 方案；是否立项由用户决定；本文不改任何运行时行为）。
+状态：active（调研结论；现场 L17 已于 2026-10-29 执行，结果见第 9 节与 §13.220；设计提案见[适配方案](./2026-10-29-claude-desktop-transport-design.md)；本文不改任何运行时行为）。
 
 ## 0. 问题与边界
 
@@ -97,7 +97,22 @@
 
 可以做，而且 B 路径不依赖任何开关，今天就能现场验证；A 路径等开关与 `notify_parent` 之类的控制出现后再切换。下一步是 L17，不是写代码。
 
-## 8. 来源
+## 8. L17 结果（2026-10-29 补）
+
+在 WakeflowTestWorkspace9 上，不改代码，只用现有工具与 CLI（桌面 4.29.0 内置 Claude Code 2.1.309，终端 CLI 2.1.303）：
+
+- **E1 三步开窗（B 路径）通过。** 产品仓库根 `claude --bg "<prompt>" --name "L17 Alembic" --permission-mode auto --add-dir <工作区根>`：10 秒 done；`claude stop`；伪终端 `claude --desktop --resume <id>`：Opening session、退出 0，侧栏出现会话，桌面 id `local_<同一 uuid>`，hook 写出两条 session-start（bg 启动与桌面接手）。第一次失败的教训：prompt 跟在变长的 `--add-dir` 后面会被当成目录，会话空闲起步；从未对话的会话 `--desktop --resume` 报 No session found。
+- **E2 fence 匹配通过。** 把该桌面会话登记为 Alembic 窗口后（用窗口原有的 tmux 坐标做 replace，因为没有 tmux 坐标的观察被拒 `tmux-coordinates-required`），桌面 `send_message` 与跨会话 `SendMessage` 各投一条：两条 user-prompt-submit 记录的 promptDigest 都等于原始正文的 digest；会话记录里看到的 "Another Claude session sent a message:" 前缀、`<cross-session-message …>` 元素与末尾说明只是渲染，hook 的 `prompt` 是原文。现有 unwrap 与落地规则都不用改。
+- **E3 回调通过。** 让该产品会话用 `SendMessage` 发回本会话：本会话正忙，得到 queued，"回合结束后送达并开新回合"。
+- **E4 权限模式不跨过桌面。** 该会话自报 `permissionMode=default`（`--bg` 给的是 auto）、模型是桌面默认 Opus 5.5。
+- **E6 pod 检出。** `claude --bg --worktree wakeflow-live16`（仓库根）在既有 pod 检出里跑、进桌面、hook 记录 cwd 为检出路径；但 `claude stop` 提示 "worktree retained … run claude rm to remove worktree"，桌面 `get_session` 报 `worktreePath/worktreeName`——app 把 Wakeflow 的检出当成自己的。
+- **E7 `--bg` 忽略 `--session-id`。** 警告 "--bg manages the session id"。
+- **E8 以检出为 cwd 直接 `--bg`。** 通过；桌面只报 `branch` 与 `originCwd`，不报 `worktreePath`。
+- **未做。** E5 换代（归档/取消归档）需用户明确同意归档具体会话；第 1 步（新会话里确认 `start_session`）需用户自己做。
+
+副作用：侧栏多了 L17 Alembic、L17 pod Alembic、L17 pod cwd 与一个无标题的 workspace9 会话；agent view 留有四个 done 的后台作业（其中 62e6867e 持有 pod 检出，**不要** `claude rm` 它）；workspace 9 的 Alembic 窗口绑定经两次 replace 回到原来的 tmux 会话句柄；本机 tmux 服务器已不在运行，9 个 tmux 窗口本就已退出。
+
+## 9. 来源
 
 - https://code.claude.com/docs/en/desktop
 - https://code.claude.com/docs/en/worktrees

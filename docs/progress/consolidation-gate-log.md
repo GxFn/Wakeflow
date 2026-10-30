@@ -5577,3 +5577,15 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **门。** 无代码改动，文档级：`wf verify quick --changed` 与 `wf handoff`。
 
 **结论：调研完成，等用户决定是否做 L17；W37 关闭为不成立。**
+
+### 13.220 桌面会话传输：现场 L17 与适配方案（2026-10-29）
+
+用户要求继续验证、全面调研并设计针对桌面端的适配方案。L17 在 WakeflowTestWorkspace9 上完成八个试验（结果写进[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)第 8 节），方案写成[设计提案](../reviews/2026-10-29-claude-desktop-transport-design.md)。
+
+- **通过。** 三步开窗 `claude --bg` → `claude stop` → 伪终端 `claude --desktop --resume`（prompt 必须在变长参数之前；从未对话的会话不能 resume）；两条投递路线到 hook 的 `prompt` 都是原始正文，promptDigest 与 permit 相等，落地规则与 unwrap 不用改；回调到忙碌的 Controller 为 queued、回合结束后自动开新回合；pod 检出以 cwd 直接起会话可行。
+- **约束。** `--bg` 忽略 `--session-id`（id 由宿主分配、读回）；桌面接手后 permissionMode 回到目录记忆值（default），auto 不跨过；登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面定位子要进 Schema；`--worktree` 起的会话被 app 当成自己的 worktree（`claude rm` 与归档会删检出），pod 窗口必须以检出为 cwd、永不 `claude rm`。
+- **未验。** 换代路径（归档/取消归档）等用户同意归档具体会话；`start_session` 是否出现等用户在新会话里看。
+- **方案。** 一个宿主两种传输（`windowTransport`），助手 `desktop.mjs` 六个子命令，绑定 Schema 加 `desktop` 定位子与 `desktop-sessions` 观察，观察记录加 `permissionMode`/`sessionTitle`，投递用 `send_message` 返回值作 sendReturn、落地不变，pod 分组为侧栏投影，状态行与 tmux 资产不发布；两批（K1 核心、K2 生命周期），各一道第 2 级门，然后 L18。四个决定点留给用户（权限模式一致性做法、换代路径、首回合 ok、tmux 工作区可否切换）。
+- **门。** 无代码改动，文档级：`wf verify quick --changed` 与 `wf handoff`。
+
+**结论：L17 主干通过，设计提案 proposed，等用户裁定四个决定点后写 ADR。**

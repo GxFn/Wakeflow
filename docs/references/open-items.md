@@ -836,5 +836,10 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219）。
 
 - **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：等用户决定。
-- **X2** [中 / 前置] 现场 L17（调研文档第 5 节）：B 路径 `claude --bg` → `claude stop` → 伪终端 `claude --desktop --resume` 三步连跑、`send_message` 投递的 fence 是否原样进 hook 记录、回调方向、pod 检出的 cwd 与 `CLAUDE_PROJECT_DIR`。状态：待用户安排。
+- **X2** [中 / 前置] 现场 L17：三步开窗、fence、回调、pod 检出。状态：主干已做（2026-10-29，§13.220，调研文档第 8 节）；剩换代路径（归档/取消归档）等用户同意归档具体会话，`start_session` 有无等用户在新会话里看。
+- **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`，登记时不是 auto 就阻塞；用户按目录选一次 auto 或用户级 defaultMode（设计提案第 3.4 节，决定点 1）。状态：待裁定。
+- **X5** [中 / 合同] 登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面会话今天无法登记。修法方向：`creationObservation` 加 `desktop` 定位子分支、观察类型加 `desktop-sessions`、准入按传输选坐标（设计提案第 4 节）。状态：待立项。
+- **X6** [高 / 风险] `claude --bg --worktree` 起的会话被 agent view 与桌面当成自己的 worktree：`claude rm` 与归档会删除 Wakeflow 的 pod 检出（L17 E6）。修法方向：pod 窗口以检出为 cwd 直接起会话（E8 证实 app 不持有），文本写明永不 `claude rm`、pod 打开期间不归档。状态：进设计。
+- **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：进设计。
+- **X8** [低 / 改进] hook 输入自带 `permission_mode` 与 `session_title`，观察记录尚未落字段；落下后模式与 mark 都能靠记录核对。状态：进设计（K2）。
 - **X3** [低 / 外部] `start_session` 由服务端开关控制、每次弹确认、自动回合里不可用、子会话回合末必唤父会话（issue 100913、104101、105099、104683）：在这些控制出现前不作基线。状态：观察。

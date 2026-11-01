@@ -642,6 +642,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 证据：claude-code-agent-text-profile.ts:50-57、:101-106 要求逐字 register 和 record helper 的输出；relatedPanes（tmux-asset.ts:672-683）返回所有相关窗格，上限 MAX_PANES=16（:119）；commandClose（:1223、:1239）丢掉 truncated 标志；未列出的窗格按 missing 分类（pane-classification.ts:91）；6 次 decommission 请求从约 13.9 KB 降到 9.6 KB，平均 11,095 B；pod create：50 次调用、64,211 输出 token、26 分钟；pod close：56 次调用、84,629 输出 token、45 分钟（其中含压缩）；验证者更正：复制的观察只占每窗口约 3-4k token；§13.128 把十几分钟主要归因于窗口启动等待和注册；kill 决策用的是完整列表
   - 建议：让 helper 把关闭和存活观察过滤到目标窗口的窗格；增加批量命令（launch --pod、close --pod），把观察写到工作区文件里，register 接受文件引用加摘要或者批量窗口；在支持第二个 pod 之前提高或取消 16 窗格上限。之后按回合数、输出 token、分钟数重新测量。
 - **K3** [中 / 缺口] ADR-0004 定的 <60 KB 工具目录目标没达到，20 个工具后没再量过，也没有强制执行；gate 仍然放行 128 KB（计划阶段 8；状态：开放）
+  - 2026-10-31（K1，§13.222）：桌面登记合同（desktop 定位子与 desktop-sessions 观察）加约 1.4 KB，实测 105,398 B，预算按最小改法提到 104 KiB；描述减肥仍是压回去的路径。
   - 2026-10-19（Q12，§13.180）：实测 tools/list 工具数组 94,146 B；预算定为 102 KiB（实测加一成）并在目录测试锁住，`INTERIM`/"L1 复测"字样退役；smoke 里的大小断言与按角色子集归 K4。
   - 说明：一个已接受的 ADR 目标看起来像是在执行，其实没有，唯一的 gate 是目标的 2.1 倍，推迟它的注释也过时了。成本主要落在没有延迟加载的 Codex 上；Claude Code 是按需加载工具的。
   - 证据：ADR-0004:5,41 目标低于 60 KB；计划 TSD-13 把它列为 L0 退出条件；wakeflow-public-mcp-catalog.test.ts:196 INTERIM 预算 128 KiB；:311 的注释说“L1 之后复测”，而 L1 已经结束；早期测量为 18 个工具时 85,016 B（gate-log L2748）；§13.140 实测 20 工具数组为 92,681 B，含外壳响应为 92,691 B；20 个 request schema 压缩后共 77,343 B，加上描述等估计约 90 KB（约 2.6 万 token，估算值）；仅 $defs 去重省不到 60 KB；smoke 只检查工具名（smoke-plugin-artifacts.ts:365-374）
@@ -835,12 +836,12 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 桌面传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；tmux 分册在 Y 节）。来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219、§13.220）与[适配方案](../reviews/2026-10-29-claude-desktop-transport-design.md)。
 
-- **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：等用户决定。
+- **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：已立项（ADR-0025），K1 已落地 §13.222，K2 待做。
 - **X2** [中 / 前置] 现场 L17：三步开窗、fence、回调、pod 检出。状态：主干已做（2026-10-29，§13.220，调研文档第 8 节）；剩换代路径（归档/取消归档）等用户同意归档具体会话，`start_session` 有无等用户在新会话里看。
 - **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`（通用输入字段，SessionStart 示例无、UserPromptSubmit 有），第一条投递落地时不是 auto 就在窗口上记 `permission-mode-mismatch`；用户按目录选一次 auto（设计提案第 3.4 节）。状态：已裁定 (b)（2026-10-30），进 K1/K2。
-- **X5** [中 / 合同] 登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面会话今天无法登记。修法方向：`creationObservation` 加 `desktop` 定位子分支、观察类型加 `desktop-sessions`、准入按传输选坐标（设计提案第 4 节）。状态：待立项。
-- **X6** [高 / 风险] `claude --bg --worktree` 起的会话被 agent view 与桌面当成自己的 worktree：`claude rm` 与归档会删除 Wakeflow 的 pod 检出（L17 E6）。修法方向：pod 窗口以检出为 cwd 直接起会话（E8 证实 app 不持有），文本写明永不 `claude rm`、pod 打开期间不归档。状态：进设计。
-- **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：进设计。
+- **X5** [中 / 合同] 登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面会话今天无法登记。修法方向：`creationObservation` 加 `desktop` 定位子分支、观察类型加 `desktop-sessions`、准入按传输选坐标（设计提案第 4 节）。状态：已落地 K1 §13.222（`desktop-session-required`、`locator-kind-mismatch`、`relocate-not-applicable`）。
+- **X6** [高 / 风险] `claude --bg --worktree` 起的会话被 agent view 与桌面当成自己的 worktree：`claude rm` 与归档会删除 Wakeflow 的 pod 检出（L17 E6）。修法方向：pod 窗口以检出为 cwd 直接起会话（E8 证实 app 不持有），文本写明永不 `claude rm`、pod 打开期间不归档。状态：已落地 K1 §13.222（助手在仓库根准备检出并以检出为 cwd，禁止 `--worktree`，永不 `claude rm`；文本已写明）。
+- **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：已落地 K1 §13.222。
 - **X8** [低 / 改进] hook 输入自带 `permission_mode` 与 `session_title`，观察记录尚未落字段；落下后模式与 mark 都能靠记录核对。状态：进设计（K2）。
 - **X3** [低 / 外部] `start_session` 由服务端开关控制、每次弹确认、自动回合里不可用、子会话回合末必唤父会话（issue 100913、104101、105099、104683）：在这些控制出现前不作基线。状态：观察。
 - **X9** [中 / 差距] 桌面传输无法无头自动化：lab 的 claude-code 实验靠 tmux 起真实进程，桌面 app 不能在测试里启动；K1 只能到"录制观察 + 场景链卡"，真实闭环靠 L18 与每次 tag 前的现场回归。状态：已知差距，进规划第 3 节。
@@ -849,6 +850,8 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X12** [低 / 行为] 向忙碌的桌面会话发消息在其回合结束后才送达；投递到被用户占用的 Design/Test 窗口要按 queued 处理，沿用 landing-silence。状态：进设计。
 - **X13** [低 / 待验] `set_session_title` 对 `--name` 给的标题是否弹确认未验（K1 前核对）。状态：待验。
 - **X14** [低 / 差距] 状态行与 `@wakeflow_state` attention 投影在桌面没有落点，只剩侧栏原生标记与标题。状态：已知差距，K2 看是否用标题前缀承载。
+- **X15** [低 / 改进] Controller 的桌面回调 id 今天由 Controller 用 `get_session self` 读出后写进投递边界段（K1 裁定；payload-privacy 只拦凭证类命中，`local_` id 不在其列）。修法方向：确定性路线——投递 prompt 的回传段由服务端从 Controller 绑定的桌面定位器渲染，或助手加子命令读定位器，prompt 里不再出现任何 id。状态：K2。
+- **X16** [低 / 文本] 新参考 `references/desktop-transport.md` 随制品也进了 Codex 制品（构建器不按宿主过滤文件；共享文本已按宿主限定措辞）。修法方向：`build-plugin-artifacts.ts` 加逐宿主文件过滤或把参考放进宿主占位符。状态：K2。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 

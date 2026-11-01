@@ -105,9 +105,9 @@ report, return the callback. You own no other step and no Controller authority.
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
    Controller window the permit's host action names, by the host's own means:
-   {{deliveryAction}} That is the only transport for this send - not a
-   cross-session messaging tool, not a file, not another window - because
-   landing is proven by the hook record of a prompt submitted in that window.
+   {{deliveryAction}} That is the only route for this send - not a file, not
+   another window, not a messaging tool the permit's host action did not name -
+   because landing is proven by the hook record of a prompt submitted in that window.
    That send is the last thing you do for this target.
 
 Then end your turn. Do not start the next task, do not poll for a reply, and

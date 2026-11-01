@@ -4,6 +4,8 @@ Read this when you are initializing, reconfiguring or detaching the workspace
 (step 0), launching or retiring a window (step 1), refreshing windows after a
 plugin update, or creating or closing a pod (step 13). It is Controller depth;
 the immediate goal, the reading order and the boundaries are in `SKILL.md`.
+On Claude Code the window transport decides the host steps: the steps below
+name both, and `references/desktop-transport.md` details desktop sessions.
 
 ## What the workspace is
 
@@ -30,7 +32,9 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   parts: `program` (identity and display), `presentation` (language),
   `topology` (repositories with their `instructionManagement`, support
   surfaces, windows), `storage` (ledger root), `governance`, `hosts` (launch
-  preferences by host); its exact shape, `hosts` included, is the tool's input
+  preferences by host; on Claude Code also `windowTransport`, `tmux` or
+  `desktop`, the window transport chosen with the user at this first run -
+  one per workspace); its exact shape, `hosts` included, is the tool's input
   schema in your tool list, so build the request from that schema and never
   from plugin files on disk or another workspace's config. A refusal names
   the failing path and the rule in
@@ -52,9 +56,10 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   the right operation instead of retrying. What does change here: the display
   name, description and language, the host launch preferences under `hosts` -
   the model and reasoning effort by role, Claude Code's permission mode, and
-  the tmux container names - which the next launch intents pick up without
-  touching any window, and one kind of layout change: adding a product
-  repository. Send the current config with the new repository entry and one
+  its tmux session name - which the next launch intents pick up without
+  touching any window (the window transport is chosen at the first run and
+  is not switched by a reconfigure in this version), and one kind of layout
+  change: adding a product repository. Send the current config with the new repository entry and one
   new `product` window for it in the primary pod appended, each with a fresh
   id (`repository_` or `window_` followed by a new lowercase UUID v4). The
   repository's root must already exist and be its own Git repository: a
@@ -194,10 +199,11 @@ Other actions on the same tool:
   claim does not block it. Use replace only when the session itself is gone.
 - **decommission** retires a window with its pre-close, close-result and
   post-close evidence. Use it when a window is genuinely gone, not to silence
-  an inconvenient state. On Claude Code the helper's `close` kills nothing
-  when the pane no longer carries its Wakeflow marks (for example after a
-  tmux server restart) and reports `closeResult: unknown`; decommission then
-  goes to the manual host gate.
+  an inconvenient state. On Claude Code the tmux helper's `close` kills
+  nothing when the pane no longer carries its Wakeflow marks (after a tmux
+  server restart, say) and reports `closeResult: unknown`; decommission then
+  goes to the manual host gate. Under desktop sessions the close is the
+  user-authorized `archive_session` (`references/desktop-transport.md`).
 - **release-claim** force-releases an expired or orphaned work claim. Use it
   only when you have established that the holding window is gone. A live claim
   is protecting someone's work.
@@ -262,8 +268,9 @@ A window's `attention` says whether the host is waiting for the user there:
 `none` once a later record superseded it, `null` without a binding or any
 record. Tell the user which window needs them; their action there clears it, no
 tool does. On Claude Code the hooks also mark a bound window's name in the
-window list: green `+` working, red `?` waiting for you, nothing when idle
-(`mark` sets that format): a hint, never evidence.
+window list where the host has one: green `+` working, red `?` waiting for
+you, nothing when idle (`mark` sets that format): a hint, never evidence; a
+desktop session shows only the app's own markers.
 
 A registered window's `launchIntent` compares the intent digest recorded at its
 handshake with what the current config and host profile produce: `current` when
@@ -276,16 +283,6 @@ Restart the stale windows with the host's procedure: {{windowResume}} After this
 server is current, preview and apply reconcile for repairable workspace gates
 such as host-settings-assets. A peer's `unverified` state remains separate from
 those repairs and from Controller acceptance of returned work.
-
-When a fresh session is the only way (`resume-never-conversed`, or the user
-asked for a new one), the complete sequence on Claude Code is four calls, one
-helper call per Bash command, each printed result kept verbatim: `close
---window <windowId>` (the binding stays; this is not a decommission); `launch
---window <windowId> --wait 60` with that window's current inspect result piped
-in; `wakeflow_register_window_binding` with `operation: "replace"`, the printed
-`observation`, and the `expectedBindingId` / `expectedBindingDigest` the
-inspect returned; then `mark --window <windowId>`. Never reconstruct those
-calls from your own session transcript or from the plugin's source.
 
 ## Interrupted writes and cancellation
 
@@ -330,7 +327,8 @@ main checkout; every other pod works in a worktree.
    depends on a sibling checkout by relative path (`file:../Name`) cannot
    resolve it inside a worktree; say so in that pod's task packages. The product windows
    need not start one by one: launch them all without waiting (`--wait 0` on
-   Claude Code), keep each printed observation, and register them once their
+   the Claude Code tmux helper; the desktop helper returns once the session
+   has started), keep each printed observation, and register them once their
    session-start records exist.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
@@ -381,12 +379,13 @@ window's runtime projection that is missing or stale is different - verify
 names the window in its `window-runtime-projection` gate and reconcile rebuilds
 it; only an unreadable one stays reported.
 
-`hostAssets` lists the files Wakeflow published per host (the status line and,
-on Claude Code, the tmux helper) and whether their bytes are still the
-artifact's. A helper that is `drift`, `missing` or `mode` is not yours to run:
-`wakeflow_prepare_delivery` refuses with `host-asset-<status>` until a reconcile
-republishes it - tell the user something rewrote the file, never repair it by
-hand. `settings: custom` is the user's own status line, left alone.
+`hostAssets` lists the files Wakeflow published per host (on Claude Code the
+window helper of the workspace's transport, `tmux.mjs` or `desktop.mjs`, and
+under tmux the status line) and whether their bytes are still the artifact's.
+A helper that is `drift`, `missing` or `mode` is not yours to run:
+`wakeflow_prepare_delivery` refuses with `host-asset-<status>` until a
+reconcile republishes it - tell the user something rewrote the file, never
+repair it by hand. `settings: custom` is the user's own status line.
 
 `legacyResidue` lists what the old JavaScript plugin left behind in the
 workspace root, the present repository roots and the support-surface roots:

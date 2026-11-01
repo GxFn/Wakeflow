@@ -1,5 +1,8 @@
 import path from "node:path";
-import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-config.js";
+import type {
+  WakeflowConfigModel,
+  WakeflowPresentationLanguage,
+} from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
@@ -83,6 +86,7 @@ import { afterMutationRefresh } from "../../governance/observation/active-projec
 import {
   type ObservationHostAssets,
   observeHostAssetState,
+  selectObservationHostAssets,
 } from "../../governance/observation/workspace-observation.js";
 import type { TargetResult } from "../../governance/result/target-result.js";
 import {
@@ -151,6 +155,11 @@ import {
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import {
+  configuredWakeflowWorkspaceHostTransport,
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import {
   compileWakeflowWindowLaunchIntents,
   type WakeflowWindowLaunchIntent,
 } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
@@ -199,9 +208,15 @@ import {
 export interface DeliveryHostFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /** 多传输宿主的 profile 表（ADR-0025 D1）；准入时按配置选出一份，之后只读选出的 profile。 */
+  readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
-  /** 本宿主已发布资产的期望（F1）；没有资产面的宿主为 null 或缺省。 */
+  /** 本宿主已发布资产的期望（F1）；没有资产面的宿主为 null 或缺省；多传输宿主改用 `transportAssets`。 */
   readonly assets?: Readonly<ObservationHostAssets> | null;
+  /** 多传输宿主按传输键的资产期望表（ADR-0025 D6），键与 `transports.profiles` 相同；准入时选出一份放进 `assets`。 */
+  readonly transportAssets?:
+    | Readonly<Record<string, Readonly<ObservationHostAssets> | null>>
+    | undefined;
 }
 
 export interface ExecuteDeliveryOptions {
@@ -393,6 +408,27 @@ function parseInstant(value: string, path: string): UtcInstant {
 
 // ---- 上下文与路由 ---------------------------------------------------------------
 
+/**
+ * ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile 与资产期望（D6）；此后本上下文只读选出的
+ * 那份。单传输宿主原样通过。
+ */
+function selectFacade(
+  facade: Readonly<DeliveryHostFacade>,
+  model: Readonly<WakeflowConfigModel>,
+): Readonly<DeliveryHostFacade> {
+  if (facade.transports === undefined) return facade;
+  const { transports: _transports, transportAssets, ...rest } = facade;
+  return Object.freeze({
+    ...rest,
+    resourceProfile: selectWakeflowWorkspaceHostResourceProfile(facade, model),
+    assets: selectObservationHostAssets(
+      configuredWakeflowWorkspaceHostTransport(facade, model),
+      facade.assets,
+      transportAssets,
+    ),
+  });
+}
+
 async function openContext(
   workspaceRoot: RootedDirectory,
   envelope: Readonly<AppendCommandEnvelope>,
@@ -405,7 +441,12 @@ async function openContext(
       envelope.demandId as WakeflowDurableId<"demand">,
       options.signal,
     );
-    return Object.freeze({ workspaceRoot, authority, facade, options });
+    return Object.freeze({
+      workspaceRoot,
+      authority,
+      facade: selectFacade(facade, authority.config.model),
+      options,
+    });
   } catch (error: unknown) {
     mapContextError(error);
   }
@@ -1221,9 +1262,10 @@ async function executePrepare(
 }
 
 /**
- * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的 tmux 助手去投递，所以
- * 签发前由服务器核对本宿主已发布资产（状态栏与伴随的助手）的字节。字节不是制品的就拒绝——被改写的助手
- * 不该跑；对账会重新发布它。只核对投递窗口所在宿主就是本宿主的情形。
+ * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的窗口传输助手去投递，所以
+ * 签发前由服务器核对本宿主已发布资产的字节——准入时按配置的传输选出的那组期望（ADR-0025 D6：状态栏可选，
+ * 伴随的助手必在）。字节不是制品的就拒绝——被改写的助手不该跑；对账会重新发布它。只核对投递窗口所在宿主
+ * 就是本宿主的情形。
  *
  * 这是发出许可的统一前置（W16）：新 prepare、prepare 与 rearm 的同键重放、rearm 换代、回调重发及其重放
  * 都在取得路由之后、追加或取声明之前调用；`requestPath` 指向该工具请求里点名目标的字段。

@@ -17,7 +17,11 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostTransportTable,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -49,6 +53,13 @@ const CLAUDE: WindowBindingHostFacade = {
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };
+/** 桌面传输直接作为门面的 profile（ADR-0025）：端点只读选出的 profile，与配置经传输表选出的结果同形。 */
+const CLAUDE_DESKTOP: WindowBindingHostFacade = {
+  hostId: "claude-code",
+  resourceProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+  identityProfile: claudeCodeWindowHostIdentityProfile,
+  renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
+};
 const DIGEST = (fill: string) => `sha256:${fill.repeat(64)}` as Sha256Digest;
 
 interface Intent {
@@ -60,6 +71,7 @@ interface Intent {
 async function fixture(
   t: TestContext,
   execute: typeof executeCodexWakeflowMaintenance,
+  hosts?: Record<string, unknown>,
 ): Promise<{
   readonly root: string;
   readonly rooted: RootedDirectory;
@@ -75,6 +87,7 @@ async function fixture(
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const selection = createMinimalWakeflowFreshConfigSelection();
   (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  if (hosts !== undefined) (selection as Record<string, unknown>).hosts = hosts;
   const preview = await execute({
     root,
     action: "fresh-initialize",
@@ -769,7 +782,22 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
     "invalid-request",
     "tmux-coordinates-required",
   );
+  // tmux 传输的观察带了桌面会话 id：另一种传输的定位子，拒绝并指向多余的字段（ADR-0025 D3）。
   const tmux = { socketName: null, sessionName: "wakeflow", windowId: "@3", paneId: "%7" };
+  await expectFailure(
+    executeWindowBindingRequest(
+      CLAUDE,
+      {
+        root,
+        operation: "register",
+        windowId: intent.windowId,
+        observation: { ...base, tmux, desktop: { sessionId: `local_${sessionId}` } },
+      },
+      { clock },
+    ),
+    "invalid-request",
+    "locator-kind-mismatch",
+  );
   const registered = await executeWindowBindingRequest(
     CLAUDE,
     { root, operation: "register", windowId: intent.windowId, observation: { ...base, tmux } },
@@ -1084,4 +1112,356 @@ test("Claude Code：session-end 按最新 start/end 顺序判定——resume 之
   if (released.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
   equal(released.disposition, "claim-released");
   equal(released.claim?.claimId, claim.claimId);
+});
+
+interface DesktopExecution {
+  readonly kind: string;
+  readonly sessionIdPolicy: string;
+  readonly arguments: readonly string[];
+  readonly desktop: { readonly title: string; readonly cwd: string };
+}
+
+interface LocatorFile {
+  readonly provider: string;
+  readonly bindingId: string;
+  readonly locatorId: string;
+  readonly desktop?: { readonly sessionId: string };
+  readonly tmux?: unknown;
+}
+
+test("Claude Code 桌面传输（ADR-0025 D3）：register 要桌面会话 id 并写桌面定位器，tmux 坐标报 locator-kind-mismatch，relocate 不适用，decommission 凭 desktop-sessions 清单与 session-end 证据机器核实", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const windowId = intents[0]?.windowId;
+  if (windowId === undefined) throw new Error("Expected a launch intent.");
+  const clock = () => parseUtcInstant("2026-10-30T10:00:00.000Z");
+  const inspected = await executeWindowBindingRequest(
+    CLAUDE_DESKTOP,
+    { root, operation: "inspect", windowId },
+    { clock },
+  );
+  if (inspected.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  equal(inspected.locator.status, "absent");
+  const execution = inspected.launchIntent.execution as unknown as DesktopExecution;
+  equal(execution.kind, "claude-code-desktop");
+  equal(execution.sessionIdPolicy, "host-assigned");
+  equal(execution.arguments.includes("--session-id"), false);
+  equal(execution.desktop.title, inspected.launchIntent.displayTitle);
+  equal(execution.desktop.cwd, inspected.launchIntent.root.configuredPlacement);
+  const placement = inspected.launchIntent.root.configuredPlacement;
+  const sessionId = "3d3d3d3d-3d3d-4d3d-8d3d-3d3d3d3d3d3d";
+  const base = {
+    handle: { kind: "claude-session", value: sessionId },
+    launchIntentDigest: inspected.launchIntent.intentDigest,
+    observedAt: "2026-10-30T09:59:00.000Z",
+  };
+  await sessionStart(
+    rooted,
+    "claude-code",
+    sessionId,
+    placement,
+    parseUtcInstant("2026-10-30T09:58:00.000Z"),
+  );
+  const register = (observation: Record<string, unknown>) =>
+    executeWindowBindingRequest(
+      CLAUDE_DESKTOP,
+      { root, operation: "register", windowId, observation },
+      { clock },
+    );
+  await expectFailure(register(base), "invalid-request", "desktop-session-required");
+  const tmux = { socketName: null, sessionName: "wakeflow", windowId: "@3", paneId: "%7" };
+  await expectFailure(register({ ...base, tmux }), "invalid-request", "locator-kind-mismatch");
+  const desktop = { sessionId: `local_${sessionId}` };
+  await expectFailure(
+    register({ ...base, tmux, desktop }),
+    "invalid-request",
+    "locator-kind-mismatch",
+  );
+  // 桌面 id 必须是 local_ 前缀的会话 UUID：裸会话 id 在 Schema 就被拒。
+  await expectFailure(register({ ...base, desktop: { sessionId } }), "invalid-request", "schema");
+  const registered = await register({ ...base, desktop });
+  if (registered.kind !== "WakeflowWindowBindingMutation" || registered.binding === null)
+    throw new Error("Expected a mutation.");
+  equal(registered.disposition, "registered");
+  equal(JSON.stringify(registered).includes(sessionId), false, "session or desktop id leaked");
+  const locatorFile = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
+    `${windowId}.json`,
+  );
+  equal(statSync(locatorFile).mode & 0o777, 0o600);
+  const locator = JSON.parse(readFileSync(locatorFile, "utf8")) as LocatorFile;
+  equal(locator.provider, "desktop");
+  deepEqual(locator.desktop, desktop);
+  equal("tmux" in locator, false);
+  equal(locator.bindingId, registered.binding.bindingId);
+  const present = await executeWindowBindingRequest(
+    CLAUDE_DESKTOP,
+    { root, operation: "inspect", windowId },
+    { clock },
+  );
+  if (present.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  equal(present.locator.status, "present");
+  equal(JSON.stringify(present).includes(desktop.sessionId), false, "desktop id leaked");
+  const replayed = await register({ ...base, desktop });
+  if (replayed.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(replayed.disposition, "replayed");
+
+  await expectFailure(
+    executeWindowBindingRequest(
+      CLAUDE_DESKTOP,
+      {
+        root,
+        operation: "relocate",
+        windowId,
+        observation: { ...base, desktop },
+        expectedBindingId: registered.binding.bindingId,
+        expectedBindingDigest: registered.binding.bindingDigest,
+      },
+      { clock },
+    ),
+    "precondition-failed",
+    "relocate-not-applicable",
+  );
+
+  const expectation = {
+    expectedBindingId: registered.binding.bindingId,
+    expectedBindingDigest: registered.binding.bindingDigest,
+  };
+  const row = { sessionId, status: "idle", cwd: null, name: "Controller", pid: 4242 };
+  const decommission = (preClose: unknown, postClose: unknown, expected = expectation) =>
+    executeWindowBindingRequest(
+      CLAUDE_DESKTOP,
+      {
+        root,
+        operation: "decommission",
+        windowId,
+        ...expected,
+        closure: { preClose, closeResult: { status: "closed" }, postClose },
+      },
+      { clock },
+    );
+  await expectFailure(
+    decommission(
+      { kind: "desktop-sessions", sessions: [row] },
+      { kind: "desktop-sessions", sessions: [{ ...row, status: "busy" }] },
+    ),
+    "precondition-failed",
+    "closure-blocked",
+  );
+  const manual = await decommission(
+    { kind: "desktop-sessions", sessions: [row] },
+    {
+      kind: "desktop-sessions",
+      sessions: [{ ...row, sessionId: "4e4e4e4e-4e4e-4e4e-8e4e-4e4e4e4e4e4e" }],
+    },
+  );
+  if (manual.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(manual.disposition, "decommissioned");
+  equal(manual.verification, "manual-host-gate", "no session-end record yet");
+  equal(existsSync(locatorFile), false, "the desktop locator is retired with the binding");
+
+  const second = "5f5f5f5f-5f5f-4f5f-8f5f-5f5f5f5f5f5f";
+  await sessionStart(
+    rooted,
+    "claude-code",
+    second,
+    placement,
+    parseUtcInstant("2026-10-30T10:01:00.000Z"),
+  );
+  const again = await register({
+    ...base,
+    handle: { kind: "claude-session", value: second },
+    desktop: { sessionId: `local_${second}` },
+    observedAt: "2026-10-30T10:02:00.000Z",
+  });
+  if (again.kind !== "WakeflowWindowBindingMutation" || again.binding === null)
+    throw new Error("Expected a mutation.");
+  deepEqual((JSON.parse(readFileSync(locatorFile, "utf8")) as LocatorFile).desktop, {
+    sessionId: `local_${second}`,
+  });
+  // tmux pane 清单对桌面定位器什么也证明不了：既不算活也不算缺席，退役走人工门而不是被挡。
+  const unmatched = await decommission(
+    { kind: "tmux-panes", panes: [] },
+    { kind: "tmux-panes", panes: [] },
+    {
+      expectedBindingId: again.binding.bindingId,
+      expectedBindingDigest: again.binding.bindingDigest,
+    },
+  );
+  if (unmatched.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(unmatched.verification, "manual-host-gate");
+
+  const third = "6a6a6a6a-6a6a-4a6a-8a6a-6a6a6a6a6a6a";
+  await sessionStart(
+    rooted,
+    "claude-code",
+    third,
+    placement,
+    parseUtcInstant("2026-10-30T10:03:00.000Z"),
+  );
+  const final = await register({
+    ...base,
+    handle: { kind: "claude-session", value: third },
+    desktop: { sessionId: `local_${third}` },
+    observedAt: "2026-10-30T10:04:00.000Z",
+  });
+  if (final.kind !== "WakeflowWindowBindingMutation" || final.binding === null)
+    throw new Error("Expected a mutation.");
+  await writeHostHookObservation(rooted, {
+    hostId: "claude-code",
+    event: "session-end",
+    sessionId: third,
+    cwd: path.resolve(root, placement),
+    recordedAt: parseUtcInstant("2026-10-30T10:05:00.000Z"),
+  });
+  const verified = await decommission(
+    { kind: "desktop-sessions", sessions: [{ sessionId: third, status: "idle" }] },
+    { kind: "desktop-sessions", sessions: [] },
+    {
+      expectedBindingId: final.binding.bindingId,
+      expectedBindingDigest: final.binding.bindingDigest,
+    },
+  );
+  if (verified.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
+  equal(verified.verification, "machine-verified");
+  equal(JSON.stringify(verified).includes(third), false, "session id leaked");
+});
+
+test("Claude Code 桌面传输：replace 以新会话与新桌面 id 换代并整体重写桌面定位器，缺桌面 id 的 replace 被拒", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const windowId = intents[0]?.windowId;
+  if (windowId === undefined) throw new Error("Expected a launch intent.");
+  let now = parseUtcInstant("2026-10-30T10:00:00.000Z");
+  const clock = () => now;
+  const inspected = await executeWindowBindingRequest(
+    CLAUDE_DESKTOP,
+    { root, operation: "inspect", windowId },
+    { clock },
+  );
+  if (inspected.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  const placement = inspected.launchIntent.root.configuredPlacement;
+  const first = "7b7b7b7b-7b7b-4b7b-8b7b-7b7b7b7b7b7b";
+  const second = "8c8c8c8c-8c8c-4c8c-8c8c-8c8c8c8c8c8c";
+  for (const sessionId of [first, second]) {
+    await sessionStart(
+      rooted,
+      "claude-code",
+      sessionId,
+      placement,
+      parseUtcInstant("2026-10-30T09:58:00.000Z"),
+    );
+  }
+  const observation = {
+    handle: { kind: "claude-session", value: first },
+    launchIntentDigest: inspected.launchIntent.intentDigest,
+    observedAt: "2026-10-30T09:59:00.000Z",
+    desktop: { sessionId: `local_${first}` },
+  };
+  const registered = await executeWindowBindingRequest(
+    CLAUDE_DESKTOP,
+    { root, operation: "register", windowId, observation },
+    { clock },
+  );
+  if (registered.kind !== "WakeflowWindowBindingMutation" || registered.binding === null)
+    throw new Error("Expected a mutation.");
+  const locatorFile = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
+    `${windowId}.json`,
+  );
+  const before = JSON.parse(readFileSync(locatorFile, "utf8")) as LocatorFile;
+  const expectation = {
+    expectedBindingId: registered.binding.bindingId,
+    expectedBindingDigest: registered.binding.bindingDigest,
+  };
+  const { desktop: _desktop, ...withoutDesktop } = observation;
+  await expectFailure(
+    executeWindowBindingRequest(
+      CLAUDE_DESKTOP,
+      {
+        root,
+        operation: "replace",
+        windowId,
+        observation: { ...withoutDesktop, handle: { kind: "claude-session", value: second } },
+        ...expectation,
+      },
+      { clock },
+    ),
+    "invalid-request",
+    "desktop-session-required",
+  );
+  now = parseUtcInstant("2026-10-30T10:01:00.000Z");
+  const replaced = await executeWindowBindingRequest(
+    CLAUDE_DESKTOP,
+    {
+      root,
+      operation: "replace",
+      windowId,
+      observation: {
+        ...observation,
+        handle: { kind: "claude-session", value: second },
+        desktop: { sessionId: `local_${second}` },
+        observedAt: "2026-10-30T10:00:30.000Z",
+      },
+      ...expectation,
+    },
+    { clock, uuidFactory: () => "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+  );
+  if (replaced.kind !== "WakeflowWindowBindingMutation" || replaced.binding === null)
+    throw new Error("Expected a mutation.");
+  equal(replaced.disposition, "replaced");
+  equal(replaced.binding.bindingId, "window_binding_cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+  const after = JSON.parse(readFileSync(locatorFile, "utf8")) as LocatorFile;
+  equal(after.provider, "desktop");
+  deepEqual(after.desktop, { sessionId: `local_${second}` });
+  equal(after.bindingId, replaced.binding.bindingId);
+  equal(after.locatorId === before.locatorId, false, "the locator generation follows the binding");
+  equal(readFileSync(locatorFile, "utf8").includes(first), false, "the old desktop id is gone");
+  equal(JSON.stringify(replaced).includes(second), false, "session or desktop id leaked");
+});
+
+test("Claude Code 桌面传输经配置选择（ADR-0025 D1）：hosts.claude-code.windowTransport = desktop 的工作区让带传输表的门面选出桌面 profile，缺省工作区仍是 tmux", {
+  timeout: 60_000,
+}, async (t) => {
+  const facade: WindowBindingHostFacade = {
+    ...CLAUDE,
+    transports: claudeCodeWorkspaceHostTransportTable,
+  };
+  const desktop = await fixture(t, executeClaudeCodeWakeflowMaintenance, {
+    "claude-code": { windowTransport: "desktop" },
+  });
+  const desktopIntent = desktop.intents[0];
+  if (desktopIntent === undefined) throw new Error("Expected a launch intent.");
+  const inspectedDesktop = await executeWindowBindingRequest(facade, {
+    root: desktop.root,
+    operation: "inspect",
+    windowId: desktopIntent.windowId,
+  });
+  if (inspectedDesktop.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  equal((inspectedDesktop.launchIntent.execution as { kind: string }).kind, "claude-code-desktop");
+  equal(
+    inspectedDesktop.launchIntent.intentDigest,
+    desktopIntent.intentDigest,
+    "the Fresh preview and the endpoint compile the intent from the same selected profile",
+  );
+  const tmux = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const tmuxIntent = tmux.intents[0];
+  if (tmuxIntent === undefined) throw new Error("Expected a launch intent.");
+  const inspectedTmux = await executeWindowBindingRequest(facade, {
+    root: tmux.root,
+    operation: "inspect",
+    windowId: tmuxIntent.windowId,
+  });
+  if (inspectedTmux.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  equal((inspectedTmux.launchIntent.execution as { kind: string }).kind, "claude-code");
+  equal(inspectedTmux.launchIntent.intentDigest, tmuxIntent.intentDigest);
 });

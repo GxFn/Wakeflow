@@ -514,10 +514,14 @@ product?: ("medium" | "high" | "xhigh" | "max")
 default?: ("medium" | "high" | "xhigh" | "max")
 }
 /**
- * Claude Code launch and tmux-container preferences; live locators stay host-local.
+ * Claude Code launch, window-transport and tmux-container preferences; live locators stay host-local.
  */
 export interface ClaudeHost {
 launch?: ClaudeLaunch
+/**
+ * Which window transport this workspace's Claude Code host uses: `tmux` panes driven by the tmux helper, or `desktop` sessions in the Claude desktop app's Code tab started through the desktop helper. Omission means tmux; one transport per workspace, and live pane or session identity stays host-local (ADR-0025).
+ */
+windowTransport?: ("tmux" | "desktop")
 tmux?: ClaudeTmux
 }
 /**

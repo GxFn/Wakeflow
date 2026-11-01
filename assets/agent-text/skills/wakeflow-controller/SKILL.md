@@ -23,7 +23,8 @@ for the user: {{commandSurface}}
 4. `references/first-run.md` - a fresh workspace only: step 0's
    fresh-initialize and the step 1 after it; never in daily use.
 5. `references/workspace-and-windows.md` - only for workspace maintenance,
-   windows, pods, or refreshing windows after a plugin update.
+   windows, pods, or refreshing windows after a plugin update; for desktop
+   sessions also `references/desktop-transport.md`.
 6. `references/delivery-and-review.md` - only when planning a task, preparing
    a delivery, or deciding on a returned result.
 7. `references/evidence.md` - only before you record managed evidence.
@@ -97,13 +98,12 @@ takes the work claim, renders the prompt around your text, returns a permit.
 
 Perform the host effect exactly once: {{deliveryAction}} Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
-fence. Wakeflow derives the disposition from evidence, not from your
-impression: accepted needs the target session's `user-prompt-submit` record
-matching the permit's prompt, or your own report of the host send's return. A
-missing readback is indeterminate, never a failure; only a send that provably
-failed before touching the session is re-armed with `wakeflow_rearm_delivery`,
-and an indeterminate delivery is resolved as the reference says, never resent
-on a hunch.
+fence. Wakeflow derives the disposition from evidence: accepted needs the
+target session's `user-prompt-submit` record matching the permit's prompt, or
+your own report of the host send's return. A missing landing is indeterminate,
+never a failure; only a send that provably failed before touching the session
+is re-armed with `wakeflow_rearm_delivery`, and an indeterminate delivery is
+resolved as the reference says, never resent on a hunch.
 
 ### Step 10 - Inspect the review unit
 
@@ -136,9 +136,8 @@ holds the coverage rules and exclusions.
 
 ### Step 13 - Close the pod
 
-After the user has merged or abandoned the pod's branch and its Demand is
-archived, close the pod with `wakeflow_pod`: record the branch dispositions,
-then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
+After the user has merged or abandoned the pod's branch and its Demand is archived, close the pod
+with `wakeflow_pod`: record the branch dispositions, then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
 
 ## Checking the workspace
 

@@ -1,4 +1,4 @@
-import { deepEqual, equal, rejects } from "node:assert/strict";
+import { deepEqual, equal, rejects, throws } from "node:assert/strict";
 import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -20,8 +20,10 @@ import {
   deriveOverallStatus,
   observeWorkspace,
   orphanWorkClaims,
+  selectObservationHostAssets,
   type WorkspaceObservation,
 } from "../../../src/governance/observation/workspace-observation.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
   CLAUDE_CODE_LOCAL_SETTINGS_REF,
@@ -29,6 +31,7 @@ import {
   claudeCodeStatuslineEntryIsWakeflows,
   claudeCodeStatuslineSettingsEntry,
 } from "../../../src/hosts/claude-code/claude-code-statusline-settings-operation.js";
+import { claudeCodeWorkspaceHostTransportTable } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
   hostRuntimeRootRef,
@@ -274,13 +277,15 @@ test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：se
         {
           ...claudeHost,
           statuslineAsset: {
-            fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
-            digest: computeSha256Digest(assetBytes),
-            settings: {
-              path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
-              key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-              expectedEntry: claudeCodeStatuslineSettingsEntry,
-              ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+            statusline: {
+              fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+              digest: computeSha256Digest(assetBytes),
+              settings: {
+                path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+                key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+                expectedEntry: claudeCodeStatuslineSettingsEntry,
+                ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+              },
             },
             companions: [],
           },
@@ -317,13 +322,15 @@ test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：se
         {
           ...claudeHost,
           statuslineAsset: {
-            fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
-            digest: computeSha256Digest(assetBytes),
-            settings: {
-              path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
-              key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-              expectedEntry: claudeCodeStatuslineSettingsEntry,
-              ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+            statusline: {
+              fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+              digest: computeSha256Digest(assetBytes),
+              settings: {
+                path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+                key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+                expectedEntry: claudeCodeStatuslineSettingsEntry,
+                ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+              },
             },
             companions: [],
           },
@@ -337,6 +344,85 @@ test("状态栏资产在场而本地设置是缺状态栏键的 JSON 对象：se
   deepEqual(
     custom.assets.map((asset) => [asset.hostId, asset.status, asset.settings]),
     [["claude-code", "current", "custom"]],
+  );
+});
+
+test("桌面传输的资产期望（ADR-0025 D6）：没有状态栏时 settings 为 not-applicable，整票由桌面助手决定；期望按选出的传输键索引，缺键或未选的条目是组合根的合同违背", {
+  timeout: 120_000,
+}, async (t) => {
+  const workspace = await maintainedWorkspace(t);
+  const helperBytes = new TextEncoder().encode("#!/usr/bin/env node\nconsole.log('desktop');\n");
+  const claudeHost = CODEX_OBSERVATION_FACADE.hosts.find((host) => host.hostId === "claude-code");
+  if (claudeHost === undefined) throw new Error("Expected a Claude Code observation host.");
+  const desktopAssets = {
+    statusline: null,
+    companions: [
+      { fileName: CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME, digest: computeSha256Digest(helperBytes) },
+    ],
+  };
+  const observeDesktop = () =>
+    observeWorkspace(workspace.rooted, workspace.snapshot, workspace.ledgerRoot, {
+      hosts: [{ ...claudeHost, statuslineAsset: desktopAssets }],
+      currentHostId: "claude-code",
+      scope: "full",
+      clock: () => OBSERVED_AT,
+    });
+  const assetOf = (observation: Readonly<WorkspaceObservation>) =>
+    observation.assets.map((asset) => [
+      asset.hostId,
+      asset.status,
+      asset.settings,
+      asset.companion,
+      asset.issue,
+    ]);
+  // 助手还没发布：整票 missing 并点名桌面助手；没有状态栏条目可核对。
+  deepEqual(assetOf(await observeDesktop()), [
+    ["claude-code", "missing", "not-applicable", CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME, null],
+  ]);
+  const assetsDirectory = absolute(
+    workspace.root,
+    `${hostRuntimeRootRef("claude-code")}/operations/assets`,
+  );
+  mkdirSync(assetsDirectory, { recursive: true });
+  const helperPath = path.join(assetsDirectory, CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME);
+  writeFileSync(helperPath, helperBytes, { mode: 0o600 });
+  deepEqual(assetOf(await observeDesktop()), [
+    ["claude-code", "current", "not-applicable", null, null],
+  ]);
+  writeFileSync(helperPath, new TextEncoder().encode("changed\n"), { mode: 0o600 });
+  deepEqual(assetOf(await observeDesktop()), [
+    ["claude-code", "drift", "not-applicable", CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME, null],
+  ]);
+
+  // 资产期望按切片准入时选出的传输键索引（ADR-0025 D6）：键为 null 的宿主用它唯一的一份；表里缺了选中的键
+  // 是组合根的合同违背，不猜。profile 的选择由共享选择函数与观察切片准入负责，这里只核对按键取期望。
+  const tmuxAssets = { statusline: null, companions: [] };
+  const transportAssets = { tmux: tmuxAssets, desktop: desktopAssets };
+  equal(selectObservationHostAssets("desktop", null, transportAssets), desktopAssets);
+  equal(selectObservationHostAssets("tmux", null, transportAssets), tmuxAssets);
+  equal(selectObservationHostAssets(null, desktopAssets, undefined), desktopAssets);
+  equal(selectObservationHostAssets(null, undefined, undefined), null);
+  const contractViolation = (error: unknown) =>
+    error instanceof WakeflowError && error.code === "unexpected" && error.reason === "host-facade";
+  throws(
+    () => selectObservationHostAssets("desktop", null, { tmux: tmuxAssets }),
+    contractViolation,
+  );
+  // 交给观察的条目必须已经选过：仍带传输表即合同违背，不按缺省 profile 静默观察。
+  await rejects(
+    observeWorkspace(workspace.rooted, workspace.snapshot, workspace.ledgerRoot, {
+      hosts: [
+        {
+          ...claudeHost,
+          transports: claudeCodeWorkspaceHostTransportTable,
+          transportAssets,
+        },
+      ],
+      currentHostId: "claude-code",
+      scope: "full",
+      clock: () => OBSERVED_AT,
+    }),
+    contractViolation,
   );
 });
 

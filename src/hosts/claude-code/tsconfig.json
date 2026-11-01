@@ -8,6 +8,8 @@
   "files": [
     "claude-code-window-launch-instructions.ts",
     "claude-code-agent-text-profile.ts",
+    "claude-code-desktop-asset-operation.ts",
+    "claude-code-desktop-asset.ts",
     "claude-code-hook-fragment.ts",
     "claude-code-host-asset-operation.ts",
     "claude-code-maintenance-capability.ts",

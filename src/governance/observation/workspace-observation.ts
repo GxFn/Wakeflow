@@ -118,9 +118,48 @@ import {
  * 仓库指针、状态栏资产、每个宿主的窗口运行投影与投影目标。观察不写任何东西。
  */
 
+/** 状态栏资产的期望字节摘要与本地设置里的期望条目（§13.94 D6）。 */
+export interface ObservationHostStatuslineAsset {
+  readonly fileName: string;
+  readonly digest: Sha256Digest;
+  readonly settings: Readonly<{
+    /** 本地设置文件（忽略的私有文件，0600）。 */
+    readonly path: PortableResourcePath;
+    readonly key: string;
+    /** 期望条目由工作区绝对根派生：命令行带 base64url 的根（§13.94 D6）。 */
+    readonly expectedEntry: (workspaceRoot: string) => JsonValue;
+    /** 条目是否是 Wakeflow 自己写的（复审 T31）：不是的就是用户自己的状态行，报 `custom`、不比较。 */
+    readonly ownsEntry: (entry: JsonValue) => boolean;
+  }>;
+}
+
+/**
+ * 一个宿主已发布资产的期望（F1；ADR-0025 D6）：状态栏资产及其设置条目（没有状态栏的传输为 null），
+ * 加同一资产目录里必须在场且字节精确的伴随资产（窗口传输助手）。维护按选出的 profile 发布的就是这一组，
+ * verify 的 `host-settings-assets` 与投递许可前的核对读同一份期望。
+ */
+export interface ObservationHostAssets {
+  readonly statusline: Readonly<ObservationHostStatuslineAsset> | null;
+  readonly companions: readonly Readonly<{
+    readonly fileName: string;
+    readonly digest: Sha256Digest;
+  }>[];
+}
+
 export interface ObservationHost {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /**
+   * 多传输宿主的 profile 表（ADR-0025 D1）：能力切片准入时按工作区配置选出 `resourceProfile` 与
+   * `statuslineAsset`，交给观察的条目不再带表（带表即组合根的合同违背）；单传输宿主缺省。形状与共享选择函数的
+   * 传输表相同；治理层只看它在不在，不导入选择函数（治理只取宿主 Profile 合同）。
+   */
+  readonly transports?:
+    | Readonly<{
+        readonly defaultTransport: string;
+        readonly profiles: Readonly<Record<string, Readonly<WakeflowWorkspaceHostResourceProfile>>>;
+      }>
+    | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   /**
    * 本宿主制品的身份（§13.127；1.2 计划 §3.6 C6）：只有本进程所属的宿主条目带它——进程启动时的
@@ -132,25 +171,32 @@ export interface ObservationHost {
     readonly manifestDigest: Sha256Digest | null;
     readonly readCurrentManifestDigest: () => Sha256Digest | null;
   }> | null;
-  /** 状态栏资产的期望字节摘要与本地设置里的期望条目；没有该表面的宿主为 null。 */
-  readonly statuslineAsset: Readonly<{
-    readonly fileName: string;
-    readonly digest: Sha256Digest;
-    readonly settings: Readonly<{
-      /** 本地设置文件（忽略的私有文件，0600）。 */
-      readonly path: PortableResourcePath;
-      readonly key: string;
-      /** 期望条目由工作区绝对根派生：命令行带 base64url 的根（§13.94 D6）。 */
-      readonly expectedEntry: (workspaceRoot: string) => JsonValue;
-      /** 条目是否是 Wakeflow 自己写的（复审 T31）：不是的就是用户自己的状态行，报 `custom`、不比较。 */
-      readonly ownsEntry: (entry: JsonValue) => boolean;
-    }>;
-    /** 同一资产目录里其他必须在场且字节精确的资产（tmux 助手，§13.117 D4）。 */
-    readonly companions: readonly Readonly<{
-      readonly fileName: string;
-      readonly digest: Sha256Digest;
-    }>[];
-  }> | null;
+  /**
+   * 本宿主已发布资产的期望（状态栏可选，伴随助手必在）；没有资产面的宿主为 null。单传输宿主直接给出；
+   * 多传输宿主在 `transportAssets` 里按传输键各给一份，准入时选出后放在这里。
+   */
+  readonly statuslineAsset?: Readonly<ObservationHostAssets> | null;
+  /** 多传输宿主按传输键的资产期望表（ADR-0025 D6），键与 `transports.profiles` 相同。 */
+  readonly transportAssets?:
+    | Readonly<Record<string, Readonly<ObservationHostAssets> | null>>
+    | undefined;
+}
+
+/**
+ * 按能力切片准入时选出的传输键取资产期望（ADR-0025 D6）：键为 null（没有传输表的宿主）用它唯一的一份；
+ * 有表的宿主必须在 `transportAssets` 里给出每个传输的期望，缺键是组合根的合同违背。这里只按键索引，
+ * 不认识键的含义；键由切片经共享选择函数从配置得出。
+ */
+export function selectObservationHostAssets(
+  transport: string | null,
+  assets: Readonly<ObservationHostAssets> | null | undefined,
+  transportAssets: Readonly<Record<string, Readonly<ObservationHostAssets> | null>> | undefined,
+): Readonly<ObservationHostAssets> | null {
+  if (transport === null) return assets ?? null;
+  if (transportAssets === undefined || !Object.hasOwn(transportAssets, transport)) {
+    fail("unexpected", "host-facade", "$facade.transportAssets");
+  }
+  return transportAssets[transport] ?? null;
 }
 
 export interface ObservedDomain<Value> {
@@ -874,7 +920,7 @@ function settingsEntryOf(bytes: Uint8Array, key: string): unknown {
 function settingsEntryStatusOf(
   entry: ReturnType<typeof settingsEntryOf>,
   permissionBits: number,
-  settings: NonNullable<ObservationHost["statuslineAsset"]>["settings"],
+  settings: ObservationHostStatuslineAsset["settings"],
   workspaceRoot: string,
 ): SettingsEntryStatus {
   if (entry === SETTINGS_NOT_OBJECT) return "unreadable";
@@ -895,7 +941,7 @@ function settingsEntryStatusOf(
  */
 async function observeSettingsEntry(
   root: RootedDirectory,
-  settings: NonNullable<ObservationHost["statuslineAsset"]>["settings"],
+  settings: ObservationHostStatuslineAsset["settings"],
   signal: AbortSignal | undefined,
 ): Promise<SettingsEntryStatus> {
   try {
@@ -919,9 +965,6 @@ async function observeSettingsEntry(
   }
 }
 
-/** 一个宿主已发布资产的期望：状态栏资产、它的设置条目与同目录的伴随资产（tmux 助手）。 */
-export type ObservationHostAssets = NonNullable<ObservationHost["statuslineAsset"]>;
-
 /**
  * F1（ADR-0020 决定 1 的 B 类）：按宿主核对已发布资产的字节与设置条目。投递许可签发前由服务器（制品
  * 字节）调用——被改写的助手自己核对不出自己，只有服务器侧的核对有意义。
@@ -941,7 +984,8 @@ async function observeHostAsset(
   currentHostId: WakeflowHostId | null,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedHostAsset>> {
-  if (host.statuslineAsset === null || host.hostId !== currentHostId) {
+  const expected = host.statuslineAsset ?? null;
+  if (expected === null || host.hostId !== currentHostId) {
     return Object.freeze({
       hostId: host.hostId,
       status: "not-applicable" as const,
@@ -950,14 +994,20 @@ async function observeHostAsset(
       issue: null,
     });
   }
-  const asset = await observeAssetFile(root, host, host.statuslineAsset, signal);
-  const settings = await observeSettingsEntry(root, host.statuslineAsset.settings, signal);
-  let status = asset.status;
-  let issue = asset.issue;
+  // 没有状态栏的传输（ADR-0025 D6）：设置条目不适用，整票由伴随的助手决定。
+  let status: ObservedHostAsset["status"] = "current";
+  let issue: string | null = null;
+  let settings: ObservedHostAsset["settings"] = "not-applicable";
+  if (expected.statusline !== null) {
+    const asset = await observeAssetFile(root, host, expected.statusline, signal);
+    settings = await observeSettingsEntry(root, expected.statusline.settings, signal);
+    status = asset.status;
+    issue = asset.issue;
+  }
   let companion: string | null = null;
   // 状态栏资产先判；它 current 时再按声明顺序看伴随资产，第一份不 current 的决定整票（§13.117 D4）。
   if (status === "current") {
-    for (const entry of host.statuslineAsset.companions) {
+    for (const entry of expected.companions) {
       const observed = await observeAssetFile(root, host, entry, signal);
       if (observed.status === "current") continue;
       status = observed.status;
@@ -1118,6 +1168,10 @@ export async function observeWorkspace(
   const projections: Readonly<ObservedHostProjections>[] = [];
   const assets: Readonly<ObservedHostAsset>[] = [];
   if (scope === "full") {
+    // 多传输宿主的 profile 与资产期望由能力切片准入时选出（ADR-0025 D1）；仍带传输表的条目是合同违背。
+    if (options.hosts.some((host) => host.transports !== undefined)) {
+      fail("unexpected", "host-facade", "$options.hosts");
+    }
     for (const host of options.hosts) {
       bindings.push(await observeHostBindings(root, snapshot, host, signal));
       hooks.push(

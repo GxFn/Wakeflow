@@ -50,7 +50,7 @@ function codexProfile(overrides: Readonly<Record<string, unknown>> = {}): Record
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
-      tmuxAsset: null,
+      helperAsset: null,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -67,7 +67,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
     "windowLocator",
     "settingsIntegration",
     "statuslineAsset",
-    "tmuxAsset",
+    "helperAsset",
     "runtimeStaleness",
     "runtimeRefresh",
   ]);
@@ -87,7 +87,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
-      tmuxAsset: null,
+      helperAsset: null,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },
@@ -122,7 +122,7 @@ test("host resource profile keeps only matrix-shaping static surfaces", () => {
       statuslineAsset: {
         fileName: "statusline.mjs",
       },
-      tmuxAsset: {
+      helperAsset: {
         fileName: "tmux.mjs",
       },
       runtimeStaleness: "unverified",
@@ -178,7 +178,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
             windowLocator: false,
             settingsIntegration: null,
             statuslineAsset: null,
-            tmuxAsset: null,
+            helperAsset: null,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
             close: true,
@@ -225,7 +225,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               localPath: ".host/settings.local.json",
             },
             statuslineAsset: null,
-            tmuxAsset: null,
+            helperAsset: null,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -253,7 +253,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               realization: "current",
             },
             statuslineAsset: null,
-            tmuxAsset: null,
+            helperAsset: null,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -283,7 +283,7 @@ test("host resource profile rejects open or behavioral data and unsafe paths", (
               fileName: "statusline.mjs",
               executable: true,
             },
-            tmuxAsset: null,
+            helperAsset: null,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -349,7 +349,7 @@ test("host resource profile closes relations without encoding host capability br
               localPath: ".host/settings.json",
             },
             statuslineAsset: null,
-            tmuxAsset: null,
+            helperAsset: null,
             runtimeStaleness: "unverified",
             runtimeRefresh: "user-app-restart",
           },
@@ -375,7 +375,7 @@ test("host resource profile closes relations without encoding host capability br
             statuslineAsset: {
               fileName: "statusline.mjs",
             },
-            tmuxAsset: {
+            helperAsset: {
               fileName: "tmux.mjs",
             },
             runtimeStaleness: "unverified",
@@ -405,7 +405,7 @@ test("host resource profile closes relations without encoding host capability br
         statuslineAsset: {
           fileName: "statusline.mjs",
         },
-        tmuxAsset: {
+        helperAsset: {
           fileName: "tmux.mjs",
         },
         runtimeStaleness: "unverified",

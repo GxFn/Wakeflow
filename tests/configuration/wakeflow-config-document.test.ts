@@ -48,6 +48,8 @@ test("optional nested fields survive representation normalization", () => {
         modelByRole: { product: "claude-sonnet" },
         permissionMode: "acceptEdits",
       },
+      // ADR-0025：窗口传输与 launch、tmux 偏好同在一个 hosts 子树里，渲染与解析往返不丢。
+      windowTransport: "desktop",
       tmux: { sessionName: "wakeflow", socketName: "wakeflow-socket" },
     },
   };
@@ -55,6 +57,7 @@ test("optional nested fields survive representation normalization", () => {
   const rendered = renderWakeflowConfig(value);
   const parsed = parseDeterministicJsonDocument(rendered);
   const model = parseWakeflowConfig(parsed);
+  equal(model.hosts?.["claude-code"]?.windowTransport, "desktop");
   equal(renderWakeflowConfig(model), rendered);
   equal(
     computeWakeflowConfigDigest(model),

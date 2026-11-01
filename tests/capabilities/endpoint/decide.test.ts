@@ -7,6 +7,7 @@ import {
   type EndpointState,
   rejectForeignHandleOwner,
 } from "../../../src/capabilities/endpoint/decide.js";
+import { classifyDesktopSessions } from "../../../src/capabilities/endpoint/desktop-session-classification.js";
 import {
   classifyTmuxPanes,
   type TmuxLocator,
@@ -14,9 +15,9 @@ import {
 } from "../../../src/capabilities/endpoint/pane-classification.js";
 
 /**
- * 端点纯决定（第 0 级，纯逻辑；能力卡 2 §2.2–2.4，open-items W1 与 W4）：register / replace / relocate /
- * decommission / release-claim 在给定端点状态下的结局，跨窗口句柄唯一性的单一判据，以及 tmux pane
- * 分类的固定顺序。状态由服务层加载后交进来，这里不读文件、不看时钟。
+ * 端点纯决定（第 0 级，纯逻辑；能力卡 2 §2.2–2.4，open-items W1 与 W4，ADR-0025 D3）：register / replace /
+ * relocate / decommission / release-claim 在给定端点状态下的结局，跨窗口句柄唯一性的单一判据，定位子按传输
+ * 二选一的准入，tmux pane 与桌面会话清单两种分类的固定顺序。状态由服务层加载后交进来，这里不读文件、不看时钟。
  */
 
 const WINDOW = "window_55555555-5555-4555-8555-555555555555";
@@ -48,12 +49,14 @@ const register = (
   handleValue: string,
   hasTmuxCoordinates = false,
   hasWorktreeObservation = false,
+  hasDesktopSession = false,
 ): EndpointCommand => ({
   operation: "register",
   observation: {
     handleValue,
     launchIntentDigest: INTENT,
     hasTmuxCoordinates,
+    hasDesktopSession,
     hasWorktreeObservation,
   },
 });
@@ -81,6 +84,7 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
       handleValue: "session-a",
       launchIntentDigest: `sha256:${"9".repeat(64)}`,
       hasTmuxCoordinates: false,
+      hasDesktopSession: false,
       hasWorktreeObservation: false,
     },
   });
@@ -114,6 +118,78 @@ test("register：无绑定登记、同句柄重放、异句柄冲突、意图漂
   equal(unknown.accepted === false && unknown.code, "not-found");
 });
 
+test("定位子按传输二选一（ADR-0025 D3）：desktop 缺会话 id 报 desktop-session-required，带 tmux 坐标报 locator-kind-mismatch 指向 tmux；tmux 带桌面 id 报 locator-kind-mismatch 指向 desktop；没有定位子的宿主两者都不看", () => {
+  const desktop = state({ locatorProvider: "desktop" });
+  deepEqual(decideEndpointCommand(WINDOW, desktop, register("session-a", false, false, true)), {
+    accepted: true,
+    operation: "register",
+    disposition: "registered",
+  });
+  deepEqual(decideEndpointCommand(WINDOW, desktop, register("session-a")), {
+    accepted: false,
+    code: "invalid-request",
+    reason: "desktop-session-required",
+    path: "$request.observation.desktop",
+  });
+  deepEqual(decideEndpointCommand(WINDOW, desktop, register("session-a", true, false, true)), {
+    accepted: false,
+    code: "invalid-request",
+    reason: "locator-kind-mismatch",
+    path: "$request.observation.tmux",
+  });
+  // 只带了别的传输的定位子：先点名多余的那个字段，而不是先要缺的那个。
+  const tmuxOnly = decideEndpointCommand(WINDOW, desktop, register("session-a", true));
+  equal(tmuxOnly.accepted === false && tmuxOnly.reason, "locator-kind-mismatch");
+  deepEqual(
+    decideEndpointCommand(
+      WINDOW,
+      state({ locatorProvider: "tmux" }),
+      register("session-a", true, false, true),
+    ),
+    {
+      accepted: false,
+      code: "invalid-request",
+      reason: "locator-kind-mismatch",
+      path: "$request.observation.desktop",
+    },
+  );
+  const desktopOnlyOnTmux = decideEndpointCommand(
+    WINDOW,
+    state({ locatorProvider: "tmux" }),
+    register("session-a", false, false, true),
+  );
+  equal(desktopOnlyOnTmux.accepted === false && desktopOnlyOnTmux.reason, "locator-kind-mismatch");
+  equal(
+    decideEndpointCommand(WINDOW, state(), register("session-a", true, false, true)).accepted,
+    true,
+    "a host without a locator ignores both locators",
+  );
+  // 定位子准入在意图核对之后、worktree 与 hook 证据之前：缺桌面 id 的 replace 也在这里被拒。
+  const replaceMissing = decideEndpointCommand(
+    WINDOW,
+    { ...desktop, binding: BINDING },
+    {
+      operation: "replace",
+      observation: {
+        handleValue: "session-b",
+        launchIntentDigest: INTENT,
+        hasTmuxCoordinates: false,
+        hasDesktopSession: false,
+        hasWorktreeObservation: false,
+      },
+      expectedBindingId: BINDING.bindingId,
+      expectedBindingDigest: BINDING.bindingDigest,
+    },
+  );
+  equal(replaceMissing.accepted === false && replaceMissing.reason, "desktop-session-required");
+  const worktreeMissing = decideEndpointCommand(
+    WINDOW,
+    { ...desktop, worktreeRequired: true },
+    register("session-a", false, false, true),
+  );
+  equal(worktreeMissing.accepted === false && worktreeMissing.reason, "worktree-receipt-required");
+});
+
 test("跨窗口句柄唯一性：别的窗口已持有即 handle-conflict，自己持有或无人持有都放行——锁外路由与锁内复验共用这一条判据（open-items W1）", () => {
   const owners = new Map([
     ["session-a", WINDOW],
@@ -136,6 +212,7 @@ test("replace：CAS 旧绑定、拒绝持有声明与未变句柄，接受新句
       handleValue,
       launchIntentDigest: INTENT,
       hasTmuxCoordinates: false,
+      hasDesktopSession: false,
       hasWorktreeObservation: false,
     },
     expectedBindingId: BINDING.bindingId,
@@ -175,6 +252,7 @@ test("relocate：同句柄换 pane，绑定 CAS，只有 tmux 定位器宿主，
       handleValue,
       launchIntentDigest: INTENT,
       hasTmuxCoordinates: true,
+      hasDesktopSession: false,
       hasWorktreeObservation: false,
     },
     expectedBindingId: BINDING.bindingId,
@@ -209,6 +287,7 @@ test("relocate：同句柄换 pane，绑定 CAS，只有 tmux 定位器宿主，
       handleValue: "session-a",
       launchIntentDigest: INTENT,
       hasTmuxCoordinates: false,
+      hasDesktopSession: false,
       hasWorktreeObservation: false,
     },
     expectedBindingId: BINDING.bindingId,
@@ -220,6 +299,35 @@ test("relocate：同句柄换 pane，绑定 CAS，只有 tmux 定位器宿主，
     state({ locatorProvider: "tmux" }),
     relocate("session-a"),
   );
+  equal(absent.accepted === false && absent.code, "not-found");
+});
+
+test("relocate 在桌面传输下不适用：relocate-not-applicable——桌面会话发消息即续、没有可换的坐标；绑定期望仍先核对（ADR-0025 D3）", () => {
+  const desktopState = state({ binding: BINDING, locatorProvider: "desktop" });
+  const relocate: EndpointCommand = {
+    operation: "relocate",
+    observation: {
+      handleValue: "session-a",
+      launchIntentDigest: INTENT,
+      hasTmuxCoordinates: false,
+      hasDesktopSession: true,
+      hasWorktreeObservation: false,
+    },
+    expectedBindingId: BINDING.bindingId,
+    expectedBindingDigest: BINDING.bindingDigest,
+  };
+  deepEqual(decideEndpointCommand(WINDOW, desktopState, relocate), {
+    accepted: false,
+    code: "precondition-failed",
+    reason: "relocate-not-applicable",
+    path: "$request.operation",
+  });
+  const drift = decideEndpointCommand(WINDOW, desktopState, {
+    ...relocate,
+    expectedBindingDigest: `sha256:${"0".repeat(64)}`,
+  });
+  equal(drift.accepted === false && drift.reason, "binding-drift");
+  const absent = decideEndpointCommand(WINDOW, state({ locatorProvider: "desktop" }), relocate);
   equal(absent.accepted === false && absent.code, "not-found");
 });
 
@@ -301,6 +409,99 @@ test("decommission：证据分级，声明持有与关闭失败拒绝", () => {
     },
   );
   equal(held.accepted === false && held.reason, "claim-held");
+});
+
+test("desktop-sessions 存活证据：present-* 阻塞关闭，absent 可关闭并与 session-end 一起机器核实，no-locator 既不算活也不算缺席（ADR-0025 D3）", () => {
+  const base = {
+    operation: "decommission" as const,
+    expectedBindingId: BINDING.bindingId,
+    expectedBindingDigest: BINDING.bindingDigest,
+  };
+  const ended = state({
+    binding: BINDING,
+    locatorProvider: "desktop",
+    endedSessions: new Set(["session-a"]),
+  });
+  const verification = (
+    current: EndpointState,
+    preClose: Extract<EndpointCommand, { operation: "decommission" }>["preClose"],
+    postClose: Extract<EndpointCommand, { operation: "decommission" }>["postClose"],
+  ) => {
+    const decision = decideEndpointCommand(WINDOW, current, {
+      ...base,
+      preClose,
+      closeResult: "closed",
+      postClose,
+    });
+    return decision.accepted && decision.operation === "decommission"
+      ? decision.verification
+      : `${decision.accepted === false && decision.reason}`;
+  };
+  equal(
+    verification(
+      ended,
+      { kind: "desktop-sessions", status: "present-idle" },
+      { kind: "desktop-sessions", status: "absent" },
+    ),
+    "machine-verified",
+  );
+  equal(
+    verification(
+      ended,
+      { kind: "desktop-sessions", status: "absent" },
+      { kind: "desktop-sessions", status: "absent" },
+    ),
+    "machine-verified",
+    "a session already gone before the archive still closes with machine evidence",
+  );
+  equal(
+    verification(
+      state({ binding: BINDING, locatorProvider: "desktop" }),
+      { kind: "desktop-sessions", status: "present-busy" },
+      { kind: "desktop-sessions", status: "absent" },
+    ),
+    "manual-host-gate",
+    "no session-end record yet",
+  );
+  equal(
+    verification(
+      ended,
+      { kind: "desktop-sessions", status: "present-idle" },
+      { kind: "desktop-sessions", status: "no-locator" },
+    ),
+    "manual-host-gate",
+    "a list that cannot be matched against a locator proves nothing",
+  );
+  equal(
+    verification(
+      ended,
+      { kind: "desktop-sessions", status: "present-idle" },
+      { kind: "desktop-sessions", status: "present-busy" },
+    ),
+    "closure-blocked",
+  );
+  equal(
+    verification(
+      ended,
+      { kind: "desktop-sessions", status: "present-idle" },
+      { kind: "desktop-sessions", status: "present-idle" },
+    ),
+    "closure-blocked",
+  );
+  const claim = { claimId: "c", claimDigest: `sha256:${"c".repeat(64)}`, expired: false };
+  const release = (
+    liveness: Extract<EndpointCommand, { operation: "release-claim" }>["liveness"],
+  ) =>
+    decideEndpointCommand(WINDOW, state({ binding: BINDING, locatorProvider: "desktop", claim }), {
+      operation: "release-claim",
+      expectedClaimDigest: claim.claimDigest,
+      liveness,
+    });
+  const active = release({ kind: "desktop-sessions", status: "present-idle" });
+  equal(active.accepted === false && active.reason, "claim-active");
+  const unmatched = release({ kind: "desktop-sessions", status: "no-locator" });
+  equal(unmatched.accepted === false && unmatched.reason, "claim-active");
+  equal(release({ kind: "desktop-sessions", status: "absent" }).accepted, true);
 });
 
 test("release-claim：只在过期、持有会话已结束或端点缺席时释放", () => {
@@ -427,4 +628,30 @@ test("tmux pane 分类按固定顺序判定，只有 live 可派发", () => {
     ]),
     "metadata-mismatch",
   );
+});
+
+test("桌面会话清单分类：句柄在清单里按 busy / idle 分 present-busy / present-idle，不在即 absent；同 id 多行有一行 busy 即 busy；cwd、name、pid 不参与（ADR-0025 D3）", () => {
+  const sessions = [
+    {
+      sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f",
+      status: "idle" as const,
+      cwd: "/somewhere/else",
+      name: "Controller",
+      pid: 4242,
+    },
+    { sessionId: "1e1e1e1e-1e1e-4e1e-8e1e-1e1e1e1e1e1e", status: "busy" as const },
+  ];
+  equal(classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", sessions), "present-idle");
+  equal(classifyDesktopSessions("1e1e1e1e-1e1e-4e1e-8e1e-1e1e1e1e1e1e", sessions), "present-busy");
+  equal(classifyDesktopSessions("2d2d2d2d-2d2d-4d2d-8d2d-2d2d2d2d2d2d", sessions), "absent");
+  equal(classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", []), "absent");
+  equal(
+    classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", [
+      ...sessions,
+      { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", status: "busy" },
+    ]),
+    "present-busy",
+  );
+  // 桌面 id（local_ 前缀）不是句柄：清单里只有原始会话 id 才算匹配。
+  equal(classifyDesktopSessions("local_0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", sessions), "absent");
 });

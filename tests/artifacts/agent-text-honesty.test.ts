@@ -10,6 +10,8 @@ import {
   CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS,
   renderClaudeCodeAgentText,
 } from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_CONTENT } from "../../src/hosts/claude-code/claude-code-desktop-asset.js";
+import { CLAUDE_CODE_TMUX_ASSET_CONTENT } from "../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import {
   CODEX_AGENT_TEXT_COMMANDS_INCLUDED,
   CODEX_AGENT_TEXT_PLACEHOLDERS,
@@ -463,4 +465,136 @@ test("渲染后的 Controller SKILL.md 每宿主不超过 2,200 词与 14 KiB，
     );
     ok(!rendered.includes("{{"), `${host} rendered SKILL.md still carries a placeholder`);
   }
+});
+
+/**
+ * ADR-0025（双传输规划原则 1、第 3 节"文本"）：tmux 与桌面会话是 Claude 宿主并列一等的两种窗口传输。
+ * 两份助手脚本各自的 `case "<name>":` 分派是子命令的唯一来源：出厂文本点名的每个 `tmux.mjs <x>` /
+ * `desktop.mjs <x>` 都必须是那份助手真有的子命令，两份助手的每个子命令又都至少被 Controller 的文本
+ * （取值表或参考）教到，桌面参考的"没有的东西"一节恰好列出 tmux 独有的子命令——助手一改名文本就说谎。
+ */
+const DESKTOP_REFERENCE = "skills/wakeflow-controller/references/desktop-transport.md";
+const DESKTOP_ABSENT_HEADING = "## What this transport does not have";
+
+function helperSubcommands(script: string): readonly string[] {
+  return [
+    ...new Set([...script.matchAll(/^\s*case "([a-z-]+)":/gmu)].map((match) => match[1] ?? "")),
+  ].sort();
+}
+
+const TMUX_SUBCOMMANDS = helperSubcommands(CLAUDE_CODE_TMUX_ASSET_CONTENT);
+const DESKTOP_SUBCOMMANDS = helperSubcommands(CLAUDE_CODE_DESKTOP_ASSET_CONTENT);
+
+/** Controller 面的全部文本：技能、它的参考与 Claude 取值表（Codex 没有助手）。 */
+function controllerCorpus(): string {
+  return [
+    ...sourcesUnder("skills/wakeflow-controller/").map((source) => source.text),
+    ...Object.values(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS).map((value) => value.en),
+  ].join("\n");
+}
+
+test("ADR-0025：文本点名的每个助手子命令都存在，两份助手的每个子命令都被 Controller 文本教到（双传输的命令表）", () => {
+  deepEqual(TMUX_SUBCOMMANDS, [
+    "close",
+    "deliver",
+    "launch",
+    "mark",
+    "nudge",
+    "panes",
+    "preflight",
+    "resume",
+    "self",
+    "teardown",
+  ]);
+  deepEqual(DESKTOP_SUBCOMMANDS, ["landing", "launch", "preflight", "sessions"]);
+  const corpus = controllerCorpus();
+  for (const [helper, admitted] of [
+    ["tmux.mjs", TMUX_SUBCOMMANDS],
+    ["desktop.mjs", DESKTOP_SUBCOMMANDS],
+  ] as const) {
+    const invocation = new RegExp(`${helper.replace(".", "\\.")} ([a-z-]+)`, "gu");
+    for (const match of corpus.matchAll(invocation)) {
+      ok(
+        admitted.includes(match[1] ?? ""),
+        `${helper} is called with a subcommand it does not have: ${match[1]}`,
+      );
+    }
+  }
+  for (const name of new Set([...TMUX_SUBCOMMANDS, ...DESKTOP_SUBCOMMANDS])) {
+    ok(
+      new RegExp(`\`${name}( |\`)`, "u").test(corpus),
+      `no Controller text teaches the helper subcommand ${name}`,
+    );
+  }
+  const desktop = SOURCES.find((source) => source.path === DESKTOP_REFERENCE);
+  ok(desktop !== undefined, "the desktop transport reference must exist");
+  const desktopText = desktop?.text ?? "";
+  for (const name of DESKTOP_SUBCOMMANDS) {
+    ok(desktopText.includes(`\n### \`${name}`), `desktop reference lacks a section for ${name}`);
+  }
+  const absentStart = desktopText.indexOf(`\n${DESKTOP_ABSENT_HEADING}\n`);
+  ok(absentStart >= 0, "the desktop reference must say what the transport does not have");
+  const absent = desktopText.slice(absentStart);
+  for (const name of TMUX_SUBCOMMANDS.filter((entry) => !DESKTOP_SUBCOMMANDS.includes(entry))) {
+    ok(absent.includes(`\`${name}\``), `the desktop reference must list ${name} as absent`);
+  }
+  for (const name of DESKTOP_SUBCOMMANDS) {
+    equal(absent.includes(`\`${name}\``), false, `${name} exists on desktop and is not absent`);
+  }
+});
+
+/**
+ * ADR-0025 D4：桌面参考的拒绝表以 `reason` 为键，表里每一行的码都必须是 `desktop.mjs` 真会以
+ * `refuse("<code>")` 给出的拒绝——助手改码或删码时文本不能继续教一个不存在的拒绝。
+ */
+test("ADR-0025：桌面参考拒绝表的每个 reason 都是 desktop.mjs 真有的拒绝码", () => {
+  const desktopText = SOURCES.find((source) => source.path === DESKTOP_REFERENCE)?.text ?? "";
+  const refusals = new Set(
+    [...CLAUDE_CODE_DESKTOP_ASSET_CONTENT.matchAll(/refuse\("([a-z-]+)"/gu)].map(
+      (match) => match[1] ?? "",
+    ),
+  );
+  const rows = [...desktopText.matchAll(/^\| `([a-z][a-z-]*)` \|/gmu)]
+    .map((match) => match[1] ?? "")
+    .filter((code) => code !== "reason");
+  ok(rows.length >= 11, `expected the desktop refusal table, found ${rows.length} rows`);
+  for (const code of rows) {
+    ok(refusals.has(code), `desktop reference teaches a refusal desktop.mjs never gives: ${code}`);
+  }
+});
+
+/**
+ * 规划第 3 节"文本"：谈到某一种传输的句子只描述环境差异（有没有桌面 app、有没有 tmux），不说任一方是旧方式、
+ * 预览、过渡或推荐。只看 Claude 取值与共享源文本——Codex 取值自称预览版说的是 Codex 宿主，不是窗口传输。
+ */
+const TRANSPORT_SENTENCE =
+  /tmux transport|tmux panes|desktop sessions?|desktop transport|window transport|windowTransport|tmux 传输|桌面会话传输|窗口传输/iu;
+const RANKING_TERMS =
+  /\b(?:legacy|deprecated|preferred|recommended|fallback|second-class|transitional|old way|new way|is a preview|preview transport|transport preview)\b|旧方式|预览版|过渡|推荐|优于|更好/iu;
+
+test("ADR-0025：提到窗口传输的句子里没有优劣词——两种传输只以环境差异区分（规划原则 1）", () => {
+  const texts: readonly (readonly [string, string])[] = [
+    ...SOURCES.map((source) => [source.path, source.text] as const),
+    ...Object.entries(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS).flatMap(([key, value]) =>
+      value.zh === undefined
+        ? [[`claude:${key}`, value.en] as const]
+        : [[`claude:${key}`, value.en] as const, [`claude:${key}:zh`, value.zh] as const],
+    ),
+  ];
+  let sentences = 0;
+  for (const [label, text] of texts) {
+    for (const sentence of text.replace(/\s+/gu, " ").split(/(?<=[.!?。！？])\s/u)) {
+      if (!TRANSPORT_SENTENCE.test(sentence)) continue;
+      sentences += 1;
+      equal(
+        RANKING_TERMS.test(sentence),
+        false,
+        `${label} ranks a transport: ${sentence.slice(0, 160)}`,
+      );
+    }
+  }
+  ok(
+    sentences >= 40,
+    `expected the texts to describe both transports, found ${sentences} sentences`,
+  );
 });

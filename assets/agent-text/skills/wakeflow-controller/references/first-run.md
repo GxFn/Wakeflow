@@ -20,10 +20,11 @@ inside the container already.
 ## Before the first tool call
 
 Run the host preflight the windows reference names and read it back. A missing
-or unsupported tool - `node` outside the supported range, or `tmux` or
-`claude` unavailable on Claude Code - is the first thing to tell the user,
-with the one thing to install; do not start the workspace conversation until
-the preflight is clean. The directory must be a Git repository of its own and
+or unsupported tool - `node` outside the supported range, `claude`
+unavailable, or on Claude Code the window transport's own prerequisite
+(`tmux` for tmux panes; the desktop app running and signed in for desktop
+sessions) - is the first thing to tell the user, with the one thing to install
+or open; do not start the workspace conversation until the preflight is clean. The directory must be a Git repository of its own and
 must not be a product repository root; if it is not a repository yet, run
 `git init` there yourself once the user agrees.
 
@@ -49,8 +50,13 @@ user decides; you do not pick silently.
    `hosts.<host>.launch.modelByRole` and `reasoningEffortByRole` (by role or
    `default`), Claude Code's `launch.permissionMode`, and the Claude Code tmux
    session name `hosts.claude-code.tmux.sessionName` (worktree pods open
-   `<name>-<pod name>`). The empty object inherits the tested profile; mention
-   it once and move on unless the user has a preference.
+   `<name>-<pod name>`). On Claude Code `hosts.claude-code.windowTransport` is
+   the window transport: propose the one this session's surroundings support -
+   `desktop` when it has the desktop app's session tools, `tmux` otherwise -
+   say what each means (tmux panes, or sessions in the desktop app's Code
+   tab), and let the user pick; one transport per workspace. The empty object
+   inherits the tested profile; mention it once and move on unless the user
+   has a preference.
 
 Build the `selection` from the tool's input schema - it spells out every part,
 `hosts` included - never from another workspace's config or from plugin files.

@@ -18,6 +18,15 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
+  CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
+  CLAUDE_CODE_DESKTOP_ASSET_REF,
+  WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+} from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
+import {
+  CLAUDE_CODE_DESKTOP_ASSET_BLOCKER,
+  CLAUDE_CODE_DESKTOP_ASSET_OPERATION_ID,
+} from "../../../src/hosts/claude-code/claude-code-desktop-asset-operation.js";
+import {
   CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER,
   claudeCodeMaintenanceCapability,
 } from "../../../src/hosts/claude-code/claude-code-maintenance-capability.js";
@@ -47,7 +56,10 @@ import {
   WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { CLAUDE_CODE_TMUX_ASSET_OPERATION_ID } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import { publishWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
@@ -70,15 +82,22 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 useDisposableDurability();
 
 /**
- * Claude 宿主的聚合维护事务（能力卡 1 §1.1 / §1.4 / §1.5，gate-log §13.94 D6、§13.117 D4–D5，复审 M2）。
- * 2 级能力测试：在一次性 Git 工作区上跑完整的 preview → apply → recover，覆盖 fresh 的三条 portable
- * settings、两份资产与三条本地设置条目、affected 操作的恢复重放、设置漂移的 plan-stale 拒绝、读不出的
- * 资产 blocker，以及 reconcile 对被删受管 Design 根的重建与规则回写（open-items W5 / CR-H6）。
+ * Claude 宿主的聚合维护事务（能力卡 1 §1.1 / §1.4 / §1.5，gate-log §13.94 D6、§13.117 D4–D5，复审 M2；
+ * ADR-0025 D6）。2 级能力测试：在一次性 Git 工作区上跑完整的 preview → apply → recover，覆盖 tmux 传输下
+ * fresh 的三条 portable settings、两份资产与三条本地设置条目、affected 操作的恢复重放、设置漂移的
+ * plan-stale 拒绝、读不出的资产 blocker、reconcile 对被删受管 Design 根的重建与规则回写（open-items W5 /
+ * CR-H6），以及桌面传输下 fresh 只发布桌面助手与便携设置（没有状态栏资产与本地设置条目）、工作区根放行桌面
+ * 助手、reconcile 零步、读不出的桌面助手报桌面的 blocker。
  */
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
+]);
+/** 桌面传输的 profile 集合：本宿主的那份换成桌面 profile（ADR-0025 D1）。 */
+const DESKTOP_PROFILES = Object.freeze([
+  codexWorkspaceHostResourceProfile,
+  claudeCodeDesktopWorkspaceHostResourceProfile,
 ]);
 const UUID = "11111111-1111-4111-8111-111111111111";
 const RECONCILE_UUID = "22222222-2222-4222-8222-222222222222";
@@ -115,6 +134,23 @@ function request(config: ReturnType<typeof desiredConfig>) {
     desiredConfig: config,
     currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
     hostProfiles: PROFILES,
+  });
+}
+
+/** 选了桌面传输的配置（`hosts.claude-code.windowTransport: "desktop"`，ADR-0025 D1）。 */
+function desktopConfig() {
+  const value = createMinimalWakeflowConfig();
+  (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  (value.hosts as Record<string, unknown>)["claude-code"] = { windowTransport: "desktop" };
+  return parseWakeflowConfig(value);
+}
+
+function desktopRequest(config: ReturnType<typeof desktopConfig>) {
+  return Object.freeze({
+    action: "fresh-initialize" as const,
+    desiredConfig: config,
+    currentHostProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+    hostProfiles: DESKTOP_PROFILES,
   });
 }
 
@@ -521,5 +557,109 @@ test("状态栏资产不是常规文件时贡献 blocked 并带稳定 blocker，
       (entry) => entry.operationId === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_ID,
     ),
     true,
+  );
+});
+
+test("桌面传输（ADR-0025 D6）：fresh 只发布桌面助手与三条便携设置，没有状态栏资产、tmux 助手与本地设置条目；工作区根放行桌面助手；reconcile 零步", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desktopConfig();
+  const input = desktopRequest(desired);
+  const plan = await previewClaudeCodeMaintenanceExecution(workspace.root, input);
+  equal(plan.status, "ready");
+  deepEqual(plan.blockerCodes, []);
+  const operations = plan.hostContribution?.operations ?? [];
+  // 三条 portable settings 加一份桌面助手资产：桌面 profile 没有状态栏表面，所以没有状态栏资产与本地设置条目。
+  equal(operations.length, 4);
+  deepEqual(operations.map((entry) => entry.operationKind).sort(), [
+    "desktop-asset",
+    "portable-settings",
+    "portable-settings",
+    "portable-settings",
+  ]);
+  const desktopAsset = operations.find(
+    (entry) => entry.operationId === CLAUDE_CODE_DESKTOP_ASSET_OPERATION_ID,
+  );
+  equal(desktopAsset?.operationKind, "desktop-asset");
+  equal(desktopAsset?.sourceDigest, null);
+  equal(desktopAsset?.targetDigest, CLAUDE_CODE_DESKTOP_ASSET_DIGEST);
+  equal(plan.steps.filter((entry) => entry.boundary === "host-capability").length, 4);
+
+  const completed = await executeClaudeCodeMaintenanceExecution(workspace.root, plan, input, {
+    uuidFactory: () => UUID,
+  });
+  equal(completed.status, "completed");
+  equal(completed.stepReceipts.filter((entry) => entry.boundary === "host-capability").length, 4);
+  const desktopAssetPath = path.join(
+    workspace.absolutePath,
+    ...CLAUDE_CODE_DESKTOP_ASSET_REF.split("/"),
+  );
+  equal(statSync(desktopAssetPath).mode & 0o777, 0o600);
+  equal(computeSha256Digest(readFileSync(desktopAssetPath)), CLAUDE_CODE_DESKTOP_ASSET_DIGEST);
+  for (const ref of [CLAUDE_CODE_STATUSLINE_ASSET_REF, CLAUDE_CODE_TMUX_ASSET_REF]) {
+    equal(existsSync(path.join(workspace.absolutePath, ...ref.split("/"))), false, ref);
+  }
+  // 桌面不渲染状态行：工作区根与两个支撑面都没有本地设置文件。
+  for (const directory of [
+    workspace.absolutePath,
+    ...desired.topology.supportSurfaces.map((surface) =>
+      path.join(workspace.absolutePath, surface.path),
+    ),
+  ]) {
+    equal(
+      existsSync(path.join(directory, ...CLAUDE_CODE_LOCAL_SETTINGS_REF.split("/"))),
+      false,
+      directory,
+    );
+  }
+  // 工作区根放行的是桌面助手这一条调用，不是 tmux 助手；支撑面仍只放行角色工具。
+  deepEqual(settingsPermission(workspace.absolutePath), [
+    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+    WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+  ]);
+  equal(WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE.includes("desktop.mjs *)"), true);
+  for (const [directory, role] of [
+    ["Design", "design"],
+    ["Test", "test"],
+  ] as const) {
+    deepEqual(settingsPermission(path.join(workspace.absolutePath, directory)), [
+      ...claudeCodePortableSettingsRulesFor({ rootKind: "support-surface", role }),
+    ]);
+  }
+  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
+
+  const reconcileInput = Object.freeze({
+    action: "reconcile" as const,
+    desiredConfig: null,
+    currentHostProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+    hostProfiles: DESKTOP_PROFILES,
+  });
+  const reconcilePlan = await previewClaudeCodeMaintenanceExecution(workspace.root, reconcileInput);
+  equal(reconcilePlan.status, "ready");
+  deepEqual(reconcilePlan.blockerCodes, []);
+  equal(reconcilePlan.steps.length, 0);
+});
+
+test("桌面助手资产不是常规文件时贡献 blocked 并带桌面助手的 blocker，状态栏资产不在计划里", async (t) => {
+  const workspace = await fixture(t);
+  mkdirSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_DESKTOP_ASSET_REF.split("/")), {
+    recursive: true,
+    mode: 0o700,
+  });
+  const plan = await previewClaudeCodeMaintenanceExecution(
+    workspace.root,
+    desktopRequest(desktopConfig()),
+  );
+  equal(plan.status, "blocked");
+  deepEqual(plan.hostContribution?.blockerCodes, [CLAUDE_CODE_DESKTOP_ASSET_BLOCKER]);
+  equal(
+    plan.blockerCodes.includes(
+      `host:claude-code:claude-code-maintenance:${CLAUDE_CODE_DESKTOP_ASSET_BLOCKER}`,
+    ),
+    true,
+  );
+  deepEqual(
+    (plan.hostContribution?.operations ?? []).map((entry) => entry.operationKind),
+    ["portable-settings", "portable-settings", "portable-settings"],
+    "the unreadable helper drops its own operation; the statusline is not part of this transport",
   );
 });

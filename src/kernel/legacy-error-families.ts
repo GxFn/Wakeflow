@@ -142,6 +142,7 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-window-runtime-unregistered-projection-record": "precondition-failed",
     "wakeflow-workspace-core-layout-inspection": "precondition-failed",
     "wakeflow-workspace-host-resource-profile": "precondition-failed",
+    "wakeflow-workspace-host-transport": "precondition-failed",
     "wakeflow-workspace-resource-declaration": "precondition-failed",
     "wakeflow-workspace-static-resource-matrix": "precondition-failed",
     "wakeflow-workspace-static-resource-operation-context": "precondition-failed",

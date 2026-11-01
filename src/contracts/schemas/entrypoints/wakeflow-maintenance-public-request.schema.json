@@ -534,17 +534,24 @@
       }
     },
     "claudeHost": {
-      "description": "Claude Code launch and tmux-container preferences; live locators stay host-local.",
+      "description": "Claude Code launch, window-transport and tmux-container preferences; live locators stay host-local.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "launch": {
           "$ref": "#/$defs/claudeLaunch"
         },
+        "windowTransport": {
+          "$ref": "#/$defs/claudeWindowTransport"
+        },
         "tmux": {
           "$ref": "#/$defs/claudeTmux"
         }
       }
+    },
+    "claudeWindowTransport": {
+      "enum": ["tmux", "desktop"],
+      "description": "Which window transport this workspace's Claude Code host uses: `tmux` panes driven by the tmux helper, or `desktop` sessions in the Claude desktop app's Code tab started through the desktop helper. Omission means tmux; one transport per workspace, and live pane or session identity stays host-local (ADR-0025)."
     },
     "codexLaunch": {
       "description": "Optional Codex model and reasoning-effort pins by protocol role; missing keys inherit the current tested profile.",

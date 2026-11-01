@@ -417,7 +417,7 @@
       }
     },
     "hostAssets": {
-      "description": "Files Wakeflow published per host (status line; the tmux helper on Claude Code) and whether their bytes are the artifact's; a non-current helper blocks wakeflow_prepare_delivery with host-asset-<status> until reconcile republishes it.",
+      "description": "Files Wakeflow published per host (on Claude Code the window-transport helper, tmux.mjs or desktop.mjs, and the status line under tmux only) and whether their bytes are the artifact's; a non-current helper blocks wakeflow_prepare_delivery with host-asset-<status> until reconcile republishes it.",
       "type": "array",
       "maxItems": 8,
       "items": {

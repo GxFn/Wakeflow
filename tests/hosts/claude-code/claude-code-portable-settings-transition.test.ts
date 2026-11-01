@@ -6,6 +6,7 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
+import { WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
 import {
   ClaudeCodePortableSettingsTransitionError,
   claudeCodePortableSettingsRemovedRulesFor,
@@ -84,9 +85,14 @@ function allowOf(text: string | null): string[] {
 
 test("removal deletes exactly the given entries, keeps the user's entries, keys and formatting, and leaves an emptied allow array in place（ADR-0024）", () => {
   const removed = claudeCodePortableSettingsRemovedRulesFor({ rootKind: "program" });
+  // 工作区根的删除表不分传输（ADR-0025 D6）：MCP 规则加两种传输的助手规则。
   deepEqual(
     [...removed],
-    [WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE, WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE],
+    [
+      WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+      WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+      WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+    ],
   );
   const source = [
     "{",

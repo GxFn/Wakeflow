@@ -31,7 +31,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowLocator",
   "settingsIntegration",
   "statuslineAsset",
-  "tmuxAsset",
+  "helperAsset",
   "runtimeStaleness",
   "runtimeRefresh",
 ] as const);
@@ -55,8 +55,11 @@ export interface WakeflowWorkspaceHostStatuslineAsset {
   readonly fileName: WakeflowWorkspaceHostResourceComponent;
 }
 
-/** 宿主运行时 `operations/assets/` 下的 tmux 会话/窗口助手资产。 */
-export interface WakeflowWorkspaceHostTmuxAsset {
+/**
+ * 宿主运行时 `operations/assets/` 下的窗口传输助手资产（ADR-0025）：tmux 传输是 tmux 会话/窗口助手，
+ * 桌面传输是桌面会话助手。字段对传输中立，文件名由宿主的传输 profile 给出。
+ */
+export interface WakeflowWorkspaceHostHelperAsset {
   readonly fileName: WakeflowWorkspaceHostResourceComponent;
 }
 
@@ -92,7 +95,7 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
   readonly windowLocator: boolean;
   readonly settingsIntegration: Readonly<WakeflowWorkspaceHostSettingsIntegration> | null;
   readonly statuslineAsset: Readonly<WakeflowWorkspaceHostStatuslineAsset> | null;
-  readonly tmuxAsset: Readonly<WakeflowWorkspaceHostTmuxAsset> | null;
+  readonly helperAsset: Readonly<WakeflowWorkspaceHostHelperAsset> | null;
   /**
    * 绑定窗口的运行身份怎样判为过期（§13.161）。`session-start-observer-digest`：制品在原路径就地
    * 更新、宿主有重启窗口的手段（Claude Code 的 tmux 助手），会话最近一次启动记录的观察器摘要不等于
@@ -110,7 +113,9 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
 
 /**
  * 宿主启动模板：端点切片按它渲染 Agent 的启动参数，不再按 hostId 分支。
- * `tmux-session` 携带宿主自己的缺省值（配置未声明时使用）；`project-thread` 在外层工作区项目内建聊天，执行目录单独分配。
+ * `tmux-session` 携带宿主自己的缺省值（配置未声明时使用）；`desktop-session` 是同一宿主的桌面会话传输
+ * （ADR-0025：会话由 `claude --bg` 起、经 `--desktop --resume` 进桌面，没有 tmux 会话名）；
+ * `project-thread` 在外层工作区项目内建聊天，执行目录单独分配。
  */
 export type WakeflowWorkspaceHostLaunchTemplate =
   | {
@@ -120,7 +125,30 @@ export type WakeflowWorkspaceHostLaunchTemplate =
       readonly permissionMode: string;
       readonly sessionName: string;
     }
+  | {
+      readonly kind: "desktop-session";
+      readonly controllerEffort: string;
+      readonly defaultEffort: string;
+      readonly permissionMode: string;
+    }
   | { readonly kind: "project-thread" };
+
+/** 窗口定位子的提供者由启动模板推导（ADR-0025 D2），共享代码不比较宿主 id 或传输名。 */
+export type WakeflowWorkspaceHostLocatorProvider = "tmux" | "desktop" | "none";
+
+export function wakeflowWorkspaceHostLocatorProvider(
+  profile: Readonly<Pick<WakeflowWorkspaceHostResourceProfile, "launch" | "surfaces">>,
+): WakeflowWorkspaceHostLocatorProvider {
+  if (!profile.surfaces.windowLocator) return "none";
+  switch (profile.launch.kind) {
+    case "tmux-session":
+      return "tmux";
+    case "desktop-session":
+      return "desktop";
+    default:
+      return "none";
+  }
+}
 
 export interface WakeflowWorkspaceHostResourceProfile {
   readonly kind: typeof WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND;
@@ -179,6 +207,12 @@ const TMUX_LAUNCH_FIELDS = new Set([
   "defaultEffort",
   "permissionMode",
   "sessionName",
+]);
+const DESKTOP_LAUNCH_FIELDS = new Set([
+  "kind",
+  "controllerEffort",
+  "defaultEffort",
+  "permissionMode",
 ]);
 const THREAD_LAUNCH_FIELDS = new Set(["kind"]);
 const LAUNCH_VALUE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -275,12 +309,12 @@ function parseStatuslineAsset(
   });
 }
 
-function parseTmuxAsset(value: unknown): Readonly<WakeflowWorkspaceHostTmuxAsset> | null {
+function parseHelperAsset(value: unknown): Readonly<WakeflowWorkspaceHostHelperAsset> | null {
   if (value === null) return null;
-  const record = plainRecord(value, "$/surfaces/tmuxAsset");
-  assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/tmuxAsset");
+  const record = plainRecord(value, "$/surfaces/helperAsset");
+  assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/helperAsset");
   return Object.freeze({
-    fileName: parseComponent(record.fileName, "$/surfaces/tmuxAsset/fileName"),
+    fileName: parseComponent(record.fileName, "$/surfaces/helperAsset/fileName"),
   });
 }
 
@@ -329,7 +363,7 @@ function parseSurfaces(value: unknown): Readonly<WakeflowWorkspaceHostResourceSu
     windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
     settingsIntegration,
     statuslineAsset,
-    tmuxAsset: parseTmuxAsset(record.tmuxAsset),
+    helperAsset: parseHelperAsset(record.helperAsset),
     runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
     runtimeRefresh: parseRuntimeRefresh(record.runtimeRefresh),
   });
@@ -362,6 +396,15 @@ function parseLaunchTemplate(value: unknown): Readonly<WakeflowWorkspaceHostLaun
     assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
     return Object.freeze({ kind: "project-thread" as const });
   }
+  if (record.kind === "desktop-session") {
+    assertExactFields(record, DESKTOP_LAUNCH_FIELDS, "$/launch");
+    return Object.freeze({
+      kind: "desktop-session" as const,
+      controllerEffort: launchValue(record.controllerEffort, "$/launch/controllerEffort"),
+      defaultEffort: launchValue(record.defaultEffort, "$/launch/defaultEffort"),
+      permissionMode: launchValue(record.permissionMode, "$/launch/permissionMode"),
+    });
+  }
   if (record.kind !== "tmux-session") fail("surface", "$/launch/kind");
   assertExactFields(record, TMUX_LAUNCH_FIELDS, "$/launch");
   return Object.freeze({
@@ -392,8 +435,11 @@ export function parseWakeflowWorkspaceHostResourceProfile(
   }
   const surfaces = parseSurfaces(record.surfaces);
   const launch = parseLaunchTemplate(record.launch);
-  if (launch.kind === "tmux-session" && !surfaces.windowLocator) {
+  if (launch.kind !== "project-thread" && !surfaces.windowLocator) {
     fail("contradiction", "$/launch");
+  }
+  if (launch.kind !== "project-thread" && surfaces.helperAsset === null) {
+    fail("contradiction", "$/surfaces/helperAsset");
   }
   return Object.freeze({
     kind: WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND,

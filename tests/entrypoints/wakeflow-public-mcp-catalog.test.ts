@@ -201,7 +201,9 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
 ] satisfies readonly Readonly<ExpectedPublicTool>[]);
 
 /** Q12（2026-10-18）：tools/list 预算按实测 94,146 B 加一成定为 102 KiB；按宿主/角色的子集预算归 K4。 */
-const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 102 * 1024;
+// ADR-0025（K1）：桌面登记合同（desktop 定位子与 desktop-sessions 观察）让目录增加约 1.4 KB，预算按最小改法
+// 从 102 KiB 提到 104 KiB（约 1.1 KiB 余量）；K3 的描述减肥仍是把它压回去的路径。
+const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 104 * 1024;
 
 function unavailableExecutor(): Promise<never> {
   return Promise.reject(new Error("Catalog test executors must not run."));

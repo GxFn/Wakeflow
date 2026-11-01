@@ -65,6 +65,10 @@ import {
   refreshWakeflowWindowRuntimeProjections,
   retireWakeflowWindowRuntimeProjections,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import {
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   admitPodResult,
@@ -104,6 +108,8 @@ import {
 export interface PodHost {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /** 多传输宿主的 profile 表（ADR-0025 D1）；准入时按配置选出一份，之后只读选出的 profile。 */
+  readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
 }
 
@@ -213,12 +219,30 @@ function envelopeOf(request: PodRequest): PublicationTransactionEnvelope {
   return Object.freeze({ root: request.root, mode: request.mode, planDigest, operationId: null });
 }
 
+/** ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile；单传输宿主原样通过。 */
+function selectHost<Host extends Readonly<PodHost>>(
+  host: Host,
+  model: Readonly<WakeflowConfigModel>,
+): Host {
+  if (host.transports === undefined) return host;
+  const { transports: _transports, ...rest } = host;
+  return Object.freeze({
+    ...rest,
+    resourceProfile: selectWakeflowWorkspaceHostResourceProfile(host, model),
+  }) as Host;
+}
+
 async function openContext(
   root: RootedDirectory,
-  facade: Readonly<PodHostFacade>,
+  hostFacade: Readonly<PodHostFacade>,
   options: ExecutePodOptions,
 ): Promise<PodSliceContext> {
   const snapshot = await readSnapshot(root, options.signal);
+  // 本宿主与组合根给出的每个宿主都按配置选出 profile；此后本上下文只读选出的那份。
+  const facade: Readonly<PodHostFacade> = Object.freeze({
+    ...selectHost(hostFacade, snapshot.model),
+    hosts: Object.freeze(hostFacade.hosts.map((host) => selectHost(host, snapshot.model))),
+  });
   return Object.freeze({ root, facade, snapshot, options });
 }
 

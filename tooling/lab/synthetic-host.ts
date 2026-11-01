@@ -22,8 +22,28 @@ export async function syntheticHost(artifact: string, hostId: string) {
     const values = Object.values(module).filter((value) => {
       return typeof value === "object" && value !== null && "kind" in value && value.kind === kind;
     });
-    assertLab(values.length === 1, "lab-host-profile-unavailable");
-    return values[0];
+    if (values.length === 1) return values[0];
+    // ADR-0025：多传输宿主导出一份传输表（defaultTransport + profiles）；lab 的合成观察走宿主的缺省传输。
+    const table = Object.values(module).find((value) => {
+      return (
+        typeof value === "object" &&
+        value !== null &&
+        "defaultTransport" in value &&
+        "profiles" in value &&
+        typeof value.profiles === "object" &&
+        value.profiles !== null
+      );
+    }) as { defaultTransport: string; profiles: Record<string, unknown> } | undefined;
+    const selected = table?.profiles[table.defaultTransport];
+    assertLab(
+      selected !== undefined &&
+        typeof selected === "object" &&
+        selected !== null &&
+        "kind" in selected &&
+        selected.kind === kind,
+      "lab-host-profile-unavailable",
+    );
+    return selected;
   };
   const identity = recordAt(
     await load(`${hostId}-window-host-identity-profile`, "WakeflowWindowHostIdentityProfile"),

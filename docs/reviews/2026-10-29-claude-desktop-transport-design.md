@@ -37,7 +37,7 @@
 
 ### 3.1 助手资产 `desktop.mjs`
 
-与 `tmux.mjs` 同一发布机制与同一允许规则形状（`Bash(node <绝对路径> *)`），子命令：`preflight`、`launch`、`sessions`、`mark`、`deliver`、`close`。它只是把三步 CLI 序列搬到 Agent 手里，仍只输出现有 MCP 工具要求的观察 JSON，Wakeflow 本身不 spawn 进程。
+与 `tmux.mjs` 同一发布机制与同一允许规则形状（`Bash(node <绝对路径> *)`），子命令四个：`preflight`、`launch`、`sessions`、`landing`（K1 实现；改名、发送、归档由 Controller 直接用桌面工具，见 ADR-0025 D4）。它只是把三步 CLI 序列搬到 Agent 手里，仍只输出现有 MCP 工具要求的观察 JSON，Wakeflow 本身不 spawn 进程。
 
 ### 3.2 `launch --window <id>`（stdin 是 inspect 结果）
 

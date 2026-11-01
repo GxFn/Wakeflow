@@ -45,6 +45,13 @@ test("I12：selection.hosts 接受 Config 形状的 tmux 会话名、权限模�
     ).ok,
     true,
   );
+
+  // ADR-0025：窗口传输与其余 Claude 偏好同一个 hosts 子树。
+  equal(
+    validate(freshInitializePreview({ "claude-code": { windowTransport: "desktop" } })).ok,
+    true,
+  );
+  equal(validate(freshInitializePreview({ "claude-code": { windowTransport: "tmux" } })).ok, true);
 });
 
 test("I12：写错的 hosts 键在请求 Schema 这一层就被拒，并点名字段", () => {
@@ -65,6 +72,11 @@ test("I12：写错的 hosts 键在请求 Schema 这一层就被拒，并点名�
     [
       { "claude-code": { launch: { permissionMode: "yolo" } } },
       "$/request/selection/hosts/claude-code/launch/permissionMode",
+      "enum",
+    ],
+    [
+      { "claude-code": { windowTransport: "screen" } },
+      "$/request/selection/hosts/claude-code/windowTransport",
       "enum",
     ],
   ] as const;

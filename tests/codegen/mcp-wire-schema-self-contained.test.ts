@@ -767,6 +767,7 @@ const FRESH_SELECTION_HOST_DEFINITIONS = [
   "claudeTmux",
   "claudeTmuxSessionName",
   "claudeTmuxSocketName",
+  "claudeWindowTransport",
   "nonEmptyString",
   "trimmedNonEmptyString",
 ] as const;

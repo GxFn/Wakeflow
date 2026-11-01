@@ -106,7 +106,7 @@ of test work, and it overrides one target rule: you do record managed evidence
    decides is replaced by importing again with the supersedes field naming
    the first import's result id; after a decision only another attempt can.
 6. Send the returned wake-controller callback prompt to the Controller window
-   by the host's own means: {{deliveryAction}} No other transport counts as a
+   by the host's own means: {{deliveryAction}} No other route counts as a
    send. Then end your turn.
 
 ## What you must return

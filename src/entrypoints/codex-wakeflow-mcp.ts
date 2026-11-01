@@ -17,7 +17,10 @@ import {
   executeTestReviewDecisionRequest,
 } from "../capabilities/result-review/service.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostTransportTable,
+} from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
@@ -62,6 +65,8 @@ const CODEX_POD_FACADE = Object.freeze({
     Object.freeze({
       hostId: "claude-code" as const,
       resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+      // ADR-0025：对端 Claude 工作区可能用桌面传输，pod 读它的绑定时按该工作区配置选 profile。
+      transports: claudeCodeWorkspaceHostTransportTable,
       identityProfile: claudeCodeWindowHostIdentityProfile,
     }),
   ]),
@@ -89,8 +94,11 @@ const CODEX_OBSERVATION_FACADE = Object.freeze({
     Object.freeze({
       hostId: "claude-code" as const,
       resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+      // ADR-0025：对端 Claude 工作区按它配置的传输选 profile；本进程读不到对端资产，两种传输的期望都为空。
+      transports: claudeCodeWorkspaceHostTransportTable,
       identityProfile: claudeCodeWindowHostIdentityProfile,
       statuslineAsset: null,
+      transportAssets: Object.freeze({ tmux: null, desktop: null }),
       // 对端制品是另一份安装：本进程读不到它的摘要，窗口只按版本比（R-ROOT-04）。
       artifact: null,
     }),

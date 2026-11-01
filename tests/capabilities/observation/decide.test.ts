@@ -780,6 +780,33 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     ),
     ["pass", "claude-code:settings-custom"],
   );
+  // 没有状态栏的传输（ADR-0025 D6）：不期望任何设置条目，settings 为 not-applicable 即通过且不点名；
+  // 整票由伴随的助手决定，助手出问题时 code 仍带文件名。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [{ hostId: "claude-code", status: "current", settings: "not-applicable" }],
+      }),
+      "host-settings-assets",
+    ),
+    ["pass", null],
+  );
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        assets: [
+          {
+            hostId: "claude-code",
+            status: "drift",
+            settings: "not-applicable",
+            companion: "desktop.mjs",
+          },
+        ],
+      }),
+      "host-settings-assets",
+    ),
+    ["fail", "claude-code:desktop.mjs:drift"],
+  );
 });
 
 test("pod-execution-location：ready 的 worktree pod 缺回执或检出即 fail；creating 只报 pending-registration 且不失败；closing 的 pod 检出仍在只报 disposal-pending；primary 仓库根未观察为 unavailable、不是主检出为 fail", () => {

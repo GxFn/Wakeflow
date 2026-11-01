@@ -1,9 +1,10 @@
 /**
- * 2 级（能力）：Claude 宿主维护 capability 的退出路径贡献（ADR-0024，能力卡 01/02）。在一次性 Git 工作区
- * 上先走完整的 fresh-initialize，再直接向 capability 要 detach-workspace 与 detach-repository 的贡献，并在
- * 维护门内执行每条宿主操作：两种宿主步的种类名与 targetKey、按标识排序、执行后只剩用户自己的条目与键、
- * 资产与配置不碰、删完再计划为空、读不出的根成为 blocker、种类与负载不一致的操作被拒绝。共享的 detach
- * 步（受管块、投影退役、retire-config）属于核心切片，不在本文件。
+ * 2 级（能力）：Claude 宿主维护 capability 的退出路径贡献（ADR-0024，能力卡 01/02；ADR-0025 D6）。在一次性
+ * Git 工作区上先走完整的 fresh-initialize，再直接向 capability 要 detach-workspace 与 detach-repository 的
+ * 贡献，并在维护门内执行每条宿主操作：两种宿主步的种类名与 targetKey、按标识排序、执行后只剩用户自己的条目
+ * 与键、资产与配置不碰、删完再计划为空、读不出的根成为 blocker、种类与负载不一致的操作被拒绝；桌面传输的
+ * 工作区没有状态行条目可删，规则删除步删掉桌面助手规则。共享的 detach 步（受管块、投影退役、retire-config）
+ * 属于核心切片，不在本文件。
  */
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -45,7 +46,14 @@ import {
   CLAUDE_CODE_TMUX_ASSET_REF,
   WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  CLAUDE_CODE_DESKTOP_ASSET_REF,
+  WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+} from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
+import {
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import type { WakeflowHostMaintenanceOperation } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
@@ -346,4 +354,101 @@ test("an unreadable settings.json or settings.local.json blocks the detach contr
     },
   );
   equal(readFileSync(designFile, "utf8"), before);
+});
+
+test("desktop transport (ADR-0025 D6): detach-workspace contributes only the three rule removals, there is no statusline entry to remove, execution strips the desktop helper rule and leaves the desktop helper asset in place", async (t) => {
+  const workspace = await fixture(t);
+  const value = createMinimalWakeflowConfig();
+  (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+  (value.hosts as Record<string, unknown>)["claude-code"] = { windowTransport: "desktop" };
+  const desired = parseWakeflowConfig(value);
+  const profiles = Object.freeze([
+    codexWorkspaceHostResourceProfile,
+    claudeCodeDesktopWorkspaceHostResourceProfile,
+  ]);
+  const input = Object.freeze({
+    action: "fresh-initialize" as const,
+    desiredConfig: desired,
+    currentHostProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+    hostProfiles: profiles,
+  });
+  const completed = await executeClaudeCodeMaintenanceExecution(
+    workspace.root,
+    await previewClaudeCodeMaintenanceExecution(workspace.root, input),
+    input,
+    { uuidFactory: () => UUID },
+  );
+  equal(completed.status, "completed");
+  deepEqual(allowOf(settingsPath(workspace.absolutePath)), [
+    WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+    WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+  ]);
+  equal(existsSync(localSettingsPath(workspace.absolutePath)), false);
+  const [designSurface, testSurface] = desired.topology.supportSurfaces;
+  if (designSurface === undefined || testSurface === undefined) {
+    throw new Error("The fixture config declares two support surfaces.");
+  }
+
+  const contribution = await claudeCodeMaintenanceCapability.planContribution(workspace.root, {
+    action: "detach-workspace",
+    config: desired,
+    profile: claudeCodeDesktopWorkspaceHostResourceProfile,
+  });
+  equal(contribution.status, "ready");
+  deepEqual(contribution.blockerCodes, []);
+  deepEqual(
+    contribution.operations.map((entry) => [entry.operationKind, entry.targetKey]),
+    [
+      [CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND, "program"],
+      [CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND, `support:${designSurface.surfaceId}`],
+      [CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND, `support:${testSurface.surfaceId}`],
+    ],
+    "no local settings file exists under the desktop transport, so no statusline removal is planned",
+  );
+  await withWakeflowMaintenanceGate(
+    workspace.root,
+    {
+      expectedCoreLayoutInspectionDigest: (
+        await previewClaudeCodeMaintenanceExecution(workspace.root, {
+          action: "reconcile",
+          desiredConfig: null,
+          currentHostProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+          hostProfiles: profiles,
+        })
+      ).sharedPreview.coreLayoutInspectionDigest,
+    },
+    async (context) => {
+      for (const operation of contribution.operations) {
+        const receipt = await claudeCodeMaintenanceCapability.executeOperation(
+          workspace.root,
+          context,
+          {
+            config: desired,
+            profile: claudeCodeDesktopWorkspaceHostResourceProfile,
+            operation,
+            recoveringAffectedOperation: false,
+          },
+        );
+        equal(receipt.disposition, "updated");
+      }
+    },
+  );
+  deepEqual(allowOf(settingsPath(workspace.absolutePath)), []);
+  for (const surface of [designSurface, testSurface]) {
+    deepEqual(allowOf(settingsPath(path.join(workspace.absolutePath, surface.path))), []);
+  }
+  // 资产在 `.wakeflow-local` 下一律不碰：桌面助手还在，tmux 资产本来就没有发布。
+  equal(
+    existsSync(path.join(workspace.absolutePath, ...CLAUDE_CODE_DESKTOP_ASSET_REF.split("/"))),
+    true,
+  );
+  for (const ref of [CLAUDE_CODE_STATUSLINE_ASSET_REF, CLAUDE_CODE_TMUX_ASSET_REF]) {
+    equal(existsSync(path.join(workspace.absolutePath, ...ref.split("/"))), false, ref);
+  }
+  const again = await claudeCodeMaintenanceCapability.planContribution(workspace.root, {
+    action: "detach-workspace",
+    config: desired,
+    profile: claudeCodeDesktopWorkspaceHostResourceProfile,
+  });
+  deepEqual([...again.operations], []);
 });

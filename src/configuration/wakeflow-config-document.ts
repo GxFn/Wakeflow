@@ -172,6 +172,7 @@ function hostsRepresentation(hosts: WakeflowConfigModel["hosts"]) {
                 ? undefined
                 : launchRepresentation(hosts["claude-code"].launch),
             ),
+            ...optionalField("windowTransport", hosts["claude-code"].windowTransport),
             ...optionalField(
               "tmux",
               hosts["claude-code"].tmux === undefined

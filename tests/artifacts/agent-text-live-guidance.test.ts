@@ -8,6 +8,7 @@ import {
   CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS,
   renderClaudeCodeAgentText,
 } from "../../src/hosts/claude-code/claude-code-agent-text-profile.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_COMMAND } from "../../src/hosts/claude-code/claude-code-desktop-asset.js";
 import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import {
   CODEX_AGENT_TEXT_PLACEHOLDERS,
@@ -36,6 +37,9 @@ const AGENT_TEXT_ROOT = path.join(process.cwd(), "assets", "agent-text");
 const CONTROLLER = "skills/wakeflow-controller/SKILL.md";
 const WINDOWS = "skills/wakeflow-controller/references/workspace-and-windows.md";
 const EVIDENCE = "skills/wakeflow-controller/references/evidence.md";
+const FIRST_RUN = "skills/wakeflow-controller/references/first-run.md";
+const DELIVERY = "skills/wakeflow-controller/references/delivery-and-review.md";
+const DESKTOP = "skills/wakeflow-controller/references/desktop-transport.md";
 const TARGET = "skills/wakeflow-target/SKILL.md";
 const TEST = "skills/wakeflow-test/SKILL.md";
 const TEST_EXECUTION = "skills/wakeflow-test/references/test-execution.md";
@@ -620,4 +624,294 @@ test("ADR-0023：交接卡与 windows 参考把窗口列表标记说成提示、
   );
   // 更新一节在 Codex 渲染里仍不提 tmux：标记那句不点名宿主工具。
   equal(section(codex(WINDOWS), PLUGIN_UPDATE_HEADING).includes("tmux"), false);
+});
+
+/**
+ * ADR-0025 D4、D5、D7 与双传输规划原则 1：Claude 宿主的两种窗口传输（tmux、桌面会话）在每个触及窗口层的
+ * 取值里各有一段，顺序是配置缺省的 tmux 在前；桌面的分步在新参考 `desktop-transport.md` 里，共享参考只指
+ * 路；README 两种语言、init 命令与 first-run 参考说清传输怎样选（引导会话按环境提议，用户可改）；投递参考
+ * 对两种传输用同一个 sendReturn 措辞；Target 技能不再把跨会话消息工具一概排除——桌面上的回调正是它。
+ */
+test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，桌面参考齐全，README、init 与 first-run 说清选择方式", () => {
+  const launch = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.windowLaunch.en);
+  includesAll(
+    launch,
+    [
+      `\`${CLAUDE_CODE_TMUX_ASSET_COMMAND} launch --window <windowId>\` under the tmux transport`,
+      `\`${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} launch --window <windowId>\` under desktop sessions`,
+      "The workspace's transport is `hosts.claude-code.windowTransport`",
+      "Under the tmux transport the helper opens the window in the tmux session the intent names",
+      "Under desktop sessions the helper starts the session in the background with `claude --bg`",
+      "prints the observation with `desktop.sessionId`",
+      "`--wait-session-start <seconds>` (default 30)",
+      "set the session's title with the desktop `set_session_title` tool",
+      "closed with the desktop `archive_session` tool only on the user's authorization - never with `claude rm`",
+      "so relocate does not apply",
+      "`references/desktop-transport.md`",
+    ],
+    "windowLaunch",
+  );
+  ok(
+    indexOfRequired(launch, "Under the tmux transport the helper") <
+      indexOfRequired(launch, "Under desktop sessions the helper"),
+    "the configured default transport is described first",
+  );
+
+  const bootstrap = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.windowBootstrap.en);
+  includesAll(
+    bootstrap,
+    [
+      `\`${CLAUDE_CODE_TMUX_ASSET_COMMAND} preflight\` under the tmux transport, \`${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} preflight\` under desktop sessions`,
+      "Under desktop sessions `preflight` reports `desktop.appRunning`",
+      "`script.available`",
+      "the same `sessionProven`",
+      "`not-trusted` means that window's folder has not been trusted yet",
+      "pick the `auto` permission mode there",
+      "There is no adoption on this transport",
+      "continue in the Controller session in the sidebar and to archive this one",
+    ],
+    "windowBootstrap",
+  );
+
+  const resume = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.windowResume.en);
+  includesAll(
+    resume,
+    [
+      "under the tmux transport, if this serving MCP is outdated",
+      "`close --window <windowId>` (the binding stays; this is not a decommission), `launch --window <windowId> --wait 60`",
+      'with `operation: "replace"`',
+      "Under desktop sessions nothing restarts in place",
+      "quit and reopen the Claude desktop app",
+      "after the restart call `wakeflow_verify`, then preview and apply reconcile",
+      "relocate does not apply on this transport",
+    ],
+    "windowResume",
+  );
+
+  const delivery = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.deliveryAction.en);
+  includesAll(
+    delivery,
+    [
+      `\`${CLAUDE_CODE_TMUX_ASSET_COMMAND} deliver --window <windowId> --handle-digest <the permit's handleDigest> --prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>\``,
+      "landing is proven by the hook record alone",
+      "Under desktop sessions send the `promptRef` file's text, unchanged and once, with the desktop `send_message` tool",
+      "the `desktop.sessionId` its `launch` printed",
+      "a callback goes with `SendMessage` to the Controller's desktop id that the delivery prompt names",
+      "keep the tool's return unchanged as `attempt.sendReturn`",
+      '`"failed-before-send"` when nothing was sent',
+      "before recording the outcome",
+      `\`${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} landing --window <windowId> --prompt-digest <the permit's promptDigest>\``,
+      "only the target's `user-prompt-submit` record proves landing",
+    ],
+    "deliveryAction",
+  );
+
+  const worktree = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.worktreeLaunch.en);
+  includesAll(
+    worktree,
+    [
+      "under the tmux transport in a tmux session named `<configured session>-<pod name>`",
+      "under desktop sessions as further sessions in the app's sidebar",
+      "under desktop sessions it starts with the checkout as its working directory and never with `--worktree`",
+    ],
+    "worktreeLaunch",
+  );
+
+  const card = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.firstRunHandover.en);
+  includesAll(
+    card,
+    [
+      "for the transport this workspace uses",
+      "Under the tmux transport:",
+      "Under desktop sessions:",
+      "click a session in the sidebar",
+      "no Wakeflow mark is added",
+      "On either transport:",
+    ],
+    "firstRunHandover",
+  );
+  includesAll(
+    flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.resendGuard.en),
+    ["refuses with `already-landed`", "under desktop sessions run the helper's `landing` first"],
+    "resendGuard",
+  );
+  includesAll(
+    flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.hostEffectRule.en),
+    [
+      "`tmux.mjs` under the tmux transport, `desktop.mjs` under desktop sessions",
+      "its `launch` prints the observation you register",
+    ],
+    "hostEffectRule",
+  );
+
+  const trust = CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.hostTrustSteps;
+  includesAll(
+    flat(trust.en),
+    [
+      "`hosts.claude-code.windowTransport` - one transport per workspace",
+      "proposes the transport its surroundings support (desktop sessions when it runs in the desktop app and has the app's session tools, tmux otherwise), you may choose the other one",
+      "sign in to the desktop app with your Claude subscription",
+      "trust each product folder once when the app asks, and pick the `auto` permission mode once in each",
+      "Under desktop sessions no status line is written",
+    ],
+    "hostTrustSteps (en)",
+  );
+  includesAll(
+    flat(trust.zh ?? ""),
+    [
+      "`hosts.claude-code.windowTransport`",
+      "时是桌面会话，否则是 tmux），你可以选另一种",
+      "用 Claude 订阅登录桌面 app",
+      "把每个产品目录信任一次",
+      "选一次 `auto` 权限模式",
+    ],
+    "hostTrustSteps (zh)",
+  );
+  const update = CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.pluginUpdateSteps;
+  ok(
+    flat(update.en).includes(
+      "under desktop sessions you quit and reopen the Claude desktop app once",
+    ),
+  );
+  ok(flat(update.zh ?? "").includes("退出并重开一次桌面 app"));
+
+  includesAll(
+    claude("README.md"),
+    [
+      "the windows live in tmux panes or as sessions in the desktop app's Code tab - one window transport per workspace, chosen on the first run",
+      "`tmux.mjs` under the tmux transport, `desktop.mjs` under desktop sessions",
+      "under desktop sessions the folders to trust once and the `auto` permission mode to pick once there",
+      "either `tmux` or the Claude desktop app signed in with a subscription",
+    ],
+    "README",
+  );
+  includesAll(
+    claude("README.zh-CN.md", "zh"),
+    ["tmux 窗格里，或是桌面 app Code 标签里的会话", "`tmux.mjs`，桌面会话传输下是 `desktop.mjs`"],
+    "README.zh-CN",
+  );
+
+  includesAll(
+    flat(source("commands/init.md")),
+    [
+      "`hosts.claude-code.windowTransport` is the window transport",
+      "propose the one this session's surroundings support (desktop when it has the desktop app's session tools, tmux otherwise)",
+      "let the user pick the other one if they prefer; one transport per workspace",
+    ],
+    "init.md",
+  );
+  for (const rendered of [claude(FIRST_RUN), codex(FIRST_RUN)]) {
+    ok(rendered.includes("`hosts.claude-code.windowTransport` is the window transport"));
+    ok(rendered.includes("the desktop app running and signed in for desktop sessions"));
+  }
+
+  includesAll(
+    claude(WINDOWS),
+    [
+      "the steps below name both, and `references/desktop-transport.md` details desktop sessions",
+      "on Claude Code also `windowTransport`, `tmux` or `desktop`",
+      "is not switched by a reconfigure in this version",
+      "`tmux.mjs` or `desktop.mjs`, and under tmux the status line",
+      "the desktop helper returns once the session has started",
+    ],
+    WINDOWS,
+  );
+  // 四步换代序列从共享参考移进 tmux 取值：共享源里不再有它，Codex 渲染也就不再读到 tmux 的分步。
+  equal(source(WINDOWS).includes("the complete sequence on Claude Code is four calls"), false);
+  equal(codex(WINDOWS).includes("--wait 60"), false);
+
+  const desktop = source(DESKTOP);
+  for (const heading of [
+    "## What the transport is",
+    "## One-time prerequisites (the user's)",
+    "## The helper and its four subcommands",
+    "## Refusals and what to tell the user",
+    "## Step 1 on this transport",
+    "## Step 8 - delivering on this transport",
+    "## The callback",
+    "## Marking, closing and replacing a window",
+    "## Pods",
+    "## After a plugin update",
+    "## What this transport does not have",
+  ]) {
+    ok(desktop.includes(`\n${heading}\n`), `desktop reference lacks the section ${heading}`);
+  }
+  includesAll(
+    flat(desktop),
+    [
+      "never runs `claude rm`",
+      "It never starts with `--worktree`",
+      "**Close** is `archive_session`, only when the user authorizes retiring that window",
+      "`relocate` does not apply on this transport",
+      "with the `SendMessage` tool, once",
+      "with the desktop `get_session` tool (`self`), never derive it from your hook session id",
+      "name it in the boundary paragraph of every delivery you prepare",
+      "find the session by its title with the desktop `list_sessions` tool",
+      '`attempt: { status: "sent", sendReturn: <the return, unchanged> }`',
+      "Before you record the outcome, run `landing --window <windowId> --prompt-digest <the permit's promptDigest>`",
+      "the outcome carries no `readback`",
+      "`closeResult.status` is `closed` when the archive tool reported success",
+      "quit and reopen the Claude desktop app",
+      "the two transports are equals",
+      "asks the session to load nothing and reply only `ok`; the first real prompt is yours, sent later",
+    ],
+    DESKTOP,
+  );
+  // 每个子命令一节，标题即用法：子命令名与旗标逐字对齐 desktop.mjs 的解析器（ADR-0025 D4）。
+  for (const usage of [
+    "### `preflight`",
+    "### `launch --window <windowId> [--wait <seconds>] [--wait-session-start <seconds>] [--force]`",
+    "### `sessions`",
+    "### `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing <seconds>]`",
+  ]) {
+    ok(desktop.includes(`\n${usage}\n`), `desktop reference lacks the usage heading ${usage}`);
+  }
+  ok(
+    desktop.includes("| `reason` | What it means | What you do |"),
+    "refusals are keyed by `reason`",
+  );
+  for (const code of [
+    "desktop-session-required",
+    "locator-kind-mismatch",
+    "relocate-not-applicable",
+  ]) {
+    ok(desktop.includes(`\`${code}\``), `desktop reference lacks the registration refusal ${code}`);
+  }
+  for (const code of [
+    "not-trusted",
+    "desktop-unavailable",
+    "script-unavailable",
+    "launch-first-turn-timeout",
+    "launch-first-turn-failed",
+    "desktop-resume-refused",
+    "desktop-session-start-missing",
+    "locator-live",
+    "worktree-cwd-mismatch",
+    "intent-invalid",
+    "prompt-position",
+  ]) {
+    ok(desktop.includes(`| \`${code}\` |`), `desktop reference lacks the refusal row ${code}`);
+  }
+  equal(
+    desktop.includes("{{"),
+    false,
+    "the desktop reference is literal host text and needs no placeholder",
+  );
+
+  includesAll(
+    claude(DELIVERY),
+    [
+      "Under the tmux transport on Claude Code the helper's `deliver` output carries that lookup",
+      "Under desktop sessions the send is your own `send_message` call: its return value is `attempt.sendReturn`",
+      "the boundary names your own desktop session id as the callback's destination",
+      "the helper's landing lookup and `panes` or `sessions`",
+      "under desktop sessions there is no nudge",
+    ],
+    DELIVERY,
+  );
+  ok(
+    flat(source(TARGET)).includes("not a messaging tool the permit's host action did not name"),
+    "the Target skill admits the messaging route the permit names (the desktop callback)",
+  );
+  equal(flat(source(TARGET)).includes("not a cross-session messaging tool"), false);
 });

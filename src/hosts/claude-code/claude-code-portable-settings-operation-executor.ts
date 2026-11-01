@@ -43,6 +43,8 @@ import {
   settleClaudeCodePortableSettingsPublicationStages,
 } from "./claude-code-portable-settings-publication.js";
 import {
+  ClaudeCodePortableSettingsTransitionError,
+  claudeCodePortableSettingsPublicationOwnerOf,
   claudeCodePortableSettingsRemovedRulesFor,
   claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
@@ -315,6 +317,13 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   ) {
     fail("profile", "$/profile");
   }
+  // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
+  try {
+    claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodePortableSettingsTransitionError) fail("profile", "$/profile");
+    throw error;
+  }
   return Object.freeze({
     model,
     profile,
@@ -339,16 +348,22 @@ function sameRoot(
   );
 }
 
-/** 写入操作按托管规则表检查与发布；删除操作只按删除表（ADR-0024）。同一组选项交给检查与发布两步。 */
+/**
+ * 写入操作按托管规则表检查与发布，工作区根的助手规则随请求里选出的 profile（ADR-0025 D6）；删除操作只按
+ * 删除表（ADR-0024），它不分传输。同一组选项交给检查与发布两步。
+ */
 function transitionOptions(
   operation: Readonly<ClaudeCodePortableSettingsOperation>,
+  profile: ParsedRequest["profile"],
 ): Pick<ClaudeCodePortableSettingsPublicationOptions, "rules" | "retiredRules" | "removedRules"> {
-  return operation.action === "remove"
-    ? { removedRules: claudeCodePortableSettingsRemovedRulesFor(operation.root) }
-    : {
-        rules: claudeCodePortableSettingsRulesFor(operation.root),
-        retiredRules: claudeCodePortableSettingsRetiredRulesFor(operation.root),
-      };
+  if (operation.action === "remove") {
+    return { removedRules: claudeCodePortableSettingsRemovedRulesFor(operation.root) };
+  }
+  const owner = claudeCodePortableSettingsPublicationOwnerOf(operation.root, profile);
+  return {
+    rules: claudeCodePortableSettingsRulesFor(owner),
+    retiredRules: claudeCodePortableSettingsRetiredRulesFor(owner),
+  };
 }
 
 async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequest>) {
@@ -366,7 +381,7 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
       throw error;
     }
   }
-  const options = transitionOptions(request.operation);
+  const options = transitionOptions(request.operation, request.profile);
   let inspection: Awaited<ReturnType<typeof inspectClaudeCodePortableSettings>>;
   try {
     inspection = await inspectClaudeCodePortableSettings(root, {

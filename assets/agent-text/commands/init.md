@@ -20,7 +20,7 @@ intent instead and report what it found. The fresh-initialize `selection` has
 six parts - `program`, `presentation`, `topology` (repositories, support
 surfaces, windows), `storage`, `governance`, `hosts` - and its exact shape is
 the tool's input schema in your tool list: build the request from that schema,
-never from plugin files on disk. A refusal names the failing path and rule
+never from plugin files on disk. `hosts.claude-code.windowTransport` is the window transport - `tmux` panes or `desktop` sessions in the desktop app's Code tab: propose the one this session's surroundings support (desktop when it has the desktop app's session tools, tmux otherwise), say what each means, and let the user pick the other one if they prefer; one transport per workspace. A refusal names the failing path and rule
 (`details.schema`, for example `required:storage`); fix that field and preview
 again. Recommend `owner-managed` for every repository unless the user asks for
 Wakeflow's managed block, and say that a committed block is seen by every

@@ -39,7 +39,9 @@ import {
 } from "./claude-code-portable-settings-publication.js";
 import {
   type ClaudeCodePortableSettingsTransition,
+  ClaudeCodePortableSettingsTransitionError,
   type ClaudeCodePortableSettingsTransitionReason,
+  claudeCodePortableSettingsPublicationOwnerOf,
   claudeCodePortableSettingsRemovedRulesFor,
   claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
@@ -220,6 +222,13 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF
   ) {
     fail("profile", "$/profile");
+  }
+  // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
+  try {
+    claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
+  } catch (error: unknown) {
+    if (error instanceof ClaudeCodePortableSettingsTransitionError) fail("profile", "$/profile");
+    throw error;
   }
   return Object.freeze({
     action: record.action as ClaudeCodePortableSettingsCompositionAction,
@@ -441,8 +450,10 @@ async function planPublicationRoot(
   root: Readonly<ClaudeCodePortableSettingsRoot>,
 ): Promise<void> {
   const { request, authority, plan } = context;
-  const rules = claudeCodePortableSettingsRulesFor(root);
-  const retiredRules = claudeCodePortableSettingsRetiredRulesFor(root);
+  // 工作区根的助手规则随选出的 profile（ADR-0025 D6）：tmux 传输放行 tmux 助手，桌面传输放行桌面助手。
+  const owner = claudeCodePortableSettingsPublicationOwnerOf(root, request.profile);
+  const rules = claudeCodePortableSettingsRulesFor(owner);
+  const retiredRules = claudeCodePortableSettingsRetiredRulesFor(owner);
   const options = { rules, retiredRules, ...signalOptions(request.signal) };
   let placementStatus: "present" | "planned-missing";
   let inspection: RootSettingsInspection;

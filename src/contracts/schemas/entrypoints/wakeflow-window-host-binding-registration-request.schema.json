@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:window-host-binding-registration-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA",
   "title": "WakeflowWindowHostBindingRegistrationRequestV1",
-  "description": "One execution-endpoint operation on a logical window: inspect, register, replace (CAS on the old binding), relocate (new tmux pane, CAS), decommission (closure evidence) or release-claim (liveness evidence).",
+  "description": "One execution-endpoint operation on a logical window: inspect, register, replace (CAS on the old binding), relocate (new tmux pane, CAS; tmux transport only), decommission (closure evidence) or release-claim (liveness evidence).",
   "type": "object",
   "oneOf": [
     {
@@ -96,6 +96,18 @@
         }
       }
     },
+    "desktopSessionLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^local_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "description": "The desktop app's id of the session running this window (`local_` + the session UUID), reported verbatim as the desktop helper printed it; never derived from the handle."
+    },
     "creationObservation": {
       "type": "object",
       "additionalProperties": false,
@@ -113,11 +125,14 @@
         "tmux": {
           "$ref": "#/$defs/tmuxCoordinates"
         },
+        "desktop": {
+          "$ref": "#/$defs/desktopSessionLocator"
+        },
         "worktree": {
           "$ref": "#/$defs/worktreeObservation"
         }
       },
-      "description": "What the Agent observed after executing one launch intent: the opaque host handle, on Claude Code the tmux coordinates of the pane running the session, and for the product window of a worktree pod the git worktree facts of that session."
+      "description": "What the Agent observed after executing one launch intent: the opaque host handle, on Claude Code the transport's locator (tmux coordinates or the desktop session id, never both), and for the product window of a worktree pod the git worktree facts of that session."
     },
     "tmuxPaneObservation": {
       "type": "object",
@@ -234,6 +249,54 @@
       },
       "description": "One row of `tmux list-panes -a` with the five Wakeflow window options the Agent read back; Wakeflow classifies it, the Agent never judges liveness."
     },
+    "desktopSessionObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "status"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "status": {
+          "enum": ["busy", "idle"]
+        },
+        "cwd": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        },
+        "name": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "maxLength": 256
+            }
+          ]
+        },
+        "pid": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      },
+      "description": "One session row of `claude agents --json`; Wakeflow matches the bound session id against the rows, the Agent never judges liveness."
+    },
     "livenessObservation": {
       "oneOf": [
         {
@@ -249,6 +312,23 @@
               "maxItems": 16,
               "items": {
                 "$ref": "#/$defs/tmuxPaneObservation"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "sessions"],
+          "properties": {
+            "kind": {
+              "const": "desktop-sessions"
+            },
+            "sessions": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/desktopSessionObservation"
               }
             }
           }

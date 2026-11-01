@@ -17,6 +17,12 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import type { PortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
+  CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
+  CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
+  CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+  CLAUDE_CODE_DESKTOP_ASSET_REF,
+} from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
+import {
   CLAUDE_CODE_STATUSLINE_ASSET_CONTENT,
   CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
   CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
@@ -36,7 +42,10 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostTransportTable,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { workClaimRef } from "../../../src/kernel/layout.js";
@@ -57,21 +66,25 @@ useDisposableDurability();
 
 /**
  * delivery 切片的宿主资产前置（第 2 级，能力；能力卡 6 §6.2 F1，open-items W16）：Claude 宿主的
- * facade 带已发布资产的期望，许可一经签发 Controller 就会免提示运行 tmux 助手，所以每一条"发出许可"
+ * facade 带已发布资产的期望，许可一经签发 Controller 就会免提示运行窗口传输助手，所以每一条"发出许可"
  * 的路径——新 prepare、prepare 的同键重放、rearm 换代、rearm 的同键重放——都在取得路由之后、追加或
  * 取声明之前核对状态栏资产与助手的字节；漂移即 `host-asset-drift[:<companion>]`，字节恢复后同一路径
- * 照常签发。结局记录不发出许可，不受资产状态影响。Codex 没有资产面（facade 不带 assets），
+ * 照常签发。结局记录不发出许可，不受资产状态影响。期望按配置的传输选出（ADR-0025 D6）：只有助手的期望
+ * （桌面传输）不核对状态栏。Codex 没有资产面（facade 不带 assets），
  * service.test.ts 里的 Codex 路径在没有任何资产的树上通过，就是它不受此前置约束的证明。
  */
 
-const CLAUDE_HOST_ASSETS = Object.freeze({
-  fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
-  digest: CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
-  settings: Object.freeze({
-    path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
-    key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
-    expectedEntry: claudeCodeStatuslineSettingsEntry,
-    ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+/** tmux 传输的资产期望：状态栏资产、它的设置条目与伴随的 tmux 助手（§13.117 D4）。 */
+const CLAUDE_TMUX_HOST_ASSETS = Object.freeze({
+  statusline: Object.freeze({
+    fileName: CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME,
+    digest: CLAUDE_CODE_STATUSLINE_ASSET_DIGEST,
+    settings: Object.freeze({
+      path: CLAUDE_CODE_LOCAL_SETTINGS_REF,
+      key: CLAUDE_CODE_STATUSLINE_SETTINGS_KEY,
+      expectedEntry: claudeCodeStatuslineSettingsEntry,
+      ownsEntry: claudeCodeStatuslineEntryIsWakeflows,
+    }),
   }),
   companions: Object.freeze([
     Object.freeze({
@@ -81,15 +94,45 @@ const CLAUDE_HOST_ASSETS = Object.freeze({
   ]),
 });
 
-/** 与 Claude Code 组合根一致的投递 facade：带资产期望（F1），许可签发前核对字节。 */
+/** 桌面传输的资产期望：只有桌面助手，没有状态栏与它的设置条目（ADR-0025 D6）。 */
+const CLAUDE_DESKTOP_HOST_ASSETS = Object.freeze({
+  statusline: null,
+  companions: Object.freeze([
+    Object.freeze({
+      fileName: CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+      digest: CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
+    }),
+  ]),
+});
+
+/**
+ * 与 Claude Code 组合根一致的投递 facade：profile 表与按传输的资产期望表（F1；ADR-0025 D1、D6），切片准入时
+ * 按工作区配置选出一份——夹具配置没有声明传输，选出的是 tmux 的那份，许可签发前核对它的字节。
+ */
 const CLAUDE_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & Readonly<WindowBindingHostFacade> =
   Object.freeze({
     hostId: "claude-code" as const,
     resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+    transports: claudeCodeWorkspaceHostTransportTable,
     identityProfile: claudeCodeWindowHostIdentityProfile,
     renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
-    assets: CLAUDE_HOST_ASSETS,
+    transportAssets: Object.freeze({
+      tmux: CLAUDE_TMUX_HOST_ASSETS,
+      desktop: CLAUDE_DESKTOP_HOST_ASSETS,
+    }),
   });
+
+/**
+ * 选出的期望只有助手、没有状态栏的门面（桌面传输的资产形状，ADR-0025 D6）。共享层只按传输键索引期望表、
+ * 不认识键的含义，所以这里把夹具配置选中的缺省键映射到桌面传输的期望；配置按 `windowTransport` 选键的路径
+ * 由观察与维护的测试（workspace-observation、maintain-workspace-window-transport）覆盖。
+ */
+const CLAUDE_HELPER_ONLY_DELIVERY_FACADE: Readonly<DeliveryHostFacade> = Object.freeze({
+  ...CLAUDE_DELIVERY_FACADE,
+  transportAssets: Object.freeze({
+    [claudeCodeWorkspaceHostTransportTable.defaultTransport]: CLAUDE_DESKTOP_HOST_ASSETS,
+  }),
+});
 
 const CLAUDE_SESSION_ID = "c1a0dec0-de00-4000-8000-0000000000c1";
 const CLAUDE_BINDING_UUID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -222,7 +265,7 @@ function rejectedByHostAsset(blocker: string, requestPath: string) {
   return (error: unknown) =>
     isWakeflowError(error) &&
     error.code === "precondition-failed" &&
-    error.reason === "host-asset-drift" &&
+    error.reason === blocker.split(":")[0] &&
     error.path === requestPath &&
     error.details?.blocker === blocker;
 }
@@ -231,9 +274,12 @@ function claimPath(fixture: Readonly<ClaudeDeliveryFixture>): string {
   return path.join(fixture.workspacePath, ...workClaimRef(fixture.windowId).split("/"));
 }
 
-async function prepare(fixture: Readonly<ClaudeDeliveryFixture>) {
+async function prepare(
+  fixture: Readonly<ClaudeDeliveryFixture>,
+  facade: Readonly<DeliveryHostFacade> = CLAUDE_DELIVERY_FACADE,
+) {
   return executePrepareDeliveryRequest(
-    CLAUDE_DELIVERY_FACADE,
+    facade,
     {
       root: fixture.workspacePath,
       demandId: fixture.demandId,
@@ -368,6 +414,41 @@ test("Claude 宿主：助手资产漂移后，新 prepare、同键重放、rearm
     equal(replayedRearm.status, "idempotent");
     equal(replayedRearm.rearm.generation, 2);
     equal(replayedRearm.permit.fence?.claimDigest, fence.claimDigest);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("只有助手的资产期望（桌面传输的形状，ADR-0025 D6）：许可前只核对助手字节——状态栏资产、它的设置条目与 tmux 助手都不在场也照常签发；助手缺失或漂移即拒绝且不取声明", async () => {
+  const fixture = await createClaudeDeliveryFixture();
+  try {
+    const helper = workspaceFile(fixture, CLAUDE_CODE_DESKTOP_ASSET_REF);
+    const helperOnly = CLAUDE_HELPER_ONLY_DELIVERY_FACADE;
+    await rejects(
+      prepare(fixture, helperOnly),
+      rejectedByHostAsset(
+        `host-asset-missing:${CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME}`,
+        "$request.targetTaskId",
+      ),
+    );
+    equal(existsSync(claimPath(fixture)), false, "a rejected prepare must not take a claim");
+    mkdirSync(path.dirname(helper), { recursive: true, mode: 0o700 });
+    writeFileSync(helper, `${CLAUDE_CODE_DESKTOP_ASSET_CONTENT}\n`, { mode: 0o600 });
+    await rejects(
+      prepare(fixture, helperOnly),
+      rejectedByHostAsset(
+        `host-asset-drift:${CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME}`,
+        "$request.targetTaskId",
+      ),
+    );
+    restore(helper, CLAUDE_CODE_DESKTOP_ASSET_CONTENT);
+    for (const ref of [CLAUDE_CODE_STATUSLINE_ASSET_REF, CLAUDE_CODE_TMUX_ASSET_REF]) {
+      equal(existsSync(workspaceFile(fixture, ref)), false, ref);
+    }
+    const prepared = await prepare(fixture, helperOnly);
+    equal(prepared.status, "committed");
+    equal(prepared.permit.hostAction.hostId, "claude-code");
+    equal(existsSync(claimPath(fixture)), true);
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

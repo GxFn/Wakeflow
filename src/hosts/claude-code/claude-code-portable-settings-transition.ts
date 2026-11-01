@@ -16,17 +16,26 @@ import {
 } from "../../foundation/data/json-value.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES as WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST } from "../../workspace/wakeflow-legacy-residue-scan.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
+import {
+  CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+  WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+} from "./claude-code-desktop-asset.js";
 import {
   claudeCodeMcpPermissionRulesFor,
   WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE,
 } from "./claude-code-mcp-permission-rules.js";
-import { WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE } from "./claude-code-tmux-asset.js";
+import {
+  CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+  WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
+} from "./claude-code-tmux-asset.js";
 
 /**
  * Wakeflow Host / Claude Code：`.claude/settings.json` 的权限最小编辑。
  *
  * 新 TS 只拥有 Wakeflow 自己的 allow entry：每个根都有 plugin MCP server 的一条，工作区根
- * 另有精确到 tmux 助手这一条调用的一条（§13.117 D5）；不写入旧项目的
+ * 另有精确到窗口传输助手这一条调用的一条（§13.117 D5；ADR-0025 D6：tmux 传输是 tmux 助手，桌面传输
+ * 是桌面助手，按选出的 profile 的助手文件名查表）；不写入旧项目的
  * `Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`。本模块以严格 JSON 模式解析并拒绝
  * 注释、尾逗号、重复键和类型冲突，再用 `jsonc-parser` 只编辑
  * `permissions.allow`，保留其他用户字段及其原始表示。
@@ -43,42 +52,88 @@ const WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES = WAKEFLOW_LEGACY_BROAD_BASH_P
 
 const DEFAULT_RULES: readonly string[] = Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE]);
 
+/**
+ * 两种窗口传输的助手允许规则，按助手资产文件名查表（ADR-0025 D6）：这是 `src/hosts/claude-code` 里唯一
+ * 认识"哪个文件名对应哪条规则"的地方，共享层只传 profile。
+ */
+const HELPER_PERMISSION_RULES_BY_FILE_NAME: ReadonlyMap<string, string> = new Map([
+  [CLAUDE_CODE_TMUX_ASSET_FILE_NAME, WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE],
+  [CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME, WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE],
+]);
+
+/** Wakeflow 曾为任一传输写进工作区根的全部助手规则；退役与退出路径按它精确删除不再属于当前传输的那些。 */
+export const WAKEFLOW_CLAUDE_CODE_HELPER_PERMISSION_RULES: readonly string[] = Object.freeze([
+  ...HELPER_PERMISSION_RULES_BY_FILE_NAME.values(),
+]);
+
 /** 一个根的规则归属：工作区根，或带角色（design / test）的支撑面根。 */
 export type ClaudeCodePortableSettingsRuleOwner =
   | Readonly<{ readonly rootKind: "program" }>
   | Readonly<{ readonly rootKind: "support-surface"; readonly role: "design" | "test" }>;
 
+/** 写入规则的归属：工作区根另带选出的窗口传输助手的允许规则（ADR-0025 D6）；支撑面同归属。 */
+export type ClaudeCodePortableSettingsPublicationOwner =
+  | Readonly<{ readonly rootKind: "program"; readonly helperPermissionRule: string }>
+  | Readonly<{ readonly rootKind: "support-surface"; readonly role: "design" | "test" }>;
+
 /**
- * 每种根拥有的 allow 规则（§13.117 D5；ADR-0020 决定 3，§13.168）：工作区根是整服务器 MCP 规则加一条
- * tmux 助手调用；支撑面按角色只放行该角色使用的工具，不再放行整个服务器。
+ * 由根的归属与选出的宿主 profile 得到写入规则的归属：工作区根按 profile 的助手文件名查到它的允许规则；
+ * 没有助手或文件名不在表里的 profile 不是本宿主的传输，是合同违背。
+ */
+export function claudeCodePortableSettingsPublicationOwnerOf(
+  owner: ClaudeCodePortableSettingsRuleOwner,
+  profile: Readonly<Pick<WakeflowWorkspaceHostResourceProfile, "surfaces">>,
+): ClaudeCodePortableSettingsPublicationOwner {
+  if (owner.rootKind !== "program") return owner;
+  const fileName = profile.surfaces.helperAsset?.fileName;
+  const helperPermissionRule =
+    fileName === undefined ? undefined : HELPER_PERMISSION_RULES_BY_FILE_NAME.get(fileName);
+  if (helperPermissionRule === undefined) failInput("$profile/surfaces/helperAsset");
+  return Object.freeze({ rootKind: "program", helperPermissionRule });
+}
+
+/**
+ * 每种根拥有的 allow 规则（§13.117 D5；ADR-0020 决定 3，§13.168；ADR-0025 D6）：工作区根是整服务器 MCP 规则
+ * 加一条选出传输的助手调用；支撑面按角色只放行该角色使用的工具，不再放行整个服务器。
  */
 export function claudeCodePortableSettingsRulesFor(
-  owner: ClaudeCodePortableSettingsRuleOwner,
+  owner: ClaudeCodePortableSettingsPublicationOwner,
 ): readonly string[] {
   return owner.rootKind === "program"
-    ? Object.freeze([
-        WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
-        WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-      ])
+    ? Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE, owner.helperPermissionRule])
     : claudeCodeMcpPermissionRulesFor(owner.role);
 }
 
-/** 该根上 Wakeflow 曾写过、现已退役的规则，转换时精确删除：支撑面的整服务器规则（§13.168）。 */
+/**
+ * 该根上 Wakeflow 曾写过、现已退役的规则，转换时精确删除：支撑面的整服务器规则（§13.168）；工作区根上
+ * 其他传输的助手规则（ADR-0025 D6：一个工作区只有一种传输，另一种的规则不该留着）。
+ */
 export function claudeCodePortableSettingsRetiredRulesFor(
-  owner: ClaudeCodePortableSettingsRuleOwner,
+  owner: ClaudeCodePortableSettingsPublicationOwner,
 ): readonly string[] {
   return owner.rootKind === "program"
-    ? Object.freeze([])
+    ? Object.freeze(
+        WAKEFLOW_CLAUDE_CODE_HELPER_PERMISSION_RULES.filter(
+          (rule) => rule !== owner.helperPermissionRule,
+        ),
+      )
     : Object.freeze([WAKEFLOW_CLAUDE_CODE_MCP_SERVER_PERMISSION_RULE]);
 }
 
 /**
- * 退出路径删除的条目（ADR-0024 `remove-portable-settings-rules`）：该根当前拥有的规则加它曾拥有、
- * 现已退役的规则，去重。两张表都是 Wakeflow 自己写过的精确条目，所以删除不用猜正文是谁的。
+ * 退出路径删除的条目（ADR-0024 `remove-portable-settings-rules`）：该根在任一传输下拥有过的规则加它曾拥有、
+ * 现已退役的规则，去重——工作区根是 MCP 规则加两种传输的助手规则，支撑面是角色规则加整服务器规则。
+ * 都是 Wakeflow 自己写过的精确条目，所以删除不用猜正文是谁的，也不必知道工作区当前是哪种传输。
  */
 export function claudeCodePortableSettingsRemovedRulesFor(
   owner: ClaudeCodePortableSettingsRuleOwner,
 ): readonly string[] {
+  if (owner.rootKind === "program") {
+    return Object.freeze([
+      WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
+      ...WAKEFLOW_CLAUDE_CODE_HELPER_PERMISSION_RULES,
+    ]);
+  }
   return Object.freeze([
     ...new Set([
       ...claudeCodePortableSettingsRulesFor(owner),

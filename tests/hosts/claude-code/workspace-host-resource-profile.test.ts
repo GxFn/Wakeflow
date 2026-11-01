@@ -8,6 +8,12 @@ import {
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
+  CLAUDE_CODE_DESKTOP_ASSET_COMMAND,
+  CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+  CLAUDE_CODE_DESKTOP_ASSET_REF,
+  WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+} from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
+import {
   CLAUDE_CODE_TMUX_ASSET_CONTENT,
   CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
   CLAUDE_CODE_TMUX_ASSET_REF,
@@ -17,7 +23,15 @@ import {
   claudeCodeTmuxSessionNameFor,
   claudeCodeTmuxWindowNameFor,
 } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  CLAUDE_CODE_DEFAULT_WINDOW_TRANSPORT,
+  CLAUDE_CODE_WINDOW_TRANSPORTS,
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostTransportTable,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { selectWakeflowWorkspaceHostResourceProfile } from "../../../src/workspace/host-runtime/wakeflow-host-window-transport.js";
+import { wakeflowWorkspaceHostLocatorProvider } from "../../../src/workspace/workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../../src/workspace/workspace-host-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 
@@ -60,7 +74,7 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
       statuslineAsset: {
         fileName: "statusline.mjs",
       },
-      tmuxAsset: {
+      helperAsset: {
         fileName: "tmux.mjs",
       },
       runtimeStaleness: "session-start-observer-digest",
@@ -77,15 +91,104 @@ test("Claude Code host owns one exact matrix-shaping resource profile", () => {
   assertDeepFrozen(claudeCodeWorkspaceHostResourceProfile);
 });
 
+test("桌面传输的 profile 与 tmux 共享表面，只换启动模板、助手文件、状态行与换代方式（ADR-0025 D2）", () => {
+  deepEqual(claudeCodeDesktopWorkspaceHostResourceProfile, {
+    kind: "WakeflowWorkspaceHostResourceProfile",
+    hostId: "claude-code",
+    runtimeDirectoryName: "claude-code",
+    instructionFileName: "CLAUDE.md",
+    surfaces: {
+      windowIdentity: true,
+      podReceipts: true,
+      worktree: {
+        launch: "claude-worktree-flag",
+        attachedDirectories: "add-dir-flag",
+      },
+      windowLocator: true,
+      settingsIntegration: {
+        portablePath: ".claude/settings.json",
+        localPath: ".claude/settings.local.json",
+      },
+      statuslineAsset: null,
+      helperAsset: {
+        fileName: CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+      },
+      runtimeStaleness: "session-start-observer-digest",
+      runtimeRefresh: "user-app-restart",
+    },
+    launch: {
+      kind: "desktop-session",
+      controllerEffort: "max",
+      defaultEffort: "xhigh",
+      permissionMode: "auto",
+    },
+  });
+  assertDeepFrozen(claudeCodeDesktopWorkspaceHostResourceProfile);
+  equal(
+    wakeflowWorkspaceHostLocatorProvider(claudeCodeDesktopWorkspaceHostResourceProfile),
+    "desktop",
+  );
+  equal(wakeflowWorkspaceHostLocatorProvider(claudeCodeWorkspaceHostResourceProfile), "tmux");
+  const catalog = createWakeflowWorkspaceHostResourceCatalog(
+    claudeCodeDesktopWorkspaceHostResourceProfile,
+  );
+  const helper = catalog.find(
+    (entry) => entry.declarationId === "host-runtime.claude-code.helper-asset",
+  );
+  equal(helper?.placement.relativePath, CLAUDE_CODE_DESKTOP_ASSET_REF);
+  equal(
+    catalog.some((entry) => entry.declarationId === "host-runtime.claude-code.statusline-asset"),
+    false,
+  );
+});
+
+test("传输表以 tmux 为缺省，两把键各指向自己的 profile；共享层按配置键选", () => {
+  deepEqual(CLAUDE_CODE_WINDOW_TRANSPORTS, ["tmux", "desktop"]);
+  equal(CLAUDE_CODE_DEFAULT_WINDOW_TRANSPORT, "tmux");
+  equal(
+    claudeCodeWorkspaceHostTransportTable.defaultTransport,
+    CLAUDE_CODE_DEFAULT_WINDOW_TRANSPORT,
+  );
+  // 桌面助手的调用前缀与允许规则与 tmux 助手同形：只放行助手本身。
+  equal(CLAUDE_CODE_DESKTOP_ASSET_COMMAND, `node ${CLAUDE_CODE_DESKTOP_ASSET_REF}`);
+  equal(
+    WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
+    `Bash(${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} *)`,
+  );
+  equal(
+    claudeCodeWorkspaceHostTransportTable.profiles.tmux,
+    claudeCodeWorkspaceHostResourceProfile,
+  );
+  equal(
+    claudeCodeWorkspaceHostTransportTable.profiles.desktop,
+    claudeCodeDesktopWorkspaceHostResourceProfile,
+  );
+  const host = {
+    hostId: "claude-code",
+    resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+    transports: claudeCodeWorkspaceHostTransportTable,
+  };
+  equal(
+    selectWakeflowWorkspaceHostResourceProfile(host, {}),
+    claudeCodeWorkspaceHostResourceProfile,
+  );
+  equal(
+    selectWakeflowWorkspaceHostResourceProfile(host, {
+      hosts: { "claude-code": { windowTransport: "desktop" } },
+    }),
+    claudeCodeDesktopWorkspaceHostResourceProfile,
+  );
+});
+
 test("Profile 的资产文件名与资产模块一致，目录里的 tmux 助手路径就是资产模块的引用", () => {
-  const { tmuxAsset, statuslineAsset } = claudeCodeWorkspaceHostResourceProfile.surfaces;
-  equal(tmuxAsset?.fileName, CLAUDE_CODE_TMUX_ASSET_FILE_NAME);
+  const { helperAsset, statuslineAsset } = claudeCodeWorkspaceHostResourceProfile.surfaces;
+  equal(helperAsset?.fileName, CLAUDE_CODE_TMUX_ASSET_FILE_NAME);
   equal(statuslineAsset?.fileName, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME);
   const catalog = createWakeflowWorkspaceHostResourceCatalog(
     claudeCodeWorkspaceHostResourceProfile,
   );
   const tmux = catalog.find(
-    (entry) => entry.declarationId === "host-runtime.claude-code.tmux-asset",
+    (entry) => entry.declarationId === "host-runtime.claude-code.helper-asset",
   );
   equal(tmux?.placement.relativePath, CLAUDE_CODE_TMUX_ASSET_REF);
 });

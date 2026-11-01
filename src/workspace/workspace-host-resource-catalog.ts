@@ -177,7 +177,7 @@ function privateProjectionFileDeclaration(
 export function hostProfileHasOperationSurface(
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): boolean {
-  return profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null;
+  return profile.surfaces.statuslineAsset !== null || profile.surfaces.helperAsset !== null;
 }
 
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
@@ -274,8 +274,8 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       ),
     );
   }
-  const { statuslineAsset, tmuxAsset } = profile.surfaces;
-  if (statuslineAsset !== null || tmuxAsset !== null) {
+  const { statuslineAsset, helperAsset } = profile.surfaces;
+  if (statuslineAsset !== null || helperAsset !== null) {
     declarations.push(
       privateDirectoryDeclaration(
         `${prefix}.statusline-assets-root`,
@@ -293,12 +293,12 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       ),
     );
   }
-  if (tmuxAsset !== null) {
+  if (helperAsset !== null) {
     declarations.push(
       privateProjectionFileDeclaration(
-        `${prefix}.tmux-asset`,
-        "host-tmux",
-        hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`),
+        `${prefix}.helper-asset`,
+        "host-helper",
+        hostRuntimeRef(profile, `operations/assets/${helperAsset.fileName}`),
       ),
     );
   }

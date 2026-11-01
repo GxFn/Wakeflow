@@ -77,6 +77,12 @@ import {
 } from "../../kernel/publication-transaction.js";
 import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
 import {
+  configuredWakeflowWorkspaceHostTransport,
+  selectWakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostTransportError,
+  type WakeflowWorkspaceHostTransportSource,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import {
   compareWakeflowArtifactVersions,
   parseWakeflowArtifactManifestIdentity,
   WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME,
@@ -292,6 +298,100 @@ function admitHostFacade(
     }
     throw error;
   }
+}
+
+/** 选择器眼中的本宿主：组合根的缺省 profile 加它的传输表（单传输宿主没有表，选择即缺省）。 */
+function transportSourceOf(
+  facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  admitted: Readonly<AdmittedHostProfiles>,
+): Readonly<WakeflowWorkspaceHostTransportSource> {
+  return Object.freeze({
+    hostId: facade.hostId,
+    resourceProfile: admitted.currentHostProfile,
+    transports: facade.transports,
+  });
+}
+
+/**
+ * ADR-0025 D1：多传输宿主按配置选出本次请求的 profile 集合——fresh-initialize 按选择编译出的期望配置（当前
+ * 配置还不存在），其余动作按当前配置；配置不可用（`null`）时沿用组合根的缺省，共享预览随后按它自己的规则阻塞。
+ * 选出的 profile 同时替换 `hostProfiles` 里本宿主的那份：静态资源矩阵、意图与宿主贡献都从同一份 profile 出发。
+ */
+function selectHostProfiles(
+  facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  admitted: Readonly<AdmittedHostProfiles>,
+  model: WakeflowConfigModel | null,
+): Readonly<AdmittedHostProfiles> {
+  if (model === null || facade.transports === undefined) return admitted;
+  let currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  try {
+    currentHostProfile = selectWakeflowWorkspaceHostResourceProfile(
+      transportSourceOf(facade, admitted),
+      model,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceHostTransportError) {
+      fail("unexpected", "host-facade", "$facade", { cause: error });
+    }
+    throw error;
+  }
+  if (currentHostProfile === admitted.currentHostProfile) return admitted;
+  return Object.freeze({
+    currentHostProfile,
+    hostProfiles: Object.freeze(
+      admitted.hostProfiles.map((profile) =>
+        profile.hostId === facade.hostId ? currentHostProfile : profile,
+      ),
+    ),
+  });
+}
+
+/**
+ * K1 不经 reconfigure 切换窗口传输（ADR-0025 D9，K2 再做退役全部窗口投影后按新传输开窗）：期望配置选出的
+ * 传输键与当前配置不同即阻塞。只比较键是否相等，不认识键的含义；单传输宿主两边都没有键。
+ */
+function transportChangeBlockers(
+  facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  admitted: Readonly<AdmittedHostProfiles>,
+  currentModel: WakeflowConfigModel,
+  desiredConfig: WakeflowConfigModel,
+): readonly string[] {
+  const source = transportSourceOf(facade, admitted);
+  return configuredWakeflowWorkspaceHostTransport(source, currentModel) ===
+    configuredWakeflowWorkspaceHostTransport(source, desiredConfig)
+    ? Object.freeze([])
+    : Object.freeze(["window-transport-change-unsupported"]);
+}
+
+/**
+ * 写入动作选出的 profile 集合（ADR-0025 D1）：fresh-initialize 按选择编译出的配置，reconcile 与 reconfigure 按
+ * 当前配置；reconfigure 改了传输键时给出 K1 的阻塞（D9），不选。
+ */
+async function selectWriteProfiles(
+  context: SliceContext,
+  action: WakeflowStaticMaterializationAction,
+  desiredConfig: WakeflowConfigModel | null,
+): Promise<
+  Readonly<{
+    readonly profiles: Readonly<AdmittedHostProfiles>;
+    readonly blockers: readonly string[];
+  }>
+> {
+  if (action === "fresh-initialize") {
+    return Object.freeze({
+      profiles: selectHostProfiles(context.facade, context.profiles, desiredConfig),
+      blockers: Object.freeze([]),
+    });
+  }
+  const currentModel = (await currentSnapshotOrNull(context))?.model ?? null;
+  const blockers =
+    action === "reconfigure" && currentModel !== null && desiredConfig !== null
+      ? transportChangeBlockers(context.facade, context.profiles, currentModel, desiredConfig)
+      : Object.freeze([]);
+  return Object.freeze({
+    profiles: selectHostProfiles(context.facade, context.profiles, currentModel),
+    blockers,
+  });
 }
 
 function desiredConfigFor(
@@ -913,11 +1013,13 @@ async function planDetach(
   const occupancy = await detachOccupancy(context, input, snapshot, repositoryId);
   if (occupancy.blockers.length > 0) return blockedPlan(occupancy.blockers);
   const desiredConfig = occupancy.desiredConfig;
+  // 退出路径按当前配置选 profile（ADR-0025 D6）：要删的就是这个传输发布过的助手规则与条目。
+  const profiles = selectHostProfiles(context.facade, context.profiles, snapshot.model);
   const executionRequest: WakeflowStaticMaterializationPreviewRequest = Object.freeze({
     action: input.action,
     desiredConfig,
-    currentHostProfile: context.profiles.currentHostProfile,
-    hostProfiles: context.profiles.hostProfiles,
+    currentHostProfile: profiles.currentHostProfile,
+    hostProfiles: profiles.hostProfiles,
     ...context.options,
   });
   let executionPlan: Readonly<WakeflowMaintenanceExecutionPlan>;
@@ -970,18 +1072,21 @@ async function planMaintenance(
     const runtime = await planRuntimeRecovery(context);
     if (runtime !== null) return runtime;
   }
+  const selected = await selectWriteProfiles(context, input.action, desiredConfig);
+  if (selected.blockers.length > 0) return blockedPlan(selected.blockers);
+  const { profiles } = selected;
   const executionRequest: WakeflowStaticMaterializationPreviewRequest = Object.freeze({
     action: input.action,
     desiredConfig,
-    currentHostProfile: context.profiles.currentHostProfile,
-    hostProfiles: context.profiles.hostProfiles,
+    currentHostProfile: profiles.currentHostProfile,
+    hostProfiles: profiles.hostProfiles,
     ...context.options,
   });
   let executionPlan: Readonly<WakeflowMaintenanceExecutionPlan>;
   let launchIntentSet: Readonly<WakeflowWindowLaunchIntentSet> | null;
   try {
     executionPlan = await context.facade.preview(context.root, executionRequest);
-    launchIntentSet = expectedLaunchIntents(executionPlan, executionRequest, context.profiles);
+    launchIntentSet = expectedLaunchIntents(executionPlan, executionRequest, profiles);
   } catch (error: unknown) {
     mapPreviewError(error);
   }

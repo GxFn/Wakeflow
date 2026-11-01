@@ -25,7 +25,7 @@ test("Codex host owns one exact matrix-shaping resource profile", () => {
       windowLocator: false,
       settingsIntegration: null,
       statuslineAsset: null,
-      tmuxAsset: null,
+      helperAsset: null,
       runtimeStaleness: "unverified",
       runtimeRefresh: "user-app-restart",
     },

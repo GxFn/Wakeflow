@@ -1,4 +1,5 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { WakeflowWorkspaceHostTransportTable } from "../host-runtime/wakeflow-host-window-transport.js";
 import type {
   WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceProfile,
@@ -29,6 +30,11 @@ export interface WakeflowMaintenancePublicHostFacade {
    */
   readonly artifactRoot: string | null;
   readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /**
+   * 多传输宿主的 profile 表（ADR-0025 D1）：协调器按请求对应的配置——fresh-initialize 按选择编译出的配置，
+   * 其余动作按当前配置——选出 `currentHostProfile`，并以它替换 `hostProfiles` 里本宿主的那份；单传输宿主缺省。
+   */
+  readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
   readonly preview: (
     root: RootedDirectory,

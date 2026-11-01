@@ -1,3 +1,4 @@
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
@@ -159,6 +160,10 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import {
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
@@ -229,6 +234,8 @@ import { renderWakeControllerPrompt } from "./prompt.js";
 export interface ResultReviewHostFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /** 多传输宿主的 profile 表（ADR-0025 D1）；准入时按配置选出一份，之后只读选出的 profile。 */
+  readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
 }
 
@@ -357,10 +364,28 @@ async function openContext(
       demandId as WakeflowDurableId<"demand">,
       options.signal,
     );
-    return Object.freeze({ workspaceRoot, authority, facade, options });
+    return Object.freeze({
+      workspaceRoot,
+      authority,
+      facade: selectFacade(facade, authority.config.model),
+      options,
+    });
   } catch (error: unknown) {
     mapContextError(error);
   }
+}
+
+/** ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile；此后本上下文只读选出的那份。 */
+function selectFacade(
+  facade: Readonly<ResultReviewHostFacade>,
+  model: Readonly<WakeflowConfigModel>,
+): Readonly<ResultReviewHostFacade> {
+  if (facade.transports === undefined) return facade;
+  const { transports: _transports, ...rest } = facade;
+  return Object.freeze({
+    ...rest,
+    resourceProfile: selectWakeflowWorkspaceHostResourceProfile(facade, model),
+  });
 }
 
 async function closeContext(context: SliceContext): Promise<void> {

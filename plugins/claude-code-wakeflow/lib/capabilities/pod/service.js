@@ -21,6 +21,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { refreshWakeflowWindowRuntimeProjections, retireWakeflowWindowRuntimeProjections, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { admitPodResult, parsePodRequest, WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION, WAKEFLOW_POD_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, podMutationNext, podPreviewNext, } from "./decide.js";
 function signalOptions(signal) {
@@ -50,8 +51,23 @@ function envelopeOf(request) {
     }
     return Object.freeze({ root: request.root, mode: request.mode, planDigest, operationId: null });
 }
-async function openContext(root, facade, options) {
+/** ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile；单传输宿主原样通过。 */
+function selectHost(host, model) {
+    if (host.transports === undefined)
+        return host;
+    const { transports: _transports, ...rest } = host;
+    return Object.freeze({
+        ...rest,
+        resourceProfile: selectWakeflowWorkspaceHostResourceProfile(host, model),
+    });
+}
+async function openContext(root, hostFacade, options) {
     const snapshot = await readSnapshot(root, options.signal);
+    // 本宿主与组合根给出的每个宿主都按配置选出 profile；此后本上下文只读选出的那份。
+    const facade = Object.freeze({
+        ...selectHost(hostFacade, snapshot.model),
+        hosts: Object.freeze(hostFacade.hosts.map((host) => selectHost(host, snapshot.model))),
+    });
     return Object.freeze({ root, facade, snapshot, options });
 }
 /** 读配置权威快照，并把它的错误映射成工具错误（中止为 io-failure，其余为 config-authority）。 */

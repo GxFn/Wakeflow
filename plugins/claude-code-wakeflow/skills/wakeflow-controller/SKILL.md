@@ -23,7 +23,8 @@ for the user: `/wakeflow:init` sets up or repairs the workspace, `/wakeflow:stat
 4. `references/first-run.md` - a fresh workspace only: step 0's
    fresh-initialize and the step 1 after it; never in daily use.
 5. `references/workspace-and-windows.md` - only for workspace maintenance,
-   windows, pods, or refreshing windows after a plugin update.
+   windows, pods, or refreshing windows after a plugin update; for desktop
+   sessions also `references/desktop-transport.md`.
 6. `references/delivery-and-review.md` - only when planning a task, preparing
    a delivery, or deciding on a returned result.
 7. `references/evidence.md` - only before you record managed evidence.
@@ -70,7 +71,7 @@ Inspect each returned window with `wakeflow_register_window_binding` for its
 current host launch instructions, open it exactly as "Step 1 - Windows and
 bindings" in `references/workspace-and-windows.md` says (bootstrap once, one
 launch per window), then register the handle you observed with the same tool: it
-needs a real `session-start` at the host startup root; a refusal names the missing evidence. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer.
+needs a real `session-start` at the host startup root; a refusal names the missing evidence. The published helper does the host steps - `tmux.mjs` under the tmux transport, `desktop.mjs` under desktop sessions - and its `launch` prints the observation you register. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer.
 
 ### Step 5 - Claim a requirement package into a Demand
 
@@ -95,15 +96,14 @@ takes the work claim, renders the prompt around your text, returns a permit.
 
 ### Step 8 - Perform the host effect and record the outcome
 
-Perform the host effect exactly once: run the tmux helper from the workspace root with the permit's `promptRef` and `promptDigest`: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest> --prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>`. It reads the prepared prompt from that file - Wakeflow wrote it when it issued the permit, so never retype, pipe or reconstruct the prompt and never read `.wakeflow-active` event files yourself - refuses with `prompt-digest-mismatch` when the file does not match, checks the pane against the locator and the handle digest, refuses before sending with `target-not-at-prompt` when the pane shows a dialog or menu instead of its input box (nothing was sent: ask the user to answer it in that window, then send again - a target delivery recorded as `failed-before-send` is re-armed by the Controller, a callback is simply delivered again with the same permit; never send keys to that window yourself), pastes the prompt, presses Return once and captures the pane once, then waits a few seconds for the target session's prompt-submit hook record and prints the `attempt`, `readback` and `landing` to record verbatim. `readback: confirmed` only means the prompt's first line, or Claude Code's collapsed `[Pasted text #N +M lines]` indicator with the matching line count, was on screen; landing is proven by the hook record alone. From a product or surface window, prefix the helper path with the workspace root you were given with `--add-dir` instead of running from the root; the helper finds the workspace from its own location. Then call
+Perform the host effect exactly once: run the helper from the workspace root (from a product or surface window, prefix its path with the `--add-dir` workspace root). Under the tmux transport: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest> --prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>`. It reads the prompt from the permit file - never retype, pipe or reconstruct it, never read `.wakeflow-active` event files yourself - refuses `prompt-digest-mismatch` when the file does not match and, before sending, `target-not-at-prompt` when the pane shows a dialog or menu instead of its input box (nothing was sent: the user answers it in that window, then you send the same permit again; never send keys there yourself), otherwise pastes the prompt, presses Return once, waits a few seconds for the target session's prompt-submit record and prints the `attempt`, `readback` and `landing` to record verbatim; `readback` is screen text only, landing is proven by the hook record alone. Under desktop sessions send the `promptRef` file's text, unchanged and once, with the desktop `send_message` tool to the window's desktop id (the `desktop.sessionId` its `launch` printed; a callback goes with `SendMessage` to the Controller's desktop id that the delivery prompt names), keep the tool's return unchanged as `attempt.sendReturn` (`status: "sent"`, or `"failed-before-send"` when nothing was sent), then, before recording the outcome, run `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/desktop.mjs landing --window <windowId> --prompt-digest <the permit's promptDigest>` (`--wait-landing <seconds>` after `queued`): only the target's `user-prompt-submit` record proves landing. Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
-fence. Wakeflow derives the disposition from evidence, not from your
-impression: accepted needs the target session's `user-prompt-submit` record
-matching the permit's prompt, or your own report of the host send's return. A
-missing readback is indeterminate, never a failure; only a send that provably
-failed before touching the session is re-armed with `wakeflow_rearm_delivery`,
-and an indeterminate delivery is resolved as the reference says, never resent
-on a hunch.
+fence. Wakeflow derives the disposition from evidence: accepted needs the
+target session's `user-prompt-submit` record matching the permit's prompt, or
+your own report of the host send's return. A missing landing is indeterminate,
+never a failure; only a send that provably failed before touching the session
+is re-armed with `wakeflow_rearm_delivery`, and an indeterminate delivery is
+resolved as the reference says, never resent on a hunch.
 
 ### Step 10 - Inspect the review unit
 
@@ -136,9 +136,8 @@ holds the coverage rules and exclusions.
 
 ### Step 13 - Close the pod
 
-After the user has merged or abandoned the pod's branch and its Demand is
-archived, close the pod with `wakeflow_pod`: record the branch dispositions,
-then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
+After the user has merged or abandoned the pod's branch and its Demand is archived, close the pod
+with `wakeflow_pod`: record the branch dispositions, then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
 
 ## Checking the workspace
 
@@ -187,7 +186,7 @@ for the record you were writing. Then either the effect already landed and you
 report it, or it did not and you replay the same call with the same
 idempotency key or plan digest - Wakeflow returns the existing record instead
 of a second one. A host send is the one effect Wakeflow cannot replay for you:
-the helper checks the receiving window's landing record before it sends and refuses with `already-landed`, printing that landing, when the prompt is already there; record or report that landing instead of forcing a second send (`--force` is only for a prompt you have established never reached the window). A turn cut in a window you delivered to is a different case:
+check the receiving window's landing record before any second send - the tmux helper's `deliver` does it itself and refuses with `already-landed`, printing that landing; under desktop sessions run the helper's `landing` first - and record or report that landing instead of sending again (tmux `--force` is only for a prompt you have established never reached the window). A turn cut in a window you delivered to is a different case:
 see the nudge rule in `references/delivery-and-review.md`. When the host says
 its login expired, only the user can sign in again: tell them; once they have,
 the host may resume the cut turn on its own - look first.

@@ -12,11 +12,14 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 - **一个工作区** —— 与产品仓库分开的控制器目录，存放配置、活动状态与持久
   ledger。
 - **四种窗口角色** —— controller、design、test，以及每个仓库一个 product 窗口。
-  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
+  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。Claude Code 上
+  窗口住在 tmux 窗格里，或是桌面 app Code 标签里的会话——每个工作区一种窗口传输，
+  第一次使用时选定。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
-- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上还在自己的
-  tmux 会话里），用来并行推进两件事而互不干扰。
+- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上 tmux 传输时
+  在自己的 tmux 会话里，桌面会话传输时是侧栏里自己的一组会话），用来并行推进两件事
+  而互不干扰。
 
 ## 第一次使用
 
@@ -24,8 +27,9 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    Wakeflow 工作区"。这个会话是引导会话：它问你几个问题（程序名、仓库、账本放
    在哪），预览计划，你点头后应用。
 2. 然后它自己开好全部窗口——Controller、Design、每个产品仓库一个、Test——并在
-   每个只有你能做的点上告诉你那一件事：进入这些窗口的那条命令，以及每个窗口里
-   要接受的信任对话。
+   每个只有你能做的点上告诉你那一件事：Claude Code 上 tmux 传输时是进入这些窗口的
+   那条命令和每个窗口里要接受的信任对话，桌面会话传输时是要信任一次的目录和在那里
+   选一次的 `auto` 权限模式，窗口则出现在 app 的侧栏里。
 3. 最后给你一张交接卡：每个窗口是做什么的、怎么在窗口之间移动、以后怎么回来、
    第一步做什么——去 Design 窗口把第一个需求说清楚。然后关掉引导会话；从此
    Controller 窗口就是 Controller。
@@ -56,7 +60,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 2. 确认 Agent 宿主能启动 `node`：在它启动时所用的 `PATH` 上，或由宿主自带
    （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
-   代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux`；
+   代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux` 或已用
+   订阅登录的 Claude 桌面 app，取决于工作区用哪种窗口传输；
    只支持 macOS 的本地文件系统，不支持 Linux 与 Windows。Claude Code 可以是原生
    二进制，也可以是 npm 安装的 `claude` 脚本，两者都能识别。
 3. 完成下面这一节的一次性宿主动作。
@@ -81,18 +86,25 @@ pod 打开期间，Controller 的宿主动作还会碰每个产品仓库：为 p
 ## 安装后的一次性宿主动作
 
 第一次在工作区目录里启动 Claude Code 时，必须接受工作区信任对话。不接受时插件的 hook
-与状态栏都不运行：没有会话被观察到，投递也拿不到落地证据。状态栏命令由
+与状态栏都不运行：没有会话被观察到，投递也拿不到落地证据。tmux 传输下状态栏命令由
 `wakeflow_maintain_workspace` 写进工作区根与 Design、Test 面的 `settings.local.json`；那一项归
 Wakeflow 所有并保持最新。你自己配置的 `statusLine`（没有 Wakeflow 标记的）不会被覆盖，在
-`wakeflow_status` 里显示为 `custom`，那个窗口就没有 Wakeflow 的标签。
+`wakeflow_status` 里显示为 `custom`，那个窗口就没有 Wakeflow 的标签。桌面会话传输下不写状态栏：
+app 的侧栏自带标记。
 
-你不需要自己配置 tmux。在工作区目录里运行 `claude`，执行 `/wakeflow:init`：Controller 会通过
-维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己
+你不需要自己配置窗口传输。在工作区目录里运行 `claude`——在终端里，或在桌面 app 的 Code 标签里——
+执行 `/wakeflow:init`：引导会话按自己所处的环境提议传输（在桌面 app 里、带着 app 的会话工具
+时是桌面会话，否则是 tmux），你可以选另一种，选择写进 `hosts.claude-code.windowTransport`，
+每个工作区一种。tmux 传输下 Controller
+会通过维护装到 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs` 的助手自己
 建 tmux 会话、开全部窗口，窗口开好后告诉你要执行的那一条 `tmux attach` 命令（worktree pod 各有
-自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任
-对话；投递 prompt 也走同一个助手。维护还会往工作区根的 `.claude/settings.json` 写只放行这个
-助手和 Wakeflow MCP 工具的 allow 规则；助手启动或恢复的每个窗口也带着这两项放行启动，所以产品
-窗口和测试窗口同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，
+自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个
+助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的
+侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作
+期间让 app 开着，app 询问时把每个产品目录信任一次，并在每个目录里选一次 `auto` 权限模式
+（app 按目录记住这两项）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和
+Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口
+同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，
 其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，
 那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。
 
@@ -118,8 +130,10 @@ Controller 会告诉你是哪个窗口在问。你的账号没有 auto 模式时
 Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wakeflow 每次发布都会改它。正在运行的
 会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的
 `wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报
-`windows-stale:<n>`；Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己刷新它们。
-没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。
+`windows-stale:<n>`。tmux 传输下 Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己
+刷新它们；桌面会话传输下由你退出并重开一次桌面 app——每个会话都在新插件上回来——然后 Controller
+校验并对账。没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；
+`unverified` 不是失败。
 
 在受支持的工作区基线内，更新不需要迁移工作区；更新后的 `wakeflow_status` 会点名剩下要做的事
 （过期的 server、stale 的窗口、`reconcile` 可修复的宿主资产）。由 Wakeflow 0.9.x 初始化的工作区
@@ -145,7 +159,8 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
   状态、hook 记录与它发布的宿主资产）、你选的账本目录、它管理的 Design 与 Test
   支撑面，以及 `CLAUDE.md` 和 `.gitignore` 里的托管块。
 - 宿主设置（有这种设置的宿主，即 Claude Code）：在工作区根与受管的 Design、Test
-  面的 `.claude/settings.json` 里只放行它自己的工具与助手的精确规则，在同样三处的
+  面的 `.claude/settings.json` 里只放行它自己的工具与所发布助手（tmux 传输下是
+  `tmux.mjs`，桌面会话传输下是 `desktop.mjs`）的精确规则，tmux 传输下还在同样三处的
   `.claude/settings.local.json` 里写状态行条目。不写更宽的规则，也不写进产品仓库。
 - 产品仓库由 Design 只读，只有产品窗口按投递的任务改动它；托管块只出现在明确选择
   的仓库里；pod 会添加"安装"一节说明的关联检出。

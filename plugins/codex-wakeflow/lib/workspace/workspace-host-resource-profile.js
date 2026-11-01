@@ -19,7 +19,7 @@ export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
     "windowLocator",
     "settingsIntegration",
     "statuslineAsset",
-    "tmuxAsset",
+    "helperAsset",
     "runtimeStaleness",
     "runtimeRefresh",
 ]);
@@ -31,6 +31,18 @@ export const WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES = Object.freeze([
     "add-dir-flag",
     "prompt-path",
 ]);
+export function wakeflowWorkspaceHostLocatorProvider(profile) {
+    if (!profile.surfaces.windowLocator)
+        return "none";
+    switch (profile.launch.kind) {
+        case "tmux-session":
+            return "tmux";
+        case "desktop-session":
+            return "desktop";
+        default:
+            return "none";
+    }
+}
 const ERROR_MESSAGES = {
     input: "Wakeflow workspace host resource profile is not passive data.",
     shape: "Wakeflow workspace host resource profile has an invalid shape.",
@@ -67,6 +79,12 @@ const TMUX_LAUNCH_FIELDS = new Set([
     "defaultEffort",
     "permissionMode",
     "sessionName",
+]);
+const DESKTOP_LAUNCH_FIELDS = new Set([
+    "kind",
+    "controllerEffort",
+    "defaultEffort",
+    "permissionMode",
 ]);
 const THREAD_LAUNCH_FIELDS = new Set(["kind"]);
 const LAUNCH_VALUE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -149,13 +167,13 @@ function parseStatuslineAsset(value) {
         fileName: parseComponent(record.fileName, "$/surfaces/statuslineAsset/fileName"),
     });
 }
-function parseTmuxAsset(value) {
+function parseHelperAsset(value) {
     if (value === null)
         return null;
-    const record = plainRecord(value, "$/surfaces/tmuxAsset");
-    assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/tmuxAsset");
+    const record = plainRecord(value, "$/surfaces/helperAsset");
+    assertExactFields(record, STATUSLINE_ASSET_FIELDS, "$/surfaces/helperAsset");
     return Object.freeze({
-        fileName: parseComponent(record.fileName, "$/surfaces/tmuxAsset/fileName"),
+        fileName: parseComponent(record.fileName, "$/surfaces/helperAsset/fileName"),
     });
 }
 function parseWorktreeTemplate(value) {
@@ -198,7 +216,7 @@ function parseSurfaces(value) {
         windowLocator: surfaceBoolean(record.windowLocator, "windowLocator"),
         settingsIntegration,
         statuslineAsset,
-        tmuxAsset: parseTmuxAsset(record.tmuxAsset),
+        helperAsset: parseHelperAsset(record.helperAsset),
         runtimeStaleness: parseRuntimeStaleness(record.runtimeStaleness),
         runtimeRefresh: parseRuntimeRefresh(record.runtimeRefresh),
     });
@@ -225,6 +243,15 @@ function parseLaunchTemplate(value) {
         assertExactFields(record, THREAD_LAUNCH_FIELDS, "$/launch");
         return Object.freeze({ kind: "project-thread" });
     }
+    if (record.kind === "desktop-session") {
+        assertExactFields(record, DESKTOP_LAUNCH_FIELDS, "$/launch");
+        return Object.freeze({
+            kind: "desktop-session",
+            controllerEffort: launchValue(record.controllerEffort, "$/launch/controllerEffort"),
+            defaultEffort: launchValue(record.defaultEffort, "$/launch/defaultEffort"),
+            permissionMode: launchValue(record.permissionMode, "$/launch/permissionMode"),
+        });
+    }
     if (record.kind !== "tmux-session")
         fail("surface", "$/launch/kind");
     assertExactFields(record, TMUX_LAUNCH_FIELDS, "$/launch");
@@ -250,8 +277,11 @@ export function parseWakeflowWorkspaceHostResourceProfile(value) {
     }
     const surfaces = parseSurfaces(record.surfaces);
     const launch = parseLaunchTemplate(record.launch);
-    if (launch.kind === "tmux-session" && !surfaces.windowLocator) {
+    if (launch.kind !== "project-thread" && !surfaces.windowLocator) {
         fail("contradiction", "$/launch");
+    }
+    if (launch.kind !== "project-thread" && surfaces.helperAsset === null) {
+        fail("contradiction", "$/surfaces/helperAsset");
     }
     return Object.freeze({
         kind: WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND,

@@ -511,8 +511,11 @@ function assetsGate(facts) {
     const applicable = facts.assets.filter((asset) => asset.status !== "not-applicable");
     const status = aggregate(applicable.flatMap((asset) => [
         verdict(asset.status === "current", asset.status === "unavailable"),
-        // 用户自己的状态行算通过：Wakeflow 不管它，但在 code 里点名（复审 T31）。
-        verdict(asset.settings === "current" || asset.settings === "custom", asset.settings === "unreadable"),
+        // 用户自己的状态行算通过：Wakeflow 不管它，但在 code 里点名（复审 T31）。没有状态栏的传输
+        // （ADR-0025 D6）不期望任何条目，settings 为 not-applicable，同样通过且不点名。
+        verdict(asset.settings === "current" ||
+            asset.settings === "custom" ||
+            asset.settings === "not-applicable", asset.settings === "unreadable"),
     ]));
     const code = applicable.length === 0
         ? "not-applicable"
@@ -524,7 +527,7 @@ function assetsGate(facts) {
                     : [
                         `${asset.hostId}:${asset.companion ? `${asset.companion}:` : ""}${asset.status}`,
                     ]),
-                ...(asset.settings === "current"
+                ...(asset.settings === "current" || asset.settings === "not-applicable"
                     ? []
                     : [`${asset.hostId}:settings-${asset.settings}`]),
             ]));

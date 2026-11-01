@@ -42,6 +42,7 @@ import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
+import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { collectEvidenceReferences, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
@@ -120,11 +121,26 @@ async function openContext(workspaceRoot, demandId, facade, options, mode) {
     try {
         const open = mode === "append" ? openDemandOperationAuthorityContext : openDemandReadAuthorityContext;
         const authority = await open(workspaceRoot, demandId, options.signal);
-        return Object.freeze({ workspaceRoot, authority, facade, options });
+        return Object.freeze({
+            workspaceRoot,
+            authority,
+            facade: selectFacade(facade, authority.config.model),
+            options,
+        });
     }
     catch (error) {
         mapContextError(error);
     }
+}
+/** ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile；此后本上下文只读选出的那份。 */
+function selectFacade(facade, model) {
+    if (facade.transports === undefined)
+        return facade;
+    const { transports: _transports, ...rest } = facade;
+    return Object.freeze({
+        ...rest,
+        resourceProfile: selectWakeflowWorkspaceHostResourceProfile(facade, model),
+    });
 }
 async function closeContext(context) {
     try {

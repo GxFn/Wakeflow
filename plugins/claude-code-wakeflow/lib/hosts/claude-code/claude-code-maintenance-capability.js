@@ -3,25 +3,32 @@ import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } f
 import { isWakeflowDetachAction } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_BLOCKER, CLAUDE_CODE_DESKTOP_ASSET_OPERATION_KIND, CLAUDE_CODE_DESKTOP_ASSET_OWNER_ID, executeClaudeCodeDesktopAssetOperation, planClaudeCodeDesktopAssetOperation, } from "./claude-code-desktop-asset-operation.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME } from "./claude-code-desktop-asset.js";
 import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND, claudeCodePortableSettingsRemovalTargetKey, planClaudeCodePortableSettingsComposition, } from "./claude-code-portable-settings-composition.js";
 import { ClaudeCodePortableSettingsOperationExecutionError, executeClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-operation-executor.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
+import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "./claude-code-statusline-asset.js";
 import { CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID, ClaudeCodeStatuslineSettingsOperationError, executeClaudeCodeStatuslineSettingsOperation, executeClaudeCodeStatuslineSettingsRemoval, planClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsRemoval, planClaudeCodeStatuslineSettingsSurfaceOperations, } from "./claude-code-statusline-settings-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_BLOCKER, CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND, CLAUDE_CODE_TMUX_ASSET_OWNER_ID, executeClaudeCodeTmuxAssetOperation, planClaudeCodeTmuxAssetOperation, } from "./claude-code-tmux-asset-operation.js";
+import { CLAUDE_CODE_TMUX_ASSET_FILE_NAME } from "./claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
 /**
  * Wakeflow Host / Claude Code：当前 Claude 宿主维护 capability。
  *
- * 它把 portable settings 的多根只读计划、两份资产（状态栏、tmux 助手）的字节核对与本地设置里
- * 状态栏条目的核对转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact
- * operation。共享层不依赖本模块；每种 operationKind 都在这里显式分派，不注册动态 handler。
- * 资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
+ * 它把 portable settings 的多根只读计划、选出传输的宿主资产的字节核对与本地设置里状态栏条目的核对
+ * 转换成共享 contribution，并在唯一 Maintenance Gate 内以闭合分派执行 exact operation。宿主资产集合随
+ * 请求里选出的 profile（ADR-0025 D6）：窗口传输助手按 `surfaces.helperAsset.fileName` 查本模块的助手表
+ * （tmux 助手或桌面助手，各自的操作模块）；状态栏资产与它在本地设置里的条目只在 `surfaces.statuslineAsset`
+ * 非空时计划（tmux 传输有，桌面传输没有）。共享层不依赖本模块；每种 operationKind 都在这里显式分派，
+ * 不注册动态 handler。资产字节或本地设置读不稳时贡献 blocked 并带稳定 blocker，不把未分类的宿主错误抛给
  * 维护预览：读不出的宿主制品不能让整个工作区无法维护。
  *
  * 退出路径（ADR-0024）的贡献只有两种宿主删除步：`remove-portable-settings-rules`（targetKey 程序根
  * `program`、支撑面 `support:<surfaceId>`）与 `remove-statusline-entry`（`statusline`、
- * `statusline:support:<surfaceId>`）；operationKind 就是共享步骤表里的种类名。
+ * `statusline:support:<surfaceId>`）；operationKind 就是共享步骤表里的种类名。两种删除步都不分传输：
+ * 规则表删两种传输的助手规则，状态行删除只删在场且是 Wakeflow 的条目，没有即 current。
  */
 const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance";
 const PORTABLE_SETTINGS_OPERATION_KIND = "portable-settings";
@@ -30,6 +37,7 @@ const ERROR_MESSAGES = {
     gate: "Claude Code maintenance capability requires the active matching gate.",
     operation: "Claude Code maintenance capability operation is invalid.",
     owner: "Claude Code maintenance capability owner failed.",
+    profile: "Claude Code maintenance capability does not provide this Host Profile's assets.",
 };
 /** Claude Code maintenance capability 失败的稳定、脱敏错误。 */
 class ClaudeCodeMaintenanceCapabilityError extends Error {
@@ -48,6 +56,50 @@ function fail(reason, path) {
 }
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
 export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER = "claude-statusline-asset-unreadable";
+/**
+ * 两种窗口传输的助手资产，按 profile 的助手文件名查表（ADR-0025 D6）：这是本宿主维护里唯一认识
+ * "哪个文件名由哪个操作模块发布"的地方；共享层只传选出的 profile。
+ */
+const HELPER_ASSET_OPERATIONS_BY_FILE_NAME = new Map([
+    [
+        CLAUDE_CODE_TMUX_ASSET_FILE_NAME,
+        Object.freeze({
+            operationKind: CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND,
+            ownerId: CLAUDE_CODE_TMUX_ASSET_OWNER_ID,
+            blocker: CLAUDE_CODE_TMUX_ASSET_BLOCKER,
+            plan: planClaudeCodeTmuxAssetOperation,
+            execute: executeClaudeCodeTmuxAssetOperation,
+        }),
+    ],
+    [
+        CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
+        Object.freeze({
+            operationKind: CLAUDE_CODE_DESKTOP_ASSET_OPERATION_KIND,
+            ownerId: CLAUDE_CODE_DESKTOP_ASSET_OWNER_ID,
+            blocker: CLAUDE_CODE_DESKTOP_ASSET_BLOCKER,
+            plan: planClaudeCodeDesktopAssetOperation,
+            execute: executeClaudeCodeDesktopAssetOperation,
+        }),
+    ],
+]);
+/** 选出的 profile 要发布的助手资产操作；没有助手或文件名不在表里的 profile 不是本宿主的传输。 */
+function helperAssetOperationsOf(profile) {
+    const fileName = profile.surfaces.helperAsset?.fileName;
+    const operations = fileName === undefined ? undefined : HELPER_ASSET_OPERATIONS_BY_FILE_NAME.get(fileName);
+    if (operations === undefined)
+        fail("profile", "$profile/surfaces/helperAsset");
+    return operations;
+}
+/** 选出的 profile 是否发布状态栏（tmux 传输）；声明了别的状态栏文件名的 profile 不是本宿主的传输。 */
+function publishesStatusline(profile) {
+    const statusline = profile.surfaces.statuslineAsset;
+    if (statusline === null)
+        return false;
+    if (statusline.fileName !== CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME) {
+        fail("profile", "$profile/surfaces/statuslineAsset");
+    }
+    return true;
+}
 /** 资产字节读不稳时不猜：整份贡献 blocked，不带该操作，而不是抛出未分类的宿主错误。 */
 async function planHostAsset(plan, blocker, signal) {
     try {
@@ -142,21 +194,28 @@ async function planDetachContribution(root, request) {
 async function planContribution(root, request) {
     if (isWakeflowDetachAction(request.action))
         return planDetachContribution(root, request);
+    // 宿主资产集合随选出的 profile（ADR-0025 D6）：助手按文件名查表；状态栏只在 profile 声明它时发布。
+    const helper = helperAssetOperationsOf(request.profile);
+    const statuslinePublished = publishesStatusline(request.profile);
     const composition = await planClaudeCodePortableSettingsComposition(root, {
         action: request.action,
         config: request.config,
         profile: request.profile,
         ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
-    const statusline = await planHostAsset((options) => planClaudeCodeStatuslineAssetOperation(root, options), CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER, request.signal);
-    const tmuxAsset = await planHostAsset((options) => planClaudeCodeTmuxAssetOperation(root, options), CLAUDE_CODE_TMUX_ASSET_BLOCKER, request.signal);
-    const settings = await planStatuslineSettings(root, request);
+    const statusline = statuslinePublished
+        ? await planHostAsset((options) => planClaudeCodeStatuslineAssetOperation(root, options), CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER, request.signal)
+        : { operation: null, blocker: null };
+    const helperAsset = await planHostAsset((options) => helper.plan(root, options), helper.blocker, request.signal);
+    const settings = statuslinePublished
+        ? await planStatuslineSettings(root, request)
+        : { operations: [], blockerCodes: [] };
     const projections = await planProjections(root, request);
     // blocker 在边界内排序去重前必须互不相同：五个来源的前缀各不相同。
     const blockerCodes = [
         ...composition.blockerCodes,
         ...(statusline.blocker === null ? [] : [statusline.blocker]),
-        ...(tmuxAsset.blocker === null ? [] : [tmuxAsset.blocker]),
+        ...(helperAsset.blocker === null ? [] : [helperAsset.blocker]),
         ...settings.blockerCodes,
         ...projections.blockerCodes,
     ];
@@ -176,7 +235,7 @@ async function planContribution(root, request) {
                 payload: operation,
             })),
             ...(statusline.operation === null ? [] : [statusline.operation]),
-            ...(tmuxAsset.operation === null ? [] : [tmuxAsset.operation]),
+            ...(helperAsset.operation === null ? [] : [helperAsset.operation]),
             ...settings.operations,
             ...projections.operations,
         ],
@@ -289,9 +348,12 @@ async function executeOperation(root, context, request) {
         request.operation.ownerId === CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID) {
         return executeHostAssetOperation(executeClaudeCodeStatuslineAssetOperation, root, request);
     }
-    if (request.operation.operationKind === CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND &&
-        request.operation.ownerId === CLAUDE_CODE_TMUX_ASSET_OWNER_ID) {
-        return executeHostAssetOperation(executeClaudeCodeTmuxAssetOperation, root, request);
+    // 两种传输的助手资产各有自己的种类与 owner；计划里只会有选出传输的那一份，执行按它分派。
+    for (const helper of HELPER_ASSET_OPERATIONS_BY_FILE_NAME.values()) {
+        if (request.operation.operationKind === helper.operationKind &&
+            request.operation.ownerId === helper.ownerId) {
+            return executeHostAssetOperation(helper.execute, root, request);
+        }
     }
     if (request.operation.operationKind === CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND &&
         request.operation.ownerId === CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID) {

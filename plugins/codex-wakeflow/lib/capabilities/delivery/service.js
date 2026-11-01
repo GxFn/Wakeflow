@@ -21,7 +21,7 @@ import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/ev
 import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
-import { observeHostAssetState, } from "../../governance/observation/workspace-observation.js";
+import { observeHostAssetState, selectObservationHostAssets, } from "../../governance/observation/workspace-observation.js";
 import { deriveTargetResultCallbackStatus, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
 import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../../governance/review/controller-implementation-review-decision.js";
 import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
@@ -38,6 +38,7 @@ import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPriv
 import { createWorkClaim, deriveWorkClaimId, inspectWorkClaim, releaseWorkClaim, releaseWorkClaimIfHeld, takeWorkClaim, } from "../../kernel/work-claims.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
+import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, deriveRearmBlockers, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
@@ -130,10 +131,29 @@ function parseInstant(value, path) {
     }
 }
 // ---- 上下文与路由 ---------------------------------------------------------------
+/**
+ * ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile 与资产期望（D6）；此后本上下文只读选出的
+ * 那份。单传输宿主原样通过。
+ */
+function selectFacade(facade, model) {
+    if (facade.transports === undefined)
+        return facade;
+    const { transports: _transports, transportAssets, ...rest } = facade;
+    return Object.freeze({
+        ...rest,
+        resourceProfile: selectWakeflowWorkspaceHostResourceProfile(facade, model),
+        assets: selectObservationHostAssets(configuredWakeflowWorkspaceHostTransport(facade, model), facade.assets, transportAssets),
+    });
+}
 async function openContext(workspaceRoot, envelope, facade, options) {
     try {
         const authority = await openDemandOperationAuthorityContext(workspaceRoot, envelope.demandId, options.signal);
-        return Object.freeze({ workspaceRoot, authority, facade, options });
+        return Object.freeze({
+            workspaceRoot,
+            authority,
+            facade: selectFacade(facade, authority.config.model),
+            options,
+        });
     }
     catch (error) {
         mapContextError(error);
@@ -678,9 +698,10 @@ async function executePrepare(context, input, binding) {
     });
 }
 /**
- * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的 tmux 助手去投递，所以
- * 签发前由服务器核对本宿主已发布资产（状态栏与伴随的助手）的字节。字节不是制品的就拒绝——被改写的助手
- * 不该跑；对账会重新发布它。只核对投递窗口所在宿主就是本宿主的情形。
+ * F1（ADR-0020 决定 1 的 B 类）：许可一经签发，Controller 就会免提示运行已发布的窗口传输助手去投递，所以
+ * 签发前由服务器核对本宿主已发布资产的字节——准入时按配置的传输选出的那组期望（ADR-0025 D6：状态栏可选，
+ * 伴随的助手必在）。字节不是制品的就拒绝——被改写的助手不该跑；对账会重新发布它。只核对投递窗口所在宿主
+ * 就是本宿主的情形。
  *
  * 这是发出许可的统一前置（W16）：新 prepare、prepare 与 rearm 的同键重放、rearm 换代、回调重发及其重放
  * 都在取得路由之后、追加或取声明之前调用；`requestPath` 指向该工具请求里点名目标的字段。

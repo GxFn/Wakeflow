@@ -113,7 +113,7 @@ function privateProjectionFileDeclaration(declarationId, ownerId, relativePath) 
 }
 /** Profile 是否声明任一 `operations/` 下的表面（只剩 `operations/assets` 的两份资产，复审 J5）；目录与布局 authority 共用此判定。 */
 export function hostProfileHasOperationSurface(profile) {
-    return profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null;
+    return profile.surfaces.statuslineAsset !== null || profile.surfaces.helperAsset !== null;
 }
 /** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
@@ -143,15 +143,15 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
     if (profile.surfaces.settingsIntegration !== null) {
         declarations.push(integrationFileDeclaration(`${prefix}.settings-portable`, "host-settings-integration", profile.surfaces.settingsIntegration.portablePath, "tracked-shareable"), integrationFileDeclaration(`${prefix}.settings-local`, "host-settings-integration", profile.surfaces.settingsIntegration.localPath, "ignored-private"));
     }
-    const { statuslineAsset, tmuxAsset } = profile.surfaces;
-    if (statuslineAsset !== null || tmuxAsset !== null) {
+    const { statuslineAsset, helperAsset } = profile.surfaces;
+    if (statuslineAsset !== null || helperAsset !== null) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.statusline-assets-root`, "host-statusline", hostRuntimeRef(profile, "operations/assets")));
     }
     if (statuslineAsset !== null) {
         declarations.push(privateProjectionFileDeclaration(`${prefix}.statusline-asset`, "host-statusline", hostRuntimeRef(profile, `operations/assets/${statuslineAsset.fileName}`)));
     }
-    if (tmuxAsset !== null) {
-        declarations.push(privateProjectionFileDeclaration(`${prefix}.tmux-asset`, "host-tmux", hostRuntimeRef(profile, `operations/assets/${tmuxAsset.fileName}`)));
+    if (helperAsset !== null) {
+        declarations.push(privateProjectionFileDeclaration(`${prefix}.helper-asset`, "host-helper", hostRuntimeRef(profile, `operations/assets/${helperAsset.fileName}`)));
     }
     return Object.freeze(declarations);
 }

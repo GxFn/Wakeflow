@@ -16,11 +16,14 @@ repositories.
   ledger.
 - **Four window roles** - controller, design, test, and one product window per
   repository. Each is an agent window the Controller launches for you; Wakeflow
-  records which is which.
+  records which is which. On Claude Code the windows live in tmux panes or as
+  sessions in the desktop app's Code tab - one window transport per workspace,
+  chosen on the first run.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
-- **Pods** - a second complete window set working in its own worktree (and,
-  on Claude Code, in its own tmux session), for running two pieces of work at
+- **Pods** - a second complete window set working in its own worktree (on
+  Claude Code in its own tmux session under the tmux transport, or as its own
+  sidebar sessions under desktop sessions), for running two pieces of work at
   once without them colliding.
 
 ## First run
@@ -32,8 +35,10 @@ repositories.
    when you say so.
 2. It then opens every window itself - Controller, Design, one per product
    repository, Test - and tells you the one thing only you do at each point:
-   the command that brings you to those windows, and the trust dialog to
-   accept in each.
+   on Claude Code under tmux the command that brings you to those windows and
+   the trust dialog to accept in each; under desktop sessions the folders to
+   trust once and the `auto` permission mode to pick once there, while the
+   windows appear in the app's sidebar.
 3. It ends with a handover card: what each window is for, how to move between
    them, how to come back later, and what to do first - go to the Design
    window and describe your first requirement. Then you close the setup
@@ -73,7 +78,9 @@ status", "keep going", "open a pod for this".
    tool server and its observation hooks are started as `node`, and a host
    that cannot find it fails silently. Wakeflow needs Node 24.19 or later
    below 25 (other versions are refused with one line on stderr before
-   anything runs), `git`, and on Claude Code `tmux`; it supports macOS only
+   anything runs), `git`, and on Claude Code either `tmux` or the Claude
+   desktop app signed in with a subscription, whichever window transport the
+   workspace uses; it supports macOS only
    (a local file system): Linux and Windows are not supported. Claude Code may
    be the native binary or the npm-installed `claude` script: both are recognized.
 3. Complete the one-time host actions below.
@@ -172,10 +179,11 @@ failure on purpose: "we could not check" is never reported as "it is fine".
   publishes), the ledger directory you chose, the Design and Test surfaces it
   manages, and the managed blocks in `AGENTS.md` and `.gitignore`.
 - Host settings, where the host has them (Claude Code): precise allow rules
-  for its own tools and helper in `.claude/settings.json` at the workspace
-  root and the managed Design and Test surfaces, and the status line entry in
-  `.claude/settings.local.json` in the same three places. Nothing broader, and
-  nothing in a product repository.
+  for its own tools and the published helper (`tmux.mjs` under the tmux
+  transport, `desktop.mjs` under desktop sessions) in `.claude/settings.json`
+  at the workspace root and the managed Design and Test surfaces, and under
+  tmux the status line entry in `.claude/settings.local.json` in the same
+  three places. Nothing broader, and nothing in a product repository.
 - Product repositories are read by Design and changed only by a product
   window doing a delivered task; the managed block appears only where the
   repository opted in; a pod adds the linked checkout described under Install.

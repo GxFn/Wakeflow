@@ -38,6 +38,7 @@ export const CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR = " · ";
  * 窗口在 tmux 里的名字（§13.186）：worktree pod 的窗口已经在 pod 自己的会话里，显示名里的
  * `<pod 名> · ` 前缀（能力卡 9 Q6 的逻辑显示名，保持不变）在会话内是冗余的，tmux 窗口名去掉它；
  * primary pod 与没有前缀的显示名原样使用。助手里的 `tmuxWindowNameFor` 是同一规则的脚本副本。
+ * 桌面传输的会话标题（`--name`，侧栏分组按 pod）用同一个名字。
  */
 export function claudeCodeTmuxWindowNameFor(intent) {
     const prefix = `${intent.podName}${CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR}`;
@@ -45,31 +46,40 @@ export function claudeCodeTmuxWindowNameFor(intent) {
         ? intent.displayTitle.slice(prefix.length)
         : intent.displayTitle;
 }
-/** Claude owns its CLI, tmux and attached-directory arguments. */
-export function renderClaudeCodeWindowLaunchInstructions(input) {
-    const { model, intent, profile, attachedWorktrees: attached } = input;
-    const role = intent.role;
-    const template = profile.launch;
-    if (template.kind !== "tmux-session")
-        throw new Error("Expected a session launch template.");
-    const worktree = intent.worktree === null
-        ? null
-        : {
-            repositoryId: intent.worktree.repositoryId,
-            suggestedName: intent.worktree.suggestedName,
-            basePolicy: intent.worktree.basePolicy,
-            launch: profile.surfaces.worktree.launch,
-            hostBranch: `worktree-${intent.worktree.suggestedName}`,
-            registration: "after the session starts inside the worktree, report the handle plus the verbatim output of `git worktree list --porcelain` and `git rev-parse --git-common-dir` run in the session cwd",
-            note: "claude --worktree reuses an existing checkout at .claude/worktrees/<name> (create it from the local HEAD first for basePolicy local-head); without one it creates the checkout from the remote default branch when a remote exists; the session cwd is that checkout",
-        };
+const WORKTREE_REGISTRATION = "after the session starts inside the worktree, report the handle plus the verbatim output of `git worktree list --porcelain` and `git rev-parse --git-common-dir` run in the session cwd";
+const TMUX_WORKTREE_NOTE = "claude --worktree reuses an existing checkout at .claude/worktrees/<name> (create it from the local HEAD first for basePolicy local-head); without one it creates the checkout from the remote default branch when a remote exists; the session cwd is that checkout";
+// 桌面会话绝不用 --worktree：桌面 app 与 agent view 会把检出当成自己的 worktree，归档会话就删掉检出（ADR-0025 D4）。
+const DESKTOP_WORKTREE_NOTE = "the desktop helper prepares the checkout at .claude/worktrees/<name> from the local HEAD (basePolicy local-head) and starts claude --bg with that checkout as the session cwd; never pass --worktree: the desktop app would claim the checkout as its own worktree and archiving the session would delete it";
+/** worktree pod 产品窗口的 worktree 事实：两种传输同一组字段，只有 note 说明检出怎样成为会话的 cwd。 */
+function worktreeFacts(intent, profile, note) {
+    if (intent.worktree === null)
+        return null;
+    return {
+        repositoryId: intent.worktree.repositoryId,
+        suggestedName: intent.worktree.suggestedName,
+        basePolicy: intent.worktree.basePolicy,
+        launch: profile.surfaces.worktree.launch,
+        hostBranch: `worktree-${intent.worktree.suggestedName}`,
+        registration: WORKTREE_REGISTRATION,
+        note,
+    };
+}
+/** 配置覆盖模板：effort 与 model 按角色，permissionMode 整体（用户裁决 Q4，§13.134）。 */
+function launchPreferences(model, role, template) {
     const host = model.hosts?.["claude-code"];
     const launch = host?.launch;
-    const effort = launch?.reasoningEffortByRole?.[role] ??
-        launch?.reasoningEffortByRole?.default ??
-        (role === "controller" ? template.controllerEffort : template.defaultEffort);
-    const modelName = launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null;
-    const permissionMode = launch?.permissionMode ?? template.permissionMode;
+    return {
+        host,
+        effort: launch?.reasoningEffortByRole?.[role] ??
+            launch?.reasoningEffortByRole?.default ??
+            (role === "controller" ? template.controllerEffort : template.defaultEffort),
+        modelName: launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null,
+        permissionMode: launch?.permissionMode ?? template.permissionMode,
+    };
+}
+function renderTmuxSessionLaunch(input, template) {
+    const { model, intent, profile, attachedWorktrees: attached } = input;
+    const { host, effort, modelName, permissionMode } = launchPreferences(model, intent.role, template);
     return {
         kind: profile.hostId,
         tmux: {
@@ -92,7 +102,48 @@ export function renderClaudeCodeWindowLaunchInstructions(input) {
         ],
         sessionIdPolicy: "agent-generates-uuid-v4",
         registration: "report handle kind claude-session with the generated session id plus the tmux socket, session, window, and pane",
-        worktree,
+        worktree: worktreeFacts(intent, profile, TMUX_WORKTREE_NOTE),
         attachedWorktrees: attached,
     };
+}
+/**
+ * 桌面会话：没有 `--session-id`（`--bg` 自己管理会话 id，助手从输出读回）、没有 `--worktree`（pod 窗口以
+ * 准备好的检出为 cwd）；`desktop.title` 是 `--name` 的值，与 tmux 窗口名同一规则；`desktop.cwd` 是会话的
+ * 启动目录（相对工作区根）。
+ */
+function renderDesktopSessionLaunch(input, template) {
+    const { model, intent, profile, attachedWorktrees: attached } = input;
+    const { effort, modelName, permissionMode } = launchPreferences(model, intent.role, template);
+    return {
+        kind: "claude-code-desktop",
+        desktop: {
+            title: claudeCodeTmuxWindowNameFor(intent),
+            cwd: intent.root.configuredPlacement,
+        },
+        command: "claude",
+        arguments: [
+            "--permission-mode",
+            permissionMode,
+            "--effort",
+            effort,
+            ...(modelName === null ? [] : ["--model", modelName]),
+            ...claudeAddDirArguments(intent, attached, model.storage.ledgerRoot),
+        ],
+        sessionIdPolicy: "host-assigned",
+        registration: "report handle kind claude-session with the host-assigned session id read back from claude --bg, plus desktop.sessionId local_<that id>",
+        worktree: worktreeFacts(intent, profile, DESKTOP_WORKTREE_NOTE),
+        attachedWorktrees: attached,
+    };
+}
+/** Claude owns its CLI, window-transport and attached-directory arguments. */
+export function renderClaudeCodeWindowLaunchInstructions(input) {
+    const template = input.profile.launch;
+    switch (template.kind) {
+        case "tmux-session":
+            return renderTmuxSessionLaunch(input, template);
+        case "desktop-session":
+            return renderDesktopSessionLaunch(input, template);
+        default:
+            throw new Error("Expected a session launch template.");
+    }
 }

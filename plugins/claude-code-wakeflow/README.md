@@ -16,11 +16,14 @@ repositories.
   ledger.
 - **Four window roles** - controller, design, test, and one product window per
   repository. Each is an agent window the Controller launches for you; Wakeflow
-  records which is which.
+  records which is which. On Claude Code the windows live in tmux panes or as
+  sessions in the desktop app's Code tab - one window transport per workspace,
+  chosen on the first run.
 - **Four skills** - `wakeflow-controller`, `wakeflow-design`,
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
-- **Pods** - a second complete window set working in its own worktree (and,
-  on Claude Code, in its own tmux session), for running two pieces of work at
+- **Pods** - a second complete window set working in its own worktree (on
+  Claude Code in its own tmux session under the tmux transport, or as its own
+  sidebar sessions under desktop sessions), for running two pieces of work at
   once without them colliding.
 
 ## First run
@@ -32,8 +35,10 @@ repositories.
    when you say so.
 2. It then opens every window itself - Controller, Design, one per product
    repository, Test - and tells you the one thing only you do at each point:
-   the command that brings you to those windows, and the trust dialog to
-   accept in each.
+   on Claude Code under tmux the command that brings you to those windows and
+   the trust dialog to accept in each; under desktop sessions the folders to
+   trust once and the `auto` permission mode to pick once there, while the
+   windows appear in the app's sidebar.
 3. It ends with a handover card: what each window is for, how to move between
    them, how to come back later, and what to do first - go to the Design
    window and describe your first requirement. Then you close the setup
@@ -73,7 +78,9 @@ status", "keep going", "open a pod for this".
    tool server and its observation hooks are started as `node`, and a host
    that cannot find it fails silently. Wakeflow needs Node 24.19 or later
    below 25 (other versions are refused with one line on stderr before
-   anything runs), `git`, and on Claude Code `tmux`; it supports macOS only
+   anything runs), `git`, and on Claude Code either `tmux` or the Claude
+   desktop app signed in with a subscription, whichever window transport the
+   workspace uses; it supports macOS only
    (a local file system): Linux and Windows are not supported. Claude Code may
    be the native binary or the npm-installed `claude` script: both are recognized.
 3. Complete the one-time host actions below.
@@ -108,26 +115,36 @@ remain available within the current format.
 The first time you start Claude Code in the workspace directory, accept the
 workspace trust dialog. Without it neither the plugin's hooks nor the status line
 run, so no session is observed and no delivery can be shown to have landed.
-`wakeflow_maintain_workspace` writes the status line command into `settings.local.json`
-at the workspace root and at the Design and Test surfaces; that entry belongs to Wakeflow
-and is kept current. A `statusLine` you configured yourself (one without Wakeflow's
-marker) is left alone and shows as `custom` in `wakeflow_status`; that window then has
-no Wakeflow label.
+Under the tmux transport `wakeflow_maintain_workspace` writes the status line command
+into `settings.local.json` at the workspace root and at the Design and Test surfaces; that
+entry belongs to Wakeflow and is kept current. A `statusLine` you configured yourself (one
+without Wakeflow's marker) is left alone and shows as `custom` in `wakeflow_status`; that
+window then has no Wakeflow label. Under desktop sessions no status line is written: the
+app's sidebar carries its own markers.
 
-You never set tmux up by hand. Start `claude` in the workspace directory and run
-`/wakeflow:init`: the Controller creates the tmux session and every window itself through
-the helper maintenance installs at
+You never set the window transport up by hand. Start `claude` in the workspace directory -
+in a terminal or in the desktop app's Code tab - and run `/wakeflow:init`: the setup session
+proposes the transport its surroundings support (desktop sessions when it runs in the
+desktop app and has the app's session tools, tmux otherwise), you may choose the other one,
+and the choice is written as `hosts.claude-code.windowTransport` - one transport per
+workspace. Under the tmux transport the Controller creates the tmux session and every
+window itself through the helper maintenance installs at
 `.wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs`, tells you the exact
 `tmux attach` command once the windows are up (a worktree pod gets its own session,
-`<session>-<pod name>`, with its own attach command), and which trust dialogs to accept. It
-delivers prompts through the same helper. Maintenance also writes precise allow rules for
-that helper and the Wakeflow MCP tools into the workspace root's `.claude/settings.json`,
-and every window the helper launches or resumes is started with those two tools allowed,
-so product and test windows do not stop at a permission prompt for them either; nothing
-broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow wrote
-therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a `..`
-directory in that list is 0.9.x residue or the repository's own settings: delete or review
-it before accepting, because accepting activates it.
+`<session>-<pod name>`, with its own attach command), and which trust dialogs to accept; it
+delivers prompts through the same helper. Under desktop sessions the Controller opens every
+window as a session in the app's sidebar through the helper installed as `desktop.mjs` in
+the same place and delivers prompts with the app's own session messaging; what only you do:
+sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow
+works, trust each product folder once when the app asks, and pick the `auto` permission
+mode once in each (the app remembers both per folder). Maintenance also writes precise
+allow rules for the published helper and the Wakeflow MCP tools into the workspace root's
+`.claude/settings.json`, and every window the helper launches is started with those two
+tools allowed, so product and test windows do not stop at a permission prompt for them
+either; nothing broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow
+wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a
+`..` directory in that list is 0.9.x residue or the repository's own settings: delete or
+review it before accepting, because accepting activates it.
 
 By default every window the helper launches runs in Claude Code's `auto` permission mode:
 Claude Code reviews routine actions itself instead of asking you. A window may still ask
@@ -158,10 +175,12 @@ Claude Code replaces the installed copy only when the plugin's manifest version
 changed, and every Wakeflow release changes it. Running sessions keep the old hooks and
 MCP server until `/reload-plugins` or a new session, so the Controller's
 `wakeflow_status` then reports `runtime-artifact-outdated` for its own server and
-`windows-stale:<n>` for peer windows started under the previous artifact; the
-Controller refreshes them itself through the tmux helper (its skill section "After a
-plugin update"). Expect `wakeflow_verify` to pass `runtime-artifact` again once no
-window is stale; `unverified` is not a failure.
+`windows-stale:<n>` for peer windows started under the previous artifact. Under the tmux
+transport the Controller refreshes them itself through the tmux helper (its skill section "After a
+plugin update"); under desktop sessions you quit and reopen the Claude desktop app once -
+every session comes back on the updated plugin - and the Controller then verifies and
+reconciles. Expect `wakeflow_verify` to pass `runtime-artifact` again once no window is
+stale; `unverified` is not a failure.
 
 Within the supported workspace baseline an update needs no workspace migration;
 `wakeflow_status` after the update names what is left to do (an outdated server,
@@ -196,10 +215,11 @@ failure on purpose: "we could not check" is never reported as "it is fine".
   publishes), the ledger directory you chose, the Design and Test surfaces it
   manages, and the managed blocks in `CLAUDE.md` and `.gitignore`.
 - Host settings, where the host has them (Claude Code): precise allow rules
-  for its own tools and helper in `.claude/settings.json` at the workspace
-  root and the managed Design and Test surfaces, and the status line entry in
-  `.claude/settings.local.json` in the same three places. Nothing broader, and
-  nothing in a product repository.
+  for its own tools and the published helper (`tmux.mjs` under the tmux
+  transport, `desktop.mjs` under desktop sessions) in `.claude/settings.json`
+  at the workspace root and the managed Design and Test surfaces, and under
+  tmux the status line entry in `.claude/settings.local.json` in the same
+  three places. Nothing broader, and nothing in a product repository.
 - Product repositories are read by Design and changed only by a product
   window doing a delivered task; the managed block appears only where the
   repository opted in; a pod adds the linked checkout described under Install.

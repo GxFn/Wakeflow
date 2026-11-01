@@ -117,18 +117,18 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 14676,
-      "sha256": "sha256:d5f30c5270143108c32bec4e171cc181d4dcddd81a7aaaba2af62a65cfcbccd8"
+      "bytes": 16469,
+      "sha256": "sha256:344509bcba901832f998fc5095235e51dce0450e5d92c2e17876419d9d260579"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 13543,
-      "sha256": "sha256:310e3acccb86735160efa704d191bb82295c3d47053aed40bb19555bac1e8aee"
+      "bytes": 15098,
+      "sha256": "sha256:2fe347c3aa2bbe7f6eeb0ff072b53a109da21e164f2ac1fa823f44d3dbe2f8a3"
     },
     {
       "path": "commands/init.md",
-      "bytes": 2646,
-      "sha256": "sha256:eeb2bea0083bb6ca9f9e7d9ba7aacdef3f5d489c911ae376cd1b46026cd3f850"
+      "bytes": 2999,
+      "sha256": "sha256:cd28815b540ef21910911fe472eb2fe2aa6a5450dbe2dd3adcc64fb72834e670"
     },
     {
       "path": "commands/next.md",
@@ -147,13 +147,18 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13686,
-      "sha256": "sha256:8907550b50f575b86ad66dcd9e8450d4ac08b13f51e84bab1239e17bd5ad2860"
+      "bytes": 14097,
+      "sha256": "sha256:b96b284c9e08c927b9437d1d30e733e87a2592f6077c5496551fa26d47eed19d"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 20955,
-      "sha256": "sha256:9a0a30afc584ca323c8e0c68d9915c20269335278244811011c01d5babf8c800"
+      "bytes": 21875,
+      "sha256": "sha256:1165f581b033a87239ad73453db3a2e6bd50736412f720439590131e3f75525e"
+    },
+    {
+      "path": "skills/wakeflow-controller/references/desktop-transport.md",
+      "bytes": 20130,
+      "sha256": "sha256:3c93f766a0e9df56b614b727d7f4f4579e37145353889000e4e4ff879e6b75f3"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -162,13 +167,13 @@
     },
     {
       "path": "skills/wakeflow-controller/references/first-run.md",
-      "bytes": 7178,
-      "sha256": "sha256:522336e14218270b40989ebc171d1e2cae617ff34ae059b389e1165967791ae8"
+      "bytes": 8234,
+      "sha256": "sha256:ff3e5359204d2fd552b93a6e366916cca7b48a42768e5accd1adddcc1e386076"
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 34530,
-      "sha256": "sha256:6dbb58aeabbb24d5b52b5f5c955bb2e17c2a19aebc4ebd4d13d251aa577febc8"
+      "bytes": 39754,
+      "sha256": "sha256:b984c6a25843818829a2101dbba6bd676194f672af92c789db5686f79c2033b6"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -182,8 +187,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 9801,
-      "sha256": "sha256:2e9a3a02bd3a83e0a587d7859560373371f6df9ad8172eac6aaf559b085b1682"
+      "bytes": 10022,
+      "sha256": "sha256:ff47a4a913f8b0dfba1b44279db8fda7b8609895022245d0032a4561fb339412"
     },
     {
       "path": "skills/wakeflow-target/references/craft.md",
@@ -192,8 +197,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 8800,
-      "sha256": "sha256:c206844fd8b4731dd926fff79167e23c920c70b36ca2502b268412fb7bc301e5"
+      "bytes": 8932,
+      "sha256": "sha256:44fe4a2491360b4bbc6e1e6dfb06f884e839798d43df4accd7d4ae90d84aad75"
     },
     {
       "path": "skills/wakeflow-test/references/test-execution.md",
@@ -225,15 +230,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 14676,
-      "sha256": "sha256:d5f30c5270143108c32bec4e171cc181d4dcddd81a7aaaba2af62a65cfcbccd8",
+      "bytes": 16469,
+      "sha256": "sha256:344509bcba901832f998fc5095235e51dce0450e5d92c2e17876419d9d260579",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 13543,
-      "sha256": "sha256:310e3acccb86735160efa704d191bb82295c3d47053aed40bb19555bac1e8aee",
+      "bytes": 15098,
+      "sha256": "sha256:2fe347c3aa2bbe7f6eeb0ff072b53a109da21e164f2ac1fa823f44d3dbe2f8a3",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -253,8 +258,8 @@
     },
     {
       "path": "commands/init.md",
-      "bytes": 2646,
-      "sha256": "sha256:eeb2bea0083bb6ca9f9e7d9ba7aacdef3f5d489c911ae376cd1b46026cd3f850",
+      "bytes": 2999,
+      "sha256": "sha256:cd28815b540ef21910911fe472eb2fe2aa6a5450dbe2dd3adcc64fb72834e670",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -316,8 +321,8 @@
     },
     {
       "path": "lib/capabilities/delivery/service.js",
-      "bytes": 77973,
-      "sha256": "sha256:8be688abac12018f58d3e8a233f8113f53a4dc0e58262a1e20e49070e18ddc9a",
+      "bytes": 79009,
+      "sha256": "sha256:421bf49d6ab0f12aaf2f6ac892119514a77d808f332eec1c732ee3e5a0db5f58",
       "mode": "0644",
       "scope": "shared"
     },
@@ -372,22 +377,29 @@
     },
     {
       "path": "lib/capabilities/endpoint/contract.js",
-      "bytes": 3396,
-      "sha256": "sha256:77fdf13b500c25b96309795c66ef991f76d34028360fd9ccdfad14f6dbd64547",
+      "bytes": 3413,
+      "sha256": "sha256:5984bc438a468131bc151795674e3a728d4d6110674ba54d9479ece04943e681",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/endpoint/decide.js",
-      "bytes": 7277,
-      "sha256": "sha256:f82e18b0df93220869781e00d0fca8131595323aa35e5aa09be43bbe2468750b",
+      "bytes": 9178,
+      "sha256": "sha256:b264e428112e0887fe92a1ff0704be4df7e9bb065a7a39a07826ef893efc0157",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/capabilities/endpoint/desktop-session-classification.js",
+      "bytes": 995,
+      "sha256": "sha256:163c87fe28189ef8b10b56b5a12113e75e50947a55fbeb7dae95b7b2920ea8e4",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/endpoint/locator-store.js",
-      "bytes": 8896,
-      "sha256": "sha256:8187eaca57879ff54128004eb2a705b1837574f8431077d7ec1f6ef499f00037",
+      "bytes": 10371,
+      "sha256": "sha256:df0a7f64b20a5ab44803c01719481b514f51a691916a91ad5210ca288424a62b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -407,8 +419,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/service.js",
-      "bytes": 47254,
-      "sha256": "sha256:64c6e6a864fa901c0fd666735781ffa194b1bae6b190463b95f1415c702a94a4",
+      "bytes": 49625,
+      "sha256": "sha256:50d7af7c8f0695b887c3a853ceefcbdbc3213690081adfb0a2bea8963595780e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -442,15 +454,15 @@
     },
     {
       "path": "lib/capabilities/observation/decide.js",
-      "bytes": 31382,
-      "sha256": "sha256:9c73c2a53d880a0f77bec3d1903628e85fcd964b88810303adb1d0f1b164fc55",
+      "bytes": 31618,
+      "sha256": "sha256:fc3f23ba4fd4acb32f733336ae71e44dde7e2a00b43f844d9fb1386bac7d7786",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/observation/service.js",
-      "bytes": 58286,
-      "sha256": "sha256:5dc0c2bcc0773d08232b285cf229d76211842f31d412335f2307bf63626c97d7",
+      "bytes": 59574,
+      "sha256": "sha256:bf24aa94dbcdbe10eead2820a9f3df972f26d0782c9bbacd67ba5b9613758287",
       "mode": "0644",
       "scope": "shared"
     },
@@ -470,8 +482,8 @@
     },
     {
       "path": "lib/capabilities/pod/service.js",
-      "bytes": 29893,
-      "sha256": "sha256:57f586065396df994eebc965564ddc9473031523a01e1fc61e2785564a0e3859",
+      "bytes": 30743,
+      "sha256": "sha256:5efceaf25ae487cf9f1423261576e88b5d2c576566c2c30a79d0d9172127feea",
       "mode": "0644",
       "scope": "shared"
     },
@@ -526,8 +538,8 @@
     },
     {
       "path": "lib/capabilities/result-review/service.js",
-      "bytes": 71563,
-      "sha256": "sha256:f91906e57c19c77a4d1750efb22367287cc08bcdb955a3f6ac54ac75fb5e488b",
+      "bytes": 72225,
+      "sha256": "sha256:aaf9a71d2ac864eda370404a8e94e33e75c046c517be2d3cc5e698e3138d93f6",
       "mode": "0644",
       "scope": "shared"
     },
@@ -554,8 +566,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 43166,
-      "sha256": "sha256:d3fa75bb5044346c0cfe5327de45221af45ae669728ba526e0d2f11b970d094e",
+      "bytes": 46989,
+      "sha256": "sha256:a0c9da7f39a9167a53664fd9bc3c9a4375b02ab1327a476cfc788d82be7dce17",
       "mode": "0644",
       "scope": "shared"
     },
@@ -603,8 +615,8 @@
     },
     {
       "path": "lib/configuration/wakeflow-config-document.js",
-      "bytes": 6501,
-      "sha256": "sha256:2ced1b47fe0c26621bda383812589f80b61345e79a13e6eb1c4fe0c38fce9a1d",
+      "bytes": 6592,
+      "sha256": "sha256:7cd357ee5773ab44d422ac90c3db2b67f56e419cc1a98c78934a41eac6c760c3",
       "mode": "0644",
       "scope": "shared"
     },
@@ -638,8 +650,8 @@
     },
     {
       "path": "lib/contracts/generated/configuration/wakeflow-config.generated.js",
-      "bytes": 34891,
-      "sha256": "sha256:cae36df240c9638808c4c4ec383c08b1532c96509a6af34aa708e9a052e0ecd9",
+      "bytes": 35435,
+      "sha256": "sha256:75c5b407a9cc7efd2d46076bd2b8ae2db970d8069cbeeece13cbbf11522b1195",
       "mode": "0644",
       "scope": "shared"
     },
@@ -729,8 +741,8 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js",
-      "bytes": 16663,
-      "sha256": "sha256:e4c9e587e8084d74c6aacfa2a22e480b81eea4c87b5582ab5517b4366ffa4018",
+      "bytes": 17137,
+      "sha256": "sha256:ca72ad5adaaeedc8ea7551c095fb7e01e4c6c45d18498827bf3a89e3d3dca9df",
       "mode": "0644",
       "scope": "shared"
     },
@@ -834,8 +846,8 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-status-result.generated.js",
-      "bytes": 34100,
-      "sha256": "sha256:3b16f6a3f2b084a274d35c79f42fefa7b4f18f430459896d945ef13d848908a3",
+      "bytes": 34161,
+      "sha256": "sha256:138533ad391ad96958fd0148331bd9d2168d153775b6b7665cba802b40514b02",
       "mode": "0644",
       "scope": "shared"
     },
@@ -911,15 +923,15 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-request.generated.js",
-      "bytes": 9822,
-      "sha256": "sha256:d844ceda7942a2725385f833d9dfbf547bac8ad3836dd3b884ea867a2ab0aaff",
+      "bytes": 11330,
+      "sha256": "sha256:10f4ff5a1c7b016237e20ac77f8ae73952793b23831011f1334c7d0be3cd35bc",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js",
-      "bytes": 10371,
-      "sha256": "sha256:5d6825cf560e75f4cd75de1c259efc26f2a5ffe478d4cdc9393698afe4190398",
+      "bytes": 10461,
+      "sha256": "sha256:01f417fc0bd6c12f44169eabb8f0ffb72f6a7c7d95df8d2a8452fae4d8eafa8a",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1380,15 +1392,15 @@
     },
     {
       "path": "lib/entrypoints/claude-code-wakeflow-maintenance.js",
-      "bytes": 2003,
-      "sha256": "sha256:affdf2e3a6a13c13020c5222a2eff55c33a1e3bc26320e9ab4264a5c8d514cff",
+      "bytes": 2226,
+      "sha256": "sha256:d77d9e705c2325457a0f9d3397c46e494b6cd9630255190364e488062fcf32a3",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/entrypoints/claude-code-wakeflow-mcp.js",
-      "bytes": 7868,
-      "sha256": "sha256:f459c0b2d84d0066763eeb622270e48e84968a24a1fd1b21778335144a25401e",
+      "bytes": 9373,
+      "sha256": "sha256:35f6b352c2c5c95a9b2e876c6cc681337416ff0a46d7db3a18591e45830b5d9e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2500,8 +2512,8 @@
     },
     {
       "path": "lib/governance/observation/workspace-observation.js",
-      "bytes": 34642,
-      "sha256": "sha256:77417407bfa39f8efb8ad22a96c8fbf138a46d78fee0916d298b4c03d4f07589",
+      "bytes": 35933,
+      "sha256": "sha256:6b9e065da9c8730dd541cb34f28ba780d79fb4b0ee0a57fac332a581082b43e3",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2639,6 +2651,20 @@
       "scope": "shared"
     },
     {
+      "path": "lib/hosts/claude-code/claude-code-desktop-asset-operation.js",
+      "bytes": 2188,
+      "sha256": "sha256:b29dfcafa2f05af0d3a4417e42280a20fa26bd197ece2dab099d7c35b2bec671",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/claude-code-desktop-asset.js",
+      "bytes": 54473,
+      "sha256": "sha256:a84fac19a6046926288c6c650df103df3052fe86f00d31f0f344df27d33985df",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
       "path": "lib/hosts/claude-code/claude-code-host-asset-operation.js",
       "bytes": 7197,
       "sha256": "sha256:cfe2c4ec7bd56c843a2bbd6604eb8bb986e2f838f181dcbf249de35ebf30957f",
@@ -2647,8 +2673,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-maintenance-capability.js",
-      "bytes": 18085,
-      "sha256": "sha256:b1591d5400dfcfed2490dea82a4ec36bb79934f7cd3d6014dcc02644c0ac5510",
+      "bytes": 21727,
+      "sha256": "sha256:80e52043c5b2c0b1ff0b4fd28dcebcde4f62c1ccc3fa4348662ad9a12e2c75e9",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2668,15 +2694,15 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-portable-settings-composition.js",
-      "bytes": 16283,
-      "sha256": "sha256:fdef684b50fc81f82f08215c71856f002360e6a1221853a2fee01cf03a8a0365",
+      "bytes": 17011,
+      "sha256": "sha256:59a3dc696f992902a2e5dfafa6c5f8b80a5305fa359490133aaf1a516407a0a6",
       "mode": "0644",
       "scope": "current-host"
     },
     {
       "path": "lib/hosts/claude-code/claude-code-portable-settings-operation-executor.js",
-      "bytes": 16602,
-      "sha256": "sha256:650d3a9da662ea905c7e56df0e6aec38390bbb78467cd3ae993eee2d5896e43b",
+      "bytes": 17301,
+      "sha256": "sha256:2b0d33530221d790f0a09f14accf761207e69f08fbbd8ae00a9414f38a17cdbd",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2689,8 +2715,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-portable-settings-transition.js",
-      "bytes": 13771,
-      "sha256": "sha256:d8813f34fe4b311447f2a324fa12c6fe1b8b3cbd00fad4b7faceb3c564775e08",
+      "bytes": 16138,
+      "sha256": "sha256:b0e6f4a7d2ab9a77d87e13815287b95c5316f3aa73f67a442b851aa67a0def65",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2738,15 +2764,15 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-window-launch-instructions.js",
-      "bytes": 5644,
-      "sha256": "sha256:602d41587da6375d09db622ba874c04c28d7025f76644f8569b9c3b5ea832779",
+      "bytes": 8415,
+      "sha256": "sha256:2eb4e0ac52416840adb48f2105976981fca0f33920bbdfeed8e5c1e29949e746",
       "mode": "0644",
       "scope": "current-host"
     },
     {
       "path": "lib/hosts/claude-code/wakeflow-workspace-host-resource-profile.js",
-      "bytes": 1965,
-      "sha256": "sha256:ebd73abec2162fa65704f283abf53ce2663f40a0e6e9cef265a5f3b4d97f46df",
+      "bytes": 3676,
+      "sha256": "sha256:0126224396ea663cc3b3548cd3e652b03e2ee03f9e0d7fc4de55b097aa0697a9",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2759,8 +2785,8 @@
     },
     {
       "path": "lib/hosts/codex/wakeflow-workspace-host-resource-profile.js",
-      "bytes": 1189,
-      "sha256": "sha256:cd58032567e8e593ef7d387bdea98bfe58c953ccdced3940473dabf00b5852f1",
+      "bytes": 1191,
+      "sha256": "sha256:83e8c18bd43b8c3b3fbaf1c769e2635215b41c0456f265fcbd6300eb3df799b9",
       "mode": "0644",
       "scope": "peer-profile"
     },
@@ -2836,8 +2862,8 @@
     },
     {
       "path": "lib/kernel/legacy-error-families.js",
-      "bytes": 14193,
-      "sha256": "sha256:d8ad35bd16861ff67b1d2510f780aeadadf0bea2accb81a3e4edbae96e95241b",
+      "bytes": 14257,
+      "sha256": "sha256:bff19814359c3b88209bf9ca662f029777bc8facc7a5565f0819b127132b2063",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2948,8 +2974,8 @@
     },
     {
       "path": "lib/workspace/host-runtime/wakeflow-host-capability-layout-authority.js",
-      "bytes": 3014,
-      "sha256": "sha256:d14a1ce6d09a4ea2094a067862294e0809f6db7d2d55fc3d54051195a294a381",
+      "bytes": 3016,
+      "sha256": "sha256:1d9f98d8db151dfa2bb446984e18737187207cd22b9e9e3683fae25bc9a95b2d",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2957,6 +2983,13 @@
       "path": "lib/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js",
       "bytes": 16012,
       "sha256": "sha256:8db2d0c181b6ef0f0d2db500bb26f9fab47ea184da269b5c63aeb5911ef5255f",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/workspace/host-runtime/wakeflow-host-window-transport.js",
+      "bytes": 1757,
+      "sha256": "sha256:6784875fc70c0850b233c7f30b635e888b9914ca9134cfc89ec338bdd28e7d3e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3417,15 +3450,15 @@
     },
     {
       "path": "lib/workspace/workspace-host-resource-catalog.js",
-      "bytes": 8115,
-      "sha256": "sha256:ba91e13b496133a0ff8d0d0ea761f5da2fe763317b286c91460611f46359ee76",
+      "bytes": 8129,
+      "sha256": "sha256:63376143dfc3d394c41abcba5d8f3fdef01c4563c865594c4310ebc2e6b88730",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/workspace-host-resource-profile.js",
-      "bytes": 10620,
-      "sha256": "sha256:7e3f4ef869ae9d868c766c18f88685dbbcecf8f1ec47e669cd8f6c165da7f7ad",
+      "bytes": 11711,
+      "sha256": "sha256:8a903d313cc968b20e78c732648b915e166a8ce99ff02d61301d3bcbe05e6d47",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6812,15 +6845,22 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 13686,
-      "sha256": "sha256:8907550b50f575b86ad66dcd9e8450d4ac08b13f51e84bab1239e17bd5ad2860",
+      "bytes": 14097,
+      "sha256": "sha256:b96b284c9e08c927b9437d1d30e733e87a2592f6077c5496551fa26d47eed19d",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 20955,
-      "sha256": "sha256:9a0a30afc584ca323c8e0c68d9915c20269335278244811011c01d5babf8c800",
+      "bytes": 21875,
+      "sha256": "sha256:1165f581b033a87239ad73453db3a2e6bd50736412f720439590131e3f75525e",
+      "mode": "0644",
+      "scope": "agent-text"
+    },
+    {
+      "path": "skills/wakeflow-controller/references/desktop-transport.md",
+      "bytes": 20130,
+      "sha256": "sha256:3c93f766a0e9df56b614b727d7f4f4579e37145353889000e4e4ff879e6b75f3",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6833,15 +6873,15 @@
     },
     {
       "path": "skills/wakeflow-controller/references/first-run.md",
-      "bytes": 7178,
-      "sha256": "sha256:522336e14218270b40989ebc171d1e2cae617ff34ae059b389e1165967791ae8",
+      "bytes": 8234,
+      "sha256": "sha256:ff3e5359204d2fd552b93a6e366916cca7b48a42768e5accd1adddcc1e386076",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 34530,
-      "sha256": "sha256:6dbb58aeabbb24d5b52b5f5c955bb2e17c2a19aebc4ebd4d13d251aa577febc8",
+      "bytes": 39754,
+      "sha256": "sha256:b984c6a25843818829a2101dbba6bd676194f672af92c789db5686f79c2033b6",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6861,8 +6901,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 9801,
-      "sha256": "sha256:2e9a3a02bd3a83e0a587d7859560373371f6df9ad8172eac6aaf559b085b1682",
+      "bytes": 10022,
+      "sha256": "sha256:ff47a4a913f8b0dfba1b44279db8fda7b8609895022245d0032a4561fb339412",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6875,8 +6915,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 8800,
-      "sha256": "sha256:c206844fd8b4731dd926fff79167e23c920c70b36ca2502b268412fb7bc301e5",
+      "bytes": 8932,
+      "sha256": "sha256:44fe4a2491360b4bbc6e1e6dfb06f884e839798d43df4accd7d4ae90d84aad75",
       "mode": "0644",
       "scope": "agent-text"
     },

@@ -42,7 +42,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     }
     // 定位器目录 `identity/window-locators` 不进 capability 布局：它在 identity 下（窗口运行时发布对 identity
     // 的子项有精确断言），由 locator store 在第一次登记时创建；目录声明只作资源清单（复审 J5）。
-    if (profile.surfaces.statuslineAsset !== null || profile.surfaces.tmuxAsset !== null) {
+    if (profile.surfaces.statuslineAsset !== null || profile.surfaces.helperAsset !== null) {
         declarationIds.push(`${prefix}.statusline-assets-root`);
     }
     const catalog = createWakeflowWorkspaceHostResourceCatalog(profile);

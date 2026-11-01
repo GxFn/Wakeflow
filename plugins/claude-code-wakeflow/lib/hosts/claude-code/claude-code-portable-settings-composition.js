@@ -7,7 +7,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { isWakeflowDetachAction, WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS, } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
-import { claudeCodePortableSettingsRemovedRulesFor, claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
+import { ClaudeCodePortableSettingsTransitionError, claudeCodePortableSettingsPublicationOwnerOf, claudeCodePortableSettingsRemovedRulesFor, claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings composition input is invalid.",
     config: "Claude portable settings composition Config is invalid.",
@@ -78,6 +78,15 @@ function parseRequest(value) {
     if (profile.hostId !== "claude-code" ||
         profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
         fail("profile", "$/profile");
+    }
+    // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
+    try {
+        claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
+    }
+    catch (error) {
+        if (error instanceof ClaudeCodePortableSettingsTransitionError)
+            fail("profile", "$/profile");
+        throw error;
     }
     return Object.freeze({
         action: record.action,
@@ -237,8 +246,10 @@ function signalOptions(signal) {
 /** 写入动作的一个根：程序根直接读；支撑面缺根时按动作决定计划 create 还是报 `support-root-missing`。 */
 async function planPublicationRoot(context, root) {
     const { request, authority, plan } = context;
-    const rules = claudeCodePortableSettingsRulesFor(root);
-    const retiredRules = claudeCodePortableSettingsRetiredRulesFor(root);
+    // 工作区根的助手规则随选出的 profile（ADR-0025 D6）：tmux 传输放行 tmux 助手，桌面传输放行桌面助手。
+    const owner = claudeCodePortableSettingsPublicationOwnerOf(root, request.profile);
+    const rules = claudeCodePortableSettingsRulesFor(owner);
+    const retiredRules = claudeCodePortableSettingsRetiredRulesFor(owner);
     const options = { rules, retiredRules, ...signalOptions(request.signal) };
     let placementStatus;
     let inspection;

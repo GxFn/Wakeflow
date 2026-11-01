@@ -7,7 +7,7 @@ import { fail } from "../../kernel/error.js";
  * Wakeflow Capabilities / Endpoint：`wakeflow_register_window_binding` 的公共合同（能力卡 2）。
  *
  * 一个工具六种操作：inspect、register、replace、relocate、decommission、release-claim。请求与
- * 结果都由 wire Schema 准入；原始句柄、tmux 坐标与工作区路径永不出现在结果里。
+ * 结果都由 wire Schema 准入；原始句柄、tmux 坐标、桌面会话 id 与工作区路径永不出现在结果里。
  */
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME = "wakeflow_register_window_binding";
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION = 1;
@@ -43,7 +43,7 @@ export const WINDOW_BINDING_TOOL_REGISTRATION = Object.freeze({
     shape: "append",
     executor: "registerWindowHostBinding",
     title: "Register Wakeflow Window Binding",
-    description: "Manage one logical window's execution endpoint. inspect returns the recomputed launch intent with binding, claim and locator state; register binds the observed handle (a SessionStart hook record is required; Claude Code also supplies tmux coordinates); replace binds a new handle with CAS on the old binding; relocate keeps the binding and records a resumed session's new tmux pane; decommission retires the window with pre-close, close-result and post-close evidence; release-claim force-releases an expired or orphaned work claim. Wakeflow never creates, inspects, or closes host windows; raw handles never leave the private binding file.",
+    description: "Manage one logical window's execution endpoint. inspect returns the recomputed launch intent with binding, claim and locator state; register binds the observed handle (a SessionStart hook record is required; Claude Code also supplies tmux coordinates or the desktop session id); replace binds a new handle with CAS on the old binding; relocate records a resumed session's new tmux pane; decommission retires the window with pre-close, close-result and post-close evidence; release-claim releases an expired or orphaned work claim. Wakeflow never creates, inspects, or closes host windows; raw handles never leave the private binding file.",
     requestSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
     annotations: {

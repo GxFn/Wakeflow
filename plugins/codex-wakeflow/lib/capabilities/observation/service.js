@@ -12,13 +12,14 @@ import { inspectLedgerAuthorityLayout } from "../../governance/ledger/ledger-aut
 import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
 import { observeProjectionTargets, unmergedAcceptedFacts, } from "../../governance/observation/active-projection-facts.js";
 import { describeDemandArchive, locateLatestDemandArchive, } from "../../governance/observation/demand-archive-locator.js";
-import { deriveOverallStatus, observeWorkspace, orphanWorkClaims, } from "../../governance/observation/workspace-observation.js";
+import { deriveOverallStatus, observeWorkspace, orphanWorkClaims, selectObservationHostAssets, } from "../../governance/observation/workspace-observation.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
+import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { readWakeflowMaintenanceJournalOrNull, WakeflowMaintenanceJournalStoreError, } from "../../workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
@@ -171,8 +172,29 @@ async function observeMaintenance(root, signal) {
         });
     }
 }
-async function openContext(root, facade, options) {
+/**
+ * ADR-0025 D1、D6：观察准入时每个宿主条目按工作区配置选出 profile 与资产期望，交给观察的条目不再带传输表；
+ * 之后的观察与投影只读选出的值。没有传输表的条目原样通过。
+ */
+function selectObservationHosts(hosts, model) {
+    return Object.freeze(hosts.map((host) => {
+        if (host.transports === undefined)
+            return host;
+        const { transports: _transports, transportAssets, ...rest } = host;
+        return Object.freeze({
+            ...rest,
+            resourceProfile: selectWakeflowWorkspaceHostResourceProfile(host, model),
+            statuslineAsset: selectObservationHostAssets(configuredWakeflowWorkspaceHostTransport(host, model), host.statuslineAsset, transportAssets),
+        });
+    }));
+}
+async function openContext(root, hostFacade, options) {
     const { snapshot, detached } = await readSnapshot(root, options.signal);
+    // ADR-0025 D1：多传输宿主按这个工作区配置的窗口传输选出 profile 与资产期望；此后本上下文只读选出的那份。
+    const facade = Object.freeze({
+        ...hostFacade,
+        hosts: selectObservationHosts(hostFacade.hosts, snapshot.model),
+    });
     const ledgerRoot = await openLedgerRoot(root, snapshot);
     try {
         const observation = await observeWorkspace(root, snapshot, ledgerRoot, {

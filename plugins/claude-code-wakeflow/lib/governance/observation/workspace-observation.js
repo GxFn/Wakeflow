@@ -30,6 +30,19 @@ import { readDemandResultReviewSnapshot, } from "../review/demand-result-review-
 import { observeArchivedDemands, } from "./archived-demand-observation.js";
 import { WAKEFLOW_OBSERVATION_POLICY, } from "./observation-policy.js";
 import { observeRepositoryPointers, } from "./repository-pointer-observation.js";
+/**
+ * 按能力切片准入时选出的传输键取资产期望（ADR-0025 D6）：键为 null（没有传输表的宿主）用它唯一的一份；
+ * 有表的宿主必须在 `transportAssets` 里给出每个传输的期望，缺键是组合根的合同违背。这里只按键索引，
+ * 不认识键的含义；键由切片经共享选择函数从配置得出。
+ */
+export function selectObservationHostAssets(transport, assets, transportAssets) {
+    if (transport === null)
+        return assets ?? null;
+    if (transportAssets === undefined || !Object.hasOwn(transportAssets, transport)) {
+        fail("unexpected", "host-facade", "$facade.transportAssets");
+    }
+    return transportAssets[transport] ?? null;
+}
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 /** Bound the session aggregate independently of the number of records scanned. */
 const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
@@ -525,7 +538,8 @@ export async function observeHostAssetState(root, hostId, assets, signal) {
     return observeHostAsset(root, { hostId, statuslineAsset: assets }, hostId, signal);
 }
 async function observeHostAsset(root, host, currentHostId, signal) {
-    if (host.statuslineAsset === null || host.hostId !== currentHostId) {
+    const expected = host.statuslineAsset ?? null;
+    if (expected === null || host.hostId !== currentHostId) {
         return Object.freeze({
             hostId: host.hostId,
             status: "not-applicable",
@@ -534,14 +548,20 @@ async function observeHostAsset(root, host, currentHostId, signal) {
             issue: null,
         });
     }
-    const asset = await observeAssetFile(root, host, host.statuslineAsset, signal);
-    const settings = await observeSettingsEntry(root, host.statuslineAsset.settings, signal);
-    let status = asset.status;
-    let issue = asset.issue;
+    // 没有状态栏的传输（ADR-0025 D6）：设置条目不适用，整票由伴随的助手决定。
+    let status = "current";
+    let issue = null;
+    let settings = "not-applicable";
+    if (expected.statusline !== null) {
+        const asset = await observeAssetFile(root, host, expected.statusline, signal);
+        settings = await observeSettingsEntry(root, expected.statusline.settings, signal);
+        status = asset.status;
+        issue = asset.issue;
+    }
     let companion = null;
     // 状态栏资产先判；它 current 时再按声明顺序看伴随资产，第一份不 current 的决定整票（§13.117 D4）。
     if (status === "current") {
-        for (const entry of host.statuslineAsset.companions) {
+        for (const entry of expected.companions) {
             const observed = await observeAssetFile(root, host, entry, signal);
             if (observed.status === "current")
                 continue;
@@ -669,6 +689,10 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
     const projections = [];
     const assets = [];
     if (scope === "full") {
+        // 多传输宿主的 profile 与资产期望由能力切片准入时选出（ADR-0025 D1）；仍带传输表的条目是合同违背。
+        if (options.hosts.some((host) => host.transports !== undefined)) {
+            fail("unexpected", "host-facade", "$options.hosts");
+        }
         for (const host of options.hosts) {
             bindings.push(await observeHostBindings(root, snapshot, host, signal));
             hooks.push(await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal));

@@ -29,9 +29,11 @@ import { compileWakeflowWindowRuntimeDesiredTopology, } from "../../workspace/wi
 import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRef, wakeflowWindowHostBindingRootRef, } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
-import { parseWakeflowWorkspaceHostResourceProfile, } from "../../workspace/workspace-host-resource-profile.js";
+import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import { parseWakeflowWorkspaceHostResourceProfile, wakeflowWorkspaceHostLocatorProvider, } from "../../workspace/workspace-host-resource-profile.js";
 import { admitWindowBindingResult, parseWindowBindingRequest, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { decideEndpointCommand, rejectForeignHandleOwner, } from "./decide.js";
+import { classifyDesktopSessions, } from "./desktop-session-classification.js";
 import { createWindowLocatorRecord, readWindowLocator, retireWindowLocator, toTmuxLocator, writeWindowLocator, } from "./locator-store.js";
 import { classifyTmuxPanes } from "./pane-classification.js";
 import { deriveEndpointNext, publishProjectionDocument, } from "./projection.js";
@@ -57,6 +59,8 @@ function admitFacade(facade) {
         return Object.freeze({
             hostId,
             resourceProfile,
+            // 传输表随门面进来（ADR-0025 D1）：openContext 按配置从它选出本工作区的 profile。
+            ...(facade.transports === undefined ? {} : { transports: facade.transports }),
             identityProfile,
             renderLaunchInstructions: facade.renderLaunchInstructions,
         });
@@ -68,9 +72,9 @@ function admitFacade(facade) {
         throw error;
     }
 }
-/** 定位器提供者取自宿主资源 Profile 的 windowLocator 表面，而不是比较宿主 id。 */
+/** 定位器提供者由宿主资源 Profile 的启动模板推导（ADR-0025 D2），而不是比较宿主 id 或传输名。 */
 function locatorProvider(facade) {
-    return facade.resourceProfile.surfaces.windowLocator ? "tmux" : "none";
+    return wakeflowWorkspaceHostLocatorProvider(facade.resourceProfile);
 }
 function bindingDigestOf(binding) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
@@ -105,8 +109,13 @@ async function readConfigSnapshot(root, signal) {
         throw error;
     }
 }
-async function openContext(root, facade, envelope, options) {
+async function openContext(root, hostFacade, envelope, options) {
     const snapshot = await readConfigSnapshot(root, options.signal);
+    // ADR-0025 D1：按这个工作区配置的窗口传输选出 profile；此后本上下文只读选出的那一份。
+    const resourceProfile = selectWakeflowWorkspaceHostResourceProfile(hostFacade, snapshot.model);
+    const facade = resourceProfile === hostFacade.resourceProfile
+        ? hostFacade
+        : Object.freeze({ ...hostFacade, resourceProfile });
     const topology = compileWakeflowWindowRuntimeDesiredTopology(snapshot.model, facade.resourceProfile);
     const intents = compileWakeflowWindowLaunchIntents(snapshot.model, facade.resourceProfile);
     const unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(snapshot.model, facade.resourceProfile);
@@ -291,7 +300,7 @@ async function loadState(context, observation) {
     const worktreeReceipts = await loadWorktreeReceipts(context);
     const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
     const claim = await loadClaim(context, window.windowId);
-    const locator = locatorProvider(context.facade) === "tmux"
+    const locator = locatorProvider(context.facade) !== "none"
         ? await readWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal)
         : null;
     return Object.freeze({
@@ -350,14 +359,25 @@ function admitHandle(context, observation) {
         throw error;
     }
 }
+/** 存活观察按种类分派；观察的种类与定位器的传输不一致（或没有定位器）时是 no-locator：什么也证明不了。 */
 function classifyLiveness(context, loaded, observation) {
     if (observation.kind === "tmux-panes") {
-        if (loaded.locator === null || loaded.binding === null) {
+        if (loaded.locator === null || loaded.binding === null || loaded.locator.provider !== "tmux") {
             return Object.freeze({ kind: "tmux-panes", status: "no-locator" });
         }
         const socketName = context.snapshot.model.hosts?.["claude-code"]?.tmux?.socketName ?? null;
         const status = classifyTmuxPanes(toTmuxLocator(loaded.locator), { bindingId: loaded.binding.bindingId, socketName }, observation.panes);
         return Object.freeze({ kind: "tmux-panes", status });
+    }
+    if (observation.kind === "desktop-sessions") {
+        if (loaded.locator === null ||
+            loaded.binding === null ||
+            loaded.locator.provider !== "desktop") {
+            return Object.freeze({ kind: "desktop-sessions", status: "no-locator" });
+        }
+        // 句柄就是 Claude 会话 id；`claude agents --json` 的行按它匹配，桌面 id 只在定位器里（ADR-0025 D3）。
+        const status = classifyDesktopSessions(loaded.binding.handle.value, observation.sessions);
+        return Object.freeze({ kind: "desktop-sessions", status });
     }
     if (observation.kind === "codex-thread") {
         return Object.freeze({ kind: "codex-thread", status: observation.status });
@@ -369,6 +389,7 @@ function creationCommand(observation) {
         handleValue: observation.handle.value,
         launchIntentDigest: observation.launchIntentDigest,
         hasTmuxCoordinates: observation.tmux !== undefined,
+        hasDesktopSession: observation.desktop !== undefined,
         hasWorktreeObservation: observation.worktree !== undefined,
     });
 }
@@ -545,10 +566,31 @@ async function readBindingSource(context, ref) {
         throw error;
     }
 }
+/** 观察里属于本传输的定位子（ADR-0025 D3）；准入已保证它在场，缺席只会出现在退役路径。 */
+function locatorTarget(provider, observation) {
+    if (provider === "tmux") {
+        return observation.tmux === undefined
+            ? null
+            : {
+                provider: "tmux",
+                tmux: {
+                    socketName: observation.tmux.socketName,
+                    sessionName: observation.tmux.sessionName,
+                    windowId: observation.tmux.windowId,
+                    paneId: observation.tmux.paneId,
+                },
+            };
+    }
+    return observation.desktop === undefined
+        ? null
+        : { provider: "desktop", desktop: { sessionId: observation.desktop.sessionId } };
+}
 async function refreshLocator(context, window, binding, observation) {
-    if (locatorProvider(context.facade) !== "tmux")
+    const provider = locatorProvider(context.facade);
+    if (provider === "none")
         return;
-    if (binding === null || observation?.tmux === undefined) {
+    const target = binding === null || observation === null ? null : locatorTarget(provider, observation);
+    if (binding === null || target === null) {
         await retireWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal);
         return;
     }
@@ -557,13 +599,8 @@ async function refreshLocator(context, window, binding, observation) {
         hostId: context.facade.hostId,
         windowId: binding.windowId,
         bindingId: binding.bindingId,
-        tmux: {
-            socketName: observation.tmux.socketName,
-            sessionName: observation.tmux.sessionName,
-            windowId: observation.tmux.windowId,
-            paneId: observation.tmux.paneId,
-        },
         registeredAt: binding.registeredAt,
+        ...target,
     }), context.signal);
 }
 async function refreshProjection(context, entry, binding) {

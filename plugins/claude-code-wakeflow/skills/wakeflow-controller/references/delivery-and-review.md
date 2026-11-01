@@ -85,7 +85,10 @@ Your three paragraphs are the only part a target reads first, so write them as
 instructions to a competent colleague who has not been in this conversation:
 what to achieve, where to focus, what not to touch. Do not restate the package
 - the target reads it - and do not put an absolute local path or a handle in
-them.
+them. The one host id they carry is under desktop sessions on Claude Code:
+the boundary names your own desktop session id as the callback's
+destination, because the rendered prompt has none
+(`references/desktop-transport.md`, "The callback").
 
 A target is preparable when it is planned; for an implementation target, when
 a rework or a product-defect rework was requested; for a test target, when
@@ -115,8 +118,8 @@ Wakeflow derives the disposition itself:
   claim is retained; the delivery is not resent on a hunch - it waits for the
   landing evidence or for your explicit resolution (below).
 
-On Claude Code the helper's `deliver` output carries that lookup for you as
-`landing`: `observed` with the record id means the prompt was submitted in the
+Under the tmux transport on Claude Code the helper's `deliver` output carries
+that lookup for you as `landing`: `observed` with the record id means the prompt was submitted in the
 bound session and the outcome will be accepted; `pending` means no record
 appeared within the wait after a real send - a late hook, or the wrong or a
 dead window; record the outcome as the helper reported it and let Wakeflow
@@ -128,7 +131,14 @@ ask the user to answer the dialog in that window - never send keys to it
 yourself - then record the outcome as reported and re-arm the delivery. Pass
 the helper's `attempt` through unchanged: on a refusal it carries
 `failure {code, summary}`, the host's own reason, into the outcome record.
-Readback is only screen text and never proves landing.
+Readback is only screen text and never proves landing. Under desktop sessions
+the send is your own `send_message` call: its return value is
+`attempt.sendReturn` with `status: "sent"`, your report of the send
+(`host-send-return`), and the desktop helper's `landing` carries the same
+lookup before you record it - `landed: true` with the record id, or
+`landed: false`; `references/desktop-transport.md` has the steps. A session
+that holds the message behind a permission prompt is waiting for the user,
+not failed.
 
 An indeterminate delivery is not a dead end. When the landing evidence arrives
 later, call `wakeflow_record_delivery_outcome` again with a new idempotency
@@ -139,8 +149,8 @@ Resolving an indeterminate delivery whose evidence never comes: a later
 and once the silence window has passed the refusal also lists
 `landing-silence-exceeded`. That, or a host that shows the window is dead or is
 not the bound session, is the signal to establish where the prompt went before
-you act - on Claude Code the helper's landing lookup and `panes`, on Codex the
-receiving thread. Then record the outcome again with a new idempotency key and
+you act - on Claude Code the helper's landing lookup and `panes` or
+`sessions`, on Codex the receiving thread. Then record the outcome again with a new idempotency key and
 a `resolution`: `{"disposition": "rejected-before-send", "rationale": ...}`
 when the prompt provably never reached the bound session - the claim is
 released and `wakeflow_rearm_delivery` issues a fresh permit, which is the one
@@ -172,19 +182,20 @@ the user that something rewrote the file.
 
 Never resend a prompt by hand because a window "looks idle". Duplicate work in
 a target window is expensive and invisible until the results disagree. After
-a turn was cut between the send and recording its outcome, the helper checks the receiving window's landing record before it sends and refuses with `already-landed`, printing that landing, when the prompt is already there; record or report that landing instead of forcing a second send (`--force` is only for a prompt you have established never reached the window).
+a turn was cut between the send and recording its outcome, check the receiving window's landing record before any second send - the tmux helper's `deliver` does it itself and refuses with `already-landed`, printing that landing; under desktop sessions run the helper's `landing` first - and record or report that landing instead of sending again (tmux `--force` is only for a prompt you have established never reached the window).
 
 A delivered window's turn can also be cut by the host itself - on Claude Code
 an `API Error` line such as "Connection lost mid-response" in the pane - and a
-cut turn does not resume on its own. On Claude Code, when the landing was
-observed, no callback came and the window looks stopped, run the helper's
-`nudge --window <windowId>` once (add `--text <phrase>` to use the workspace
+cut turn does not resume on its own. On Claude Code under the tmux transport,
+when the landing was observed, no callback came and the window looks stopped,
+run the tmux helper's `nudge --window <windowId>` once (add `--text <phrase>` to use the workspace
 language). It pastes one short continue phrase only when that error line is
 the last transcript line above the input box (no later reply, rendered user
 message such as an earlier "Continue.", or other output), the pane is idle and
 the input box is empty; otherwise it reports `not-needed` or `busy` and sends
-nothing. A nudge is not a second delivery - the task
-package is already in that session. If the window stays silent after it,
+nothing. A nudge is not a second delivery - the task package is already in
+that session; under desktop sessions there is no nudge, so tell the user which
+session stopped mid-turn. If the window stays silent after it,
 follow the next action `wakeflow_status` names. When that status shows the
 window's `attention` as `needed`, the window is waiting for the user, not for
 a nudge: tell them what it asks for (a permission, a login, their input).

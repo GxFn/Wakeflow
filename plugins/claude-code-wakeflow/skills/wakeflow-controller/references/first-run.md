@@ -20,10 +20,11 @@ inside the container already.
 ## Before the first tool call
 
 Run the host preflight the windows reference names and read it back. A missing
-or unsupported tool - `node` outside the supported range, or `tmux` or
-`claude` unavailable on Claude Code - is the first thing to tell the user,
-with the one thing to install; do not start the workspace conversation until
-the preflight is clean. The directory must be a Git repository of its own and
+or unsupported tool - `node` outside the supported range, `claude`
+unavailable, or on Claude Code the window transport's own prerequisite
+(`tmux` for tmux panes; the desktop app running and signed in for desktop
+sessions) - is the first thing to tell the user, with the one thing to install
+or open; do not start the workspace conversation until the preflight is clean. The directory must be a Git repository of its own and
 must not be a product repository root; if it is not a repository yet, run
 `git init` there yourself once the user agrees.
 
@@ -49,8 +50,13 @@ user decides; you do not pick silently.
    `hosts.<host>.launch.modelByRole` and `reasoningEffortByRole` (by role or
    `default`), Claude Code's `launch.permissionMode`, and the Claude Code tmux
    session name `hosts.claude-code.tmux.sessionName` (worktree pods open
-   `<name>-<pod name>`). The empty object inherits the tested profile; mention
-   it once and move on unless the user has a preference.
+   `<name>-<pod name>`). On Claude Code `hosts.claude-code.windowTransport` is
+   the window transport: propose the one this session's surroundings support -
+   `desktop` when it has the desktop app's session tools, `tmux` otherwise -
+   say what each means (tmux panes, or sessions in the desktop app's Code
+   tab), and let the user pick; one transport per workspace. The empty object
+   inherits the tested profile; mention it once and move on unless the user
+   has a preference.
 
 Build the `selection` from the tool's input schema - it spells out every part,
 `hosts` included - never from another workspace's config or from plugin files.
@@ -83,7 +89,7 @@ registered but started again.
 ## The handover card
 
 When every window is registered and `wakeflow_status` names
-`requirement-authoring` as the next action: show one card and nothing else: the tmux session name and the one command to get there (the helper's `attach` when the user is outside tmux, its `switch` when they are already inside); the windows in that session, one line each - `Controller` (where they give instructions and ask what is next), `Design` (where a requirement is written with the agent), one window per product repository (where that repository's work happens; it waits for a delivery from the Controller and is never given tasks by hand), `Test` (where the test contract runs); how to move - `Ctrl-b n` next window, `Ctrl-b p` previous, `Ctrl-b s` to pick a session, `Ctrl-b d` to detach while everything keeps running; how to read the window list - a green `+` after a window name means it is working, a red `?` means it is waiting for you, nothing means idle; the hooks write them, a hint and never evidence; long runs - keep the machine awake yourself, Wakeflow runs no background process; what to do first - switch to the Design window and describe the first requirement in plain words, come back to the Controller when Design says the package is published; how to come back later - the same `attach` command, the sessions outlive the terminal; `/wakeflow:status` in the Controller answers "what is next" from then on.
+`requirement-authoring` as the next action: show one card and nothing else, for the transport this workspace uses. Under the tmux transport: the tmux session name and the one command to get there (the helper's `attach` when the user is outside tmux, its `switch` when they are already inside); the windows in that session, one line each - `Controller` (where they give instructions and ask what is next), `Design` (where a requirement is written with the agent), one window per product repository (where that repository's work happens; it waits for a delivery from the Controller and is never given tasks by hand), `Test` (where the test contract runs); how to move - `Ctrl-b n` next window, `Ctrl-b p` previous, `Ctrl-b s` to pick a session, `Ctrl-b d` to detach while everything keeps running; how to read the window list - a green `+` after a window name means it is working, a red `?` means it is waiting for you, nothing means idle; the hooks write them, a hint and never evidence; how to come back later - the same `attach` command, the sessions outlive the terminal. Under desktop sessions: the sessions in the desktop app's sidebar, one line each with the same four roles in the same words, and which of them is the Controller (this setup session is not it and is archived after the card); how to move - click a session in the sidebar; how to read the sidebar - the app's own markers say when a session is working, has unread output or waits for you, no Wakeflow mark is added; how to come back later - open the desktop app's Code tab, the sessions are kept there. On either transport: long runs - keep the machine awake yourself, Wakeflow runs no background process; what to do first - switch to the Design window and describe the first requirement in plain words, come back to the Controller when Design says the package is published; `/wakeflow:status` in the Controller answers "what is next" from then on.
 
 After the card, tell the user to close this setup session. Do not continue the
 main flow from here: from now on the Controller window is the Controller.

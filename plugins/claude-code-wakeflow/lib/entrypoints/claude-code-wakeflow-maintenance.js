@@ -1,13 +1,14 @@
 import { executeWakeflowMaintenancePublicRequest, } from "../capabilities/workspace/maintain-workspace.js";
 import { executeClaudeCodeMaintenanceExecution, previewClaudeCodeMaintenanceExecution, recoverClaudeCodeMaintenanceExecution, } from "../hosts/claude-code/claude-code-maintenance-execution.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { resolveWakeflowArtifactRoot } from "./wakeflow-artifact-identity.js";
 /**
  * Wakeflow Entrypoint / Claude Code：Claude Code 制品的公共 Maintenance composition root。
  *
  * 本入口固定组合 Claude portable settings capability；共享协调器只看单宿主端口，
- * 不知道 `.claude` 文件、权限规则或宿主 operation 的含义。
+ * 不知道 `.claude` 文件、权限规则或宿主 operation 的含义。本宿主的 profile 按窗口传输给表（ADR-0025 D1）：
+ * 协调器按请求对应的配置选出一份，缺省 tmux。
  */
 const CLAUDE_CODE_MAINTENANCE_HOST_PROFILES = Object.freeze([
     codexWorkspaceHostResourceProfile,
@@ -19,6 +20,7 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
     hostId: "claude-code",
     artifactRoot: CLAUDE_CODE_ARTIFACT_ROOT,
     currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
+    transports: claudeCodeWorkspaceHostTransportTable,
     hostProfiles: CLAUDE_CODE_MAINTENANCE_HOST_PROFILES,
     preview: previewClaudeCodeMaintenanceExecution,
     apply: executeClaudeCodeMaintenanceExecution,

@@ -12,11 +12,14 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 - **一个工作区** —— 与产品仓库分开的控制器目录，存放配置、活动状态与持久
   ledger。
 - **四种窗口角色** —— controller、design、test，以及每个仓库一个 product 窗口。
-  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。
+  窗口由 Controller 里的 Agent 替你启动，Wakeflow 只记录哪个是哪个。Claude Code 上
+  窗口住在 tmux 窗格里，或是桌面 app Code 标签里的会话——每个工作区一种窗口传输，
+  第一次使用时选定。
 - **四份技能** —— `wakeflow-controller`、`wakeflow-design`、`wakeflow-target`、
   `wakeflow-test`。每个窗口加载自己角色那一份。
-- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上还在自己的
-  tmux 会话里），用来并行推进两件事而互不干扰。
+- **pod** —— 在自己的 worktree 里运行的第二套完整窗口集（Claude Code 上 tmux 传输时
+  在自己的 tmux 会话里，桌面会话传输时是侧栏里自己的一组会话），用来并行推进两件事
+  而互不干扰。
 
 ## 第一次使用
 
@@ -24,8 +27,9 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    Wakeflow 工作区"。这个会话是引导会话：它问你几个问题（程序名、仓库、账本放
    在哪），预览计划，你点头后应用。
 2. 然后它自己开好全部窗口——Controller、Design、每个产品仓库一个、Test——并在
-   每个只有你能做的点上告诉你那一件事：进入这些窗口的那条命令，以及每个窗口里
-   要接受的信任对话。
+   每个只有你能做的点上告诉你那一件事：Claude Code 上 tmux 传输时是进入这些窗口的
+   那条命令和每个窗口里要接受的信任对话，桌面会话传输时是要信任一次的目录和在那里
+   选一次的 `auto` 权限模式，窗口则出现在 app 的侧栏里。
 3. 最后给你一张交接卡：每个窗口是做什么的、怎么在窗口之间移动、以后怎么回来、
    第一步做什么——去 Design 窗口把第一个需求说清楚。然后关掉引导会话；从此
    Controller 窗口就是 Controller。
@@ -56,7 +60,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 2. 确认 Agent 宿主能启动 `node`：在它启动时所用的 `PATH` 上，或由宿主自带
    （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
-   代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux`；
+   代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux` 或已用
+   订阅登录的 Claude 桌面 app，取决于工作区用哪种窗口传输；
    只支持 macOS 的本地文件系统，不支持 Linux 与 Windows。Claude Code 可以是原生
    二进制，也可以是 npm 安装的 `claude` 脚本，两者都能识别。
 3. 完成下面这一节的一次性宿主动作。
@@ -129,7 +134,8 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
   状态、hook 记录与它发布的宿主资产）、你选的账本目录、它管理的 Design 与 Test
   支撑面，以及 `AGENTS.md` 和 `.gitignore` 里的托管块。
 - 宿主设置（有这种设置的宿主，即 Claude Code）：在工作区根与受管的 Design、Test
-  面的 `.claude/settings.json` 里只放行它自己的工具与助手的精确规则，在同样三处的
+  面的 `.claude/settings.json` 里只放行它自己的工具与所发布助手（tmux 传输下是
+  `tmux.mjs`，桌面会话传输下是 `desktop.mjs`）的精确规则，tmux 传输下还在同样三处的
   `.claude/settings.local.json` 里写状态行条目。不写更宽的规则，也不写进产品仓库。
 - 产品仓库由 Design 只读，只有产品窗口按投递的任务改动它；托管块只出现在明确选择
   的仓库里；pod 会添加"安装"一节说明的关联检出。

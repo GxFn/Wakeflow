@@ -561,6 +561,81 @@ test("Notification 类型是后加的可选键：合文法的标签原样往返�
   );
 });
 
+test("权限模式与会话标题是后加的可选键：原样往返、不参与标识，旧记录没有它们读成 null，不合文法的模式标签以 invalid-request 拒绝（open-items X8）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const at = "2026-09-18T14:00:00.000Z" as UtcInstant;
+  const plain = createHostHookObservation(
+    observation(workspace, at, { event: "user-prompt-submit" }),
+  );
+  const prompt = await writeHostHookObservation(
+    root,
+    observation(workspace, at, {
+      event: "user-prompt-submit",
+      permissionMode: "acceptEdits",
+      sessionTitle: "Alembic · 实现",
+    }),
+  );
+  equal(prompt.record.permissionMode, "acceptEdits");
+  equal(prompt.record.sessionTitle, "Alembic · 实现");
+  equal(prompt.record.recordId, plain.recordId, "模式与标题不参与记录标识");
+  equal(plain.permissionMode, null);
+  equal(plain.sessionTitle, null);
+  // 旧记录：没有这两个键——去掉内核写出的规范文件里的键再放回去，读成 null，标识不变，重试仍是 current。
+  const start = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "session-start" }),
+  );
+  const file = path.join(workspace, start.resourceRef);
+  const rendered = readFileSync(file, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  equal(parsed.permissionMode, null);
+  equal(parsed.sessionTitle, null);
+  delete parsed.permissionMode;
+  delete parsed.sessionTitle;
+  const sorted = Object.fromEntries(
+    Object.entries(parsed).sort(([left], [right]) => (left < right ? -1 : 1)),
+  );
+  writeFileSync(
+    file,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(sorted, null, 2)}\n`
+      : `${JSON.stringify(sorted)}\n`,
+  );
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    Object.fromEntries(
+      inventory.records.map((record) => [
+        record.recordId,
+        [record.permissionMode, record.sessionTitle],
+      ]),
+    ),
+    {
+      [prompt.record.recordId]: ["acceptEdits", "Alembic · 实现"],
+      [start.record.recordId]: [null, null],
+    },
+  );
+  equal(
+    (await writeHostHookObservation(root, observation(workspace, at, { event: "session-start" })))
+      .disposition,
+    "current",
+  );
+  await rejects(
+    writeHostHookObservation(
+      root,
+      observation(workspace, at, { event: "stop", permissionMode: "accept edits" }),
+    ),
+    (error: unknown) => isWakeflowError(error) && error.reason === "hook-permission-mode",
+  );
+  await rejects(
+    writeHostHookObservation(
+      root,
+      observation(workspace, at, { event: "stop", sessionTitle: "line\nbreak" }),
+    ),
+    (error: unknown) => isWakeflowError(error) && error.reason === "hook-text",
+  );
+});
+
 // ---- §13.134 B12：原子暂存残留 --------------------------------------------------------------
 
 const MINUTE = 60 * 1000;

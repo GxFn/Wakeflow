@@ -23,8 +23,8 @@ for the user: {{commandSurface}}
 4. `references/first-run.md` - a fresh workspace only: step 0's
    fresh-initialize and the step 1 after it; never in daily use.
 5. `references/workspace-and-windows.md` - only for workspace maintenance,
-   windows, pods, or refreshing windows after a plugin update; for desktop
-   sessions also `references/desktop-transport.md`.
+   windows, pods, or refreshing windows after a plugin update; when your host
+   has desktop sessions, also `references/desktop-transport.md`.
 6. `references/delivery-and-review.md` - only when planning a task, preparing
    a delivery, or deciding on a returned result.
 7. `references/evidence.md` - only before you record managed evidence.

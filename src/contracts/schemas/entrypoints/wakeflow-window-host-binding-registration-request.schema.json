@@ -258,8 +258,24 @@
           "type": "string",
           "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
+        "desktopSessionId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^local_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ],
+          "description": "The row's `local_` id verbatim."
+        },
         "status": {
           "enum": ["busy", "idle"]
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "The row's `isArchived`."
         },
         "cwd": {
           "oneOf": [
@@ -295,7 +311,7 @@
           ]
         }
       },
-      "description": "One session row of `claude agents --json`; Wakeflow matches the bound session id against the rows, the Agent never judges liveness."
+      "description": "One `list_sessions` row: `sessionId` without the `local_` prefix, `status` busy when `isRunning`. Wakeflow matches the bound session or desktop id; the Agent never judges liveness."
     },
     "livenessObservation": {
       "oneOf": [

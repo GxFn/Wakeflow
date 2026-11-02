@@ -712,9 +712,12 @@ function classifyLiveness(
     ) {
       return Object.freeze({ kind: "desktop-sessions" as const, status: "no-locator" as const });
     }
-    // 句柄就是 Claude 会话 id；`claude agents --json` 的行按它匹配，桌面 id 只在定位器里（ADR-0025 D3）。
+    // 句柄是 Claude 会话 id，定位器里是桌面 id；`list_sessions` 的行按两者之一匹配（ADR-0025 D3，X17）。
     const status = classifyDesktopSessions(
-      loaded.binding.handle.value,
+      {
+        sessionId: loaded.binding.handle.value,
+        desktopSessionId: loaded.locator.desktop.sessionId,
+      },
       observation.sessions as readonly DesktopSessionObservation[],
     );
     return Object.freeze({ kind: "desktop-sessions" as const, status });

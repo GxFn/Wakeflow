@@ -16,6 +16,7 @@ import {
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import type { PortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
   CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
@@ -72,6 +73,10 @@ useDisposableDurability();
  * 照常签发。结局记录不发出许可，不受资产状态影响。期望按配置的传输选出（ADR-0025 D6）：只有助手的期望
  * （桌面传输）不核对状态栏。Codex 没有资产面（facade 不带 assets），
  * service.test.ts 里的 Codex 路径在没有任何资产的树上通过，就是它不受此前置约束的证明。
+ *
+ * 同一份 Claude 投递夹具也覆盖落地时的模式证据（open-items X4）：目标会话的 user-prompt-submit 记录报告的权限模式
+ * 与选出 profile 要求的启动模式不同，处置仍 accepted，结果的 `next.blockers` 多一条
+ * `permission-mode-mismatch:<windowId>`，同键重放照报；模式相同或记录没带模式的判定在 decide.test.ts。
  */
 
 /** tmux 传输的资产期望：状态栏资产、它的设置条目与伴随的 tmux 助手（§13.117 D4）。 */
@@ -449,6 +454,56 @@ test("只有助手的资产期望（桌面传输的形状，ADR-0025 D6）：许
     equal(prepared.status, "committed");
     equal(prepared.permit.hostAction.hostId, "claude-code");
     equal(existsSync(claimPath(fixture)), true);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("落地记录报告的模式与选出 profile 要求的不同（open-items X4）：处置仍 accepted，next.blockers 多一条 permission-mode-mismatch:<windowId>，同键重放照报", async () => {
+  const fixture = await createClaudeDeliveryFixture();
+  try {
+    materializeClaudeAssets(fixture);
+    const prepared = await prepare(fixture);
+    const landed = await writeHostHookObservation(fixture.workspaceRoot, {
+      hostId: "claude-code",
+      event: "user-prompt-submit",
+      sessionId: CLAUDE_SESSION_ID,
+      cwd: fixture.workspacePath,
+      recordedAt: parseUtcInstant("2026-08-29T12:05:30.000Z"),
+      promptDigest: computeDeliveryPromptDigest(prepared.permit.prompt),
+      permissionMode: "default",
+    });
+    const record = () =>
+      executeRecordDeliveryOutcomeRequest(
+        CLAUDE_DELIVERY_FACADE,
+        {
+          root: fixture.workspacePath,
+          demandId: fixture.demandId,
+          idempotencyKey: "claude-outcome-landed",
+          expectedStreamRevision: prepared.event.streamRevision,
+          deliveryId: prepared.delivery.deliveryId,
+          claimDigest: prepared.permit.fence.claimDigest,
+          attempt: { status: "sent" },
+          readback: { status: "pending" },
+          observedAt: OUTCOME_AT,
+        },
+        { durability: DISPOSABLE_WORKSPACE_DURABILITY, clock: () => OUTCOME_AT },
+      );
+    const mismatch = `permission-mode-mismatch:${fixture.windowId}`;
+    const accepted = await record();
+    equal(accepted.status, "recorded");
+    equal(accepted.outcome.disposition, "accepted");
+    equal(accepted.outcome.evidenceKind, "hook-record");
+    equal(accepted.outcome.hookRecordId, landed.record.recordId);
+    equal(accepted.target.phase, "host-effect-accepted");
+    equal(
+      accepted.next.blockers.filter((entry) => entry.startsWith("permission-mode-mismatch")).join(),
+      mismatch,
+    );
+    const replayed = await record();
+    equal(replayed.status, "idempotent");
+    equal(replayed.outcome.outcomeDigest, accepted.outcome.outcomeDigest);
+    equal(replayed.next.blockers.includes(mismatch), true, "the replay rereads the same record");
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

@@ -7,6 +7,7 @@ import {
   executeRearmDeliveryRequest,
   executeRecordDeliveryOutcomeRequest,
 } from "../capabilities/delivery/service.js";
+import { readWindowDesktopSessionId } from "../capabilities/endpoint/locator-store.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
 import { executePodRequest } from "../capabilities/pod/service.js";
@@ -16,6 +17,7 @@ import {
   executeTargetResultReviewInspectionRequest,
   executeTestReviewDecisionRequest,
 } from "../capabilities/result-review/service.js";
+import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import type { ObservationHostAssets } from "../governance/observation/workspace-observation.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
@@ -109,6 +111,13 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
   // F1（ADR-0020）：投递许可签发前核对选出传输的这些资产的字节。
   transportAssets: CLAUDE_CODE_HOST_ASSETS_BY_TRANSPORT,
+  // X15：桌面会话传输下投递 prompt 的回传段由服务端渲染 Controller 的桌面会话 id；tmux 定位器读出 null。
+  readControllerDesktopSessionId: (
+    root: RootedDirectory,
+    windowId: string,
+    bindingId: string,
+    signal: AbortSignal | undefined,
+  ) => readWindowDesktopSessionId(root, "claude-code", windowId, bindingId, signal),
 });
 
 /** pod 读两个宿主的绑定与投影：对端仍握着的窗口登记也阻塞关闭完成（open-items W7）。 */

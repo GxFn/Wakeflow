@@ -620,6 +620,19 @@ function lastObservationOf(
       };
 }
 
+/** 绑定会话在 hook 保留期内有过 user-prompt-submit 记录（open-items W41）；没有绑定或没有记录为 false。 */
+function sessionConversed(
+  observation: Readonly<WorkspaceObservation>,
+  binding: WindowBindingView | null,
+): boolean {
+  if (binding === null) return false;
+  return (
+    observation.hooks
+      .find((entry) => entry.hostId === binding.hostId)
+      ?.latestBySession.get(binding.handleValue)?.conversed === true
+  );
+}
+
 /**
  * 窗口是否在等用户（open-items A7，§13.167；I14）：绑定会话最近一条 hook 记录是 Claude Code 的 Notification
  * （等待权限、登录或用量提示）时为 needed 并带类型；`idle_prompt` 只是空闲一分钟的通知、没有在等任何人，
@@ -927,7 +940,13 @@ function nextActionInput(
       runtime.view.artifactOnDisk === "changed" || runtime.view.artifactOnDisk === "superseded",
     artifactServerSupersededBy: runtime.supersededBy,
     artifactServerRefreshOwner: artifactServerRefreshOwnerOf(context),
-    staleWindows: runtimeWindowIds(context, "stale").length,
+    staleWindows: runtimeWindowIds(context, "stale").map((windowId) => ({
+      windowId,
+      conversed: sessionConversed(
+        context.observation,
+        windowBindingOf(context.observation, windowId),
+      ),
+    })),
     artifactServerUnavailable:
       context.facade.artifact !== undefined &&
       (runtime.view.artifactManifestDigest === null || runtime.view.artifactOnDisk === "unknown"),

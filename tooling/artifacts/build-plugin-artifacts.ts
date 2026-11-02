@@ -76,6 +76,14 @@ const AGENT_TEXT_CHINESE_SUFFIX = ".zh-CN.md";
 const AGENT_TEXT_COMMAND_PREFIX = "commands/";
 const AGENT_TEXT_PLACEHOLDER_PATTERN = /\{\{([A-Za-z]+)\}\}/gu;
 const AGENT_TEXT_ERROR_CODE = "wakeflow-artifact-agent-text";
+/**
+ * 逐宿主文件（open-items X16）：源文件的第一行可以是 `<!-- wakeflow-hosts: claude-code -->`，列出随哪些
+ * 宿主的制品发出（逗号分隔的宿主 id）；构建器把这一行从出厂副本里去掉，并跳过不在列表里的宿主。没有
+ * 标记的文件随两个制品发出。标记只认第一行：写在别处的同名标记是笔误，构建失败而不是静默发错。
+ */
+const AGENT_TEXT_HOSTS_MARKER_PATTERN = /^<!-- wakeflow-hosts: ([a-z-]+(?:, [a-z-]+)*) -->\n/u;
+const AGENT_TEXT_HOSTS_MARKER_TOKEN = "wakeflow-hosts:";
+const AGENT_TEXT_HOST_IDS: readonly PluginHostId[] = Object.freeze(["codex", "claude-code"]);
 
 type CompiledFileScope = "shared" | "current-host" | "peer-profile";
 type LauncherKind = "mcp" | "hook-observer";
@@ -744,7 +752,38 @@ async function hooksJsonBytes(
 interface AgentTextSourceFile {
   readonly path: string;
   readonly language: AgentTextLanguage;
+  /** 去掉宿主标记行之后的正文。 */
   readonly text: string;
+  /** 随哪些宿主的制品发出；没有标记的文件是两个宿主。 */
+  readonly hosts: readonly PluginHostId[];
+}
+
+/** 一份源文本的宿主标记：随哪些宿主发出，以及去掉标记行后的正文。 */
+export interface AgentTextHostMarker {
+  readonly hosts: readonly PluginHostId[];
+  readonly text: string;
+}
+
+/**
+ * 读出源文本第一行的宿主标记（open-items X16）并把它从正文里去掉；没有标记即两个宿主、正文原样。
+ * 未知宿主、重复宿主或出现在第一行之外的标记以稳定错误码失败。导出供回归测试。
+ */
+export function parseAgentTextHostMarker(text: string, sourcePath: string): AgentTextHostMarker {
+  const match = AGENT_TEXT_HOSTS_MARKER_PATTERN.exec(text);
+  const body = match === null ? text : text.slice(match[0].length);
+  if (body.includes(AGENT_TEXT_HOSTS_MARKER_TOKEN)) {
+    fail(
+      AGENT_TEXT_ERROR_CODE,
+      `agent text host marker must be the first line only: ${sourcePath}`,
+    );
+  }
+  if (match === null) return Object.freeze({ hosts: AGENT_TEXT_HOST_IDS, text });
+  const listed = (match[1] ?? "").split(", ");
+  const hosts = AGENT_TEXT_HOST_IDS.filter((hostId) => listed.includes(hostId));
+  if (hosts.length !== listed.length) {
+    fail(AGENT_TEXT_ERROR_CODE, `agent text host marker names an unknown host: ${sourcePath}`);
+  }
+  return Object.freeze({ hosts: Object.freeze(hosts), text: body });
 }
 
 /** 某个占位符在源目录里被哪几种语言的文件用到；两面都要有用户，否则取值是死的。 */
@@ -783,11 +822,16 @@ function collectAgentTextSources(root: string): readonly Readonly<AgentTextSourc
       }
       const absolute = path.join(root, relative);
       assertBelow(root, absolute, "wakeflow-artifact-agent-text-scope");
+      const marker = parseAgentTextHostMarker(
+        readBoundedRegularFile(absolute).toString("utf8"),
+        relative,
+      );
       files.push(
         Object.freeze({
           path: relative,
           language: entry.name.endsWith(AGENT_TEXT_CHINESE_SUFFIX) ? "zh" : "en",
-          text: readBoundedRegularFile(absolute).toString("utf8"),
+          text: marker.text,
+          hosts: marker.hosts,
         }),
       );
     }
@@ -896,7 +940,8 @@ function renderAgentTextFiles(
 
 /**
  * 整棵源目录按该宿主的取值表渲染（§13.99 D3、D9）：一次封闭替换，`commands/` 只进声明了
- * 命令面的制品。渲染字节只由源文本与取值表决定，所以两次构建字节一致。
+ * 命令面的制品，第一行标记了宿主的文件只进它列出的宿主的制品（X16）。渲染字节只由源文本与取值表
+ * 决定，所以两次构建字节一致。
  */
 async function agentTextFiles(
   repositoryRoot: string,
@@ -905,7 +950,10 @@ async function agentTextFiles(
 ): Promise<readonly Readonly<AgentTextRenderedFile>[]> {
   const root = path.join(repositoryRoot, AGENT_TEXT_SOURCE_ROOT);
   assertRealDirectory(root, AGENT_TEXT_SOURCE_ROOT);
-  const sources = collectAgentTextSources(root);
+  // 逐宿主文件（X16）：只渲染随本宿主发出的源；占位符闭合也只按本宿主发出的文件核对。
+  const sources = collectAgentTextSources(root).filter((source) =>
+    source.hosts.includes(definition.hostId),
+  );
   const namespace = await importCompiledHostModule(
     compiledRoot,
     definition.agentText.module,

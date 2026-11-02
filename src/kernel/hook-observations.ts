@@ -120,6 +120,18 @@ export interface HostHookObservation {
    * 阻塞状态只记类型标签，不记消息文本；其他事件与早于本字段的记录读成 null。
    */
   readonly notificationType: string | null;
+  /**
+   * 宿主 hook 输入的通用字段 `permission_mode`（open-items X8）：会话在这一事件时的权限模式标签（Claude Code 的
+   * `default`、`plan`、`acceptEdits`、`auto`、`dontAsk`、`bypassPermissions`；界面上的 Manual 到这里是 `default`）。
+   * 不是每个事件都带它（UserPromptSubmit 带，SessionStart 的示例不带）；没带、宿主不报（Codex）与早于本字段的
+   * 记录读成 null。内核只核对标签文法，不维护取值表：新模式词不会被降级成 null。
+   */
+  readonly permissionMode: string | null;
+  /**
+   * 宿主 hook 输入的 `session_title`（open-items X8）：会话有名字时 SessionStart 与 UserPromptSubmit 带它，让窗口
+   * 标题有记录可核对而不是读屏；没带与早于本字段的记录读成 null。只在私有记录里出现。
+   */
+  readonly sessionTitle: string | null;
 }
 
 export interface HostHookObservationInput {
@@ -135,6 +147,8 @@ export interface HostHookObservationInput {
   readonly artifactManifestDigest?: Sha256Digest | null;
   readonly artifactVersion?: string | null;
   readonly notificationType?: string | null;
+  readonly permissionMode?: string | null;
+  readonly sessionTitle?: string | null;
 }
 
 export interface HostHookObservationFilter {
@@ -169,6 +183,8 @@ const RECORD_KIND = "WakeflowHostHookObservation";
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
 /** Notification 类型标签：Claude Code 的 `permission_prompt`、`idle_prompt` 一类 snake_case 词（§13.167）。 */
 const NOTIFICATION_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
+/** 权限模式标签：`acceptEdits`、`bypassPermissions` 一类 camelCase 词（open-items X8），与通知类型同一文法。 */
+const PERMISSION_MODE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const CWD_MAXIMUM_LENGTH = 4096;
 
 function hasControlCharacter(text: string): boolean {
@@ -213,11 +229,13 @@ const RECORD_KEYS = Object.freeze([
   "lastAssistantMessageDigest",
   "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6）。 */
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6、open-items X8）。 */
 const OPTIONAL_RECORD_KEYS = Object.freeze([
   "artifactManifestDigest",
   "artifactVersion",
   "notificationType",
+  "permissionMode",
+  "sessionTitle",
 ]);
 
 /**
@@ -268,6 +286,14 @@ function optionalNotificationType(value: unknown, path: string): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string" || !NOTIFICATION_TYPE_PATTERN.test(value)) {
     fail("invalid-request", "hook-notification-type", path);
+  }
+  return value;
+}
+
+function optionalPermissionMode(value: unknown, path: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string" || !PERMISSION_MODE_PATTERN.test(value)) {
+    fail("invalid-request", "hook-permission-mode", path);
   }
   return value;
 }
@@ -373,6 +399,8 @@ export function createHostHookObservation(
       input.notificationType,
       "$observation.notificationType",
     ),
+    permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
+    sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
   };
   return Object.freeze({
     kind: RECORD_KIND,
@@ -411,6 +439,8 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     artifactManifestDigest: (object.artifactManifestDigest ?? null) as Sha256Digest | null,
     artifactVersion: (object.artifactVersion ?? null) as string | null,
     notificationType: (object.notificationType ?? null) as string | null,
+    permissionMode: (object.permissionMode ?? null) as string | null,
+    sessionTitle: (object.sessionTitle ?? null) as string | null,
   });
   if (record.recordId !== object.recordId) {
     fail("invalid-request", "hook-record-id", "$record.recordId");

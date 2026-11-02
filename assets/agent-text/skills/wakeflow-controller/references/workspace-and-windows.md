@@ -25,55 +25,55 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
 
 `wakeflow_maintain_workspace` runs one transaction in one of five intents:
 
-- **fresh-initialize** - a new workspace in an empty or non-workspace
-  directory that is itself a Git repository (when it is not, run `git init`
-  there yourself once the user agrees; the preview reports
-  `gitignore-git-repository` until it is). The `selection` you send has six
-  parts: `program` (identity and display), `presentation` (language),
-  `topology` (repositories with their `instructionManagement`, support
-  surfaces, windows), `storage` (ledger root), `governance`, `hosts` (launch
-  preferences by host; on Claude Code also `windowTransport`, `tmux` or
-  `desktop`, the window transport chosen with the user at this first run -
-  one per workspace); its exact shape, `hosts` included, is the tool's input
-  schema in your tool list, so build the request from that schema and never
-  from plugin files on disk or another workspace's config. A refusal names
-  the failing path and the rule in
-  `details.schema` (`required:storage`, `additional:foo`, `type:string`,
-  `enum`): fix that field and preview again. Default repositories to
-  `owner-managed`; offer `managed-block` only when the user wants Wakeflow's
-  bounded block in the repository's instruction file, and tell them a
-  committed block is seen by every clone. `fresh-legacy-residue-present` means
-  the scan found 0.9.x leftovers; the codes `fresh-legacy-residue-<kind>`
-  say which (`scope-block`, `broad-permission`, `additional-directories`,
-  `root-marker`, `ledger-directory`). Residue is cleaned by the user, never by
-  you; a sibling `../wakeflow-ledger` directory that is another workspace's live ledger
-  (it carries `archives/`, `requirements/`, `transactions/`) is not residue and
-  is not reported.
+- **fresh-initialize** - a new workspace in an empty or non-workspace directory
+  that is itself a Git repository (when it is not, run `git init` there yourself
+  once the user agrees; the preview reports `gitignore-git-repository` until it
+  is). The `selection` you send has six parts: `program` (identity and display),
+  `presentation` (language), `topology` (repositories with their
+  `instructionManagement`, support surfaces, windows), `storage` (ledger root),
+  `governance`, `hosts` (launch preferences by host; on Claude Code also
+  `windowTransport`, `tmux` or `desktop`, the window transport chosen with the
+  user at this first run - one per workspace); its exact shape, `hosts`
+  included, is the tool's input schema in your tool list, so build the request
+  from that schema and never from plugin files on disk or another workspace's
+  config. A refusal names the failing path and the rule in `details.schema`
+  (`required:storage`, `additional:foo`, `type:string`, `enum`): fix that field
+  and preview again. Default repositories to `owner-managed`; offer
+  `managed-block` only when the user wants Wakeflow's bounded block in the
+  repository's instruction file, and tell them a committed block is seen by
+  every clone. `fresh-legacy-residue-present` means the scan found 0.9.x
+  leftovers; the codes `fresh-legacy-residue-<kind>` say which (`scope-block`,
+  `broad-permission`, `additional-directories`, `root-marker`,
+  `ledger-directory`). Residue is cleaned by the user, never by you; a sibling
+  `../wakeflow-ledger` directory that is another workspace's live ledger (it
+  carries `archives/`, `requirements/`, `transactions/`) is not residue and is
+  not reported.
 - **reconfigure** - a declared difference against an existing config. Layout
   identity is immutable: the program id and the ledger root cannot move, the
   support surfaces cannot change, and a change to the pod set is not a
-  reconfigure. Those refusals are structural, not advisory - route the user to
-  the right operation instead of retrying. What does change here: the display
-  name, description and language, the host launch preferences under `hosts` -
-  the model and reasoning effort by role, Claude Code's permission mode, and
-  its tmux session name - which the next launch intents pick up without
-  touching any window (the window transport is chosen at the first run and
-  is not switched by a reconfigure in this version), and one kind of layout
-  change: adding a product repository. Send the current config with the new repository entry and one
-  new `product` window for it in the primary pod appended, each with a fresh
-  id (`repository_` or `window_` followed by a new lowercase UUID v4). The
-  repository's root must already exist and be its own Git repository: a
-  linked worktree of another repository is refused as
+  reconfigure. These refusals are structural: route the user to the right
+  operation instead of retrying. What does change here: the display name,
+  description and language, the host launch preferences under `hosts` - the
+  model and reasoning effort by role, Claude Code's permission mode, and its
+  tmux session name - which the next launch intents pick up without touching any
+  window (the window transport is chosen at the first run; a later `reconfigure`
+  can switch the transport when no Demand is active and no worktree pod is open,
+  then every window is unregistered: relaunch and register each with the new
+  transport's helper), and one kind of layout change: adding a product
+  repository. Send the current config with the new repository entry and one new
+  `product` window for it in the primary pod appended, each with a fresh id
+  (`repository_` or `window_` followed by a new lowercase UUID v4). The
+  repository's root must already exist and be its own Git repository: a linked
+  worktree of another repository is refused as
   `reconfigure-repository-root-worktree`, a path that is, contains or sits
   inside an already configured repository (a symlink alias included) as
-  `reconfigure-repository-root-duplicate`, and more than one new window for
-  it as `reconfigure-window-addition-unsupported`. The apply writes the
-  config, the new window's runtime projection and the managed blocks in one
-  transaction; then launch and register the new window as in step 1. Changing
-  an existing repository or window is refused, and removing one is not a
-  reconfigure either - that is the detach intent below. Adding a repository
-  while a worktree pod is open is refused too, because that pod would lack
-  it: an `invalid-request` error with reason `desired-config`,
+  `reconfigure-repository-root-duplicate`, and more than one new window for it
+  as `reconfigure-window-addition-unsupported`. The apply writes the config, the
+  new window's runtime projection and the managed blocks in one transaction;
+  then launch and register the new window as in step 1. Changing an existing
+  repository or window is refused; removing one is the detach intent below.
+  Adding a repository while a worktree pod is open is refused too, because that
+  pod would lack it: an `invalid-request` error with reason `desired-config`,
   `details.configReason: topology` and a path into the pod's entry - tell the
   user to close the pod first rather than rewriting the config.
 - **reconcile** - bring a workspace back to what its descriptor implies. On a
@@ -154,11 +154,10 @@ instruction block, and the main pod's window set - but no running windows.
 ## Step 1 - Windows and bindings
 
 A logical window is a role plus a root: `controller`, `design`, `test`, and one
-`product` window per repository. Its identity is the typed id in the config;
-the display name is decoration and never says which window something belongs
-to. A binding maps that logical window to the host handle you observed after
-launching it; bindings live in the private local runtime, never in a public
-result.
+`product` window per repository. Its identity is the typed id in the config; the
+display name is decoration and never says which window something belongs to. A
+binding maps that logical window to the host handle you observed after launching
+it; bindings live in the private local runtime, never in a public result.
 
 Before the first launch: {{windowBootstrap}}
 
@@ -254,13 +253,16 @@ therefore carries one of three states. `stale` means its latest `session-start`
 record was written by an observer older than the installed artifact: that
 session started under the previous plugin and has not restarted since. Strict
 verification counts these as `windows-stale:<n>`, fails the `runtime-artifact`
-gate and names `window-artifact-stale` in `next`. `unverified` means the host
-adapter has no such evidence either way (Codex sessions, or a session-start
-record without an observer digest); verification reports
-`window-runtime-unverified:<n>` as information on a passing gate, never as a
-failure. Keep that limitation explicit: do not fabricate records, rebind, or
-repeatedly restart windows to clear it, and do not treat `unverified` as a
-blanket prerequisite for actions whose own contracts do not depend on it.
+gate and names `window-artifact-stale` in `next`. Status `nextActions` routes
+each stale window, so do not probe them: `stale-window-resume` (its session
+holds a prompt record: restart it in place) or `stale-window-relaunch` (it never
+conversed and cannot be resumed: close, launch, `replace` and `mark` it).
+`unverified` means the host adapter has no such evidence either way (Codex
+sessions, or a session-start record without an observer digest); verification
+reports `window-runtime-unverified:<n>` as information on a passing gate, never
+as a failure. Keep that limitation explicit: do not fabricate records, rebind,
+or repeatedly restart windows to clear it, and do not treat `unverified` as a
+blanket prerequisite for unrelated actions.
 
 A window's `attention` says whether the host is waiting for the user there:
 `needed` when the bound session's latest hook record is a Claude Code
@@ -287,21 +289,20 @@ those repairs and from Controller acceptance of returned work.
 ## Interrupted writes and cancellation
 
 `reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
-event append residues: its preview is read-only, its apply rechecks the plan
-and owner facts, retires uncommitted candidates or settles already linked
-commits, and preserves committed event bytes; re-preview afterwards for
-ordinary layout maintenance. `demand-candidates-busy:<demandId>` means the
-writer may still be active - wait and inspect again. Unknown owners, unknown
-files and changed resources are not permission to force cleanup. Board and
-projection writers retire a proven inactive lock before retrying; a lock with
-a live or unknown owner stays protected. A pending Demand publication or
-lifecycle journal keeps reserving its pod after the process exits: finish that
-operation's documented recovery before claiming another requirement or closing
-the pod. Cancelling a tool call stops work before its next commit point, and a
-disconnected or cancelled response does not prove that nothing was committed:
-inspect the stored outcome and reuse the original idempotency key for an
-append retry; never resend a host delivery only because its response was
-interrupted.
+event append residues: its preview is read-only, its apply rechecks the plan and
+owner facts, retires uncommitted candidates or settles already linked commits,
+and preserves committed event bytes; re-preview afterwards for ordinary layout
+maintenance. `demand-candidates-busy:<demandId>` means the writer may still be
+active - wait and inspect again. Unknown owners, unknown files and changed
+resources are not permission to force cleanup. Board and projection writers
+retire a proven inactive lock before retrying; a lock with a live or unknown
+owner stays protected. A pending Demand publication or lifecycle journal keeps
+reserving its pod after the process exits: finish that operation's documented
+recovery before claiming another requirement or closing the pod. Cancelling a
+tool call stops work before its next commit point, and a disconnected or
+cancelled response does not prove that nothing was committed: inspect the stored
+outcome and reuse the original idempotency key for an append retry; never resend
+a host delivery only because its response was interrupted.
 
 ## Pods
 

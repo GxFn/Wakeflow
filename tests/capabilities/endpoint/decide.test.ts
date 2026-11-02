@@ -641,17 +641,47 @@ test("桌面会话清单分类：句柄在清单里按 busy / idle 分 present-b
     },
     { sessionId: "1e1e1e1e-1e1e-4e1e-8e1e-1e1e1e1e1e1e", status: "busy" as const },
   ];
-  equal(classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", sessions), "present-idle");
-  equal(classifyDesktopSessions("1e1e1e1e-1e1e-4e1e-8e1e-1e1e1e1e1e1e", sessions), "present-busy");
-  equal(classifyDesktopSessions("2d2d2d2d-2d2d-4d2d-8d2d-2d2d2d2d2d2d", sessions), "absent");
-  equal(classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", []), "absent");
   equal(
-    classifyDesktopSessions("0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", [
-      ...sessions,
-      { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", status: "busy" },
-    ]),
+    classifyDesktopSessions(
+      { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", desktopSessionId: null },
+      sessions,
+    ),
+    "present-idle",
+  );
+  equal(
+    classifyDesktopSessions(
+      { sessionId: "1e1e1e1e-1e1e-4e1e-8e1e-1e1e1e1e1e1e", desktopSessionId: null },
+      sessions,
+    ),
+    "present-busy",
+  );
+  equal(
+    classifyDesktopSessions(
+      { sessionId: "2d2d2d2d-2d2d-4d2d-8d2d-2d2d2d2d2d2d", desktopSessionId: null },
+      sessions,
+    ),
+    "absent",
+  );
+  equal(
+    classifyDesktopSessions(
+      { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", desktopSessionId: null },
+      [],
+    ),
+    "absent",
+  );
+  equal(
+    classifyDesktopSessions(
+      { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", desktopSessionId: null },
+      [...sessions, { sessionId: "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", status: "busy" }],
+    ),
     "present-busy",
   );
   // 桌面 id（local_ 前缀）不是句柄：清单里只有原始会话 id 才算匹配。
-  equal(classifyDesktopSessions("local_0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", sessions), "absent");
+  equal(
+    classifyDesktopSessions(
+      { sessionId: "local_0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f", desktopSessionId: null },
+      sessions,
+    ),
+    "absent",
+  );
 });

@@ -275,6 +275,25 @@ export async function readWindowLocator(
   return (await readLocatorSource(root, hostId, windowId, signal))?.record ?? null;
 }
 
+/**
+ * 某窗口当前绑定代际的桌面会话 id（open-items X15）：定位器记录在、`provider` 是桌面、且记录的 `bindingId`
+ * 等于调用方给出的绑定时返回 `local_<uuid>`；记录不在、属于另一种传输或另一代绑定都返回 `null`——
+ * 调用方据此决定渲染与否，不判断传输名。投递的回传段用它给出 Controller 窗口的桌面会话。
+ */
+export async function readWindowDesktopSessionId(
+  root: RootedDirectory,
+  hostId: WakeflowHostId,
+  windowId: string,
+  bindingId: string,
+  signal: AbortSignal | undefined,
+): Promise<string | null> {
+  const record = await readWindowLocator(root, hostId, windowId, signal);
+  if (record === null || record.provider !== "desktop" || record.bindingId !== bindingId) {
+    return null;
+  }
+  return record.desktop.sessionId;
+}
+
 /** 写入或整体替换某窗口的定位器：绑定代际变化时定位器随之更换。 */
 export async function writeWindowLocator(
   root: RootedDirectory,

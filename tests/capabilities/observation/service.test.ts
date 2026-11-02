@@ -621,7 +621,7 @@ test("status 的窗口 attention：绑定会话最近一条记录是 Notificatio
   }
 });
 
-test("status 的窗口 launchIntent：reconfigure 改变 Config 摘要后，登记窗口的意图摘要落后于当前意图即 drifted，其余字段与门不受影响（C18）", {
+test("status 的窗口 launchIntent：reconfigure 改了窗口的启动参数（宿主启动覆盖）后，登记窗口的意图摘要落后于当前意图即 drifted，其余字段与门不受影响（C18；只改项目显示名不算，D11）", {
   timeout: 120_000,
 }, async () => {
   const workspace = await createHealthyWorkspace();
@@ -637,8 +637,9 @@ test("status 的窗口 launchIntent：reconfigure 改变 Config 摘要后，登�
     equal(registered?.status, "current");
     const desired = JSON.parse(
       readFileSync(path.join(workspace.root, "wakeflow.config.json"), "utf8"),
-    ) as { program: { displayName: string } };
+    ) as { program: { displayName: string }; hosts: Record<string, unknown> };
     desired.program.displayName = "After the intent drift";
+    desired.hosts.codex = { launch: { reasoningEffortByRole: { controller: "xhigh" } } };
     const request = {
       root: workspace.root,
       action: "reconfigure",
@@ -1768,6 +1769,31 @@ test("R-ROOT-04 与版本轴（1.2 计划 §3.6 C6）：对端宿主的绑定窗
     `windows-stale:1,window-runtime-unverified:${registered(stale) - 1}`,
   ]);
   equal(staleVerify.next.frontier, "window-artifact-stale");
+  // 逐窗口路线（W41）：这个会话只有启动记录、没有 user-prompt-submit ⇒ 重开；记下一条提示后 ⇒ resume。
+  const staleRoute = (status: Status) =>
+    status.nextActions
+      .filter((action) => action.reason.startsWith("stale-window-"))
+      .map((action) => [action.tool, action.reason, action.subject]);
+  deepEqual(staleRoute(stale), [
+    ["wakeflow_register_window_binding", "stale-window-relaunch", designWindow.windowId],
+  ]);
+  const prompted = await RootedDirectory.open(root);
+  try {
+    await writeHostHookObservation(prompted, {
+      hostId: "claude-code",
+      event: "user-prompt-submit",
+      sessionId: CLAUDE_SESSION,
+      cwd: root,
+      recordedAt: parseUtcInstant("2026-09-18T09:03:00.000Z"),
+      artifactManifestDigest: peer as never,
+      artifactVersion: "1.1.0",
+    });
+  } finally {
+    await prompted.close();
+  }
+  deepEqual(staleRoute(await executeStatusRequest(codexProcess, { root }, CLOCK)), [
+    [null, "stale-window-resume", designWindow.windowId],
+  ]);
 });
 
 /** 旧实现 T08 的零写断言：逐节点的类型、模式、大小与 mtime/ctime（不含 atime：只读也会更新它）。 */

@@ -125,6 +125,7 @@ import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
+  readHostHookObservationRecord,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
@@ -184,8 +185,10 @@ import {
 import {
   deriveClaimBlocker,
   deriveDeliveryDisposition,
+  derivePermissionModeBlocker,
   derivePrepareBlockers,
   deriveRearmBlockers,
+  expectedLaunchPermissionMode,
   type HookLandingRecord,
   landingSilenceExceeded,
   sendReturnProvesLanding,
@@ -217,6 +220,16 @@ export interface DeliveryHostFacade {
   readonly transportAssets?:
     | Readonly<Record<string, Readonly<ObservationHostAssets> | null>>
     | undefined;
+  /**
+   * 读某窗口当前绑定代际的桌面会话 id（X15）：只有桌面会话传输的定位器给出 `local_<uuid>`，其余为 null。
+   * 由组合根注入（端点切片的定位器存储），缺省即回传段不出 Controller 桌面会话这一行。
+   */
+  readonly readControllerDesktopSessionId?: (
+    root: RootedDirectory,
+    windowId: string,
+    bindingId: string,
+    signal: AbortSignal | undefined,
+  ) => Promise<string | null>;
 }
 
 export interface ExecuteDeliveryOptions {
@@ -328,7 +341,14 @@ interface OutcomeOutcome extends CommandOutcome {
   readonly targetTaskId: WakeflowDurableId<"target-task">;
   readonly workType: "implementation" | "test";
   readonly eventId: WakeflowDurableId<"demand-event">;
+  /** 落地记录上的窗口级发现（open-items X4 的模式不一致）；不改变处置，只进结果的 `next.blockers`。 */
+  readonly windowBlockers: readonly string[];
 }
+
+/** 会话记录里投递判定要用的那几项：落地字段、事件与宿主报告的权限模式（X4）。 */
+type SessionLandingRecord = Readonly<
+  HookLandingRecord & { readonly event: string; readonly permissionMode: string | null }
+>;
 
 const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, string, string]>> =
   Object.freeze({
@@ -510,6 +530,19 @@ async function readBinding(
   context: SliceContext,
   windowId: string,
 ): Promise<Readonly<WakeflowWindowHostBinding>> {
+  const binding = await findBinding(context, windowId);
+  if (binding === undefined)
+    fail("precondition-failed", "binding-missing", "$request.targetTaskId");
+  if (binding.hostId !== context.facade.hostId) {
+    fail("precondition-failed", "binding-host", "$request.targetTaskId");
+  }
+  return binding;
+}
+
+async function findBinding(
+  context: SliceContext,
+  windowId: string,
+): Promise<Readonly<WakeflowWindowHostBinding> | undefined> {
   const { facade, authority } = context;
   let bindings: readonly Readonly<WakeflowWindowHostBinding>[];
   try {
@@ -532,13 +565,32 @@ async function readBinding(
     }
     throw error;
   }
-  const binding = bindings.find((entry) => entry.windowId === windowId);
-  if (binding === undefined)
-    fail("precondition-failed", "binding-missing", "$request.targetTaskId");
-  if (binding.hostId !== facade.hostId) {
-    fail("precondition-failed", "binding-host", "$request.targetTaskId");
-  }
-  return binding;
+  return bindings.find((entry) => entry.windowId === windowId);
+}
+
+/**
+ * 目标所在 pod 的 Controller 窗口当前绑定的桌面会话 id（X15）：组合根没有注入读取端、该 pod 没有 Controller
+ * 绑定或定位器不是桌面会话时为 null；tmux 目标的 prompt 因此逐字节不变。
+ */
+async function controllerDesktopSessionIdFor(
+  context: SliceContext,
+  route: Readonly<WindowRoute>,
+): Promise<string | null> {
+  const read = context.facade.readControllerDesktopSessionId;
+  if (read === undefined) return null;
+  const controller = compileWakeflowWindowLaunchIntents(
+    context.authority.config.model,
+    context.facade.resourceProfile,
+  ).intents.find((entry) => entry.role === "controller" && entry.podId === route.podId);
+  if (controller === undefined) return null;
+  const binding = await findBinding(context, controller.windowId);
+  if (binding === undefined || binding.hostId !== context.facade.hostId) return null;
+  return read(
+    context.workspaceRoot,
+    controller.windowId,
+    binding.bindingId,
+    context.options.signal,
+  );
 }
 
 function digestBinding(binding: Readonly<WakeflowWindowHostBinding>): Sha256Digest {
@@ -1059,6 +1111,7 @@ function renderPrompt(
     readonly streamRevision: number;
     readonly generation: number;
   }>,
+  controllerDesktopSessionId: string | null,
 ): string {
   const { taskPackage, route } = sources;
   const instructionFile = context.facade.resourceProfile.instructionFileName;
@@ -1067,6 +1120,7 @@ function renderPrompt(
   return renderDeliveryPortablePrompt({
     language: input.language,
     displayTitle: route.displayTitle,
+    controllerDesktopSessionId,
     taskPackage,
     authored: {
       goal: input.authored.goal,
@@ -1200,6 +1254,7 @@ async function executePrepare(
   const claimId = deriveWorkClaimId("prepare-delivery", demandId, binding.idempotencyKey);
   const now = nowFrom(options);
   const sources = await prepareSources(context, repository, target, taskPackage, route, binding);
+  const controllerDesktopSessionId = await controllerDesktopSessionIdFor(context, route);
   const taken = await takeClaim(
     context,
     route,
@@ -1210,12 +1265,18 @@ async function executePrepare(
   let envelope: Readonly<DeliveryEnvelope>;
   let commandResult: Readonly<DemandEventSourcingCommandResult>;
   try {
-    const portablePrompt = renderPrompt(context, input, sources.prompt, {
-      deliveryId,
-      claimDigest: taken.claim.claimDigest,
-      streamRevision: binding.expectedStreamRevision + 1,
-      generation: 1,
-    });
+    const portablePrompt = renderPrompt(
+      context,
+      input,
+      sources.prompt,
+      {
+        deliveryId,
+        claimDigest: taken.claim.claimDigest,
+        streamRevision: binding.expectedStreamRevision + 1,
+        generation: 1,
+      },
+      controllerDesktopSessionId,
+    );
     envelope = createEnvelope(input, sources, taken.claim, {
       deliveryId,
       taskPackage,
@@ -1748,7 +1809,7 @@ async function sessionRecords(
   context: SliceContext,
   sessionId: string,
   since: UtcInstant,
-): Promise<readonly Readonly<HookLandingRecord & { readonly event: string }>[]> {
+): Promise<readonly SessionLandingRecord[]> {
   // A session's retained records easily exceed the default page: query the full bound, and
   // let only unreadable record candidates (never foreign file names) void the evidence.
   const query = { sessionId, since, limit: HOST_HOOK_RECORDS_MAXIMUM };
@@ -1767,8 +1828,56 @@ async function sessionRecords(
       promptDigest: record.promptDigest,
       recordedAt: record.recordedAt,
       event: record.event,
+      permissionMode: record.permissionMode,
     }),
   );
+}
+
+/** 启动要求的模式：配置覆盖按选出 profile 的宿主键读取，再落到 profile 的启动模板（X4）。 */
+function expectedPermissionMode(context: SliceContext): string | null {
+  const launch = context.authority.config.model.hosts[context.facade.hostId]?.launch;
+  const configured =
+    launch !== undefined && "permissionMode" in launch ? launch.permissionMode : undefined;
+  return expectedLaunchPermissionMode(context.facade.resourceProfile, configured);
+}
+
+/** 处置引用的落地记录若报告了与启动要求不同的模式，就在窗口上记一条阻塞（X4）；处置本身不变。 */
+function permissionModeBlockers(
+  context: SliceContext,
+  windowId: string,
+  landed: Readonly<{ readonly permissionMode: string | null }> | undefined,
+): readonly string[] {
+  const blocker = derivePermissionModeBlocker(
+    windowId,
+    expectedPermissionMode(context),
+    landed?.permissionMode ?? null,
+  );
+  return blocker === null ? Object.freeze([]) : Object.freeze([blocker]);
+}
+
+/**
+ * 重放时按处置引用的记录标识重读那条记录，让结果与首次记录报同样的窗口发现；记录已被修剪或读不出时只是
+ * 不再报，重放的处置不受影响。
+ */
+async function replayPermissionModeBlockers(
+  context: SliceContext,
+  windowId: string,
+  hookRecordId: string | null,
+): Promise<readonly string[]> {
+  if (hookRecordId === null) return Object.freeze([]);
+  let read: Awaited<ReturnType<typeof readHostHookObservationRecord>>;
+  try {
+    read = await readHostHookObservationRecord(
+      context.workspaceRoot,
+      context.facade.hostId,
+      hookRecordId,
+      signalOptions(context.options.signal),
+    );
+  } catch (error: unknown) {
+    if (context.options.signal?.aborted === true) throw error;
+    return Object.freeze([]);
+  }
+  return permissionModeBlockers(context, windowId, read?.record);
 }
 
 function outcomeDraft(
@@ -1836,6 +1945,7 @@ function replayOutcome(
     targetTaskId: envelope.target.targetTaskId,
     workType: envelope.workType,
     eventId: stored.eventId,
+    windowBlockers: Object.freeze([]),
   });
 }
 
@@ -1863,7 +1973,7 @@ function decideOutcome(
   context: SliceContext,
   input: OutcomeInput,
   envelope: Readonly<DeliveryEnvelope>,
-  records: readonly Readonly<HookLandingRecord & { readonly event: string }>[],
+  records: readonly SessionLandingRecord[],
   currentlyIndeterminate: boolean,
 ): ReturnType<typeof deriveDeliveryDisposition> {
   const resolution = input.resolution;
@@ -1903,10 +2013,18 @@ async function observedOutcomeDecision(
   envelope: Readonly<DeliveryEnvelope>,
   sessionId: string,
   currentlyIndeterminate: boolean,
-): Promise<ReturnType<typeof deriveDeliveryDisposition>> {
+): Promise<
+  Readonly<{
+    decision: ReturnType<typeof deriveDeliveryDisposition>;
+    records: readonly SessionLandingRecord[];
+  }>
+> {
   try {
     const records = await sessionRecords(context, sessionId, envelope.preparedAt);
-    return decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+    return {
+      decision: decideOutcome(context, input, envelope, records, currentlyIndeterminate),
+      records,
+    };
   } catch (error: unknown) {
     const partial =
       isWakeflowError(error) &&
@@ -1919,7 +2037,7 @@ async function observedOutcomeDecision(
       (independent.evidenceKind === "host-send-return" ||
         independent.evidenceKind === "controller-resolution")
     )
-      return independent;
+      return { decision: independent, records: [] };
     throw error;
   }
 }
@@ -1935,7 +2053,15 @@ async function executeOutcome(
   if (bound !== null) {
     // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
     const replayedEnvelope = await loadEnvelope(repository, input.deliveryId, options.signal);
-    const replayed = replayOutcome(context, replayedEnvelope, bound, binding);
+    const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
+    const replayed: OutcomeOutcome = Object.freeze({
+      ...recorded,
+      windowBlockers: await replayPermissionModeBlockers(
+        context,
+        replayedEnvelope.route.windowId,
+        recorded.outcome.evidence.hookRecordId,
+      ),
+    });
     // 追加已提交而释放未完成的裂缝由重放路径补做；助手对缺失或已易主的声明无事可做。
     if (replayed.outcome.claimHandling === "release-authorized") {
       await releaseClaimFor(context, replayedEnvelope.route.windowId, replayed.outcome.fence);
@@ -1951,7 +2077,7 @@ async function executeOutcome(
   if (route.binding.bindingId !== envelope.route.bindingId) {
     fail("precondition-failed", "binding-changed", "$request.deliveryId");
   }
-  const decision = await observedOutcomeDecision(
+  const { decision, records } = await observedOutcomeDecision(
     context,
     input,
     envelope,
@@ -1990,12 +2116,17 @@ async function executeOutcome(
   if (outcome.claimHandling === "release-authorized") {
     await releaseClaimFor(context, route.binding.windowId, outcome.fence);
   }
+  const landed =
+    outcome.evidence.hookRecordId === null
+      ? undefined
+      : records.find((record) => record.recordId === outcome.evidence.hookRecordId);
   return Object.freeze({
     commandResult,
     outcome,
     targetTaskId: target.targetTaskId,
     workType: target.workType === "test" ? ("test" as const) : ("implementation" as const),
     eventId: committed.stored.eventId,
+    windowBlockers: permissionModeBlockers(context, envelope.route.windowId, landed),
   });
 }
 
@@ -2054,6 +2185,7 @@ function outcomeResult(
   const phase = `${outcome.workType === "test" ? "test-" : ""}host-effect-${OUTCOME_PHASE_SUFFIX[outcome.outcome.disposition]}`;
   const blockers = [...nextProjection.blockers];
   if (outcome.outcome.disposition === "indeterminate") blockers.push("landing-evidence-missing");
+  blockers.push(...outcome.windowBlockers);
   return admitRecordDeliveryOutcomeResult({
     kind: "WakeflowRecordDeliveryOutcomeResult",
     schemaVersion: WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION,

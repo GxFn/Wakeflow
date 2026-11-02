@@ -21,7 +21,8 @@ import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config
  * Claude Code launch 指令的渲染（第 0 级，纯逻辑；ADR-0025 D3，§13.134，§13.186）：tmux 分支的输出逐键逐字节
  * 不变（含键序，钉成字面量）；桌面分支没有 `--session-id` 与 `--worktree`、`sessionIdPolicy` 为 host-assigned、
  * `desktop.title` 与 tmux 窗口名同一规则，其余参数（permission mode、effort、model、`--add-dir`）与 tmux 完全相同，
- * worktree 事实只有 note 不同；项目聊天模板抛错。
+ * worktree 事实只有 note 不同；项目聊天模板抛错。增删一个 pod 时 main pod 窗口的意图摘要与两种渲染都不变，
+ * 只有启动参数真变了的窗口摘要才变（open-items D11）。
  */
 
 const REPOSITORY_ID = parseWakeflowDurableIdOfKind(
@@ -337,4 +338,119 @@ test("项目聊天模板不是会话模板：渲染器抛错而不是猜一个�
     () => render(raw, codexWorkspaceHostResourceProfile, intent),
     /Expected a session launch template\./u,
   );
+});
+
+const DESIGN = "window_66666666-6666-4666-8666-666666666666";
+const POD_FEATURE = "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const FEATURE_PRODUCT = "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const FEATURE_TEST = "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const FEATURE_CONTROLLER = "window_dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const FEATURE_DESIGN = "window_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+/** 同一份配置再加一个 worktree pod（Controller、Design、产品与 Test 四个窗口），main pod 的窗口一个不动。 */
+function withFeaturePod(raw: Record<string, unknown>): Record<string, unknown> {
+  const added = structuredClone(raw) as {
+    pods: Record<string, unknown>[];
+    topology: { windows: Record<string, unknown>[] };
+  };
+  added.pods.push({
+    podId: POD_FEATURE,
+    name: "feature-x",
+    placement: "worktree",
+    lifecycle: "open",
+    worktrees: [
+      {
+        repositoryId: REPOSITORY_ID,
+        windowId: FEATURE_PRODUCT,
+        suggestedName: "wakeflow-feature-x",
+      },
+    ],
+    closing: null,
+  });
+  added.topology.windows.push(
+    {
+      windowId: FEATURE_CONTROLLER,
+      podId: POD_FEATURE,
+      role: "controller",
+      displayName: "feature-x · Controller",
+      root: { kind: "program" },
+    },
+    {
+      windowId: FEATURE_DESIGN,
+      podId: POD_FEATURE,
+      role: "design",
+      displayName: "feature-x · Design",
+      root: { kind: "support-surface", surfaceId: "surface_33333333-3333-4333-8333-333333333333" },
+    },
+    {
+      windowId: FEATURE_PRODUCT,
+      podId: POD_FEATURE,
+      role: "product",
+      displayName: "feature-x · Product A",
+      root: { kind: "repository", repositoryId: REPOSITORY_ID },
+    },
+    {
+      windowId: FEATURE_TEST,
+      podId: POD_FEATURE,
+      role: "test",
+      displayName: "feature-x · Test",
+      root: { kind: "support-surface", surfaceId: "surface_44444444-4444-4444-8444-444444444444" },
+    },
+  );
+  return added as unknown as Record<string, unknown>;
+}
+
+test("增删一个 pod 不改 main pod 窗口的意图摘要，tmux 与桌面两种渲染逐字节相同；只有启动参数真变了的窗口摘要才变（open-items D11）", () => {
+  const base = rawConfig(LAUNCH_PREFERENCES);
+  const added = withFeaturePod(base);
+  for (const profile of [
+    claudeCodeWorkspaceHostResourceProfile,
+    claudeCodeDesktopWorkspaceHostResourceProfile,
+  ]) {
+    for (const windowId of [CONTROLLER, DESIGN, TEST_WINDOW, PRODUCT]) {
+      const before = intentFor(base, profile, windowId);
+      const after = intentFor(added, profile, windowId);
+      // 整份 Config 的摘要变了（字段照旧带出），本窗口的意图摘要不变：加 pod 与删 pod 是同一对比较。
+      equal(before.configDigest === after.configDigest, false, windowId);
+      equal(after.intentDigest, before.intentDigest, windowId);
+      equal(
+        JSON.stringify(render(added, profile, after)),
+        JSON.stringify(render(base, profile, before)),
+        windowId,
+      );
+    }
+    // 项目显示名不是启动参数：摘要不变。
+    const renamed = structuredClone(base) as { program: { displayName: string } };
+    renamed.program.displayName = "Renamed Program";
+    equal(
+      intentFor(renamed as unknown as Record<string, unknown>, profile, CONTROLLER).intentDigest,
+      intentFor(base, profile, CONTROLLER).intentDigest,
+    );
+    // 真变化仍然 drifted：宿主启动覆盖（model）改了即每个窗口都变；一个窗口改名只变它自己。
+    const otherModel = rawConfig({
+      "claude-code": {
+        ...LAUNCH_PREFERENCES["claude-code"],
+        launch: { ...LAUNCH_PREFERENCES["claude-code"].launch, modelByRole: { default: "sonnet" } },
+      },
+    });
+    equal(
+      intentFor(otherModel, profile, PRODUCT).intentDigest ===
+        intentFor(base, profile, PRODUCT).intentDigest,
+      false,
+    );
+    const retitled = structuredClone(base) as { topology: { windows: { displayName: string }[] } };
+    const controllerWindow = retitled.topology.windows[0];
+    if (controllerWindow === undefined) throw new Error("Expected the Controller window.");
+    controllerWindow.displayName = "Main Controller";
+    const retitledRaw = retitled as unknown as Record<string, unknown>;
+    equal(
+      intentFor(retitledRaw, profile, CONTROLLER).intentDigest ===
+        intentFor(base, profile, CONTROLLER).intentDigest,
+      false,
+    );
+    equal(
+      intentFor(retitledRaw, profile, PRODUCT).intentDigest,
+      intentFor(base, profile, PRODUCT).intentDigest,
+    );
+  }
 });

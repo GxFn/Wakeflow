@@ -1,3 +1,4 @@
+<!-- wakeflow-hosts: claude-code -->
 # Desktop sessions: the window transport in the Claude desktop app
 
 Read this on Claude Code when the workspace's `hosts.claude-code.windowTransport`
@@ -9,7 +10,12 @@ window, pods and the refresh after a plugin update. Everything that does not
 depend on the transport stays in `references/workspace-and-windows.md`, and
 the boundaries are in `SKILL.md`. A workspace on the tmux transport never
 reads this file: the two transports are equals, one is chosen per workspace
-at the first run, and nothing here is a reason to prefer either.
+at the first run, and nothing here is a reason to prefer either. A
+`reconfigure` can switch the transport when no Demand is active and no
+worktree pod is open; afterwards every window is unregistered, and you
+relaunch and register each one with the new transport's helper. Sessions
+of the old transport that remain (tmux panes or sidebar sessions) are the
+user's to close or archive; name them, do not retire them yourself.
 
 ## What the transport is
 
@@ -21,15 +27,23 @@ at the first run, and nothing here is a reason to prefer either.
   hook record carries. The desktop id `local_<session id>` is only the
   locator, recorded as `desktop.sessionId` in the creation observation
   exactly as the helper printed it; Wakeflow never derives it from the handle.
-- Liveness is the `desktop-sessions` observation the helper's `sessions`
-  prints - the host's own session list. Wakeflow classifies each bound window
+- Liveness is the `desktop-sessions` observation you build from the desktop
+  `list_sessions` tool - the sidebar's own list, called with a `limit` that
+  covers every session (64, the observation's cap): one row per session it
+  returns, `sessionId` its id without the `local_` prefix, `desktopSessionId`
+  its `local_` id verbatim (always; a session the app created is matched only
+  by it), `status` `busy` while it is running and `idle` otherwise, and its
+  `archived` flag as the tool reports it. A session whose
+  process ended after its turn is still in the sidebar and still present; an
+  archived or deleted session is absent. Wakeflow classifies each bound window
   as present and busy, present and idle, or absent; you never judge liveness
-  from the sidebar yourself.
+  yourself. The helper's `sessions` is only the process view.
 - Wakeflow still sends nothing. The helper does the three-step launch, prints
-  the session list and waits for landing records; it never sends a prompt,
+  its process view and waits for landing records; it never sends a prompt,
   never renames, archives or deletes a session, and never runs `claude rm`.
-  Sending, titling and archiving are your own calls of the desktop app's
-  session tools, each kept exactly as it returned.
+  Listing, sending, setting the mode, titling, grouping and archiving are
+  your own calls of the desktop app's session tools, each kept exactly as it
+  returned.
 - Landing is proven the same way as everywhere: by the target session's
   `user-prompt-submit` hook record whose prompt digest equals the permit's.
   The app's messaging hands the hook the raw prompt, so no unwrapping is
@@ -47,15 +61,20 @@ missing, in one sentence, and wait for their word:
   `claude --desktop` refuses redirected output without it
   (`script-unavailable`).
 - Each folder a window starts in - the workspace root, the Design and Test
-  surfaces, every product repository - has been opened once in Claude Code
-  and had its trust dialog accepted. `launch` reports `not-trusted` for a
-  folder that has not; the app remembers trust per folder.
-- The `auto` permission mode has been picked once in each of those folders.
-  The helper starts the background session in the configured mode, but the
-  app applies the folder's remembered mode once it takes the session over, so
-  a folder left on another mode makes that window stop for permission
-  prompts and hold cross-session messages for approval. Tell the user which
-  window is asking; their choice in that folder clears it, no tool does.
+  surfaces, every product repository - is trusted. Trust is a record per
+  folder in Claude Code's own project list. The user writes it by opening the
+  folder in the desktop app (a new session there) or by running `claude` in a
+  terminal there, and accepting the trust dialog. `claude --desktop <folder>`
+  writes the same record without a dialog, so never run it on a folder the
+  user has not been told about: trusting a folder is their decision. `launch`
+  reports `not-trusted` for a folder without the record and names it.
+- One approval per folder for the `auto` permission mode. The helper starts
+  the background session in the configured mode, but the app applies the
+  folder's remembered mode once it takes the session over, so you set `auto`
+  again right after registration (Step 1). The app may show one approval card
+  for that; the user approves it once and the folder remembers it. A session
+  left on another mode stops for permission prompts and holds cross-session
+  messages for approval.
 
 ## The helper and its four subcommands
 
@@ -109,12 +128,15 @@ prepared still carries `worktreePrepared` and `worktreeBranch`.
 
 ### `sessions`
 
-Prints the `desktop-sessions` liveness observation: one row per session the
-desktop app lists, with the session id, `busy` or `idle`, and the cwd, name
-and pid it reports, at most 64 rows (`truncated` says when the list was
-longer). Hand it to `wakeflow_register_window_binding` as the liveness
-observation where the tool asks for one; `kind: unobserved` means the session
-list was unavailable, not that every session is gone.
+Prints the process view: one row per session that has a live process, with
+the session id, `busy` or `idle`, and the cwd, name and pid it reports, at
+most 64 rows (`truncated` says when the list was longer). It is not the
+liveness observation: a desktop session's process ends some time after its
+turn while the session stays in the sidebar, so a session missing here may
+still be present. Use it to see which sessions run right now, for example
+while a launch is in progress; liveness for
+`wakeflow_register_window_binding` comes from `list_sessions` ("What the
+transport is").
 
 ### `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing <seconds>]`
 
@@ -127,7 +149,7 @@ It never sends. Use it after every send, and before any second send.
 
 | `reason` | What it means | What you do |
 | --- | --- | --- |
-| `not-trusted` | `claude --bg` refused because the folder is not trusted. | Name the folder (the refusal's `cwd`); ask the user to open it in Claude Code once and accept its trust dialog, then `launch` again. |
+| `not-trusted` | `claude --bg` refused because Claude Code has no trust record for the folder. | Name the folder (the refusal's `cwd`) and ask the user to open it in the desktop app (a new session there) or run `claude` in a terminal there, and accept the trust dialog; `launch` again when they say so. Never open it with `claude --desktop` yourself. |
 | `desktop-unavailable` | The app is not running or not signed in (`stage` says whether at preflight or at the reopen step; the stopped background session keeps its conversation). | Ask the user to start the desktop app and sign in; `launch` again when they say it is up. |
 | `script-unavailable` | The pseudo-terminal wrapper `script` is not on the `PATH`. | Tell the user; it is part of macOS, so the `PATH` the host launches with is what to fix. |
 | `launch-first-turn-timeout` | The first turn did not finish within `--wait`; the helper stopped the background session. | `launch` again, with a longer `--wait` when the machine is slow. |
@@ -156,23 +178,38 @@ edit files, do not read the helper's source.
 1. Run `preflight` and read it back. A first-run setup session - whether it
    runs in the desktop app or in a terminal - is never proven and never
    becomes the Controller; it launches the Controller window first and every
-   other window after it.
+   other window after it. Right after the fresh-initialize apply, the setup
+   session's permission classifier may refuse the helper: the allow rules
+   were written after that session started, so it never loaded them. Never
+   work around a classifier refusal - no other command form, no run on the
+   user's behalf. Start a new session in the workspace root (with
+   `start_session` when the host offers it, otherwise ask the user to open
+   one there) whose first prompt asks it to initialize Wakeflow here - on the
+   existing workspace that previews reconcile and continues with step 1 - and
+   continue the window launches from that session. Its `preflight` may
+   report it proven, but on this transport only a session `launch` started
+   is a window, so it still launches the Controller window first.
 2. For each window: inspect, pipe the result into `launch --window
    <windowId>`, one call per Bash command. `launch` returns only after the
    session-start record exists, so register that window from the printed
    `observation` as soon as the call returns, before launching the next one
    or in launch order afterwards - never wait for the user between windows
    unless a refusal names them.
-3. After each registration set the session's title with the desktop
-   `set_session_title` tool to the title in the intent (`window.name` in the
-   launch result); the title is decoration that keeps the sidebar readable,
-   never evidence. When the app asks to confirm a rename, that is a one-time
-   question for the user.
+3. Right after each registration call the desktop
+   `set_session_permission_mode` tool with the window's `desktop.sessionId`
+   and `"auto"`: the app applied the folder's remembered mode when it took
+   the session over. The app may show one approval card; the user approves
+   it once per folder and the folder remembers it. Then, when the sidebar
+   title differs from the intent's (`window.name` in the launch result), set
+   it with the desktop `set_session_title` tool; the title is decoration that
+   keeps the sidebar readable, never evidence. When the app asks to confirm a
+   rename, that is a one-time question for the user.
 4. There is no adoption on this transport. A window that a setup session
    launched but never registered keeps its observation only in that session:
    when that session is gone, ask the user to authorize archiving the stray
    session, then `launch` and register again.
-5. When every window is registered, show the handover card from
+5. When every window is registered, file the sessions into the program's
+   sidebar group ("Pods"), show the handover card from
    `references/first-run.md` and tell the user to continue in the Controller
    session in the sidebar and to archive this setup session.
 
@@ -215,25 +252,33 @@ settings rules maintenance writes are unchanged, and a product repository's
    no screen readback on this transport, so the outcome carries no
    `readback`.
 4. A session that shows a permission prompt or a dialog holds the message
-   until the user answers there (the mode mismatch under "One-time
-   prerequisites" is the usual cause). That is not a failed send: the message
-   lands when they answer. Tell the user which window is asking.
+   until the user answers there (a mode other than `auto` is the usual
+   cause). That is not a failed send: the message lands when they answer.
+   Tell the user which window is asking.
+5. `permission-mode-mismatch:<windowId>` means the landing record shows that
+   window in another permission mode than `auto`. The delivery landed and the
+   window works, but it will stop for permission prompts and hold
+   cross-session messages for approval. The
+   one-time fix is step 3 of Step 1: `set_session_permission_mode` with its
+   `desktop.sessionId` and `"auto"`, the user approving the card once for
+   that folder. The blocker is not stored and `wakeflow_status` does not show
+   it: each outcome derives it again from the landing record it cites, so the
+   next delivery to that window reports it gone or still there.
 
-The tmux helper's `deliver`, `nudge` and `panes` do not exist here; `sessions`
-is the liveness lookup when a delivery stays silent.
+The tmux helper's `deliver`, `nudge` and `panes` do not exist here; the
+`desktop-sessions` observation from `list_sessions` is the liveness lookup
+when a delivery stays silent.
 
 ## The callback
 
 A product, Design or Test window returns its wake-controller callback by
 sending the callback permit's prompt to the Controller's desktop session id
 with the `SendMessage` tool, once, and passes that tool's return unchanged as
-`attempt.sendReturn`. Neither the delivery prompt nor the callback permit
-carries a desktop id - the permit's host action names the Controller window
-and its title - so you supply it: read your own desktop id once per session
-with the desktop `get_session` tool (`self`), never derive it from your hook
-session id, and name it in the boundary paragraph of every delivery you
-prepare as the session the callback goes to. The hook record still decides
-landing: a callback sent elsewhere never lands in the Controller session.
+`attempt.sendReturn`. The delivery prompt's return section names that id as
+`- controller desktop session: local_<id>`; Wakeflow renders it, so your
+three paragraphs carry no desktop id, and you never derive one from a hook
+session id. The hook record still decides landing: a callback sent elsewhere
+never lands in the Controller session.
 
 A callback to a busy Controller is queued and opens a new turn when the
 current one ends; to an idle Controller it starts the turn at once. That is
@@ -251,15 +296,17 @@ callback's `user-prompt-submit` record in the Controller session.
   into another process - and `wakeflow_register_window_binding` refuses it.
 - **Close** is `archive_session`, only when the user authorizes retiring
   that window. Archiving stops the process and removes the session from the
-  sidebar; `sessions` then reports it absent. Never archive a pod's window
-  while the pod is open, and never run `claude rm` on any Wakeflow session -
-  it deletes checkouts the app believes it owns.
+  sidebar; `list_sessions` then reports it archived, which Wakeflow
+  classifies as absent. Never archive a pod's window while the pod is open,
+  and never run `claude rm` on any Wakeflow session - it deletes checkouts
+  the app believes it owns.
 - **Replace** a session that is absent (archived or deleted): with the user's
   authorization pipe the window's inspect result into `launch` again,
   register the printed observation with `operation: "replace"` and the
   `expectedBindingId` / `expectedBindingDigest` the inspect returned, then set
-  its title. A **decommission** records the `observation` of `sessions`
-  before and after the archive as its `preClose` and `postClose` evidence;
+  its permission mode and title as in Step 1. A **decommission** records the
+  `desktop-sessions` observation built from `list_sessions` before and after
+  the archive as its `preClose` and `postClose` evidence;
   `closeResult.status` is `closed` when the archive tool reported success,
   `failed` when it refused, and `unknown` when you cannot tell.
 
@@ -272,9 +319,13 @@ callback's `user-prompt-submit` record in the Controller session.
   working directory. It never starts with `--worktree`: the app would claim
   such a checkout as its own worktree, and archiving the session or
   `claude rm` would delete it.
-- The pod's sessions sit in the sidebar beside the primary pod's, titled with
-  the pod-prefixed display names the intents carry; Wakeflow groups nothing
-  in the sidebar in this version.
+- The pod's sessions are titled with the pod-prefixed display names the
+  intents carry. Once a pod's windows are registered, file their sessions
+  into one sidebar group with the desktop `create_group` and `move_sessions`
+  tools: `<program>` for the primary pod, `<program> · <pod>` for a worktree
+  pod (the program's display name and the pod name). A group is a projection
+  for the user's eye: losing or renaming it changes no Wakeflow state, and
+  after a reconcile you recreate a missing group the same way.
 - Bring the pod up in the order `references/workspace-and-windows.md` gives
   (Controller and Design, then every product window with its worktree
   observation, then Test). Product windows may be launched one after another
@@ -286,17 +337,21 @@ callback's `user-prompt-submit` record in the Controller session.
 
 ## After a plugin update
 
-`runtime-artifact-outdated` names `user` as the owner on this transport: only
-reopening the desktop app reloads the plugin for its sessions. Tell the user
-in one sentence that the update takes effect when they quit and reopen the
-Claude desktop app, that every session - this one included - comes back on
-the updated plugin with a fresh Wakeflow server, and that nothing needs
-relocating because a session resumes when it is next messaged; then end your
-turn. After the restart call `wakeflow_verify`, then preview and apply
+`runtime-artifact-outdated` means this session's Wakeflow server predates
+the installed plugin, and an outdated server refuses writes. On this
+transport the desktop app reloads the MCP server on its own within a few
+turns: tell the user in one sentence that the update is being picked up,
+and check `wakeflow_status` on your next turns until it shows the runtime
+artifact current. Then call `wakeflow_verify`, and preview and apply
 reconcile for the gates it names (`host-settings-assets`, the helper's own
-bytes). Peer windows reported `stale` clear the same way; a window that stays
-`stale` after the restart has not conversed since - send it nothing to clear
-a state; `wakeflow_status` names the next action.
+bytes). If the server has not reloaded after a few turns, ask the user to
+archive and unarchive this Controller session, then message it: that message
+restarts its process on the current artifact (a session whose process already
+ended restarts the same way on its next message, with no archive). Nothing is
+relocated. Peer windows reported `stale`
+clear the same way when they next converse; a window that stays `stale` has
+not conversed since - send it nothing to clear a state; `wakeflow_status`
+names the next action.
 
 ## What this transport does not have
 

@@ -202,11 +202,25 @@ function attachedWorktreesForWindow(
   );
 }
 
+/**
+ * 窗口启动参数在 Config 里的共同来源（open-items D11）：宿主段（启动覆盖、tmux 名称、窗口传输）与账本根
+ * （`--add-dir`）。窗口自己的角色、根、pod 与 worktree 已在意图里；别的 pod、别的窗口、项目显示名不在。
+ */
+function launchConfigDigest(model: WakeflowConfigModel): Sha256Digest {
+  return computeCanonicalJsonSha256Digest({
+    hosts: model.hosts,
+    ledgerRoot: model.storage.ledgerRoot,
+  });
+}
+
 function createIntent(
   model: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
-  configDigest: Sha256Digest,
-  profileDigest: Sha256Digest,
+  digests: Readonly<{
+    readonly config: Sha256Digest;
+    readonly launchConfig: Sha256Digest;
+    readonly profile: Sha256Digest;
+  }>,
   indexes: Readonly<WakeflowConfigIndexes>,
   window: WakeflowConfigWindow,
 ): Readonly<WakeflowWindowLaunchIntent> {
@@ -226,7 +240,7 @@ function createIntent(
     attachedWorktrees: attachedWorktreesForWindow(pod, window),
     host: Object.freeze({
       hostId: profile.hostId,
-      profileDigest,
+      profileDigest: digests.profile,
     }),
     create: Object.freeze({
       effect: "create-window" as const,
@@ -237,11 +251,16 @@ function createIntent(
       rawHandleSource: "host-create-result" as const,
       identityAuthority: "window-host-binding" as const,
     }),
-    configDigest,
   });
+  // 意图摘要只覆盖这个窗口自己的启动参数（D11）：整份 Config 的摘要随任何 pod 的增删而变，曾让 main pod
+  // 的全部窗口显示 drifted；它仍作为字段带出，但不进本窗口的摘要。
   return Object.freeze({
     ...basis,
-    intentDigest: computeCanonicalJsonSha256Digest(basis),
+    configDigest: digests.config,
+    intentDigest: computeCanonicalJsonSha256Digest({
+      ...basis,
+      launchConfigDigest: digests.launchConfig,
+    }),
   });
 }
 
@@ -258,12 +277,17 @@ export function compileWakeflowWindowLaunchIntents(
   const indexes = buildWakeflowConfigIndexes(model);
   const configDigest = computeWakeflowConfigDigest(model);
   const profileDigest = computeCanonicalJsonSha256Digest(profile);
+  const digests = Object.freeze({
+    config: configDigest,
+    launchConfig: launchConfigDigest(model),
+    profile: profileDigest,
+  });
   const intents = Object.freeze(
     [...model.topology.windows]
       .sort((left, right) =>
         left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0,
       )
-      .map((window) => createIntent(model, profile, configDigest, profileDigest, indexes, window)),
+      .map((window) => createIntent(model, profile, digests, indexes, window)),
   );
   const basis = Object.freeze({
     kind: "WakeflowWindowLaunchIntentSet" as const,

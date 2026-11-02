@@ -148,9 +148,18 @@ export interface RenderDeliveryPromptInput {
   readonly rework: Readonly<TargetDeliveryReworkContext> | null;
   readonly productDefectRemediation: Readonly<TargetDeliveryProductDefectRemediationContext> | null;
   readonly testContract: Readonly<DeliveryTestContractSection> | null;
+  /**
+   * Controller 窗口当前绑定的桌面会话 id（`local_<uuid>`，open-items X15）：调用方从 Controller 的定位器记录读出
+   * （`readWindowDesktopSessionId`），只有桌面会话传输的定位器才有；其余传输为 `null` 或缺省，回传段不出这一行。
+   * 它进入渲染文本，所以也在 prompt 摘要与 permit 里。
+   */
+  readonly controllerDesktopSessionId?: string | null;
 }
 
 const MAXIMUM_ANCHORS = 4;
+/** 与登记 Schema 的 `desktopSessionLocator.sessionId` 同一形状；别的值不进 prompt。 */
+const DESKTOP_SESSION_ID_PATTERN =
+  /^local_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const RETURN_TOOL = "wakeflow_import_target_result";
 
 type Labels = Readonly<
@@ -426,6 +435,19 @@ function testLines(input: RenderDeliveryPromptInput, labels: Labels): readonly s
   ]);
 }
 
+/**
+ * 回传段里 Controller 的桌面会话（X15）：目标窗口把 wake-controller 回调 `SendMessage` 到这个 id，不再由 Controller
+ * 自己读出后写进边界段。没有值即没有这一行（tmux 目标经助手粘贴到 Controller 窗格，不需要它）。
+ */
+function controllerCallbackLines(input: RenderDeliveryPromptInput): readonly string[] {
+  const sessionId = input.controllerDesktopSessionId ?? null;
+  if (sessionId === null) return [];
+  if (!DESKTOP_SESSION_ID_PATTERN.test(sessionId)) {
+    fail("unexpected", "controller-desktop-session", "$prompt");
+  }
+  return [`- controller desktop session: ${sessionId}`];
+}
+
 /** 确定性渲染可移植 prompt（不含绝对路径；工作区根只以相对窗口根的路径出现）。 */
 export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromptInput>): string {
   const labels = LABELS[input.language];
@@ -464,6 +486,7 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
       `- tool: ${RETURN_TOOL}`,
       `- deliveryId: ${input.returnPointer.deliveryId}`,
       `- claimDigest: ${input.returnPointer.claimDigest}`,
+      ...controllerCallbackLines(input),
       labels.noWrite,
     ]),
     ...section(labels.record, [

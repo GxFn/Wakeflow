@@ -11,6 +11,8 @@ import {
   type NextActionInput,
   nextFromActions,
   projectionFreshness,
+  STALE_WINDOW_RELAUNCH,
+  STALE_WINDOW_RESUME,
   STATUS_LIST_MAXIMUMS,
   summarizeGates,
   type VerifyGate,
@@ -191,7 +193,7 @@ function nextInput(overrides: Partial<NextActionInput> = {}): NextActionInput {
     artifactServerSupersededBy: null,
     artifactServerRefreshOwner: "user",
     artifactServerUnavailable: false,
-    staleWindows: 0,
+    staleWindows: [],
     ...overrides,
   };
 }
@@ -289,6 +291,38 @@ test("deriveNextActions：维护 > 活动 pod 的未登记窗口（按 windowId�
     suggestedTool: null,
     blockers: [],
   });
+});
+
+test("deriveNextActions：过期窗口先给汇总项，再按 windowId 逐窗口给路线——从未对话的会话重开（replace 是其中的登记一步），有过对话的 resume（W41）", () => {
+  const actions = deriveNextActions(
+    nextInput({
+      maintenance: true,
+      staleWindows: [
+        { windowId: WINDOW_C, conversed: false },
+        { windowId: WINDOW_A, conversed: true },
+        { windowId: WINDOW_B, conversed: false },
+      ],
+    }),
+  );
+  deepEqual(
+    actions.map((action) => [action.owner, action.tool, action.reason, action.subject]),
+    [
+      ["controller", null, "window-artifact-stale", null],
+      ["controller", null, STALE_WINDOW_RESUME, WINDOW_A],
+      ["controller", "wakeflow_register_window_binding", STALE_WINDOW_RELAUNCH, WINDOW_B],
+      ["controller", "wakeflow_register_window_binding", STALE_WINDOW_RELAUNCH, WINDOW_C],
+      ["controller", "wakeflow_maintain_workspace", "workspace-maintenance", null],
+    ],
+  );
+  equal(nextFromActions(actions).frontier, "window-artifact-stale");
+  deepEqual(
+    [STALE_WINDOW_RELAUNCH, STALE_WINDOW_RESUME],
+    ["stale-window-relaunch", "stale-window-resume"],
+  );
+  equal(
+    deriveNextActions(nextInput()).some((action) => action.reason.startsWith("stale-window-")),
+    false,
+  );
 });
 
 test("deriveNextActions：空闲工作区的下一步是用户在 Design 窗口起草需求（§13.188 I1），任何别的动作在场时不出现", () => {
@@ -1303,7 +1337,17 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     ),
     ["fail", "windows-stale:1,window-runtime-unverified:1"],
   );
-  equal(deriveNextActions(nextInput({ staleWindows: 2 }))[0]?.reason, "window-artifact-stale");
+  equal(
+    deriveNextActions(
+      nextInput({
+        staleWindows: [
+          { windowId: WINDOW_A, conversed: true },
+          { windowId: WINDOW_C, conversed: false },
+        ],
+      }),
+    )[0]?.reason,
+    "window-artifact-stale",
+  );
   deepEqual(
     deriveNextActions(
       nextInput({

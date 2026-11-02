@@ -26,6 +26,7 @@
     "claude-code-tmux-asset-operation.ts",
     "claude-code-tmux-asset.ts",
     "claude-code-window-host-identity-profile.ts",
+    "claude-code-window-transport-retirement.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],
   "references": [{ "path": "../../tsconfig.runtime.json" }]

@@ -23,7 +23,7 @@ repositories.
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
 - **Pods** - a second complete window set working in its own worktree (on
   Claude Code in its own tmux session under the tmux transport, or as its own
-  sidebar sessions under desktop sessions), for running two pieces of work at
+  sidebar group of sessions under desktop sessions), for running two pieces of work at
   once without them colliding.
 
 ## First run
@@ -37,8 +37,9 @@ repositories.
    repository, Test - and tells you the one thing only you do at each point:
    on Claude Code under tmux the command that brings you to those windows and
    the trust dialog to accept in each; under desktop sessions the folders to
-   trust once and the `auto` permission mode to pick once there, while the
-   windows appear in the app's sidebar.
+   open once so Claude Code trusts them and the one card per folder that
+   confirms the `auto` permission mode, while the windows appear in the app's
+   sidebar.
 3. It ends with a handover card: what each window is for, how to move between
    them, how to come back later, and what to do first - go to the Design
    window and describe your first requirement. Then you close the setup

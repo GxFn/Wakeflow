@@ -41,6 +41,8 @@ import {
   assertSharedClosure,
   buildWakeflowPluginArtifacts,
   type CandidateHostIsolationRule,
+  PluginArtifactBuildError,
+  parseAgentTextHostMarker,
 } from "../../tooling/artifacts/build-plugin-artifacts.js";
 import { resolveRuntimeDependencyClosure } from "../../tooling/artifacts/plugin-dependency-closure.js";
 import {
@@ -73,6 +75,9 @@ const GENERATED_SCOPES: readonly string[] = [
   "dependency",
 ];
 const FIXED_CODE_PREFIX = "wakeflow-hook-observer: ";
+/** 只随 Claude 制品发出的参考（X16）：源文件第一行是 `<!-- wakeflow-hosts: claude-code -->`。 */
+const DESKTOP_TRANSPORT_REFERENCE = "skills/wakeflow-controller/references/desktop-transport.md";
+const REFERENCE_MENTION_PATTERN = /`references\/([a-z0-9-]+\.md)`/gu;
 /**
  * 运行时依赖闭包：直接包加它们在锁文件里的传递依赖（§13.101 现状盘点实测）。`jsonc-parser`
  * 只被 Claude 的可移植设置模块引用，所以只进 Claude 制品——闭包按真实 import 求得，不按根
@@ -594,6 +599,28 @@ test("双宿主插件制品由确定性的闭合文件清单生成：编译闭�
       agentTextPaths.some((file) => file.startsWith("commands/")),
       artifact.hostId === "claude-code",
     );
+    // X16：第一行标了宿主的源文件只进它列出的宿主的制品，标记行不进出厂副本；技能文本点名的每份
+    // reference 在本制品里都存在，除非那份 reference 的源标记把本宿主排除在外（链接闭合按宿主核对）。
+    equal(agentTextPaths.includes(DESKTOP_TRANSPORT_REFERENCE), !isCodex);
+    equal(agentTextCorpus.includes("wakeflow-hosts:"), false);
+    for (const entry of manifest.agentText) {
+      const skill = /^skills\/([a-z-]+)\//u.exec(entry.path)?.[1];
+      if (skill === undefined) continue;
+      const rendered = readFileSync(path.join(artifactRoot, entry.path), "utf8");
+      for (const mention of rendered.matchAll(REFERENCE_MENTION_PATTERN)) {
+        const reference: string = `skills/${skill}/references/${mention[1] ?? ""}`;
+        if (agentTextPaths.includes(reference)) continue;
+        const marker = parseAgentTextHostMarker(
+          readFileSync(path.join(process.cwd(), "assets", "agent-text", reference), "utf8"),
+          reference,
+        );
+        equal(
+          marker.hosts.includes(artifact.hostId),
+          false,
+          `${entry.path} names ${reference}, which the ${artifact.hostId} artifact lacks`,
+        );
+      }
+    }
     // 文本 profile 与 hook 片段同类：只在构建时动态 import，不进任何闭包。
     equal(byPath.has("lib/hosts/codex/codex-agent-text-profile.js"), false);
     equal(byPath.has("lib/hosts/claude-code/claude-code-agent-text-profile.js"), false);
@@ -696,6 +723,45 @@ test("两个制品的 hooks/observe.mjs 以宿主 SessionStart payload 把记录
     equal(guarded.status, 0, artifact.hostId);
     equal(guarded.stderr, `${FIXED_CODE_PREFIX}launcher\n`, artifact.hostId);
   }
+});
+
+test("agent 面文本的宿主标记（X16）：只认第一行、去掉后发出；没有标记即两个宿主；未知宿主、重复宿主与写在别处的标记以稳定错误码失败", () => {
+  deepEqual(parseAgentTextHostMarker("# Title\nbody\n", "a.md"), {
+    hosts: ["codex", "claude-code"],
+    text: "# Title\nbody\n",
+  });
+  deepEqual(parseAgentTextHostMarker("<!-- wakeflow-hosts: claude-code -->\n# Title\n", "a.md"), {
+    hosts: ["claude-code"],
+    text: "# Title\n",
+  });
+  deepEqual(
+    parseAgentTextHostMarker("<!-- wakeflow-hosts: claude-code, codex -->\n# T\n", "a.md").hosts,
+    ["codex", "claude-code"],
+  );
+  for (const text of [
+    "<!-- wakeflow-hosts: cursor -->\n# T\n",
+    "<!-- wakeflow-hosts: codex, codex -->\n# T\n",
+    "# T\n<!-- wakeflow-hosts: codex -->\n",
+    "<!-- wakeflow-hosts:claude-code -->\n# T\n",
+  ]) {
+    throws(
+      () => parseAgentTextHostMarker(text, "a.md"),
+      (error: unknown) =>
+        error instanceof PluginArtifactBuildError && error.code === "wakeflow-artifact-agent-text",
+      text,
+    );
+  }
+  // 真实源：桌面传输参考只随 Claude 发出，其余源文件都没有标记。
+  equal(
+    parseAgentTextHostMarker(
+      readFileSync(
+        path.join(process.cwd(), "assets", "agent-text", DESKTOP_TRANSPORT_REFERENCE),
+        "utf8",
+      ),
+      DESKTOP_TRANSPORT_REFERENCE,
+    ).hosts.join(","),
+    "claude-code",
+  );
 });
 
 test("hooks.json 的渲染字节必须等于片段模块自己声明的摘要：不一致或缺席时构建器以稳定错误码失败", () => {

@@ -221,6 +221,7 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-claude-code-portable-settings-publication": "precondition-failed",
     "wakeflow-claude-code-portable-settings-transition": "precondition-failed",
     "wakeflow-claude-code-statusline-settings-operation": "precondition-failed",
+    "wakeflow-claude-code-window-transport-retirement": "precondition-failed",
     "wakeflow-codex-maintenance-capability": "precondition-failed",
     // ---- entrypoints ----
     "wakeflow-public-mcp-server-configuration": "unexpected",

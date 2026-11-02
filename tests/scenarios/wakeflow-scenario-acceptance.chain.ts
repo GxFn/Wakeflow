@@ -479,7 +479,8 @@ const SCENARIO_HOST_DRIVERS: readonly ScenarioHostDriver[] = Object.freeze([
   /**
    * Claude 桌面会话传输（ADR-0025）：同一个 claude-code 宿主与制品，fresh 选择里选 `windowTransport: desktop`。
    * 启动意图是 `claude-code-desktop`（会话 id 由宿主分配、没有 `--session-id` 与 `--worktree`），登记带桌面会话 id
-   * 而不带 tmux 坐标，关闭证据是 `claude agents --json` 的会话清单，维护只发布桌面助手、没有状态栏。
+   * 而不带 tmux 坐标，关闭证据是桌面 `list_sessions` 的会话行（open-items X17：关闭前在侧栏、空闲；归档后该行带
+   * `archived`），维护只发布桌面助手、没有状态栏。
    */
   Object.freeze({
     driverId: "claude-code-desktop" as const,
@@ -506,11 +507,14 @@ const SCENARIO_HOST_DRIVERS: readonly ScenarioHostDriver[] = Object.freeze([
       assertDesktopLaunchExecution(launchIntent.execution as Record<string, unknown>);
     },
     locator: (_label: string, handle: string) => ({ desktop: { sessionId: `local_${handle}` } }),
-    closure: (handle: string) => ({
-      preClose: { kind: "desktop-sessions", sessions: [{ sessionId: handle, status: "idle" }] },
-      closeResult: { status: "closed" },
-      postClose: { kind: "desktop-sessions", sessions: [] },
-    }),
+    closure: (handle: string) => {
+      const row = { sessionId: handle, desktopSessionId: `local_${handle}`, status: "idle" };
+      return {
+        preClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: false }] },
+        closeResult: { status: "closed" },
+        postClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: true }] },
+      };
+    },
     hostSurface: CLAUDE_DESKTOP_HOST_SURFACE,
   }),
 ]);
@@ -1754,6 +1758,12 @@ async function scenarioDeliveryChain(context: ScenarioContext): Promise<string> 
   equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
   equal(prepared.permit.prompt.includes(prepared.permit.deliveryId), true);
   equal(prepared.permit.prompt.includes(prepared.permit.claimDigest), true);
+  // X15：此时 Controller 窗口尚未登记（card-07 才握手），任何传输的回传段都没有 Controller 桌面会话行。
+  equal(
+    prepared.permit.prompt.includes("- controller desktop session:"),
+    false,
+    "no Controller binding, no Controller desktop session line",
+  );
   // K6：许可 prompt 由 Wakeflow 落在 Demand 根下，助手按 promptRef 读取并核对 promptDigest，Agent 不再重打。
   equal(
     prepared.permit.promptRef,
@@ -2783,6 +2793,14 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   );
   equal(prepared.status, "committed");
   equal(prepared.permit.prompt.includes("ts-1"), true, "prompt must carry the contract steps");
+  // X15：Controller 已登记；只有桌面会话传输的回传段带它的桌面会话 id（服务端从定位器渲染，tmux 与 Codex 没有这一行）。
+  equal(
+    prepared.permit.prompt.includes(
+      `- controller desktop session: local_${context.controllerHandle ?? ""}`,
+    ),
+    context.driver.windowTransport === "desktop",
+    "the Controller desktop session line follows the window transport",
+  );
   equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
   await landPrompt(context, prepared.permit.prompt, context.testWindowId, context.testHandle);
   const accepted = await recordOutcome(context, prepared.permit, "scenario-test-outcome-1");

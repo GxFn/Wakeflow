@@ -119,9 +119,14 @@ const WINDOW_LAUNCH =
   "the session id) for registration; it waits `--wait <seconds>` (default 120) for the first " +
   "turn and `--wait-session-start <seconds>` (default 30) for the record, refuses " +
   "`locator-live` while the window's recorded session is still in the sidebar and " +
-  "`not-trusted` until the user has opened that folder once in Claude Code and accepted its " +
-  "trust dialog. After each registration set the session's title with the desktop " +
-  "`set_session_title` tool; `sessions` prints the desktop-sessions observation; a " +
+  "`not-trusted` for a folder without Claude Code's trust record (the user opens it in the " +
+  "desktop app or runs `claude` there and accepts the trust dialog; never open it with " +
+  "`claude --desktop` yourself). After each registration set the session's permission mode " +
+  'with the desktop `set_session_permission_mode` tool to `"auto"` (the app reapplies the ' +
+  "folder's remembered mode when it takes the session over; the user approves its card once " +
+  "per folder) and its title with the desktop `set_session_title` tool; liveness is the " +
+  "desktop-sessions observation built from the desktop `list_sessions` tool, the helper's " +
+  "`sessions` is only the process view; a " +
   "session is resumed by sending it a message, so relocate does not apply, and it is closed " +
   "with the desktop `archive_session` tool only on the user's authorization - never with " +
   "`claude rm`. The steps, refusal codes and what to tell the user for that transport are in " +
@@ -138,8 +143,9 @@ const WINDOW_LAUNCH =
  * 里。工作区里的助手只由维护部署：还是就地重启之前的旧助手时它以 `argument-unknown` 拒绝 `--in-place`，
  * 这一次只能先由用户 `/mcp` 重连本窗口的服务、再对账装上新助手，然后从头再来。"只能开新会话"的四步
  * （close → launch → replace → mark）从共享参考移到这里，因为它是 tmux 的分步。
- * 桌面：没有就地重启（profile 的 runtimeRefresh 是 user-app-restart，裁定 2）——用户退出并重开桌面 app，
- * 每个会话都在新插件上回来，Controller 之后 verify 与对账；没了的会话用 launch + replace 换，不 relocate。
+ * 桌面：没有就地重启；L18（X20）证实 app 会在几个回合内自行重载过期的 MCP 服务，所以文本让 Controller 等
+ * status 显示制品当前后再 verify 与对账，不重载才请用户重开 Controller 会话；没了的会话用 launch + replace
+ * 换，不 relocate。
  */
 const WINDOW_RESUME =
   "under the tmux transport, if this serving MCP is outdated, first tell the user in one " +
@@ -153,7 +159,8 @@ const WINDOW_RESUME =
   "refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window " +
   "and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, " +
   "and start this section again. If this server is already current, skip its restart. For peer " +
-  "windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), take them one at a time, each only while it sits idle at an empty prompt, and " +
+  "windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), `wakeflow_status` lists one action per window: " +
+  "take the `stale-window-resume` ones one at a time, each only while it sits idle at an empty prompt, and " +
   "pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper " +
   "call per Bash command. The session restarts inside its own pane on the updated plugin; the " +
   "binding, coordinates and marks stay, so there is nothing to relocate or mark, and " +
@@ -162,8 +169,8 @@ const WINDOW_RESUME =
   "does not override it: go on with the next window and retry this one once its turn has " +
   "ended - a dialog, a menu or typed input waits for the user, so tell them which window it " +
   "is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. " +
-  "`resume-never-conversed` reports missing conversation evidence: inspect host history first. " +
-  "Only if a fresh session is required and authorized, close the old one, launch it again, " +
+  "A `stale-window-relaunch` window (its session never conversed, so `resume` would refuse with `resume-never-conversed`) " +
+  "is not probed or resumed: close the old one, launch it again, " +
   "register it with `replace` and `mark` it - four calls, one helper call per Bash command, " +
   "each printed result kept verbatim: `close --window <windowId>` (the binding stays; this is " +
   "not a decommission), `launch --window <windowId> --wait 60` with that window's current " +
@@ -171,15 +178,17 @@ const WINDOW_RESUME =
   "the printed `observation` and the `expectedBindingId` / `expectedBindingDigest` the inspect " +
   "returned, then `mark --window <windowId>`; never reconstruct those calls from your own " +
   "session transcript or from the plugin's source. Under desktop sessions nothing restarts in " +
-  "place: when this serving MCP is outdated or verify reports peer windows as `stale`, tell " +
-  "the user in one sentence that the update takes effect when they quit and reopen the Claude " +
-  "desktop app - every session in it, this one included, comes back on the updated plugin with " +
-  "a fresh Wakeflow server, and a session is resumed by sending it a message, so nothing is " +
-  "relocated - then end your turn; after the restart call `wakeflow_verify`, then preview and " +
-  "apply reconcile. A session that is gone (`absent` in the desktop-sessions observation: " +
-  "archived or deleted) is replaced, not resumed: with the user's authorization pipe its " +
-  "inspect result into `launch` again, register the printed observation with `replace` and " +
-  "set its title; relocate does not apply on this transport.";
+  "place: an outdated server refuses writes (`runtime-artifact-outdated`), and the desktop app " +
+  "reloads the MCP server on its own within a few turns, so tell the user in one sentence that " +
+  "the update is being picked up, check `wakeflow_status` on your next turns until it shows " +
+  "the runtime artifact current, then call `wakeflow_verify` and preview and apply reconcile; " +
+  "if it has not reloaded after a few turns, ask the user to archive and unarchive this Controller session and message it: the message restarts its process on the current artifact. " +
+  "Peer windows reported `stale` clear the same way when they next converse; a session is " +
+  "resumed by sending it a message, so nothing is relocated. A session that is gone (`absent` " +
+  "in the desktop-sessions observation: archived or deleted) is replaced, not resumed: with " +
+  "the user's authorization pipe its inspect result into `launch` again, register the printed " +
+  "observation with `replace` and set its permission mode and title; relocate does not apply " +
+  "on this transport.";
 
 /** 重发守卫（§13.127）：tmux 助手发送前查接收窗口的落地记录；桌面的发送是 Controller 自己的工具调用，第二次发送前先用助手的 `landing` 查。 */
 const RESEND_GUARD =
@@ -193,8 +202,9 @@ const RESEND_GUARD =
  * Controller 自己怎么进容器：用户是被引导者，从不自己配置 tmux 或桌面会话（§13.118）。tmux：引导会话
  * 登记前就被关掉时，tmux 里的 Controller 用 `launch` 收编仍在运行的窗口再登记（§13.134 I6），不在 tmux
  * 里 teardown；收编被拒时按助手的 hint 引导用户。桌面：引导会话跑在桌面 app 里，同样永不是 Controller；
- * `launch` 自己等到 session-start 才返回，所以每个窗口一返回就登记；没有收编，`not-trusted` 让用户在 app
- * 里信任该目录一次并选 auto。
+ * `launch` 自己等到 session-start 才返回，所以每个窗口一返回就登记；没有收编；apply 后引导会话的分类器可能
+ * 拒绝助手（X18），改由新开的会话继续开窗；`not-trusted` 让用户在桌面里打开该目录或在那里运行 `claude`
+ * （X19）；每窗登记后由 Controller 切 auto（X4），全部登记后归入程序名分组。
  */
 const WINDOW_BOOTSTRAP =
   "run the published helper's `preflight` - " +
@@ -234,19 +244,28 @@ const WINDOW_BOOTSTRAP =
   "Claude desktop app, sign in with their subscription and say when it is up, then run it " +
   "again; `launch` refuses `desktop-unavailable` until then), `script.available` (the " +
   "pseudo-terminal wrapper; `script-unavailable` otherwise) and the same `sessionProven`: a " +
-  "setup session running in the app is unproven and likewise never the Controller. `launch` " +
-  "the Controller window's intent first, then every " +
+  "setup session running in the app is unproven and likewise never the Controller. Right " +
+  "after the fresh-initialize apply its permission classifier may refuse the helper, because " +
+  "the allow rules were written after it started: never try to work around a classifier " +
+  "refusal - start a new session in the workspace root (with `start_session` when the host " +
+  "offers it, otherwise ask the user to open one) that initializes Wakeflow there and " +
+  "continues the window launches. `launch` the Controller window's intent first, then every " +
   "other window, one helper call each: `launch` waits for the session-start record itself and " +
   "each session appears in the app's sidebar when it returns, so register each window from the " +
-  "observation you kept as soon as its call returns and then set its title with the desktop " +
-  "`set_session_title` tool. `not-trusted` means that window's folder has not been trusted " +
-  "yet: name the folder, ask them to open it in Claude Code once, accept its trust dialog and " +
-  "pick the `auto` permission mode there, and `launch` again when they say so. There is no adoption on " +
+  "observation you kept as soon as its call returns, then set its permission mode with the " +
+  'desktop `set_session_permission_mode` tool to `"auto"` (the user approves the card once per ' +
+  "folder) and its title with the desktop `set_session_title` tool. `not-trusted` means Claude " +
+  "Code has no trust record for that window's folder: name the folder, ask the user to open it " +
+  "in the desktop app (a new session there) or run `claude` in a terminal there and accept the " +
+  "trust dialog, and `launch` again when they say so; never open a folder with " +
+  "`claude --desktop` yourself, which trusts it without a dialog. There is no adoption on " +
   "this transport: a window that was launched but never registered is archived with the " +
-  "user's authorization and launched again. When every window is registered, show the handover " +
-  "card from `references/first-run.md` and tell the user to continue in the Controller session " +
-  "in the sidebar and to archive this one. The three-step launch, the other subcommands and the " +
-  "refusal codes are in `references/desktop-transport.md`.";
+  "user's authorization and launched again. When every window is registered, file the sessions " +
+  "into one sidebar group named after the program with the desktop `create_group` and " +
+  "`move_sessions` tools, show the handover card from `references/first-run.md` and tell the " +
+  "user to continue in the Controller session in the sidebar and to archive this one. The " +
+  "three-step launch, the other subcommands and the refusal codes are in " +
+  "`references/desktop-transport.md`.";
 
 /**
  * 首次交接卡（§13.188）：首次初始化结束时 Controller 给用户的那一张卡，教学一次，日常不再重复。
@@ -266,7 +285,8 @@ const FIRST_RUN_HANDOVER =
   "window name means it is working, a red `?` means it is waiting for you, nothing means idle; " +
   "the hooks write them, a hint and never evidence; how to come back later - the same `attach` " +
   "command, the sessions outlive the terminal. Under desktop sessions: the sessions in the " +
-  "desktop app's sidebar, one line each with the same four roles in the same words, and which " +
+  "desktop app's sidebar, filed in one group named after the program (a worktree pod gets its " +
+  "own group, `<program> · <pod>`), one line each with the same four roles in the same words, and which " +
   "of them is the Controller (this setup session is not it and is archived after the card); " +
   "how to move - click a session in the sidebar; how to read the sidebar - the app's own " +
   "markers say when a session is working, has unread output or waits for you, no Wakeflow mark " +
@@ -351,7 +371,7 @@ const COMMAND_SURFACE_ZH =
 /**
  * README 的一次性宿主动作；窗口缺省以 auto 权限模式启动（用户裁决 Q4，§13.134）。两种传输并列
  * （ADR-0025）：tmux 的状态行、attach 命令与每窗的信任对话；桌面的订阅登录、app 在运行、每个目录
- * 信任一次与选一次 auto（app 按目录记忆，裁定 1）。
+ * 的信任记录由用户写（X19：打开目录或运行 `claude`，Controller 从不替用户信任），切 auto 的确认卡每目录一次（X4）。
  */
 const HOST_TRUST_STEPS_EN = [
   "The first time you start Claude Code in the workspace directory, accept the",
@@ -378,11 +398,14 @@ const HOST_TRUST_STEPS_EN = [
   "window as a session in the app's sidebar through the helper installed as `desktop.mjs` in",
   "the same place and delivers prompts with the app's own session messaging; what only you do:",
   "sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow",
-  "works, trust each product folder once when the app asks, and pick the `auto` permission",
-  "mode once in each (the app remembers both per folder). Maintenance also writes precise",
-  "allow rules for the published helper and the Wakeflow MCP tools into the workspace root's",
-  "`.claude/settings.json`, and every window the helper launches is started with those two",
-  "tools allowed, so product and test windows do not stop at a permission prompt for them",
+  "works, let Claude Code trust each folder a window starts in - open the folder in the",
+  "desktop app (a new session there) or run `claude` in a terminal there, and accept the",
+  "trust dialog; the Controller names any folder that still needs it and never trusts one for",
+  "you - and approve the one card per folder the app may show when the Controller switches a",
+  "window there to the `auto` permission mode (the folder remembers it). Maintenance also",
+  "writes precise allow rules for the published helper and the Wakeflow MCP tools into the",
+  "workspace root's `.claude/settings.json`, and every window the helper launches is started",
+  "with those two tools allowed, so product and test windows do not stop at a permission prompt for them",
   "either; nothing broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow",
   "wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a",
   "`..` directory in that list is 0.9.x residue or the repository's own settings: delete or",
@@ -414,8 +437,10 @@ const HOST_TRUST_STEPS_ZH = [
   "自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个",
   "助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的",
   "侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作",
-  "期间让 app 开着，app 询问时把每个产品目录信任一次，并在每个目录里选一次 `auto` 权限模式",
-  "（app 按目录记住这两项）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
+  "期间让 app 开着；让 Claude Code 信任每个窗口所在的目录——在桌面 app 里打开该目录（在那里新开",
+  "一个会话），或在终端里到该目录运行 `claude`，接受信任对话；Controller 会点名还需要信任的目录，",
+  "从不替你信任；Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",
+  "即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
   "Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口",
   "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，",
   "其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，",
@@ -427,7 +452,7 @@ const HOST_TRUST_STEPS_ZH = [
   "`hosts.claude-code.launch.permissionMode` 设为 `acceptEdits`；之后窗口执行命令时会弹权限确认。",
 ].join("\n");
 
-/** 更新后的换代按传输并列（ADR-0025 D6、裁定 2）：tmux 由 Controller 经助手就地重启；桌面由用户重启 app 一次。 */
+/** 更新后的换代按传输并列（ADR-0025 D6、裁定 2）：tmux 由 Controller 经助手就地重启；桌面由 app 自行重载服务（X20），不重载时重开会话。 */
 const PLUGIN_UPDATE_STEPS_EN = [
   "Updating is two host actions and one Wakeflow read. Refresh the marketplace catalog",
   "with `/plugin marketplace update gxfn` (from a shell: `claude plugin marketplace update",
@@ -439,10 +464,11 @@ const PLUGIN_UPDATE_STEPS_EN = [
   "`wakeflow_status` then reports `runtime-artifact-outdated` for its own server and",
   "`windows-stale:<n>` for peer windows started under the previous artifact. Under the tmux",
   'transport the Controller refreshes them itself through the tmux helper (its skill section "After a',
-  'plugin update"); under desktop sessions you quit and reopen the Claude desktop app once -',
-  "every session comes back on the updated plugin - and the Controller then verifies and",
-  "reconciles. Expect `wakeflow_verify` to pass `runtime-artifact` again once no window is",
-  "stale; `unverified` is not a failure.",
+  "plugin update\"); under desktop sessions the desktop app reloads each session's Wakeflow",
+  "server on its own within a few turns - if the Controller's does not, archive and unarchive it and",
+  "message it, which restarts its process on the current artifact -",
+  "and the Controller then verifies and reconciles. Expect `wakeflow_verify` to pass",
+  "`runtime-artifact` again once no window is stale; `unverified` is not a failure.",
 ].join("\n");
 
 const PLUGIN_UPDATE_STEPS_ZH = [
@@ -453,9 +479,9 @@ const PLUGIN_UPDATE_STEPS_ZH = [
   "会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的",
   "`wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报",
   '`windows-stale:<n>`。tmux 传输下 Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己',
-  "刷新它们；桌面会话传输下由你退出并重开一次桌面 app——每个会话都在新插件上回来——然后 Controller",
-  "校验并对账。没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；",
-  "`unverified` 不是失败。",
+  "刷新它们；桌面会话传输下桌面 app 会在几个回合内自行重载各会话的 Wakeflow 服务——Controller 的",
+  "服务没有重载时，归档再取消归档并发一条消息即可令其以当前制品重起——然后 Controller 校验并对账。没有窗口再是 stale 之后，",
+  "`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。",
 ].join("\n");
 
 /** 十二个占位符的 Claude Code 取值；键序与 D3 列出的顺序一致，新增的排在最后。 */

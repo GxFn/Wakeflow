@@ -319,7 +319,7 @@
   - 说明：在全局开启 commit.gpgsign 或 core.hooksPath 的机器上，临时仓库的提交会失败或弹出提示，pod 和场景测试会因与 Wakeflow 无关的原因失败，也会挡住以后接入 CI。
   - 证据：9 个测试文件设置了 GIT_AUTHOR_* 和 GIT_COMMITTER_*，但没有设置 GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM（例如 pod/service.test.ts:44、scenario test:2561）；只有 check-release-consistency.test.ts:54-55 和 tmux asset 测试做了隔离
   - 建议：集中一个测试用的 git 环境 helper（GIT_CONFIG_GLOBAL=/dev/null、GIT_CONFIG_NOSYSTEM=1、作者和提交者身份），所有需要 spawn git 的测试都用它。
-- **D11** [低 / 噪音] 新增或移除 pod 的配置事务让 main pod 的全部窗口显示 `launchIntent: drifted`（计划阶段 2；状态：开放，§13.185 观察 A）
+- **D11** [低 / 噪音] 新增或移除 pod 的配置事务让 main pod 的全部窗口显示 `launchIntent: drifted`（计划阶段 2；§13.185 观察 A）。成因：`intentDigest` 的基底含整份配置的 `configDigest`。已修 T1 §13.225：摘要改覆盖窗口自身基底加 `{hosts, storage.ledgerRoot}` 的规范摘要（两宿主渲染器只读这些），`configDigest` 字段仍在意图里、launch-set 摘要不变；此前登记的窗口会显示一次 `drifted` 直到下次 replace（仅信息，无门比较它）。状态：已修。
   - 说明：意图摘要把整份配置的变化都算了进去，而这些窗口的参数、启动目录、tmux 名称都没变；没有门因此失败，但 Design 与 Controller 都把它当成需要处理的事反复提及。
   - 建议：意图摘要只覆盖该窗口自己的启动参数与根，或在 status 里把"仅摘要变化"与"参数变化"分开标注。
 - **D12** [中 / 缺口] 相对 `file:` 依赖在 `<repo>/.claude/worktrees/<name>` 布局下解析不到（计划阶段 2；状态：开放，§13.185 观察 B）
@@ -827,22 +827,22 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **W35** [P3 / 触发低] CR-T5：合法零测试 quick 回执不能导出 CI 摘要（批 F；状态：已修 §13.211）。修：export-ci 依回执 selection 判完整。
 - **W36** [P3 / 触发低] 新发现（§13.213，批 H）：apply 一条数千文件的受管证据记录耗时数分钟（stage 物化与发布链在数千文件时很慢，与目录是否扁平无关；4095 文件的来源只做 preview 就要约 9 秒捕获）。修法方向：发布链按目录批量物化或流式写入，单记录文件数上限是否下调由用户定。状态：待排。
 - **W37** [P3 / 触发中] 新发现（§13.215，批 D′ 接线）：`wakeflow_verify` 结果 Schema 的门码 `code` 模式不允许下划线，而既有 `demand-root-audit`、`evidence-integrity`、`append-candidates-clear` 的失败码带 `demand_…` id，带 Demand id 的失败码会在输出准入被拒——疑似既有缺陷。状态：不成立（2026-10-29，§13.219）：模式 `^[A-Za-z0-9][A-Za-z0-9._:,/-]{0,255}$` 的字符类本就含下划线，用户的子会话以真实 Schema 做 Ajv 探针核实三种形状都通过；它加的两个断言测试留在其 worktree 未提交。
-- **W38** [P3 / 触发低] 新发现（§13.218，现场 L16 准备）：reconcile 第一次 apply 报 completed 却没有改写 tmux 助手副本与看板索引，verify 仍报 tmux.mjs:drift 与 index-stale；第二次同样的 preview + apply 正常生效（stepReceipt disposition updated）。两次计划摘要不同，原因未查明；待用带过期助手副本的工作区复现并修。状态：待排。
-- **W39** [P3 / 触发中] 新发现（§13.218，现场 L16）：`wakeflow_register_window_binding` 的 replace/relocate 请求缺 expectedBindingId 与 expectedBindingDigest 时，Schema 拒绝码是 additional:observation，没有点名缺的两个字段，措辞误导。修法方向：按 mode 分支报缺字段，或工具描述写明两字段必填。状态：待排。
+- **W38** [P3 / 触发低] 新发现（§13.218，现场 L16 准备）：reconcile 第一次 apply 报 completed 却没有改写 tmux 助手副本与看板索引，verify 仍报 tmux.mjs:drift 与 index-stale；第二次同样的 preview + apply 正常生效（stepReceipt disposition updated）。两次计划摘要不同。T1 §13.225 回看 L16 记录后判定不是缺陷：第一次 preview 返回的是私有模式收敛计划（`WakeflowPrivateModeConvergencePlan`，§13.130 D8 设计的两阶段 reconcile 第一阶段），它的 apply 只收敛模式、不跑宿主操作与索引刷新，`next` 指回新的 preview；tmux 助手计划只在第二次 preview 出现。文本本就写"apply 后再 preview"。证据：新测试 `tests/hosts/claude-code/claude-code-maintenance-reconcile.test.ts`（过期助手 + v1 索引一次 preview/apply 即改写；叠加私有目录漂移时第一个计划是模式收敛、第二个才改写助手与索引）。状态：已结（误读，非缺陷）。
+- **W39** [P3 / 触发中] 新发现（§13.218，现场 L16）：`wakeflow_register_window_binding` 的 replace/relocate 请求缺 expectedBindingId 与 expectedBindingDigest 时，Schema 拒绝码是 additional:observation，没有点名缺的两个字段，措辞误导。修法方向：按 mode 分支报缺字段，或工具描述写明两字段必填。已修 T1 §13.225：`src/capabilities/endpoint/contract.ts` 为每个 operation 从生成的请求 Schema 建一个惰性分支校验器，整体校验失败且 `operation` 已知时改报该分支的错误，仍是 `invalid-request/schema`，`details.schema` 为 `required:expectedBindingId` / `required:expectedBindingDigest`；无 Schema 改动。状态：已修。
 - **W40** [P3 / 触发低] 新发现（§13.218，现场 L14）：fresh-initialize 的 selection 要求 selectionKey 在整份选择里全局唯一（窗口键与支撑面键同名即 invalid-request/selection），Schema 描述与 init 技能都没写。修法方向：Schema description 与技能各补一句。状态：待排。
-- **W41** [P3 / 触发中] 新发现（§13.218，现场 L13）：制品更新后整批窗口 window-artifact-stale，Controller 第一轮 `/wakeflow:next` 花 10 分钟逐窗口 inspect 与 resume（从未对话的旧会话必然 resume-exited）才到第一个确认点，而 status 已点名 windows-stale:8。修法方向：nextActions 对整批 stale 窗口直接给 close → launch → replace → mark 的批处理建议；技能文本写明从未对话的会话不必 resume。状态：待排。
+- **W41** [P3 / 触发中] 新发现（§13.218，现场 L13）：制品更新后整批窗口 window-artifact-stale，Controller 第一轮 `/wakeflow:next` 花 10 分钟逐窗口 inspect 与 resume（从未对话的旧会话必然 resume-exited）才到第一个确认点，而 status 已点名 windows-stale:8。修法方向：nextActions 对整批 stale 窗口直接给 close → launch → replace → mark 的批处理建议；技能文本写明从未对话的会话不必 resume。已修 T1 §13.225：观察为每个会话记 `conversed`（有无 `user-prompt-submit` 记录），status `nextActions` 在 `window-artifact-stale` 之后按 windowId 逐窗口给 `stale-window-resume`（原地 resume）或 `stale-window-relaunch`（close → launch → replace → mark，不探测、不 resume）；tmux 与桌面文本都按路线改写。状态：已修。
 
 ## X. Claude 宿主 desktop 传输（2026-10-29 起）
 
 桌面传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；tmux 分册在 Y 节）。来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219、§13.220）与[适配方案](../reviews/2026-10-29-claude-desktop-transport-design.md)。
 
-- **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：已立项（ADR-0025），K1 已落地 §13.222，K2 待做。
+- **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：已立项（ADR-0025），K1 已落地 §13.222，K2 已落地 §13.225。
 - **X2** [中 / 前置] 现场 L17 与 L18。状态：L17 主干 §13.220；L18 全流程通过 §13.223（fresh-initialize → 8 窗口 → 认领 → 投递 → 回调 → accept → 归档）；换代路径在 L18 观察到服务自行重载（X20）。
-- **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`（通用输入字段，SessionStart 示例无、UserPromptSubmit 有），第一条投递落地时不是 auto 就在窗口上记 `permission-mode-mismatch`；用户按目录选一次 auto（设计提案第 3.4 节）。状态：已裁定 (b)；L18 证实 Controller 可直接 `set_session_permission_mode(…, auto)`（8 个会话全部成功），K2 把它作为开窗后的固定步骤。
+- **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`（通用输入字段，SessionStart 示例无、UserPromptSubmit 有），第一条投递落地时不是 auto 就在窗口上记 `permission-mode-mismatch`；用户按目录选一次 auto（设计提案第 3.4 节）。状态：已裁定 (b)；L18 证实 Controller 可直接 `set_session_permission_mode(…, auto)`（8 个会话全部成功），K2 把它作为开窗后的固定步骤。K2 已落地（§13.225）：hook 记录带 `permissionMode`，记录投递结果时把被引用落地记录的模式与启动模式（配置 `launch.permissionMode`，否则画像值）比对，不一致就在结果的 `next.blockers` 加 `permission-mode-mismatch:<windowId>`，处置不变；该阻塞不落盘、不进 status，每次 outcome 重算。残留：status 的 `nextActions` 不投影它。
 - **X5** [中 / 合同] 登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面会话今天无法登记。修法方向：`creationObservation` 加 `desktop` 定位子分支、观察类型加 `desktop-sessions`、准入按传输选坐标（设计提案第 4 节）。状态：已落地 K1 §13.222（`desktop-session-required`、`locator-kind-mismatch`、`relocate-not-applicable`）。
 - **X6** [高 / 风险] `claude --bg --worktree` 起的会话被 agent view 与桌面当成自己的 worktree：`claude rm` 与归档会删除 Wakeflow 的 pod 检出（L17 E6）。修法方向：pod 窗口以检出为 cwd 直接起会话（E8 证实 app 不持有），文本写明永不 `claude rm`、pod 打开期间不归档。状态：已落地 K1 §13.222（助手在仓库根准备检出并以检出为 cwd，禁止 `--worktree`，永不 `claude rm`；文本已写明）。
 - **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：已落地 K1 §13.222。
-- **X8** [低 / 改进] hook 输入自带 `permission_mode` 与 `session_title`，观察记录尚未落字段；落下后模式与 mark 都能靠记录核对。状态：进设计（K2）。
+- **X8** [低 / 改进] hook 输入自带 `permission_mode` 与 `session_title`，观察记录尚未落字段；落下后模式与 mark 都能靠记录核对。状态：已落地 K2 §13.225（`permissionMode`、`sessionTitle` 为可选键，旧记录读作 null、记录 id 不变；Codex 记录为 null）。
 - **X3** [低 / 外部] `start_session` 由服务端开关控制、每次弹确认、自动回合里不可用、子会话回合末必唤父会话（issue 100913、104101、105099、104683）：在这些控制出现前不作基线。状态：观察。
 - **X9** [中 / 差距] 桌面传输无法无头自动化：lab 的 claude-code 实验靠 tmux 起真实进程，桌面 app 不能在测试里启动；K1 只能到"录制观察 + 场景链卡"，真实闭环靠 L18 与每次 tag 前的现场回归。状态：已知差距，进规划第 3 节。
 - **X10** [中 / 外部] 桌面会话工具是 app 内部接口，随版本与服务端开关变动（10 月内 `start_session` 出现又消失、确认卡新增）；传输层必须可替换，所有桌面知识只放 `src/hosts/claude-code/`。状态：约束，进设计。
@@ -850,26 +850,26 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X12** [低 / 行为] 向忙碌的桌面会话发消息在其回合结束后才送达；投递到被用户占用的 Design/Test 窗口要按 queued 处理，沿用 landing-silence。状态：进设计。
 - **X13** [低 / 待验] `set_session_title` 对 `--name` 给的标题是否弹确认未验（K1 前核对）。状态：待验。
 - **X14** [低 / 差距] 状态行与 `@wakeflow_state` attention 投影在桌面没有落点，只剩侧栏原生标记与标题。状态：已知差距，K2 看是否用标题前缀承载。
-- **X15** [低 / 改进] Controller 的桌面回调 id 今天由 Controller 用 `get_session self` 读出后写进投递边界段（K1 裁定；payload-privacy 只拦凭证类命中，`local_` id 不在其列）。修法方向：确定性路线——投递 prompt 的回传段由服务端从 Controller 绑定的桌面定位器渲染，或助手加子命令读定位器，prompt 里不再出现任何 id。状态：K2。
-- **X16** [低 / 文本] 新参考 `references/desktop-transport.md` 随制品也进了 Codex 制品（构建器不按宿主过滤文件；共享文本已按宿主限定措辞）。修法方向：`build-plugin-artifacts.ts` 加逐宿主文件过滤或把参考放进宿主占位符。状态：K2。
-- **X17** [高 / 漏判] K1 的 `desktop-sessions` 存活观察取自 `claude agents --json`，它只列进程存活的会话；桌面窗口会话空闲后进程会结束（L18：AlembicCore 登记后 session-end），仍在侧栏的会话会被判 absent。修法：观察改由 Controller 用桌面 `list_sessions` 产出（会话在不在、isRunning），助手 `sessions` 只作补充或退役。状态：K2 必修。
-- **X18** [中 / 首跑] 引导会话在 apply 写出允许规则之前已启动，auto 分类器把运行助手判为越权（L18）。修法：首跑文本在 apply 后让引导会话用 `start_session`（账号有时）或请用户新开引导会话再开窗；或把开窗放到 Controller 窗口自己做。状态：K2。
-- **X19** [中 / 边界] `claude --desktop <目录>` 打开目录会直接写入命令行信任记录（L18：五个仓库各 3 秒内、无弹窗）。Wakeflow 不得在用户不知情时依赖它；交接卡把"信任目录"写成"在桌面里打开该目录并接受弹窗"，助手的 not-trusted 拒绝给出具体做法。状态：K2 文本。
-- **X20** [低 / 观察] 桌面传输下 MCP 服务过期后，app 在后续回合自行重载了服务（L18：第一次 register 被 runtime-artifact-outdated 拒绝，几分钟后同会话登记成功）；"重启桌面 app"可放宽为"等服务重载或重开会话"。状态：K2 核实后改文本。
+- **X15** [低 / 改进] Controller 的桌面回调 id 今天由 Controller 用 `get_session self` 读出后写进投递边界段（K1 裁定；payload-privacy 只拦凭证类命中，`local_` id 不在其列）。修法方向：确定性路线——投递 prompt 的回传段由服务端从 Controller 绑定的桌面定位器渲染，或助手加子命令读定位器，prompt 里不再出现任何 id。已落地 K2 §13.225：prepare 从目标所在 pod 的 Controller 绑定读桌面定位器（组合根注入 `readControllerDesktopSessionId`，仅桌面 provider 且同绑定代际给值），回传段渲染 `- controller desktop session: local_<id>`，tmux prompt 逐字节不变；Controller 不再写 id；场景链按传输断言该行有无。状态：已修。
+- **X16** [低 / 文本] 新参考 `references/desktop-transport.md` 随制品也进了 Codex 制品（构建器不按宿主过滤文件；共享文本已按宿主限定措辞）。修法方向：`build-plugin-artifacts.ts` 加逐宿主文件过滤或把参考放进宿主占位符。已落地 K2 §13.225：源文件首行 `<!-- wakeflow-hosts: claude-code -->` 标记限定宿主，构建时剥离标记并对未列宿主跳过该文件，占位符闭包与链接闭包按宿主各自检查；Codex 制品不再含 desktop-transport.md。状态：已修。
+- **X17** [高 / 漏判] K1 的 `desktop-sessions` 存活观察取自 `claude agents --json`，它只列进程存活的会话；桌面窗口会话空闲后进程会结束（L18：AlembicCore 登记后 session-end），仍在侧栏的会话会被判 absent。成因已坐实：桌面会话进程空闲 1800 秒后由 app 结束（E5 时 app 日志 `WarmLifecycle idle timeout 1800s`，§13.225），下一条消息再起新进程。修法：观察改由 Controller 用桌面 `list_sessions` 产出（会话在不在、isRunning、archived），助手 `sessions` 只作进程视图。状态：已落地 K2 §13.225——行为 `sessionId`（去 `local_` 前缀）、`desktopSessionId`（整 id，app 自建的会话只能靠它匹配）、`status`、`archived`；所有匹配行均 archived 或无匹配行即 absent；文本要求 `list_sessions` 用覆盖全部会话的 `limit`（观察上限 64 行）。
+- **X18** [中 / 首跑] 引导会话在 apply 写出允许规则之前已启动，auto 分类器把运行助手判为越权（L18）。修法：首跑文本在 apply 后让引导会话用 `start_session`（账号有时）或请用户新开引导会话再开窗；或把开窗放到 Controller 窗口自己做。K2 文本 §13.225：apply 之后在工作区根新开一个会话（宿主有 `start_session` 时用它，否则请用户新开）作引导会话，它只负责开出并登记 Controller 窗口；不绕过分类器拒绝。状态：文本已落地，待 L20 现场核。
+- **X19** [中 / 边界] `claude --desktop <目录>` 打开目录会直接写入命令行信任记录（L18：五个仓库各 3 秒内、无弹窗）。Wakeflow 不得在用户不知情时依赖它；交接卡把"信任目录"写成"在桌面里打开该目录并接受弹窗"，助手的 not-trusted 拒绝给出具体做法。状态：K2 文本已落地 §13.225（参考、交接卡、README 与助手提示都写"在桌面 app 里打开该目录并接受信任弹窗"，并禁止 Controller 自己用 `claude --desktop` 打开未告知用户的目录）。
+- **X20** [低 / 观察] 桌面传输下 MCP 服务过期后，app 在后续回合自行重载了服务（L18：第一次 register 被 runtime-artifact-outdated 拒绝，几分钟后同会话登记成功）；"重启桌面 app"可放宽为"等服务重载或重开会话"。E5（§13.225，用户授权在 WakeflowTestWorkspace12 的 AlembicPlugin 会话上做）核实了确定性的换代路径：归档 → 取消归档 → 发一条消息，app 为同一会话起新进程，hook 记录的制品摘要从旧制品换成当前制品，会话 id 与绑定不变，目录记忆的 auto 模式保留（app 日志 `requested=auto effective=auto`）；进程已因空闲结束的会话则下一条消息即以当前制品重起，无需归档。文本已按该机制定稿（参考 "After a plugin update"、WINDOW_RESUME、PLUGIN_UPDATE_STEPS）。状态：K2 文本已落地。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 
 tmux 传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；桌面分册在 X 节）。条目只做汇总与指向，修法与状态以被指向的原条目为准；原条目关闭时同步改这里。
 
 - **Y1** [P2] 输入框首行空而续行有草稿时仍发送或重启 → W3 / H3（等现场 L15）。
-- **Y2** [P3] 制品更新后整批窗口 stale，首轮 `/wakeflow:next` 逐窗口探测耗时 → W41（T1）。
-- **Y3** [P3] 第一次 reconcile apply 报 completed 却没改写助手副本与索引 → W38（T1）。
-- **Y4** [P3] replace / relocate 缺 expectedBindingId 与 Digest 时的拒绝码措辞 → W39（T1）。
+- **Y2** [P3] 制品更新后整批窗口 stale，首轮 `/wakeflow:next` 逐窗口探测耗时 → W41（T1）。已修 §13.225。
+- **Y3** [P3] 第一次 reconcile apply 报 completed 却没改写助手副本与索引 → W38（T1）。已结 §13.225：两阶段 reconcile 的设计行为，非缺陷。
+- **Y4** [P3] replace / relocate 缺 expectedBindingId 与 Digest 时的拒绝码措辞 → W39（T1）。已修 §13.225。
 - **Y5** [高] 助手是约两千行无类型的 JS 字符串，游离在静态门之外 → D5（与 desktop.mjs 一起做类型化与合同共享）。
 - **Y6** [高] 屏幕抓取与 wrapper 剥离依赖未公开的 UI 文本，Claude Code 版本不检测不固定 → A3。
 - **Y7** [高] 产品与 Test 窗口可改写 Controller 免提示运行的助手 → F1（部分缓解：投递前核对已发布资产字节）。
 - **Y8** [中] 长寿会话按旧技能文字行事，插件更新后照旧流程刷新窗口 → I9（部分）。
-- **Y9** [低] pod 配置事务后 main pod 全部窗口显示 `drifted` → D11（T1）。
+- **Y9** [低] pod 配置事务后 main pod 全部窗口显示 `drifted` → D11（T1）。已修 §13.225（旧窗口一次性 `drifted` 到下次 replace）。
 - **Y10** [中] 宿主观察经模型逐字转抄，pod 开关每窗口约一万输出 token，16 窗格上限 → K2。
 - **Y11** [设计限制] 从未对话的会话不能 `claude --resume`，助手拒绝为 resume-exited；与桌面的 `--desktop --resume` 同源。状态：文本已写明。
 - **Y12** [固有] tmux 服务器退出（终端关闭、重启）即全部窗口退出，下次由 Controller 重开并 replace。状态：行为已知，交接卡写明保活。

@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -50,8 +50,8 @@ useDisposableDurability();
 /**
  * 2 级（能力）：公共维护请求按窗口传输选 profile（ADR-0025 D1、D6）。在一次性 Git 工作区上经 Claude 组合根以
  * `hosts.claude-code.windowTransport: "desktop"` 的选择 fresh-initialize：发布桌面助手而不是状态栏与 tmux 助手，
- * 工作区根放行桌面助手；reconcile 按当前配置选出同一传输、零步；reconfigure 改传输在 K1 以
- * `window-transport-change-unsupported` 阻塞（ADR-0025 D9，K2 再做切换）；status 的 hostAssets 与 verify 的
+ * 工作区根放行桌面助手；reconcile 按当前配置选出同一传输、零步；reconfigure 改传输在 K2 起就绪并按新传输
+ * 计划（切换的完整效果见 maintain-workspace-transport-switch.test.ts）；status 的 hostAssets 与 verify 的
  * host-settings-assets、local-layout 门按同一份桌面期望读，没有状态栏条目也通过。
  */
 
@@ -125,7 +125,7 @@ function operationKindsOf(plan: unknown): readonly string[] {
   return (contribution?.operations ?? []).map((entry) => entry.operationKind).sort();
 }
 
-test("desktop transport through the public maintenance request: fresh publishes the desktop helper set, reconcile re-selects the same transport as a no-op, reconfigure cannot switch transports in K1, and status/verify read the desktop expectation", async (t) => {
+test("desktop transport through the public maintenance request: fresh publishes the desktop helper set, reconcile re-selects the same transport as a no-op, a transport-switching reconfigure previews the tmux set, and status/verify read the desktop expectation", async (t) => {
   const root = disposableRoot(t, "wakeflow-maintain-transport-");
   runGit(root, "init", "--quiet");
   const fresh = {
@@ -192,7 +192,8 @@ test("desktop transport through the public maintenance request: fresh publishes 
     equal(existsSync(path.join(root, ...ref.split("/"))), false, ref);
   }
 
-  // K1 不经 reconfigure 切换传输（ADR-0025 D9）：改了传输键的期望配置以稳定 blocker 阻塞；不改传输的 reconfigure 不受影响。
+  // K2 起 reconfigure 可以换传输（裁定 4）：期望配置改回 tmux 时按 tmux 的资产集合计划并带四条启动意图（只预览，
+  // 下面的 status 与 verify 仍读桌面期望）；不改传输的 reconfigure 没有启动意图。
   const switching = await executeClaudeCodeWakeflowMaintenance({
     root,
     action: "reconfigure",
@@ -204,9 +205,14 @@ test("desktop transport through the public maintenance request: fresh publishes 
       },
     },
   });
-  equal(switching.status, "blocked");
-  deepEqual([...switching.blockerCodes], ["window-transport-change-unsupported"]);
-  equal(switching.planDigest, null);
+  if (switching.mode !== "preview") throw new Error("Expected a preview result.");
+  equal(switching.status, "ready", JSON.stringify(switching.blockerCodes));
+  const switchingKinds = operationKindsOf(switching.plan);
+  for (const kind of ["tmux-asset", "statusline-asset", "statusline-settings"]) {
+    ok(switchingKinds.includes(kind), kind);
+  }
+  equal(switchingKinds.includes("desktop-asset"), false);
+  equal(switching.launchIntents.length, 4);
   const same = await executeClaudeCodeWakeflowMaintenance({
     root,
     action: "reconfigure",
@@ -214,7 +220,7 @@ test("desktop transport through the public maintenance request: fresh publishes 
     request: { desiredConfig: config },
   });
   if (same.mode !== "preview") throw new Error("Expected a preview result.");
-  equal(same.blockerCodes.includes("window-transport-change-unsupported"), false);
+  equal(same.launchIntents.length, 0);
 
   // status 与 verify 按桌面期望读资产：助手 current、设置条目不适用，门通过且不点名；本地布局按桌面 profile 对账。
   const status = await executeStatusRequest(CLAUDE_OBSERVATION_FACADE, { root });

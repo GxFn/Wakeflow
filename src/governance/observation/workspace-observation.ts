@@ -264,6 +264,11 @@ export interface ObservedHostHooks {
       readonly sessionStartObserverManifestDigest: Sha256Digest | null;
       /** 同一条 session-start 记录里观察器制品的 `version`（§3.6 C6）；旧记录或没有启动记录为 null。 */
       readonly sessionStartArtifactVersion: string | null;
+      /**
+       * 保留期内该会话有过 user-prompt-submit 记录（open-items W41）：从未有过对话的会话宿主不会
+       * --resume 它，过期窗口只能重开；与 tmux 助手 `resume-never-conversed` 的判据相同。
+       */
+      readonly conversed: boolean;
     }>
   >;
 }
@@ -640,8 +645,10 @@ async function observeHostHooks(
         readonly notificationType: string | null;
         readonly sessionStartObserverManifestDigest: Sha256Digest | null;
         readonly sessionStartArtifactVersion: string | null;
+        readonly conversed: boolean;
       }>
     >();
+    const conversed = new Set<string>();
     const latestKeys = new Map<string, string>();
     const startKeys = new Map<string, string>();
     const startDigests = new Map<string, Sha256Digest | null>();
@@ -658,6 +665,7 @@ async function observeHostHooks(
           fail("io-failure", "observation-session-limit", "$observations");
         }
         const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+        if (record.event === "user-prompt-submit") conversed.add(record.sessionId);
         if (record.event === "session-start") {
           const previousStart = startKeys.get(record.sessionId);
           if (previousStart === undefined || previousStart <= key) {
@@ -676,6 +684,7 @@ async function observeHostHooks(
             notificationType: record.notificationType,
             sessionStartObserverManifestDigest: null,
             sessionStartArtifactVersion: null,
+            conversed: false,
           });
         }
       },
@@ -686,6 +695,7 @@ async function observeHostHooks(
         ...latest,
         sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
         sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
+        conversed: conversed.has(sessionId),
       });
     }
     const writeFailures = await countIncidents(

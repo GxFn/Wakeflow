@@ -747,6 +747,66 @@ test("Notification 只记类型：notification_type 合文法时落地为 notifi
   equal(rendered.includes("Waiting for your input"), false);
 });
 
+test("权限模式与会话标题（open-items X8）：permission_mode 与 session_title 原样落进记录，不合内核文法的值只把该字段降级为 null，没带它们的事件与宿主读成 null", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  const start = await observe(
+    "claude-code",
+    hookPayload("SessionStart", sessionId, fixture.workspace, fixture.transcriptPath, {
+      session_title: "Alembic",
+    }),
+  );
+  equal(start.code, null);
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  for (const [turn, extra] of [
+    ["turn-a", { permission_mode: "default", session_title: "Alembic" }],
+    ["turn-b", { permission_mode: "accept edits!", session_title: "bad\u0007title" }],
+    ["turn-c", { permission_mode: 7, session_title: ["Alembic"] }],
+  ] as const) {
+    const outcome = await observe(
+      "claude-code",
+      hookPayload("UserPromptSubmit", sessionId, fixture.workspace, fixture.transcriptPath, {
+        prompt: "hello",
+        turn_id: turn,
+        ...extra,
+      }),
+    );
+    equal(outcome.code, null);
+    deepEqual(writtenRoots(outcome), [fixture.workspace]);
+  }
+  const stop = await observe(
+    "claude-code",
+    hookPayload("Stop", sessionId, fixture.workspace, fixture.transcriptPath, {
+      turn_id: "turn-a",
+    }),
+  );
+  equal(stop.code, null);
+  const inventory = await readBack(fixture.workspace, "claude-code");
+  const facts = Object.fromEntries(
+    inventory.records.map((record) => [
+      `${record.event}:${record.turnId ?? ""}`,
+      [record.permissionMode, record.sessionTitle],
+    ]),
+  );
+  deepEqual(facts, {
+    "session-start:": [null, "Alembic"],
+    "user-prompt-submit:turn-a": ["default", "Alembic"],
+    "user-prompt-submit:turn-b": [null, null],
+    "user-prompt-submit:turn-c": [null, null],
+    "stop:turn-a": [null, null],
+  });
+
+  const codex = await observe(
+    "codex",
+    hookPayload("SessionStart", SESSION_IDS.codex, fixture.repository, fixture.transcriptPath),
+  );
+  equal(codex.code, null);
+  for (const record of (await readBack(fixture.workspace, "codex")).records) {
+    equal(record.permissionMode, null);
+    equal(record.sessionTitle, null);
+  }
+});
+
 test("写失败：观察目录被普通文件顶替的工作区报 write-failed，其他匹配工作区照写，顶替的文件原样保留", async (t) => {
   const fixture = createFixture(t);
   const second = createWorkspace(fixture.base, "Wakeflow-2");

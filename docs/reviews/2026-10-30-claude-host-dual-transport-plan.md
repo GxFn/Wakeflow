@@ -36,13 +36,13 @@
 | relocate | 换 pane 后 CAS | 不适用（同 Codex） | 无 |
 | replace / close | 助手 `close` + 重开 | `archive_session`（用户授权）+ 重开 | pod 打开期间不归档（X6） |
 | pod 检出 | 助手准备 `.claude/worktrees/wakeflow-<pod>` | 同一检出作为 cwd，不用 `--worktree` | X6 |
-| pod 容器 | 每 pod 一个 tmux 会话 | 每 pod 一个侧栏分组（K2） | 无 |
+| pod 容器 | 每 pod 一个 tmux 会话 | 每 pod 一个侧栏分组（Controller 用 `create_group` / `move_sessions` 投影，K2） | 无 |
 | 状态投影 | 状态行 + `@wakeflow_state` | 侧栏原生标记，不发布状态行 | X14 |
 | 信任与权限模式 | 每窗信任对话；`--permission-mode auto` 随启动 | 每目录一次信任与选 auto；模式证据来自 user-prompt-submit（K1/K2） | X4 |
-| 制品更新换代 | close → launch → replace → mark | K1 文本"重启 app 后 reconcile"；K2 验归档/取消归档 | Y2（W41）、X2 |
+| 制品更新换代 | close → launch → replace → mark（status 逐窗口给 resume / relaunch 路线） | app 自行重载或归档→取消归档→发消息重起（E5 核实） | Y2（W41，已修）、X20 |
 | 首跑交接卡 | tmux 进入命令与每窗信任 | 侧栏分组、每目录信任与 auto、订阅登录 | X11 |
 | 自动化测试 | lab 用真实 tmux 进程跑两种实验 | 录制观察 + 场景链卡；无法无头起 app | X9 |
-| 现场清单 | L1–L16 | L17 已做，L18 待做 | 两者每次 tag 前各回归一次窗口生命周期 |
+| 现场清单 | L1–L16、L19 | L17、L18 已做 | 两者每次 tag 前各回归一次窗口生命周期 |
 
 ## 3. 维护规则
 
@@ -56,8 +56,8 @@
 
 - **T0（本文，已做）**：规划、对等矩阵、Y/X 分册、维护规则。
 - **K1 桌面传输核心**（第 2 级门；已执行 2026-10-31，§13.222，门 run-u090Pi 1733/1733）：ADR-0025（双传输决定 + 桌面设计）、配置轴与 profile 传输对象（tmux 迁入，不改行为）、Schema `desktop` 与 `desktop-sessions`、`desktop.mjs`、launch 渲染器、维护资产集合、投递与回调文本、场景链桌面卡、文本压缩。
-- **T1 tmux 维护批**（第 1 或 2 级门，与 K1 相邻）：W41 整批 stale 窗口的批处理建议与"从未对话不必 resume"；W38 首次 reconcile apply 无效的复现与修；W39 replace/relocate 缺字段的措辞；D11 pod 事务后的 `drifted` 噪音。W3/H3 仍等 L15。
-- **K2 桌面生命周期与投影**（第 2 级门）：`permissionMode` / `sessionTitle` 进观察记录（两传输共用）、pod 分组、换代路径（先验归档/取消归档）、交接卡、detach 对应、reconfigure 切换传输。
+- **T1 tmux 维护批**（第 2 级门，与 K2 同一阶段执行 2026-11-02，§13.225）：W41 整批 stale 窗口的批处理建议与"从未对话不必 resume"；W38 首次 reconcile apply 无效的复现与修；W39 replace/relocate 缺字段的措辞；D11 pod 事务后的 `drifted` 噪音。W3/H3 仍等 L15。
+- **K2 桌面生命周期与投影**（第 2 级门；已执行 2026-11-02，§13.225，与 T1 同一道门）：`permissionMode` / `sessionTitle` 进观察记录（两传输共用）、pod 分组、换代路径（先验归档/取消归档）、交接卡、detach 对应、reconfigure 切换传输。
 - **L18 / L19**：桌面全流程现场（已通过 2026-11-01，§13.223）；tmux 全流程回归（与 L13 同形，核对 K1 重构无行为变化；已通过 2026-11-02，§13.224）。
 - **之后**：两份助手脚本共同的类型化与合同共享（Y5/D5 与 desktop.mjs 一起解决）、A3 版本检测、K2 观察转抄成本。
 

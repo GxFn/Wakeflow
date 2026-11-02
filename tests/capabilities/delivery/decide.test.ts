@@ -7,14 +7,19 @@ import {
   type DispositionInput,
   deriveClaimBlocker,
   deriveDeliveryDisposition,
+  derivePermissionModeBlocker,
   derivePrepareBlockers,
   deriveRearmBlockers,
+  expectedLaunchPermissionMode,
   landingSilenceExceeded,
   sendReturnProvesLanding,
 } from "../../../src/capabilities/delivery/decide.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 
 /**
@@ -346,4 +351,23 @@ test("等用户决定的 Demand 不准备投递也不 rearm（复审 D1）：阻
     ["awaiting-decision"],
   );
   deepEqual(deriveRearmBlockers({ phase: "host-effect-rejected", generation: 1 }), []);
+});
+
+test("落地时的模式证据（open-items X4）：要求的模式取配置覆盖、否则取选出 profile 的启动模板，宿主线程型没有要求；只有记录报告了不同的模式才是不一致", () => {
+  equal(expectedLaunchPermissionMode(claudeCodeWorkspaceHostResourceProfile, undefined), "auto");
+  equal(expectedLaunchPermissionMode(claudeCodeDesktopWorkspaceHostResourceProfile, null), "auto");
+  equal(
+    expectedLaunchPermissionMode(claudeCodeDesktopWorkspaceHostResourceProfile, "acceptEdits"),
+    "acceptEdits",
+  );
+  equal(expectedLaunchPermissionMode(codexWorkspaceHostResourceProfile, "auto"), null);
+
+  const windowId = "window_00000000-0000-4000-8000-000000000001";
+  equal(
+    derivePermissionModeBlocker(windowId, "auto", "default"),
+    `permission-mode-mismatch:${windowId}`,
+  );
+  equal(derivePermissionModeBlocker(windowId, "auto", "auto"), null);
+  equal(derivePermissionModeBlocker(windowId, "auto", null), null, "旧记录或事件不带模式");
+  equal(derivePermissionModeBlocker(windowId, null, "default"), null, "宿主没有模式要求");
 });

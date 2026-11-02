@@ -5627,3 +5627,18 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **修法与验证。** 本节提交三处修法：助手伪终端 stdin、观察器 system-reminder 剥离、两处技能文本；第 1 级（entrypoints 与 hosts 改动，制品重建）：`impact report` 定级 1（52 个受影响测试文件）；制品重建后 `wf verify quick --changed` 346/346 failed 0（run-nO9GD0，14.5 分钟，含制品测试与 lab 负载测试）；`smoke:artifacts` 五幕通过、lab 四个实验 4/4；`git diff --check` 干净；`wf handoff` 全部通过。
 
 **结论：L18 通过——桌面传输从 fresh-initialize 到归档走通，K1 的设计在真实桌面上成立；现场发现的两处缺陷与两处竞态文案已修，X17（存活观察改用 list_sessions）与 X18–X20 进 K2。L19（tmux 回归现场）待做。**
+
+### 13.224 现场 L19：tmux 传输回归，K1 重构后行为不变（2026-11-02）
+
+用户推送 L18 修法后，在 WakeflowTestWorkspace9（K1 之前初始化、`windowTransport` 缺省即 tmux、5 个 Alembic 克隆、pod live16 半建）上重走 L13 的"认领到归档"，核对 ADR-0025 把 tmux 实现迁入传输轴后没有改变 tmux 行为。制品为 L18 修法后的提交；工作区的 `hostAssets` 在 K1 后仍为 current（tmux.mjs 字节未变）。
+
+- **准备。** 脚手架 + `wakeflow_publish_requirement` 发布 "L19 README note"（Alembic README 的 Live check 节加一句）；tmux 服务器此前已不在运行，我用已发布的 tmux 助手 `launch` 开 Controller 窗口——输出与 K1 前同形（`execution.kind` 仍是 `claude-code`，观察带 tmux 四元组，新建会话 `wakeflow`），`replace` 登记、`mark` 标题照旧。
+- **流程。** 3 次 `/wakeflow:next` + 2 次对话框作答（比 L13 多一次 `/next`，原因是回调回合被一次 API 错误"响应中断"打断、没有工具调用，按技能从 status 续上）：
+  1. `/next` #1：status 报 8 个 stale 窗口；Controller 把两个确认点合成一个 AskUserQuestion 对话框（重开 4 个从未对话的窗口 + 认领唯一待办包），作答后同一回合里 close → launch → replace → mark 四个窗口（register 19 次）、认领、规划、准备、助手 `deliver` 粘贴投递、`record_delivery_outcome` accepted，停在"投递已发送"（回合 27 分钟，其中约 20 分钟在等对话框作答）。
+  2. 回调由 Alembic 窗口粘回 Controller（Alembic 一回合内提交 ab70d37，只改 README）；该回合因 API 错误中断。
+  3. `/next` #2：inspect review 2 次、记 8 条证据、accept（返工 0），停在"已记录决定"。
+  4. `/next` #3：完成预检 10 道门全过，对话框确认后归档：status idle、看板 archived 3，verify 15/16（唯一失败是 live16 pod 那一个 stale 窗口，K1 前就在）。
+- **计数。** 51 次 Wakeflow 工具调用（status 11、verify 2、register_window_binding 19、record_evidence 8、create_demand 2、complete_demand 2、inspect_target_result_review 2，inspect_board / plan / prepare / record_delivery_outcome / record_implementation_review_decision 各 1）、Bash 37（全部是助手与只读 git）、AskUserQuestion 2。与 L13（47 次、2 `/next` + 2 确认）同量级；差异只有对话框形式与那次 API 错误。
+- **结论。** tmux 传输在 K1 重构后行为不变：开窗、登记、恢复、粘贴投递、回调、评审、归档的每一步都与 L13 同形；W41（制品更新后整批 stale 窗口的探测成本）依旧存在，归 T1。
+
+**结论：L19 通过。两种传输都已在真实宿主上走通完整闭环（L18 桌面、L19 tmux）；接下来是 T1（tmux 维护批）与 K2（桌面生命周期与投影）。**

@@ -85,10 +85,10 @@ Your three paragraphs are the only part a target reads first, so write them as
 instructions to a competent colleague who has not been in this conversation:
 what to achieve, where to focus, what not to touch. Do not restate the package
 - the target reads it - and do not put an absolute local path or a handle in
-them. The one host id they carry is under desktop sessions on Claude Code:
-the boundary names your own desktop session id as the callback's
-destination, because the rendered prompt has none
-(`references/desktop-transport.md`, "The callback").
+them, nor a host session id: under desktop sessions on Claude Code the
+rendered prompt's return section already names the Controller's desktop
+session as the callback's destination (`references/desktop-transport.md`,
+"The callback").
 
 A target is preparable when it is planned; for an implementation target, when
 a rework or a product-defect rework was requested; for a test target, when

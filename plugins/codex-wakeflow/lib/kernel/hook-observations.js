@@ -59,6 +59,8 @@ const RECORD_KIND = "WakeflowHostHookObservation";
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
 /** Notification 类型标签：Claude Code 的 `permission_prompt`、`idle_prompt` 一类 snake_case 词（§13.167）。 */
 const NOTIFICATION_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
+/** 权限模式标签：`acceptEdits`、`bypassPermissions` 一类 camelCase 词（open-items X8），与通知类型同一文法。 */
+const PERMISSION_MODE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
 const CWD_MAXIMUM_LENGTH = 4096;
 function hasControlCharacter(text) {
     for (const character of text) {
@@ -103,11 +105,13 @@ const RECORD_KEYS = Object.freeze([
     "lastAssistantMessageDigest",
     "transcriptRef",
 ]);
-/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6）。 */
+/** 后加的可选键：旧记录没有它也合法（§13.127、§13.167、§3.6 C6、open-items X8）。 */
 const OPTIONAL_RECORD_KEYS = Object.freeze([
     "artifactManifestDigest",
     "artifactVersion",
     "notificationType",
+    "permissionMode",
+    "sessionTitle",
 ]);
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
@@ -152,6 +156,14 @@ function optionalNotificationType(value, path) {
         return null;
     if (typeof value !== "string" || !NOTIFICATION_TYPE_PATTERN.test(value)) {
         fail("invalid-request", "hook-notification-type", path);
+    }
+    return value;
+}
+function optionalPermissionMode(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "string" || !PERMISSION_MODE_PATTERN.test(value)) {
+        fail("invalid-request", "hook-permission-mode", path);
     }
     return value;
 }
@@ -225,6 +237,8 @@ export function createHostHookObservation(input) {
         artifactManifestDigest: optionalDigest(input.artifactManifestDigest, "$observation.artifactManifestDigest"),
         artifactVersion: optionalArtifactVersion(input.artifactVersion, "$observation.artifactVersion"),
         notificationType: optionalNotificationType(input.notificationType, "$observation.notificationType"),
+        permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
+        sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
     };
     return Object.freeze({
         kind: RECORD_KIND,
@@ -260,6 +274,8 @@ function parseHostHookObservation(value) {
         artifactManifestDigest: (object.artifactManifestDigest ?? null),
         artifactVersion: (object.artifactVersion ?? null),
         notificationType: (object.notificationType ?? null),
+        permissionMode: (object.permissionMode ?? null),
+        sessionTitle: (object.sessionTitle ?? null),
     });
     if (record.recordId !== object.recordId) {
         fail("invalid-request", "hook-record-id", "$record.recordId");

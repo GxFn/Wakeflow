@@ -82,6 +82,25 @@ export function sendReturnProvesLanding(profile) {
 export function landingSilenceExceeded(silenceStartedAt, now, thresholdMilliseconds = DELIVERY_LANDING_SILENCE_MILLISECONDS) {
     return Date.parse(now) - Date.parse(silenceStartedAt) > thresholdMilliseconds;
 }
+/**
+ * 窗口启动时要求的权限模式（open-items X4）：配置覆盖（`hosts.<宿主>.launch.permissionMode`）优先，否则取选出的
+ * 宿主资源 Profile 的启动模板值；没有模式概念的启动模板（宿主线程型）为 null。共享代码不按宿主或传输分支。
+ */
+export function expectedLaunchPermissionMode(profile, configured) {
+    if (!("permissionMode" in profile.launch))
+        return null;
+    return configured ?? profile.launch.permissionMode;
+}
+/**
+ * 落地时的模式证据（open-items X4，设计提案第 3.4 节）：落地记录报告的模式与启动要求的模式不同，就在窗口上记
+ * `permission-mode-mismatch:<windowId>`。它不改变处置——投递已落地、窗口仍可工作，只是会向用户要权限；
+ * Controller 据此请用户为该目录选一次模式。记录没带模式（旧记录或事件不带该字段）或宿主没有模式要求时从不算不一致。
+ */
+export function derivePermissionModeBlocker(windowId, expected, observed) {
+    if (expected === null || observed === null || expected === observed)
+        return null;
+    return `permission-mode-mismatch:${windowId}`;
+}
 /** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm；等用户决定时一律阻塞。 */
 export function derivePrepareBlockers(target) {
     if (target.awaitingDecision === true)

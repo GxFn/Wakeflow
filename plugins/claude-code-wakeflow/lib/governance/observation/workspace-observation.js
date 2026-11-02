@@ -269,6 +269,7 @@ async function observeHostHooks(root, hostId, current, signal) {
     try {
         const directory = await hookDirectoryState(root, hostId);
         const latestBySession = new Map();
+        const conversed = new Set();
         const latestKeys = new Map();
         const startKeys = new Map();
         const startDigests = new Map();
@@ -279,6 +280,8 @@ async function observeHostHooks(root, hostId, current, signal) {
                 fail("io-failure", "observation-session-limit", "$observations");
             }
             const key = `${record.recordedAt}-${record.event}-${record.recordId}`;
+            if (record.event === "user-prompt-submit")
+                conversed.add(record.sessionId);
             if (record.event === "session-start") {
                 const previousStart = startKeys.get(record.sessionId);
                 if (previousStart === undefined || previousStart <= key) {
@@ -297,6 +300,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                     notificationType: record.notificationType,
                     sessionStartObserverManifestDigest: null,
                     sessionStartArtifactVersion: null,
+                    conversed: false,
                 });
             }
         }, signalOptions(signal));
@@ -305,6 +309,7 @@ async function observeHostHooks(root, hostId, current, signal) {
                 ...latest,
                 sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
                 sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
+                conversed: conversed.has(sessionId),
             });
         }
         const writeFailures = await countIncidents(root, { source: "hook-observer", hostId }, signalOptions(signal));

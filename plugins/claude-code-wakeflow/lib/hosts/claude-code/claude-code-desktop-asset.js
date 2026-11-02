@@ -829,7 +829,7 @@ function startBackgroundSession(cwd, argv) {
   const output = started.stdout + "\n" + started.stderr;
   if (!started.ok) {
     if (NOT_TRUSTED_PATTERN.test(output)) {
-      refuse("not-trusted", { cwd: cwd.relative, hint: "open claude once in this directory and accept the trust dialog, then launch again" });
+      refuse("not-trusted", { cwd: cwd.relative, hint: "Claude Code has no trust record for this folder: the user opens it in the Claude desktop app (a new session there) or runs claude in a terminal there and accepts the trust dialog, then launch again; never open it with claude --desktop yourself" });
     }
     refuse("launch-start-failed", { status: started.status, detail: boundedDetail(started.stderr.length > 0 ? started.stderr : started.stdout) });
   }

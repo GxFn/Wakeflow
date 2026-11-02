@@ -30,7 +30,7 @@ import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, Tes
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
-import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservations, } from "../../kernel/hook-observations.js";
+import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
@@ -41,7 +41,7 @@ import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveClaimBlocker, deriveDeliveryDisposition, derivePrepareBlockers, deriveRearmBlockers, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
+import { deriveClaimBlocker, deriveDeliveryDisposition, derivePermissionModeBlocker, derivePrepareBlockers, deriveRearmBlockers, expectedLaunchPermissionMode, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
 import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
@@ -203,6 +203,15 @@ function workspaceRootFromWindow(context, route) {
     return relative === "" ? "." : relative;
 }
 async function readBinding(context, windowId) {
+    const binding = await findBinding(context, windowId);
+    if (binding === undefined)
+        fail("precondition-failed", "binding-missing", "$request.targetTaskId");
+    if (binding.hostId !== context.facade.hostId) {
+        fail("precondition-failed", "binding-host", "$request.targetTaskId");
+    }
+    return binding;
+}
+async function findBinding(context, windowId) {
     const { facade, authority } = context;
     let bindings;
     try {
@@ -217,13 +226,23 @@ async function readBinding(context, windowId) {
         }
         throw error;
     }
-    const binding = bindings.find((entry) => entry.windowId === windowId);
-    if (binding === undefined)
-        fail("precondition-failed", "binding-missing", "$request.targetTaskId");
-    if (binding.hostId !== facade.hostId) {
-        fail("precondition-failed", "binding-host", "$request.targetTaskId");
-    }
-    return binding;
+    return bindings.find((entry) => entry.windowId === windowId);
+}
+/**
+ * 目标所在 pod 的 Controller 窗口当前绑定的桌面会话 id（X15）：组合根没有注入读取端、该 pod 没有 Controller
+ * 绑定或定位器不是桌面会话时为 null；tmux 目标的 prompt 因此逐字节不变。
+ */
+async function controllerDesktopSessionIdFor(context, route) {
+    const read = context.facade.readControllerDesktopSessionId;
+    if (read === undefined)
+        return null;
+    const controller = compileWakeflowWindowLaunchIntents(context.authority.config.model, context.facade.resourceProfile).intents.find((entry) => entry.role === "controller" && entry.podId === route.podId);
+    if (controller === undefined)
+        return null;
+    const binding = await findBinding(context, controller.windowId);
+    if (binding === undefined || binding.hostId !== context.facade.hostId)
+        return null;
+    return read(context.workspaceRoot, controller.windowId, binding.bindingId, context.options.signal);
 }
 function digestBinding(binding) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
@@ -545,13 +564,14 @@ function testContractSection(taskPackage, attempt) {
         rerunStepIds: attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null,
     });
 }
-function renderPrompt(context, input, sources, pointer) {
+function renderPrompt(context, input, sources, pointer, controllerDesktopSessionId) {
     const { taskPackage, route } = sources;
     const instructionFile = context.facade.resourceProfile.instructionFileName;
     const repositoryId = taskPackage.workType === "implementation" ? taskPackage.assignment.repositoryId : null;
     return renderDeliveryPortablePrompt({
         language: input.language,
         displayTitle: route.displayTitle,
+        controllerDesktopSessionId,
         taskPackage,
         authored: {
             goal: input.authored.goal,
@@ -646,6 +666,7 @@ async function executePrepare(context, input, binding) {
     const claimId = deriveWorkClaimId("prepare-delivery", demandId, binding.idempotencyKey);
     const now = nowFrom(options);
     const sources = await prepareSources(context, repository, target, taskPackage, route, binding);
+    const controllerDesktopSessionId = await controllerDesktopSessionIdFor(context, route);
     const taken = await takeClaim(context, route, { demandId, targetTaskId: target.targetTaskId, deliveryId, generation: 1 }, claimId, now);
     let envelope;
     let commandResult;
@@ -655,7 +676,7 @@ async function executePrepare(context, input, binding) {
             claimDigest: taken.claim.claimDigest,
             streamRevision: binding.expectedStreamRevision + 1,
             generation: 1,
-        });
+        }, controllerDesktopSessionId);
         envelope = createEnvelope(input, sources, taken.claim, {
             deliveryId,
             taskPackage,
@@ -1086,7 +1107,37 @@ async function sessionRecords(context, sessionId, since) {
         promptDigest: record.promptDigest,
         recordedAt: record.recordedAt,
         event: record.event,
+        permissionMode: record.permissionMode,
     }));
+}
+/** 启动要求的模式：配置覆盖按选出 profile 的宿主键读取，再落到 profile 的启动模板（X4）。 */
+function expectedPermissionMode(context) {
+    const launch = context.authority.config.model.hosts[context.facade.hostId]?.launch;
+    const configured = launch !== undefined && "permissionMode" in launch ? launch.permissionMode : undefined;
+    return expectedLaunchPermissionMode(context.facade.resourceProfile, configured);
+}
+/** 处置引用的落地记录若报告了与启动要求不同的模式，就在窗口上记一条阻塞（X4）；处置本身不变。 */
+function permissionModeBlockers(context, windowId, landed) {
+    const blocker = derivePermissionModeBlocker(windowId, expectedPermissionMode(context), landed?.permissionMode ?? null);
+    return blocker === null ? Object.freeze([]) : Object.freeze([blocker]);
+}
+/**
+ * 重放时按处置引用的记录标识重读那条记录，让结果与首次记录报同样的窗口发现；记录已被修剪或读不出时只是
+ * 不再报，重放的处置不受影响。
+ */
+async function replayPermissionModeBlockers(context, windowId, hookRecordId) {
+    if (hookRecordId === null)
+        return Object.freeze([]);
+    let read;
+    try {
+        read = await readHostHookObservationRecord(context.workspaceRoot, context.facade.hostId, hookRecordId, signalOptions(context.options.signal));
+    }
+    catch (error) {
+        if (context.options.signal?.aborted === true)
+            throw error;
+        return Object.freeze([]);
+    }
+    return permissionModeBlockers(context, windowId, read?.record);
 }
 function outcomeDraft(input, target, decision) {
     if (!decision.accepted)
@@ -1144,6 +1195,7 @@ function replayOutcome(context, envelope, bound, binding) {
         targetTaskId: envelope.target.targetTaskId,
         workType: envelope.workType,
         eventId: stored.eventId,
+        windowBlockers: Object.freeze([]),
     });
 }
 function assertOutcomeRecordable(target, claimDigest) {
@@ -1191,7 +1243,10 @@ function decideOutcome(context, input, envelope, records, currentlyIndeterminate
 async function observedOutcomeDecision(context, input, envelope, sessionId, currentlyIndeterminate) {
     try {
         const records = await sessionRecords(context, sessionId, envelope.preparedAt);
-        return decideOutcome(context, input, envelope, records, currentlyIndeterminate);
+        return {
+            decision: decideOutcome(context, input, envelope, records, currentlyIndeterminate),
+            records,
+        };
     }
     catch (error) {
         const partial = isWakeflowError(error) &&
@@ -1203,7 +1258,7 @@ async function observedOutcomeDecision(context, input, envelope, sessionId, curr
         if (independent.accepted &&
             (independent.evidenceKind === "host-send-return" ||
                 independent.evidenceKind === "controller-resolution"))
-            return independent;
+            return { decision: independent, records: [] };
         throw error;
     }
 }
@@ -1214,7 +1269,11 @@ async function executeOutcome(context, input, binding) {
     if (bound !== null) {
         // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
         const replayedEnvelope = await loadEnvelope(repository, input.deliveryId, options.signal);
-        const replayed = replayOutcome(context, replayedEnvelope, bound, binding);
+        const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
+        const replayed = Object.freeze({
+            ...recorded,
+            windowBlockers: await replayPermissionModeBlockers(context, replayedEnvelope.route.windowId, recorded.outcome.evidence.hookRecordId),
+        });
         // 追加已提交而释放未完成的裂缝由重放路径补做；助手对缺失或已易主的声明无事可做。
         if (replayed.outcome.claimHandling === "release-authorized") {
             await releaseClaimFor(context, replayedEnvelope.route.windowId, replayed.outcome.fence);
@@ -1230,7 +1289,7 @@ async function executeOutcome(context, input, binding) {
     if (route.binding.bindingId !== envelope.route.bindingId) {
         fail("precondition-failed", "binding-changed", "$request.deliveryId");
     }
-    const decision = await observedOutcomeDecision(context, input, envelope, route.binding.handle.value, currentlyIndeterminate);
+    const { decision, records } = await observedOutcomeDecision(context, input, envelope, route.binding.handle.value, currentlyIndeterminate);
     if (!decision.accepted) {
         const blockers = [decision.blocker];
         if (decision.blocker === "landing-evidence-missing" &&
@@ -1251,12 +1310,16 @@ async function executeOutcome(context, input, binding) {
     if (outcome.claimHandling === "release-authorized") {
         await releaseClaimFor(context, route.binding.windowId, outcome.fence);
     }
+    const landed = outcome.evidence.hookRecordId === null
+        ? undefined
+        : records.find((record) => record.recordId === outcome.evidence.hookRecordId);
     return Object.freeze({
         commandResult,
         outcome,
         targetTaskId: target.targetTaskId,
         workType: target.workType === "test" ? "test" : "implementation",
         eventId: committed.stored.eventId,
+        windowBlockers: permissionModeBlockers(context, envelope.route.windowId, landed),
     });
 }
 /** 只释放仍属于本次投递的声明；缺失或已易主（例如已被 rearm 重取）都不是错误。 */
@@ -1290,6 +1353,7 @@ function outcomeResult(envelope, outcome, nextProjection) {
     const blockers = [...nextProjection.blockers];
     if (outcome.outcome.disposition === "indeterminate")
         blockers.push("landing-evidence-missing");
+    blockers.push(...outcome.windowBlockers);
     return admitRecordDeliveryOutcomeResult({
         kind: "WakeflowRecordDeliveryOutcomeResult",
         schemaVersion: WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION,

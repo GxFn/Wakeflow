@@ -24,7 +24,8 @@ import { parseWakeflowArtifactManifestIdentity, } from "../kernel/wakeflow-artif
  * 支持面、仓库之下，或位于主仓库为声明仓库的检出之下即匹配。`session-start` 写进每个匹配的工作区，
  * 其余事件只写进绑定目录已持有该 `session_id` 句柄的工作区。记录只经内核 `writeHostHookObservation`
  * 写入（D3）：只有 `session_id`、`cwd`、`hook_event_name` 是必填，不合内核合同即 `stdin-invalid`；
- * 可选字段（turn 标识、transcript 路径、消息正文）不合合同时只把该字段降级为 null，会话事实照写。
+ * 可选字段（turn 标识、transcript 路径、消息正文、权限模式与会话标题）不合合同时只把该字段降级为 null，
+ * 会话事实照写。
  * 进程永远退出 0、stdout 为空、stderr 只在异常时打一行固定代码，不含路径、句柄与提示正文（D4）；
  * 进程级守卫经 `registerProcessGuards` 只登记一次，一次故障恰好一行。闭包限于 foundation 与
  * kernel：不加载配置校验器，非 Wakeflow 会话必须静默且便宜。
@@ -142,6 +143,8 @@ function parsePayload(stdin) {
         lastAssistantMessage: optionalString(object.last_assistant_message),
         turnId: optionalString(object.turn_id) ?? optionalString(object.prompt_id),
         notificationType: optionalString(object.notification_type),
+        permissionMode: optionalString(object.permission_mode),
+        sessionTitle: optionalString(object.session_title),
     }));
 }
 // ---- 记录映射（D3）--------------------------------------------------------------
@@ -219,11 +222,6 @@ function requiredInput(hostId, payload, event, clock) {
         return null;
     }
 }
-/**
- * 可选字段逐个问内核：合同文法（标识符模式、文本长度与控制字符）只住在内核，这里不复制它。
- * 内核拒绝的字段降级为 null 而不丢整条记录——宿主给出的 turn 标识或 transcript 路径不合文法时，
- * 会话事实本身仍是证据。
- */
 function degradeToKernel(required, field, value) {
     if (value === null)
         return null;
@@ -241,6 +239,10 @@ function withOptionalField(required, field, value) {
             return { ...required, turnId: value };
         case "transcriptRef":
             return { ...required, transcriptRef: value };
+        case "permissionMode":
+            return { ...required, permissionMode: value };
+        case "sessionTitle":
+            return { ...required, sessionTitle: value };
         default:
             return { ...required, notificationType: value };
     }
@@ -261,6 +263,9 @@ function recordInput(hostId, payload, event, clock, artifactManifestDigest, arti
         notificationType: event === "notification"
             ? degradeToKernel(required, "notificationType", payload.notificationType)
             : null,
+        // 模式与标题是会话事实，按宿主交回的原样逐字段降级；不带它们的宿主（Codex）与事件自然是 null。
+        permissionMode: degradeToKernel(required, "permissionMode", payload.permissionMode),
+        sessionTitle: degradeToKernel(required, "sessionTitle", payload.sessionTitle),
     });
 }
 async function nodeKind(target) {

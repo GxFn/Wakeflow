@@ -23,7 +23,7 @@ repositories.
   `wakeflow-target`, `wakeflow-test`. Each window loads the one for its role.
 - **Pods** - a second complete window set working in its own worktree (on
   Claude Code in its own tmux session under the tmux transport, or as its own
-  sidebar sessions under desktop sessions), for running two pieces of work at
+  sidebar group of sessions under desktop sessions), for running two pieces of work at
   once without them colliding.
 
 ## First run
@@ -37,8 +37,9 @@ repositories.
    repository, Test - and tells you the one thing only you do at each point:
    on Claude Code under tmux the command that brings you to those windows and
    the trust dialog to accept in each; under desktop sessions the folders to
-   trust once and the `auto` permission mode to pick once there, while the
-   windows appear in the app's sidebar.
+   open once so Claude Code trusts them and the one card per folder that
+   confirms the `auto` permission mode, while the windows appear in the app's
+   sidebar.
 3. It ends with a handover card: what each window is for, how to move between
    them, how to come back later, and what to do first - go to the Design
    window and describe your first requirement. Then you close the setup
@@ -136,11 +137,14 @@ delivers prompts through the same helper. Under desktop sessions the Controller 
 window as a session in the app's sidebar through the helper installed as `desktop.mjs` in
 the same place and delivers prompts with the app's own session messaging; what only you do:
 sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow
-works, trust each product folder once when the app asks, and pick the `auto` permission
-mode once in each (the app remembers both per folder). Maintenance also writes precise
-allow rules for the published helper and the Wakeflow MCP tools into the workspace root's
-`.claude/settings.json`, and every window the helper launches is started with those two
-tools allowed, so product and test windows do not stop at a permission prompt for them
+works, let Claude Code trust each folder a window starts in - open the folder in the
+desktop app (a new session there) or run `claude` in a terminal there, and accept the
+trust dialog; the Controller names any folder that still needs it and never trusts one for
+you - and approve the one card per folder the app may show when the Controller switches a
+window there to the `auto` permission mode (the folder remembers it). Maintenance also
+writes precise allow rules for the published helper and the Wakeflow MCP tools into the
+workspace root's `.claude/settings.json`, and every window the helper launches is started
+with those two tools allowed, so product and test windows do not stop at a permission prompt for them
 either; nothing broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow
 wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a
 `..` directory in that list is 0.9.x residue or the repository's own settings: delete or
@@ -177,10 +181,11 @@ MCP server until `/reload-plugins` or a new session, so the Controller's
 `wakeflow_status` then reports `runtime-artifact-outdated` for its own server and
 `windows-stale:<n>` for peer windows started under the previous artifact. Under the tmux
 transport the Controller refreshes them itself through the tmux helper (its skill section "After a
-plugin update"); under desktop sessions you quit and reopen the Claude desktop app once -
-every session comes back on the updated plugin - and the Controller then verifies and
-reconciles. Expect `wakeflow_verify` to pass `runtime-artifact` again once no window is
-stale; `unverified` is not a failure.
+plugin update"); under desktop sessions the desktop app reloads each session's Wakeflow
+server on its own within a few turns - if the Controller's does not, archive and unarchive it and
+message it, which restarts its process on the current artifact -
+and the Controller then verifies and reconciles. Expect `wakeflow_verify` to pass
+`runtime-artifact` again once no window is stale; `unverified` is not a failure.
 
 Within the supported workspace baseline an update needs no workspace migration;
 `wakeflow_status` after the update names what is left to do (an outdated server,

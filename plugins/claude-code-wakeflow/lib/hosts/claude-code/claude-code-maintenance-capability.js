@@ -14,6 +14,7 @@ import { CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_S
 import { CLAUDE_CODE_TMUX_ASSET_BLOCKER, CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND, CLAUDE_CODE_TMUX_ASSET_OWNER_ID, executeClaudeCodeTmuxAssetOperation, planClaudeCodeTmuxAssetOperation, } from "./claude-code-tmux-asset-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_FILE_NAME } from "./claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
+import { CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OPERATION_KIND, CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OWNER_ID, ClaudeCodeWindowTransportRetirementError, executeClaudeCodeWindowTransportRetirement, planClaudeCodeWindowTransportRetirement, } from "./claude-code-window-transport-retirement.js";
 /**
  * Wakeflow Host / Claude Code：当前 Claude 宿主维护 capability。
  *
@@ -29,6 +30,12 @@ import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-i
  * `program`、支撑面 `support:<surfaceId>`）与 `remove-statusline-entry`（`statusline`、
  * `statusline:support:<surfaceId>`）；operationKind 就是共享步骤表里的种类名。两种删除步都不分传输：
  * 规则表删两种传输的助手规则，状态行删除只删在场且是 Wakeflow 的条目，没有即 current。
+ *
+ * 换传输（ADR-0025 K2，裁定 4）：reconfigure 的期望 Config 换了窗口传输时，贡献另出两类步——每个有登记的窗口
+ * 一条 `window-transport-retirement`（删绑定与定位器、投影发布成 unregistered，见退役模块），以及不发布状态栏的
+ * profile 的 `remove-statusline-entry`（离开 tmux 时删掉 Wakeflow 的状态行条目）；便携设置的写入路径本来就把
+ * 另一种传输的助手规则作为退役规则删掉。状态行删除不只在切换时计划：不发布状态栏的传输上任何一次 reconcile
+ * 或 reconfigure 都删在场的 Wakeflow 条目，没有即零步，所以中断后的对账同样收敛。
  */
 const CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID = "claude-code-maintenance";
 const PORTABLE_SETTINGS_OPERATION_KIND = "portable-settings";
@@ -191,6 +198,27 @@ async function planDetachContribution(root, request) {
         ],
     });
 }
+/**
+ * 不发布状态栏的传输（桌面）上，程序根与托管支撑面里 Wakeflow 自己的状态行条目要删（离开 tmux）。删除计划与
+ * detach-workspace 用的是同一份：它对这组根只删所有权判定为 Wakeflow 的那一条、没有即零步，负载里不带动作，
+ * 所以这里按 detach-workspace 的根集合求它；执行走同一个删除 executor。fresh-initialize 没有可删的条目。
+ */
+async function planStatuslineRetirement(root, request) {
+    if (request.action === "fresh-initialize")
+        return { operations: [], blockerCodes: [] };
+    return planStatuslineRemoval(root, { ...request, action: "detach-workspace" });
+}
+/** 换传输时旧登记的退役计划（K2）；宿主错误按 owner 失败。 */
+async function planWindowTransportRetirement(root, request) {
+    try {
+        return await planClaudeCodeWindowTransportRetirement(root, request);
+    }
+    catch (error) {
+        if (error instanceof ClaudeCodeWindowTransportRetirementError)
+            fail("owner", error.path);
+        throw error;
+    }
+}
 async function planContribution(root, request) {
     if (isWakeflowDetachAction(request.action))
         return planDetachContribution(root, request);
@@ -209,14 +237,18 @@ async function planContribution(root, request) {
     const helperAsset = await planHostAsset((options) => helper.plan(root, options), helper.blocker, request.signal);
     const settings = statuslinePublished
         ? await planStatuslineSettings(root, request)
-        : { operations: [], blockerCodes: [] };
+        : await planStatuslineRetirement(root, request);
+    const retirement = await planWindowTransportRetirement(root, request);
     const projections = await planProjections(root, request);
-    // blocker 在边界内排序去重前必须互不相同：五个来源的前缀各不相同。
+    // 被退役的窗口由退役操作自己发布 unregistered 投影；按旧绑定算出的 registered 投影操作不再执行。
+    const projectionOperations = projections.operations.filter((operation) => !retirement.retiredWindowIds.includes(operation.targetKey));
+    // blocker 在边界内排序去重前必须互不相同：六个来源的前缀各不相同（状态行安装与删除不会同时计划）。
     const blockerCodes = [
         ...composition.blockerCodes,
         ...(statusline.blocker === null ? [] : [statusline.blocker]),
         ...(helperAsset.blocker === null ? [] : [helperAsset.blocker]),
         ...settings.blockerCodes,
+        ...retirement.blockerCodes,
         ...projections.blockerCodes,
     ];
     return createWakeflowHostMaintenanceContribution({
@@ -237,7 +269,8 @@ async function planContribution(root, request) {
             ...(statusline.operation === null ? [] : [statusline.operation]),
             ...(helperAsset.operation === null ? [] : [helperAsset.operation]),
             ...settings.operations,
-            ...projections.operations,
+            ...retirement.operations,
+            ...projectionOperations,
         ],
     });
 }
@@ -326,6 +359,16 @@ async function executeStatuslineSettingsOperation(root, request, execute) {
         throw error;
     }
 }
+async function executeWindowTransportRetirement(root, request) {
+    try {
+        return await executeClaudeCodeWindowTransportRetirement(root, request);
+    }
+    catch (error) {
+        if (error instanceof ClaudeCodeWindowTransportRetirementError)
+            fail("owner", error.path);
+        throw error;
+    }
+}
 /** 退出路径的 portable settings 负载带 `action: "remove"`（ADR-0024）；只看这一个判别字段，完整准入在 executor。 */
 function portableSettingsPayloadRemoves(payload) {
     if (payload === null || typeof payload !== "object" || Array.isArray(payload))
@@ -366,6 +409,10 @@ async function executeOperation(root, context, request) {
     if (request.operation.operationKind === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND &&
         request.operation.ownerId === WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID) {
         return executeProjectionOperation(root, request);
+    }
+    if (request.operation.operationKind === CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OPERATION_KIND &&
+        request.operation.ownerId === CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OWNER_ID) {
+        return executeWindowTransportRetirement(root, request);
     }
     // 写入与删除共用一个 executor；种类与负载的 action 不一致的操作在任何效果前拒绝。
     const removal = request.operation.operationKind === CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND;

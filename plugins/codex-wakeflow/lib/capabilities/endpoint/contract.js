@@ -12,6 +12,29 @@ import { fail } from "../../kernel/error.js";
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME = "wakeflow_register_window_binding";
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION = 1;
 const validateRequest = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA);
+/**
+ * 每种操作各一个校验器（open-items W39）：顶层 oneOf 不匹配时 Ajv 报的是第一个分支（inspect）的
+ * 错误——replace 缺 expectedBindingId 被报成 `additional:observation`。请求点名了一个已知操作时
+ * 改用那个分支重校，拒绝码就是该操作自己缺的或多的字段（`required:expectedBindingId`）。
+ */
+const OPERATION_REQUEST_DEFINITIONS = Object.freeze({
+    inspect: "inspectRequest",
+    register: "registerRequest",
+    replace: "replaceRequest",
+    relocate: "relocateRequest",
+    decommission: "decommissionRequest",
+    "release-claim": "releaseClaimRequest",
+});
+const validateOperationRequest = new Map(Object.entries(OPERATION_REQUEST_DEFINITIONS).map(([operation, definition]) => {
+    const { oneOf: _branches, ...schema } = WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA;
+    return [
+        operation,
+        createRuntimeJsonSchemaValidator({
+            ...schema,
+            $ref: `#/$defs/${definition}`,
+        }),
+    ];
+}));
 const validateResult = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA);
 export function parseWindowBindingRequest(value) {
     let json;
@@ -24,11 +47,18 @@ export function parseWindowBindingRequest(value) {
         throw error;
     }
     const result = validateRequest(json);
-    if (!result.ok)
-        fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
-            details: { schema: result.detail },
-        });
-    return result.value;
+    if (result.ok)
+        return result.value;
+    const operation = json !== null && typeof json === "object" && !Array.isArray(json)
+        ? json.operation
+        : undefined;
+    const branch = typeof operation === "string" ? validateOperationRequest.get(operation) : undefined;
+    const branched = branch?.(json);
+    // 分支互斥（operation 是 const），所以分支通过而 oneOf 不通过不会发生；真发生了就报原来的错。
+    const refusal = branched === undefined || branched.ok ? result : branched;
+    fail("invalid-request", "schema", `$request${refusal.path.slice(1)}`, {
+        details: { schema: refusal.detail },
+    });
 }
 export function admitWindowBindingResult(value) {
     const result = validateResult(parseJsonValue(value, "$result"));

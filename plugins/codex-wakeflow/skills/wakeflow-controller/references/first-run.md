@@ -79,6 +79,15 @@ for a missing record is waiting on such a prompt (or still starting): name
 it, wait for their word, and register it again. When every window is
 registered, finish the host procedure's last step before the card.
 
+On Claude Code under desktop sessions, right after apply this session's
+permission classifier may refuse the helper: the allow rules were written
+after this session started, so it never loaded them. Never try to work
+around a classifier refusal. Start a new session in the workspace root -
+with `start_session` when the host offers it, otherwise ask the user to open
+one there - whose first prompt asks it to initialize Wakeflow here: on the
+existing workspace it previews reconcile and continues the window launches
+from that session.
+
 Explain while you wait, do not only report: a host prompt that asks the user
 to trust or allow something lists only what that root's own settings
 pre-approve - nothing, when Wakeflow wrote the root; a product window only

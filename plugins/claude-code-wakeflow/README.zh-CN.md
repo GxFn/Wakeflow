@@ -28,8 +28,8 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
    在哪），预览计划，你点头后应用。
 2. 然后它自己开好全部窗口——Controller、Design、每个产品仓库一个、Test——并在
    每个只有你能做的点上告诉你那一件事：Claude Code 上 tmux 传输时是进入这些窗口的
-   那条命令和每个窗口里要接受的信任对话，桌面会话传输时是要信任一次的目录和在那里
-   选一次的 `auto` 权限模式，窗口则出现在 app 的侧栏里。
+   那条命令和每个窗口里要接受的信任对话，桌面会话传输时是要打开一次、让 Claude Code
+   信任的目录，和每个目录一张确认 `auto` 权限模式的卡片，窗口则出现在 app 的侧栏里。
 3. 最后给你一张交接卡：每个窗口是做什么的、怎么在窗口之间移动、以后怎么回来、
    第一步做什么——去 Design 窗口把第一个需求说清楚。然后关掉引导会话；从此
    Controller 窗口就是 Controller。
@@ -101,8 +101,10 @@ app 的侧栏自带标记。
 自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个
 助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的
 侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作
-期间让 app 开着，app 询问时把每个产品目录信任一次，并在每个目录里选一次 `auto` 权限模式
-（app 按目录记住这两项）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和
+期间让 app 开着；让 Claude Code 信任每个窗口所在的目录——在桌面 app 里打开该目录（在那里新开
+一个会话），或在终端里到该目录运行 `claude`，接受信任对话；Controller 会点名还需要信任的目录，
+从不替你信任；Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次
+即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和
 Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口
 同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，
 其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，
@@ -131,9 +133,9 @@ Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wa
 会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的
 `wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报
 `windows-stale:<n>`。tmux 传输下 Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己
-刷新它们；桌面会话传输下由你退出并重开一次桌面 app——每个会话都在新插件上回来——然后 Controller
-校验并对账。没有窗口再是 stale 之后，`wakeflow_verify` 的 `runtime-artifact` 门重新通过；
-`unverified` 不是失败。
+刷新它们；桌面会话传输下桌面 app 会在几个回合内自行重载各会话的 Wakeflow 服务——Controller 的
+服务没有重载时，归档再取消归档并发一条消息即可令其以当前制品重起——然后 Controller 校验并对账。没有窗口再是 stale 之后，
+`wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。
 
 在受支持的工作区基线内，更新不需要迁移工作区；更新后的 `wakeflow_status` 会点名剩下要做的事
 （过期的 server、stale 的窗口、`reconcile` 可修复的宿主资产）。由 Wakeflow 0.9.x 初始化的工作区

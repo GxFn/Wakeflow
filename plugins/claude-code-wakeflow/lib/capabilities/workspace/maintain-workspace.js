@@ -131,35 +131,47 @@ function selectHostProfiles(facade, admitted, model) {
         hostProfiles: Object.freeze(admitted.hostProfiles.map((profile) => profile.hostId === facade.hostId ? currentHostProfile : profile)),
     });
 }
-/**
- * K1 不经 reconfigure 切换窗口传输（ADR-0025 D9，K2 再做退役全部窗口投影后按新传输开窗）：期望配置选出的
- * 传输键与当前配置不同即阻塞。只比较键是否相等，不认识键的含义；单传输宿主两边都没有键。
- */
-function transportChangeBlockers(facade, admitted, currentModel, desiredConfig) {
+/** 期望配置选出的传输键与当前配置不同：只比较键是否相等，不认识键的含义；单传输宿主两边都没有键。 */
+function transportChanges(facade, admitted, currentModel, desiredConfig) {
     const source = transportSourceOf(facade, admitted);
-    return configuredWakeflowWorkspaceHostTransport(source, currentModel) ===
-        configuredWakeflowWorkspaceHostTransport(source, desiredConfig)
-        ? Object.freeze([])
-        : Object.freeze(["window-transport-change-unsupported"]);
+    return (configuredWakeflowWorkspaceHostTransport(source, currentModel) !==
+        configuredWakeflowWorkspaceHostTransport(source, desiredConfig));
 }
 /**
  * 写入动作选出的 profile 集合（ADR-0025 D1）：fresh-initialize 按选择编译出的配置，reconcile 与 reconfigure 按
- * 当前配置；reconfigure 改了传输键时给出 K1 的阻塞（D9），不选。
+ * 当前配置。reconfigure 换了传输键（K2，桌面适配方案第 11 节裁定 4）时按期望配置选新传输的 profile：静态步骤、
+ * 宿主资产集合（新助手与它的规则，离开 tmux 时删状态行条目）与宿主对旧登记的退役都从这份 profile 出发；前提是
+ * 没有活动 Demand、没有未关闭的 worktree pod，阻塞码与退出路径同形（`transport-change-demand-active:<id>`、
+ * `transport-change-pod-open:<podId>`）——换传输要重开每一个窗口，进行中的投递与 pod 检出里的窗口不能被拆掉。
  */
 async function selectWriteProfiles(context, action, desiredConfig) {
     if (action === "fresh-initialize") {
         return Object.freeze({
             profiles: selectHostProfiles(context.facade, context.profiles, desiredConfig),
             blockers: Object.freeze([]),
+            transportSwitch: false,
         });
     }
-    const currentModel = (await currentSnapshotOrNull(context))?.model ?? null;
-    const blockers = action === "reconfigure" && currentModel !== null && desiredConfig !== null
-        ? transportChangeBlockers(context.facade, context.profiles, currentModel, desiredConfig)
-        : Object.freeze([]);
+    const snapshot = await currentSnapshotOrNull(context);
+    const currentModel = snapshot?.model ?? null;
+    if (action === "reconfigure" &&
+        snapshot !== null &&
+        desiredConfig !== null &&
+        transportChanges(context.facade, context.profiles, snapshot.model, desiredConfig)) {
+        const blockers = new Set(occupancyPodBlockers(snapshot.model, null, TRANSPORT_CHANGE_BLOCKER_PREFIX));
+        const demands = await occupancyDemandBlockers(context, snapshot, null, TRANSPORT_CHANGE_BLOCKER_PREFIX);
+        for (const code of demands)
+            blockers.add(code);
+        return Object.freeze({
+            profiles: selectHostProfiles(context.facade, context.profiles, desiredConfig),
+            blockers: Object.freeze([...blockers].sort()),
+            transportSwitch: true,
+        });
+    }
     return Object.freeze({
         profiles: selectHostProfiles(context.facade, context.profiles, currentModel),
-        blockers,
+        blockers: Object.freeze([]),
+        transportSwitch: false,
     });
 }
 function desiredConfigFor(input, workspaceRoot) {
@@ -259,8 +271,9 @@ function mapTransactionError(error) {
     }
     throw error;
 }
-function expectedLaunchIntents(plan, request, profiles) {
-    if (request.action !== "fresh-initialize" ||
+/** fresh-initialize 与换传输的 reconfigure（K2）带启动意图：两者之后每个窗口都按选出的 profile 开窗。 */
+function expectedLaunchIntents(plan, request, profiles, transportSwitch) {
+    if ((request.action !== "fresh-initialize" && !transportSwitch) ||
         plan.status !== "ready" ||
         request.desiredConfig === null) {
         return null;
@@ -535,13 +548,15 @@ async function currentSnapshotOrNull(context) {
         throw error;
     }
 }
-/** 未关闭的 worktree pod：detach-repository 看含该仓库检出的，detach-workspace 看全部。 */
-function detachPodBlockers(model, repositoryId) {
+const DETACH_BLOCKER_PREFIX = "detach";
+const TRANSPORT_CHANGE_BLOCKER_PREFIX = "transport-change";
+/** 未关闭的 worktree pod：detach-repository 看含该仓库检出的，detach-workspace 与换传输看全部。 */
+function occupancyPodBlockers(model, repositoryId, prefix) {
     return model.pods
         .filter((pod) => pod.placement !== "primary" &&
         (repositoryId === null ||
             pod.worktrees.some((worktree) => worktree.repositoryId === repositoryId)))
-        .map((pod) => `detach-pod-open:${pod.podId}`);
+        .map((pod) => `${prefix}-pod-open:${pod.podId}`);
 }
 /** 活动目录里的 Demand 目录名；目录不在即没有 Demand；读不出为 "unavailable"。 */
 async function activeDemandDirectoryNames(context) {
@@ -598,11 +613,11 @@ async function demandOccupies(context, store, demandId, repositoryId) {
             await closeDemandOperationRoot(demandRoot);
     }
 }
-/** 活动 Demand：detach-repository 看有该仓库目标的，detach-workspace 看全部。 */
-async function detachDemandBlockers(context, snapshot, repositoryId) {
+/** 活动 Demand：detach-repository 看有该仓库目标的，detach-workspace 与换传输看全部。 */
+async function occupancyDemandBlockers(context, snapshot, repositoryId, prefix) {
     const names = await activeDemandDirectoryNames(context);
     if (names === "unavailable")
-        return Object.freeze(["detach-demands-unavailable"]);
+        return Object.freeze([`${prefix}-demands-unavailable`]);
     if (names.length === 0)
         return Object.freeze([]);
     let ledgerRoot;
@@ -622,7 +637,7 @@ async function detachDemandBlockers(context, snapshot, repositoryId) {
         for (const name of names) {
             const demandId = parseWakeflowDurableIdOfKind(name, "demand");
             if (await demandOccupies(context, store, demandId, repositoryId)) {
-                blockers.push(`detach-demand-active:${demandId}`);
+                blockers.push(`${prefix}-demand-active:${demandId}`);
             }
         }
         return Object.freeze(blockers);
@@ -663,10 +678,12 @@ async function detachOccupancy(context, input, snapshot, repositoryId) {
         else
             desiredConfig = derivation.model;
     }
-    for (const code of detachPodBlockers(snapshot.model, repositoryId))
+    for (const code of occupancyPodBlockers(snapshot.model, repositoryId, DETACH_BLOCKER_PREFIX)) {
         blockers.add(code);
-    for (const code of await detachDemandBlockers(context, snapshot, repositoryId))
+    }
+    for (const code of await occupancyDemandBlockers(context, snapshot, repositoryId, DETACH_BLOCKER_PREFIX)) {
         blockers.add(code);
+    }
     const privateModes = await privateModePlan(context, input.action);
     for (const code of privateModes?.blockers ?? [])
         blockers.add(code);
@@ -763,7 +780,7 @@ async function planMaintenance(context, input) {
     let launchIntentSet;
     try {
         executionPlan = await context.facade.preview(context.root, executionRequest);
-        launchIntentSet = expectedLaunchIntents(executionPlan, executionRequest, profiles);
+        launchIntentSet = expectedLaunchIntents(executionPlan, executionRequest, profiles, selected.transportSwitch);
     }
     catch (error) {
         mapPreviewError(error);

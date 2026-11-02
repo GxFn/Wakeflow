@@ -64,10 +64,43 @@ const WORKSPACE_MAINTENANCE_FRONTIER = "workspace-maintenance";
 const MAINTENANCE_TOOL = "wakeflow_maintain_workspace";
 const REGISTRATION_TOOL = "wakeflow_register_window_binding";
 const CREATE_DEMAND_TOOL = "wakeflow_create_demand";
+/**
+ * 过期窗口的逐窗口路线（open-items W41）：从未有过对话的会话宿主不能 --resume，直接重开
+ * （close → launch → replace → mark，登记工具是其中的 Wakeflow 一步）；有过对话的就地 resume。
+ */
+export const STALE_WINDOW_RELAUNCH = "stale-window-relaunch";
+export const STALE_WINDOW_RESUME = "stale-window-resume";
 /** 空闲工作区的下一步：用户在 Design 窗口起草需求（§13.188 I1）。 */
 export const IDLE_REQUIREMENT_AUTHORING = "requirement-authoring";
 /**
- * 顺序：制品过期（用户）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
+ * 过期窗口：一项汇总（next 的前沿），再按 windowId 逐窗口给路线（W41）。整批路线按数据给出，不让
+ * Controller 逐窗口 inspect 再试 resume（§13.218 L13：4 次注定 resume-exited）。
+ */
+function staleWindowActions(staleWindows) {
+    if (staleWindows.length === 0)
+        return [];
+    const routes = [...staleWindows]
+        .sort((left, right) => left.windowId.localeCompare(right.windowId))
+        .map((window) => window.conversed
+        ? {
+            owner: "controller",
+            tool: null,
+            reason: STALE_WINDOW_RESUME,
+            subject: window.windowId,
+        }
+        : {
+            owner: "controller",
+            tool: REGISTRATION_TOOL,
+            reason: STALE_WINDOW_RELAUNCH,
+            subject: window.windowId,
+        });
+    return [
+        { owner: "controller", tool: null, reason: "window-artifact-stale", subject: null },
+        ...routes,
+    ];
+}
+/**
+ * 顺序：制品过期（用户）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
  * （primary 先，再按 demandId）> 待认领需求包；去重，上限 64。
  */
 export function deriveNextActions(input) {
@@ -88,14 +121,7 @@ export function deriveNextActions(input) {
             subject: input.artifactServerSupersededBy,
         });
     }
-    if (input.staleWindows > 0) {
-        actions.push({
-            owner: "controller",
-            tool: null,
-            reason: "window-artifact-stale",
-            subject: null,
-        });
-    }
+    actions.push(...staleWindowActions(input.staleWindows));
     if (input.maintenance) {
         actions.push({
             owner: "controller",

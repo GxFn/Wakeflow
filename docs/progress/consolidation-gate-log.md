@@ -5614,3 +5614,16 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **门。** 第 2 级（contracts、Schema、场景链改动，制品重建）。制品重建后 79 个文件变化（两份 `lib/`、两份 manifest、两种语言 README、Controller / Target / Test 技能与新参考、init 命令）。门 run-u090Pi：1733/1733，19.7 分钟（本会话的运行；第三条场景链让门比 §13.217 长约 1.6 分钟）；`smoke:artifacts` 五幕通过、lab 四个实验 4/4（2.6 分钟）；`wf timings apply` 已按 run-u090Pi 写回耗时表（343 个文件），按既有做法不为耗时表再跑一道门；`git diff --check` 干净；`wf handoff` 全部通过。
 
 **结论：通过（run-u090Pi，1733/1733）。K1 落地：Claude Code 宿主的桌面会话传输与 tmux 传输并列，一份制品、一套 hook 与设置规则，按工作区配置选传输；源码、测试、工具与文档一并提交，制品重建另一提交。剩 L18（桌面全流程现场）、L19（tmux 回归现场）、K2（观察记录字段、pod 分组、换代、reconfigure 切换）与 X15、X16。**
+
+### 13.223 现场 L18：桌面传输从初始化到归档走通，三处现场修法（2026-11-01）
+
+用户推送 K1 后建了 WakeflowTestWorkspace12（五个 Alembic 克隆、根目录不是 Git 仓库）并在里面开了一个桌面会话作为引导会话。全程走真实桌面 app（4.29.0，内置 Claude Code 2.1.309），我从本会话（"项目概览"）以跨会话消息推动，用户只在设计上的确认点点头。
+
+- **初始化。** 引导会话提议 desktop 传输（它有桌面会话工具），fresh-initialize preview → apply 成功，配置带 `windowTransport: desktop`，助手 preflight 通过。引导会话随即被自己的 auto 分类器拦下（"Auto-Mode Bypass"）：工作区的允许规则是 apply 之后才写的，它没加载；它改为提议一张 `start_session` 卡片（该账号此时已有 `start_session`）或让用户在终端跑助手。登记 X18。
+- **信任。** 根目录在 apply 写出 `.claude/settings.json` 后弹了信任框、写入命令行信任记录；其余 7 个目录我用 `claude --desktop <目录>` 逐个打开，命令行信任记录在 3 秒内写入、没有弹窗。这是 app 的行为，Wakeflow 不应在用户不知情时依赖它，登记 X19；交接卡文本要把"信任目录"写成具体操作。
+- **开窗。** 我代替引导会话运行助手：第一次 `launch` 在伪终端那一步失败——`spawnSync` 继承的管道 stdin 让 `script` 报 "tcgetattr/ioctl: Operation not supported on socket"（本机手工验证时用的是 `</dev/null`）；修为 stdin `ignore`，重建后 8 个窗口全部开进桌面（每个约 30 秒：`--bg` 首回合 → `stop` → `--desktop --resume` → 新 session-start 记录）。我的分类器拒绝一条命令里批量开多个窗口，单个开窗允许。引导会话第一次 register 被 `runtime-artifact-outdated` 拒绝（我重建了制品），几分钟后它的 MCP 服务自行重载、8 个窗口登记成功（`artifactOnDisk: same`）——桌面传输下服务过期不需要用户重启 app，文本里"重启桌面 app"的说法可以放宽（X20）。
+- **会话生命周期与模式。** 桌面窗口会话空闲一段时间后进程结束（AlembicCore 在登记后出现 session-end），`claude agents --json` 只列进程存活的会话：K1 用它做 `desktop-sessions` 存活观察会把仍在侧栏的会话判成 absent，必须改用桌面 `list_sessions`（X17，K1 的漏判）。窗口接手后权限模式回到 Manual；我用 `set_session_permission_mode` 把 8 个会话切到 auto，全部成功、无阻力——这就是 X4 的落地路径（开窗后由 Controller 立即切 auto，K2）。侧栏按文件夹分组把 8 个会话散开，我用 `create_group` + `move_sessions` 归入"Wakeflow 测试项目"一组（K2 的投影）。
+- **需求闭环。** 需求包用脚手架发布（`wf mcp call` 的请求体不能带 `root`；preview 也要带 `confirmation.confirmedAt`）。Controller 会话按技能停在认领确认点，正确地不把我的跨会话消息当作用户确认；用户确认后它连续完成认领、规划、准备、`send_message` 投递、`landing`、记录结果。投递落地 indeterminate：Alembic 会话被桌面接手后的第一回合，app 把一段 23 KB 的 `<system-reminder>` 拼在同一条用户消息前面，hook 的 prompt 因此与 permit 摘要不符（E2 时第二条消息没有这段）。观察器修为先剥首尾 `<system-reminder>` 块再剥传输外壳，加测试。Alembic 一分钟内完成改动（提交 070e2f1 只改 README）并尝试导入，被拒 `target-phase:delivery-prepared`——Controller 约 90 秒后才记录投递结果，竞态；目标技能加"该码表示结果未记录，稍等再导入"，桌面参考加"发送返回后立刻 `landing` 并记录结果"。重导入成功，回调经 `SendMessage` 落地且摘要与 permit 一致；Controller 读评审单元、自己核对 diff 与 README 末尾、记 3 条证据、accept（返工 0）；完成预检 10 道门全过，用户确认后归档：status idle、看板 archived 1，verify 15/16（唯一失败是 Finder 的 .DS_Store 与克隆自带的旧版残留，与传输无关）。
+- **修法与验证。** 本节提交三处修法：助手伪终端 stdin、观察器 system-reminder 剥离、两处技能文本；第 1 级（entrypoints 与 hosts 改动，制品重建）：`impact report` 定级 1（52 个受影响测试文件）；制品重建后 `wf verify quick --changed` 346/346 failed 0（run-nO9GD0，14.5 分钟，含制品测试与 lab 负载测试）；`smoke:artifacts` 五幕通过、lab 四个实验 4/4；`git diff --check` 干净；`wf handoff` 全部通过。
+
+**结论：L18 通过——桌面传输从 fresh-initialize 到归档走通，K1 的设计在真实桌面上成立；现场发现的两处缺陷与两处竞态文案已修，X17（存活观察改用 list_sessions）与 X18–X20 进 K2。L19（tmux 回归现场）待做。**

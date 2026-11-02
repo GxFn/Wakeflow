@@ -289,9 +289,22 @@ const CLAUDE_CODE_PROMPT_WRAPPERS: readonly RegExp[] = [
   /^<cross-session-message\b[^>\n]*>\n?([\s\S]*?)\n?<\/cross-session-message\b[^>\n]*>$/u,
 ];
 
+/**
+ * 桌面 app 在会话被它接手后的第一回合，把一段 `<system-reminder>…</system-reminder>` 拼在同一条用户消息
+ * 的最前面（现场 L18：投递落在那一回合，hook 的 prompt 因此多了这段前缀，摘要对不上 permit）。它是宿主
+ * 注入的引导文字，不是投递正文：先剥掉首尾的 reminder 块再剥传输外壳。
+ */
+const CLAUDE_CODE_LEADING_SYSTEM_REMINDERS =
+  /^(?:\s*<system-reminder\b[^>\n]*>[\s\S]*?<\/system-reminder\s*>\s*)+/u;
+const CLAUDE_CODE_TRAILING_SYSTEM_REMINDERS =
+  /(?:\s*<system-reminder\b[^>\n]*>[\s\S]*?<\/system-reminder\s*>\s*)+$/u;
+
 export function unwrapHostPrompt(hostId: HostId, prompt: string): string {
   if (hostId !== "claude-code") return prompt;
-  let text = prompt.trim();
+  let text = prompt
+    .replace(CLAUDE_CODE_LEADING_SYSTEM_REMINDERS, "")
+    .replace(CLAUDE_CODE_TRAILING_SYSTEM_REMINDERS, "")
+    .trim();
   for (let depth = 0; depth < 2; depth += 1) {
     const match = CLAUDE_CODE_PROMPT_WRAPPERS.map((pattern) => pattern.exec(text)).find(
       (entry) => entry !== null,

@@ -58,7 +58,7 @@
 - **K1 桌面传输核心**（第 2 级门；已执行 2026-10-31，§13.222，门 run-u090Pi 1733/1733）：ADR-0025（双传输决定 + 桌面设计）、配置轴与 profile 传输对象（tmux 迁入，不改行为）、Schema `desktop` 与 `desktop-sessions`、`desktop.mjs`、launch 渲染器、维护资产集合、投递与回调文本、场景链桌面卡、文本压缩。
 - **T1 tmux 维护批**（第 1 或 2 级门，与 K1 相邻）：W41 整批 stale 窗口的批处理建议与"从未对话不必 resume"；W38 首次 reconcile apply 无效的复现与修；W39 replace/relocate 缺字段的措辞；D11 pod 事务后的 `drifted` 噪音。W3/H3 仍等 L15。
 - **K2 桌面生命周期与投影**（第 2 级门）：`permissionMode` / `sessionTitle` 进观察记录（两传输共用）、pod 分组、换代路径（先验归档/取消归档）、交接卡、detach 对应、reconfigure 切换传输。
-- **L18 / L19**：桌面全流程现场；tmux 全流程回归（与 L13 同形，核对 K1 重构无行为变化）。
+- **L18 / L19**：桌面全流程现场（已通过 2026-11-01，§13.223）；tmux 全流程回归（与 L13 同形，核对 K1 重构无行为变化，待做）。
 - **之后**：两份助手脚本共同的类型化与合同共享（Y5/D5 与 desktop.mjs 一起解决）、A3 版本检测、K2 观察转抄成本。
 
 ## 5. 问题分册摘要（权威在 open-items）

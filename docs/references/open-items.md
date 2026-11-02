@@ -837,8 +837,8 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 桌面传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；tmux 分册在 Y 节）。来源：[调研文档](../reviews/2026-10-29-claude-desktop-window-transport-research.md)（§13.219、§13.220）与[适配方案](../reviews/2026-10-29-claude-desktop-transport-design.md)。
 
 - **X1** [中 / 待决] 立项与否：桌面会话是持久对象、`send_message` 有返回值、hook 在桌面会话里照常触发（本机已证实），与 Codex 宿主同形；设计为 `claude-code` 宿主的 `windowTransport: tmux | desktop` 轴，制品、hook、设置、技能不变，两道门。状态：已立项（ADR-0025），K1 已落地 §13.222，K2 待做。
-- **X2** [中 / 前置] 现场 L17：三步开窗、fence、回调、pod 检出。状态：主干已做（2026-10-29，§13.220，调研文档第 8 节）；剩换代路径（归档/取消归档）等用户同意归档具体会话，`start_session` 有无等用户在新会话里看。
-- **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`（通用输入字段，SessionStart 示例无、UserPromptSubmit 有），第一条投递落地时不是 auto 就在窗口上记 `permission-mode-mismatch`；用户按目录选一次 auto（设计提案第 3.4 节）。状态：已裁定 (b)（2026-10-30），进 K1/K2。
+- **X2** [中 / 前置] 现场 L17 与 L18。状态：L17 主干 §13.220；L18 全流程通过 §13.223（fresh-initialize → 8 窗口 → 认领 → 投递 → 回调 → accept → 归档）；换代路径在 L18 观察到服务自行重载（X20）。
+- **X4** [中 / 约束] 桌面接手后 permissionMode 回到目录记忆值（L17 E4：`--bg --permission-mode auto` 变为 default），模式不一致还会让跨会话消息被扣住。修法方向：hook 记录加 `permissionMode`（通用输入字段，SessionStart 示例无、UserPromptSubmit 有），第一条投递落地时不是 auto 就在窗口上记 `permission-mode-mismatch`；用户按目录选一次 auto（设计提案第 3.4 节）。状态：已裁定 (b)；L18 证实 Controller 可直接 `set_session_permission_mode(…, auto)`（8 个会话全部成功），K2 把它作为开窗后的固定步骤。
 - **X5** [中 / 合同] 登记合同拒绝没有 tmux 坐标的观察（`tmux-coordinates-required`），桌面会话今天无法登记。修法方向：`creationObservation` 加 `desktop` 定位子分支、观察类型加 `desktop-sessions`、准入按传输选坐标（设计提案第 4 节）。状态：已落地 K1 §13.222（`desktop-session-required`、`locator-kind-mismatch`、`relocate-not-applicable`）。
 - **X6** [高 / 风险] `claude --bg --worktree` 起的会话被 agent view 与桌面当成自己的 worktree：`claude rm` 与归档会删除 Wakeflow 的 pod 检出（L17 E6）。修法方向：pod 窗口以检出为 cwd 直接起会话（E8 证实 app 不持有），文本写明永不 `claude rm`、pod 打开期间不归档。状态：已落地 K1 §13.222（助手在仓库根准备检出并以检出为 cwd，禁止 `--worktree`，永不 `claude rm`；文本已写明）。
 - **X7** [低 / 约束] `--bg` 忽略 `--session-id`，会话 id 由宿主分配后读回（L17 E7）。修法方向：launch intent 的 `sessionIdPolicy` 加 host-assigned 值。状态：已落地 K1 §13.222。
@@ -852,6 +852,10 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X14** [低 / 差距] 状态行与 `@wakeflow_state` attention 投影在桌面没有落点，只剩侧栏原生标记与标题。状态：已知差距，K2 看是否用标题前缀承载。
 - **X15** [低 / 改进] Controller 的桌面回调 id 今天由 Controller 用 `get_session self` 读出后写进投递边界段（K1 裁定；payload-privacy 只拦凭证类命中，`local_` id 不在其列）。修法方向：确定性路线——投递 prompt 的回传段由服务端从 Controller 绑定的桌面定位器渲染，或助手加子命令读定位器，prompt 里不再出现任何 id。状态：K2。
 - **X16** [低 / 文本] 新参考 `references/desktop-transport.md` 随制品也进了 Codex 制品（构建器不按宿主过滤文件；共享文本已按宿主限定措辞）。修法方向：`build-plugin-artifacts.ts` 加逐宿主文件过滤或把参考放进宿主占位符。状态：K2。
+- **X17** [高 / 漏判] K1 的 `desktop-sessions` 存活观察取自 `claude agents --json`，它只列进程存活的会话；桌面窗口会话空闲后进程会结束（L18：AlembicCore 登记后 session-end），仍在侧栏的会话会被判 absent。修法：观察改由 Controller 用桌面 `list_sessions` 产出（会话在不在、isRunning），助手 `sessions` 只作补充或退役。状态：K2 必修。
+- **X18** [中 / 首跑] 引导会话在 apply 写出允许规则之前已启动，auto 分类器把运行助手判为越权（L18）。修法：首跑文本在 apply 后让引导会话用 `start_session`（账号有时）或请用户新开引导会话再开窗；或把开窗放到 Controller 窗口自己做。状态：K2。
+- **X19** [中 / 边界] `claude --desktop <目录>` 打开目录会直接写入命令行信任记录（L18：五个仓库各 3 秒内、无弹窗）。Wakeflow 不得在用户不知情时依赖它；交接卡把"信任目录"写成"在桌面里打开该目录并接受弹窗"，助手的 not-trusted 拒绝给出具体做法。状态：K2 文本。
+- **X20** [低 / 观察] 桌面传输下 MCP 服务过期后，app 在后续回合自行重载了服务（L18：第一次 register 被 runtime-artifact-outdated 拒绝，几分钟后同会话登记成功）；"重启桌面 app"可放宽为"等服务重载或重开会话"。状态：K2 核实后改文本。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 

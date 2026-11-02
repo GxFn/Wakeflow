@@ -848,7 +848,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "name it in the boundary paragraph of every delivery you prepare",
       "find the session by its title with the desktop `list_sessions` tool",
       '`attempt: { status: "sent", sendReturn: <the return, unchanged> }`',
-      "Before you record the outcome, run `landing --window <windowId> --prompt-digest <the permit's promptDigest>`",
+      "Right after the send returns, before any other step, run `landing --window",
       "the outcome carries no `readback`",
       "`closeResult.status` is `closed` when the archive tool reported success",
       "quit and reopen the Claude desktop app",

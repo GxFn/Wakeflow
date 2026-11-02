@@ -89,7 +89,9 @@ report, return the callback. You own no other step and no Controller authority.
    from the prompt. Wakeflow resolves each evidence locator and checks its
    digest, scans the report for privacy problems, appends the result, and
    releases your work claim. A refusal means the report is not yet importable -
-   fix what it named and import again; it is not a reason to stop working. If
+   fix what it named and import again; it is not a reason to stop working. A
+   refusal naming `target-phase:delivery-prepared` means the Controller has not
+   recorded the delivery outcome yet: wait a short while and import again. If
    you find the imported report wrong before the Controller has decided, import
    once more with `supersedes` set to the `targetResultId` the first import
    returned; after a decision only a rework can change it. An

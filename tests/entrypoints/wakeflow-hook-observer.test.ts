@@ -1011,6 +1011,17 @@ test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥�
   equal(unwrapHostPrompt("claude-code", pastedPlainClose), PROMPT.trim());
   equal(unwrapHostPrompt("claude-code", crossSession), PROMPT.trim());
   equal(unwrapHostPrompt("claude-code", PROMPT), PROMPT.trim());
+  // 现场 L18：桌面接手后的第一回合，app 把 system-reminder 拼在跨会话消息前面；首尾的 reminder 都要剥掉。
+  const desktopFirstTurn = `<system-reminder>\nThis conversation is now continuing in the Claude desktop app (Code tab).\n<simulator_tools>\nstuff\n</simulator_tools>\n</system-reminder>\n\n<cross-session-message from="local_1" from-name="Controller">\n${PROMPT}\n</cross-session-message>`;
+  equal(unwrapHostPrompt("claude-code", desktopFirstTurn), PROMPT.trim());
+  equal(
+    unwrapHostPrompt(
+      "claude-code",
+      `${desktopFirstTurn}\n<system-reminder>trailing</system-reminder>`,
+    ),
+    PROMPT.trim(),
+  );
+  equal(unwrapHostPrompt("codex", desktopFirstTurn), desktopFirstTurn);
   equal(unwrapHostPrompt("codex", pasted), pasted);
   for (const host of HOSTS) {
     const sessionId = SESSION_IDS[host];

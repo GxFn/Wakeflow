@@ -202,9 +202,11 @@ settings rules maintenance writes are unchanged, and a product repository's
    `status: "failed-before-send"` with that return - record it so, then
    re-arm with `wakeflow_rearm_delivery`. Your send return is your own report
    (`host-send-return`), never host evidence.
-3. Before you record the outcome, run `landing --window <windowId>
-   --prompt-digest <the permit's promptDigest>` - with
-   `--wait-landing <seconds>` after a `queued` send. It reads the record
+3. Right after the send returns, before any other step, run `landing --window
+   <windowId> --prompt-digest <the permit's promptDigest>` - with
+   `--wait-landing <seconds>` after a `queued` send - and then record the
+   outcome: the window may finish and try to import within a minute, and its
+   import is refused until the outcome is recorded. It reads the record
    Wakeflow reads: `landed: true` with its `recordId` means the outcome will
    be accepted; `landed: false` means it will be indeterminate, resolved
    exactly as `references/delivery-and-review.md` says - wait for the

@@ -402,6 +402,9 @@ function run(command, args, options) {
     timeout: commandTimeoutMs(),
     ...(options?.input === undefined ? {} : { input: options.input }),
     ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+    // 现场 L18：script(1) 对继承来的管道 stdin 做 tcgetattr 会失败（Operation not supported on socket），
+    // 伪终端包装一律把 stdin 接到 /dev/null；其它子进程保持缺省管道。
+    ...(options?.stdin === "ignore" ? { stdio: ["ignore", "pipe", "pipe"] } : {}),
   });
   if (result.error !== undefined && result.error.code === "ETIMEDOUT") {
     refuse("host-command-timeout", {
@@ -881,7 +884,7 @@ function awaitFirstTurn(id, seconds) {
 function resumeIntoDesktop(sessionId, cwd) {
   const script = scriptBinary();
   if (script === null) refuse("script-unavailable");
-  const result = run(script, ["-q", "/dev/null", claudeBinary(), "--desktop", "--resume", sessionId], { cwd: cwd.absolute });
+  const result = run(script, ["-q", "/dev/null", claudeBinary(), "--desktop", "--resume", sessionId], { cwd: cwd.absolute, stdin: "ignore" });
   const output = stripSgr(result.stdout + "\n" + result.stderr);
   const opened = result.ok && OPENING_SESSION_PATTERN.test(output);
   if (opened) return;

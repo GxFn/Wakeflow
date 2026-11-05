@@ -16,7 +16,10 @@ import {
   CLAUDE_CODE_DESKTOP_ASSET_COMMAND,
   CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
 } from "../../src/hosts/claude-code/claude-code-desktop-asset.js";
-import { CLAUDE_CODE_TMUX_ASSET_COMMAND } from "../../src/hosts/claude-code/claude-code-tmux-asset.js";
+import {
+  CLAUDE_CODE_TMUX_ASSET_COMMAND,
+  CLAUDE_CODE_TMUX_ASSET_CONTENT,
+} from "../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import {
   CODEX_AGENT_TEXT_PLACEHOLDERS,
   renderCodexAgentText,
@@ -151,6 +154,33 @@ test("C16：Controller 技能把 server-outdated 与 windows-stale 直接路由�
   ok(source(WINDOWS).includes(`\n${PLUGIN_UPDATE_HEADING}\n`));
 });
 
+test("现场 L21：目标窗格不在空输入框时，技能、参考与助手提示给同一个做法——用户处理后重发同一个 permit，三种 observed 都列出", () => {
+  const reference = flat(source(DELIVERY));
+  includesAll(
+    reference,
+    [
+      "`menu-cursor`, `input-box-unseen` or `input-not-empty`",
+      "or that box holds typed text - a draft on any of its lines",
+      "then send the same permit again",
+      "Record a refusal and re-arm only when the window cannot be brought back to its prompt",
+    ],
+    "delivery reference",
+  );
+  equal(reference.includes("then record the outcome as reported and re-arm the delivery"), false);
+  const action = flat(CLAUDE_CODE_AGENT_TEXT_PLACEHOLDERS.deliveryAction.en);
+  ok(
+    action.includes(
+      "or that box holds typed text (nothing was sent: the user answers or clears it in that window, then you send the same permit again",
+    ),
+  );
+  ok(
+    CLAUDE_CODE_TMUX_ASSET_CONTENT.includes(
+      "have the user answer or clear it in that window, then send the same permit again",
+    ),
+  );
+  equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("then rearm"), false);
+});
+
 test("W41：更新一节按 status 的逐窗口路线处理过期窗口——从未对话的直接重开、不先试 resume，码与观察切片同一份", () => {
   for (const rendered of [claude(WINDOWS), codex(WINDOWS)]) {
     includesAll(
@@ -158,7 +188,8 @@ test("W41：更新一节按 status 的逐窗口路线处理过期窗口——从
       [
         "Status `nextActions` routes each stale window, so do not probe them:",
         `\`${STALE_WINDOW_RESUME}\` (its session holds a prompt record: restart it in place)`,
-        `\`${STALE_WINDOW_RELAUNCH}\` (it never conversed and cannot be resumed: close, launch, \`replace\` and \`mark\` it)`,
+        `\`${STALE_WINDOW_RELAUNCH}\` (it never conversed: close, launch, \`replace\`, \`mark\`)`,
+        "Where the host restarts a session on its next turn they are `windows-refresh-pending:<n>` on a passing gate.",
       ],
       "plugin-update section",
     );
@@ -910,6 +941,8 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "after a reconcile you recreate a missing group the same way",
       "the desktop app reloads the MCP server on its own within a few turns",
       "archive and unarchive this Controller session, then message it: that message",
+      "`wakeflow_verify` reports them as `windows-refresh-pending:<n>` on a passing gate",
+      "Restart none of them and send none a message to clear the state",
       "A `reconfigure` can switch the transport when no Demand is active and no worktree pod is open",
       "find the session by its title with the desktop `list_sessions` tool",
       '`attempt: { status: "sent", sendReturn: <the return, unchanged> }`',

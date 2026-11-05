@@ -107,8 +107,12 @@ export interface WakeflowWorkspaceHostResourceSurfaces {
    * 本进程的 MCP 过期（`server-outdated`）后由谁换代（open-items C17）。`controller-in-place`：Controller
    * 能按技能用宿主助手就地重启自己的窗口（Claude Code），`next` 的 owner 是 controller；
    * `user-app-restart`：只有用户重启宿主应用才能重载 MCP（Codex），owner 是 user。
+   * `host-next-turn`：宿主应用自己管会话进程（Claude 桌面会话）——空闲的会话进程会被结束，下一条消息以
+   * 当前制品重起，MCP 也会自行重载；owner 仍是 user（等待或归档再取消归档），而在旧制品下启动的绑定窗口
+   * 不由 Controller 重启：它们只作 `windows-refresh-pending` 信息，不让 runtime-artifact 门失败，也不排逐窗口动作。
+   * 只有 `controller-in-place` 的宿主把过期窗口算作门的失败并给出 resume / relaunch 路线。
    */
-  readonly runtimeRefresh: "controller-in-place" | "user-app-restart";
+  readonly runtimeRefresh: "controller-in-place" | "user-app-restart" | "host-next-turn";
 }
 
 /**
@@ -372,7 +376,13 @@ function parseSurfaces(value: unknown): Readonly<WakeflowWorkspaceHostResourceSu
 function parseRuntimeRefresh(
   value: unknown,
 ): WakeflowWorkspaceHostResourceSurfaces["runtimeRefresh"] {
-  if (value === "controller-in-place" || value === "user-app-restart") return value;
+  if (
+    value === "controller-in-place" ||
+    value === "user-app-restart" ||
+    value === "host-next-turn"
+  ) {
+    return value;
+  }
   fail("surface", "$/surfaces/runtimeRefresh");
 }
 

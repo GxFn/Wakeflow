@@ -183,7 +183,9 @@ const WINDOW_RESUME =
   "the update is being picked up, check `wakeflow_status` on your next turns until it shows " +
   "the runtime artifact current, then call `wakeflow_verify` and preview and apply reconcile; " +
   "if it has not reloaded after a few turns, ask the user to archive and unarchive this Controller session and message it: the message restarts its process on the current artifact. " +
-  "Peer windows reported `stale` clear the same way when they next converse; a session is " +
+  "Peer windows reported `stale` are `windows-refresh-pending` on a passing gate there: the " +
+  "app ends an idle session's process and its next message starts it on the current artifact, " +
+  "so restart none and send none a message for it; a session is " +
   "resumed by sending it a message, so nothing is relocated. A session that is gone (`absent` " +
   "in the desktop-sessions observation: archived or deleted) is replaced, not resumed: with " +
   "the user's authorization pipe its inspect result into `launch` again, register the printed " +
@@ -310,9 +312,9 @@ const DELIVERY_ACTION =
   "It reads the prompt from the permit file - never retype, pipe or " +
   "reconstruct it, never read `.wakeflow-active` event files yourself - refuses " +
   "`prompt-digest-mismatch` when the file does not match and, before sending, " +
-  "`target-not-at-prompt` when the pane shows a dialog or menu instead of its input box " +
-  "(nothing was sent: the user answers it in that window, then you send the same permit " +
-  "again; never send keys there yourself), otherwise pastes the prompt, presses Return once, " +
+  "`target-not-at-prompt` when the pane shows a dialog or menu instead of its input box, or " +
+  "that box holds typed text (nothing was sent: the user answers or clears it in that window, " +
+  "then you send the same permit again; never send keys there yourself), otherwise pastes the prompt, presses Return once, " +
   "waits a few seconds for the target session's prompt-submit record and prints the " +
   "`attempt`, `readback` and `landing` to record verbatim; `readback` is screen text only, " +
   "landing is proven by the hook record alone. Under desktop sessions send the `promptRef` " +

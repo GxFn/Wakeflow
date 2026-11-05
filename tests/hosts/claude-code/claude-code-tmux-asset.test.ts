@@ -1730,6 +1730,24 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
     false,
   );
+  // 现场 L15（Claude Code 2.1.309，capture-pane -e 的真实渲染，W3）：多行草稿的首行可以是空的——只有 "❯" 与一个
+  // 不换行空格——草稿在缩进两格的续行里，仍夹在两条边框线之间；折行的长草稿、首行有字的多行草稿同形。都拒绝。
+  for (const draft of [
+    "\u001b[39m\u276f\u00a0\n  draft on line two",
+    "\u001b[39m\u276f\u00a0\n  \n  draft on line three",
+    "\u001b[39m\u276f\u00a0first line text\n  second line text",
+    "\u001b[39m\u276f\u00a0this is a long single line draft that should wrap past the eighty column\n  pane width so we can see how the wrapped part renders",
+  ]) {
+    const multiline = deliverWith(
+      `● Done.\n\u001b[38;5;244m──────────\n${draft}\n\u001b[38;5;244m──────────\n\u001b[39m  footer\n`,
+    );
+    equal(multiline.json.reason, "target-not-at-prompt", draft);
+    equal(multiline.json.observed, "input-not-empty", draft);
+    equal(
+      tmuxLog(current).some((entry) => entry[0] === "load-buffer" || entry[0] === "send-keys"),
+      false,
+    );
+  }
   // 闲置的输入框与工作中但输入框可见的 pane（排队是正常的）都照发。
   const footer = "──────────\n  ⏵⏵ accept edits on (shift+tab to cycle)\n";
   for (const screen of [
@@ -1741,6 +1759,8 @@ test("deliver never pastes into a permission dialog or menu, even with --force, 
     `● Done.\n──────────\n\u276f Try "fix lint errors"\n${footer}`,
     // 回合结束后 Claude Code 在输入框里显示的暗色提示建议（SGR 2），不是用户打的字（§13.133 现场）。
     `● Done.\n\u001b[38;5;244m──────────\u001b[39m\n\u001b[39m\u276f \u001b[2m确认，发布\u001b[0m\n${footer}`,
+    // 折到续行的暗色提示建议同样不算（续行判空只数去掉暗色段之后的字；这一形态是设计断言，没有现场截屏）。
+    `● Done.\n──────────\n\u276f\u00a0\u001b[2mTry "refactor the long\u001b[0m\n\u001b[2m  module name"\u001b[0m\n${footer}`,
   ]) {
     const sent = deliverWith(screen);
     equal(sent.json.ok, true, JSON.stringify(sent.json));
@@ -2164,6 +2184,14 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   const typed = nudgeWith(screen(errorLine, "❯ continue please"));
   equal(typed.json.status, "busy");
   equal(typed.json.observedBusy, "input-not-empty");
+  // 首行空、草稿在续行（现场 L15）：同样不粘贴。
+  const multiline = nudgeWith(
+    [errorLine, "──────────", "\u276f\u00a0", "  draft on line two", "──────────", "  footer"].join(
+      "\n",
+    ),
+  );
+  equal(multiline.json.status, "busy");
+  equal(multiline.json.observedBusy, "input-not-empty");
   const unseen = nudgeWith(screen(errorLine));
   equal(unseen.json.status, "busy");
   equal(unseen.json.observedBusy, "input-box-unseen");
@@ -2586,6 +2614,12 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   );
   equal(
     resumeWith(`● Done.\n──────────\n❯ half-typed\n${footer}`, ["--wait", "0"]).json.observed,
+    "input-not-empty",
+  );
+  // 首行空、草稿在续行（现场 L15）：就地重启会丢掉这份草稿，同样拒绝。
+  equal(
+    resumeWith(`● Done.\n──────────\n❯\u00a0\n  draft on line two\n${footer}`, ["--wait", "0"]).json
+      .observed,
     "input-not-empty",
   );
   equal(

@@ -62,7 +62,10 @@ import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
 } from "../../../src/governance/result/target-result-callback.js";
-import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import {
+  claudeCodeDesktopWorkspaceHostResourceProfile,
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -1777,6 +1780,30 @@ test("R-ROOT-04 与版本轴（1.2 计划 §3.6 C6）：对端宿主的绑定窗
   deepEqual(staleRoute(stale), [
     ["wakeflow_register_window_binding", "stale-window-relaunch", designWindow.windowId],
   ]);
+  // 宿主在窗口的下一回合自行换代的画像（桌面会话传输，`runtimeRefresh: host-next-turn`）：同一条旧启动记录仍报
+  // stale，但 Controller 不重启它——门通过并报 windows-refresh-pending，status 不排过期窗口动作，next 不停在这里。
+  const hostNextTurn = Object.freeze({
+    ...codexProcess,
+    hosts: codexProcess.hosts.map((host) =>
+      host.hostId === "claude-code"
+        ? Object.freeze({
+            ...host,
+            transports: undefined,
+            resourceProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+          })
+        : host,
+    ),
+  }) as typeof CODEX_OBSERVATION_FACADE;
+  const pending = await executeStatusRequest(hostNextTurn, { root }, CLOCK);
+  equal(designRuntime(pending).status, "stale");
+  deepEqual(runtimeActions(pending), []);
+  deepEqual(staleRoute(pending), []);
+  const pendingVerify = await executeVerifyRequest(hostNextTurn, { root }, CLOCK);
+  deepEqual(runtimeGate(pendingVerify), [
+    "pass",
+    `windows-refresh-pending:1,window-runtime-unverified:${registered(pending) - 1}`,
+  ]);
+  equal(pendingVerify.next.frontier === "window-artifact-stale", false);
   const prompted = await RootedDirectory.open(root);
   try {
     await writeHostHookObservation(prompted, {

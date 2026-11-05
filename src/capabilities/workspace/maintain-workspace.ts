@@ -1180,7 +1180,9 @@ function deriveNext(
     if (phase.planned.status === "ready") {
       return Object.freeze({
         frontier: "workspace-maintenance-apply",
-        owner: "user",
+        // 模式收回只恢复 Wakeflow 私有树的权限位、不改任何内容（不安全的节点已在计划阶段阻塞）：这一步归
+        // Controller 自己执行，随后再预览；其余计划改动的是用户的目录，由用户确认（现场 L20，§13.226）。
+        owner: phase.planned.plan?.kind === "private-mode-convergence" ? "controller" : "user",
         suggestedTool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
         blockers: Object.freeze([]),
       });

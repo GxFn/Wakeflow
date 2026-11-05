@@ -447,7 +447,7 @@
   - 说明：EACCES/EPERM（例如 macOS TCC 挡住了 Documents 子树）、ELOOP、EIO 都会被当成“checkout 已不在”，pod 关闭照样走到 close-complete 并退役 receipt，而 checkout 还在，最后留下一个孤儿 worktree。Wakeflow 本身不删 checkout，所以不会丢数据。这违背了 README 自己的承诺。触发条件是推断出来的，可能不常见。
   - 证据：kernel/pod-worktree-receipts.ts:800-811 worktreeCheckoutPresent：任何错误都 return false；repository-pointer-observation.ts:292-299 同样处理，结果喂给 :330 的 prunable；pod/service.ts:384-391、:663、:728、:753-755：false 映射为 checkout-missing，receipt 被退役，并放行 close-complete；assets/agent-text/README.md:88-90 承诺“无法检查”永远不会被报告成“没问题”；有 28 处 catch 后返回 null 或 false，分布在 9 个文件里（hook observer 占 13 处）
   - 建议：用 readNodeSystemErrorCode，只把 ENOENT/ENOTDIR 视为不存在，其他 errno 变成第三种状态 unknown：阻止 close-complete，并以 unavailable 加 causeCode 显示。其余 27 处 catch-to-null 按同样方式审一遍。
-- **G8** [中 / 缺口] hook observer 的失败不可见：总是 exit 0，只写一个 stderr code，verify 只在宿主完全没有记录时才报警（计划阶段 4；状态：部分（§13.166 批次 1）：写失败在该工作区留 `source: hook-observer` 的事故记录（含宿主、事件、cause 链），verify 的 host-hook-channel 门按宿主报 `write-failures-<n>`（信息，不改 verdict）；最近一次时间未显示，`internal` 分支没有根不留记录，宿主是否展示 stderr 仍未验证）
+- **G8** [中 / 缺口] hook observer 的失败不可见：总是 exit 0，只写一个 stderr code，verify 只在宿主完全没有记录时才报警（计划阶段 4；状态：部分（§13.166 批次 1）：写失败在该工作区留 `source: hook-observer` 的事故记录（含宿主、事件、cause 链），verify 的 host-hook-channel 门按宿主报 `write-failures-<n>`（信息，不改 verdict）；最近一次时间未显示，`internal` 分支没有根不留记录，宿主是否展示 stderr 仍未验证；现场 L21（§13.226）在 WakeflowTestWorkspace9 看到一条 2026-10-28 的事故：`user-prompt-submit` 的观察写入以 `observation-write-stage-changed`（原子写的 stage-changed）失败，计数此后一直是 1，Controller 每次都如实报"原因未查明"——成因待查，且该计数没有清零或按时间淡出的办法）
   - 说明：落地只能由 hook 记录证明，observer 写失败会表现为“投递看起来发了，却没有证据”。宿主是否会展示 exit 0 时的 stderr 没有验证过，推测在非 verbose 模式下看不到。Controller 针对静默的恢复流程，恰恰对 Wakeflow 本可以记下来的这个原因是盲的。
   - 证据：wakeflow-hook-observer.ts:742-767：失败映射为 internal，只写 'wakeflow-hook-observer: <code>'，exit 固定为 0；write-failed 不在任何地方持久化；observation/decide.ts:498-518 host-hook-channel gate 报 absent、records-0、unavailable、mode、skipped-N，看不到第一条记录之后的单次写失败；ADR-0009 L9：hook 总是 exit 0，stdout 为空
   - 建议：observer 已经找到工作区但写入失败时，在该工作区 .wakeflow-local/runtime/ 下追加一个很小的失败标记（时间、code、事件类型、哈希后的会话 id），沿用 incident id 方案；status/verify 显示 hook-failures:<n> 和最近一次的时间。宿主是否展示 stderr，在每个宿主上都标为未验证，直到现场确认。
@@ -792,7 +792,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 - **W1** [P2 / 触发低] CR-H1：并发注册未锁内复验跨窗口 handle 唯一性（批 I；状态：已修 §13.214）。修：mutateBinding 的 store 回调里用锁内 inventory 重算 handleOwners，异窗口持有即 handle-conflict。
 - **W2** [P2 / 触发中] CR-H2：Claude worktree 普通 resume 输出不能用于 relocate（批 J；状态：已修 §13.216，现场 L16 已过 §13.218）。修：resume 带 --worktree 且 hook cwd 存在时 observeWorktree，pending 同 launch。
-- **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J；状态：等现场 L15 看真实多行草稿渲染后再改）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。
+- **W3** [P2 / 触发中] CR-H3：输入框首行空而续行有草稿时仍发送/重启（批 J）。修：先现场 L15 看真实渲染，再让块内每行 typedInput 参与判空。现场 L15（2026-11-05，Claude Code 2.1.309，§13.226）：显式换行与软折行的草稿都渲染成缩进两格的纯文本续行，仍夹在输入框两条边框线之间；首行可以只有 `❯` 加一个不换行空格。已修：`promptAssessment` 让块内每一行都参与判空（deliver 与 `resume --in-place` 共用），`nudgeAssessment` 在看得到下边框线时同样数续行；暗色的提示建议仍不算。测试用现场截屏的四种形态。状态：已修 §13.226。
 - **W4** [P2 / 触发中] CR-H4：旧 SessionEnd 可释放恢复会话的新 claim（批 I；状态：已修 §13.214）。修：loadHookSessions 按 recordedAt 只计最新 end 晚于最新 start 的会话。
 - **W5** [P2 / 触发中] CR-H6：Claude reconcile 被自己的设置贡献阻止修复缺失支撑面（批 D′；状态：已修 §13.215）。修：composition 对 reconcile 的 missing 根走 planned-missing，statusline 同步。
 - **W6** [P2 / 触发低] CR-H7：portable settings 在两次读取间变化后先写入再报 stale（批 I；状态：已修 §13.214）。修：发布器接 expectedSourceDigest，不等即 source-changed 不写。
@@ -856,12 +856,14 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X18** [中 / 首跑] 引导会话在 apply 写出允许规则之前已启动，auto 分类器把运行助手判为越权（L18）。修法：首跑文本在 apply 后让引导会话用 `start_session`（账号有时）或请用户新开引导会话再开窗；或把开窗放到 Controller 窗口自己做。K2 文本 §13.225：apply 之后在工作区根新开一个会话（宿主有 `start_session` 时用它，否则请用户新开）作引导会话，它只负责开出并登记 Controller 窗口；不绕过分类器拒绝。状态：文本已落地，待 L20 现场核。
 - **X19** [中 / 边界] `claude --desktop <目录>` 打开目录会直接写入命令行信任记录（L18：五个仓库各 3 秒内、无弹窗）。Wakeflow 不得在用户不知情时依赖它；交接卡把"信任目录"写成"在桌面里打开该目录并接受弹窗"，助手的 not-trusted 拒绝给出具体做法。状态：K2 文本已落地 §13.225（参考、交接卡、README 与助手提示都写"在桌面 app 里打开该目录并接受信任弹窗"，并禁止 Controller 自己用 `claude --desktop` 打开未告知用户的目录）。
 - **X20** [低 / 观察] 桌面传输下 MCP 服务过期后，app 在后续回合自行重载了服务（L18：第一次 register 被 runtime-artifact-outdated 拒绝，几分钟后同会话登记成功）；"重启桌面 app"可放宽为"等服务重载或重开会话"。E5（§13.225，用户授权在 WakeflowTestWorkspace12 的 AlembicPlugin 会话上做）核实了确定性的换代路径：归档 → 取消归档 → 发一条消息，app 为同一会话起新进程，hook 记录的制品摘要从旧制品换成当前制品，会话 id 与绑定不变，目录记忆的 auto 模式保留（app 日志 `requested=auto effective=auto`）；进程已因空闲结束的会话则下一条消息即以当前制品重起，无需归档。文本已按该机制定稿（参考 "After a plugin update"、WINDOW_RESUME、PLUGIN_UPDATE_STEPS）。状态：K2 文本已落地。
+- **X21** [中 / 设计] 现场 L20 准备时发现：共享层对桌面窗口也按 W41 给 `stale-window-relaunch`（指向重新登记）并让 runtime-artifact 门失败，而桌面上会话进程由 app 管——空闲进程被结束、下一条消息以当前制品重起（E5），Controller 没有、也不需要重启手段；照旧状态走，Controller 会去归档重开健康的会话，或被一道永远过不了的门卡住。已修 §13.226：画像 `runtimeRefresh` 加第三个值 `host-next-turn`（桌面画像取它；过期服务进程的 owner 仍是 user），在旧制品下启动的绑定窗口仍标 `runtime: stale`，但只有 `controller-in-place` 的宿主把它们算作门的失败并排逐窗口路线，其余记为 `windows-refresh-pending:<n>`（门通过、status 不排动作）；文本写明不重启、不为清状态发消息，投递前进程仍活着时经用户授权归档再取消归档。现场 L20 核实：8 个窗口 pending、verify 通过，投递的那条消息让 Alembic 窗口以当前制品重起并转为 unverified。副作用：桌面画像摘要变了，桌面工作区的窗口显示一次 `drifted`。状态：已修。
+- **X22** [低 / 体验] 现场 L20：reconcile 的第一份计划是私有模式收敛（Finder 在 `.wakeflow-active` 留下的 `.DS_Store` 权限比 0600 宽），preview 把 apply 的 owner 标成 user，Controller 因此为"改 5 个文件的权限位"单独要了一次确认，随后替换 `desktop.mjs` 的计划又要一次。已修 §13.226：收敛计划的 preview `next.owner` 改为 controller（只恢复 Wakeflow 私有树的权限位、不改内容，不安全节点在计划阶段已阻塞），文本写明直接执行后再预览、由用户确认随后的计划。两传输共用。状态：已修。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 
 tmux 传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host-dual-transport-plan.md)原则 5；桌面分册在 X 节）。条目只做汇总与指向，修法与状态以被指向的原条目为准；原条目关闭时同步改这里。
 
-- **Y1** [P2] 输入框首行空而续行有草稿时仍发送或重启 → W3 / H3（等现场 L15）。
+- **Y1** [P2] 输入框首行空而续行有草稿时仍发送或重启 → W3 / H3。已修 §13.226（现场 L15 取得真实渲染）。
 - **Y2** [P3] 制品更新后整批窗口 stale，首轮 `/wakeflow:next` 逐窗口探测耗时 → W41（T1）。已修 §13.225。
 - **Y3** [P3] 第一次 reconcile apply 报 completed 却没改写助手副本与索引 → W38（T1）。已结 §13.225：两阶段 reconcile 的设计行为，非缺陷。
 - **Y4** [P3] replace / relocate 缺 expectedBindingId 与 Digest 时的拒绝码措辞 → W39（T1）。已修 §13.225。
@@ -874,3 +876,4 @@ tmux 传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host
 - **Y11** [设计限制] 从未对话的会话不能 `claude --resume`，助手拒绝为 resume-exited；与桌面的 `--desktop --resume` 同源。状态：文本已写明。
 - **Y12** [固有] tmux 服务器退出（终端关闭、重启）即全部窗口退出，下次由 Controller 重开并 replace。状态：行为已知，交接卡写明保活。
 - **Y13** [固有] 每个窗口一次信任对话，只能由用户接受。状态：行为已知。
+- **Y14** [低 / 文本] 现场 L21：目标窗格不在空输入框（`target-not-at-prompt`）时，技能取值说"用户处理后重发同一个 permit"，共享参考与助手 hint 说"先记录结果再 re-arm"（K1 压缩 tmux 文本时只改了取值）；hint 只提对话框或菜单，参考没有列 `input-not-empty`。现场证实重发同一个 permit 可行且不消耗 re-arm。已修 §13.226：三处统一为"用户回答或清空后重发同一个 permit；窗口带不回输入框时才记录拒绝并 re-arm"，三种 `observed` 都列出，测试把三处钉在一起。状态：已修。

@@ -171,6 +171,11 @@ test("reconcile 把 chmod -R go+rX 之后的私有树收回 0700 / 0600（§13.1
   equal(plan.areas.length > 0 && plan.areas.length <= 3, true);
   deepEqual(preview.launchIntents, []);
   equal(preview.next.suggestedTool, "wakeflow_maintain_workspace");
+  // 模式收回只恢复私有树的权限位：apply 归 Controller，不占用用户的一次确认（现场 L20）。
+  deepEqual(
+    [preview.next.frontier, preview.next.owner],
+    ["workspace-maintenance-apply", "controller"],
+  );
   if (preview.planDigest === null) throw new Error("Expected a plan digest.");
 
   const stray = path.join(root, ".wakeflow-local", "runtime", "stray-note");

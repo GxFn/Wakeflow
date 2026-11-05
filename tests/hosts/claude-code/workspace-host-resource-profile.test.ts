@@ -114,7 +114,7 @@ test("桌面传输的 profile 与 tmux 共享表面，只换启动模板、助�
         fileName: CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,
       },
       runtimeStaleness: "session-start-observer-digest",
-      runtimeRefresh: "user-app-restart",
+      runtimeRefresh: "host-next-turn",
     },
     launch: {
       kind: "desktop-session",

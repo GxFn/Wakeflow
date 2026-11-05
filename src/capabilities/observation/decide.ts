@@ -373,8 +373,10 @@ export interface WorkspaceGateFacts {
    */
   readonly runtime: Readonly<{
     readonly server: Readonly<ServerRuntimeInput> | null;
-    /** 会话在旧制品下启动的绑定窗口：确定过期，门因此不通过。 */
+    /** 会话在旧制品下启动、且由 Controller 重启的绑定窗口（画像 `runtimeRefresh: controller-in-place`）：确定过期，门因此不通过。 */
     readonly staleWindows: readonly string[];
+    /** 同样在旧制品下启动、但由宿主在下一回合自行换代的绑定窗口（`host-next-turn`）：只作信息，不是门的失败。 */
+    readonly refreshPendingWindows: readonly string[];
     /** 没有宿主关联证据的绑定窗口：只作信息，不是门的失败。 */
     readonly unverifiedWindows: readonly string[];
   }>;
@@ -872,7 +874,7 @@ function serverOutdatedCode(view: Readonly<ServerRuntimeView> | null): string | 
  * window is bound would make `ok` meaningless and leave the Controller an unactionable frontier.
  */
 function runtimeArtifactGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
-  const { server, staleWindows, unverifiedWindows } = facts.runtime;
+  const { server, staleWindows, refreshPendingWindows, unverifiedWindows } = facts.runtime;
   const view = server === null ? null : deriveServerRuntime(server);
   const outdated = serverOutdatedCode(view);
   const unavailable = view?.artifactOnDisk === "unknown";
@@ -880,6 +882,9 @@ function runtimeArtifactGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
     ...(unavailable ? ["manifest-unavailable"] : []),
     ...(outdated === null ? [] : [outdated]),
     ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
+    ...(refreshPendingWindows.length > 0
+      ? [`windows-refresh-pending:${refreshPendingWindows.length}`]
+      : []),
     ...(unverifiedWindows.length > 0
       ? [`window-runtime-unverified:${unverifiedWindows.length}`]
       : []),

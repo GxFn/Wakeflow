@@ -72,7 +72,7 @@ const OBSERVED_WRITER = Object.freeze({ status: "observed" as const, newestVersi
 
 function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGateFacts {
   return {
-    runtime: { server: null, staleWindows: [], unverifiedWindows: [] },
+    runtime: { server: null, staleWindows: [], refreshPendingWindows: [], unverifiedWindows: [] },
     domains: { demands: OBSERVED, claims: OBSERVED, pods: OBSERVED },
     configRecheck: "current",
     legacyResidue: { status: "observed", items: 0 },
@@ -1274,6 +1274,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
         runtime: {
           server: server(same, same),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: [],
         },
       }),
@@ -1281,12 +1282,31 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
     ),
     ["pass", null],
   );
+  // 由宿主在下一回合自行换代的过期窗口（`runtimeRefresh: host-next-turn`）只作信息：门仍通过。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        runtime: {
+          server: server(same, same),
+          staleWindows: [],
+          refreshPendingWindows: [
+            "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          ],
+          unverifiedWindows: [],
+        },
+      }),
+      "runtime-artifact",
+    ),
+    ["pass", "windows-refresh-pending:2"],
+  );
   deepEqual(
     verdictOf(
       healthyFacts({
         runtime: {
           server: server(same, digest("artifact-b")),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: [],
         },
       }),
@@ -1300,6 +1320,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
         runtime: {
           server: server(same, null),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: [
             "window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -1317,6 +1338,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
         runtime: {
           server: server(same, same),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
         },
       }),
@@ -1330,6 +1352,7 @@ test("runtime-artifact 门（§13.127）：没有 manifest 记 not-applicable �
         runtime: {
           server: server(same, same),
           staleWindows: ["window_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],
+          refreshPendingWindows: [],
           unverifiedWindows: ["window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
         },
       }),
@@ -1397,6 +1420,7 @@ test("曾有运行制品身份但磁盘清单消失时，verify/status 都要求
     runtime: {
       server: server(digest("previous-artifact"), null),
       staleWindows: [],
+      refreshPendingWindows: [],
       unverifiedWindows: [],
     },
   });
@@ -1565,6 +1589,7 @@ test("服务进程的制品状态（§3.6 C6）：任一会话在更高版本下
         runtime: {
           server: server(same, same, "1.2.0", "1.3.0"),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: [WINDOW_A],
         },
       }),
@@ -1578,6 +1603,7 @@ test("服务进程的制品状态（§3.6 C6）：任一会话在更高版本下
         runtime: {
           server: server(same, same, "1.2.0", "1.1.0"),
           staleWindows: [],
+          refreshPendingWindows: [],
           unverifiedWindows: [],
         },
       }),
@@ -1610,7 +1636,12 @@ test("artifact-older-than-stream 门（C11 版本轴）：流或维护日志里�
   const same = digest("artifact-a");
   const GATE = "artifact-older-than-stream";
   const serverAt = (version: string | null): Pick<WorkspaceGateFacts, "runtime"> => ({
-    runtime: { server: server(same, same, version), staleWindows: [], unverifiedWindows: [] },
+    runtime: {
+      server: server(same, same, version),
+      staleWindows: [],
+      refreshPendingWindows: [],
+      unverifiedWindows: [],
+    },
   });
   const demandWriter = (
     newestVersion: string | null,

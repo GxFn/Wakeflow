@@ -1756,7 +1756,7 @@ function commandDeliver(config, options) {
     return beforeSend("target-not-at-prompt", windowId, {
       observed: prompted.observed,
       evidenceDigest: sha256(before.stdout),
-      hint: "the target pane shows a dialog or menu instead of its input box; have the user answer it in that window, then rearm",
+      hint: "the target pane shows a dialog or menu instead of its input box, or that box holds typed text; have the user answer or clear it in that window, then send the same permit again",
     });
   }
   const submitted = pasteAndSubmit(context, locator.tmux.paneId, prompt);
@@ -1836,6 +1836,15 @@ function typedInput(rawLine) {
   return (found === null ? text : found[1]).trim();
 }
 
+// 输入行之后、下边框线之前的续行（现场 L15，W3）：显式换行与软折行的草稿都渲染成缩进两格的续行，仍夹在两条
+// 边框线之间，而首行可以是空的（只有 "❯" 与一个不换行空格）。任何一条续行有字（暗色的提示建议除外）即输入框非空。
+function continuationTyped(lines, start, end) {
+  for (let index = start; index < end; index += 1) {
+    if (typedInput(lines[index].raw).length > 0) return true;
+  }
+  return false;
+}
+
 // 输入框上方最后一条对话行：取尾部最后一个输入框行之前、跳过输入框边框线的最后一行。
 function lastTranscriptLine(tail) {
   let inputIndex = -1;
@@ -1867,6 +1876,10 @@ function promptAssessment(screen) {
   if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
     return Object.freeze({ atPrompt: false, observed: "input-not-empty" });
   }
+  // 首行空而续行有草稿（多行草稿、折行的长草稿）同样是别人打了一半的字：块内每一行都参与判空（现场 L15）。
+  if (continuationTyped(lines, upper + 2, lower)) {
+    return Object.freeze({ atPrompt: false, observed: "input-not-empty" });
+  }
   // boxTop / boxBottom 是输入框两条边框线在尾部里的下标，resume --in-place 的闲置判断据此把输入框本身排除在外。
   return Object.freeze({ atPrompt: true, observed: null, boxTop: upper, boxBottom: lower });
 }
@@ -1889,6 +1902,11 @@ function nudgeAssessment(screen) {
   if (inputLine === null) return Object.freeze({ status: "busy", observedError, observedBusy: "input-box-unseen" });
   const typed = typedInput(lines[inputIndex].raw);
   if (typed.length > 0 && !typed.startsWith(INPUT_PLACEHOLDER_PREFIX)) {
+    return Object.freeze({ status: "busy", observedError, observedBusy: "input-not-empty" });
+  }
+  // 续行里的草稿同样算输入框有字（现场 L15）：只在看得到下边框线时判断，边框之后是状态行，不是草稿。
+  const boxEnd = tail.findIndex((line, index) => index > inputIndex && INPUT_BORDER_PATTERN.test(line));
+  if (boxEnd > inputIndex && continuationTyped(lines, inputIndex + 1, boxEnd)) {
     return Object.freeze({ status: "busy", observedError, observedBusy: "input-not-empty" });
   }
   // 错误行必须是输入框上方最后一条对话行（§13.130）：之后有回复、完成行、已渲染的用户消息

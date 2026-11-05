@@ -41,6 +41,7 @@ Claude Code 宿主今天只有一种窗口传输：每个窗口是 tmux pane 里
 - **D7 文本。** 技能静态文本只写"按工具返回的 launch instructions 分步做"，分步由渲染器按传输给出；Controller 窗口参考压缩 tmux 细节腾出篇幅；桌面专属步骤放新的参考文件；README 与交接卡并列描述两种传输，不表达优劣（规划原则 1）。
 - **D8 验证对等。** 场景链以桌面驱动再跑一遍（26 卡），组件测试按传输分文件；lab 无法无头起桌面 app，以录制观察补，差距登记 X9；每次 tag 前两种传输各做一次窗口生命周期现场。
 - **D9 不做。** 不依赖 `start_session`（服务端开关、必弹确认、自动回合不可用、子会话唤父）；K1 不做 reconfigure 切换传输、pod 侧栏分组、换代自动化与观察记录新字段，这些归 K2（规划第 4 节）。K2 已做（§13.225）：reconfigure 在无活动 Demand、无打开的 worktree pod 时可切换传输（宿主操作 `window-transport-retirement` 退役每个窗口的绑定与定位器并把投影置为 unregistered，新传输的资产集合随同发布，阻塞 `transport-change-demand-active:<id>` / `transport-change-pod-open:<podId>`）；pod 侧栏分组为 Controller 用桌面工具做的投影；换代路径以 E5 核实；观察记录新增 `permissionMode` / `sessionTitle`。
+- **D10 过期窗口的换代方式是画像值（2026-11-05，现场 L20，§13.226）。** `surfaces.runtimeRefresh` 取三个值：`controller-in-place`（tmux：Controller 用助手重启自己与同伴，过期窗口让 runtime-artifact 门失败并由 status 逐窗口给 resume / relaunch 路线）、`user-app-restart`（Codex）、`host-next-turn`（桌面：app 结束空闲的会话进程，下一条消息以当前制品重起，MCP 自行重载）。后两者的过期窗口只作 `windows-refresh-pending:<n>` 信息，门通过、status 不排动作；窗口的 `runtime` 仍如实标 `stale`。共享层只读这个值，不认识传输名。
 
 ## 后果
 

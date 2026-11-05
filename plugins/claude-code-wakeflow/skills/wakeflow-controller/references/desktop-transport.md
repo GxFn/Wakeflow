@@ -347,10 +347,16 @@ bytes). If the server has not reloaded after a few turns, ask the user to
 archive and unarchive this Controller session, then message it: that message
 restarts its process on the current artifact (a session whose process already
 ended restarts the same way on its next message, with no archive). Nothing is
-relocated. Peer windows reported `stale`
-clear the same way when they next converse; a window that stays `stale` has
-not conversed since - send it nothing to clear a state; `wakeflow_status`
-names the next action.
+relocated.
+
+Peer windows that started under the older plugin show `runtime: stale`, and
+`wakeflow_verify` reports them as `windows-refresh-pending:<n>` on a passing
+gate: the app ends an idle session's process after about half an hour, and the
+session's next message then starts it on the current artifact. Restart none of
+them and send none a message to clear the state; status lists no action for
+them. Before a delivery to such a window, run `sessions`: when its process is
+still listed, tell the user and, with their authorization, archive and
+unarchive that session so the delivery starts a fresh process.
 
 ## What this transport does not have
 

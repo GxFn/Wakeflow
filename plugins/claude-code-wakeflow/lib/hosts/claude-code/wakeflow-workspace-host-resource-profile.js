@@ -52,7 +52,8 @@ export const claudeCodeWorkspaceHostResourceProfile = parseWakeflowWorkspaceHost
 });
 /**
  * 桌面传输：会话由桌面助手经 `claude --bg` → `claude stop` → `claude --desktop --resume` 送进 Code 标签；
- * 没有状态行（桌面不渲染），换代靠用户重启桌面 app（裁定 2，K2 再验归档/取消归档）。
+ * 没有状态行（桌面不渲染）；换代由桌面 app 自己完成：空闲的会话进程被结束、下一条消息以当前制品重起，
+ * 归档再取消归档可立即结束进程（E5，§13.225），所以过期窗口不由 Controller 重启（`host-next-turn`）。
  */
 export const claudeCodeDesktopWorkspaceHostResourceProfile = parseWakeflowWorkspaceHostResourceProfile({
     kind: "WakeflowWorkspaceHostResourceProfile",
@@ -65,7 +66,7 @@ export const claudeCodeDesktopWorkspaceHostResourceProfile = parseWakeflowWorksp
         helperAsset: {
             fileName: "desktop.mjs",
         },
-        runtimeRefresh: "user-app-restart",
+        runtimeRefresh: "host-next-turn",
     },
     launch: {
         kind: "desktop-session",

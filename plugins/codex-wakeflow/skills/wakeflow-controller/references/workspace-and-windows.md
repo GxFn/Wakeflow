@@ -85,10 +85,10 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   window runtime projection (recomputed from the config and the window's
   current binding), and a missing host runtime or maintenance protocol root,
   even when the whole `.wakeflow-local` directory is gone. It also takes back
-  private modes: when something under `.wakeflow-local` or `.wakeflow-active`
-  has only drifted wider than 0700 / 0600 in a safe way (say after a
-  `chmod -R go+rX`), the preview's plan is a `WakeflowPrivateModeConvergencePlan`
-  (counts and areas) instead of the usual steps: apply it, then preview again.
+  private modes: when something under `.wakeflow-local` or `.wakeflow-active` has only drifted
+  wider than 0700 / 0600 in a safe way (a `chmod -R go+rX`, a Finder `.DS_Store`), the preview's plan
+  is a `WakeflowPrivateModeConvergencePlan` (counts and areas) and `next` names you as its owner: it only
+  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan.
   A private node another user owns, that group or others can write, or that
   is a symlink is reported as `private-mode-unsafe:<area>` and never touched,
   and the other intents refuse with `private-mode-drift` until reconcile has
@@ -251,12 +251,12 @@ only. SessionStart can occur on resume or compaction; Stop also does not prove
 that the window's MCP or instructions reloaded. Each bound window's `runtime`
 therefore carries one of three states. `stale` means its latest `session-start`
 record was written by an observer older than the installed artifact: that
-session started under the previous plugin and has not restarted since. Strict
-verification counts these as `windows-stale:<n>`, fails the `runtime-artifact`
-gate and names `window-artifact-stale` in `next`. Status `nextActions` routes
-each stale window, so do not probe them: `stale-window-resume` (its session
-holds a prompt record: restart it in place) or `stale-window-relaunch` (it never
-conversed and cannot be resumed: close, launch, `replace` and `mark` it).
+session started under the previous plugin and has not restarted since. Where you
+restart windows, strict verification counts these as `windows-stale:<n>`, fails the
+`runtime-artifact` gate and names `window-artifact-stale` in `next`. Status `nextActions` routes
+each stale window, so do not probe them: `stale-window-resume` (its session holds a prompt record:
+restart it in place) or `stale-window-relaunch` (it never conversed: close, launch, `replace`, `mark`).
+Where the host restarts a session on its next turn they are `windows-refresh-pending:<n>` on a passing gate.
 `unverified` means the host adapter has no such evidence either way (Codex
 sessions, or a session-start record without an observer digest); verification
 reports `window-runtime-unverified:<n>` as information on a passing gate, never

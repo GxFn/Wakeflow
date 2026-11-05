@@ -222,8 +222,11 @@ function parseSurfaces(value) {
     });
 }
 function parseRuntimeRefresh(value) {
-    if (value === "controller-in-place" || value === "user-app-restart")
+    if (value === "controller-in-place" ||
+        value === "user-app-restart" ||
+        value === "host-next-turn") {
         return value;
+    }
     fail("surface", "$/surfaces/runtimeRefresh");
 }
 function parseRuntimeStaleness(value) {

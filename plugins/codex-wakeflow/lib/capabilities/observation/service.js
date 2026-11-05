@@ -661,7 +661,7 @@ function nextActionInput(context, runtime) {
         artifactServerOutdated: runtime.view.artifactOnDisk === "changed" || runtime.view.artifactOnDisk === "superseded",
         artifactServerSupersededBy: runtime.supersededBy,
         artifactServerRefreshOwner: artifactServerRefreshOwnerOf(context),
-        staleWindows: runtimeWindowIds(context, "stale").map((windowId) => ({
+        staleWindows: staleWindowIdsByRefresh(context).restart.map((windowId) => ({
             windowId,
             conversed: sessionConversed(context.observation, windowBindingOf(context.observation, windowId)),
         })),
@@ -1089,7 +1089,8 @@ async function gateFacts(context, readings) {
                     onDiskDigest: runtime.onDiskDigest,
                     newestSessionStartVersion: runtime.newestSessionStartVersion,
                 },
-            staleWindows: runtimeWindowIds(context, "stale"),
+            staleWindows: staleWindowIdsByRefresh(context).restart,
+            refreshPendingWindows: staleWindowIdsByRefresh(context).pending,
             unverifiedWindows: runtimeWindowIds(context, "unverified"),
         },
         domains: {
@@ -1248,6 +1249,22 @@ async function assembleVerify(context, request) {
             ? DETACHED_WORKSPACE_NEXT
             : verifyNext(gates, artifactServerRefreshOwnerOf(context)),
     });
+}
+/**
+ * 在旧制品下启动的绑定窗口按其宿主画像的 `surfaces.runtimeRefresh` 分两类：`controller-in-place` 的由
+ * Controller 重启（门失败、逐窗口路线）；其余的由宿主在窗口的下一回合自行换代（只作信息）。画像由观察准入
+ * 按工作区配置选出，这里不认识传输名。
+ */
+function staleWindowIdsByRefresh(context) {
+    const restart = [];
+    const pending = [];
+    for (const windowId of runtimeWindowIds(context, "stale")) {
+        const hostId = windowBindingOf(context.observation, windowId)?.hostId;
+        const refresh = context.facade.hosts.find((host) => host.hostId === hostId)?.resourceProfile
+            .surfaces.runtimeRefresh;
+        (refresh === "controller-in-place" ? restart : pending).push(windowId);
+    }
+    return Object.freeze({ restart: Object.freeze(restart), pending: Object.freeze(pending) });
 }
 /** 过期服务进程由谁换代：本进程所属宿主画像的 `surfaces.runtimeRefresh`（C17）；画像缺席时保守地交给用户。 */
 function artifactServerRefreshOwnerOf(context) {

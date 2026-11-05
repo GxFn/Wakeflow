@@ -125,12 +125,14 @@ appeared within the wait after a real send - a late hook, or the wrong or a
 dead window; record the outcome as the helper reported it and let Wakeflow
 decide. Before it pastes, the helper captures the pane and refuses with
 `target-not-at-prompt` (a `failed-before-send` attempt whose `observed` is
-`menu-cursor` or `input-box-unseen`) when the window shows a dialog or menu
-instead of its input box; `--force` does not bypass this. Nothing was sent:
-ask the user to answer the dialog in that window - never send keys to it
-yourself - then record the outcome as reported and re-arm the delivery. Pass
-the helper's `attempt` through unchanged: on a refusal it carries
-`failure {code, summary}`, the host's own reason, into the outcome record.
+`menu-cursor`, `input-box-unseen` or `input-not-empty`) when the window shows a
+dialog or menu instead of its input box, or that box holds typed text - a draft
+on any of its lines; `--force` does not bypass this. Nothing was sent and
+nothing is recorded yet: tell the user which window it is and let them answer
+the dialog or clear the draft there - never send keys to it yourself - then send
+the same permit again. Record a refusal and re-arm only when the window cannot be
+brought back to its prompt; the helper's `attempt` then goes in unchanged, its
+`failure {code, summary}` being the host's own reason in the outcome record.
 Readback is only screen text and never proves landing. Under desktop sessions
 the send is your own `send_message` call: its return value is
 `attempt.sendReturn` with `status: "sent"`, your report of the send

@@ -487,7 +487,7 @@ function serverOutdatedCode(view) {
  * window is bound would make `ok` meaningless and leave the Controller an unactionable frontier.
  */
 function runtimeArtifactGate(facts) {
-    const { server, staleWindows, unverifiedWindows } = facts.runtime;
+    const { server, staleWindows, refreshPendingWindows, unverifiedWindows } = facts.runtime;
     const view = server === null ? null : deriveServerRuntime(server);
     const outdated = serverOutdatedCode(view);
     const unavailable = view?.artifactOnDisk === "unknown";
@@ -495,6 +495,9 @@ function runtimeArtifactGate(facts) {
         ...(unavailable ? ["manifest-unavailable"] : []),
         ...(outdated === null ? [] : [outdated]),
         ...(staleWindows.length > 0 ? [`windows-stale:${staleWindows.length}`] : []),
+        ...(refreshPendingWindows.length > 0
+            ? [`windows-refresh-pending:${refreshPendingWindows.length}`]
+            : []),
         ...(unverifiedWindows.length > 0
             ? [`window-runtime-unverified:${unverifiedWindows.length}`]
             : []),

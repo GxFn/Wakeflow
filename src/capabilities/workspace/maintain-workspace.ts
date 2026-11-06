@@ -1166,7 +1166,8 @@ function nextAfterLaunchIntents(
   }
   return Object.freeze({
     frontier: "window-launch",
-    owner: "user",
+    // 开窗是执行维护的会话（Controller 或首跑的引导会话）自己用宿主手段做的下一步，不是用户的动作（现场 L22）。
+    owner: "controller",
     // 切片之间不互相引用；公共工具名是词汇，不是依赖。
     suggestedTool: "wakeflow_register_window_binding",
     blockers: Object.freeze([]),

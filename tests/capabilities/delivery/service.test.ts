@@ -44,6 +44,7 @@ import {
   planFixtureTargetTask,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 useDisposableDurability();
 
@@ -743,7 +744,19 @@ test("测试投递的 prompt 同样从 Test 窗口根解析需求包文档，不
   }
 });
 
-test("投递查询不完整不能作未落地判断；独立宿主回执仍可证明落地", { timeout: 120_000 }, async () => {
+test("投递查询不完整不能作未落地判断；独立宿主回执仍可证明落地", {
+  timeout: 120_000,
+}, async (t) => {
+  // §13.227：写出并读回一万六千多个记录文件的真实目录树；门里 8 个文件 worker 下贴着上限（84 秒），机器另有
+  // 前台负载时超时。按测试标准进隔离道，不放宽超时。
+  if (
+    loadSensitive(
+      t,
+      "writes and reads back more than sixteen thousand hook record files; timed out in the gate at eight file workers",
+    )
+  ) {
+    return;
+  }
   const fixture = await createDeliveryWorkspaceFixture();
   try {
     const prepared = await prepareFixtureDelivery(fixture);

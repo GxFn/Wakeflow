@@ -1131,7 +1131,20 @@ test("landing reports the bound session's user-prompt-submit record for the give
       promptDigest: `sha256:${"ef".repeat(32)}`,
     },
   );
-  equal(landing(["--prompt-digest", PROMPT_DIGEST]).json.landed, false);
+  // 本会话有一条别的摘要的 prompt 记录：仍是未落地，但把它报出来（现场 L22）——发送改动了文本与什么都没到是
+  // 两回事，Controller 凭它的时间判断是不是这次发送，而不是再发一遍。
+  deepEqual(landing(["--prompt-digest", PROMPT_DIGEST]).json, {
+    ok: true,
+    command: "landing",
+    windowId: PRODUCT_WINDOW_ID,
+    landed: false,
+    promptDigest: PROMPT_DIGEST,
+    latestPrompt: {
+      recordId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      recordedAt: "2026-09-24T00:00:03.000Z",
+      promptDigest: `sha256:${"ef".repeat(32)}`,
+    },
+  });
   writeHookRecord(
     path.join(current.hooks, "20260924", "ab"),
     "20260924T000004000Z",

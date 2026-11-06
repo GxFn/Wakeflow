@@ -114,9 +114,40 @@ function section(title: string, lines: readonly string[]): readonly string[] {
   return ["", `${title}:`, ...lines];
 }
 
+/**
+ * 回调 prompt 是要被转发的文本：tmux 传输由助手按文件字节粘贴，桌面会话传输却由目标窗口的模型放进工具调用的
+ * JSON 参数里发出。文本里若有反斜杠转义（`\u0060`、`\"`、`\\`），模型必须再转义一层，漏掉就被解码，Controller
+ * 会话收到的文本与许可不再逐字相同，落地摘要对不上（现场 L22：目标描述里的反引号被渲染成 `\u0060`，转发后
+ * 变回反引号，`callbackLanding` 成了 `unlanded`）。所以外部文本进字面量之前，先把会被 JSON 或 Markdown 字面量
+ * 转义的字符换成不需要转义的近形字符，控制字符与显式双向控制字符去掉：渲染结果里不出现反斜杠。这些值只是
+ * 给 Controller 看的不可信摘要，评审读的是已存的评审单元，不是这段文字。
+ */
+// 第二个分支是“属于控制字符（Cc）且不是空白”的字符：制表与换行留给后面的空白压缩，其余控制字符去掉。
+const TRANSPORT_ESCAPED_PATTERN =
+  /["\\`|<>&\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]|[^\P{Cc}\s]/gu;
+const TRANSPORT_SAFE_REPLACEMENTS: Readonly<Record<string, string>> = Object.freeze({
+  '"': "'",
+  "`": "'",
+  "\\": "/",
+  "|": "\u00a6",
+  "<": "\u2039",
+  ">": "\u203a",
+  "&": "\uff06",
+});
+
+function transportSafe(text: string): string {
+  return text.replace(
+    TRANSPORT_ESCAPED_PATTERN,
+    (character) => TRANSPORT_SAFE_REPLACEMENTS[character] ?? "",
+  );
+}
+
 function clip(text: string): string {
   // 目标撰写的文本压成单行，避免在 Result 段内伪造 Next 等结构行；按码点截断（R-ROOT-05）。
-  return truncateToCodePoints(text.trim().replace(/\s+/gu, " "), MAXIMUM_SUMMARY_CODE_POINTS);
+  return truncateToCodePoints(
+    transportSafe(text).trim().replace(/\s+/gu, " "),
+    MAXIMUM_SUMMARY_CODE_POINTS,
+  );
 }
 
 /** 确定性渲染回调 prompt；同一输入永远得到同一文本与摘要。 */
@@ -139,7 +170,7 @@ export function renderWakeControllerPrompt(input: Readonly<WakeControllerPromptI
       `- ${labels.summary}: ${renderMarkdownJsonStringLiteral(clip(result.summary))}`,
       ...(result.branch === null
         ? []
-        : [`- ${labels.branch}: ${renderMarkdownJsonStringLiteral(result.branch)}`]),
+        : [`- ${labels.branch}: ${renderMarkdownJsonStringLiteral(transportSafe(result.branch))}`]),
       ...(result.commits.length === 0 ? [] : [`- ${labels.commits}: ${result.commits.join(", ")}`]),
       `- ${labels.resultId}: ${result.targetResultId}`,
       `- ${labels.resultDigest}: ${result.resultDigest}`,

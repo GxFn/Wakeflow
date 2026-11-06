@@ -481,7 +481,7 @@ function tmuxContext(config) {
   const tmux = config.hosts?.["claude-code"]?.tmux ?? {};
   const socketName = typeof tmux.socketName === "string" && tmux.socketName.length > 0 ? tmux.socketName : null;
   const sessionName = typeof tmux.sessionName === "string" && tmux.sessionName.length > 0 ? tmux.sessionName : DEFAULT_SESSION_NAME;
-  return Object.freeze({ socketName, sessionName });
+  return Object.freeze({ socketName, sessionName, programId: config.program.programId });
 }
 
 function hostEnvironment() {
@@ -968,23 +968,35 @@ function locatorWindowIds() {
     .filter((name) => WINDOW_ID_PATTERN.test(name));
 }
 
-function relatedPanes(rows) {
+// 与本工作区有关的 pane（现场 L22）：同一个 tmux 服务器上可以有别的 Wakeflow 工作区的窗口，它们带着别的
+// programId，对本工作区的存活判断没有意义，却会排在前面占掉 MAX_PANES 行，把本工作区的 pane 截出观察——存活
+// 观察里缺了那一行，窗口就会被判成 absent。只留三类：坐标与本工作区某条定位器相符的（哪怕带着别人的标识，
+// Wakeflow 要看得见“被占用”）、带本程序标识的、带 Wakeflow 标识但没有 programId 的。不超上限时保持 tmux 的
+// 列出顺序；超了才按这个次序优先保留。
+function relatedPanes(rows, programId) {
   const locators = locatorWindowIds().map(readLocator).filter((record) => record !== null);
-  const related = rows.filter((row) => (
-    Object.values(row.options).some((value) => value !== null)
-    || locators.some((locator) => (
+  const rank = (row) => {
+    const located = locators.some((locator) => (
       locator.tmux.sessionName === row.sessionName
       && locator.tmux.windowId === row.windowId
       && locator.tmux.paneId === row.paneId
-    ))
-  ));
-  return Object.freeze({ panes: related.slice(0, MAX_PANES), truncated: related.length > MAX_PANES, total: rows.length });
+    ));
+    if (located) return 0;
+    if (row.options.programId === programId) return 1;
+    if (row.options.programId === null && Object.values(row.options).some((value) => value !== null)) return 2;
+    return null;
+  };
+  const ranked = rows.map((row, index) => ({ row, index, rank: rank(row) })).filter((entry) => entry.rank !== null);
+  const kept = ranked.length <= MAX_PANES
+    ? ranked
+    : [...ranked].sort((left, right) => left.rank - right.rank || left.index - right.index).slice(0, MAX_PANES);
+  return Object.freeze({ panes: kept.map((entry) => entry.row), truncated: ranked.length > MAX_PANES, total: rows.length });
 }
 
 function panesObservation(context) {
   const listed = listPanes(context);
   if (!listed.available) return Object.freeze({ observation: { kind: "unobserved" }, truncated: false, total: 0 });
-  const related = relatedPanes(listed.rows);
+  const related = relatedPanes(listed.rows, context.programId);
   return Object.freeze({
     observation: { kind: "tmux-panes", panes: related.panes },
     truncated: related.truncated,

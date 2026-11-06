@@ -1037,7 +1037,25 @@ function commandLanding(options) {
       };
     }
     if (Date.now() >= deadline) {
-      return { ok: true, command: "landing", windowId: options.window, landed: false, promptDigest: options.promptDigest };
+      // 没有这个摘要的记录时，报出该会话最近一条别的 prompt 记录（现场 L22）：发送把文本改动了（经工具调用参数
+      // 转发时反斜杠转义被解码、重排了空白）与“什么都没到”是两回事——前者不能再发一遍，只能凭这条记录裁决。
+      const other = latestHookRecord("user-prompt-submit", sessionId);
+      return {
+        ok: true,
+        command: "landing",
+        windowId: options.window,
+        landed: false,
+        promptDigest: options.promptDigest,
+        ...(other === null
+          ? {}
+          : {
+              latestPrompt: {
+                recordId: typeof other.recordId === "string" ? other.recordId : null,
+                recordedAt: typeof other.recordedAt === "string" ? other.recordedAt : null,
+                promptDigest: typeof other.promptDigest === "string" ? other.promptDigest : null,
+              },
+            }),
+      };
     }
     sleep(HOOK_POLL_MS);
   }

@@ -107,7 +107,8 @@ test("maintain_workspace preview 零写给出摘要，apply 重算比对，漂�
   equal(applied.status, "completed");
   equal(applied.planDigest, planDigest);
   equal(applied.next.frontier, "window-launch");
-  equal(applied.next.owner, "user");
+  // 开窗归执行维护的会话自己（Controller 或引导会话），与 status 的 pod-window-registration 同一 owner。
+  equal(applied.next.owner, "controller");
   equal(applied.next.suggestedTool, "wakeflow_register_window_binding");
   equal(existsSync(path.join(root, "wakeflow.config.json")), true);
   equal(JSON.stringify(applied).includes(root), false);

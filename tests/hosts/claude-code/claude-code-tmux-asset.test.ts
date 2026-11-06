@@ -1182,6 +1182,66 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     "unobserved",
   );
 
+  // 现场 L22：同一个 tmux 服务器上还有另一个 Wakeflow 工作区的窗口（别的 programId）。它们排在前面，过去会占掉
+  // 16 行上限、把本工作区的 pane 截出观察（存活观察里缺了那一行就被判成 absent）。现在不算本工作区的 pane：
+  // 只有坐标与本工作区定位器相符的那一条仍然保留，Wakeflow 要看得见它被别人占用。
+  const OTHER_PROGRAM_ID = "program_99999999-9999-4999-8999-999999999999";
+  const foreign = Array.from({ length: 17 }, (_, index) =>
+    paneRow({
+      session: "wakeflow-other",
+      window: `@${40 + index}`,
+      pane: `%${40 + index}`,
+      options: { programId: OTHER_PROGRAM_ID, hostId: "claude-code" },
+    }),
+  );
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      ...foreign,
+      paneRow({
+        window: "@3",
+        pane: "%7",
+        options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID },
+      }),
+      // 本工作区产品窗口的定位器坐标（@5 / %9）上现在是另一个程序的 pane。
+      paneRow({
+        window: "@5",
+        pane: "%9",
+        options: { programId: OTHER_PROGRAM_ID, hostId: "claude-code" },
+      }),
+      "",
+    ].join("\n"),
+  );
+  const shared = runHelper(current, ["panes"]);
+  equal(shared.status, 0);
+  const sharedPanes = (shared.json.observation as { panes: readonly Record<string, unknown>[] })
+    .panes;
+  deepEqual(
+    sharedPanes.map((pane) => [pane.sessionName, pane.windowId, pane.paneId]),
+    [
+      ["wakeflow", "@3", "%7"],
+      ["wakeflow", "@5", "%9"],
+    ],
+  );
+  equal(shared.json.truncated, false);
+  equal(shared.json.total, 19);
+  // 恢复原来的三行：后面的 mark 按它们核对。
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    [
+      paneRow({
+        window: "@3",
+        pane: "%7",
+        command: "2.1.281",
+        pid: 300,
+        options: { programId: PROGRAM_ID, hostId: "claude-code", windowId: CONTROLLER_WINDOW_ID },
+      }),
+      paneRow({ session: "other", window: "@9", pane: "%20", command: "zsh", pid: 900 }),
+      paneRow({ window: "@5", pane: "%9", command: "2.1.281", pid: 500 }),
+      "",
+    ].join("\n"),
+  );
+
   resetLog(current);
   const marked = runHelper(current, ["mark", "--window", PRODUCT_WINDOW_ID]);
   equal(marked.status, 0, JSON.stringify(marked.json));

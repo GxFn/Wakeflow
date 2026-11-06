@@ -32,6 +32,7 @@ import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-
 import { wakeflowWindowHostBindingMutationLockRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { loadSensitive } from "../../support/load-sensitive.js";
 
 useDisposableDurability();
 
@@ -236,6 +237,7 @@ test("Codex：inspect 给出启动意图与执行参数，register 需要 hook �
   equal(inspected.launchIntent.role, inspected.role);
   equal((inspected.launchIntent.execution as { kind: string }).kind, "codex");
   equal(inspected.next.frontier, "window-registration");
+  equal(inspected.next.owner, "controller", "registering a window is the Controller's own step");
   equal(JSON.stringify(inspected).includes(root), false, "inspection leaked the workspace path");
 
   const handle = { kind: "codex-thread", value: "codex-host-owned-thread:opaque-7" };
@@ -1430,6 +1432,16 @@ test("Claude Code 桌面传输：replace 以新会话与新桌面 id 换代并�
 test("Claude Code 桌面传输经配置选择（ADR-0025 D1）：hosts.claude-code.windowTransport = desktop 的工作区让带传输表的门面选出桌面 profile，缺省工作区仍是 tmux", {
   timeout: 60_000,
 }, async (t) => {
+  // §13.227：两个经 Claude 组合根 fresh-initialize 的工作区；门里 8 个文件 worker 下贴着 60 秒上限（53 秒），
+  // 机器另有前台负载时超时。按测试标准进隔离道，不放宽超时。
+  if (
+    loadSensitive(
+      t,
+      "two workspaces fresh-initialized through the Claude composition root; timed out in the gate at eight file workers",
+    )
+  ) {
+    return;
+  }
   const facade: WindowBindingHostFacade = {
     ...CLAUDE,
     transports: claudeCodeWorkspaceHostTransportTable,

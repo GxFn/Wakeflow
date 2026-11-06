@@ -823,6 +823,8 @@ test("launch refuses each failure of the three steps with a stable code and neve
   equal(untrusted.status, 1);
   equal(untrusted.json.reason, "not-trusted");
   equal(untrusted.json.cwd, "../ProductA");
+  // 桩 git 答不出顶层目录时，要信任的就是这个目录自己。
+  equal(untrusted.json.trustRoot, "../ProductA");
   deepEqual(calls(), ["ps", "claude --bg"]);
   clearMarker(current, "bg-not-trusted");
 
@@ -1062,6 +1064,7 @@ test("trust opens the window's folder in the desktop app only with --user-agreed
     command: "trust",
     windowId: PRODUCT_WINDOW_ID,
     cwd: "../ProductA",
+    trustRoot: "../ProductA",
     opened: true,
   });
   deepEqual(calls(), ["ps", "script", "claude --desktop"]);
@@ -1108,6 +1111,46 @@ test("trust opens the window's folder in the desktop app only with --user-agreed
     runHelper(current, ["trust", "--window", PRODUCT_WINDOW_ID, "--settle", "x"]).json.reason,
     "settle-invalid",
   );
+});
+
+test("a surface window's trust root is the workspace repository: not-trusted names it and trust opens it, not the surface folder（现场 L23）", async (t) => {
+  if (loadSensitive(t, "real git repository to resolve the repository toplevel")) return;
+  const current = await fixture(t);
+  const gitPath = realGitPath();
+  const isolation = {
+    HOME: current.parent,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+  };
+  // 工作区根是一个真实的 Git 仓库，Design 是它里面的普通子目录：信任记录按仓库顶层认（探针 E9）。
+  equal(
+    spawnSync(gitPath, ["init", "-q", "-b", "main"], {
+      cwd: current.root,
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "", ...isolation },
+    }).status,
+    0,
+  );
+  mkdirSync(path.join(current.root, "Design"), { recursive: true });
+  const intent = launchIntent("Design", "Design", [], "design");
+  const environment = { WAKEFLOW_REAL_GIT: gitPath, ...isolation };
+
+  marker(current, "bg-not-trusted");
+  const untrusted = launch(current, intent, [], { env: environment });
+  equal(untrusted.json.reason, "not-trusted");
+  equal(untrusted.json.cwd, "Design");
+  equal(untrusted.json.trustRoot, ".");
+  clearMarker(current, "bg-not-trusted");
+
+  const opened = runHelper(
+    current,
+    ["trust", "--window", PRODUCT_WINDOW_ID, "--settle", "0", "--user-agreed"],
+    { input: JSON.stringify(intent), env: environment },
+  );
+  equal(opened.status, 0, JSON.stringify(opened.json));
+  equal(opened.json.cwd, "Design");
+  equal(opened.json.trustRoot, ".");
+  equal(readFileSync(path.join(current.state, "opened-folder"), "utf8").trim(), current.root);
 });
 
 test("sessions maps the interactive rows of claude agents --json to the desktop-sessions observation, capped at 64 rows, and reports unobserved when the listing fails", async (t) => {

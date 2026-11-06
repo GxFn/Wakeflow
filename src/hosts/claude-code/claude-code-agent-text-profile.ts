@@ -119,9 +119,10 @@ const WINDOW_LAUNCH =
   "the session id) for registration; it waits `--wait <seconds>` (default 120) for the first " +
   "turn and `--wait-session-start <seconds>` (default 30) for the record, refuses " +
   "`locator-live` while the window's recorded session is still in the sidebar and " +
-  "`not-trusted` for a folder without Claude Code's trust record (collect every such folder, " +
-  "ask the user once, and with their agreement run `trust --window <windowId> --user-agreed` " +
-  "for each and `launch` it again; a user who declines opens the folder in the desktop app or " +
+  "`not-trusted` for a folder without Claude Code's trust record (the refusal's `trustRoot` is " +
+  "the folder that needs it: collect the distinct ones, ask the user once, and with their " +
+  "agreement run `trust --window <windowId> --user-agreed` once per `trustRoot` and `launch` " +
+  "the refused windows again; a user who declines opens that folder in the desktop app or " +
   "runs `claude` there and accepts the trust dialog). After each registration set the session's permission mode " +
   'with the desktop `set_session_permission_mode` tool to `"auto"` (the app reapplies the ' +
   "folder's remembered mode when it takes the session over; the user approves its card once " +
@@ -259,12 +260,13 @@ const WINDOW_BOOTSTRAP =
   "observation you kept as soon as its call returns, then set its permission mode with the " +
   'desktop `set_session_permission_mode` tool to `"auto"` (the user approves the card once per ' +
   "folder) and its title with the desktop `set_session_title` tool. `not-trusted` means Claude " +
-  "Code has no trust record for that window's folder - every product repository needs its own, " +
-  "the surfaces inside the workspace do not. Do not stop there: launch the remaining windows, " +
-  "then name every refused folder to the user in one question and say that Claude Code will " +
-  "load each folder's own settings and hooks once it is trusted. After their yes run " +
-  "`trust --window <windowId> --user-agreed` for each - it opens the folder in the desktop app, " +
-  "which records the trust - and `launch` it again; a user who would rather do it themselves " +
+  "Code has no trust record for that window's `trustRoot` - the workspace root, whose record " +
+  "covers the surfaces inside it, or a product repository; opening a folder in the desktop app " +
+  "does not always write it, so the root can be among them. Do not stop there: launch the " +
+  "remaining windows, then name every distinct `trustRoot` to the user in one question and say " +
+  "that Claude Code will load that folder's own settings and hooks once it is trusted. After " +
+  "their yes run `trust --window <windowId> --user-agreed` once per `trustRoot` - it opens that " +
+  "folder in the desktop app, which records the trust - and `launch` the refused windows again; a user who would rather do it themselves " +
   "opens each folder in the desktop app (a new session there) or runs `claude` in a terminal " +
   "there and accepts the trust dialog. Never pass `--user-agreed` without their word. There is no adoption on " +
   "this transport: a window that was launched but never registered is archived with the " +
@@ -406,9 +408,9 @@ const HOST_TRUST_STEPS_EN = [
   "window as a session in the app's sidebar through the helper installed as `desktop.mjs` in",
   "the same place and delivers prompts with the app's own session messaging; what only you do:",
   "sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow",
-  "works, accept the trust dialog for the workspace root when you open the first session there",
-  "(the Design and Test surfaces inside the workspace are covered by it), decide once about the",
-  "product repositories - the setup session lists the ones Claude Code does not trust yet, says",
+  "works, decide once about the folders Claude Code does not trust yet - the workspace root,",
+  "whose trust also covers the Design and Test surfaces inside it, and each product repository:",
+  "the setup session lists them, says",
   "what trusting them means and, with your agreement, opens each in the desktop app, which",
   "records the trust without a further dialog on the current app version; if you would rather",
   "do it yourself, open each folder in the app or run `claude` in a terminal there and accept",
@@ -448,8 +450,8 @@ const HOST_TRUST_STEPS_ZH = [
   "自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个",
   "助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的",
   "侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作",
-  "期间让 app 开着；第一次在工作区根开会话时接受它的信任对话（工作区内的 Design、Test 面随根目录",
-  "一起被信任）；对产品仓库只需决定一次——引导会话列出 Claude Code 还不信任的仓库、说明信任意味着什么，",
+  "期间让 app 开着；对 Claude Code 还不信任的目录只需决定一次——工作区根（它的信任同时覆盖工作区内的",
+  "Design、Test 面）与每个产品仓库：引导会话把它们列出来、说明信任意味着什么，",
   "你同意后由它在桌面 app 里逐个打开，app 随即记下信任（当前版本不再弹窗）；想自己来也可以：在 app 里",
   "打开该目录或在终端里到该目录运行 `claude`，接受信任对话。没有你的同意，不会信任任何目录。",
   "Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",

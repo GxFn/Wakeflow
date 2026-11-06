@@ -49,7 +49,9 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   不启动会话进程、不产生 hook 记录。没有 `--user-agreed` 一律拒绝为 `consent-required`——信任一个目录是用户的
  *   决定，这个标志是 Agent 对"用户已对这份清单表示同意"的声明；pod 窗口的检出由 launch 准备，检出不在时拒绝
  *   `checkout-missing`。输出里没有 "Opening … in Claude Desktop" 或退出非零拒绝为 `trust-open-failed`。成功只说明
- *   目录已在 app 里打开：之后的 `launch` 才是证明。
+ *   目录已在 app 里打开：之后的 `launch` 才是证明。打开的是该窗口目录所属 Git 仓库的顶层（`trustRoot`，现场 L23）：
+ *   信任记录按仓库顶层认，工作区根的一条记录覆盖 Controller、Design、Test 三个窗口；`not-trusted` 的拒绝也带
+ *   `trustRoot`，Agent 按不同的 `trustRoot` 去重后只问用户一次。
  * - `sessions`：`claude agents --json` 的 interactive 行转成 `desktop-sessions` 存活观察（sessionId、
  *   status busy / idle、cwd、name、pid；最多 64 行），Wakeflow 据此分类，Agent 不判存活。
  * - `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing N]`：只等待并报告绑定会话的
@@ -859,12 +861,22 @@ function parseBackgroundId(output) {
   refuse("launch-id-unparsed", { detail: boundedDetail(text) });
 }
 
+// 信任记录按 Git 仓库的顶层目录认（探针 E9；现场 L23）：工作区根的记录覆盖根仓库里的普通子目录（Design、Test 面），
+// 嵌套的产品仓库与 pod 检出各认自己的顶层。目录不在任何仓库里时就是它自己。相对工作区根给出，不带绝对路径。
+function trustRootOf(cwd) {
+  const toplevel = git(cwd.absolute, ["rev-parse", "--show-toplevel"]);
+  const resolved = toplevel.ok && toplevel.stdout.trim().length > 0 ? realpathOrNull(toplevel.stdout.trim()) : null;
+  if (resolved === null) return cwd;
+  const relative = path.relative(realpathOrNull(ROOT) ?? ROOT, resolved);
+  return Object.freeze({ absolute: resolved, relative: relative.length === 0 ? "." : relative });
+}
+
 function startBackgroundSession(cwd, argv) {
   const started = run(claudeBinary(), argv, { cwd: cwd.absolute });
   const output = started.stdout + "\n" + started.stderr;
   if (!started.ok) {
     if (NOT_TRUSTED_PATTERN.test(output)) {
-      refuse("not-trusted", { cwd: cwd.relative, hint: "Claude Code has no trust record for this folder: go on launching the other windows, then name every refused folder to the user in one question and say what trusting it means; with their agreement run trust --window <windowId> --user-agreed for each and launch it again, otherwise they open the folder in the Claude desktop app or run claude in a terminal there and accept the trust dialog" });
+      refuse("not-trusted", { cwd: cwd.relative, trustRoot: trustRootOf(cwd).relative, hint: "Claude Code has no trust record for trustRoot, the repository root this folder belongs to: go on launching the other windows, then name every distinct trustRoot to the user in one question and say what trusting it means; with their agreement run trust --window <windowId> --user-agreed once per trustRoot and launch the refused windows again, otherwise they open that folder in the Claude desktop app or run claude in a terminal there and accept the trust dialog" });
     }
     refuse("launch-start-failed", { status: started.status, detail: boundedDetail(started.stderr.length > 0 ? started.stderr : started.stdout) });
   }
@@ -1047,9 +1059,11 @@ function commandTrust(options) {
     cwd = checkoutPlacement({ checkout });
   }
   assertDesktopReady();
-  openFolderInDesktop(cwd);
+  // 打开的是该窗口所属仓库的顶层：一条工作区根的记录就覆盖 Controller、Design 与 Test 三个窗口。
+  const target = trustRootOf(cwd);
+  openFolderInDesktop(target);
   if (options.settle > 0) sleep(options.settle * 1000);
-  return { ok: true, command: "trust", windowId, cwd: cwd.relative, opened: true };
+  return { ok: true, command: "trust", windowId, cwd: cwd.relative, trustRoot: target.relative, opened: true };
 }
 
 // 存活观察：interactive 行就是桌面 Code 标签里的会话（tmux 里的 CLI 窗口不在列，L17）。

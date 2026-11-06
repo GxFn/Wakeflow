@@ -60,18 +60,17 @@ missing, in one sentence, and wait for their word:
   `claude --desktop` refuses redirected output without it
   (`script-unavailable`).
 - Claude Code trusts the workspace root and every product repository. Trust
-  is a record in Claude Code's own project list. It covers the plain
-  subdirectories of a trusted folder - a Design or Test surface inside the
-  workspace needs nothing more - but not a Git repository nested in it, so
-  every product repository needs its own record. The root gets it when the
-  user opens the first session there and accepts the dialog. For a
-  repository without it `launch` reports `not-trusted` and names the folder:
-  collect every such refusal, ask the user once, and with their agreement
-  record the trust with `trust` (below). Trusting a folder is their decision:
-  never open one with `claude --desktop` yourself and never pass
-  `--user-agreed` without their word. A user who declines opens each folder
-  in the desktop app, or runs `claude` in a terminal there, and accepts the
-  dialog.
+  is a record per repository root in Claude Code's own project list: the
+  workspace root's record covers the Design and Test surfaces inside it, a
+  Git repository nested in it needs its own. Opening a folder in the desktop
+  app does not always write the record, so the root can lack it too. Where
+  it is missing `launch` reports `not-trusted` with `trustRoot`, the folder
+  that needs the record: collect the refusals, ask the user once about each
+  distinct `trustRoot`, and with their agreement record the trust with
+  `trust` (below). Trusting a folder is their decision: never open one with
+  `claude --desktop` yourself and never pass `--user-agreed` without their
+  word. A user who declines opens each folder in the desktop app, or runs
+  `claude` in a terminal there, and accepts the dialog.
 - One approval per folder for the `auto` permission mode. The helper starts
   the background session in the configured mode, but the app applies the
   folder's remembered mode once it takes the session over, so you set `auto`
@@ -132,14 +131,14 @@ prepared still carries `worktreePrepared` and `worktreeBranch`.
 
 ### `trust --window <windowId> --user-agreed`
 
-Stdin is the inspect result, as for `launch`. It opens the window's folder in
-the desktop app with a bare `claude --desktop`, which records Claude Code's
-trust for that folder - the current app version shows no further dialog - and
-starts no session. Without `--user-agreed` it refuses `consent-required`: the
-flag is your statement that the user agreed to trust the folders you named.
-Success only says the folder was opened; `launch` that window again, and a
-second `not-trusted` means the app did not record it - then the user opens
-the folder themselves.
+Stdin is the inspect result, as for `launch`. It opens the window's
+`trustRoot` in the desktop app with a bare `claude --desktop`, which records
+Claude Code's trust for that repository root - no further dialog on the
+current app version - and starts no session; one call per distinct
+`trustRoot` is enough. Without `--user-agreed` it refuses `consent-required`:
+the flag states that the user agreed to trust the folders you named. Success
+only says the folder was opened; `launch` the refused windows again - a
+second `not-trusted` means the user has to open that folder themselves.
 
 ### `sessions`
 
@@ -164,7 +163,7 @@ It never sends. Use it after every send, and before any second send.
 
 | `reason` | What it means | What you do |
 | --- | --- | --- |
-| `not-trusted` | `claude --bg` refused because Claude Code has no trust record for the folder (the refusal's `cwd`). | Go on with the other windows, then ask the user once about every refused folder; after their yes `trust --window <windowId> --user-agreed` for each and `launch` again. A user who declines opens the folder in the desktop app (a new session there) or runs `claude` in a terminal there and accepts the trust dialog. |
+| `not-trusted` | `claude --bg` refused because Claude Code has no trust record for the window's repository root (the refusal's `trustRoot`; `cwd` is the window's folder). | Go on with the other windows, then ask the user once about every distinct `trustRoot`; after their yes `trust --window <windowId> --user-agreed` once per `trustRoot` and `launch` the refused windows again. A user who declines opens that folder in the desktop app (a new session there) or runs `claude` in a terminal there and accepts the trust dialog. |
 | `consent-required` | `trust` was called without `--user-agreed`. | Ask the user about the folders first; the flag follows their agreement, never precedes it. |
 | `trust-open-failed` | `claude --desktop` did not report opening the folder (`checkout-missing`: a pod window's checkout does not exist yet - `launch` it first). | Ask the user to open that folder in the desktop app and accept the trust dialog. |
 | `desktop-unavailable` | The app is not running or not signed in (`stage` says whether at preflight or at the reopen step; the stopped background session keeps its conversation). | Ask the user to start the desktop app and sign in; `launch` again when they say it is up. |
@@ -212,10 +211,11 @@ edit files, do not read the helper's source.
    `observation` as soon as the call returns, before launching the next one
    or in launch order afterwards - never wait for the user between windows
    unless a refusal names them. `not-trusted` does not stop the round: launch
-   the remaining windows first, then name every refused folder to the user
-   in one question - say that Claude Code will load each folder's own
+   the remaining windows first, then name every distinct `trustRoot` to the
+   user in one question - say that Claude Code will load that folder's own
    settings and hooks once it is trusted - and after their yes run
-   `trust --window <windowId> --user-agreed` and `launch` again for each.
+   `trust --window <windowId> --user-agreed` once per `trustRoot` and
+   `launch` the refused windows again.
 3. Right after each registration call the desktop
    `set_session_permission_mode` tool with the window's `desktop.sessionId`
    and `"auto"`: the app applied the folder's remembered mode when it took

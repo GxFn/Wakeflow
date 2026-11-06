@@ -137,9 +137,9 @@ delivers prompts through the same helper. Under desktop sessions the Controller 
 window as a session in the app's sidebar through the helper installed as `desktop.mjs` in
 the same place and delivers prompts with the app's own session messaging; what only you do:
 sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow
-works, accept the trust dialog for the workspace root when you open the first session there
-(the Design and Test surfaces inside the workspace are covered by it), decide once about the
-product repositories - the setup session lists the ones Claude Code does not trust yet, says
+works, decide once about the folders Claude Code does not trust yet - the workspace root,
+whose trust also covers the Design and Test surfaces inside it, and each product repository:
+the setup session lists them, says
 what trusting them means and, with your agreement, opens each in the desktop app, which
 records the trust without a further dialog on the current app version; if you would rather
 do it yourself, open each folder in the app or run `claude` in a terminal there and accept

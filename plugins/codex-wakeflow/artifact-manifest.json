@@ -352,8 +352,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/projection.js",
-      "bytes": 1858,
-      "sha256": "sha256:84e13bb8f69e2878ed37f4fbbdb15f1ce22f930157058abe83c0548dbb59deb1",
+      "bytes": 2107,
+      "sha256": "sha256:0db2416d7088e28b56aeae5cb6e45f5900cc02f3adda26c3cd6f540434f43b7b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -471,8 +471,8 @@
     },
     {
       "path": "lib/capabilities/result-review/prompt.js",
-      "bytes": 4349,
-      "sha256": "sha256:f5249822b2b9150963c0a295e47f49c21bc418b3989b1048274eb1fd53b98887",
+      "bytes": 5825,
+      "sha256": "sha256:e74288a45d7b63910694525ae46125cb5a15d0ecf3d9b49dd0a0e0e952a9c2be",
       "mode": "0644",
       "scope": "shared"
     },
@@ -506,8 +506,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 48671,
-      "sha256": "sha256:53168dbb812ef05a5c9e3d7c0878f990dd236d941dc945a5d3c575889dd2035c",
+      "bytes": 48839,
+      "sha256": "sha256:a563e04c93c42b5c6180ff999cecc04b508aef90807396d1de2c093bf4b4f01b",
       "mode": "0644",
       "scope": "shared"
     },

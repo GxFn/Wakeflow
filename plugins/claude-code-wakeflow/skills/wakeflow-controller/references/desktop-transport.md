@@ -59,14 +59,17 @@ missing, in one sentence, and wait for their word:
 - The pseudo-terminal wrapper `script` is on the `PATH` the helper runs with;
   `claude --desktop` refuses redirected output without it
   (`script-unavailable`).
-- Each folder a window starts in - the workspace root, the Design and Test
-  surfaces, every product repository - is trusted. Trust is a record per
-  folder in Claude Code's own project list. The user writes it by opening the
-  folder in the desktop app (a new session there) or by running `claude` in a
-  terminal there, and accepting the trust dialog. `claude --desktop <folder>`
-  writes the same record without a dialog, so never run it on a folder the
-  user has not been told about: trusting a folder is their decision. `launch`
-  reports `not-trusted` for a folder without the record and names it.
+- Claude Code trusts the workspace root and every product repository. Trust
+  is a record in Claude Code's own project list. It covers the plain
+  subdirectories of a trusted folder - a Design or Test surface inside the
+  workspace needs nothing more - but not a Git repository nested in it, so
+  every product repository needs its own record. The user writes it by
+  opening the folder in the desktop app (a new session there) or by running
+  `claude` in a terminal there, and accepting the trust dialog.
+  `claude --desktop <folder>` writes the same record without a dialog, so
+  never run it on a folder the user has not been told about: trusting a
+  folder is their decision. `launch` reports `not-trusted` for a folder
+  without the record and names it; name only those folders to the user.
 - One approval per folder for the `auto` permission mode. The helper starts
   the background session in the configured mode, but the app applies the
   folder's remembered mode once it takes the session over, so you set `auto`
@@ -228,7 +231,8 @@ settings rules maintenance writes are unchanged, and a product repository's
    session cannot land: landing is the bound session's record. Pass the text
    exactly as the file holds it: Wakeflow wrote it when it issued the permit,
    and the landing record's digest has to equal the permit's `promptDigest`.
-   Never reconstruct the prompt from the conversation.
+   Never reconstruct the prompt from the conversation. Every backslash in
+   the file is a literal character and must arrive as one.
 2. Keep what the tool returned and record it as
    `attempt: { status: "sent", sendReturn: <the return, unchanged> }` when
    you call `wakeflow_record_delivery_outcome`; Wakeflow stores only the
@@ -247,8 +251,12 @@ settings rules maintenance writes are unchanged, and a product repository's
    be accepted; `landed: false` means it will be indeterminate, resolved
    exactly as `references/delivery-and-review.md` says - wait for the
    record, run `landing` again later, and resolve only on evidence (the
-   `recordId` is the `hookRecordId` an accepted resolution cites). There is
-   no screen readback on this transport, so the outcome carries no
+   `recordId` is the `hookRecordId` an accepted resolution cites). A
+   `latestPrompt` beside `landed: false` is the newest prompt record of that
+   session under another digest: when its `recordedAt` is your send, the
+   message arrived with its text altered on the way, so never send it again -
+   the window is already working on it - and resolve on that record. There
+   is no screen readback on this transport, so the outcome carries no
    `readback`.
 4. A session that shows a permission prompt or a dialog holds the message
    until the user answers there (a mode other than `auto` is the usual
@@ -324,7 +332,9 @@ callback's `user-prompt-submit` record in the Controller session.
   tools: `<program>` for the primary pod, `<program> · <pod>` for a worktree
   pod (the program's display name and the pod name). A group is a projection
   for the user's eye: losing or renaming it changes no Wakeflow state, and
-  after a reconcile you recreate a missing group the same way.
+  after a reconcile you recreate a missing group the same way. When the app
+  or this session's permission classifier refuses a grouping call, do not
+  retry it another way: leave the sessions ungrouped and tell the user.
 - Bring the pod up in the order `references/workspace-and-windows.md` gives
   (Controller and Design, then every product window with its worktree
   observation, then Test). Product windows may be launched one after another

@@ -101,7 +101,8 @@ app 的侧栏自带标记。
 自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个
 助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的
 侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作
-期间让 app 开着；让 Claude Code 信任每个窗口所在的目录——在桌面 app 里打开该目录（在那里新开
+期间让 app 开着；让 Claude Code 信任工作区根与每个产品仓库（工作区内的 Design、Test 面随根目录
+一起被信任）——在桌面 app 里打开该目录（在那里新开
 一个会话），或在终端里到该目录运行 `claude`，接受信任对话；Controller 会点名还需要信任的目录，
 从不替你信任；Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次
 即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和

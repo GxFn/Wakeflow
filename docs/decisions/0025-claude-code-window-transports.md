@@ -42,6 +42,7 @@ Claude Code 宿主今天只有一种窗口传输：每个窗口是 tmux pane 里
 - **D8 验证对等。** 场景链以桌面驱动再跑一遍（26 卡），组件测试按传输分文件；lab 无法无头起桌面 app，以录制观察补，差距登记 X9；每次 tag 前两种传输各做一次窗口生命周期现场。
 - **D9 不做。** 不依赖 `start_session`（服务端开关、必弹确认、自动回合不可用、子会话唤父）；K1 不做 reconfigure 切换传输、pod 侧栏分组、换代自动化与观察记录新字段，这些归 K2（规划第 4 节）。K2 已做（§13.225）：reconfigure 在无活动 Demand、无打开的 worktree pod 时可切换传输（宿主操作 `window-transport-retirement` 退役每个窗口的绑定与定位器并把投影置为 unregistered，新传输的资产集合随同发布，阻塞 `transport-change-demand-active:<id>` / `transport-change-pod-open:<podId>`）；pod 侧栏分组为 Controller 用桌面工具做的投影；换代路径以 E5 核实；观察记录新增 `permissionMode` / `sessionTitle`。
 - **D10 过期窗口的换代方式是画像值（2026-11-05，现场 L20，§13.226）。** `surfaces.runtimeRefresh` 取三个值：`controller-in-place`（tmux：Controller 用助手重启自己与同伴，过期窗口让 runtime-artifact 门失败并由 status 逐窗口给 resume / relaunch 路线）、`user-app-restart`（Codex）、`host-next-turn`（桌面：app 结束空闲的会话进程，下一条消息以当前制品重起，MCP 自行重载）。后两者的过期窗口只作 `windows-refresh-pending:<n>` 信息，门通过、status 不排动作；窗口的 `runtime` 仍如实标 `stale`。共享层只读这个值，不认识传输名。
+- **D11 桌面传输下产品仓库的信任：用户一次同意，助手打开（用户裁定 2026-11-06，Q13，§13.228）。** Claude Code 的信任不跨 Git 仓库边界继承（探针 E9）：工作区根由用户打开第一个会话时接受对话框，工作区内的支撑面随根继承，每个产品仓库要自己的记录。`launch` 在没有记录的目录里被拒为 `not-trusted`，这不打断一轮开窗：引导会话或 Controller 把被拒的目录收齐，向用户问一次并说明信任意味着 Claude Code 会加载该目录自己的设置与 hook；用户同意后，助手的 `trust --window <windowId> --user-agreed` 在该窗口的执行根里执行裸 `claude --desktop`——桌面 app 切到该目录并写下信任记录，当前 app 版本不再弹窗——随后再 `launch`。没有 `--user-agreed` 助手一律拒绝 `consent-required`；用户不同意时照旧由用户自己在 app 里打开目录或在终端里运行 `claude` 并接受对话框。tmux 传输不变：每个窗口的信任对话框只能由用户在窗格里回答（Y13）。Wakeflow 本身仍不 spawn 进程，信任是宿主效果，由 Agent 经助手执行。
 
 ## 后果
 

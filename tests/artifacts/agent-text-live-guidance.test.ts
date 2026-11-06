@@ -701,7 +701,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "and its title with the desktop `set_session_title` tool",
       "liveness is the desktop-sessions observation built from the desktop `list_sessions` tool, the helper's `sessions` is only the process view",
       "`not-trusted` for a folder without Claude Code's trust record",
-      "never open it with `claude --desktop` yourself",
+      "collect every such folder, ask the user once, and with their agreement run `trust --window <windowId> --user-agreed` for each and `launch` it again",
       "closed with the desktop `archive_session` tool only on the user's authorization - never with `claude rm`",
       "so relocate does not apply",
       "`references/desktop-transport.md`",
@@ -723,8 +723,10 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "`script.available`",
       "the same `sessionProven`",
       "`not-trusted` means Claude Code has no trust record for that window's folder",
-      "open it in the desktop app (a new session there) or run `claude` in a terminal there and accept the trust dialog",
-      "never open a folder with `claude --desktop` yourself, which trusts it without a dialog",
+      "opens each folder in the desktop app (a new session there) or runs `claude` in a terminal there and accepts the trust dialog",
+      "Do not stop there: launch the remaining windows, then name every refused folder to the user in one question",
+      "After their yes run `trust --window <windowId> --user-agreed` for each",
+      "Never pass `--user-agreed` without their word",
       'set its permission mode with the desktop `set_session_permission_mode` tool to `"auto"`',
       "never try to work around a classifier refusal - start a new session in the workspace root (with `start_session` when the host offers it, otherwise ask the user to open one)",
       "file the sessions into one sidebar group named after the program with the desktop `create_group` and `move_sessions` tools",
@@ -814,8 +816,9 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "`hosts.claude-code.windowTransport` - one transport per workspace",
       "proposes the transport its surroundings support (desktop sessions when it runs in the desktop app and has the app's session tools, tmux otherwise), you may choose the other one",
       "sign in to the desktop app with your Claude subscription",
-      "let Claude Code trust the workspace root and each product repository (the Design and Test surfaces inside the workspace are covered by the root) - open the folder in the desktop app (a new session there) or run `claude` in a terminal there, and accept the trust dialog",
-      "never trusts one for you",
+      "accept the trust dialog for the workspace root when you open the first session there (the Design and Test surfaces inside the workspace are covered by it)",
+      "the setup session lists the ones Claude Code does not trust yet, says what trusting them means and, with your agreement, opens each in the desktop app",
+      "nothing is trusted without your word",
       "approve the one card per folder the app may show when the Controller switches a window there to the `auto` permission mode",
       "Under desktop sessions no status line is written",
     ],
@@ -827,8 +830,9 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "`hosts.claude-code.windowTransport`",
       "时是桌面会话，否则是 tmux），你可以选另一种",
       "用 Claude 订阅登录桌面 app",
-      "让 Claude Code 信任工作区根与每个产品仓库（工作区内的 Design、Test 面随根目录 一起被信任）",
-      "从不替你信任",
+      "第一次在工作区根开会话时接受它的信任对话（工作区内的 Design、Test 面随根目录 一起被信任）",
+      "你同意后由它在桌面 app 里逐个打开，app 随即记下信任（当前版本不再弹窗）",
+      "没有你的同意，不会信任任何目录",
       "app 可能每个目录弹一次确认卡",
     ],
     "hostTrustSteps (zh)",
@@ -908,7 +912,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
   for (const heading of [
     "## What the transport is",
     "## One-time prerequisites (the user's)",
-    "## The helper and its four subcommands",
+    "## The helper and its five subcommands",
     "## Refusals and what to tell the user",
     "## Step 1 on this transport",
     "## Step 8 - delivering on this transport",
@@ -935,7 +939,9 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "The helper's `sessions` is only the process view",
       'Right after each registration call the desktop `set_session_permission_mode` tool with the window\'s `desktop.sessionId` and `"auto"`',
       "`permission-mode-mismatch:<windowId>` means the landing record shows that window in another permission mode than `auto`",
-      "never run it on a folder the user has not been told about",
+      "collect every such refusal, ask the user once, and with their agreement record the trust with `trust` (below)",
+      "never open one with `claude --desktop` yourself and never pass `--user-agreed` without their word",
+      "Without `--user-agreed` it refuses `consent-required`",
       "Never work around a classifier refusal",
       "`<program>` for the primary pod, `<program> · <pod>` for a worktree pod",
       "after a reconcile you recreate a missing group the same way",
@@ -976,6 +982,8 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
   }
   for (const code of [
     "not-trusted",
+    "consent-required",
+    "trust-open-failed",
     "desktop-unavailable",
     "script-unavailable",
     "launch-first-turn-timeout",
@@ -989,12 +997,19 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
   ]) {
     ok(desktop.includes(`| \`${code}\` |`), `desktop reference lacks the refusal row ${code}`);
   }
-  // X19：助手的 not-trusted 提示与参考同一做法——用户在桌面里打开该目录或在那里运行 claude，Controller 不代开。
+  // Q13（ADR-0025 D11）：助手的 not-trusted 提示与参考同一做法——不打断这一轮，把被拒的目录收齐后只问用户一次，
+  // 同意后 trust --user-agreed 再 launch，不同意则由用户自己打开；没有同意标志时 trust 拒绝。
   ok(
     CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes(
-      "the user opens it in the Claude desktop app (a new session there) or runs claude in a terminal there and accepts the trust dialog, then launch again; never open it with claude --desktop yourself",
+      "go on launching the other windows, then name every refused folder to the user in one question and say what trusting it means; with their agreement run trust --window <windowId> --user-agreed for each and launch it again, otherwise they open the folder in the Claude desktop app or run claude in a terminal there and accept the trust dialog",
     ),
-    "the helper's not-trusted hint names the concrete trust steps",
+    "the helper's not-trusted hint names the one-question trust flow",
+  );
+  ok(
+    CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes(
+      "pass --user-agreed only after the user agrees to that list",
+    ),
+    "the helper's consent-required hint ties the flag to the user's agreement",
   );
   equal(
     desktop.includes("{{"),

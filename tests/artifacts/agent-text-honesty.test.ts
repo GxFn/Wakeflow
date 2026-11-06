@@ -506,7 +506,7 @@ test("ADR-0025：文本点名的每个助手子命令都存在，两份助手的
     "self",
     "teardown",
   ]);
-  deepEqual(DESKTOP_SUBCOMMANDS, ["landing", "launch", "preflight", "sessions"]);
+  deepEqual(DESKTOP_SUBCOMMANDS, ["landing", "launch", "preflight", "sessions", "trust"]);
   const corpus = controllerCorpus();
   for (const [helper, admitted] of [
     ["tmux.mjs", TMUX_SUBCOMMANDS],

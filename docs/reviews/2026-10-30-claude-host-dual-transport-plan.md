@@ -38,7 +38,7 @@
 | pod 检出 | 助手准备 `.claude/worktrees/wakeflow-<pod>` | 同一检出作为 cwd，不用 `--worktree` | X6 |
 | pod 容器 | 每 pod 一个 tmux 会话 | 每 pod 一个侧栏分组（Controller 用 `create_group` / `move_sessions` 投影，K2） | 无 |
 | 状态投影 | 状态行 + `@wakeflow_state` | 侧栏原生标记，不发布状态行 | X14 |
-| 信任与权限模式 | 每窗信任对话；`--permission-mode auto` 随启动 | 每目录一次信任与选 auto；模式证据来自 user-prompt-submit（K1/K2） | X4 |
+| 信任与权限模式 | 每窗信任对话，只能由用户在窗格里回答（Y13）；`--permission-mode auto` 随启动 | 工作区根由用户接受一次；产品仓库的信任收齐后只问用户一次，同意后助手 `trust` 打开（ADR-0025 D11）；每目录一次选 auto，模式证据来自 user-prompt-submit | X4、X19、Q13（已裁决） |
 | 制品更新换代 | Controller 就地重启自己，再按 status 的逐窗口路线 resume 或 close → launch → replace → mark；过期窗口让门失败 | app 自行重载；过期窗口在下一条消息时换代，只作 `windows-refresh-pending` 信息（ADR-0025 D10）；归档→取消归档可立即结束进程（E5） | Y2（W41，已修）、X20、X21（已修） |
 | 首跑交接卡 | tmux 进入命令与每窗信任 | 侧栏分组、每目录信任与 auto、订阅登录 | X11 |
 | 自动化测试 | lab 用真实 tmux 进程跑两种实验 | 录制观察 + 场景链卡；无法无头起 app | X9 |

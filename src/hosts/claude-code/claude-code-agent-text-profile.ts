@@ -119,9 +119,10 @@ const WINDOW_LAUNCH =
   "the session id) for registration; it waits `--wait <seconds>` (default 120) for the first " +
   "turn and `--wait-session-start <seconds>` (default 30) for the record, refuses " +
   "`locator-live` while the window's recorded session is still in the sidebar and " +
-  "`not-trusted` for a folder without Claude Code's trust record (the user opens it in the " +
-  "desktop app or runs `claude` there and accepts the trust dialog; never open it with " +
-  "`claude --desktop` yourself). After each registration set the session's permission mode " +
+  "`not-trusted` for a folder without Claude Code's trust record (collect every such folder, " +
+  "ask the user once, and with their agreement run `trust --window <windowId> --user-agreed` " +
+  "for each and `launch` it again; a user who declines opens the folder in the desktop app or " +
+  "runs `claude` there and accepts the trust dialog). After each registration set the session's permission mode " +
   'with the desktop `set_session_permission_mode` tool to `"auto"` (the app reapplies the ' +
   "folder's remembered mode when it takes the session over; the user approves its card once " +
   "per folder) and its title with the desktop `set_session_title` tool; liveness is the " +
@@ -205,8 +206,9 @@ const RESEND_GUARD =
  * 登记前就被关掉时，tmux 里的 Controller 用 `launch` 收编仍在运行的窗口再登记（§13.134 I6），不在 tmux
  * 里 teardown；收编被拒时按助手的 hint 引导用户。桌面：引导会话跑在桌面 app 里，同样永不是 Controller；
  * `launch` 自己等到 session-start 才返回，所以每个窗口一返回就登记；没有收编；apply 后引导会话的分类器可能
- * 拒绝助手（X18），改由新开的会话继续开窗；`not-trusted` 让用户在桌面里打开该目录或在那里运行 `claude`
- * （X19）；每窗登记后由 Controller 切 auto（X4），全部登记后归入程序名分组。
+ * 拒绝助手（X18），改由新开的会话继续开窗；`not-trusted` 不打断这一轮——把被拒的目录收齐、只问用户一次，
+ * 同意后用助手的 `trust --user-agreed` 逐个打开再 launch，不同意则由用户自己打开（Q13，ADR-0025 D11）；每窗
+ * 登记后由 Controller 切 auto（X4），全部登记后归入程序名分组。
  */
 const WINDOW_BOOTSTRAP =
   "run the published helper's `preflight` - " +
@@ -257,10 +259,14 @@ const WINDOW_BOOTSTRAP =
   "observation you kept as soon as its call returns, then set its permission mode with the " +
   'desktop `set_session_permission_mode` tool to `"auto"` (the user approves the card once per ' +
   "folder) and its title with the desktop `set_session_title` tool. `not-trusted` means Claude " +
-  "Code has no trust record for that window's folder: name the folder, ask the user to open it " +
-  "in the desktop app (a new session there) or run `claude` in a terminal there and accept the " +
-  "trust dialog, and `launch` again when they say so; never open a folder with " +
-  "`claude --desktop` yourself, which trusts it without a dialog. There is no adoption on " +
+  "Code has no trust record for that window's folder - every product repository needs its own, " +
+  "the surfaces inside the workspace do not. Do not stop there: launch the remaining windows, " +
+  "then name every refused folder to the user in one question and say that Claude Code will " +
+  "load each folder's own settings and hooks once it is trusted. After their yes run " +
+  "`trust --window <windowId> --user-agreed` for each - it opens the folder in the desktop app, " +
+  "which records the trust - and `launch` it again; a user who would rather do it themselves " +
+  "opens each folder in the desktop app (a new session there) or runs `claude` in a terminal " +
+  "there and accepts the trust dialog. Never pass `--user-agreed` without their word. There is no adoption on " +
   "this transport: a window that was launched but never registered is archived with the " +
   "user's authorization and launched again. When every window is registered, file the sessions " +
   "into one sidebar group named after the program with the desktop `create_group` and " +
@@ -400,11 +406,13 @@ const HOST_TRUST_STEPS_EN = [
   "window as a session in the app's sidebar through the helper installed as `desktop.mjs` in",
   "the same place and delivers prompts with the app's own session messaging; what only you do:",
   "sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow",
-  "works, let Claude Code trust the workspace root and each product repository (the Design",
-  "and Test surfaces inside the workspace are covered by the root) - open the folder in the",
-  "desktop app (a new session there) or run `claude` in a terminal there, and accept the",
-  "trust dialog; the Controller names any folder that still needs it and never trusts one for",
-  "you - and approve the one card per folder the app may show when the Controller switches a",
+  "works, accept the trust dialog for the workspace root when you open the first session there",
+  "(the Design and Test surfaces inside the workspace are covered by it), decide once about the",
+  "product repositories - the setup session lists the ones Claude Code does not trust yet, says",
+  "what trusting them means and, with your agreement, opens each in the desktop app, which",
+  "records the trust without a further dialog on the current app version; if you would rather",
+  "do it yourself, open each folder in the app or run `claude` in a terminal there and accept",
+  "the dialog; nothing is trusted without your word - and approve the one card per folder the app may show when the Controller switches a",
   "window there to the `auto` permission mode (the folder remembers it). Maintenance also",
   "writes precise allow rules for the published helper and the Wakeflow MCP tools into the",
   "workspace root's `.claude/settings.json`, and every window the helper launches is started",
@@ -440,10 +448,11 @@ const HOST_TRUST_STEPS_ZH = [
   "自己的会话 `<会话名>-<pod 名>` 和各自的 attach 命令）、要接受哪些信任对话；投递 prompt 也走同一个",
   "助手。桌面会话传输下 Controller 通过装在同一位置的 `desktop.mjs` 把每个窗口作为一个会话开进 app 的",
   "侧栏，用 app 自己的会话消息投递 prompt；只有你能做的事：用 Claude 订阅登录桌面 app，Wakeflow 工作",
-  "期间让 app 开着；让 Claude Code 信任工作区根与每个产品仓库（工作区内的 Design、Test 面随根目录",
-  "一起被信任）——在桌面 app 里打开该目录（在那里新开",
-  "一个会话），或在终端里到该目录运行 `claude`，接受信任对话；Controller 会点名还需要信任的目录，",
-  "从不替你信任；Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",
+  "期间让 app 开着；第一次在工作区根开会话时接受它的信任对话（工作区内的 Design、Test 面随根目录",
+  "一起被信任）；对产品仓库只需决定一次——引导会话列出 Claude Code 还不信任的仓库、说明信任意味着什么，",
+  "你同意后由它在桌面 app 里逐个打开，app 随即记下信任（当前版本不再弹窗）；想自己来也可以：在 app 里",
+  "打开该目录或在终端里到该目录运行 `claude`，接受信任对话。没有你的同意，不会信任任何目录。",
+  "Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",
   "即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
   "Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口",
   "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，",

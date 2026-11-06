@@ -5688,3 +5688,16 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **残留。** 投递方向的 prompt 原样带 Controller 撰写的段落，段落里若有反斜杠同样要靠模型逐字转发，目前只有文本提醒。`permission-mode-mismatch` 仍没有现场触发：把别的会话切到非 auto 的调用被我的分类器拒绝，要用户本人在 app 里切。全新工作区的首跑路径与 Q13 一起做。侧栏里 ws12 的 8 个旧窗口会话与新会话同名并存，是否归档由用户决定；tmux 会话 `wakeflow12`（8 个已退役的窗口）已由我关闭，ws9 的两个 tmux 会话仍在运行。三处 `settings.local.json` 在状态行条目移除后各剩一个空对象。
 
 **结论：通过。传输切换在真实工作区上往返走通，其后的 Demand 由用户确认到归档；现场引出的五处修法（X25、Y15、Y16、X23、X24）由门 run-znN0a4 1754/1754 覆盖，其中 X25 是桌面传输独有的证据链缺陷。待用户：Q13（产品仓库的信任由谁写）的裁决、`permission-mode-mismatch` 的现场触发（要在 app 里把一个窗口切到非 auto）、全新工作区的首跑路径，以及 ws12 侧栏里 8 个旧窗口会话的处置。**
+
+### 13.228 Q13 裁决落地：桌面传输下产品仓库的信任，用户一次同意、助手打开（2026-11-06）
+
+用户推送 §13.227 后裁定"Q13 按你的推荐"并要求继续。Q13 的事实基础是探针 E9：Claude Code 的信任不跨 Git 仓库边界继承，工作区根被信任后支撑面随之被信任，每个产品仓库仍要自己的记录；此前的文本要求用户逐个在桌面 app 里打开仓库并接受对话框。
+
+- **裁决与设计（ADR-0025 D11）。** `launch` 在没有信任记录的目录里被拒为 `not-trusted`，这不打断一轮开窗：引导会话或 Controller 把其余窗口开完、把被拒的目录收齐，向用户问一次并说明信任意味着 Claude Code 会加载该目录自己的设置与 hook；用户同意后逐个执行助手的新子命令 `trust --window <windowId> --user-agreed`，再 `launch`。用户不同意时照旧由用户自己在 app 里打开目录或在终端运行 `claude` 并接受对话框。tmux 传输不变（每窗对话框只能由用户在窗格里回答，Y13）。
+- **助手。** `trust` 的 stdin 与 `launch` 相同，准入也相同（意图文法、目录存在）；没有 `--user-agreed` 拒绝 `consent-required`，一个宿主命令都不调；带上之后先看桌面 app 在不在，再经伪终端在该窗口的执行根里执行裸 `claude --desktop`（L17：打印 "Opening <目录> in Claude Desktop"，桌面切到该目录的新会话页，不启动进程；L18：信任记录 3 秒内写下、不再弹窗），输出里没有 Opening 或退出非零拒绝 `trust-open-failed`，app 不可用为 `desktop-unavailable`；pod 窗口的落点是 launch 准备的检出，检出不在时拒绝 `checkout-missing`，信任从不创建检出。成功只说明目录已打开，随后的 `launch` 才是证明。`not-trusted` 的 hint 同步改成这套做法。
+- **文本。** 桌面参考的前提、五个子命令的说明、Step 1 的开窗一条与拒绝码表（新增 `consent-required`、`trust-open-failed`），取值表里 WINDOW_LAUNCH、WINDOW_BOOTSTRAP 与 README 的信任步骤（中英）都改为同一做法；桌面参考到 400 行上限。测试把助手提示、参考与取值钉在一起，命令表测试加上 `trust`。
+- **我没能做的探针。** 开工前我想在一个临时嵌套仓库里实际执行一次裸 `claude --desktop`，核对输出与信任记录的时序；这次调用被我自己会话的 auto 分类器以"削弱安全"拒绝，我没有绕行。因此 `trust` 的宿主行为只有桩测试与 L17 / L18 的记录作依据，现场核对留给全新工作区的首跑：那里由带着助手允许规则的引导会话在用户同意后执行。为这一轮准备了 WakeflowTestWorkspace13（根仓库加 ProductA、ProductB 两个小仓库）。
+- **验证。** 第 2 级门一次通过：run-LMda96 1755/1755、`inputsUnchanged`（我的运行）。之前的 tier 0：桌面助手测试 15/15（新增 trust 用例：没有同意标志零宿主调用、同意后的调用序列是 ps、script、裸 claude --desktop、四种拒绝码），文本、制品与助手测试 57/57。`smoke:artifacts` 4/4；`wf timings apply` 写入耗时；`wf handoff` 八项通过。本节随源码、测试与文档提交，制品另一提交。
+- **残留。** `trust` 未经现场；引导会话的分类器是否放行助手的 `trust`（X18 同类问题）要在首跑里看；`permission-mode-mismatch` 的现场触发与首跑同一轮做。
+
+**结论：通过（第 2 级门 run-LMda96 1755/1755）。Q13 按用户裁决落地为 ADR-0025 D11 与桌面助手的 `trust` 子命令；现场验证待用户在场的首跑一轮。**

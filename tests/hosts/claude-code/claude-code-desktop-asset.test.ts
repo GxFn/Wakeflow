@@ -113,6 +113,11 @@ case "\${1:-}" in
     : > "$state/stopped-\${2:-}" ;;
   --desktop)
     if [ -e "$state/desktop-not-running" ]; then echo "Claude Desktop is not running; start it and sign in" >&2; exit 1; fi
+    if [ "\${2:-}" != "--resume" ]; then
+      if [ -e "$state/desktop-open-fail" ]; then echo "stub: could not open the folder" >&2; exit 1; fi
+      : > "$state/opened-folder"; printf '%s\\n' "$PWD" > "$state/opened-folder"
+      echo "Opening $PWD in Claude Desktop"; exit 0
+    fi
     if [ -e "$state/desktop-no-session" ]; then echo "No session found with id \${3:-} under /private/stub/sessions" >&2; exit 1; fi
     if [ -e "$state/desktop-silent" ]; then exit 0; fi
     if [ ! -e "$state/desktop-no-hook" ]; then hook 20260924T000001000Z resume; fi
@@ -1028,6 +1033,81 @@ test("launch refuses while the window's desktop session is still listed, unless 
   setAgents(current, [backgroundRow("done"), interactiveRow(SESSION_ID, "busy", "Product A", 777)]);
   const forced = launch(current, launchIntent("Product A", "../ProductA"), ["--force"]);
   equal(forced.status, 0, JSON.stringify(forced.json));
+});
+
+test("trust opens the window's folder in the desktop app only with --user-agreed, never starts a session, and refuses with stable codes（Q13，ADR-0025 D11）", async (t) => {
+  const current = await fixture(t);
+  const intent = launchIntent("Product A", "../ProductA");
+  const trust = (args: readonly string[], input = JSON.stringify(intent)): HelperRun =>
+    runHelper(current, ["trust", "--window", PRODUCT_WINDOW_ID, "--settle", "0", ...args], {
+      input,
+    });
+  const calls = (): readonly string[] =>
+    callLog(current).map((entry) =>
+      entry[0] === "claude" ? `claude ${entry.slice(1).join(" ")}` : (entry[0] ?? ""),
+    );
+
+  // 没有 --user-agreed：信任是用户的决定，一个宿主命令都不调。
+  const unasked = trust([]);
+  equal(unasked.status, 1);
+  equal(unasked.json.reason, "consent-required");
+  equal(unasked.json.windowId, PRODUCT_WINDOW_ID);
+  deepEqual(calls(), []);
+
+  // 用户同意之后：先看 app 在不在，再经伪终端在该窗口的执行根里执行裸 claude --desktop；不 --bg、不 --resume、不 rm。
+  const opened = trust(["--user-agreed"]);
+  equal(opened.status, 0, JSON.stringify(opened.json));
+  deepEqual(opened.json, {
+    ok: true,
+    command: "trust",
+    windowId: PRODUCT_WINDOW_ID,
+    cwd: "../ProductA",
+    opened: true,
+  });
+  deepEqual(calls(), ["ps", "script", "claude --desktop"]);
+  equal(
+    readFileSync(path.join(current.state, "opened-folder"), "utf8").trim(),
+    path.join(current.parent, "ProductA"),
+  );
+
+  // app 没在运行：在打开目录之前拒绝。
+  resetLog(current);
+  writeFileSync(path.join(current.state, "ps.txt"), `${PS_WITHOUT_APP}\n`);
+  const noApp = trust(["--user-agreed"]);
+  equal(noApp.json.reason, "desktop-unavailable");
+  equal(noApp.json.stage, "preflight");
+  deepEqual(calls(), ["ps"]);
+  writeFileSync(path.join(current.state, "ps.txt"), `${PS_WITH_APP}\n`);
+
+  // claude --desktop 自己报 app 不可用，或没有报 Opening：各有稳定的拒绝码，都不带绝对路径。
+  marker(current, "desktop-not-running");
+  const refused = trust(["--user-agreed"]);
+  equal(refused.json.reason, "desktop-unavailable");
+  equal(refused.json.stage, "trust");
+  equal(refused.json.cwd, "../ProductA");
+  clearMarker(current, "desktop-not-running");
+  marker(current, "desktop-open-fail");
+  const failed = trust(["--user-agreed"]);
+  equal(failed.status, 1);
+  equal(failed.json.reason, "trust-open-failed");
+  equal(failed.json.cwd, "../ProductA");
+  clearMarker(current, "desktop-open-fail");
+
+  // 意图不合文法、目录不在：与 launch 同一套准入，在任何宿主命令之前拒绝。
+  resetLog(current);
+  equal(
+    trust(["--user-agreed"], JSON.stringify({ ...intent, role: "nobody" })).json.reason,
+    "intent-invalid",
+  );
+  equal(
+    trust(["--user-agreed"], JSON.stringify(launchIntent("Product A", "../Missing"))).json.reason,
+    "cwd-missing",
+  );
+  deepEqual(calls(), []);
+  equal(
+    runHelper(current, ["trust", "--window", PRODUCT_WINDOW_ID, "--settle", "x"]).json.reason,
+    "settle-invalid",
+  );
 });
 
 test("sessions maps the interactive rows of claude agents --json to the desktop-sessions observation, capped at 64 rows, and reports unobserved when the listing fails", async (t) => {

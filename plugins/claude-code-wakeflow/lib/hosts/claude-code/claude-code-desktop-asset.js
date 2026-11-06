@@ -35,6 +35,14 @@ import { claudeCodeMcpPermissionRulesFor } from "./claude-code-mcp-permission-ru
  *   （§13.130 H4 的同一套拒绝码），并以那条检出为 `--bg` 的 cwd；记录的 cwd 不是它时拒绝 `worktree-cwd-mismatch`，
  *   是它时把 `git worktree list --porcelain` 与 `--git-common-dir` 的原文附在 observation 里。
  *   定位器已指向一个仍在侧栏里的桌面会话时拒绝 `locator-live`（`--force` 跳过）。
+ * - `trust --window <windowId> --user-agreed [--settle N]`（Q13，ADR-0025 D11）：stdin 同 launch。Claude Code 的信任
+ *   不跨 Git 仓库边界继承（探针 E9），每个产品仓库要自己的信任记录；`launch` 在没有记录的目录里被拒为
+ *   `not-trusted`。用户在引导会话里看过被拒目录的清单、听过信任的含义并同意之后，本子命令在该窗口的执行根里
+ *   经伪终端执行裸 `claude --desktop`：桌面 app 切到该目录的新会话页并写下信任记录（当前 app 版本不再弹窗，L18），
+ *   不启动会话进程、不产生 hook 记录。没有 `--user-agreed` 一律拒绝为 `consent-required`——信任一个目录是用户的
+ *   决定，这个标志是 Agent 对"用户已对这份清单表示同意"的声明；pod 窗口的检出由 launch 准备，检出不在时拒绝
+ *   `checkout-missing`。输出里没有 "Opening … in Claude Desktop" 或退出非零拒绝为 `trust-open-failed`。成功只说明
+ *   目录已在 app 里打开：之后的 `launch` 才是证明。
  * - `sessions`：`claude agents --json` 的 interactive 行转成 `desktop-sessions` 存活观察（sessionId、
  *   status busy / idle、cwd、name、pid；最多 64 行），Wakeflow 据此分类，Agent 不判存活。
  * - `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing N]`：只等待并报告绑定会话的
@@ -99,6 +107,10 @@ const BACKGROUNDED_PATTERN = /backgrounded/iu;
 const FIRST_TURN_DONE_STATES = Object.freeze(["done", "completed"]);
 const FIRST_TURN_FAILED_STATES = Object.freeze(["failed", "stopped", "error", "killed", "cancelled"]);
 const OPENING_SESSION_PATTERN = /Opening session/u;
+// 裸 claude --desktop 在目录里的输出（L17 1.1）："Opening <目录> in Claude Desktop"。
+const OPENING_FOLDER_PATTERN = /Opening .+ in Claude Desktop/u;
+// 打开目录之后给 app 写下信任记录的时间（L18：3 秒内）。
+const DEFAULT_TRUST_SETTLE_SECONDS = 4;
 // --desktop 报告 app 未运行或未登录的措辞；与 "No session found"（会话从未对话或仍在运行）分开。
 const DESKTOP_UNAVAILABLE_PATTERN = /not running|not signed in|not logged in|sign in|log in|could not connect|unable to connect/iu;
 const NOT_TRUSTED_PATTERN = /not trusted/iu;
@@ -495,11 +507,18 @@ function parseArguments(argv) {
     waitSessionStart: DEFAULT_SESSION_START_WAIT_SECONDS,
     waitLanding: DEFAULT_LANDING_WAIT_SECONDS,
     promptDigest: null,
+    userAgreed: false,
+    settle: DEFAULT_TRUST_SETTLE_SECONDS,
   };
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
     if (argument === "--force") {
       options.force = true;
+    } else if (argument === "--user-agreed") {
+      options.userAgreed = true;
+    } else if (argument === "--settle") {
+      options.settle = parseSeconds(rest[index + 1], "settle-invalid");
+      index += 1;
     } else if (argument === "--window") {
       options.window = parseWindowId(rest[index + 1], "--window");
       index += 1;
@@ -829,7 +848,7 @@ function startBackgroundSession(cwd, argv) {
   const output = started.stdout + "\n" + started.stderr;
   if (!started.ok) {
     if (NOT_TRUSTED_PATTERN.test(output)) {
-      refuse("not-trusted", { cwd: cwd.relative, hint: "Claude Code has no trust record for this folder: the user opens it in the Claude desktop app (a new session there) or runs claude in a terminal there and accepts the trust dialog, then launch again; never open it with claude --desktop yourself" });
+      refuse("not-trusted", { cwd: cwd.relative, hint: "Claude Code has no trust record for this folder: go on launching the other windows, then name every refused folder to the user in one question and say what trusting it means; with their agreement run trust --window <windowId> --user-agreed for each and launch it again, otherwise they open the folder in the Claude desktop app or run claude in a terminal there and accept the trust dialog" });
     }
     refuse("launch-start-failed", { status: started.status, detail: boundedDetail(started.stderr.length > 0 ? started.stderr : started.stdout) });
   }
@@ -976,6 +995,47 @@ function commandLaunch(options) {
   }
 }
 
+// 裸 claude --desktop：桌面 app 切到 cwd 的新会话页并写下该目录的信任记录，不启动进程（L17 1.1、L18）。
+function openFolderInDesktop(cwd) {
+  const script = scriptBinary();
+  if (script === null) refuse("script-unavailable");
+  const result = run(script, ["-q", "/dev/null", claudeBinary(), "--desktop"], { cwd: cwd.absolute, stdin: "ignore" });
+  const output = stripSgr(result.stdout + "\n" + result.stderr);
+  if (result.ok && OPENING_FOLDER_PATTERN.test(output)) return;
+  const extra = { cwd: cwd.relative, status: result.status };
+  if (DESKTOP_UNAVAILABLE_PATTERN.test(output)) {
+    refuse("desktop-unavailable", { stage: "trust", ...extra, hint: "the desktop app is not running or not signed in; ask the user to start it and sign in, then run trust again" });
+  }
+  refuse("trust-open-failed", { ...extra, hint: "claude --desktop did not report opening the folder; ask the user to open it in the Claude desktop app and accept the trust dialog" });
+}
+
+// trust（Q13，ADR-0025 D11）：只在用户对被拒目录的清单表示同意之后调用；信任一个目录是用户的决定。
+function commandTrust(options) {
+  const { windowId, launchIntent } = unwrapIntent(readStdinJson(), options);
+  if (!options.userAgreed) {
+    refuse("consent-required", { windowId, hint: "trusting a folder is the user's decision: name the folders launch refused as not-trusted, say that Claude Code will then load each folder's own settings and hooks, and pass --user-agreed only after the user agrees to that list" });
+  }
+  const execution = launchIntent.execution;
+  assertExecution(execution);
+  const worktreeIntent = requestedWorktree(launchIntent);
+  const repositoryRoot = resolvePlacement(launchIntent.root?.configuredPlacement);
+  let cwd;
+  if (worktreeIntent === null) {
+    cwd = resolvePlacement(execution.desktop?.cwd ?? launchIntent.root?.configuredPlacement);
+  } else {
+    // pod 窗口的落点是 launch 准备的检出；信任从不创建检出。
+    const checkout = path.join(repositoryRoot.absolute, ".claude", "worktrees", worktreeIntent.suggestedName);
+    if (!existsSync(checkout)) {
+      refuse("checkout-missing", { windowId, hint: "launch prepares the pod checkout; launch this window first and trust it only when launch reports not-trusted" });
+    }
+    cwd = checkoutPlacement({ checkout });
+  }
+  assertDesktopReady();
+  openFolderInDesktop(cwd);
+  if (options.settle > 0) sleep(options.settle * 1000);
+  return { ok: true, command: "trust", windowId, cwd: cwd.relative, opened: true };
+}
+
 // 存活观察：interactive 行就是桌面 Code 标签里的会话（tmux 里的 CLI 窗口不在列，L17）。
 function sessionsObservation() {
   const listed = listAgents(false);
@@ -1063,6 +1123,9 @@ function main() {
         break;
       case "launch":
         result = commandLaunch(options);
+        break;
+      case "trust":
+        result = commandTrust(options);
         break;
       case "sessions":
         result = commandSessions();

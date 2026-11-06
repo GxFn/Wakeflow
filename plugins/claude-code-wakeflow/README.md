@@ -137,11 +137,13 @@ delivers prompts through the same helper. Under desktop sessions the Controller 
 window as a session in the app's sidebar through the helper installed as `desktop.mjs` in
 the same place and delivers prompts with the app's own session messaging; what only you do:
 sign in to the desktop app with your Claude subscription, keep the app open while Wakeflow
-works, let Claude Code trust the workspace root and each product repository (the Design
-and Test surfaces inside the workspace are covered by the root) - open the folder in the
-desktop app (a new session there) or run `claude` in a terminal there, and accept the
-trust dialog; the Controller names any folder that still needs it and never trusts one for
-you - and approve the one card per folder the app may show when the Controller switches a
+works, accept the trust dialog for the workspace root when you open the first session there
+(the Design and Test surfaces inside the workspace are covered by it), decide once about the
+product repositories - the setup session lists the ones Claude Code does not trust yet, says
+what trusting them means and, with your agreement, opens each in the desktop app, which
+records the trust without a further dialog on the current app version; if you would rather
+do it yourself, open each folder in the app or run `claude` in a terminal there and accept
+the dialog; nothing is trusted without your word - and approve the one card per folder the app may show when the Controller switches a
 window there to the `auto` permission mode (the folder remembers it). Maintenance also
 writes precise allow rules for the published helper and the Wakeflow MCP tools into the
 workspace root's `.claude/settings.json`, and every window the helper launches is started

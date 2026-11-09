@@ -5730,3 +5730,17 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **残留。** 正式工作区的初始化等用户发起，之后看它的 Controller 第一次 `/wakeflow:next`；`permission-mode-mismatch` 的现场触发（WakeflowTestWorkspace13 上已发布的 L24 包，用户先把 ProductB 切到 Manual）；WakeflowTestWorkspace9 的两个 tmux 会话、WakeflowTestWorkspace12/13 欠一次 reconcile；open-items 里的高严重度项不变。
 
 **结论：通过（第 0 级，文档与 Git 状态，无门）。`v1.2.0` 打在 `ecdd20fb`、`release:check` 一次通过、派生分支清理、正式工作区建立（初始化待用户）、迭代节奏由 ADR-0026 定；`main` 与 tag 等用户推送。**
+
+### 13.231 正式工作区首跑：8 个窗口 6 分钟开出并登记，信任按 `trustRoot` 去重只问了五个产品仓库（2026-11-08）
+
+用户按 §13.230 准备的那段 `/wakeflow:init` 消息，在桌面 app 里以正式工作区的根目录开会话发出。这是 ADR-0026 决定 5 所说的受监督现场，不是测试：我没有向这个工作区写入任何东西，只读它的配置、绑定与 hook 记录，以及引导会话的本地记录。
+
+- **初始化。** 写下的配置与消息一致：程序 Alembic、zh-Hans、五个仓库都在工作区内且 owner-managed、Design 与 Test 在工作区内、账本在工作区内、desktop 传输、8 个窗口。根仓库零提交，与 L23 相同，没有影响。
+- **开窗与信任。** apply 后 40 秒 Controller 登记，Design、Test 随后——工作区根已有信任记录，三个支撑窗口一次开出；五个产品仓库被拒 `not-trusted`，引导会话按 `trustRoot` 去重后只问了一次，用户同意后五条信任记录写下、五个产品窗口依次开出。从 apply 到第 8 个窗口登记 5 分 29 秒，到交接卡 6 分 10 秒。§13.229 的残留"`trustRoot` 去重没有再走一遍现场"至此有了现场：问的是五个目录，不是 L23 的全部。
+- **hook 记录的形状。** 每个窗口两条 session-start（`claude --bg` 起会话、桌面 `--resume` 再起一次）加一条 session-end（后台进程在桌面接管后退出，该会话已绑定所以被记下）。这是 L17 以来的开窗路径，不是窗口死亡；桌面传输的存活以 Controller 维护时的 `desktop-sessions` 观察为准，状态卡在那之前如实显示 `unverified`。
+- **侧栏分组。** 这次"Alembic"分组建好并装进 8 个会话，X24 的分类器拒绝没有再发生（放行与否取决于分类器，文本两条路都保留）；两个早先测试留下的空分组仍在侧栏，由用户处置。
+- **交接卡。** 说明了 `unverified` 不是故障、首次发消息可能出现 auto 确认卡，告诉用户归档引导会话、到 Design 写第一个需求、以后在 Controller 里继续。
+- **验证。** 本节只记录观察：没有源码、文本或制品变更，`impact report` 的第 0 级（只有文档变化），不需要门；`wf handoff` 通过后随文档提交。
+- **残留。** 正式工作区此后只观察，第一个 Demand 由用户在 Design 与 Controller 里发起时再看一次完整流转；`permission-mode-mismatch` 的现场触发仍在 WakeflowTestWorkspace13 上。
+
+**结论：通过（观察，无门）。正式工作区的桌面首跑 6 分钟走完，信任只问一次且只问五个产品仓库，侧栏分组成功；§13.229 的 `trustRoot` 残留关闭。**

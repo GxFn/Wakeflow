@@ -106,8 +106,10 @@ of test work, and it overrides one target rule: you do record managed evidence
    decides is replaced by importing again with the supersedes field naming
    the first import's result id; after a decision only another attempt can.
 6. Send the returned wake-controller callback prompt to the Controller window
-   by the host's own means: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. No other route counts as a
-   send. Then end your turn.
+   by the host's own means for this workspace's one transport - the delivery
+   prompt's return section names a Controller desktop id under desktop
+   sessions (no tmux helper exists there), otherwise it is tmux:
+   send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. No other route counts as a send. Then end your turn.
 
 ## What you must return
 

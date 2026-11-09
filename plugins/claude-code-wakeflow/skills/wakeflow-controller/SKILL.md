@@ -75,10 +75,10 @@ needs a real `session-start` at the host startup root; a refusal names the missi
 
 ### Step 5 - Claim a requirement package into a Demand
 
-Call `wakeflow_inspect_board` to list what Design has published, choose one
-pending package with the user, then call `wakeflow_create_demand` on it. The
-Demand type, testing decision and authority members come from the package; you
-do not restate them.
+Call `wakeflow_inspect_board` to list what Design has published. With exactly
+one pending package, claim it and say which; with several, choose with the
+user. Then call `wakeflow_create_demand` on it. The Demand type, testing
+decision and authority members come from the package; you do not restate them.
 
 ### Step 6 - Plan the target task
 
@@ -99,11 +99,11 @@ takes the work claim, renders the prompt around your text, returns a permit.
 Perform the host effect exactly once: run the helper from the workspace root (from a product or surface window, prefix its path with the `--add-dir` workspace root). Under the tmux transport: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs deliver --window <windowId> --handle-digest <the permit's handleDigest> --prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>`. It reads the prompt from the permit file - never retype, pipe or reconstruct it, never read `.wakeflow-active` event files yourself - refuses `prompt-digest-mismatch` when the file does not match and, before sending, `target-not-at-prompt` when the pane shows a dialog or menu instead of its input box, or that box holds typed text (nothing was sent: the user answers or clears it in that window, then you send the same permit again; never send keys there yourself), otherwise pastes the prompt, presses Return once, waits a few seconds for the target session's prompt-submit record and prints the `attempt`, `readback` and `landing` to record verbatim; `readback` is screen text only, landing is proven by the hook record alone. Under desktop sessions send the `promptRef` file's text, unchanged and once, with the desktop `send_message` tool to the window's desktop id (the `desktop.sessionId` its `launch` printed; a callback goes with `SendMessage` to the Controller's desktop id that the delivery prompt names), keep the tool's return unchanged as `attempt.sendReturn` (`status: "sent"`, or `"failed-before-send"` when nothing was sent), then, before recording the outcome, run `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/desktop.mjs landing --window <windowId> --prompt-digest <the permit's promptDigest>` (`--wait-landing <seconds>` after `queued`): only the target's `user-prompt-submit` record proves landing. Then call
 `wakeflow_record_delivery_outcome` with the permit's delivery identity and
 fence. Wakeflow derives the disposition from evidence: accepted needs the
-target session's `user-prompt-submit` record matching the permit's prompt, or
-your own report of the host send's return. A missing landing is indeterminate,
-never a failure; only a send that provably failed before touching the session
-is re-armed with `wakeflow_rearm_delivery`, and an indeterminate delivery is
-resolved as the reference says, never resent on a hunch.
+target session's `user-prompt-submit` record matching the permit's prompt (on
+Codex, your report of the host send's return). A missing landing is
+indeterminate, never a failure; only a send that provably failed before touching
+the session is re-armed with `wakeflow_rearm_delivery`, and an indeterminate
+delivery is resolved as the reference says, never resent on a hunch.
 
 ### Step 10 - Inspect the review unit
 
@@ -122,7 +122,7 @@ for an implementation result or `wakeflow_record_test_review_decision` for a
 test result. On escalate, hand the user the issue, options and recommendation,
 then bring their answer back through `wakeflow_continue_demand`; a
 product-defect escalation instead returns to implementation delivery planning.
-A recorded decision ends the turn; the next Controller turn resumes from `wakeflow_status`. Depth: `references/delivery-and-review.md`.
+A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you. Depth: `references/delivery-and-review.md`.
 
 ### Step 12 - Complete and archive
 
@@ -170,7 +170,8 @@ Prefer a new session per Demand and after a pod is created or closed.
 
 ## What you must return to the user
 
-- What you did, in their words, and what Wakeflow recorded.
+- What you did, in their words, and what Wakeflow recorded - after a delivery,
+  which window took it and when.
 - The evidence behind any claim of success - which record, which gate, which
   hook observation. Never report a host effect as done on the strength of
   having attempted it.

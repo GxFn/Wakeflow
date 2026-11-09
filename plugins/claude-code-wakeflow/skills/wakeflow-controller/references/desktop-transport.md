@@ -272,11 +272,11 @@ settings rules maintenance writes are unchanged, and a product repository's
    record, run `landing` again later, and resolve only on evidence (the
    `recordId` is the `hookRecordId` an accepted resolution cites). A
    `latestPrompt` beside `landed: false` is the newest prompt record of that
-   session under another digest: when its `recordedAt` is your send, the
-   message arrived with its text altered on the way, so never send it again -
-   the window is already working on it - and resolve on that record. There
-   is no screen readback on this transport, so the outcome carries no
-   `readback`.
+   session under another digest: when its `recordedAt` is your send, the host
+   wrapped or altered the text on the way (the observer strips the app's
+   cross-session envelope; a mismatch means a shape it does not know yet), so
+   never send it again - the window is already working on it - and resolve
+   on that record. No screen readback here: the outcome carries no `readback`.
 4. A session that shows a permission prompt or a dialog holds the message
    until the user answers there (a mode other than `auto` is the usual
    cause). That is not a failed send: the message lands when they answer.

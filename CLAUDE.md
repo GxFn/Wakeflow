@@ -27,6 +27,10 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 - Keep secrets, tokens, private session or thread identifiers, local absolute
   paths, and machine-specific cache paths out of committed source, fixtures,
   and docs.
+- The user's formal workspace loads this checkout's `plugins/claude-code-wakeflow`
+  directly, so every artifact rebuild is a deployment (ADR-0026). Rebuild only at
+  the end of a stage, after checking that workspace has no active Demand, and
+  say so in the handoff; run experiments in disposable test workspaces only.
 
 ## Source Ownership
 

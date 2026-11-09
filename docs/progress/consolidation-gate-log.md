@@ -5717,3 +5717,16 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **残留。** `trustRoot` 的去重没有再走一遍现场（逻辑由真实 git 的助手测试覆盖）；`permission-mode-mismatch` 的现场触发；WakeflowTestWorkspace13 在重建之后欠一次 reconcile，侧栏里留着它的 5 个窗口会话、一个引导会话和一个空分组。
 
 **结论：通过（第 2 级门 run-UihXzG 1756/1756）。桌面传输的全新首跑由用户两步发起、一次同意信任、到第一个 Demand 归档全程走通；Q13 的 `trust` 流程与 X25 的回调落地修正现场通过；补 `trustRoot`。**
+
+### 13.230 `v1.2.0` tag 与 `release:check`、派生分支清理、正式工作区建立与迭代节奏裁决（2026-11-08）
+
+用户问 Wakeflow 是否到了正式可用状态、要不要把全部内容更新确定。我的评估：代码面已经过第 2 级门与 L20–L23 现场，可用；差的是形式——`v1.2.0` 还没有 tag 与 `release:check`、开发检出与正式安装没有分开、几条高严重度的 open-items。用户的裁决：保持"便捷开发"的状态——正式工作区就从本检出加载插件，提交由用户把控，用户监督 Wakeflow 的使用；要我用 git 清理、打 tag，并确定后续版本的迭代节奏。本节记录这四件事。
+
+- **正式工作区。** 按用户在问答里的选择（桌面传输、旧工作区的五个核心仓库、去掉 0.9.x 残留并提交、沿用默认模型），在旧工作区的同级目录新建根仓库，从 GitHub 远端重新克隆 Alembic、AlembicCore、AlembicAgent、AlembicDashboard、AlembicPlugin，每个克隆上一次提交删掉 0.9.x 留下的 `.claude/settings.json` 与 CLAUDE.md/AGENTS.md 里的 scope 块（各领先远端 1 个提交，未推送）。旧工作区只做了一次授权的状态检查，没有改动。`/wakeflow:init` 由用户在桌面 app 里用那段带齐答案的消息发起；到本节写下时还没有发生，等待的观察在 30 分钟后超时，不算失败。此后那里只观察、不试验、不发测试需求包（ADR-0026 决定 5）。
+- **Git 清理。** 派生会话留下的分支 `claude/objective-wiles-c8313d`（6c67aa07，没有 `main` 之外的提交）与其 `.claude/worktrees/` 下的工作树一并删除并 prune；此后只剩 `main` 与主工作树。
+- **tag 与发布检查。** 轻量 tag `v1.2.0` 打在 `ecdd20fb`（§13.229 的 README 指针提交，也是本地与 `origin/main` 的共同 HEAD；1.2 系列从 §13.207 bump 起没有再变过 `plugins/` 字节，`version-bytes` 检查一直成立）。`npm run release:check` 一次通过：`main`、树干净、tag 在 HEAD、`origin/main` 同一提交、六个版本源都是 1.2.0、Node 引擎声明 `>=24.19.0 <25`。tag 未推送：推送 `main` 与 tag 都由用户执行。
+- **迭代节奏（ADR-0026）。** 主干开发、派生分支与工作树即删；一个阶段一道门一次部署，`plugins/` 只在阶段末重建一次，重建前以正式工作区 Controller 的状态卡确认没有活动 Demand，重建后在交接里说明；`v1.2.0` 之后任何改变 `plugins/` 字节的阶段先 bump 补丁号（下一次是 1.2.1），新增公共工具、画像字段、传输能力或 Schema 的批次推进小版本；每阶段 bump 提交推送后打轻量 tag 并真跑 `release:check`，推送与 tag 由用户执行或授权；小版本 tag 前两传输各一次窗口生命周期现场，补丁 tag 只做触及的传输。随之：CLAUDE.md 与 AGENTS.md 的 Scope And Safety 加"正式工作区直接加载本检出的制品，重建即部署"一条；双传输规划 §3 的 tag 前现场规则按小版本与补丁分级；open-items 的 Q1、Q2、Q11 标为 ADR-0021 已裁决，Q2 的节奏指向 ADR-0026；决定索引加 0026 一行。
+- **验证。** 第 0 级：`impact report` 判"只有文档与仓库文件变化"、不影响制品、不需要门；`wf handoff` 见下。没有源码、Schema 或制品变更，提交的制品字节与 `v1.2.0` 相同。
+- **残留。** 正式工作区的初始化等用户发起，之后看它的 Controller 第一次 `/wakeflow:next`；`permission-mode-mismatch` 的现场触发（WakeflowTestWorkspace13 上已发布的 L24 包，用户先把 ProductB 切到 Manual）；WakeflowTestWorkspace9 的两个 tmux 会话、WakeflowTestWorkspace12/13 欠一次 reconcile；open-items 里的高严重度项不变。
+
+**结论：通过（第 0 级，文档与 Git 状态，无门）。`v1.2.0` 打在 `ecdd20fb`、`release:check` 一次通过、派生分支清理、正式工作区建立（初始化待用户）、迭代节奏由 ADR-0026 定；`main` 与 tag 等用户推送。**

@@ -51,6 +51,7 @@
 | [0023](./0023-hook-driven-window-activity-marks.md) | hook 驱动的窗口活动标记：观察器在已绑定会话按事件写 `@wakeflow_state`，助手 `mark` 设每窗口格式；UI 投影而非状态权威，不回轮询 | `accepted` | 2026-10-20 | 旧版复审 R1（§13.194）；落地见 1.1.1 批 1 |
 | [0024](./0024-detach-repository-and-workspace.md) | 退出路径：`detach-repository` 与 `detach-workspace` 两个维护动作各有 preview/apply，走同一事务；五种只做删除的步骤按受管文本的精确准入判断能不能删；终态把 `wakeflow.config.json` 改名为 `wakeflow.detached.json`，账本、支撑面、检出、分支、插件 hooks 不碰并列出 | `accepted` | 2026-10-26 | Codex 审阅修复计划 §4 批 E、测试门与 1.2 计划 §3.7（open-items V7）；落地见 §13.217 |
 | [0025](./0025-claude-code-window-transports.md) | Claude Code 宿主的两种窗口传输：tmux 与桌面会话并列一等；配置 `hosts.claude-code.windowTransport` 选传输、宿主提供传输表、共享层在门面准入时选 profile；启动模板加 `desktop-session`，`tmuxAsset` 改为中立的 `helperAsset`；登记观察加 `desktop { sessionId }` 与 `desktop-sessions` 存活观察；助手 `desktop.mjs` 三步开窗（`--bg` → `stop` → 伪终端 `--desktop --resume`）；投递用 `send_message` 返回值作 sendReturn、落地规则不变；维护按传输发布资产；场景链桌面驱动再跑一遍；不依赖 `start_session` | `accepted` | 2026-10-30 | 双传输规划 §4 批 K1、桌面适配方案 §2–§9（open-items X、Y）；落地见 §13.222（K1） |
+| [0026](./0026-iteration-cadence-with-a-live-checkout.md) | 迭代节奏：开发检出直接作为插件来源时的部署、版本、tag 与现场——主干开发、派生分支即删；一个阶段一道门一次部署，重建前确认正式工作区空闲；`plugins/` 字节变化先 bump 补丁号，新能力推进小版本；每阶段 bump 提交推送后打轻量 tag 并真跑 `release:check`；小版本 tag 前两传输各一次现场，补丁 tag 只做触及的传输；正式工作区是受监督的桌面现场，不做试验 | `accepted` | 2026-11-08 | ADR-0021、规划 §3、CLAUDE.md Scope And Safety；gate-log §13.230 |
 
 ## 4. 已在其他文档中确认、尚未转为 ADR 的决定
 

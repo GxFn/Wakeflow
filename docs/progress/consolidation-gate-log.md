@@ -5744,3 +5744,34 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **残留。** 正式工作区此后只观察，第一个 Demand 由用户在 Design 与 Controller 里发起时再看一次完整流转；`permission-mode-mismatch` 的现场触发仍在 WakeflowTestWorkspace13 上。
 
 **结论：通过（观察，无门）。正式工作区的桌面首跑 6 分钟走完，信任只问一次且只问五个产品仓库，侧栏分组成功；§13.229 的 `trustRoot` 残留关闭。**
+
+### 13.232 正式工作区的第一个 Demand：五个仓库的 Node 24 底线，桌面传输全程观察（2026-11-09）
+
+用户在正式工作区（桌面传输，根仓库加五个 Alembic 产品仓库）跑第一个 Demand："五个仓库统一 Node.js 24 工具链底线（最低 24.22.2）"。Design 与 Controller 用 Fable 5.1（Controller 为 Max 档），产品窗口用默认模型。我只读观察（配置、绑定、hook 记录、账本与状态投影、各会话的本地记录），没有向该工作区写入任何东西，也没有给它的会话发过消息；发现与方案在 `docs/reviews/2026-11-09-formal-first-demand-findings-and-convergence-plan.md`，登记为 open-items X27–X29、G14–G16、H11、I16–I21。
+
+- **Design（15.7 分钟）。** 一段带齐事实与决定的消息发出后，Design 读完五个仓库、核实我给的五条现状、找出两处简报里没有的门禁（Core 的 `toolchainFloor` 与 Core / Agent 的逐字相等断言；Plugin 的子模块），替用户定了七条边界，写出 7 条验收标准；"测试决定"标题不被识别多了一轮预览（I16）；用户确认后 50 秒上板。
+- **认领与规划。** `/wakeflow:next` 后 Controller 直接认领了唯一的 pending 包（I17），一轮里规划了全部 5 个目标并写了 R4 依赖（Core、Dashboard 无依赖；Agent、Plugin 依赖 Core；Alembic 依赖其余四个），与 landing 的顺序一致。认领到第一次投递 17.6 分钟：工具调用都在 1–3 秒，时间都在 Fable Max 每步 30–120 秒的思考上。
+- **X27。** Core 与 Agent 的投递落地后摘要对不上许可，`landing` 给 `landed: false` 加 `latestPrompt`，结局 indeterminate，Controller 以 resolution 接受、没有重发；Dashboard 的投递摘要相符。三份落地文本对比：唯一的差别是桌面 app 把 `@` 折成全角 `＠`（防 @ 提及），两段对不上的文本都含 `@types/node`；会话记录里标签外的框架文字 hook 没有拿到，不是成因。Controller 从第三次投递起自己在三段话里不写 `@`，之后三次投递全部相符。修法见 §13.233。
+- **评审。** Core 10 个文件 31 分钟（含独立复跑 `check` 与 `release:check`）；Dashboard 8.5 分钟；Agent 35 分钟，走通了 blocked → escalate → 用户决定 → rework → accept：Agent 报 `check:ci` 的两个性能比值门在满载机器上抖动，Controller 自己做了空闲复跑与 24.19.0 对照以区分 Node 回退与负载，升级给用户，用户选"接受并提交"，`continue_demand` 记下决定、rework 投递、回调、独立复跑替代证据后 accept，残余风险写进决定；Plugin 16.6 分钟；Alembic 实现 7.9 分钟后同样升级（单测有 11 条改动前就存在的失败，GitHub 上自 9 月 21 日起即红），用户选按改动前基线认定，rework 后 accept。两次升级都是产品侧既有问题。Controller 每次都独立复跑 ci.yml 的步骤并把日志记为证据；自产日志两次触发隐私扫描（G15）；升级时一次往工具输入里加了自造字段，被 Schema 拒绝后第二次就对了。
+- **I21。** 每记录一次决定 Controller 就按批 A 的停点规则结束本轮（§13.208），Plugin、Alembic 已可投递却要用户再发 `/wakeflow:next`，三次空等各 9、3.5 与 2 分钟。用户裁决正常应连续；修法见 §13.233。
+- **X29。** Plugin 窗口导入报告后先去跑 tmux 助手的 `deliver`，91 秒后自己想到这是桌面传输，改用 app 的 send_message 发回调。
+- **其它。** 四个目标第一次导入报告都遇到 `concurrency-conflict`（Controller 刚写了结局事件），重试即过（H11）；用后台命令的目标会先 `stop` 再被唤醒，`stop` 不等于做完；替换谱系用了三次（Agent、Plugin、Alembic 都在上游提交成为事实后重新规划）；完成前的严格校验把 Finder 留下的 5 个 `.DS_Store`（0644）判为 `local-layout` 失败，Controller 用 reconcile 收回权限位后 16/16（G16）。
+- **归档。** 完成预览十门全过、无阻塞；apply 后归档 0000000065（125 个文件，校验 10 门 0 失败），活动根删除，工作区回到空闲。从 `/wakeflow:next` 到归档 3 小时 17 分；用户的输入：开头 1 次 `/next`、3 次因旧停点补发的 `/next`、2 次升级决定、1 次归档确认，Design 侧 1 次确认。五个仓库各一个本地提交，推送由用户决定。
+- **验证。** 本节只记录观察，无门。
+
+**结论：通过（观察）。正式工作区的第一个 Demand 在桌面传输上从需求到归档走通，五个目标全部接受；发现集中在宿主对 `@` 的折叠（X27）、多目标下的停点（I21）与回调选路文本（X29），修复见 §13.233。**
+
+### 13.233 1.2.1：正式首跑的修复批——`＠` 折回、连续 `/next`、回调选路与四处文本（2026-11-09）
+
+按 ADR-0026，这一批在正式工作区的 Demand 归档之后才 bump 与重建；重建即部署，正式工作区的 Controller 在下一次 `/wakeflow:next` 走插件更新路径，这也是第一次在真实工作区上从一个 tag 版本升到另一个（C6 / V6 的现场）。源码、文本与文档的改动在 Demand 进行期间写好并逐文件过第 0 级，门等到工作区空闲再跑。
+
+- **X27（内核）。** `computePromptDigest` 在去首尾空白后把全角 `＠`（U+FF20）折回 `@` 再算摘要：许可与 hook 观察共用这一个函数，桌面 app 折不折 `@` 两侧都相等，真写了全角的文本也不受影响；内核测试加两例。观察器的跨会话剥壳改为不锚定整条消息、丢掉标签外的宿主框架文字，作为加固（那一轮 hook 的 prompt 并没有带框架文字），用抓到的真实信封做测试。
+- **I21（文本，用户裁决）。** `commands/next.md`：记录决定与投递结局是步骤边界不是停点，重读 `wakeflow_status`，只要它点名 Controller 就继续（投下一个目标、评审期间落地的回调、完成预检）；停点只剩 owner 变化且无自有工作、用户决定点、阻塞；用户随时可排队消息。SKILL.md Step 11 同步；钉测试换成新措辞并钉住旧措辞不再出现。V3 / Q10 的裁决记录更新。
+- **X29（文本）。** 目标与测试技能的回调步在 `deliveryAction` 之前先说按本工作区的传输选路：回传段有 Controller 桌面 id 即桌面会话，那里没有 tmux 助手；否则是 tmux。`deliveryAction` 取值不动——第一版改在取值里，Controller 技能渲染后 14,544 字节被 14 KiB 的预算测试挡回。
+- **I16 / I17 / I18 / I19（文本与词表）。** 需求标题别名加"测试决定"；Step 5 单包直接认领并告知、多包与用户选；回报里投递后点名窗口与时间；"发送返回即接受"在 SKILL.md 与投递参考两处改为 Codex 限定（代码里 `sendReturnProvesLanding` 只对 Codex 为真）；桌面参考 Step 8 点名 `latestPrompt` 对不上的成因。两份参考仍 400 行、技能 200 行。
+- **登记。** open-items X27、X28、X29、G14、G15、G16、H11、I16–I21，V3 / Q10 更新；`docs/reviews/2026-11-09-formal-first-demand-findings-and-convergence-plan.md` 记发现表、1.2.1 / 1.2.2 批与 1.3 的五个收敛主题（宿主漂移可诊断、助手类型化、信任边界、持久格式、存活与就绪）。
+- **验证。** 第 2 级门一次通过：run-IRqpZG 1756/1756、`inputsUnchanged`（我的运行，工作区归档后机器空闲时）。之前逐文件的第 0 级：观察器 18/18、内核与投递 30/30、需求词表与文本钉 71/71、文本钉 34/34。`smoke:artifacts` 4/4（两个制品上的 lab 双产品与 worktree 实验）；`wf timings apply` 写入 349 个文件的耗时；`wf handoff` 八项通过。本节随源码、测试与文档提交，制品另一提交。
+- **发布。** `assets/release/version.json` 1.2.0 → 1.2.1，六个版本源一致，重建后 `version-bytes` 以 1.2.1 计。tag `v1.2.1` 打在本阶段最后一个提交上、`release:check` 真跑一次，都在用户推送之后（ADR-0021 规则 3）。
+- **残留。** 正式工作区的 Controller 还没有走过这次升级（下一次 `/wakeflow:next` 看 `runtime-artifact-outdated` 与窗口换代）；X28 等下次重开窗口验证；G14、G15、H11、A3 第一步进 1.2.2。
+
+**结论：通过（第 2 级门 run-IRqpZG 1756/1756）。X27 由内核折回修正，I21 按用户裁决改为连续，X29 与四处文本落地；1.2.1 已重建并部署到正式工作区，tag 与 `release:check` 等用户推送。**

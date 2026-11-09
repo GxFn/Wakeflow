@@ -19,14 +19,15 @@ step, and read `wakeflow_status` again before the next one: each step produces
 state that the next one has to read.
 
 Keep going while the owner of `next` is the Controller. Stop and report at the
-first of these: the owner changes (after a delivery lands it is the target
-window; before a claim it is Design or the user); you recorded a review
-decision; you performed a delivery send and recorded its outcome; the skill
-asks for the user's confirmation or decision; a preview reports a blocker you
-cannot resolve. A fresh Controller session may take over at any step boundary:
-the state is in Wakeflow, not in this chat. The two extra stops - per send and
-per decision - are the trade: fewer round trips than one step per turn, while
-the user can still step in after every delivery and every decision.
+first of these: the owner changes and nothing you own is ready (after the last
+pending delivery lands it is the target windows; before a claim it is Design or
+the user); the skill asks for the user's confirmation or decision; a preview
+reports a blocker you cannot resolve. A recorded decision or a recorded
+delivery outcome is a step boundary, not a stop: read `wakeflow_status` again
+and go on while it names you - the next target to plan or deliver, a review
+unit that landed meanwhile, the completion preview. A fresh Controller session
+may take over at any step boundary: the state is in Wakeflow, not in this chat;
+the user can queue a message at any time and you read it at the next boundary.
 
 Report what you did, the evidence Wakeflow recorded for it, and what is now
 next. If the next step belongs to the Design window or to a target window, say

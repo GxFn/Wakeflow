@@ -106,8 +106,10 @@ report, return the callback. You own no other step and no Controller authority.
    A `needs-review` import is then a normal ending: the Controller records the
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
-   Controller window the permit's host action names, by the host's own means:
-   {{deliveryAction}} That is the only route for this send - not a file, not
+   Controller window the permit's host action names, by the host's own means
+   for this workspace's one transport - the delivery prompt's return section
+   names a Controller desktop id under desktop sessions (no tmux helper exists
+   there), otherwise it is tmux: {{deliveryAction}} That is the only route for this send - not a file, not
    another window, not a messaging tool the permit's host action did not name -
    because landing is proven by the hook record of a prompt submitted in that window.
    That send is the last thing you do for this target.

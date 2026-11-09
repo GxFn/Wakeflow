@@ -374,17 +374,20 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
       "names `requirement-authoring` with the user as owner",
     ),
   );
-  // 连续 `/next`（V3，§13.208）：owner 是 Controller 就连续，四类停点写在命令里，旧的"一步即停"措辞不再出现。
+  // 连续 `/next`（V3，§13.208；I21，2026-11-09 用户裁决）：owner 是 Controller 就连续；停点只剩 owner 变化
+  // 且无自有工作、用户决定点、阻塞；记录决定与投递结局是步骤边界不是停点。旧的"一步即停"与"每次决定停一次"
+  // 的措辞都不再出现。
   const next = flat(source("commands/next.md"));
   ok(next.includes("Keep going while the owner of `next` is the Controller"));
-  ok(next.includes("you recorded a review decision"));
-  ok(next.includes("you performed a delivery send and recorded its outcome"));
+  ok(next.includes("the owner changes and nothing you own is ready"));
+  ok(next.includes("is a step boundary, not a stop"));
   ok(next.includes("asks for the user's confirmation or decision"));
   equal(next.includes("do that one step, and stop"), false);
+  equal(next.includes("you recorded a review decision"), false);
   // 技能正文宿主中立（R3，W18）：停点那句不点名 `/wakeflow:next`，两个宿主渲染出同一句。
   ok(
     flat(source("skills/wakeflow-controller/SKILL.md")).includes(
-      "A recorded decision ends the turn; the next Controller turn resumes from `wakeflow_status`",
+      "A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you",
     ),
   );
   // Agent 侧的四条引导：临时文件、逐条列出用例、环境前置、Controller 核对文件的位置。

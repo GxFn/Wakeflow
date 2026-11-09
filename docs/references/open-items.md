@@ -17,7 +17,7 @@
 - **Q7** 后续工作由哪个机制负责：让 continue_demand 接受补充需求包；还是让 supplement 包带上父 Demand 或父需求的链接。升级后文档承诺的“补充包认领出口”是实现出来，还是改文档，说明实际路径是 record-decision 或取消后重新认领。（**事实状态 2026-10-09**：`wakeflow_continue_demand` 只接受 optimization、requirement-supplement、verified-bug 三种 kind 的续接；“补充包认领出口”未实现，§13.165 批次 0 已把升级选项文本与需求文档改为实际路径（record-decision，或取消后重新认领）；supplement 的父链接与归档写回归 H2/H10，仍待裁决。）
 - **Q8** Demand 完成时，未被任何任务或测试覆盖的验收标准怎么处理：阻断完成，还是由 Controller 逐条豁免并记入归档。（**已裁决 2026-10-02**：用户确认修复设计；缺项默认阻断，无隐式豁免；controller-only 由已接受实现锚点覆盖，real-environment 由当前已接受测试合同覆盖，见 ADR-0014。）
 - **Q9** v1 是否需要退出路径：删除或改动仓库和窗口，把仓库切出 managed-block，分离整个工作区。另外，managed-block 的默认值是否改为 owner-managed，托管块能否不带工作区专属的 id。
-- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 一步即停——2026-10-22 §13.208 改为连续执行 Controller 自有步骤、四类停点（V3）；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）
+- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 一步即停——2026-10-22 §13.208 改为连续执行 Controller 自有步骤、四类停点（V3）；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）（**2026-11-09**：`/wakeflow:next` 的停点再收窄为 owner 变化且无自有工作、用户决定点、阻塞，见 V3 / I21。）
 - **Q11** 平台范围怎么声明：仅支持 macOS 和 Linux 的本地文件系统，是否明确拒绝网络文件系统。Node 的 engines 范围是否放宽到 26。（**已裁决 2026-10-18**，ADR-0021 决定 4：只支持 macOS 的本地文件系统，两个制品的 `package.json` 声明 `os: ["darwin"]`；网络文件系统的预检阻塞仍待议。）
 - **Q12** 架构目标是重新定基线还是排期去做：ADR-0004 的 tools/list 小于 60 KB，ADR-0013 的 foundation 不超过 20 个文件和单一错误类型。约 2,100 行没有生产调用者的恢复模块，逐个决定接进恢复入口还是删除。
 - **Q13** 桌面传输下产品仓库的信任由谁写（X19、X23，2026-11-05 提出）：Claude Code 的信任不跨 Git 仓库边界继承（探针 E9），N 个产品仓库就要 N 条信任记录。现行文本要求用户逐个在桌面 app 里打开仓库并接受弹窗；用户在 L18 表达过"由 Wakeflow 在桌面端新建会话、用户只点同意"的倾向。可选：(a) 维持现状；(b) 引导会话列出仓库清单并讲明含义，用户一次同意后由助手用 `claude --desktop <仓库>` 逐个打开（当前 app 版本直接写入信任记录、不再弹窗）；(c) 账号有 `start_session` 时逐仓库出确认卡，用户点卡后在弹出的信任框里再点一次。推荐 (b) 并保留 (a) 作为用户不同意时的路径。（**已裁决 2026-11-06**：用户"Q13 按你的推荐"——(b)，保留 (a)；落地为 ADR-0025 D11 与桌面助手的 `trust --window <windowId> --user-agreed`，§13.228。我的会话执行同一动作被 auto 分类器以"削弱安全"拒绝，只能由带着助手允许规则的引导会话在用户同意后执行。**现场 L23（§13.229）已验证**：全新工作区里 5 个窗口都被拒为 `not-trusted`，引导会话把目录收齐只问了用户一次，用户同意后 `trust` 逐个打开，五条信任记录写下，5 个窗口随后开出并登记。）
@@ -480,6 +480,9 @@
   - 说明：§13.135 现场 Controller 第一次记 rework 被拒后猜是 `blockingReasons` 所致（Schema 的 rework 分支要求 `maxItems: 0`、`requirementAlignment: aligned`）；re-arm 后担心导入会因旧围栏被拒（导入按设计接受同一投递更早一代的围栏）；按文字选 replacement 被拒为 `lineage-continuation-required`。
   - 证据：`controller-implementation-review-decision.schema.json` 的 if/then 分支；`result-review/service.ts` 的 `assertEarlierGenerationFence`；`tasking/decide.ts` 的 `deriveLineageBlockers`。
   - 建议：（文字已补）决定记录的 Schema 拒绝在 path 里点名出错的字段（例如 `$request.decision.blockingReasons`）。
+- **G14** [中 / 设计] 启动意图摘要把整个 `hosts` 块加账本根算进每个窗口（`launchConfigDigest`）：reconfigure 改一个角色的模型或思考档，8 个窗口全显示 `launchIntent: drifted`（只是信息，但误导人去重开；正式工作区 2026-11-09 分析所得，§13.232）。修法：按窗口角色解析后的启动参数（模型、思考档、权限模式、传输、tmux 名）算摘要；reconcile 对"公式变了但启动命令没变"的绑定一次性迁移已登记摘要，避免升级后全部 drifted。1.2.2。
+- **G15** [低 / 行为] Controller 自产的核对日志（npm / tsc 输出带绝对路径）两次触发 `record_evidence` 的隐私扫描，改写后通过（正式工作区首个 Demand，§13.232）。evidence 参考已要求先替换为 `<workspace root>`；考虑给 `record_evidence` 加按工作区根脱敏的选项。1.2.2 评估。
+- **G16** [低 / 行为] 完成前的严格校验把 Finder 在受管私有目录里留下的 `.DS_Store`（0644）判为 `local-layout` 失败；Controller 用 reconcile 收回权限位后通过（正式工作区首个 Demand，§13.232）。修复路径成立；考虑让布局检查忽略 `.DS_Store`，或在文本里点名这个成因。
 
 ## H. Demand 流程中的死角与产品语义缺口
 
@@ -531,6 +534,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：§13.135 现场续接"在文件末尾加一行"：实现窗口、Test 与 Controller 都指出 requirement.md 仍写"只有一句话"，以后只看需求文档的人会以为结果与需求不符。
   - 证据：§13.135 现场；`wakeflow_continue_demand` 只追加续接事件，需求包成员不可变。
   - 建议：随 Q7 一并裁决：补充包作为新的需求包成员（或新包 supersedes 原包）进入归档，或者归档的 manifest 把续接摘要列为需求的一部分。
+- **H11** [低 / 流程] 目标第一次 `import_target_result` 报 `concurrency-conflict`（许可里的流版本已被 Controller 的投递结果事件推进），目标重试即过（正式工作区首个 Demand，§13.232）。这是正常顺序：评估让导入对不触及本目标的追加容忍版本漂移，或许可不再让目标断言流版本；文本先写明重试。1.2.2。
 
 ## I. 引导式体验与 Agent 文本：被引导的用户在关键时刻得不到指引
 
@@ -604,6 +608,12 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - D6 交接卡与 windows 参考改成解释两个字形；与 I14 同步：`?` 与 `attention: needed` 只对 permission_prompt 及登录、额度类。
   （状态：已修 2026-10-21（§13.201），现场 L12 通过（§13.202：字形改纯 ASCII `+`/`?`，set-option 目标改 @id））
 - **G11** [低 / 缺口] 看板索引缺测试模式与 parked 触发两列（复审 §7）：改索引渲染会让每个现存工作区的 `board-consistency` 门报 `index-stale`——索引只在看板变更时重投影，对账没有"投影陈旧即重写"的步骤；两列不值一个新维护步骤，留到 1.2 与投影刷新一起做（§13.201；状态：开放） 已修 2026-10-22（§13.209，V4）：认领状态可选 `testingMode`、索引两列与 v2 标记、维护 apply 之后重写陈旧索引。
+- **I16** [低 / 文本] Design 写的标题"测试决定"预览不认（别名表只有"测试决策"），多一轮预览（§13.232）。**已修 1.2.1**：加别名。
+- **I17** [低 / 文本] 看板只有一个 pending 包时 Controller（Fable）直接认领，用户以为会被问（§13.232）。**已定 1.2.1**：单包直接认领并告知，多包与用户选。
+- **I18** [低 / 文本] 用户把产品窗口的会话恢复（session-start）当成"收到投递"（§13.232）。**已修 1.2.1**：Controller 投递后点名窗口与时间。
+- **I19** [低 / 诚实] 技能与投递参考把 Codex 的"发送返回即接受"写成通用规则，代码里 `sendReturnProvesLanding` 只对 Codex 为真（§13.232）。**已修 1.2.1**：两处改为 Codex 限定。
+- **I20** [低 / 体验] 确认点 1 的"一页摘要"对一个完整的包约两屏，因为按合同引完成定义与非目标全文（§13.232）。观察，不改。
+- **I21** [中 / 文本] 正式工作区首个 Demand（五个目标）：Controller 每记录一次评审决定就按 `commands/next.md` 的停点规则结束本轮，Plugin 已可投递却要用户再发 `/wakeflow:next`（§13.232）。批 A 的"每次发送、每次决定各停一次"（V3 / Q10）在单目标 Demand 里不显，多目标时让 Controller 空等。**已改 1.2.1**：记录决定与投递结局是步骤边界不是停点，重读 `wakeflow_status`，只要它点名 Controller 就继续；停点只剩 owner 变化且无自有工作、用户决定点、阻塞。
 
 ## J. 占用与退出路径：进得去，出不来
 
@@ -781,7 +791,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 
 - **V1** [中 / 缺口] R4：任务包可选 `dependsOn` 与 `requiredEvidenceKinds`——准备时从已规划事件重读，阻塞 `dependency-pending:<id>` 排在 `awaiting-decision` 之后；第 16 道门 `required-evidence`，取消跳过（计划 §3.1；批 C；级别 2；状态：已执行 §13.210；`required-evidence` 是 Demand 完成门，不是 verify 的十五门）
 - **V2** [中 / 缺口] R5：`result-reported` 阶段一次 `supersedes` 导入——四处单次约束同时放宽（服务阶段门、聚合转换、`claimId` 派生身份加序号、流审计放宽为同声明至多两个结果），决定后拒绝，不计返工，回调按新结果重签（计划 §3.2；批 C；级别 2；状态：已执行 §13.210）
-- **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：已执行 §13.208，现场 L13 已过 §13.218：2 次 `/next` + 2 次确认从认领到归档，停点与定义一致）
+- **V3** [低 / 待决已裁] 连续 `/wakeflow:next`：owner 是 Controller 就连续；owner 变化、记录决定、投递发送、用户确认点即停；只改命令与技能文本，H8/Q10 据此关闭（计划 §3.3；批 A；级别 1；状态：已执行 §13.208，现场 L13 已过 §13.218：2 次 `/next` + 2 次确认从认领到归档，停点与定义一致）（**2026-11-09 用户裁决**：正常应连续——正式工作区五目标 Demand 里每次评审决定后 Controller 停下等 `/wakeflow:next`，用户要求改为：记录决定与投递结局是步骤边界不是停点，停点只剩 owner 变化且无自有工作、用户决定点、阻塞；I21，1.2.1 文本。）
 - **V4** [低 / 债务] G11：认领状态加可选 `testingMode`，看板索引两列、标记 v2，维护 apply 收尾调用 `refreshRequirementBoardIndex` 重写陈旧索引（计划 §3.4；批 B；级别 2；状态：已执行 §13.209）
 - **V5** [中 / 缺口] K3 Schema 描述减肥：目录 104,406 字节里 Schema 内 194 条 `description` 字串占 30.5 KB（工具描述本身合计约 11 KB），压到一句、删与技能参考重复的解释，目录回到 95 KiB 以内；K4 的服务端裁剪在 Codex 提供按项目启用 MCP 之前不做（计划 §3.5；批 C；级别 2；状态：已执行 §13.210，目录 104,406 → 约 102,900 字节）
 - **V6** [高 / 风险] C6/C11：制品身份加版本轴（manifest `version` 进身份与 hook 记录），比较规则分"服务器旧"与"窗口旧"，维护 preview 被过期进程阻塞；提交记录带写者，门 `artifact-older-than-stream`（计划 §3.6；批 D；级别 2；状态：已执行 §13.215（批 D′：版本轴、per-host 摘要比较、维护守卫、写者戳、artifact-older-than-stream 门；安装目录布局与升级方向仍待现场核对））
@@ -863,6 +873,9 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X24** [低 / 行为] 现场 L22：桌面引导会话把新会话移入侧栏分组的调用被它的 auto 分类器拒绝（没有理由），它没有绕行、如实告知用户；我的会话同一类调用一次通过、一次被拒。分组是投影，不影响状态。已修 §13.227（文本）：分组调用被 app 或分类器拒绝时不换法重试，留在未分组并告诉用户。同一轮里我想把一个窗口会话切到非 auto 模式以触发 `permission-mode-mismatch`，也被分类器拒绝——跨会话改权限模式要用户本人在 app 里做。状态：文本已修；`permission-mode-mismatch` 的现场触发仍待用户操作。（2026-11-08 正式工作区首跑里同一动作被放行，8 个会话进了分组，§13.231；放行与否取决于分类器，文本两条路都保留。）
 - **X25** [高 / 缺陷] 现场 L22：切换往返后的第一个 Demand 里，回调明明送到了 Controller 会话，Wakeflow 却记 `callbackLanding: unlanded`。成因：回调 prompt 用 JSON 字符串字面量渲染外部文本，Controller 写的目标描述里有反引号，被渲染成 `\u0060`；桌面传输下目标窗口的模型把回调放进工具调用的 JSON 参数转发，少转义了一层，序列被解码回反引号，Controller 会话收到的文本与许可不再逐字相同，摘要对不上。tmux 传输由助手按文件字节粘贴，不受影响；L20 没踩到是因为那次目标描述里没有反引号。评审与归档没有被挡住（回调落地不是门），但证据链缺一环。已修 §13.227：回调 prompt 的外部文本（目标、摘要、分支）进字面量之前先把会被 JSON 或 Markdown 字面量转义的字符换成不需要转义的近形字符、去掉控制字符与显式双向控制字符，渲染结果里不出现反斜杠；桌面助手的 `landing` 在未落地时报出该会话最近一条别的 prompt 记录（`latestPrompt`），文本写明这是"文本在路上被改动"而不是没到、不得重发、凭该记录裁决；桌面参考加一句"文件里的每个反斜杠都是字面字符"。残留：投递方向的 prompt 原样带 Controller 撰写的段落，段落里若有反斜杠，同样要靠模型逐字转发——只有文本提醒，没有确定性防线。状态：已修（回调方向），投递方向登记为残留。
 - **X26** [低 / 观察] 现场 L23：五次开窗里有一次（Test）桌面 app 报了 Opening session、会话也进了侧栏，却始终没有为它起进程，助手等 30 秒后拒绝 `desktop-session-start-missing`；引导会话重开一次成功，多出的那个会话在用户授权后归档。属 app 行为（X10 一类），加长等待无济于事——那条启动记录一直没有来。文本现有的做法（重开、多余会话经用户授权归档）够用。状态：观察。
+- **X27** [高 / 事实] 桌面 app（Claude.app 4.23118.0 / Claude Code 2.1.303）把跨会话消息里的每个 `@`（U+0040）折成全角 `＠`（U+FF20）以阻止 @ 提及：Controller 边界文本里的 `@types/node` 让投递与回调的落地摘要都对不上许可，`landing` 给 `landed: false` 加 `latestPrompt`，`record_delivery_outcome` 判 indeterminate，Controller 以 resolution 接受（每次多一步）；不带 `@` 的投递摘要相符。会话记录里标签外还有框架文字（引语一行与一段说明），hook 的 prompt 没带上，不是成因（正式工作区首个 Demand，§13.232）。**已修 1.2.1**：内核 `computePromptDigest` 先把 `＠` 折回 `@` 再算（许可与 hook 共用，宿主折不折都相等）；剥壳不再锚定整条消息作加固。
+- **X28** [中 / 未验证] 桌面传输下配置的 `hosts.claude-code.launch.modelByRole` 只在开窗时以 `claude --bg --model` 生效，能否跨过 app 接管未验证（权限模式当时没跨过去，L17）；桌面参考没有提模型。下次重开窗口时验证；验证前文本只说未验证。
+- **X29** [中 / 文本] 正式工作区首个 Demand：AlembicPlugin 窗口导入报告后先去跑 tmux 助手的 `deliver`（桌面工作区里没有这个文件），再读 desktop.mjs 找发送命令，91 秒后自己想到"这个工作区是桌面传输"，用 app 的 send_message 发出回调（§13.232）。成因：`deliveryAction` 取值以"run the helper from the workspace root"开头，传输的选择只隐含在回传段的 Controller 桌面 id 里。**已改 1.2.1**：目标与测试技能的回调步在 `deliveryAction` 之前先说按本工作区的传输选路（回传段有 Controller 桌面 id 即桌面会话，那里没有 tmux 助手；否则是 tmux）；`deliveryAction` 取值本身不动，Controller 技能的 14 KiB 预算已到顶。后续（1.2.2）：回调许可的 `hostAction` 带 transport 与桌面会话 id，文本只需指向它。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 

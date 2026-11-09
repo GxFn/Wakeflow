@@ -62,7 +62,12 @@ const REQUIREMENT_SECTION_ALIASES: Readonly<Record<RequirementSectionAnchor, rea
       "landing plan and impact",
       "repository boundaries and landing intent",
     ],
-    "testing-decision": ["测试决策", "testing decision", "validation and testing decision"],
+    "testing-decision": [
+      "测试决策",
+      "测试决定",
+      "testing decision",
+      "validation and testing decision",
+    ],
     reproduction: ["复现", "reproduction", "steps to reproduce"],
     scope: ["范围", "scope"],
     "requirement-delta": ["需求增量", "requirement delta"],

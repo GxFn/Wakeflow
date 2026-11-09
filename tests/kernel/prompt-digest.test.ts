@@ -20,10 +20,19 @@ function sha256Of(text: string): string {
   return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
 }
 
-test("提示摘要：去除首尾空白后 UTF-8 字节的 SHA-256，与投递信封的摘要同一函数", () => {
+test("提示摘要：去除首尾空白、全角 ＠ 折回 @ 后 UTF-8 字节的 SHA-256，与投递信封的摘要同一函数", () => {
   const prompt = " \t实现登录页 — login page\r\n\n";
   const digest = computePromptDigest(prompt);
   equal(digest, sha256Of("实现登录页 — login page"));
+  // X27：桌面 app 把跨会话消息里的 `@` 折成全角 `＠`；两侧先折回再算，所以落地记录仍与许可相等。
+  equal(
+    computePromptDigest("不升级 ＠types/node 与 ＠alembic/core"),
+    sha256Of("不升级 @types/node 与 @alembic/core"),
+  );
+  equal(
+    computeDeliveryPromptDigest("不升级 ＠types/node"),
+    computePromptDigest("不升级 @types/node"),
+  );
   // D3：`promptDigest` 等于 `computeDeliveryPromptDigest`——同一内核函数，不是两份规则的巧合相等。
   equal(digest, computeDeliveryPromptDigest(prompt));
   equal(computePromptDigest("实现登录页 — login page"), digest);

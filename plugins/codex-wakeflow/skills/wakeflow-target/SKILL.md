@@ -48,7 +48,8 @@ report, return the callback. You own no other step and no Controller authority.
   accepts or rejects it.
 - A tool answer whose `code` is `unexpected` or `io-failure` is a failure, not
   a refusal you can fix: retry at most once, never edit around it, then put the
-  tool name, `code`/`reason` and any `causeCode` in your report and stop.
+  tool name, `code`/`reason`, `details.incidentId` (its record is under
+  `.wakeflow-local/runtime/incidents/`) and any `causeCode` in your report and stop.
 - Never invent a result. If you could not run something, say so; "unverified"
   is an acceptable report and a false pass is not.
 - A sub-agent you spawn may only search, triage logs or summarize, bounded;

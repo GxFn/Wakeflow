@@ -120,8 +120,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 12239,
-      "sha256": "sha256:4d92ad0538f86941b6d991027ffcb3bc29d696bd123472e972f93fae958fbae9"
+      "bytes": 12261,
+      "sha256": "sha256:73535055342dd93552bcb0ee12ef8d9a5f9e2714b525376d2f3006b4661c6247"
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
@@ -145,8 +145,8 @@
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
-      "bytes": 6451,
-      "sha256": "sha256:a3f7d658feb79f4ed560a424aba7cb802787afd0008042aef9d1eaff91f5f041"
+      "bytes": 6540,
+      "sha256": "sha256:05b4335e4104e5102cdbd63d7cfcb3fe221c81134fc6d9a09e7e87d9181e207f"
     },
     {
       "path": "skills/wakeflow-design/references/requirement-package.md",
@@ -155,8 +155,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 8935,
-      "sha256": "sha256:2a2710d2dac0f168f1302931a6ccc4bf86dd58c30a022395f20c04c0d611440d"
+      "bytes": 9018,
+      "sha256": "sha256:7a4e8b4093ffd642905410c0659802b4ee734afa9098e972f871607d6d8b5e19"
     },
     {
       "path": "skills/wakeflow-target/references/craft.md",
@@ -165,8 +165,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 7859,
-      "sha256": "sha256:5052b4a3767160c8b531217113bb1471d2bcb7c46cfcfe0f14062cd34bcbde28"
+      "bytes": 7881,
+      "sha256": "sha256:1930d3b03fe7d5d2391ff8282cc29d90ac3db790774f647532b25be224c595e8"
     },
     {
       "path": "skills/wakeflow-test/references/test-execution.md",
@@ -6582,8 +6582,8 @@
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
-      "bytes": 12239,
-      "sha256": "sha256:4d92ad0538f86941b6d991027ffcb3bc29d696bd123472e972f93fae958fbae9",
+      "bytes": 12261,
+      "sha256": "sha256:73535055342dd93552bcb0ee12ef8d9a5f9e2714b525376d2f3006b4661c6247",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6617,8 +6617,8 @@
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
-      "bytes": 6451,
-      "sha256": "sha256:a3f7d658feb79f4ed560a424aba7cb802787afd0008042aef9d1eaff91f5f041",
+      "bytes": 6540,
+      "sha256": "sha256:05b4335e4104e5102cdbd63d7cfcb3fe221c81134fc6d9a09e7e87d9181e207f",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6631,8 +6631,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 8935,
-      "sha256": "sha256:2a2710d2dac0f168f1302931a6ccc4bf86dd58c30a022395f20c04c0d611440d",
+      "bytes": 9018,
+      "sha256": "sha256:7a4e8b4093ffd642905410c0659802b4ee734afa9098e972f871607d6d8b5e19",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6645,8 +6645,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 7859,
-      "sha256": "sha256:5052b4a3767160c8b531217113bb1471d2bcb7c46cfcfe0f14062cd34bcbde28",
+      "bytes": 7881,
+      "sha256": "sha256:1930d3b03fe7d5d2391ff8282cc29d90ac3db790774f647532b25be224c595e8",
       "mode": "0644",
       "scope": "agent-text"
     },

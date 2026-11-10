@@ -152,11 +152,11 @@ while a launch is in progress; liveness for
 `wakeflow_register_window_binding` comes from `list_sessions` ("What the
 transport is").
 
-### `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing <seconds>]`
+### `landing --window <windowId> --prompt-ref <promptRef> [--wait-landing <seconds>]`
 
-Waits up to `--wait-landing` seconds (default 3) for a `user-prompt-submit`
-record of the bound session whose prompt digest equals the one given and
-prints `landed: true` with `recordId` and `recordedAt`, or `landed: false`.
+Waits up to `--wait-landing` seconds (default 3) for the bound session's
+`user-prompt-submit` record of that permit and prints `landed: true` with
+`match` (`digest`: the text arrived unchanged; `identity`: the permit id was found in text the host altered), `recordId` and `recordedAt`, or `landed: false`.
 It never sends. Use it after every send, and before any second send.
 
 ## Refusals and what to tell the user
@@ -262,21 +262,21 @@ settings rules maintenance writes are unchanged, and a product repository's
    re-arm with `wakeflow_rearm_delivery`. Your send return is your own report
    (`host-send-return`), never host evidence.
 3. Right after the send returns, before any other step, run `landing --window
-   <windowId> --prompt-digest <the permit's promptDigest>` - with
+   <windowId> --prompt-ref <the permit's promptRef>` - with
    `--wait-landing <seconds>` after a `queued` send - and then record the
    outcome: the window may finish and try to import within a minute, and its
    import is refused until the outcome is recorded. It reads the record
-   Wakeflow reads: `landed: true` with its `recordId` means the outcome will
-   be accepted; `landed: false` means it will be indeterminate, resolved
-   exactly as `references/delivery-and-review.md` says - wait for the
-   record, run `landing` again later, and resolve only on evidence (the
-   `recordId` is the `hookRecordId` an accepted resolution cites). A
-   `latestPrompt` beside `landed: false` is the newest prompt record of that
-   session under another digest: when its `recordedAt` is your send, the host
-   wrapped or altered the text on the way (the observer strips the app's
-   cross-session envelope; a mismatch means a shape it does not know yet), so
-   never send it again - the window is already working on it - and resolve
-   on that record. No screen readback here: the outcome carries no `readback`.
+   Wakeflow reads: `landed: true` means the outcome will be accepted;
+   `match: "identity"` (evidence kind `hook-record-identity`) adds that the
+   host altered the text on the way - tell the user which delivery, send
+   nothing again: the window works from the task package. `landed: false`
+   means indeterminate, resolved exactly as `references/delivery-and-review.md`
+   says - wait, run `landing` again later, and resolve only on evidence (a
+   `recordId` is the `hookRecordId` a resolution cites). A `latestPrompt`
+   beside it is that session's newest prompt, under another digest and
+   without the permit id: when its `recordedAt` is your send, the text
+   arrived cut short or mangled - never send it again, resolve on that
+   record. No screen readback here: the outcome carries no `readback`.
 4. A session that shows a permission prompt or a dialog holds the message
    until the user answers there (a mode other than `auto` is the usual
    cause). That is not a failed send: the message lands when they answer.

@@ -1,6 +1,7 @@
 import { wakeflowRearmablePhase, wakeflowTargetPhaseAdmission, } from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 /**
  * Wakeflow Capabilities / Delivery：投递切片的纯决定（能力卡 6，ADR-0009，ADR-0012 D2）。
  *
@@ -46,15 +47,20 @@ function resolutionDecision(input) {
     return decided("rejected-before-send", "controller-resolution", null, resolution.rationale);
 }
 /**
- * 处置派生（能力卡 6 修订）：匹配的 hook 记录 → accepted；发送调用失败且未触碰会话 →
+ * 处置派生（能力卡 6 修订；ADR-0027）：摘要相符的 hook 记录 → accepted（`hook-record`）；摘要不符但
+ * 带着许可标识的记录 → accepted（`hook-record-identity`，文本被宿主改动）；发送调用失败且未触碰会话 →
  * rejected-before-send；Codex 的发送返回摘要 → accepted；其余 indeterminate。显式解决优先。
  */
 export function deriveDeliveryDisposition(input) {
     if (input.resolution !== null)
         return resolutionDecision(input);
-    const landed = input.landingRecords.find((record) => record.promptDigest === input.expectedPromptDigest);
-    if (landed !== undefined)
-        return decided("accepted", "hook-record", landed.recordId);
+    const landed = findPromptLanding(input.landingRecords, {
+        promptDigest: input.expectedPromptDigest,
+        permitId: input.permitId,
+    });
+    if (landed !== null) {
+        return decided("accepted", landed.match === "digest" ? "hook-record" : "hook-record-identity", landed.record.recordId);
+    }
     if (input.attempt.status === "failed-before-send") {
         if (input.currentlyIndeterminate) {
             return Object.freeze({ accepted: false, blocker: "attempt-status" });

@@ -223,6 +223,7 @@ async function sessionRecords(context, sessionId, since) {
         recordId: record.recordId,
         event: record.event,
         promptDigest: record.promptDigest,
+        promptPermitIds: record.promptPermitIds,
         recordedAt: record.recordedAt,
     }));
 }
@@ -524,8 +525,10 @@ async function issueCallback(context, result, taskPackage, streamRevision, now) 
     const controllerWindowId = scope.controllerWindow.windowId;
     const window = await loadWindow(context, controllerWindowId);
     const summary = summarizeResultForCallback(result);
+    const callbackId = deriveTargetResultCallbackId(result.targetResultId);
     const prompt = renderWakeControllerPrompt({
         language: context.authority.config.model.presentation.language,
+        callbackId,
         demandId: result.demandId,
         podId: `${scope.pod.name} (${scope.pod.podId})`,
         target: {
@@ -547,7 +550,7 @@ async function issueCallback(context, result, taskPackage, streamRevision, now) 
     });
     try {
         const callback = parseTargetResultCallbackRecord({
-            callbackId: deriveTargetResultCallbackId(result.targetResultId),
+            callbackId,
             controllerWindowId,
             bindingId: window.binding.bindingId,
             bindingDigest: window.bindingDigest,
@@ -775,7 +778,7 @@ async function loadReviewEvidence(context, unit) {
     ]);
     return Object.freeze({
         targetCompletion: deriveTargetCompletion(targetRecords, result.report.reportedAt),
-        callbackLanding: deriveCallbackLanding(callbackRecords, callback.promptDigest, callback.issuedAt),
+        callbackLanding: deriveCallbackLanding(callbackRecords, { promptDigest: callback.promptDigest, permitId: callback.callbackId }, callback.issuedAt),
         callbackRecords,
     });
 }
@@ -940,6 +943,7 @@ async function inspectReview(context, request) {
     const callbackStatus = deriveTargetResultCallbackStatus({
         issuedAt: callback.issuedAt,
         promptDigest: callback.promptDigest,
+        callbackId: callback.callbackId,
         landingRecords: evidence.callbackRecords,
         acknowledged: unit.currentDecision !== null,
         now: nowFrom(context.options),

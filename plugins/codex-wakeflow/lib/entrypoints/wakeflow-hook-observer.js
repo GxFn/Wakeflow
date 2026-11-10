@@ -9,7 +9,7 @@ import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { createHostHookObservation, writeHostHookObservation, } from "../kernel/hook-observations.js";
 import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { hostRuntimeRootRef, parseWakeflowHostId, WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../kernel/layout.js";
-import { computePromptDigest } from "../kernel/prompt-digest.js";
+import { computePromptDigest, countPromptCharacters, extractPromptPermitIds, } from "../kernel/prompt-digest.js";
 import { parseWakeflowArtifactManifestIdentity, } from "../kernel/wakeflow-artifact-identity.js";
 /**
  * Wakeflow Entrypoint / Hook Observer：两宿主生命周期 hook 的观察脚本（gate-log §13.97 D1–D4）。
@@ -198,14 +198,29 @@ export function unwrapHostPrompt(hostId, prompt) {
     }
     return text;
 }
-function promptDigest(hostId, prompt) {
+const NO_PROMPT_FACTS = Object.freeze({
+    promptDigest: null,
+    promptPermitIds: null,
+    promptCharacters: null,
+});
+/**
+ * 一条提交的 prompt 留下的三件事实（ADR-0027 决定 2）：解包后的摘要、摘要所覆盖文本的字符数，与
+ * 许可身份行里的标识。身份与摘要各算各的：摘要算不出（文本过长）时身份照样记，宿主改了文本、摘要
+ * 对不上时，身份就是认出这条许可的依据。
+ */
+function promptFacts(hostId, prompt) {
     if (prompt === null)
-        return null;
+        return NO_PROMPT_FACTS;
     try {
-        return computePromptDigest(unwrapHostPrompt(hostId, prompt));
+        const text = unwrapHostPrompt(hostId, prompt);
+        return Object.freeze({
+            promptDigest: computePromptDigest(text),
+            promptPermitIds: extractPromptPermitIds(text),
+            promptCharacters: countPromptCharacters(text),
+        });
     }
     catch {
-        return null;
+        return NO_PROMPT_FACTS;
     }
 }
 /** 必填字段（宿主、事件、会话、cwd）与时间按内核合同核对：任何一个不合合同即 stdin-invalid。 */
@@ -264,7 +279,7 @@ function recordInput(hostId, payload, event, clock, artifactManifestDigest, arti
         artifactManifestDigest: artifactManifestDigest ?? null,
         artifactVersion: artifactVersion ?? null,
         turnId: degradeToKernel(required, "turnId", payload.turnId),
-        promptDigest: event === "user-prompt-submit" ? promptDigest(hostId, payload.prompt) : null,
+        ...(event === "user-prompt-submit" ? promptFacts(hostId, payload.prompt) : NO_PROMPT_FACTS),
         lastAssistantMessageDigest: event === "stop" ? textDigest(payload.lastAssistantMessage) : null,
         transcriptRef: degradeToKernel(required, "transcriptRef", payload.transcriptPath),
         notificationType: event === "notification"

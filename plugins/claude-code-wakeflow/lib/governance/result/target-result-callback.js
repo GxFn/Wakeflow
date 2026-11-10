@@ -4,6 +4,7 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 import { parseWakeflowWindowHostBindingId, WakeflowWindowHostBindingIdError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { computeDeliveryPromptDigest, DeliveryEnvelopeError, } from "../delivery/delivery-envelope.js";
 /**
@@ -218,8 +219,8 @@ export function parseTargetResultEvidenceResolutions(value, path = "$evidenceRes
 }
 /** 回调状态由读侧惰性派生：决定已记录即 acknowledged，否则按落地记录与静默阈值判断。 */
 export function deriveTargetResultCallbackStatus(input) {
-    const landed = input.landingRecords.find((record) => record.promptDigest === input.promptDigest &&
-        Date.parse(record.recordedAt) >= Date.parse(input.issuedAt));
+    const issued = Date.parse(input.issuedAt);
+    const landed = findPromptLanding(input.landingRecords.filter((record) => Date.parse(record.recordedAt) >= issued), { promptDigest: input.promptDigest, permitId: input.callbackId })?.record;
     if (input.acknowledged) {
         return Object.freeze({
             status: "acknowledged",

@@ -20,6 +20,7 @@ import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail } from "./error.js";
 import { HOST_HOOK_FILE_NAME_PATTERN as FILE_NAME_PATTERN, partitionedHostHookRef, visitHostHookDirectory, } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
+import { DELIVERY_PROMPT_MAXIMUM_CHARACTERS, isPromptPermitId, PROMPT_PERMIT_IDS_MAXIMUM, } from "./prompt-digest.js";
 import { isWakeflowArtifactVersion } from "./wakeflow-artifact-identity.js";
 /**
  * Host hooks persist private facts, never message bodies. Record schema and ids
@@ -112,6 +113,8 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
     "notificationType",
     "permissionMode",
     "sessionTitle",
+    "promptPermitIds",
+    "promptCharacters",
 ]);
 /**
  * 条目若是本写入器自己那种原子暂存文件（§13.134 B12），返回它的暂存地址，否则返回 `null`：普通
@@ -169,6 +172,28 @@ function optionalPermissionMode(value, path) {
 }
 function optionalDigest(value, path) {
     return value === null || value === undefined ? null : parseSha256Digest(value, path);
+}
+function optionalPromptPermitIds(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (!Array.isArray(value) ||
+        value.length > PROMPT_PERMIT_IDS_MAXIMUM ||
+        !value.every(isPromptPermitId) ||
+        new Set(value).size !== value.length) {
+        fail("invalid-request", "hook-prompt-permit-ids", path);
+    }
+    return Object.freeze([...value]);
+}
+function optionalPromptCharacters(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        value < 1 ||
+        value > DELIVERY_PROMPT_MAXIMUM_CHARACTERS) {
+        fail("invalid-request", "hook-prompt-characters", path);
+    }
+    return value;
 }
 function optionalArtifactVersion(value, path) {
     if (value === null || value === undefined)
@@ -239,6 +264,8 @@ export function createHostHookObservation(input) {
         notificationType: optionalNotificationType(input.notificationType, "$observation.notificationType"),
         permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
         sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
+        promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
+        promptCharacters: optionalPromptCharacters(input.promptCharacters, "$observation.promptCharacters"),
     };
     return Object.freeze({
         kind: RECORD_KIND,
@@ -276,6 +303,8 @@ function parseHostHookObservation(value) {
         notificationType: (object.notificationType ?? null),
         permissionMode: (object.permissionMode ?? null),
         sessionTitle: (object.sessionTitle ?? null),
+        promptPermitIds: (object.promptPermitIds ?? null),
+        promptCharacters: (object.promptCharacters ?? null),
     });
     if (record.recordId !== object.recordId) {
         fail("invalid-request", "hook-record-id", "$record.recordId");

@@ -1,5 +1,6 @@
 import { RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS, } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, scanPrivacy, } from "../../kernel/privacy-scan.js";
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
@@ -157,14 +158,16 @@ export function deriveTargetCompletion(records, reportedAt) {
         observedAt: record.recordedAt,
     });
 }
-/** 回调落地：Controller 会话在签发之后、摘要相符的 `user-prompt-submit` 记录。 */
-export function deriveCallbackLanding(records, promptDigest, issuedAt) {
+/**
+ * 回调落地：Controller 会话在签发之后的 `user-prompt-submit` 记录，摘要与回调许可相符，或带着回调
+ * 许可的标识（文本被宿主改动，ADR-0027 决定 5）；按时间取最早的一条，摘要相符的优先。
+ */
+export function deriveCallbackLanding(records, permit, issuedAt) {
     const issued = Date.parse(issuedAt);
-    const record = [...records]
-        .filter((entry) => entry.event === "user-prompt-submit" &&
-        entry.promptDigest === promptDigest &&
-        Date.parse(entry.recordedAt) >= issued)
-        .sort((left, right) => Date.parse(left.recordedAt) - Date.parse(right.recordedAt))[0];
+    const candidates = [...records]
+        .filter((entry) => entry.event === "user-prompt-submit" && Date.parse(entry.recordedAt) >= issued)
+        .sort((left, right) => Date.parse(left.recordedAt) - Date.parse(right.recordedAt));
+    const record = findPromptLanding(candidates, permit)?.record;
     return record === undefined
         ? null
         : Object.freeze({ recordId: record.recordId, landedAt: record.recordedAt });

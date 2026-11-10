@@ -1104,6 +1104,7 @@ async function sessionRecords(context, sessionId, since) {
     return inventory.records.map((record) => Object.freeze({
         recordId: record.recordId,
         promptDigest: record.promptDigest,
+        promptPermitIds: record.promptPermitIds,
         recordedAt: record.recordedAt,
         event: record.event,
         permissionMode: record.permissionMode,
@@ -1225,6 +1226,7 @@ function decideOutcome(context, input, envelope, records, currentlyIndeterminate
         },
         landingRecords: landing,
         expectedPromptDigest: envelope.promptDigest,
+        permitId: envelope.deliveryId,
         resolution: resolution === undefined
             ? null
             : {
@@ -1482,6 +1484,7 @@ async function executeCallbackReissue(context, target, binding) {
     const status = deriveTargetResultCallbackStatus({
         issuedAt: callback.issuedAt,
         promptDigest: callback.promptDigest,
+        callbackId: callback.callbackId,
         landingRecords: records,
         acknowledged: false,
         now,

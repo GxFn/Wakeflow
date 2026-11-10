@@ -109,7 +109,7 @@ the rule is blunt: performing the send is not evidence that it landed.
 Wakeflow derives the disposition itself:
 
 - **accepted** - the target session produced a `user-prompt-submit` hook
-  record whose prompt digest matches the envelope's, or, on Codex only, the
+  record whose prompt digest matches the envelope's (`hook-record`) or that carries the permit id while the digest differs (`hook-record-identity`: the prompt arrived, the host altered its text - tell the user; the target works from the task package), or, on Codex only, the
   host's own send call returned success. Nothing else accepts.
 - **rejected-before-send** - the send call itself failed without touching the
   session. Only then is the work claim released and only then may the delivery

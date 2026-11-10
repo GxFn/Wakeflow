@@ -1,6 +1,7 @@
 import path from "node:path";
 import { DELIVERY_PROMPT_MAXIMUM_CHARACTERS, } from "../../governance/delivery/delivery-envelope.js";
 import { fail } from "../../kernel/error.js";
+import { renderPromptPermitIdLine } from "../../kernel/prompt-digest.js";
 import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";
 /**
  * 由 Demand 权威引用（`admittedAuthority.resolvedAuthority`）与配置的 ledger 位置得出阅读顺序里的
@@ -273,6 +274,7 @@ export function renderDeliveryPortablePrompt(input) {
             `- deliveryId: ${input.returnPointer.deliveryId}`,
             `- generation: ${input.returnPointer.generation}`,
             `- claimDigest: ${input.returnPointer.claimDigest}`,
+            renderPromptPermitIdLine(input.returnPointer.deliveryId),
         ]),
     ];
     const prompt = lines.join("\n");

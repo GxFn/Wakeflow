@@ -1,6 +1,7 @@
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { renderMarkdownJsonStringLiteral } from "../../foundation/text/markdown-json-string-literal.js";
 import { fail } from "../../kernel/error.js";
+import { renderPromptPermitIdLine } from "../../kernel/prompt-digest.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "./contract.js";
 const MAXIMUM_PORTABLE_CHARACTERS = 20_000;
 const MAXIMUM_SUMMARY_CODE_POINTS = 600;
@@ -108,6 +109,7 @@ export function renderWakeControllerPrompt(input) {
             `- tool: ${WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME}`,
             `- demandId: ${input.demandId}`,
             `- targetTaskId: ${target.targetTaskId}`,
+            renderPromptPermitIdLine(input.callbackId),
         ]),
     ];
     const prompt = lines.join("\n");

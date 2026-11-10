@@ -16,8 +16,12 @@
         "src/hosts/claude-code/claude-code-mcp-configuration.ts",
         "src/hosts/codex/codex-agent-text-profile.ts",
         "src/hosts/claude-code/claude-code-agent-text-profile.ts",
+        "src/hosts/claude-code/assets/desktop.mjs",
+        "src/hosts/claude-code/assets/statusline.mjs",
+        "src/hosts/claude-code/assets/tmux.mjs",
         "tooling/architecture/check-dependencies.ts",
         "tooling/codegen/schema-types.ts",
+        "tooling/codegen/helper-assets.ts",
         "tooling/testing/run-typescript-tests.ts",
         "tooling/cli.ts",
         "tooling/artifacts/build-plugin-artifacts.ts",
@@ -30,6 +34,7 @@
       ],
       "project": [
         "src/**/*.ts",
+        "src/**/*.mjs",
         "tooling/**/*.ts",
         "tests/**/*.ts"
       ],

@@ -223,6 +223,43 @@ test("agent 文本改动经资源边传播：读取它的模块的导入者与�
   deepEqual(selection.fullGateReasons, []);
 });
 
+test("助手源文件改动经资源边传播：两个资产模块与生成器的导入者、直接导入片段的测试入选，不建议完整门", (t) => {
+  const root = fixture(t);
+  write(root, "src/hosts/claude-code/claude-code-tmux-asset.ts", "export const tmux = 1;\n");
+  write(root, "src/hosts/claude-code/claude-code-desktop-asset.ts", "export const desktop = 1;\n");
+  write(root, "tooling/codegen/helper-assets.ts", "export const assemble = 1;\n");
+  write(
+    root,
+    "tests/hosts/claude-code/claude-code-tmux-asset.test.ts",
+    'import { tmux } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";\n',
+  );
+  write(
+    root,
+    "tests/codegen/helper-assets.test.ts",
+    'import { assemble } from "../../tooling/codegen/helper-assets.js";\n',
+  );
+  write(
+    root,
+    "tests/hosts/claude-code/claude-code-helper-prompt-rules.test.ts",
+    'import { promptDigestOf } from "../../../src/hosts/claude-code/assets/shared/prompt-rules.mjs";\n',
+  );
+  write(root, "tests/kernel/unrelated.test.ts", 'import { a } from "../../src/kernel/a.js";\n');
+  write(root, "src/hosts/claude-code/assets/shared/prompt-rules.mjs", "export const rule = 1;\n");
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "helper sources"]);
+  deepEqual(selectImpactedTests(root).tests, []);
+
+  write(root, "src/hosts/claude-code/assets/shared/prompt-rules.mjs", "export const rule = 2;\n");
+  const selection = selectImpactedTests(root);
+  deepEqual(selection.changed, ["src/hosts/claude-code/assets/shared/prompt-rules.mjs"]);
+  deepEqual(selection.tests, [
+    "tests/codegen/helper-assets.test.ts",
+    "tests/hosts/claude-code/claude-code-helper-prompt-rules.test.ts",
+    "tests/hosts/claude-code/claude-code-tmux-asset.test.ts",
+  ]);
+  equal(selection.fullGateRecommended, false);
+});
+
 test("tooling 源也在静态图里：改动的 tooling 模块选中导入它的测试，经另一个 tooling 模块的间接导入也选中", (t) => {
   const root = fixture(t);
   write(root, "tooling/verification/files.ts", "export const files = 1;\n");

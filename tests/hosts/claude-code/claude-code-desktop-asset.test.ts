@@ -455,27 +455,27 @@ function assertSessionPermissionRules(
   equal(words.filter((word) => word === "--allowedTools").length, 1, words.join(" "));
 }
 
-test("desktop asset is a fixed 0600 file whose command and permission rule agree, carries no paths or backticks, and its operation plans, publishes and recovers byte-exactly", async (t) => {
+test("desktop asset is a fixed 0600 file whose command and permission rule agree, carries no paths or unfilled build tokens, and its operation plans, publishes and recovers byte-exactly", async (t) => {
   const current = await fixture(t);
   equal(statSync(current.assetPath).mode & 0o777, 0o600);
   equal(computeSha256Digest(readFileSync(current.assetPath)), CLAUDE_CODE_DESKTOP_ASSET_DIGEST);
   equal(readFileSync(current.assetPath, "utf8"), CLAUDE_CODE_DESKTOP_ASSET_CONTENT);
-  equal(CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes("`"), false);
-  equal(CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes("${"), false);
+  // 发布字节是装配后的模板：构建期记号必须全部换成了字面量（批 1，§13.238）。
+  equal(/__WAKEFLOW_[A-Z0-9_]+__/u.test(CLAUDE_CODE_DESKTOP_ASSET_CONTENT), false);
   equal(CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes("/Users/"), false);
   equal(CLAUDE_CODE_DESKTOP_ASSET_CONTENT.endsWith("\n"), true);
-  // 助手里的定位器目录字面量等于内核布局常量（资产是 String.raw，不能 import）。
+  // 助手里的定位器目录字面量等于内核布局常量（助手是自包含脚本，不能 import 运行时）。
   ok(
     CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes(
-      `const LOCATORS = RUNTIME + "${hostWindowLocatorsRootRef("claude-code").slice(RUNTIME.length)}";`,
+      `const LOCATORS = \`\${RUNTIME}${hostWindowLocatorsRootRef("claude-code").slice(RUNTIME.length)}\`;`,
     ),
     "the helper reads locators from the kernel's locator directory",
   );
   // 助手永不 claude rm（L17 E6），并把 --session-id 与 --worktree 列为意图里禁止的旗标（E6、E7）。
   equal(CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes('"rm"'), false);
   ok(
-    CLAUDE_CODE_DESKTOP_ASSET_CONTENT.includes(
-      'const FORBIDDEN_ARGUMENTS = Object.freeze(["--session-id", "--worktree",',
+    /const FORBIDDEN_ARGUMENTS = Object\.freeze\(\[\s*"--session-id",\s*"--worktree",/u.test(
+      CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
     ),
     "the helper refuses intents that carry --session-id or --worktree",
   );

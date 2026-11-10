@@ -68,6 +68,18 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 - `src/contracts/schemas/` holds the portable JSON Schemas;
   `src/contracts/generated/` is derived by `npm run schema:build` and checked
   for drift by `npm run schema:check`. Do not hand-edit generated files.
+- `src/hosts/claude-code/assets/` holds the sources of the three scripts
+  Wakeflow publishes into a workspace (the tmux helper, the desktop helper and
+  the status-line script) as type-checked `.mjs` files (`checkJs`, Biome);
+  `shared/` holds the fragments both helpers use, written once.
+  `src/hosts/claude-code/generated/` is derived by `npm run helpers:build`,
+  which assembles each entry with its fragments into one self-contained script
+  template, and is checked for drift by `npm run helpers:check`. Build-time
+  values are `__WAKEFLOW_…__` tokens that the asset modules fill from runtime
+  constants at load, so changing such a constant needs no regeneration; a new
+  token needs its value in the asset module and its declaration in
+  `assets/build-values.d.ts`. The published scripts stay self-contained: a
+  helper source imports only `node:` modules and fragments under `assets/`.
 - `assets/release/version.json` is the only version input. The two plugin
   `package.json` files, the two plugin manifests and the Claude marketplace
   entry must agree with it.
@@ -126,7 +138,9 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
     (or `--files <tests>`): typecheck, Biome on the changed files and the tests
     reached by the change set, with a receipt under `.build/verification/`.
   - Tier 1, before every commit (5–12 min): tier 0 plus what the impact report
-    names - `schema:build` and `schema:check` for schema changes; the artifact
+    names - `schema:build` and `schema:check` for schema changes;
+    `helpers:build` and `helpers:check` for a change under
+    `src/hosts/claude-code/assets/`; the artifact
     rebuild, `tests/artifacts` and `smoke:artifacts` for anything that reaches
     the artifacts (the smoke also runs the lab dual-product and worktree
     experiments on both built artifacts; an `assets/agent-text/` change selects
@@ -169,7 +183,8 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
   end-to-end scenario chain (26 scenarios, run once per host), the Schema
-  drift check, and `build:check` against the committed artifacts.
+  and helper-script drift checks, and `build:check` against the committed
+  artifacts.
 - After a change that reaches the artifacts (runtime, skills, commands,
   READMEs, hooks, metadata), run `npm run build:artifacts:committed` before
   the tests of tier 1 or 2, and `npm run smoke:artifacts` before handoff. Any

@@ -11,7 +11,7 @@ import {
  * 来源、是否要重新生成 Schema 与制品、哪些测试受影响，以及按顺序该跑哪些命令。
  *
  * 分类规则直接对应 CLAUDE.md 的 Source Ownership：`src/contracts/schemas/` 由 `schema:build` 派生
- * 生成文件；运行时、宿主与 agent-text 进入两份制品；`tooling/` 与 `tests/` 不进制品；`plugins/` 与
+ * 生成文件，`src/hosts/claude-code/assets/` 由 `helpers:build` 装配成生成模块；运行时、宿主与 agent-text 进入两份制品；`tooling/` 与 `tests/` 不进制品；`plugins/` 与
  * `src/contracts/generated/` 不能手改。它是开发建议，不替代完整门；静态图说明不了的影响（动态装配、
  * Schema `$ref`）仍由 `fullGateRecommended` 兜底，agent-text 经资源边选中制品测试（开发工具规划 §4.6）。
  */
@@ -103,6 +103,7 @@ function verificationTier(
 const RULES: readonly Readonly<{ pattern: RegExp; category: ImpactCategory }>[] = [
   { pattern: /^plugins\//u, category: "artifacts-edited" },
   { pattern: /^src\/contracts\/generated\//u, category: "generated-edited" },
+  { pattern: /^src\/hosts\/claude-code\/generated\//u, category: "generated-edited" },
   { pattern: /^src\/contracts\/schemas\//u, category: "schemas" },
   { pattern: /^src\/hosts\//u, category: "hosts" },
   { pattern: /^src\/entrypoints\//u, category: "entrypoints" },
@@ -127,6 +128,9 @@ const RULES: readonly Readonly<{ pattern: RegExp; category: ImpactCategory }>[] 
     category: "repository",
   },
 ];
+
+/** Claude Code 宿主脚本的源文件：改了要重新装配生成模块（`helpers:build`）。 */
+const HELPER_SOURCE_PATTERN = /^src\/hosts\/claude-code\/assets\//u;
 
 const ARTIFACT_CATEGORIES: readonly ImpactCategory[] = [
   "schemas",
@@ -164,6 +168,8 @@ function recommendations(
 ): readonly string[] {
   const steps: string[] = [];
   if (categories.schemas.length > 0) steps.push("npm run schema:build", "npm run schema:check");
+  if (categories.hosts.some((file) => HELPER_SOURCE_PATTERN.test(file)))
+    steps.push("npm run helpers:build", "npm run helpers:check");
   if (artifactsAffected) steps.push("npm run build:artifacts:committed");
   if (tier.level === 2) steps.push("npm run locked -- npm test");
   else if (tests.tests.length > 0) steps.push("npm run wf -- verify quick --changed");
@@ -219,9 +225,13 @@ export function reportChangeImpact(
     warnings.push(
       "plugins/ is generated: rebuild with npm run build:artifacts:committed instead of editing it",
     );
-  if (categories["generated-edited"].length > 0)
+  if (categories["generated-edited"].some((file) => file.startsWith("src/contracts/")))
     warnings.push(
       "src/contracts/generated/ is derived: change the schema and run npm run schema:build",
+    );
+  if (categories["generated-edited"].some((file) => file.startsWith("src/hosts/")))
+    warnings.push(
+      "src/hosts/claude-code/generated/ is derived: change src/hosts/claude-code/assets/ and run npm run helpers:build",
     );
   if (categories.unclassified.length > 0)
     warnings.push(

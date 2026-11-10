@@ -78,6 +78,26 @@ test("变更影响：按所有权规则分类，运行时改动要求重建制�
   ok(report.tier.reasons.includes("owner kernel changed"));
 });
 
+test("变更影响：宿主脚本的源文件进制品并要求重新装配；生成模块随之变化时提醒它是派生的", (t) => {
+  const root = fixture(t);
+  write(root, "src/hosts/claude-code/assets/shared/text.mjs", "export const x = 1;\n");
+  write(
+    root,
+    "src/hosts/claude-code/generated/claude-code-tmux-helper.generated.ts",
+    "export const y = 1;\n",
+  );
+  const report = reportChangeImpact(root);
+  deepEqual(report.categories.hosts, ["src/hosts/claude-code/assets/shared/text.mjs"]);
+  deepEqual(report.categories["generated-edited"], [
+    "src/hosts/claude-code/generated/claude-code-tmux-helper.generated.ts",
+  ]);
+  equal(report.artifactsAffected, true);
+  ok(report.warnings.some((warning) => warning.includes("npm run helpers:build")));
+  const build = report.recommended.indexOf("npm run helpers:build");
+  ok(build >= 0 && report.recommended[build + 1] === "npm run helpers:check");
+  ok(build < report.recommended.indexOf("npm run build:artifacts:committed"));
+});
+
 test("变更影响：手改生成目录与制品给出警告；只改 tooling 与测试不触及制品；未分类路径点名", (t) => {
   const root = fixture(t);
   write(root, "plugins/codex-wakeflow/README.md", "edited\n");

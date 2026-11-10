@@ -1,0 +1,13 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "useUnknownInCatchVariables": false,
+    "noUncheckedIndexedAccess": false,
+    "rootDir": ".",
+    "outDir": "../../../../.build/src/hosts/claude-code/assets",
+    "tsBuildInfoFile": "../../../../.build/cache/hosts-claude-code-assets.tsbuildinfo"
+  },
+  "include": ["**/*.mjs", "*.d.ts"]
+}

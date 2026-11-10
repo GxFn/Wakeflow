@@ -38,6 +38,13 @@ const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
   "src/entrypoints/claude-code-wakeflow-mcp.ts",
   "src/entrypoints/codex-wakeflow-mcp.ts",
   "src/entrypoints/wakeflow-hook-observer.ts",
+  // 宿主脚本的源文件：三个入口（tmux 助手、桌面助手、状态栏脚本）由 tooling/codegen/helper-assets.ts 装配成
+  // 自包含脚本，运行时读的是生成模块；两份 .d.ts 是只给 checkJs 看的环境声明。
+  "src/hosts/claude-code/assets/build-values.d.ts",
+  "src/hosts/claude-code/assets/desktop.mjs",
+  "src/hosts/claude-code/assets/helper-types.d.ts",
+  "src/hosts/claude-code/assets/statusline.mjs",
+  "src/hosts/claude-code/assets/tmux.mjs",
   "src/hosts/claude-code/claude-code-agent-text-profile.ts",
   "src/hosts/claude-code/claude-code-hook-fragment.ts",
   // 制品构建器动态读取的宿主 MCP 配置；不是运行时内部依赖。

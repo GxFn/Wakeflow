@@ -465,3 +465,16 @@ npm run --silent wf -- test levels
 ```
 
 按[测试开发标准](../standards/testing-standard.md) §2 给 `tests/` 下每个 `.test.ts` 归级（0 纯逻辑、1 组件、2 能力、3 公共工具、4 维护者工具、5 制品），依据是目录与静态事实：`tests/scenarios/` 是 3 级链，`tests/tooling/` 是 4 级，`artifacts`/`codegen`/`release` 是 5 级，`entrypoints` 或 MCP 客户端夹具是 3 级，其余按是否有一次性文件系统（`mkdtempSync`、`disposableRoot`、预备基线、`useDisposableDurability()`、`RootedDirectory.open`、夹具导入）或子进程事实，再按目录分 1 级与 2 级，都没有就是 0 级。耗时取签入的耗时表，预算按级别（链 600 秒、`.load` 文件 360 秒）。输出每级的文件数与耗时之和、超预算文件、混合文件（带标签用例只占一部分）、后缀与标签不一致的文件（`.load` 却不在标签闭包里；全部带标签却没有后缀）、缺文件头注释的数量与样本、没有耗时记录的文件。只读、不跑测试、不进门；清理进度记在 open-items D9。
+
+## 26. 宿主脚本的装配与漂移检查
+
+```sh
+npm run helpers:build
+npm run helpers:check
+```
+
+Wakeflow 发布进 Claude Code 工作区的三段脚本（tmux 助手、桌面助手、状态栏脚本）的源文件是 `src/hosts/claude-code/assets/` 下受 `checkJs` 与 Biome 检查的 `.mjs`，两个助手共用的部分在 `shared/` 下各写一份。发布出去的却必须是每段一份自包含的文件，所以 `tooling/codegen/helper-assets.ts` 把每个入口连同它导入的片段装配成 `src/hosts/claude-code/generated/*.generated.ts` 里的一份模板：`helpers:build` 写生成模块，`helpers:check` 只比对，提交的生成模块与当前源文件不一致就失败（与 `schema:check` 同一做法，已在 `npm test` 里）。
+
+改了 `assets/` 下任何文件之后先跑 `helpers:build`，再重建制品；`wf impact report` 会把这两条命令排在制品重建之前。装配器只接受收窄的写法——`node:` 内置模块与目录内片段的具名导入（不带 `as`）、片段只导出顶层声明、入口不导出——其余报错并点名文件。模板里的 `__WAKEFLOW_…__` 是构建期记号，由资产模块（`claude-code-<名字>-asset.ts`）在加载时用运行时常量填入：加一个记号要同时在资产模块给取值、在 `assets/build-values.d.ts` 声明类型；只改取值来源的常量不需要重新生成。
+
+生成模块随运行时进制品；生成器本身是开发支持，不进制品。

@@ -95,7 +95,7 @@
 | 公共工具的请求/结果 Schema | 0 级 Schema 形状；`tests/entrypoints` 的目录预算（102 KiB）与自包含检查；相关场景链断言 | `schema:build`、能力卡/工具描述 |
 | 能力服务的效果或阻塞项 | 该切片的 2 级 `service`/`decide` 测试（正反两面、幂等重放、恢复） | 控制器技能文本、场景链 |
 | 内核/治理的存储格式 | 1 级读写与崩溃语义；旧记录的读回（兼容或明确拒绝） | 管理文本历史登记（若是托管正文） |
-| 宿主适配（tmux 助手、设置、状态行） | `tests/hosts/<host>` 的 2 级测试用替身覆盖每条拒绝码；助手资产的 ASCII/可打印检查 | 现场核对一次 |
+| 宿主适配（tmux 助手、设置、状态行） | `tests/hosts/<host>` 的 2 级测试用替身覆盖每条拒绝码；助手资产的 ASCII/可打印检查；改 `src/hosts/claude-code/assets/` 之后 `helpers:build`，内核与片段共有的规则在合同测试里加向量 | 现场核对一次 |
 | agent-text（技能、命令、README） | `tests/artifacts` 的诚实预算与现场指引钉子（资源边会自动选中） | 重建制品、`smoke:artifacts` |
 | 运行器、记录器、影响选择 | `tests/tooling/testing` 的纯函数与真实进程回归 | 第 2 级完整门 |
 | 新增一个测试文件 | 文件头注释、级别、所在道；第 2 级绿门后刷新耗时表（`wf handoff` 检查覆盖） | — |

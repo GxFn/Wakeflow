@@ -43,7 +43,7 @@ export function countPromptCharacters(prompt: string): number | null {
  * 按行精确匹配（先去掉行两端的空白），所以夹在一行中间的标识——例如单行 JSON 字面量里的不可信
  * 文本——不算；宿主把整段文本包进外壳或在前后加字都不影响它，把文本截断则它不在了。
  */
-const PERMIT_ID_LINE =
+export const PROMPT_PERMIT_ID_LINE =
   /^- permitId: (target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 
 /** 一条 prompt 记录至多保留的许可标识数：正常是 1，上限只为记录有界。 */
@@ -52,7 +52,8 @@ export const PROMPT_PERMIT_IDS_MAXIMUM = 4;
 /** 渲染一条许可身份行；投递与回调的 prompt 渲染器把它放在最后一行。 */
 export function renderPromptPermitIdLine(permitId: string): string {
   const line = `- permitId: ${permitId}`;
-  if (!PERMIT_ID_LINE.test(line)) throw new TypeError("permitId is not a target-delivery id");
+  if (!PROMPT_PERMIT_ID_LINE.test(line))
+    throw new TypeError("permitId is not a target-delivery id");
   return line;
 }
 
@@ -60,7 +61,7 @@ export function renderPromptPermitIdLine(permitId: string): string {
 export function extractPromptPermitIds(prompt: string): readonly string[] {
   const found: string[] = [];
   for (const line of prompt.split("\n")) {
-    const match = PERMIT_ID_LINE.exec(line.trim());
+    const match = PROMPT_PERMIT_ID_LINE.exec(line.trim());
     const id = match?.[1];
     if (id === undefined || found.includes(id)) continue;
     found.push(id);
@@ -99,5 +100,5 @@ export function findPromptLanding<Record extends PromptLandingRecord>(
 
 /** 一个值是不是许可标识的文法（hook 记录的 `promptPermitIds` 逐项核对）。 */
 export function isPromptPermitId(value: unknown): value is string {
-  return typeof value === "string" && PERMIT_ID_LINE.test(`- permitId: ${value}`);
+  return typeof value === "string" && PROMPT_PERMIT_ID_LINE.test(`- permitId: ${value}`);
 }

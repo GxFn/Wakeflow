@@ -75,6 +75,17 @@ const RESOURCE_EDGES: readonly Readonly<{
     ],
     mention: "agent-text",
   },
+  {
+    // Claude Code 助手的源文件（`.mjs`，不在静态图里）：经生成模块进入两个资产模块，生成器的测试核对
+    // 两者没有漂移；直接导入片段的测试按路径入选。
+    pattern: /^src\/hosts\/claude-code\/assets\//u,
+    owners: [
+      "src/hosts/claude-code/claude-code-desktop-asset.ts",
+      "src/hosts/claude-code/claude-code-tmux-asset.ts",
+      "tooling/codegen/helper-assets.ts",
+    ],
+    mention: "hosts/claude-code/assets/",
+  },
 ];
 
 export function assertRevision(since: string): string {

@@ -6,7 +6,13 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["src/**", "tests/**", "tooling/**", "!src/contracts/generated/**"]
+    "includes": [
+      "src/**",
+      "tests/**",
+      "tooling/**",
+      "!src/contracts/generated/**",
+      "!src/hosts/claude-code/generated/**"
+    ]
   },
   "formatter": {
     "enabled": true,

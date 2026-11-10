@@ -448,21 +448,21 @@ const LIVE_OPTIONS = Object.freeze({
   locatorId: LOCATOR_ID,
 });
 
-test("tmux asset is a fixed 0600 file whose command and permission rule agree and which carries no paths or backticks", async (t) => {
+test("tmux asset is a fixed 0600 file whose command and permission rule agree and which carries no paths or unfilled build tokens", async (t) => {
   const current = await fixture(t);
   equal(statSync(current.assetPath).mode & 0o777, 0o600);
   equal(computeSha256Digest(readFileSync(current.assetPath)), CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(readFileSync(current.assetPath, "utf8"), CLAUDE_CODE_TMUX_ASSET_CONTENT);
-  equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("`"), false);
-  // 复审 J5：助手里的定位器目录字面量等于内核布局常量（资产是 String.raw，不能 import）。
+  // 发布字节是装配后的模板：构建期记号必须全部换成了字面量（批 1，§13.238）。
+  equal(/__WAKEFLOW_[A-Z0-9_]+__/u.test(CLAUDE_CODE_TMUX_ASSET_CONTENT), false);
+  // 复审 J5：助手里的定位器目录字面量等于内核布局常量（助手是自包含脚本，不能 import 运行时）。
   ok(
     CLAUDE_CODE_TMUX_ASSET_CONTENT.includes(
-      `const LOCATORS = RUNTIME + "${hostWindowLocatorsRootRef("claude-code").slice(RUNTIME.length)}";`,
+      `const LOCATORS = \`\${RUNTIME}${hostWindowLocatorsRootRef("claude-code").slice(RUNTIME.length)}\`;`,
     ),
     "the helper reads locators from the kernel's locator directory",
   );
   equal(hostWindowLocatorsRootRef("claude-code"), `${RUNTIME}/identity/window-locators`);
-  equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("${"), false);
   equal(CLAUDE_CODE_TMUX_ASSET_CONTENT.includes("/Users/"), false);
   equal(CLAUDE_CODE_TMUX_ASSET_COMMAND, `node ${CLAUDE_CODE_TMUX_ASSET_REF}`);
   equal(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE, `Bash(${CLAUDE_CODE_TMUX_ASSET_COMMAND} *)`);

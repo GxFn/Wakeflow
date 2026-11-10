@@ -10,6 +10,7 @@
     "claude-code-agent-text-profile.ts",
     "claude-code-desktop-asset-operation.ts",
     "claude-code-desktop-asset.ts",
+    "claude-code-helper-asset-template.ts",
     "claude-code-hook-fragment.ts",
     "claude-code-host-asset-operation.ts",
     "claude-code-maintenance-capability.ts",
@@ -27,7 +28,14 @@
     "claude-code-tmux-asset.ts",
     "claude-code-window-host-identity-profile.ts",
     "claude-code-window-transport-retirement.ts",
+    "generated/claude-code-desktop-helper.generated.ts",
+    "generated/claude-code-statusline-script.generated.ts",
+    "generated/claude-code-tmux-helper.generated.ts",
     "wakeflow-workspace-host-resource-profile.ts"
   ],
-  "references": [{ "path": "../../tsconfig.runtime.json" }]
+  "references": [
+    {
+      "path": "../../tsconfig.runtime.json"
+    }
+  ]
 }

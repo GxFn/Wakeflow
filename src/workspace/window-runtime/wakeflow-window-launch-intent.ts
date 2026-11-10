@@ -264,6 +264,32 @@ function createIntent(
   });
 }
 
+/**
+ * 这个窗口自己的启动摘要（open-items G14）。意图摘要把整个 `hosts` 段算进每个窗口，改一个角色的模型就让
+ * 所有窗口显示 drifted；这里只取窗口自己的事实（角色、根、pod、worktree、宿主画像）、宿主画像为它解析出的
+ * 取值与账本根。握手时记进绑定，status 拿当前算出的同一个摘要与它比较。
+ */
+export function computeWakeflowWindowLaunchExecutionDigest(
+  intent: Readonly<WakeflowWindowLaunchIntent>,
+  values: Readonly<Record<string, string | null>>,
+  ledgerRoot: string,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest({
+    windowId: intent.windowId,
+    podId: intent.podId,
+    podName: intent.podName,
+    podPlacement: intent.podPlacement,
+    role: intent.role,
+    displayTitle: intent.displayTitle,
+    root: intent.root,
+    worktree: intent.worktree,
+    attachedWorktrees: intent.attachedWorktrees,
+    host: intent.host,
+    values,
+    ledgerRoot,
+  });
+}
+
 /** 从完整Config和当前Host Profile生成按windowId排序的launch intent集合。 */
 export function compileWakeflowWindowLaunchIntents(
   configValue: unknown,

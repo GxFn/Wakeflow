@@ -1,4 +1,4 @@
-import { equal, rejects } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -13,9 +13,14 @@ import {
   executeWindowBindingRequest,
   type WindowBindingHostFacade,
 } from "../../../src/capabilities/endpoint/service.js";
+import {
+  executeStatusRequest,
+  type ObservationHostFacade,
+} from "../../../src/capabilities/observation/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import type { PortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
@@ -42,7 +47,10 @@ import {
   CLAUDE_CODE_TMUX_ASSET_REF,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
-import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import {
+  renderClaudeCodeWindowLaunchInstructions,
+  renderClaudeCodeWindowLaunchValues,
+} from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostTransportTable,
@@ -137,6 +145,20 @@ const CLAUDE_HELPER_ONLY_DELIVERY_FACADE: Readonly<DeliveryHostFacade> = Object.
   transportAssets: Object.freeze({
     [claudeCodeWorkspaceHostTransportTable.defaultTransport]: CLAUDE_DESKTOP_HOST_ASSETS,
   }),
+});
+
+/** 只读本宿主的观察门面，带启动取值渲染器：status 能把会话报告的权限模式与启动要求的模式对照（X4）。 */
+const CLAUDE_STATUS_FACADE: Readonly<ObservationHostFacade> = Object.freeze({
+  hostId: "claude-code" as const,
+  hosts: Object.freeze([
+    Object.freeze({
+      hostId: "claude-code" as const,
+      resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+      identityProfile: claudeCodeWindowHostIdentityProfile,
+      statuslineAsset: null,
+      renderLaunchValues: renderClaudeCodeWindowLaunchValues,
+    }),
+  ]),
 });
 
 const CLAUDE_SESSION_ID = "c1a0dec0-de00-4000-8000-0000000000c1";
@@ -459,6 +481,34 @@ test("只有助手的资产期望（桌面传输的形状，ADR-0025 D6）：许
   }
 });
 
+test("许可的 hostAction 带传输与接收窗口的桌面会话 id（open-items X29）：tmux 传输没有 id；组合根注入了定位器读取端时原样给出，重发的许可相同", async () => {
+  const fixture = await createClaudeDeliveryFixture();
+  try {
+    materializeClaudeAssets(fixture);
+    const desktopSessionId = "local_0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+    const asked: string[] = [];
+    const withReader: Readonly<DeliveryHostFacade> = Object.freeze({
+      ...CLAUDE_DELIVERY_FACADE,
+      readControllerDesktopSessionId: async (_root: unknown, windowId: string) => {
+        asked.push(windowId);
+        return windowId === fixture.windowId ? desktopSessionId : null;
+      },
+    });
+    const prepared = await prepare(fixture, withReader);
+    equal(prepared.permit.hostAction.transport, "tmux-session");
+    equal(prepared.permit.hostAction.desktopSessionId, desktopSessionId);
+    equal(asked.includes(fixture.windowId), true, "the recipient window's locator was read");
+    // 没有读取端的门面（tmux 的常态）：同键重放，id 为 null，其余不变。
+    const replayed = await prepare(fixture);
+    equal(replayed.status, "idempotent");
+    equal(replayed.permit.hostAction.transport, "tmux-session");
+    equal(replayed.permit.hostAction.desktopSessionId, null);
+    equal(replayed.permit.hostAction.handleDigest, prepared.permit.hostAction.handleDigest);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
 test("落地记录报告的模式与选出 profile 要求的不同（open-items X4）：处置仍 accepted，next.blockers 多一条 permission-mode-mismatch:<windowId>，同键重放照报", async () => {
   const fixture = await createClaudeDeliveryFixture();
   try {
@@ -495,6 +545,11 @@ test("落地记录报告的模式与选出 profile 要求的不同（open-items 
     equal(accepted.outcome.disposition, "accepted");
     equal(accepted.outcome.evidenceKind, "hook-record");
     equal(accepted.outcome.hookRecordId, landed.record.recordId);
+    // 摘要相符的落地：许可的字符数照给；这条记录没带字符数（早于该字段的记录也是这样），那一边为 null。
+    deepEqual(JSON.parse(JSON.stringify(accepted.outcome.landing)), {
+      permitCharacters: countPromptCharacters(prepared.permit.prompt),
+      recordCharacters: null,
+    });
     equal(accepted.target.phase, "host-effect-accepted");
     equal(
       accepted.next.blockers.filter((entry) => entry.startsWith("permission-mode-mismatch")).join(),
@@ -503,7 +558,31 @@ test("落地记录报告的模式与选出 profile 要求的不同（open-items 
     const replayed = await record();
     equal(replayed.status, "idempotent");
     equal(replayed.outcome.outcomeDigest, accepted.outcome.outcomeDigest);
+    deepEqual(
+      JSON.parse(JSON.stringify(replayed.outcome.landing)),
+      JSON.parse(JSON.stringify(accepted.outcome.landing)),
+      "the replay rereads the same record for the counts too",
+    );
     equal(replayed.next.blockers.includes(mismatch), true, "the replay rereads the same record");
+
+    // 同一件事 status 也看得见（1.3.0 批 2）：窗口的会话事实给出两个模式，nextActions 列出这个窗口。
+    const status = await executeStatusRequest(
+      CLAUDE_STATUS_FACADE,
+      { root: fixture.workspacePath },
+      { durability: DISPOSABLE_WORKSPACE_DURABILITY, clock: () => OUTCOME_AT },
+    );
+    const window = status.windows.find((entry) => entry.windowId === fixture.windowId);
+    deepEqual(JSON.parse(JSON.stringify(window?.session?.permissionMode ?? null)), {
+      configured: "auto",
+      observed: "default",
+      status: "mismatch",
+    });
+    deepEqual(
+      status.nextActions
+        .filter((action) => action.reason === "permission-mode-mismatch")
+        .map((action) => [action.owner, action.subject]),
+      [["controller", fixture.windowId]],
+    );
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

@@ -269,6 +269,13 @@ export interface ObservedHostHooks {
        * --resume 它，过期窗口只能重开；与 tmux 助手 `resume-never-conversed` 的判据相同。
        */
       readonly conversed: boolean;
+      /**
+       * 该会话最近一条带模型的 session-start 记录里的模型标识（open-items X28）：宿主在 `/clear` 之后的
+       * 启动记录里可以不带它，所以取"最近一条带了的"；从未带过为 null。
+       */
+      readonly sessionStartModel: string | null;
+      /** 该会话最近一条带权限模式的记录里的模式（open-items X4）；宿主从未报过为 null。 */
+      readonly permissionMode: string | null;
     }>
   >;
 }
@@ -628,6 +635,19 @@ async function hookDirectoryState(
   }
 }
 
+/** 会话的一项事实取"最近一条带了它的记录"：记录没带这一项不动，键不早于已记下的才覆盖。 */
+function keepLatestFact(
+  keys: Map<string, string>,
+  values: Map<string, string>,
+  sessionId: string,
+  key: string,
+  value: string | null,
+): void {
+  if (value === null || (keys.get(sessionId) ?? "") > key) return;
+  keys.set(sessionId, key);
+  values.set(sessionId, value);
+}
+
 async function observeHostHooks(
   root: RootedDirectory,
   hostId: WakeflowHostId,
@@ -646,9 +666,16 @@ async function observeHostHooks(
         readonly sessionStartObserverManifestDigest: Sha256Digest | null;
         readonly sessionStartArtifactVersion: string | null;
         readonly conversed: boolean;
+        readonly sessionStartModel: string | null;
+        readonly permissionMode: string | null;
       }>
     >();
     const conversed = new Set<string>();
+    // 两项会话事实各取"最近一条带了它的记录"：不是每条记录都带模型或权限模式。
+    const modelKeys = new Map<string, string>();
+    const models = new Map<string, string>();
+    const modeKeys = new Map<string, string>();
+    const modes = new Map<string, string>();
     const latestKeys = new Map<string, string>();
     const startKeys = new Map<string, string>();
     const startDigests = new Map<string, Sha256Digest | null>();
@@ -673,7 +700,9 @@ async function observeHostHooks(
             startDigests.set(record.sessionId, record.artifactManifestDigest);
             startVersions.set(record.sessionId, record.artifactVersion);
           }
+          keepLatestFact(modelKeys, models, record.sessionId, key, record.model);
         }
+        keepLatestFact(modeKeys, modes, record.sessionId, key, record.permissionMode);
         const previous = latestKeys.get(record.sessionId);
         if (previous === undefined || previous <= key) {
           latestKeys.set(record.sessionId, key);
@@ -685,6 +714,8 @@ async function observeHostHooks(
             sessionStartObserverManifestDigest: null,
             sessionStartArtifactVersion: null,
             conversed: false,
+            sessionStartModel: null,
+            permissionMode: null,
           });
         }
       },
@@ -696,6 +727,8 @@ async function observeHostHooks(
         sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
         sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
         conversed: conversed.has(sessionId),
+        sessionStartModel: models.get(sessionId) ?? null,
+        permissionMode: modes.get(sessionId) ?? null,
       });
     }
     const writeFailures = await countIncidents(

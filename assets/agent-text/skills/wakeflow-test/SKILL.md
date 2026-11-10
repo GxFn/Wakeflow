@@ -107,9 +107,8 @@ of test work, and it overrides one target rule: you do record managed evidence
    decides is replaced by importing again with the supersedes field naming
    the first import's result id; after a decision only another attempt can.
 6. Send the returned wake-controller callback prompt to the Controller window
-   by the host's own means for this workspace's one transport - the delivery
-   prompt's return section names a Controller desktop id under desktop
-   sessions (no tmux helper exists there), otherwise it is tmux:
+   by the one route the permit's host action gives - its transport field,
+   never a guess from the prompt's wording:
    {{deliveryAction}} No other route counts as a send. Then end your turn.
 
 ## What you must return

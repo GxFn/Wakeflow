@@ -20,9 +20,11 @@ Report in the user's terms: the overall state, what is on the board, the active
 Demand and its frontier, any window that is not registered, any window whose
 `attention` is `needed` (the host is waiting for the user there - a permission
 prompt, an idle prompt, a login or usage limit - so name it before waiting on
-that window), any registered window whose `launchIntent` is `drifted` (it was
-launched or last resumed under an older launch intent; a replacing handshake
-renews the record, nothing fails on it), any `legacyResidue` item (old-plugin content the user removes by
+that window), any registered window whose `launchIntent` is `drifted` (name the
+values in `changes`: it was launched under other parameters than the config now
+gives; a replacing handshake renews the record, nothing fails on it), any window
+whose `session.permissionMode.status` is `mismatch` (it works but stops for
+permission prompts), any `legacyResidue` item (old-plugin content the user removes by
 hand - name its root, file and line), any `hostAssets` entry that is not
 `current`, any work claim that is held, and the next actions the result named -
 with who owns each one.

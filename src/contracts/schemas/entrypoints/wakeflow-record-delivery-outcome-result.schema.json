@@ -188,7 +188,8 @@
         "hookRecordId",
         "claimHandling",
         "observedAt",
-        "outcomeDigest"
+        "outcomeDigest",
+        "landing"
       ],
       "properties": {
         "deliveryId": {
@@ -231,6 +232,45 @@
         },
         "outcomeDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "landing": {
+          "description": "When a hook record is cited: how many characters the permit's prompt has and how many the landing record covers, both after trimming. They are equal under evidenceKind hook-record; under hook-record-identity the difference is what the host changed in transit. A count is null when the record predates the field or is no longer readable. null when no record is cited.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["permitCharacters", "recordCharacters"],
+              "properties": {
+                "permitCharacters": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65536
+                    }
+                  ]
+                },
+                "recordCharacters": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65536
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       }
     },

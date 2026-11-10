@@ -179,6 +179,16 @@ export function versionOf(command, versionArguments) {
   return Object.freeze({ available: true, version: cleanLabel(line, "unknown", MAX_VERSION) });
 }
 
+/**
+ * 宿主 CLI 的版本（`claude --version` 的第一行，有界）：随登记用的 observation 交给 Wakeflow，记进窗口的绑定，
+ * status 里就看得见每个窗口是在哪个版本的宿主下启动的（open-items A3）。读不到就是 null，从不因此拒绝。
+ * @param {string} binary
+ */
+export function hostVersionOf(binary) {
+  const version = versionOf(binary, ["--version"]);
+  return version.available && version.version !== "unknown" ? version.version : null;
+}
+
 // §13.130：git 调用去掉会把仓库重定向到别处的 GIT_* 变量，只认 cwd 所在的仓库。
 const GIT_REDIRECT_VARIABLES = [
   "GIT_DIR",

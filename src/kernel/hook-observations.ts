@@ -138,6 +138,12 @@ export interface HostHookObservation {
    */
   readonly sessionTitle: string | null;
   /**
+   * 宿主 hook 输入的 `model`（open-items X28）：SessionStart 带的当前模型标识（例如 `claude-opus-5`）。它让"配置
+   * 的模型是否就是会话实际用的模型"有记录可核对——桌面接管之后尤其如此。宿主可以不带（`/clear` 之后、从对话
+   * 恢复的会话）；没带、别的事件、不报它的宿主（Codex）与早于本字段的记录读成 null。只是标签，不维护取值表。
+   */
+  readonly model: string | null;
+  /**
    * prompt 里的许可身份行带的标识（ADR-0027 决定 2）：`- permitId: <target-delivery 标识>`，按出现顺序、
    * 去重、至多 4 个。它让落地判定在宿主改动了文本、摘要对不上时仍能认出"这条许可的 prompt 到了这个
    * 会话"。没有身份行的 prompt 是空数组；其他事件与早于本字段的记录读成 null。
@@ -162,6 +168,7 @@ export interface HostHookObservationInput {
   readonly notificationType?: string | null;
   readonly permissionMode?: string | null;
   readonly sessionTitle?: string | null;
+  readonly model?: string | null;
   readonly promptPermitIds?: readonly string[] | null;
   readonly promptCharacters?: number | null;
 }
@@ -251,6 +258,7 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
   "notificationType",
   "permissionMode",
   "sessionTitle",
+  "model",
   "promptPermitIds",
   "promptCharacters",
 ]);
@@ -311,6 +319,17 @@ function optionalPermissionMode(value: unknown, path: string): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string" || !PERMISSION_MODE_PATTERN.test(value)) {
     fail("invalid-request", "hook-permission-mode", path);
+  }
+  return value;
+}
+
+/** 模型标识是宿主给的标签：可打印、不带空白，至多 256 个字符（云提供方的 ARN 形式也在内）。 */
+const MODEL_LABEL_PATTERN = /^[!-~]{1,256}$/u;
+
+function optionalModel(value: unknown, path: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string" || !MODEL_LABEL_PATTERN.test(value)) {
+    fail("invalid-request", "hook-model", path);
   }
   return value;
 }
@@ -444,6 +463,7 @@ export function createHostHookObservation(
     ),
     permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
     sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
+    model: optionalModel(input.model, "$observation.model"),
     promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
     promptCharacters: optionalPromptCharacters(
       input.promptCharacters,
@@ -489,6 +509,7 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     notificationType: (object.notificationType ?? null) as string | null,
     permissionMode: (object.permissionMode ?? null) as string | null,
     sessionTitle: (object.sessionTitle ?? null) as string | null,
+    model: (object.model ?? null) as string | null,
     promptPermitIds: (object.promptPermitIds ?? null) as readonly string[] | null,
     promptCharacters: (object.promptCharacters ?? null) as number | null,
   });

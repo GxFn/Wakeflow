@@ -22,6 +22,7 @@ import {
   boundedDetail,
   claudeInstallForm,
   hostEnvironment,
+  hostVersionOf,
   nodeVersionSupported,
   run,
   versionOf,
@@ -32,6 +33,7 @@ import {
   promptDigestOf,
   promptPermitIdsOf,
 } from "./shared/prompt-rules.mjs";
+import { withObservationFiles } from "./shared/observation-files.mjs";
 import { MAX_STDIN_BYTES, readStdinJson, readStdinText } from "./shared/stdin.mjs";
 import { SGR_PATTERN, cleanLabel, isControl, sha256 } from "./shared/text.mjs";
 import {
@@ -439,18 +441,21 @@ function assertPreparedCheckoutCwd(prepared, cwd) {
 }
 
 /**
+ * `hostVersion` 只在握手用的 observation 上给（launch、self）：relocate 不改绑定，resume 不带它。
  * @param {string} sessionId
  * @param {string} launchIntentDigest
  * @param {TmuxObservedLocation} coordinates
  * @param {ReturnType<typeof observeWorktree>} worktree
+ * @param {string | null} [hostVersion]
  */
-function creationObservation(sessionId, launchIntentDigest, coordinates, worktree) {
+function creationObservation(sessionId, launchIntentDigest, coordinates, worktree, hostVersion) {
   return Object.freeze({
     handle: { kind: HANDLE_KIND, value: sessionId },
     launchIntentDigest,
     observedAt: new Date().toISOString(),
     tmux: coordinates,
     ...(worktree === null ? {} : { worktree }),
+    ...(typeof hostVersion === "string" ? { hostVersion } : {}),
   });
 }
 
@@ -1317,6 +1322,7 @@ function commandLaunch(config, options) {
             paneId: adopted.row.paneId,
           },
           adoptedWorktree,
+          hostVersionOf(claudeBinary()),
         ),
         hook: { sessionStart: "observed" },
         window: {
@@ -1376,6 +1382,7 @@ function commandLaunch(config, options) {
         paneId: opened.coordinates.paneId,
       },
       worktree,
+      hostVersionOf(claudeBinary()),
     ),
     hook: { sessionStart: hook.status },
     window: {
@@ -1456,6 +1463,7 @@ function commandSelf(config, options) {
         paneId,
       },
       null,
+      hostVersionOf(claudeBinary()),
     ),
     ...(sessionName === intentSessionName(launchIntent.execution, context)
       ? {}
@@ -2194,7 +2202,8 @@ function main() {
       default:
         refuse("command-unknown");
     }
-    emit(result, result.ok ? 0 : 1);
+    // 结果里的宿主观察另存一份并附上引用（K2）：登记工具按引用读入，不必逐字转抄。
+    emit(withObservationFiles(String(parsed.command), result), result.ok ? 0 : 1);
   } catch (error) {
     if (error instanceof HelperFailure) {
       emit(

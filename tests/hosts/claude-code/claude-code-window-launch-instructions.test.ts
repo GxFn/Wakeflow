@@ -3,15 +3,20 @@ import { test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import {
+  renderClaudeCodeWindowLaunchInstructions,
+  renderClaudeCodeWindowLaunchValues,
+} from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import {
   claudeCodeDesktopWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { renderCodexWindowLaunchValues } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import type { WakeflowWindowLaunchInstructionInput } from "../../../src/workspace/window-runtime/wakeflow-window-launch-instructions.js";
 import {
   compileWakeflowWindowLaunchIntents,
+  computeWakeflowWindowLaunchExecutionDigest,
   type WakeflowWindowLaunchIntent,
 } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../../src/workspace/workspace-host-resource-profile.js";
@@ -453,4 +458,147 @@ test("增删一个 pod 不改 main pod 窗口的意图摘要，tmux 与桌面两
       intentFor(base, profile, PRODUCT).intentDigest,
     );
   }
+});
+
+test("启动取值（open-items G14）：与启动命令的参数同源、按角色解析；tmux 带 socket 与会话名，桌面不带；项目聊天模板抛错", () => {
+  const raw = rawConfig(LAUNCH_PREFERENCES);
+  const model = parseWakeflowConfig(raw);
+  const tmuxProfile = claudeCodeWorkspaceHostResourceProfile;
+  const tmuxTemplate = tmuxProfile.launch;
+  if (tmuxTemplate.kind !== "tmux-session") throw new Error("Expected the tmux template.");
+  deepEqual(
+    renderClaudeCodeWindowLaunchValues({
+      model,
+      intent: intentFor(raw, tmuxProfile, PRODUCT),
+      profile: tmuxProfile,
+    }),
+    {
+      transport: "tmux",
+      model: "claude-opus",
+      effort: "high",
+      permissionMode: "acceptEdits",
+      tmuxSocket: "sock",
+      tmuxSession: "team",
+    },
+  );
+  // 没有按角色覆盖的 Controller 取模板缺省的思考档；模型按 default。
+  const controller = renderClaudeCodeWindowLaunchValues({
+    model,
+    intent: intentFor(raw, tmuxProfile, CONTROLLER),
+    profile: tmuxProfile,
+  });
+  equal(controller.effort, tmuxTemplate.controllerEffort);
+  equal(controller.model, "claude-opus");
+  // 取值就是启动命令里实际带的参数。
+  const rendered = renderClaudeCodeWindowLaunchInstructions({
+    model,
+    intent: intentFor(raw, tmuxProfile, PRODUCT),
+    profile: tmuxProfile,
+    attachedWorktrees: [],
+  }) as { arguments: string[] };
+  for (const [flag, value] of [
+    ["--model", "claude-opus"],
+    ["--effort", "high"],
+    ["--permission-mode", "acceptEdits"],
+  ] as const) {
+    equal(rendered.arguments[rendered.arguments.indexOf(flag) + 1], value);
+  }
+
+  const desktopProfile = claudeCodeDesktopWorkspaceHostResourceProfile;
+  deepEqual(
+    renderClaudeCodeWindowLaunchValues({
+      model,
+      intent: intentFor(raw, desktopProfile, PRODUCT),
+      profile: desktopProfile,
+    }),
+    { transport: "desktop", model: "claude-opus", effort: "high", permissionMode: "acceptEdits" },
+  );
+  // 什么都没配置：模型为 null（由宿主缺省决定），权限模式是模板的缺省。
+  const bare = rawConfig();
+  const unset = renderClaudeCodeWindowLaunchValues({
+    model: parseWakeflowConfig(bare),
+    intent: intentFor(bare, desktopProfile, PRODUCT),
+    profile: desktopProfile,
+  });
+  equal(unset.model, null);
+  equal(unset.permissionMode, "auto");
+
+  throws(() =>
+    renderClaudeCodeWindowLaunchValues({
+      model,
+      intent: intentFor(raw, codexWorkspaceHostResourceProfile, PRODUCT),
+      profile: codexWorkspaceHostResourceProfile,
+    }),
+  );
+});
+
+test("窗口自己的启动摘要（open-items G14）：别的角色、别的宿主的配置变了它不变，自己的取值或账本根变了才变", () => {
+  const profile = claudeCodeWorkspaceHostResourceProfile;
+  const digestOf = (hosts: Record<string, unknown>, windowId: string, ledgerRoot = "Ledger") => {
+    const raw = rawConfig(hosts);
+    const model = parseWakeflowConfig(raw);
+    const intent = intentFor(raw, profile, windowId);
+    return computeWakeflowWindowLaunchExecutionDigest(
+      intent,
+      renderClaudeCodeWindowLaunchValues({ model, intent, profile }),
+      ledgerRoot,
+    );
+  };
+  const base = digestOf(LAUNCH_PREFERENCES, CONTROLLER);
+  const claude = LAUNCH_PREFERENCES["claude-code"];
+  // 只改 product 的思考档：Controller 不变，product 变。
+  const productOnly = {
+    "claude-code": {
+      ...claude,
+      launch: { ...claude.launch, reasoningEffortByRole: { product: "xhigh" } },
+    },
+  };
+  equal(digestOf(productOnly, CONTROLLER), base);
+  equal(digestOf(productOnly, PRODUCT) === digestOf(LAUNCH_PREFERENCES, PRODUCT), false);
+  // 只改 Codex 的配置：Claude 的窗口不变（整份意图摘要此时会变）。
+  const withCodex = {
+    ...LAUNCH_PREFERENCES,
+    codex: { launch: { modelByRole: { default: "gpt" } } },
+  };
+  equal(digestOf(withCodex, CONTROLLER), base);
+  equal(
+    intentFor(rawConfig(withCodex), profile, CONTROLLER).intentDigest ===
+      intentFor(rawConfig(LAUNCH_PREFERENCES), profile, CONTROLLER).intentDigest,
+    false,
+  );
+  // 自己的模型、账本根变了：变。
+  const ownModel = {
+    "claude-code": {
+      ...claude,
+      launch: { ...claude.launch, modelByRole: { controller: "sonnet" } },
+    },
+  };
+  equal(digestOf(ownModel, CONTROLLER) === base, false);
+  equal(digestOf(LAUNCH_PREFERENCES, CONTROLLER, "../outside-ledger") === base, false);
+});
+
+test("Codex 的启动取值：只有用户配置的模型与思考档，没配置为 null", () => {
+  const profile = codexWorkspaceHostResourceProfile;
+  const bare = rawConfig();
+  deepEqual(
+    renderCodexWindowLaunchValues({
+      model: parseWakeflowConfig(bare),
+      intent: intentFor(bare, profile, PRODUCT),
+      profile,
+    }),
+    { transport: "project-thread", model: null, effort: null },
+  );
+  const configured = rawConfig({
+    codex: {
+      launch: { modelByRole: { default: "gpt" }, reasoningEffortByRole: { product: "high" } },
+    },
+  });
+  deepEqual(
+    renderCodexWindowLaunchValues({
+      model: parseWakeflowConfig(configured),
+      intent: intentFor(configured, profile, PRODUCT),
+      profile,
+    }),
+    { transport: "project-thread", model: "gpt", effort: "high" },
+  );
 });

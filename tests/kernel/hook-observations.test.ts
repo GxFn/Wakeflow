@@ -923,3 +923,47 @@ test("外来点文件不计，外来文件名只计 skipped，记录命名却读
   equal(inventory.unreadable, 2);
   equal(inventory.complete, true);
 });
+
+test("模型标识是后加的可选键（open-items X28）：原样往返、不参与标识，没带与旧记录读成 null，带空白或过长的标签以 invalid-request 拒绝", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const at = "2026-11-10T04:00:00.000Z" as UtcInstant;
+  const plain = createHostHookObservation(observation(workspace, at, { event: "session-start" }));
+  equal(plain.model, null);
+  const started = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "session-start", model: "claude-opus-5" }),
+  );
+  equal(started.record.model, "claude-opus-5");
+  equal(started.record.recordId, plain.recordId, "模型不参与记录标识");
+  // 云提供方的 ARN 形式也是合法标签。
+  const arn = "arn:aws:bedrock:us-east-1:000000000000:inference-profile/us.anthropic.claude-opus-5";
+  equal(
+    createHostHookObservation(observation(workspace, at, { event: "session-start", model: arn }))
+      .model,
+    arn,
+  );
+  // 旧记录：没有这个键，读成 null。
+  const file = path.join(workspace, started.resourceRef);
+  const rendered = readFileSync(file, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  equal(parsed.model, "claude-opus-5");
+  delete parsed.model;
+  writeFileSync(
+    file,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(parsed, null, 2)}\n`
+      : `${JSON.stringify(parsed)}\n`,
+  );
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    inventory.records.map((record) => record.model),
+    [null],
+  );
+  for (const model of ["two words", "", "x".repeat(257), "tab\there"]) {
+    await rejects(
+      writeHostHookObservation(root, observation(workspace, at, { event: "stop", model })),
+      (error: unknown) => isWakeflowError(error) && error.reason === "hook-model",
+    );
+  }
+});

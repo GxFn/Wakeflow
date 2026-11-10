@@ -846,7 +846,8 @@
         "attention",
         "projection",
         "runtime",
-        "launchIntent"
+        "launchIntent",
+        "session"
       ],
       "properties": {
         "windowId": {
@@ -1028,7 +1029,7 @@
           }
         },
         "launchIntent": {
-          "description": "current when the registered launch intent digest matches what the current config and host profile produce; drifted when it differs (only a replacing handshake renews it); null without a binding. Information only.",
+          "description": "Whether the window still runs with the launch parameters recorded at its handshake; null without a binding. Information only. A binding written since 1.3.0 is compared by the window's own launch facts (comparison window): changes lists each named value that differs, and drifted with no change listed means a window fact outside those values moved (root, pod, title or host profile). An older binding is compared by the whole launch intent digest (comparison config), which any edit of the hosts block changes. Only a replacing handshake renews the record.",
           "oneOf": [
             {
               "type": "null"
@@ -1036,7 +1037,14 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["status", "registeredDigest", "currentDigest"],
+              "required": [
+                "status",
+                "registeredDigest",
+                "currentDigest",
+                "hostVersion",
+                "comparison",
+                "changes"
+              ],
               "properties": {
                 "status": {
                   "enum": ["current", "drifted"]
@@ -1046,6 +1054,140 @@
                 },
                 "currentDigest": {
                   "$ref": "#/$defs/sha256Digest"
+                },
+                "hostVersion": {
+                  "description": "The host CLI version the launch helper reported at the handshake; null when none was recorded.",
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    }
+                  ]
+                },
+                "comparison": {
+                  "enum": ["window", "config"]
+                },
+                "changes": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["field", "registered", "current"],
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                      },
+                      "registered": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "maxLength": 128
+                          }
+                        ]
+                      },
+                      "current": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "string",
+                            "maxLength": 128
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "session": {
+          "description": "What the host reported about the bound session in its hook records, beside what this window is configured to launch with; null without a binding. model.observed is the model id on the session's latest session-start record that carried one, and model.configured may be an alias, so the two are shown and not compared. permissionMode.status is mismatch when the session's latest reported mode differs from the launch mode (the window works but stops for permission prompts and holds cross-session messages), unknown when the host reported none or sets no launch mode.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["model", "permissionMode"],
+              "properties": {
+                "model": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["configured", "observed"],
+                  "properties": {
+                    "configured": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      ]
+                    },
+                    "observed": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      ]
+                    }
+                  }
+                },
+                "permissionMode": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["configured", "observed", "status"],
+                  "properties": {
+                    "configured": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      ]
+                    },
+                    "observed": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": ["match", "mismatch", "unknown"]
+                    }
+                  }
                 }
               }
             }

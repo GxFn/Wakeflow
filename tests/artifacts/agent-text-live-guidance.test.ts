@@ -762,9 +762,10 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
     [
       `\`${CLAUDE_CODE_TMUX_ASSET_COMMAND} deliver --window <windowId> --handle-digest <the permit's handleDigest> --prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>\``,
       "landing is proven by the hook record alone",
-      "Under desktop sessions send the `promptRef` file's text, unchanged and once, with the desktop `send_message` tool",
-      "the `desktop.sessionId` its `launch` printed",
-      "a callback goes with `SendMessage` to the Controller's desktop id that the delivery prompt names",
+      // 许可自己说走哪条路、发给谁（X29，1.3.0 批 2）：不再从 launch 的输出或 prompt 的回传段里找。
+      "follow the permit's `hostAction.transport`. `tmux-session`: run the helper from the workspace root",
+      "`desktop-session`: send the `promptRef` file's text, unchanged and once, with the desktop `send_message` tool to the permit's `hostAction.desktopSessionId`",
+      "a callback goes with `SendMessage`",
       "keep the tool's return unchanged as `attempt.sendReturn`",
       '`"failed-before-send"` when nothing was sent',
       "before recording the outcome",

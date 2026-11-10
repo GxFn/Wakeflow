@@ -115,3 +115,66 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
       error instanceof WakeflowWindowHostBindingError && error.reason === "handle",
   );
 });
+
+test("Window Host Binding 的 launch（1.3.0，G14）：握手时的启动事实随记录往返，取值按名字排序；没有它的旧记录字节不变", () => {
+  const handle = parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
+    kind: "codex-thread",
+    value: "host-owned:opaque/thread?id=7",
+  });
+  const base = {
+    programId: PROGRAM_ID,
+    hostId: "codex" as const,
+    windowId: WINDOW_ID,
+    bindingId: BINDING_ID,
+    handle,
+    launchIntentDigest: INTENT_DIGEST,
+    observedAt: parseUtcInstant("2026-08-28T10:00:02.000Z"),
+    registeredAt: parseUtcInstant("2026-08-28T10:00:03.000Z"),
+  };
+  const executionDigest = parseSha256Digest(`sha256:${"b".repeat(64)}`);
+  const binding = createWakeflowWindowHostBinding(
+    {
+      ...base,
+      launch: {
+        executionDigest,
+        values: { transport: "project-thread", model: null, effort: "high" },
+        hostVersion: "0.99.0",
+      },
+    },
+    codexWindowHostIdentityProfile,
+  );
+  deepEqual(binding.launch, {
+    executionDigest,
+    values: { effort: "high", model: null, transport: "project-thread" },
+    hostVersion: "0.99.0",
+  });
+  deepEqual(Object.keys(binding.launch?.values ?? {}), ["effort", "model", "transport"]);
+  const document = renderWakeflowWindowHostBinding(binding, codexWindowHostIdentityProfile);
+  deepEqual(
+    parseWakeflowWindowHostBindingDocument(document, codexWindowHostIdentityProfile),
+    binding,
+  );
+
+  // 1.3.0 之前写下的记录没有这个键：解析后也没有，重新渲染出的字节与原文件相同。
+  const legacy = createWakeflowWindowHostBinding(base, codexWindowHostIdentityProfile);
+  equal("launch" in legacy, false);
+  const legacyDocument = renderWakeflowWindowHostBinding(legacy, codexWindowHostIdentityProfile);
+  equal(legacyDocument.includes('"launch"'), false);
+  deepEqual(
+    parseWakeflowWindowHostBindingDocument(legacyDocument, codexWindowHostIdentityProfile),
+    legacy,
+  );
+
+  // 取值名与取值都有界：名字不合文法、取值带控制字符、宿主版本过长都被 Schema 拒绝。
+  for (const launch of [
+    { executionDigest, values: { "Bad-Name": "x" }, hostVersion: null },
+    { executionDigest, values: { model: "line\nbreak" }, hostVersion: null },
+    { executionDigest, values: {}, hostVersion: "v".repeat(65) },
+  ]) {
+    throws(
+      () => createWakeflowWindowHostBinding({ ...base, launch }, codexWindowHostIdentityProfile),
+      (error: unknown) =>
+        error instanceof WakeflowWindowHostBindingError && error.reason === "schema",
+    );
+  }
+});

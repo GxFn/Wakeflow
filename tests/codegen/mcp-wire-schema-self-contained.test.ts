@@ -372,12 +372,15 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "goal",
   ]);
   // 许可从不携带原始句柄：宿主动作只暴露句柄摘要。
+  // 传输种类与接收窗口的桌面会话 id 随许可给出（X29）：Agent 按它选路，不从 prompt 的措辞里猜。
   deepEqual(Object.keys(definition(prepareResult, "hostAction").properties as JsonObject).sort(), [
     "bindingId",
+    "desktopSessionId",
     "displayTitle",
     "effect",
     "handleDigest",
     "hostId",
+    "transport",
     "windowId",
   ]);
   deepEqual(

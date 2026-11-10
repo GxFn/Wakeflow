@@ -18,3 +18,15 @@ export interface WakeflowWindowLaunchInstructionInput {
 export type WakeflowWindowLaunchInstructionsRenderer = (
   input: WakeflowWindowLaunchInstructionInput,
 ) => JsonObject;
+
+/**
+ * 一个窗口自己解析后的启动取值（open-items G14）：宿主画像把 Config 的宿主段与模板缺省按这个窗口的角色
+ * 解析成"名字 → 取值"，例如 model、effort、permissionMode、transport。共享代码不知道这些名字的含义，只在
+ * 握手时把它们记进绑定、在 status 里逐项比较；没有配置的一项是 null。
+ */
+export type WakeflowWindowLaunchValues = Readonly<Record<string, string | null>>;
+
+/** Pure rendering port, same boundary as the instructions renderer. */
+export type WakeflowWindowLaunchValuesRenderer = (
+  input: Pick<WakeflowWindowLaunchInstructionInput, "model" | "intent" | "profile">,
+) => WakeflowWindowLaunchValues;

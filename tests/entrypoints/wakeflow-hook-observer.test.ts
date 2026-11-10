@@ -812,6 +812,49 @@ test("权限模式与会话标题（open-items X8）：permission_mode 与 sessi
   }
 });
 
+test("模型标识（open-items X28）：SessionStart 带的 model 落进 session-start 记录，别的事件即使带了也不记，不合文法的只把该字段降级为 null", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  const start = await observe(
+    "claude-code",
+    hookPayload("SessionStart", sessionId, fixture.workspace, fixture.transcriptPath, {
+      model: "claude-opus-5",
+    }),
+  );
+  equal(start.code, null);
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  // 别的事件带了同名字段：不记。
+  const prompt = await observe(
+    "claude-code",
+    hookPayload("UserPromptSubmit", sessionId, fixture.workspace, fixture.transcriptPath, {
+      prompt: "hello",
+      turn_id: "turn-a",
+      model: "claude-opus-5",
+    }),
+  );
+  equal(prompt.code, null);
+  const facts = Object.fromEntries(
+    (await readBack(fixture.workspace, "claude-code")).records.map((record) => [
+      record.event,
+      record.model,
+    ]),
+  );
+  deepEqual(facts, { "session-start": "claude-opus-5", "user-prompt-submit": null });
+
+  // 不是标签的取值：记录照写，模型为 null。
+  const other = createFixture(t);
+  for (const model of ["two words", 7, ["claude-opus-5"]]) {
+    const outcome = await observe(
+      "claude-code",
+      hookPayload("SessionStart", sessionId, other.workspace, other.transcriptPath, { model }),
+    );
+    equal(outcome.code, null);
+  }
+  const degraded = (await readBack(other.workspace, "claude-code")).records;
+  equal(degraded.length > 0, true, "the session-start records were still written");
+  for (const record of degraded) equal(record.model, null);
+});
+
 test("写失败：观察目录被普通文件顶替的工作区报 write-failed，其他匹配工作区照写，顶替的文件原样保留", async (t) => {
   const fixture = createFixture(t);
   const second = createWorkspace(fixture.base, "Wakeflow-2");

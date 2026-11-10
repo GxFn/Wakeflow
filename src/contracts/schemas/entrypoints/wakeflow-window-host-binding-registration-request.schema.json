@@ -130,6 +130,12 @@
         },
         "worktree": {
           "$ref": "#/$defs/worktreeObservation"
+        },
+        "hostVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
         }
       },
       "description": "What the Agent observed after executing one launch intent: the opaque host handle, on Claude Code the transport's locator (tmux coordinates or the desktop session id, never both), and for the product window of a worktree pod the git worktree facts of that session."
@@ -405,7 +411,7 @@
           "$ref": "#/$defs/windowId"
         },
         "observation": {
-          "$ref": "#/$defs/creationObservation"
+          "$ref": "#/$defs/creationEvidence"
         }
       }
     },
@@ -431,7 +437,7 @@
           "$ref": "#/$defs/windowId"
         },
         "observation": {
-          "$ref": "#/$defs/creationObservation"
+          "$ref": "#/$defs/creationEvidence"
         },
         "expectedBindingId": {
           "$ref": "#/$defs/bindingId"
@@ -463,7 +469,7 @@
           "$ref": "#/$defs/windowId"
         },
         "observation": {
-          "$ref": "#/$defs/creationObservation"
+          "$ref": "#/$defs/creationEvidence"
         },
         "expectedBindingId": {
           "$ref": "#/$defs/bindingId"
@@ -501,27 +507,14 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "closure": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["preClose", "closeResult", "postClose"],
-          "properties": {
-            "preClose": {
-              "$ref": "#/$defs/livenessObservation"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/closureEvidence"
             },
-            "closeResult": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["status"],
-              "properties": {
-                "status": {
-                  "enum": ["closed", "failed", "unknown"]
-                }
-              }
-            },
-            "postClose": {
-              "$ref": "#/$defs/livenessObservation"
+            {
+              "$ref": "#/$defs/observationFile"
             }
-          }
+          ]
         }
       }
     },
@@ -548,7 +541,14 @@
           "required": ["liveness"],
           "properties": {
             "liveness": {
-              "$ref": "#/$defs/livenessObservation"
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/livenessObservation"
+                },
+                {
+                  "$ref": "#/$defs/observationFile"
+                }
+              ]
             }
           }
         }
@@ -577,6 +577,54 @@
           "description": "Absolute assigned worktree directory, required for project chats whose SessionStart cwd is the outer workspace. Omit for session-root hosts."
         }
       }
+    },
+    "observationFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "digest"],
+      "description": "The file object a helper printed (observationFile, closureFile), passed in place of the observation: read, digest-checked and admitted as if inline.",
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/hosts/[a-z-]+/observations/helper/[0-9A-Za-z][0-9A-Za-z._-]{0,127}\\.json$"
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "closureEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preClose", "closeResult", "postClose"],
+      "properties": {
+        "preClose": {
+          "$ref": "#/$defs/livenessObservation"
+        },
+        "closeResult": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": ["closed", "failed", "unknown"]
+            }
+          }
+        },
+        "postClose": {
+          "$ref": "#/$defs/livenessObservation"
+        }
+      }
+    },
+    "creationEvidence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/creationObservation"
+        },
+        {
+          "$ref": "#/$defs/observationFile"
+        }
+      ]
     }
   }
 }

@@ -203,7 +203,10 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
 /** Q12（2026-10-18）：tools/list 预算按实测 94,146 B 加一成定为 102 KiB；按宿主/角色的子集预算归 K4。 */
 // ADR-0025（K1）：桌面登记合同（desktop 定位子与 desktop-sessions 观察）让目录增加约 1.4 KB，预算按最小改法
 // 从 102 KiB 提到 104 KiB（约 1.1 KiB 余量）；K3 的描述减肥仍是把它压回去的路径。
-const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 104 * 1024;
+// 1.3.0 批 2（open-items K2）：登记请求里每一处宿主观察都可以改给助手落盘的文件引用，绑定握手多带宿主版本，
+// 压缩说明文字之后目录仍增加约 0.8 KB——换来的是 Agent 不再逐字转抄观察（关一个窗口约一万输出 token）。
+// 预算从 104 KiB 提到 105 KiB（约 0.9 KiB 余量），实测 106,597 B。
+const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 105 * 1024;
 
 function unavailableExecutor(): Promise<never> {
   return Promise.reject(new Error("Catalog test executors must not run."));

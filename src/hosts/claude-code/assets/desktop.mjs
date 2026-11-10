@@ -20,6 +20,7 @@ import {
   boundedDetail,
   claudeInstallForm,
   git,
+  hostVersionOf,
   nodeVersionSupported,
   run,
   versionOf,
@@ -30,6 +31,7 @@ import {
   promptDigestOf,
   promptPermitIdsOf,
 } from "./shared/prompt-rules.mjs";
+import { withObservationFiles } from "./shared/observation-files.mjs";
 import { MAX_STDIN_BYTES, readStdinJson } from "./shared/stdin.mjs";
 import { MAX_LABEL, SGR_PATTERN, cleanLabel } from "./shared/text.mjs";
 import {
@@ -369,14 +371,16 @@ function desktopLocator(sessionId) {
  * @param {string} sessionId
  * @param {string} launchIntentDigest
  * @param {ReturnType<typeof observeWorktree>} worktree
+ * @param {string | null} hostVersion
  */
-function creationObservation(sessionId, launchIntentDigest, worktree) {
+function creationObservation(sessionId, launchIntentDigest, worktree, hostVersion) {
   return Object.freeze({
     handle: { kind: HANDLE_KIND, value: sessionId },
     launchIntentDigest,
     observedAt: new Date().toISOString(),
     desktop: desktopLocator(sessionId),
     ...(worktree === null ? {} : { worktree }),
+    ...(hostVersion === null ? {} : { hostVersion }),
   });
 }
 
@@ -741,7 +745,12 @@ function commandLaunch(options) {
       ok: true,
       command: "launch",
       windowId,
-      observation: creationObservation(session.sessionId, launchIntent.intentDigest, worktree),
+      observation: creationObservation(
+        session.sessionId,
+        launchIntent.intentDigest,
+        worktree,
+        hostVersionOf(claudeBinary()),
+      ),
       created: "launched",
       hook: { sessionStart: "observed" },
       window: { name: title, cwd: cwd.relative },
@@ -957,7 +966,8 @@ function main() {
       default:
         refuse("command-unknown");
     }
-    emit(result, result.ok ? 0 : 1);
+    // 结果里的宿主观察另存一份并附上引用（K2）：登记工具按引用读入，不必逐字转抄。
+    emit(withObservationFiles(String(parsed.command), result), result.ok ? 0 : 1);
   } catch (error) {
     if (error instanceof HelperFailure) {
       emit(

@@ -791,7 +791,16 @@
     "hostAction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["effect", "hostId", "windowId", "displayTitle", "bindingId", "handleDigest"],
+      "required": [
+        "effect",
+        "hostId",
+        "windowId",
+        "displayTitle",
+        "bindingId",
+        "handleDigest",
+        "transport",
+        "desktopSessionId"
+      ],
       "description": "Agent 执行的一次性宿主动作：把回调 prompt 送进 Controller 窗口；原始句柄不出现。",
       "properties": {
         "effect": {
@@ -813,6 +822,22 @@
         },
         "handleDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "transport": {
+          "enum": ["tmux-session", "desktop-session", "project-thread"],
+          "description": "How this workspace reaches the recipient window: the tmux helper's deliver, the desktop app's message to a session, or a Codex project thread. Choose the route by this field, never by guessing from the prompt."
+        },
+        "desktopSessionId": {
+          "description": "The recipient window's desktop session id under the desktop-session transport; null otherwise or when its locator has none.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^local_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          ]
         }
       }
     },

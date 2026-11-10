@@ -274,12 +274,12 @@ window list where the host has one: green `+` working, red `?` waiting for
 you, nothing when idle (`mark` sets that format): a hint, never evidence; a
 desktop session shows only the app's own markers.
 
-A registered window's `launchIntent` compares the intent digest recorded at its
-handshake with what the current config and host profile produce: `current` when
-they agree, `drifted` when the window was launched or last resumed under an
-older intent (a config or plugin change since). A relocate keeps the recorded
-digest; only a replacing handshake renews it. It informs your review of that
-window's launch parameters; no gate fails on it and it never justifies rebinding.
+A registered window's `launchIntent` says whether it still runs with the launch
+parameters recorded at its handshake: `current`, or `drifted` with `changes`
+naming each value that differs (an empty list: its root, pod, title or the host
+profile moved; `comparison: "config"` is an older binding compared by the whole
+config digest). `session` shows the model and permission mode the host reported.
+Only a replacing handshake renews the record; no gate fails on it, never rebind for it.
 
 Restart the stale windows with the host's procedure: {{windowResume}} After this
 server is current, preview and apply reconcile for repairable workspace gates

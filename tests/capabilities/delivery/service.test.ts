@@ -16,6 +16,7 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -138,6 +139,9 @@ test("prepare_delivery 一次追加、取得声明并返回可移植许可；重
     equal(prepared.permit.hostAction.effect, "send-prompt-to-window");
     equal(prepared.permit.hostAction.windowId, fixture.route.windowId);
     equal(prepared.permit.hostAction.bindingId, fixture.route.bindingId);
+    // 宿主动作带本工作区到达窗口的方式（X29）：Codex 是项目聊天，没有桌面会话 id。
+    equal(prepared.permit.hostAction.transport, "project-thread");
+    equal(prepared.permit.hostAction.desktopSessionId, null);
     equal(prepared.permit.fence.streamRevision, 3);
     equal(prepared.event.streamRevision, 3);
     equal(prepared.next.frontier, "implementation-host-effect-execution");
@@ -360,8 +364,10 @@ test("ADR-0027：宿主改动了投递文本——摘要不符但记录带着许
     equal(pending.outcome.disposition, "indeterminate");
     equal(pending.outcome.evidenceKind, "agent-declaration");
     equal(pending.next.blockers.includes("landing-evidence-missing"), true);
-    // 改字：整段都到了，宿主把一个字符换了。摘要不符，身份还在。
-    const altered = prompt.replace(":", "：");
+    // 没有引用落地记录的结局不带字符数。
+    equal(pending.outcome.landing, null);
+    // 改字：整段都到了，宿主把一个字符换成了两个。摘要不符，身份还在。
+    const altered = prompt.replace(":", "：：");
     equal(altered === prompt, false);
     equal(computeDeliveryPromptDigest(altered) === prepared.permit.promptDigest, false);
     const landed = await landFixturePrompt(
@@ -383,6 +389,12 @@ test("ADR-0027：宿主改动了投递文本——摘要不符但记录带着许
     equal(accepted.outcome.disposition, "accepted");
     equal(accepted.outcome.evidenceKind, "hook-record-identity");
     equal(accepted.outcome.hookRecordId, landed.record.recordId);
+    // 结局直接给出许可与落地记录各有多少字符（ADR-0027 未决 1）：差一个，就是宿主多出来的那个字符。
+    const characters = countPromptCharacters(prompt) ?? 0;
+    deepEqual(JSON.parse(JSON.stringify(accepted.outcome.landing)), {
+      permitCharacters: characters,
+      recordCharacters: characters + 1,
+    });
     equal(accepted.outcome.claimHandling, "retain");
     equal(accepted.target.phase, "host-effect-accepted");
     equal(accepted.next.frontier, "implementation-target-result-import");

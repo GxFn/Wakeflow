@@ -1,4 +1,3 @@
-import type { WakeflowWindowLaunchInstructionsRenderer } from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
 import path from "node:path";
 import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import {
@@ -9,7 +8,11 @@ import {
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { type JsonObject, parseJsonValue } from "../../foundation/data/json-value.js";
+import {
+  type JsonObject,
+  type JsonValue,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
 import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
@@ -33,10 +36,13 @@ import type {
   RootedDirectory,
   RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import {
+  readStableFile,
+  StableFileReadError,
+} from "../../foundation/filesystem/stable-file-read.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
@@ -46,7 +52,11 @@ import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
-import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
+import {
+  hostHelperObservationsRootRef,
+  hostRuntimeRootRef,
+  parseWakeflowHostId,
+} from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   type AdmittedPodWorktree,
@@ -65,9 +75,14 @@ import {
   type WorkClaim,
 } from "../../kernel/work-claims.js";
 import {
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import {
   createWakeflowWindowHostBinding,
   renderWakeflowWindowHostBinding,
   type WakeflowWindowHostBinding,
+  type WakeflowWindowHostBindingLaunch,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import {
@@ -85,8 +100,13 @@ import {
   type WakeflowWindowHostIdentityProfile,
   WakeflowWindowHostIdentityProfileError,
 } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
+import type {
+  WakeflowWindowLaunchInstructionsRenderer,
+  WakeflowWindowLaunchValuesRenderer,
+} from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
 import {
   compileWakeflowWindowLaunchIntents,
+  computeWakeflowWindowLaunchExecutionDigest,
   type WakeflowWindowLaunchIntent,
 } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import {
@@ -103,10 +123,6 @@ import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
   type WakeflowWindowRuntimeUnregisteredProjectionEntry,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
-import {
-  type WakeflowWorkspaceHostTransportTable,
-  selectWakeflowWorkspaceHostResourceProfile,
-} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostLocatorProvider,
@@ -172,6 +188,11 @@ export interface WindowBindingHostFacade {
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
+  /**
+   * 这个窗口解析后的启动取值（open-items G14）。给了它，register 与 replace 就把握手时的取值与启动摘要记进
+   * 绑定；不给（测试门面）则绑定不带 `launch`，status 退回整份意图摘要的比较。
+   */
+  readonly renderLaunchValues?: WakeflowWindowLaunchValuesRenderer | undefined;
 }
 
 export interface ExecuteWindowBindingOptions {
@@ -190,11 +211,37 @@ const BINDING_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$binding.maximumBytes")
 const BINDING_FILE_MODE = 0o600;
 const RECEIPT_DIRECTORY_MODE = 0o700;
 
-type RegisterRequest = Extract<WindowBindingRequest, { readonly operation: "register" }>;
-type ReplaceRequest = Extract<WindowBindingRequest, { readonly operation: "replace" }>;
-type RelocateRequest = Extract<WindowBindingRequest, { readonly operation: "relocate" }>;
-type DecommissionRequest = Extract<WindowBindingRequest, { readonly operation: "decommission" }>;
-type ReleaseClaimRequest = Extract<WindowBindingRequest, { readonly operation: "release-claim" }>;
+/** 助手落盘的一份宿主观察的引用（open-items K2）：相对工作区根的文件与它的字节摘要。 */
+type ObservationFileReference = Readonly<{ file: string; digest: string }>;
+
+/**
+ * 引用解析之后的请求：凡是可以按引用给出的宿主观察（observation、closure、evidence.liveness）都已是内联的值。
+ * 切片里除 `resolveObservationFiles` 之外的代码只见这个形状，所以按引用与内联走的是同一条准入与判定。
+ */
+type Resolved<Request> = Request extends { readonly observation: infer Observation }
+  ? Omit<Request, "observation"> & {
+      readonly observation: Exclude<Observation, ObservationFileReference>;
+    }
+  : Request extends { readonly closure: infer Closure }
+    ? Omit<Request, "closure"> & { readonly closure: Exclude<Closure, ObservationFileReference> }
+    : Request extends { readonly evidence: { readonly liveness: infer Liveness } }
+      ? Omit<Request, "evidence"> & {
+          readonly evidence: { readonly liveness: Exclude<Liveness, ObservationFileReference> };
+        }
+      : Request;
+type ResolvedWindowBindingRequest = Resolved<WindowBindingRequest>;
+
+type RegisterRequest = Extract<ResolvedWindowBindingRequest, { readonly operation: "register" }>;
+type ReplaceRequest = Extract<ResolvedWindowBindingRequest, { readonly operation: "replace" }>;
+type RelocateRequest = Extract<ResolvedWindowBindingRequest, { readonly operation: "relocate" }>;
+type DecommissionRequest = Extract<
+  ResolvedWindowBindingRequest,
+  { readonly operation: "decommission" }
+>;
+type ReleaseClaimRequest = Extract<
+  ResolvedWindowBindingRequest,
+  { readonly operation: "release-claim" }
+>;
 type MutationRequest = RegisterRequest | ReplaceRequest | RelocateRequest | DecommissionRequest;
 type CreationObservation = RegisterRequest["observation"];
 type LivenessObservation = DecommissionRequest["closure"]["preClose"];
@@ -219,6 +266,7 @@ interface AdmittedFacade {
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
+  readonly renderLaunchValues?: WakeflowWindowLaunchValuesRenderer | undefined;
 }
 
 interface EndpointContext {
@@ -308,6 +356,9 @@ function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade 
       ...(facade.transports === undefined ? {} : { transports: facade.transports }),
       identityProfile,
       renderLaunchInstructions: facade.renderLaunchInstructions,
+      ...(typeof facade.renderLaunchValues === "function"
+        ? { renderLaunchValues: facade.renderLaunchValues }
+        : {}),
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostIdentityProfileError) {
@@ -741,7 +792,7 @@ function creationCommand(observation: CreationObservation) {
 function toCommand(
   context: EndpointContext,
   loaded: LoadedState,
-  request: Exclude<WindowBindingRequest, { readonly operation: "inspect" }>,
+  request: Exclude<ResolvedWindowBindingRequest, { readonly operation: "inspect" }>,
 ): EndpointCommand {
   switch (request.operation) {
     case "register":
@@ -881,6 +932,34 @@ function nextFor(
     claimExpired,
     unregisteredWindowIds,
   });
+}
+
+/**
+ * 握手时的启动事实（open-items G14、A3）：取值与摘要由服务端按此刻的 Config 与宿主画像为这个窗口算出，
+ * 不取 Agent 的说法；宿主版本是助手读出、Agent 转报的，原样记下。门面没有取值渲染器时不记。
+ */
+function launchFactsFor(
+  context: EndpointContext,
+  observation: CreationObservation,
+): { readonly launch?: Readonly<WakeflowWindowHostBindingLaunch> } {
+  const render = context.facade.renderLaunchValues;
+  if (render === undefined || context.intent === null) return {};
+  const values = render({
+    model: context.snapshot.model,
+    intent: context.intent,
+    profile: context.facade.resourceProfile,
+  });
+  return {
+    launch: Object.freeze({
+      executionDigest: computeWakeflowWindowLaunchExecutionDigest(
+        context.intent,
+        values,
+        context.snapshot.model.storage.ledgerRoot,
+      ),
+      values,
+      hostVersion: observation.hostVersion ?? null,
+    }),
+  };
 }
 
 function bindingSummary(binding: Readonly<WakeflowWindowHostBinding>) {
@@ -1166,6 +1245,7 @@ async function applyRegister(
       launchIntentDigest: observation.launchIntentDigest as Sha256Digest,
       handle: admitHandle(context, observation),
       observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
+      ...launchFactsFor(context, observation),
     },
     store,
   );
@@ -1200,6 +1280,7 @@ async function applyReplace(
       launchIntentDigest: observation.launchIntentDigest as Sha256Digest,
       observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
       registeredAt,
+      ...launchFactsFor(context, observation),
     },
     context.facade.identityProfile,
   );
@@ -1459,7 +1540,7 @@ interface MutationResultInput {
 
 function mutationResult(
   context: EndpointContext,
-  request: Exclude<WindowBindingRequest, { readonly operation: "inspect" }>,
+  request: Exclude<ResolvedWindowBindingRequest, { readonly operation: "inspect" }>,
   outcome: Readonly<MutationResultInput>,
 ): WindowBindingResult {
   return admitWindowBindingResult({
@@ -1479,9 +1560,101 @@ function mutationResult(
   });
 }
 
-async function executeOperation(
+/** 助手一次观察的上限：16 个 pane 的两份清单加 git worktree 原文远小于它。 */
+const OBSERVATION_FILE_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$observationFile.maximumBytes");
+
+function isObservationFileReference(value: unknown): value is ObservationFileReference {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { file?: unknown }).file === "string" &&
+    typeof (value as { digest?: unknown }).digest === "string"
+  );
+}
+
+/** 请求里按引用给出的那一项观察在哪里：字段路径、引用本身，以及换成内联值之后的请求。 */
+function observationFileSlot(request: WindowBindingRequest): Readonly<{
+  path: string;
+  reference: ObservationFileReference;
+  inline: (value: JsonValue) => JsonValue;
+}> | null {
+  const raw = request as unknown as JsonObject;
+  if ("observation" in request && isObservationFileReference(request.observation)) {
+    return {
+      path: "$request.observation",
+      reference: request.observation,
+      inline: (value) => ({ ...raw, observation: value }),
+    };
+  }
+  if ("closure" in request && isObservationFileReference(request.closure)) {
+    return {
+      path: "$request.closure",
+      reference: request.closure,
+      inline: (value) => ({ ...raw, closure: value }),
+    };
+  }
+  if ("evidence" in request && isObservationFileReference(request.evidence.liveness)) {
+    return {
+      path: "$request.evidence.liveness",
+      reference: request.evidence.liveness,
+      inline: (value) => ({ ...raw, evidence: { liveness: value } }),
+    };
+  }
+  return null;
+}
+
+/**
+ * 宿主观察按引用（open-items K2）：助手把观察落在本宿主的私有观察目录里并给出文件与摘要，Agent 传引用而不是
+ * 把几千字的 JSON 逐字抄一遍。这里按引用读回——只认本宿主那个目录里的文件、有界、不跟随符号链接、字节摘要
+ * 必须相符——再把内容放回请求原处，用同一份 Schema 重新准入。从此以后它与内联给出的观察没有区别：它仍是
+ * Agent 转报的宿主观察，不因为走了文件就多一分可信。
+ */
+async function resolveObservationFiles(
   context: EndpointContext,
   request: WindowBindingRequest,
+): Promise<ResolvedWindowBindingRequest> {
+  const slot = observationFileSlot(request);
+  if (slot === null) return request as ResolvedWindowBindingRequest;
+  const directory = `${hostHelperObservationsRootRef(context.facade.hostId)}/`;
+  if (!slot.reference.file.startsWith(directory)) {
+    fail("invalid-request", "observation-file-host", `${slot.path}.file`);
+  }
+  let read: Awaited<ReturnType<typeof readStableFile>>;
+  try {
+    read = await readStableFile(
+      context.root,
+      parsePortableResourcePath(slot.reference.file, `${slot.path}.file`),
+      { maximumBytes: OBSERVATION_FILE_MAXIMUM_BYTES, ...signalOptions(context.signal) },
+    );
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      fail("precondition-failed", `observation-file-${error.reason}`, `${slot.path}.file`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
+  if (read.digest !== slot.reference.digest) {
+    fail("precondition-failed", "observation-file-digest", `${slot.path}.digest`);
+  }
+  let content: JsonValue;
+  try {
+    content = parseJsonValue(JSON.parse(decodeUtf8(read.bytes, slot.path)), slot.path);
+  } catch {
+    fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
+  }
+  // 文件里不许再是一个引用：内联之后重新准入的请求必须已经没有引用。
+  const resolved = parseWindowBindingRequest(slot.inline(content));
+  if (observationFileSlot(resolved) !== null) {
+    fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
+  }
+  return resolved as ResolvedWindowBindingRequest;
+}
+
+async function executeOperation(
+  context: EndpointContext,
+  request: ResolvedWindowBindingRequest,
 ): Promise<WindowBindingResult> {
   const loaded = await loadState(
     context,
@@ -1560,7 +1733,8 @@ export async function executeWindowBindingRequest(
     },
     value,
     () => {},
-    (context, binding) => executeOperation(context, binding.input),
+    async (context, binding) =>
+      executeOperation(context, await resolveObservationFiles(context, binding.input)),
     commandShellExecutionOptions(options.durability, options.signal),
   );
 }

@@ -72,6 +72,9 @@ test("import 重放幂等、已回报目标拒绝二次导入；回调只在静�
     equal(imported.status, "committed");
     equal(imported.callback.permit.generation, 1);
     equal(imported.callback.permit.hostAction.windowId, fixture.controllerRoute.windowId);
+    // 回调许可说明走哪条路（X29）：夹具是 Codex 的项目聊天，没有桌面会话 id。
+    equal(imported.callback.permit.hostAction.transport, "project-thread");
+    equal(imported.callback.permit.hostAction.desktopSessionId, null);
     // K6：回调 prompt 也落在 Demand 根下，目标侧助手按 promptRef 读取并核对 promptDigest。
     equal(
       imported.callback.permit.promptRef,

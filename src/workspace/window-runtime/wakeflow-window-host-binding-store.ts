@@ -44,6 +44,7 @@ import {
   renderWakeflowWindowHostBinding,
   type WakeflowWindowHostBinding,
   WakeflowWindowHostBindingError,
+  type WakeflowWindowHostBindingLaunch,
 } from "./wakeflow-window-host-binding.js";
 import {
   createWakeflowWindowHostBindingId,
@@ -87,6 +88,8 @@ export interface WakeflowWindowHostBindingCreateAuthority
   readonly launchIntentDigest: Sha256Digest;
   readonly handle: Readonly<WakeflowWindowHostHandle>;
   readonly observedAt: UtcInstant;
+  /** 握手时的启动事实；不给就不记（见 Binding 记录的 `launch`）。 */
+  readonly launch?: Readonly<WakeflowWindowHostBindingLaunch>;
 }
 
 export interface InspectWakeflowWindowHostBindingInventoryOptions {
@@ -550,6 +553,7 @@ export async function createWakeflowWindowHostBindingInStore(
         launchIntentDigest: authority.launchIntentDigest,
         observedAt: authority.observedAt,
         registeredAt,
+        ...(authority.launch === undefined ? {} : { launch: authority.launch }),
       },
       authority.identityProfile,
     );

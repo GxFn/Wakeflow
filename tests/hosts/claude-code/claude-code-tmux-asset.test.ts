@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -1117,6 +1118,46 @@ test("self registers the Controller's own pane from the environment and refuses 
     }).json.reason,
     "socket-mismatch",
   );
+});
+
+test("观察按引用（open-items K2）：panes 的 observation 与 close 的 closure 各另存为私有观察目录里的 0600 文件，引用的摘要是文件字节的摘要、内容就是输出里的那一份", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  const directory = path.join(
+    current.root,
+    ".wakeflow-local/runtime/hosts/claude-code/observations/helper",
+  );
+  const check = (
+    output: Record<string, unknown>,
+    field: "observation" | "closure",
+    target: "observationFile" | "closureFile",
+    command: string,
+  ) => {
+    const reference = output[target] as { file: string; digest: string };
+    ok(
+      reference.file.startsWith(".wakeflow-local/runtime/hosts/claude-code/observations/helper/") &&
+        reference.file.endsWith(".json"),
+      reference.file,
+    );
+    ok(path.basename(reference.file).includes(`-${command}-`));
+    const absolute = path.join(current.root, reference.file);
+    const bytes = readFileSync(absolute);
+    equal(reference.digest, computeSha256Digest(bytes));
+    deepEqual(JSON.parse(bytes.toString("utf8")), output[field]);
+    equal(statSync(absolute).mode & 0o777, 0o600);
+  };
+  const panes = runHelper(current, ["panes"]);
+  equal(panes.status, 0, JSON.stringify(panes.json));
+  check(panes.json, "observation", "observationFile", "panes");
+  equal(statSync(directory).mode & 0o777, 0o700);
+  const closed = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
+  equal(closed.status, 0, JSON.stringify(closed.json));
+  check(closed.json, "closure", "closureFile", "close");
+  equal("observationFile" in closed.json, false);
+  // 没有观察的命令不落盘。
+  const before = readdirSync(directory).length;
+  runHelper(current, ["mark", "--window", PRODUCT_WINDOW_ID]);
+  equal(readdirSync(directory).length, before);
 });
 
 test("panes keeps only Wakeflow-related rows, mark writes the locator identity, close returns the closure evidence", async (t) => {

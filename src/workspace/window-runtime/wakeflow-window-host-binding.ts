@@ -50,6 +50,10 @@ import {
  * 记录只回答“当前宿主的哪个 opaque handle 对应哪个稳定 windowId”，并保存产生该
  * 事实的 Agent host-create observation。它不保存窗口角色、逻辑根、宿主可用性或
  * Delivery 状态；公开consumer只能取得脱敏ref与bindingId。
+ *
+ * `launch`（1.3.0，open-items G14 / A3）是握手那一刻这个窗口自己的启动事实：服务端按当时的 Config 与宿主
+ * 画像解析出的取值与摘要，加上助手读出的宿主版本。status 用它按字段说明漂移；1.3.0 之前写下的绑定没有
+ * 这一项，文件里不出现，照旧按整份启动意图摘要比较。
  */
 
 const WAKEFLOW_WINDOW_HOST_BINDING_KIND = "WakeflowWindowHostBinding" as const;
@@ -69,8 +73,18 @@ export interface WakeflowWindowHostBinding {
     /** Agent报告Host create结果时携带的审计时间。 */
     readonly observedAt: UtcInstant;
   }>;
+  readonly launch?: Readonly<WakeflowWindowHostBindingLaunch>;
   /** Wakeflow持久化本Binding代际时记录的审计时间。 */
   readonly registeredAt: UtcInstant;
+}
+
+/** 握手时登记的启动事实。`values` 的名字由宿主画像给出（model、effort、permissionMode、transport……）。 */
+export interface WakeflowWindowHostBindingLaunch {
+  /** 这个窗口自己的启动摘要：窗口事实、解析后的取值与账本根；别的角色、别的宿主的配置不进来。 */
+  readonly executionDigest: Sha256Digest;
+  readonly values: Readonly<Record<string, string | null>>;
+  /** 助手启动时读出的宿主版本，由 Agent 转报；没有报告为 null。 */
+  readonly hostVersion: string | null;
 }
 
 interface CreateWakeflowWindowHostBindingInput {
@@ -82,6 +96,7 @@ interface CreateWakeflowWindowHostBindingInput {
   readonly launchIntentDigest: Sha256Digest;
   readonly observedAt: UtcInstant;
   readonly registeredAt: UtcInstant;
+  readonly launch?: Readonly<WakeflowWindowHostBindingLaunch>;
 }
 
 type WakeflowWindowHostBindingErrorReason =
@@ -148,15 +163,28 @@ function bindingId(value: unknown): WakeflowWindowHostBindingId {
   }
 }
 
-function digest(value: unknown): Sha256Digest {
+function digest(value: unknown, path = "$/source/launchIntentDigest"): Sha256Digest {
   try {
-    return parseSha256Digest(value, "$/source/launchIntentDigest");
+    return parseSha256Digest(value, path);
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("schema", "$/source/launchIntentDigest");
+      fail("schema", path);
     }
     throw error;
   }
+}
+
+/** 取值表按名字排序后冻结：同一组取值只有一种写法，记录的字节才确定。 */
+function launchFacts(
+  wire: NonNullable<WindowHostBindingWire["launch"]>,
+): Readonly<WakeflowWindowHostBindingLaunch> {
+  const values: Record<string, string | null> = {};
+  for (const name of Object.keys(wire.values).sort()) values[name] = wire.values[name] ?? null;
+  return Object.freeze({
+    executionDigest: digest(wire.executionDigest, "$/launch/executionDigest"),
+    values: Object.freeze(values),
+    hostVersion: wire.hostVersion,
+  });
 }
 
 function instant(value: unknown, path: string): UtcInstant {
@@ -225,6 +253,8 @@ export function parseWakeflowWindowHostBinding(
       launchIntentDigest: digest(wire.source.launchIntentDigest),
       observedAt,
     }),
+    // 没有这一项的旧记录不补 null：文件里没有的键，解析后也没有，确定性字节才对得上。
+    ...(wire.launch === undefined ? {} : { launch: launchFacts(wire.launch) }),
     registeredAt,
   });
 }
@@ -248,6 +278,7 @@ export function createWakeflowWindowHostBinding(
         launchIntentDigest: input.launchIntentDigest,
         observedAt: input.observedAt,
       },
+      ...(input.launch === undefined ? {} : { launch: input.launch }),
       registeredAt: input.registeredAt,
     },
     identityProfileValue,

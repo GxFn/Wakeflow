@@ -4,10 +4,12 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -701,9 +703,12 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
   deepEqual(Object.keys(observation).sort(), [
     "desktop",
     "handle",
+    "hostVersion",
     "launchIntentDigest",
     "observedAt",
   ]);
+  // 宿主版本随握手用的 observation 交给登记（open-items A3）：就是 claude --version 的第一行。
+  equal(observation.hostVersion, "9.9.9 (Claude Code)");
   deepEqual(observation.handle, { kind: "claude-session", value: SESSION_ID });
   equal(observation.launchIntentDigest, INTENT_DIGEST);
   match(observation.observedAt as string, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
@@ -753,7 +758,9 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
     SESSION_ID,
   ]);
   deepEqual(log[5], ["claude", "--desktop", "--resume", SESSION_ID]);
-  equal(log.length, 6);
+  // 成功之后才读一次宿主版本：失败的启动不为它多付一次调用。
+  deepEqual(log[6], ["claude", "--version"]);
+  equal(log.length, 7);
 
   // Controller 角色拿整服务器的 MCP 规则；意图里缺 role 时回退到 inspect 结果顶层的 role（§13.182 F-L1-8）。
   resetLog(current);
@@ -1154,11 +1161,49 @@ test("a surface window's trust root is the workspace repository: not-trusted nam
   equal(readFileSync(path.join(current.state, "opened-folder"), "utf8").trim(), current.root);
 });
 
+test("观察按引用（open-items K2）：成功结果里的 observation 另存为私有观察目录里的一个 0600 文件，引用的摘要就是文件字节的摘要、内容就是输出里的观察；失败的结果不落盘，一天前的文件被顺手清掉", async (t) => {
+  const current = await fixture(t);
+  const directory = path.join(
+    current.root,
+    ".wakeflow-local/runtime/hosts/claude-code/observations/helper",
+  );
+  const stale = path.join(directory, "20200101T000000000Z-sessions-stale.json");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  writeFileSync(stale, "{}\n", { mode: 0o600 });
+  const longAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  utimesSync(stale, longAgo, longAgo);
+
+  const run = runHelper(current, ["sessions"]);
+  equal(run.status, 0, JSON.stringify(run.json));
+  const reference = run.json.observationFile as { file: string; digest: string };
+  match(
+    reference.file,
+    /^\.wakeflow-local\/runtime\/hosts\/claude-code\/observations\/helper\/[0-9]{8}T[0-9]{9}Z-sessions-[0-9a-f-]{36}\.json$/u,
+  );
+  const absolute = path.join(current.root, reference.file);
+  const bytes = readFileSync(absolute);
+  equal(reference.digest, computeSha256Digest(bytes));
+  deepEqual(JSON.parse(bytes.toString("utf8")), run.json.observation);
+  equal(statSync(absolute).mode & 0o777, 0o600);
+  equal(statSync(directory).mode & 0o777, 0o700);
+  // 一天前的旧文件随这次落盘被清掉；新文件留下。
+  equal(existsSync(stale), false);
+  deepEqual(readdirSync(directory), [path.basename(absolute)]);
+
+  // 被拒绝的命令没有观察可存：目录里不多出文件。
+  const refused = runHelper(current, ["landing"]);
+  equal(refused.json.ok, false);
+  equal(readdirSync(directory).length, 1);
+});
+
 test("sessions maps the interactive rows of claude agents --json to the desktop-sessions observation, capped at 64 rows, and reports unobserved when the listing fails", async (t) => {
   const current = await fixture(t);
   const run = runHelper(current, ["sessions"]);
   equal(run.status, 0, JSON.stringify(run.json));
-  deepEqual(run.json, {
+  // 观察另存了一份文件并附上引用（open-items K2）；引用本身由下面的专门用例核对。
+  const { observationFile: sessionsFile, ...sessionsOutput } = run.json;
+  equal(typeof sessionsFile, "object");
+  deepEqual(sessionsOutput, {
     ok: true,
     command: "sessions",
     observation: {

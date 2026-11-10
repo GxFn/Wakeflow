@@ -293,6 +293,35 @@ test("deriveNextActions：维护 > 活动 pod 的未登记窗口（按 windowId�
   });
 });
 
+test("deriveNextActions：权限模式不一致的窗口（open-items X4）排在最后，不抢前沿；空闲工作区的前沿仍是写需求", () => {
+  const mismatched = ["window_b", "window_a"];
+  const idle = deriveNextActions(nextInput({ permissionModeMismatchWindows: mismatched }));
+  deepEqual(
+    idle.map((action) => [action.owner, action.reason, action.subject]),
+    [
+      ["user", "requirement-authoring", null],
+      ["controller", "permission-mode-mismatch", "window_a"],
+      ["controller", "permission-mode-mismatch", "window_b"],
+    ],
+  );
+  const busy = deriveNextActions(
+    nextInput({
+      maintenance: true,
+      pendingPackages: [{ requirementId: "requirement_1" }],
+      permissionModeMismatchWindows: ["window_a"],
+    }),
+  );
+  deepEqual(
+    busy.map((action) => action.reason),
+    ["workspace-maintenance", "requirement-claim", "permission-mode-mismatch"],
+  );
+  // 没给这一项（旧调用方）与空表都不产生条目。
+  equal(
+    deriveNextActions(nextInput()).some((action) => action.reason === "permission-mode-mismatch"),
+    false,
+  );
+});
+
 test("deriveNextActions：过期窗口先给汇总项，再按 windowId 逐窗口给路线——从未对话的会话重开（replace 是其中的登记一步），有过对话的 resume（W41）", () => {
   const actions = deriveNextActions(
     nextInput({

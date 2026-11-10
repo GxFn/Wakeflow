@@ -237,6 +237,16 @@ export interface ResultReviewHostFacade {
   /** 多传输宿主的 profile 表（ADR-0025 D1）；准入时按配置选出一份，之后只读选出的 profile。 */
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
+  /**
+   * 读某窗口当前绑定代际的桌面会话 id（X29）：与投递切片的门面同名同形，组合根把同一个读取端交给两边。
+   * 回调许可的 hostAction 用它给出 Controller 窗口的 id；缺省或 tmux 定位器即 null。
+   */
+  readonly readControllerDesktopSessionId?: (
+    root: RootedDirectory,
+    windowId: string,
+    bindingId: string,
+    signal: AbortSignal | undefined,
+  ) => Promise<string | null>;
 }
 
 export interface ExecuteResultReviewOptions {
@@ -260,6 +270,10 @@ interface WindowView {
   readonly binding: Readonly<WakeflowWindowHostBinding>;
   readonly bindingDigest: Sha256Digest;
   readonly handleDigest: Sha256Digest;
+  /** 本工作区到达窗口的方式（X29）：选出的宿主画像的启动模板种类。 */
+  readonly transport: WakeflowWorkspaceHostResourceProfile["launch"]["kind"];
+  /** 这个窗口在桌面会话传输下的会话 id（X29）；其余传输为 null。 */
+  readonly desktopSessionId: string | null;
   readonly displayTitle: string;
 }
 
@@ -467,6 +481,14 @@ async function loadWindow(context: SliceContext, windowId: string): Promise<Wind
     binding,
     bindingDigest: computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding")),
     handleDigest: computeSha256Digest(encodeUtf8(binding.handle.value, "$handle"), "$handle"),
+    transport: facade.resourceProfile.launch.kind,
+    desktopSessionId:
+      (await facade.readControllerDesktopSessionId?.(
+        context.workspaceRoot,
+        binding.windowId,
+        binding.bindingId,
+        context.options.signal,
+      )) ?? null,
     displayTitle: intent.displayTitle,
   });
 }
@@ -1139,6 +1161,8 @@ function importResult(
           displayTitle: window.displayTitle,
           bindingId: callback.bindingId,
           handleDigest: window.handleDigest,
+          transport: window.transport,
+          desktopSessionId: window.desktopSessionId,
         },
         generation: callback.generation,
         issuedAt: callback.issuedAt,

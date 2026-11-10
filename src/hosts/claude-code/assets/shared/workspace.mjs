@@ -22,6 +22,8 @@ const RUNTIME = ".wakeflow-local/runtime/hosts/claude-code";
 export const LOCATORS = `${RUNTIME}/identity/window-locators`;
 export const BINDINGS = `${RUNTIME}/identity/window-bindings`;
 export const HOOKS = `${RUNTIME}/observations/hooks`;
+// 助手落盘的宿主观察（open-items K2）；与内核布局的 hostHelperObservationsRootRef 同一个目录。
+export const HELPER_OBSERVATIONS = `${RUNTIME}/observations/helper`;
 const MAX_CONFIG_BYTES = 1048576;
 export const MAX_RECORD_BYTES = 65536;
 export const WINDOW_ID_PATTERN =

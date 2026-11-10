@@ -1,6 +1,15 @@
 import { deepEqual, equal, match, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -12,8 +21,9 @@ import {
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
-import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
@@ -934,6 +944,165 @@ test("Claude Code：register 需要 tmux 坐标并写定位器，decommission �
   if (verified.kind !== "WakeflowWindowBindingMutation") throw new Error("Expected a mutation.");
   equal(verified.verification, "machine-verified");
   equal(JSON.stringify(verified).includes(sessionId), false, "session id leaked");
+});
+
+/** 把一份观察写成助手观察目录里的文件，返回登记工具认的引用（与助手的落盘同形）。 */
+function observationFile(
+  root: string,
+  hostId: "codex" | "claude-code",
+  name: string,
+  value: unknown,
+  text = `${JSON.stringify(value)}\n`,
+): { file: string; digest: string } {
+  const directory = `.wakeflow-local/runtime/hosts/${hostId}/observations/helper`;
+  mkdirSync(path.join(root, directory), { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(root, directory, name), text, { mode: 0o600 });
+  return {
+    file: `${directory}/${name}`,
+    digest: computeSha256Digest(encodeUtf8(text, "$observationFile")),
+  };
+}
+
+test("观察按引用（open-items K2）：register 与 decommission 接受助手落盘的观察文件，按引用读入后与内联完全同一条准入；摘要不符、文件缺失、别的宿主目录、内容不合 Schema、文件里再套引用都有稳定的拒绝码", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, rooted, intents } = await fixture(t, executeClaudeCodeWakeflowMaintenance);
+  const intent = intents[0];
+  if (intent === undefined) throw new Error("Expected a launch intent.");
+  const clock = () => parseUtcInstant("2026-09-04T10:00:00.000Z");
+  const sessionId = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+  const tmux = { socketName: null, sessionName: "wakeflow", windowId: "@3", paneId: "%7" };
+  const observation = {
+    handle: { kind: "claude-session", value: sessionId },
+    launchIntentDigest: intent.intentDigest,
+    observedAt: "2026-09-04T09:59:00.000Z",
+    tmux,
+    hostVersion: "2.1.303 (Claude Code)",
+  };
+  await sessionStart(
+    rooted,
+    "claude-code",
+    sessionId,
+    intent.root.configuredPlacement,
+    parseUtcInstant("2026-09-04T09:58:00.000Z"),
+  );
+  const register = (reference: { file: string; digest: string }) =>
+    executeWindowBindingRequest(
+      CLAUDE,
+      { root, operation: "register", windowId: intent.windowId, observation: reference },
+      { clock },
+    );
+  const good = observationFile(root, "claude-code", "launch-good.json", observation);
+
+  // 摘要不符：文件在，但不是助手说的那些字节。
+  await expectFailure(
+    register({ ...good, digest: DIGEST("a") }),
+    "precondition-failed",
+    "observation-file-digest",
+  );
+  // 文件不在。
+  await expectFailure(
+    register({ ...good, file: good.file.replace("launch-good", "launch-missing") }),
+    "precondition-failed",
+    "observation-file-not-found",
+  );
+  // 别的宿主的观察目录：Schema 认这个路径形状，本宿主不读它。
+  await expectFailure(
+    register(observationFile(root, "codex", "launch-foreign.json", observation)),
+    "invalid-request",
+    "observation-file-host",
+  );
+  // 目录之外的路径过不了 Schema。
+  await expectFailure(
+    register({ ...good, file: "wakeflow.config.json" }),
+    "invalid-request",
+    "schema",
+  );
+  // 内容不是合法 JSON；内容是 JSON 但不合观察的 Schema；内容本身又是一个引用。
+  await expectFailure(
+    register(observationFile(root, "claude-code", "launch-broken.json", null, "{not json\n")),
+    "precondition-failed",
+    "observation-file-content",
+  );
+  await expectFailure(
+    register(observationFile(root, "claude-code", "launch-shape.json", { handle: "nope" })),
+    "invalid-request",
+    "schema",
+  );
+  await expectFailure(
+    register(observationFile(root, "claude-code", "launch-nested.json", good)),
+    "precondition-failed",
+    "observation-file-content",
+  );
+  // 文件内容仍要过同一条业务准入：少了 tmux 坐标照样被拒。
+  const { tmux: _tmux, ...withoutTmux } = observation;
+  await expectFailure(
+    register(observationFile(root, "claude-code", "launch-no-tmux.json", withoutTmux)),
+    "invalid-request",
+    "tmux-coordinates-required",
+  );
+
+  // 按引用登记：与内联的结果相同，定位器照写。
+  const registered = await register(good);
+  if (registered.kind !== "WakeflowWindowBindingMutation" || registered.binding === null)
+    throw new Error("Expected a mutation.");
+  equal(registered.disposition, "registered");
+  const locatorFile = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/claude-code/identity/window-locators",
+    `${intent.windowId}.json`,
+  );
+  const locator = JSON.parse(readFileSync(locatorFile, "utf8")) as {
+    tmux: typeof tmux;
+    locatorId: string;
+    programId: string;
+  };
+  deepEqual(locator.tmux, tmux);
+  // 同一份文件重放：幂等。
+  equal(((await register(good)) as { disposition: string }).disposition, "replayed");
+  // 内联的同一份观察也是重放：两种写法是同一个请求。
+  const inline = await executeWindowBindingRequest(
+    CLAUDE,
+    { root, operation: "register", windowId: intent.windowId, observation },
+    { clock },
+  );
+  equal((inline as { disposition: string }).disposition, "replayed");
+
+  // decommission 的整份关窗证据按引用：就是助手 close 打印的 closureFile。
+  const pane = {
+    ...tmux,
+    paneWindowId: "@3",
+    paneDead: false,
+    currentCommand: "claude",
+    options: {
+      programId: locator.programId,
+      hostId: "claude-code",
+      windowId: intent.windowId,
+      bindingId: registered.binding.bindingId,
+      locatorId: locator.locatorId,
+    },
+  };
+  const closure = observationFile(root, "claude-code", "close-good.json", {
+    preClose: { kind: "tmux-panes", panes: [pane] },
+    closeResult: { status: "closed" },
+    postClose: { kind: "tmux-panes", panes: [] },
+  });
+  const decommissioned = await executeWindowBindingRequest(
+    CLAUDE,
+    {
+      root,
+      operation: "decommission",
+      windowId: intent.windowId,
+      expectedBindingId: registered.binding.bindingId,
+      expectedBindingDigest: registered.binding.bindingDigest,
+      closure,
+    },
+    { clock },
+  );
+  if (decommissioned.kind !== "WakeflowWindowBindingMutation")
+    throw new Error("Expected a mutation.");
+  equal(decommissioned.disposition, "decommissioned");
+  equal(existsSync(locatorFile), false);
 });
 
 test("Claude Code：relocate 保留绑定、换定位器代际，句柄变了被拒（Codex 的 locator-provider 拒绝由 decide 测试覆盖，§13.125）", {

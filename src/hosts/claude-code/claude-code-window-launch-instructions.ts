@@ -1,5 +1,9 @@
 import type { JsonObject } from "../../foundation/data/json-value.js";
-import type { WakeflowWindowLaunchInstructionInput } from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
+import type {
+  WakeflowWindowLaunchInstructionInput,
+  WakeflowWindowLaunchValues,
+  WakeflowWindowLaunchValuesRenderer,
+} from "../../workspace/window-runtime/wakeflow-window-launch-instructions.js";
 import type { WakeflowWorkspaceHostLaunchTemplate } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
@@ -201,6 +205,39 @@ function renderDesktopSessionLaunch(
     attachedWorktrees: attached,
   };
 }
+
+/**
+ * 这个窗口解析后的启动取值（open-items G14、X28）：与上面两个渲染器用同一个 `launchPreferences`，所以登记进
+ * 绑定的就是启动命令里实际带的值。tmux 传输另带 socket 与会话名（改了它们，窗口就不在配置说的地方）。
+ */
+export const renderClaudeCodeWindowLaunchValues: WakeflowWindowLaunchValuesRenderer = (
+  input,
+): WakeflowWindowLaunchValues => {
+  const template = input.profile.launch;
+  if (template.kind !== "tmux-session" && template.kind !== "desktop-session") {
+    throw new Error("Expected a session launch template.");
+  }
+  const { host, effort, modelName, permissionMode } = launchPreferences(
+    input.model,
+    input.intent.role,
+    template,
+  );
+  const values = {
+    transport: template.kind === "tmux-session" ? "tmux" : "desktop",
+    model: modelName,
+    effort,
+    permissionMode,
+  };
+  if (template.kind !== "tmux-session") return values;
+  return {
+    ...values,
+    tmuxSocket: host?.tmux?.socketName ?? null,
+    tmuxSession: claudeCodeTmuxSessionNameFor(
+      host?.tmux?.sessionName ?? template.sessionName,
+      input.intent,
+    ),
+  };
+};
 
 /** Claude owns its CLI, window-transport and attached-directory arguments. */
 export function renderClaudeCodeWindowLaunchInstructions(

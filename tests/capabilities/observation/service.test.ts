@@ -67,7 +67,10 @@ import {
   claudeCodeWorkspaceHostResourceProfile,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import {
+  renderCodexWindowLaunchInstructions,
+  renderCodexWindowLaunchValues,
+} from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -164,7 +167,24 @@ const CODEX_ENDPOINT_FACADE = Object.freeze({
   resourceProfile: codexWorkspaceHostResourceProfile,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
+  // 与组合根一致：握手时把窗口解析后的启动取值记进绑定（open-items G14）。
+  renderLaunchValues: renderCodexWindowLaunchValues,
 });
+/**
+ * 与组合根一致的观察门面：本宿主的条目带启动取值渲染器，status 按窗口自己的启动事实比较。上面夹具里的
+ * `CODEX_OBSERVATION_FACADE` 不带渲染器，走的是退回整份意图摘要的那条路。
+ */
+const CODEX_OBSERVATION_FACADE_WITH_LAUNCH_VALUES = Object.freeze({
+  ...CODEX_OBSERVATION_FACADE,
+  hosts: Object.freeze(
+    CODEX_OBSERVATION_FACADE.hosts.map((host) =>
+      host.hostId === "codex"
+        ? Object.freeze({ ...host, renderLaunchValues: renderCodexWindowLaunchValues })
+        : host,
+    ),
+  ),
+});
+const CONTROLLER_HOST_VERSION = "0.99.0 (codex test double)";
 const CLOCK = { clock: () => parseUtcInstant("2026-09-18T09:00:00.000Z") };
 
 /** 共享的 git 夹具：隔离环境、失败即抛、返回去空白的 stdout（§13.166 D10）。 */
@@ -308,6 +328,7 @@ async function createHealthyWorkspace(): Promise<HealthyWorkspace> {
         handle: { kind: "codex-thread", value: CONTROLLER_HANDLE },
         launchIntentDigest: inspection.launchIntent.intentDigest,
         observedAt: "2026-09-18T08:59:30.000Z",
+        hostVersion: CONTROLLER_HOST_VERSION,
       },
     },
     CLOCK,
@@ -684,6 +705,120 @@ test("status 的窗口 launchIntent：reconfigure 改了窗口的启动参数（
       false,
       "no gate reports the launch intent drift",
     );
+  } finally {
+    rmSync(workspace.base, { recursive: true, force: true });
+  }
+});
+
+/** 用 reconfigure 把配置的 `hosts.codex` 换成给定的值。 */
+async function reconfigureCodexHost(root: string, codex: Record<string, unknown>): Promise<void> {
+  const desired = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")) as {
+    hosts: Record<string, unknown>;
+  };
+  desired.hosts.codex = codex;
+  const request = {
+    root,
+    action: "reconfigure",
+    mode: "preview",
+    request: { desiredConfig: desired },
+  } as const;
+  const preview = await executeCodexWakeflowMaintenance(request);
+  if (preview.mode !== "preview" || preview.planDigest === null) {
+    throw new Error("Expected a ready reconfigure preview.");
+  }
+  await executeCodexWakeflowMaintenance({
+    ...request,
+    mode: "apply",
+    planDigest: preview.planDigest,
+  });
+}
+
+test("status 的窗口 launchIntent 按窗口自己的启动事实比较（open-items G14、A3、X28）：别的角色的配置变了仍 current，自己的模型变了 drifted 并点名这一项；会话事实并排给出配置与宿主报告的模型", {
+  timeout: 120_000,
+}, async () => {
+  const workspace = await createHealthyWorkspace();
+  try {
+    const controller = async (facade: Parameters<typeof executeStatusRequest>[0]) => {
+      const status = await executeStatusRequest(facade, { root: workspace.root }, CLOCK);
+      const window = status.windows.find(
+        (entry) => entry.windowId === workspace.controllerWindowId,
+      );
+      if (window === undefined || window.launchIntent === null || window.session === null) {
+        throw new Error("Expected the registered Controller window.");
+      }
+      return { launchIntent: window.launchIntent, session: window.session, status };
+    };
+    const before = await controller(CODEX_OBSERVATION_FACADE_WITH_LAUNCH_VALUES);
+    equal(before.launchIntent.status, "current");
+    equal(before.launchIntent.comparison, "window");
+    deepEqual(before.launchIntent.changes, []);
+    // 握手时助手报告的宿主版本进了绑定，status 原样给出。
+    equal(before.launchIntent.hostVersion, CONTROLLER_HOST_VERSION);
+
+    // 只改 product 角色的思考档：Controller 自己的启动事实没变，仍是 current；
+    // 不带渲染器的门面只有整份意图摘要可比，照旧说 drifted，也说不出是哪一项。
+    await reconfigureCodexHost(workspace.root, {
+      launch: { reasoningEffortByRole: { product: "xhigh" } },
+    });
+    const otherRole = await controller(CODEX_OBSERVATION_FACADE_WITH_LAUNCH_VALUES);
+    equal(otherRole.launchIntent.status, "current");
+    notEqual(otherRole.launchIntent.currentDigest, otherRole.launchIntent.registeredDigest);
+    const legacy = await controller(CODEX_OBSERVATION_FACADE);
+    equal(legacy.launchIntent.status, "drifted");
+    equal(legacy.launchIntent.comparison, "config");
+    deepEqual(legacy.launchIntent.changes, []);
+
+    // 改 Controller 自己的模型：drifted，并点名变了的取值。
+    await reconfigureCodexHost(workspace.root, {
+      launch: {
+        modelByRole: { controller: "gpt-next" },
+        reasoningEffortByRole: { product: "xhigh" },
+      },
+    });
+    const ownModel = await controller(CODEX_OBSERVATION_FACADE_WITH_LAUNCH_VALUES);
+    equal(ownModel.launchIntent.status, "drifted");
+    // 结果是准入后的无原型对象：转成普通对象再逐字段比较。
+    const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+    deepEqual(plain(ownModel.launchIntent.changes), [
+      { field: "model", registered: null, current: "gpt-next" },
+    ]);
+    // 仍只是信息：不进 nextActions。
+    equal(
+      ownModel.status.nextActions.some((action) => action.reason.includes("intent")),
+      false,
+    );
+
+    // 会话事实：配置的模型与宿主在 session-start 记录里报告的模型并排给出，不作比较；Codex 没有启动模式要求。
+    deepEqual(plain(ownModel.session), {
+      model: { configured: "gpt-next", observed: null },
+      permissionMode: { configured: null, observed: null, status: "unknown" },
+    });
+    const rooted = await RootedDirectory.open(workspace.root);
+    try {
+      await writeHostHookObservation(rooted, {
+        hostId: "codex",
+        event: "session-start",
+        sessionId: CONTROLLER_HANDLE,
+        cwd: workspace.root,
+        recordedAt: parseUtcInstant("2026-09-18T08:59:40.000Z"),
+        model: "gpt-5-reported",
+      });
+      // 之后一条不带模型的启动记录（例如 /clear 之后）不抹掉已知的模型。
+      await writeHostHookObservation(rooted, {
+        hostId: "codex",
+        event: "session-start",
+        sessionId: CONTROLLER_HANDLE,
+        cwd: workspace.root,
+        recordedAt: parseUtcInstant("2026-09-18T08:59:50.000Z"),
+      });
+    } finally {
+      await rooted.close();
+    }
+    const reported = await controller(CODEX_OBSERVATION_FACADE_WITH_LAUNCH_VALUES);
+    deepEqual(plain(reported.session.model), {
+      configured: "gpt-next",
+      observed: "gpt-5-reported",
+    });
   } finally {
     rmSync(workspace.base, { recursive: true, force: true });
   }

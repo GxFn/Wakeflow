@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:workspace:window-runtime:host-binding:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA",
   "title": "WakeflowWindowHostBinding",
-  "description": "Portable shape of one private current-host binding. The TypeScript owner additionally validates hostId and the opaque handle against the supplied Host Identity Profile.",
+  "description": "Portable shape of one private current-host binding. The TypeScript owner additionally validates hostId and the opaque handle against the supplied Host Identity Profile. `launch` is absent on bindings written before 1.3.0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -69,6 +69,51 @@
         },
         "observedAt": {
           "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executionDigest", "values", "hostVersion"],
+      "description": "What this window was launched with, as Wakeflow resolved it at the handshake from the config and host profile of that moment. Drift is reported by comparing these values with the current ones.",
+      "properties": {
+        "executionDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "values": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][A-Za-z0-9]{0,31}$"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+              }
+            ]
+          }
+        },
+        "hostVersion": {
+          "description": "The host CLI version the launch helper read, as the Agent reported it; null when it was not reported.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+            }
+          ]
         }
       }
     },

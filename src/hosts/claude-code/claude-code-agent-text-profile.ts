@@ -87,7 +87,10 @@ const WINDOW_LAUNCH =
   "the config says `desktop`); maintenance publishes only that transport's helper and " +
   `\`wakeflow_status\` lists it under \`hostAssets\`. ${ONE_CALL_RULE} Either helper starts ` +
   "`claude` with the intent's parameters, waits for the session-start hook record of the " +
-  "session it started and prints the creation observation to register verbatim. The window " +
+  "session it started and prints the creation observation with `observationFile`, a " +
+  "reference to it: pass that object as the registration's `observation` instead of copying " +
+  "the observation out (a helper result's `closureFile` and a liveness `observationFile` go " +
+  "the same way into `closure` and `evidence.liveness`). The window " +
   "starts with `--allowedTools` for its role's Wakeflow tools and the helper, in the " +
   "permission mode from step 0; the workspace root's `.claude/settings.json` carries those " +
   "two rules, Design and Test carry only their role's tools, and a product repository's " +
@@ -313,8 +316,9 @@ const FIRST_RUN_HANDOVER =
  * Test 技能（回调的发送），所以回调的去向（Controller 的桌面 id、从产品窗口调助手的路径前缀）也在这里。
  */
 const DELIVERY_ACTION =
-  "run the helper from the workspace root (from a product or surface window, prefix its path " +
-  "with the `--add-dir` workspace root). Under the tmux transport: " +
+  "follow the permit's `hostAction.transport`. `tmux-session`: run the helper from the " +
+  "workspace root (from a product or surface window, prefix its path with the `--add-dir` " +
+  "workspace root): " +
   `\`${TMUX_HELPER} deliver --window <windowId> --handle-digest <the permit's handleDigest> ` +
   "--prompt-ref <the permit's promptRef> --prompt-digest <the permit's promptDigest>`. " +
   "It reads the prompt from the permit file - never retype, pipe or " +
@@ -325,10 +329,9 @@ const DELIVERY_ACTION =
   "then you send the same permit again; never send keys there yourself), otherwise pastes the prompt, presses Return once, " +
   "waits a few seconds for the target session's prompt-submit record and prints the " +
   "`attempt`, `readback` and `landing` to record verbatim; `readback` is screen text only, " +
-  "landing is proven by the hook record alone. Under desktop sessions send the `promptRef` " +
-  "file's text, unchanged and once, with the desktop `send_message` tool to the window's " +
-  "desktop id (the `desktop.sessionId` its `launch` printed; a callback goes with " +
-  "`SendMessage` to the Controller's desktop id that the delivery prompt names), keep the " +
+  "landing is proven by the hook record alone. `desktop-session`: send the `promptRef` " +
+  "file's text, unchanged and once, with the desktop `send_message` tool to the permit's " +
+  "`hostAction.desktopSessionId` (a callback goes with `SendMessage`), keep the " +
   'tool\'s return unchanged as `attempt.sendReturn` (`status: "sent"`, or ' +
   '`"failed-before-send"` when nothing was sent), then, before recording the outcome, run ' +
   `\`${DESKTOP_HELPER} landing --window <windowId> --prompt-ref <the permit's promptRef>\` ` +

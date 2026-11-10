@@ -91,6 +91,34 @@ test(
 );
 
 test(
+  "Finder metadata is not drift: a 0644 .DS_Store file is ignored, an unsafe one or a directory of that name is still reported (G16)",
+  withWorkspace(async (rootPath, root) => {
+    const clean = await inspectWakeflowPrivateModes(root);
+    writeFileSync(path.join(rootPath, ".wakeflow-active/.DS_Store"), "view", { mode: 0o644 });
+    chmodSync(path.join(rootPath, ".wakeflow-active/.DS_Store"), 0o644);
+    writeFileSync(path.join(rootPath, ".wakeflow-local/runtime/.DS_Store"), "view", {
+      mode: 0o644,
+    });
+    chmodSync(path.join(rootPath, ".wakeflow-local/runtime/.DS_Store"), 0o644);
+    const browsed = await inspectWakeflowPrivateModes(root);
+    equal(browsed.status, "current");
+    deepEqual(browsed.drifted, []);
+    equal(browsed.censusDigest, clean.censusDigest);
+    // 别人可写的同名文件是 unsafe；同名目录不是宿主的元数据文件，照常算漂移。
+    chmodSync(path.join(rootPath, ".wakeflow-active/.DS_Store"), 0o666);
+    mkdirSync(path.join(rootPath, ".wakeflow-local/runtime/x/.DS_Store"));
+    chmodSync(path.join(rootPath, ".wakeflow-local/runtime/x/.DS_Store"), 0o755);
+    const census = await inspectWakeflowPrivateModes(root);
+    equal(census.status, "unsafe");
+    deepEqual(census.unsafe, refs([".wakeflow-active/.DS_Store"]));
+    deepEqual(
+      census.drifted.map((entry) => entry.resourcePath),
+      refs([".wakeflow-local/runtime/x/.DS_Store"]),
+    );
+  }),
+);
+
+test(
   "an unsafe node is reported and never converged",
   withWorkspace(async (rootPath, root) => {
     chmodSync(path.join(rootPath, ".wakeflow-local/runtime"), 0o755);

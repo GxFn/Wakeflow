@@ -12,6 +12,7 @@ import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
+  deliverFixtureTarget,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
   prepareFixtureDelivery,
@@ -53,7 +54,7 @@ useDisposableDurability();
  * result-review 切片效果（§13.87 D1–D8）之导入与回调，2 级（能力）测试：导入重放幂等、已回报目标拒绝
  * 二次导入；回调只在静默后重发、重放幂等、第四代之后到顶；rearm 不重渲染 prompt，第一代 claimDigest
  * 仍被接纳而陌生摘要被拒；rearm 用尽的返工投递与测试投递换新信封；评审前一次 supersedes 导入换新身份
- * 与新回调（R5，§13.210）。拆自 service.test.ts（测试门清理 D4，open-items D9），与
+ * 与新回调（R5，§13.210）；导入不必断言流修订（H11）。拆自 service.test.ts（测试门清理 D4，open-items D9），与
  * service-implementation-review-and-inspection、service-test-review 共用 service.fixture.ts。
  */
 
@@ -165,6 +166,43 @@ test("import 重放幂等、已回报目标拒绝二次导入；回调只在静�
     equal(allows(silent.reviewUnit, "accept"), true);
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
+  }
+});
+
+test("H11：导入不必断言流修订——投递之后 Controller 的追加不再让目标撞并发冲突；给了过期修订仍被拒", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    await registerFixtureControllerWindow(fixture);
+    const delivered = await deliverFixtureTarget(fixture);
+    // 现场的顺序（正式工作区首个 Demand）：prompt 在准备投递时渲染，Controller 随后记录结局、再记录证据，
+    // 流修订一路前进；目标手里的任何修订到导入时都已过期。
+    const evidence = await recordFixtureEvidence(fixture);
+    const current = await currentFixtureStreamRevision(fixture);
+    equal(current > delivered.prepared.event.streamRevision, true);
+    await rejects(
+      importFixtureImplementationResult(fixture, delivered, {
+        idempotencyKey: "fixture-import-stale",
+        evidence,
+        expectedStreamRevision: delivered.prepared.event.streamRevision,
+      }),
+      rejectedWith("stream-revision", "concurrency-conflict"),
+    );
+    const imported = await importFixtureImplementationResult(fixture, delivered, {
+      idempotencyKey: "fixture-import-unobserved",
+      evidence,
+      expectedStreamRevision: null,
+    });
+    equal(imported.status, "committed");
+    equal(imported.event.streamRevision, current + 1);
+    const replayed = await importFixtureImplementationResult(fixture, delivered, {
+      idempotencyKey: "fixture-import-unobserved",
+      evidence,
+      expectedStreamRevision: null,
+    });
+    equal(replayed.status, "idempotent");
+    equal(replayed.result.resultDigest, imported.result.resultDigest);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
   }
 });
 

@@ -77,7 +77,6 @@ function renderInput(
     returnPointer: {
       deliveryId: "delivery-1",
       claimDigest: `sha256:${"1".repeat(64)}`,
-      streamRevision: 7,
       generation: 1,
     },
     rework: null,

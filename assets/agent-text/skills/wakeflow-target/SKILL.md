@@ -86,7 +86,8 @@ report, return the callback. You own no other step and no Controller authority.
    per-anchor answers, the evidence locators, and everything you could not
    verify.
 5. Call `wakeflow_import_target_result` with the delivery identity and fence
-   from the prompt. Wakeflow resolves each evidence locator and checks its
+   from the prompt, and no `expectedStreamRevision`: the stream moves while
+   you work, and identity plus fence are your guard. Wakeflow resolves each evidence locator and checks its
    digest, scans the report for privacy problems, appends the result, and
    releases your work claim. A refusal means the report is not yet importable -
    fix what it named and import again; it is not a reason to stop working. A

@@ -480,9 +480,9 @@
   - 说明：§13.135 现场 Controller 第一次记 rework 被拒后猜是 `blockingReasons` 所致（Schema 的 rework 分支要求 `maxItems: 0`、`requirementAlignment: aligned`）；re-arm 后担心导入会因旧围栏被拒（导入按设计接受同一投递更早一代的围栏）；按文字选 replacement 被拒为 `lineage-continuation-required`。
   - 证据：`controller-implementation-review-decision.schema.json` 的 if/then 分支；`result-review/service.ts` 的 `assertEarlierGenerationFence`；`tasking/decide.ts` 的 `deriveLineageBlockers`。
   - 建议：（文字已补）决定记录的 Schema 拒绝在 path 里点名出错的字段（例如 `$request.decision.blockingReasons`）。
-- **G14** [中 / 设计] 启动意图摘要把整个 `hosts` 块加账本根算进每个窗口（`launchConfigDigest`）：reconfigure 改一个角色的模型或思考档，8 个窗口全显示 `launchIntent: drifted`（只是信息，但误导人去重开；正式工作区 2026-11-09 分析所得，§13.232）。修法：按窗口角色解析后的启动参数（模型、思考档、权限模式、传输、tmux 名）算摘要；reconcile 对"公式变了但启动命令没变"的绑定一次性迁移已登记摘要，避免升级后全部 drifted。1.2.2。
-- **G15** [低 / 行为] Controller 自产的核对日志（npm / tsc 输出带绝对路径）两次触发 `record_evidence` 的隐私扫描，改写后通过（正式工作区首个 Demand，§13.232）。evidence 参考已要求先替换为 `<workspace root>`；考虑给 `record_evidence` 加按工作区根脱敏的选项。1.2.2 评估。
-- **G16** [低 / 行为] 完成前的严格校验把 Finder 在受管私有目录里留下的 `.DS_Store`（0644）判为 `local-layout` 失败；Controller 用 reconcile 收回权限位后通过（正式工作区首个 Demand，§13.232）。修复路径成立；考虑让布局检查忽略 `.DS_Store`，或在文本里点名这个成因。
+- **G14** [中 / 设计] 启动意图摘要把整个 `hosts` 块加账本根算进每个窗口（`launchConfigDigest`）：reconfigure 改一个角色的模型或思考档，8 个窗口全显示 `launchIntent: drifted`（只是信息，但误导人去重开；正式工作区 2026-11-09 分析所得，§13.232）。修法：按窗口角色解析后的启动参数（模型、思考档、权限模式、传输、tmux 名）算摘要；reconcile 对"公式变了但启动命令没变"的绑定一次性迁移已登记摘要，避免升级后全部 drifted。1.2.2。（**2026-11-09 改判，不进 1.2.2**：只换摘要公式帮不到已登记的窗口——旧绑定只存旧公式的摘要，升级后要么全部 drifted，要么靠双公式比较维持原样，都要等窗口重新握手才受益。改为在 1.3"宿主漂移可诊断"里让绑定在握手时记录解析后的启动参数取值（模型、思考档、权限模式、传输），漂移按字段比较并说出哪一项变了；没有取值的旧绑定退回摘要比较。）
+- **G15** [低 / 行为] Controller 自产的核对日志（npm / tsc 输出带绝对路径）两次触发 `record_evidence` 的隐私扫描，改写后通过（正式工作区首个 Demand，§13.232）。evidence 参考已要求先替换为 `<workspace root>`；考虑给 `record_evidence` 加按工作区根脱敏的选项。1.2.2 评估。（**2026-11-09：不加工具选项**——脱敏会改变证据字节，是新的能力面；Controller 被拒一次后都自己改对了，evidence 参考的规则已在。保留观察。）
+- **G16** [低 / 行为] 完成前的严格校验把 Finder 在受管私有目录里留下的 `.DS_Store`（0644）判为 `local-layout` 失败；Controller 用 reconcile 收回权限位后通过（正式工作区首个 Demand，§13.232）。修复路径成立；考虑让布局检查忽略 `.DS_Store`，或在文本里点名这个成因。（**已修 1.2.2**，§13.234：私有树的模式普查不再把安全漂移的 `.DS_Store` 普通文件算作漂移；同名目录、符号链接与 unsafe 节点照常报告。）
 
 ## H. Demand 流程中的死角与产品语义缺口
 
@@ -534,7 +534,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：§13.135 现场续接"在文件末尾加一行"：实现窗口、Test 与 Controller 都指出 requirement.md 仍写"只有一句话"，以后只看需求文档的人会以为结果与需求不符。
   - 证据：§13.135 现场；`wakeflow_continue_demand` 只追加续接事件，需求包成员不可变。
   - 建议：随 Q7 一并裁决：补充包作为新的需求包成员（或新包 supersedes 原包）进入归档，或者归档的 manifest 把续接摘要列为需求的一部分。
-- **H11** [低 / 流程] 目标第一次 `import_target_result` 报 `concurrency-conflict`（许可里的流版本已被 Controller 的投递结果事件推进），目标重试即过（正式工作区首个 Demand，§13.232）。这是正常顺序：评估让导入对不触及本目标的追加容忍版本漂移，或许可不再让目标断言流版本；文本先写明重试。1.2.2。
+- **H11** [低 / 流程] 目标第一次 `import_target_result` 报 `concurrency-conflict`（许可里的流版本已被 Controller 的投递结果事件推进），目标重试即过（正式工作区首个 Demand，§13.232）。这是正常顺序：评估让导入对不触及本目标的追加容忍版本漂移，或许可不再让目标断言流版本；文本先写明重试。1.2.2。（**已修 1.2.2**，§13.234：成因是投递 prompt 的派发记录印着准备投递时的流修订，而 Controller 随后必然记录结局，目标拿它当 `expectedStreamRevision` 每次都撞一次；多目标并行时还会与别的目标的证据、决定追加赛跑。改为导入请求的 `expectedStreamRevision` 可选——缺席即绑定到权威上下文读到的当前修订，投递身份、围栏与目标阶段才是导入的并发守卫；给了仍须相等。prompt 不再印修订，目标与测试技能写明不带。）
 
 ## I. 引导式体验与 Agent 文本：被引导的用户在关键时刻得不到指引
 
@@ -875,7 +875,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X26** [低 / 观察] 现场 L23：五次开窗里有一次（Test）桌面 app 报了 Opening session、会话也进了侧栏，却始终没有为它起进程，助手等 30 秒后拒绝 `desktop-session-start-missing`；引导会话重开一次成功，多出的那个会话在用户授权后归档。属 app 行为（X10 一类），加长等待无济于事——那条启动记录一直没有来。文本现有的做法（重开、多余会话经用户授权归档）够用。状态：观察。
 - **X27** [高 / 事实] 桌面 app（Claude.app 4.23118.0 / Claude Code 2.1.303）把跨会话消息里的每个 `@`（U+0040）折成全角 `＠`（U+FF20）以阻止 @ 提及：Controller 边界文本里的 `@types/node` 让投递与回调的落地摘要都对不上许可，`landing` 给 `landed: false` 加 `latestPrompt`，`record_delivery_outcome` 判 indeterminate，Controller 以 resolution 接受（每次多一步）；不带 `@` 的投递摘要相符。会话记录里标签外还有框架文字（引语一行与一段说明），hook 的 prompt 没带上，不是成因（正式工作区首个 Demand，§13.232）。**已修 1.2.1**：内核 `computePromptDigest` 先把 `＠` 折回 `@` 再算（许可与 hook 共用，宿主折不折都相等）；剥壳不再锚定整条消息作加固。
 - **X28** [中 / 未验证] 桌面传输下配置的 `hosts.claude-code.launch.modelByRole` 只在开窗时以 `claude --bg --model` 生效，能否跨过 app 接管未验证（权限模式当时没跨过去，L17）；桌面参考没有提模型。下次重开窗口时验证；验证前文本只说未验证。
-- **X29** [中 / 文本] 正式工作区首个 Demand：AlembicPlugin 窗口导入报告后先去跑 tmux 助手的 `deliver`（桌面工作区里没有这个文件），再读 desktop.mjs 找发送命令，91 秒后自己想到"这个工作区是桌面传输"，用 app 的 send_message 发出回调（§13.232）。成因：`deliveryAction` 取值以"run the helper from the workspace root"开头，传输的选择只隐含在回传段的 Controller 桌面 id 里。**已改 1.2.1**：目标与测试技能的回调步在 `deliveryAction` 之前先说按本工作区的传输选路（回传段有 Controller 桌面 id 即桌面会话，那里没有 tmux 助手；否则是 tmux）；`deliveryAction` 取值本身不动，Controller 技能的 14 KiB 预算已到顶。后续（1.2.2）：回调许可的 `hostAction` 带 transport 与桌面会话 id，文本只需指向它。
+- **X29** [中 / 文本] 正式工作区首个 Demand：AlembicPlugin 窗口导入报告后先去跑 tmux 助手的 `deliver`（桌面工作区里没有这个文件），再读 desktop.mjs 找发送命令，91 秒后自己想到"这个工作区是桌面传输"，用 app 的 send_message 发出回调（§13.232）。成因：`deliveryAction` 取值以"run the helper from the workspace root"开头，传输的选择只隐含在回传段的 Controller 桌面 id 里。**已改 1.2.1**：目标与测试技能的回调步在 `deliveryAction` 之前先说按本工作区的传输选路（回传段有 Controller 桌面 id 即桌面会话，那里没有 tmux 助手；否则是 tmux）；`deliveryAction` 取值本身不动，Controller 技能的 14 KiB 预算已到顶。后续（1.2.2）：回调许可的 `hostAction` 带 transport 与桌面会话 id，文本只需指向它。（**2026-11-09**：许可带 transport 的后续并入 1.3"宿主漂移可诊断"，不单独做。）
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 

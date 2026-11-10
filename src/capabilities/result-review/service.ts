@@ -619,7 +619,16 @@ interface ImportInput {
   readonly report: TargetResultImportRequest["report"];
   /** 评审前取代本投递已回报的那份结果（R5）；缺席即第一份导入。 */
   readonly supersedes?: string;
+  /**
+   * 调用方观察到的流修订；null 即没有断言（H11）。目标不拥有事件流：它工作期间 Controller 照常追加
+   * （投递结局、别的目标的证据与决定），prompt 里任何修订到导入时都已过期。导入的并发守卫是投递身份、
+   * 围栏与目标阶段；没给修订就绑定到权威上下文读到的当前修订。
+   */
+  readonly observedStreamRevision: number | null;
 }
+
+/** 信封里"未断言流修订"的占位：导入请求 Schema 的下限是 1，0 不会是调用方给出的值。 */
+const UNOBSERVED_STREAM_REVISION = 0;
 
 interface ImportOutcome extends CommandOutcome {
   readonly result: Readonly<TargetResult>;
@@ -1033,7 +1042,14 @@ async function executeImport(
   if (bound !== null) {
     return replayImport(context, { commit: bound, aggregate: authority.loaded.aggregate });
   }
-  assertFreshRevision(context, binding);
+  const appendBinding: Readonly<AppendCommandBinding> =
+    input.observedStreamRevision === null
+      ? Object.freeze({
+          ...binding,
+          expectedStreamRevision: authority.loaded.aggregate.streamRevision,
+        })
+      : binding;
+  assertFreshRevision(context, appendBinding);
   const target = deliveryTargetOf(context, input.deliveryId);
   if (input.supersedes === undefined) {
     if (!IMPORTABLE_PHASES.includes(target.phase)) {
@@ -1073,7 +1089,7 @@ async function executeImport(
     context,
     result,
     taskPackage,
-    binding.expectedStreamRevision + 1,
+    appendBinding.expectedStreamRevision + 1,
     now,
   );
   const command = parseDemandEventSourcingCommand({
@@ -1083,7 +1099,7 @@ async function executeImport(
     callback: issued.callback,
     evidenceResolution,
   });
-  const commandResult = await appendCommand(repository, command, binding, options);
+  const commandResult = await appendCommand(repository, command, appendBinding, options);
   if (commandResult.disposition === "idempotent") return replayImport(context, commandResult);
   await releaseFence(context, envelope.route.windowId, result.delivery.fence);
   return Object.freeze({
@@ -1146,13 +1162,14 @@ export async function executeTargetResultImportRequest(
             root: request.root,
             demandId: request.demandId,
             idempotencyKey: request.idempotencyKey,
-            expectedStreamRevision: request.expectedStreamRevision,
+            expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
           }),
           input: Object.freeze({
             deliveryId: request.deliveryId,
             claimDigest: request.claimDigest,
             report: request.report,
             ...(request.supersedes === undefined ? {} : { supersedes: request.supersedes }),
+            observedStreamRevision: request.expectedStreamRevision ?? null,
           }),
         });
       },

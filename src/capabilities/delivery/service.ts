@@ -1108,7 +1108,6 @@ function renderPrompt(
   pointer: Readonly<{
     readonly deliveryId: string;
     readonly claimDigest: string;
-    readonly streamRevision: number;
     readonly generation: number;
   }>,
   controllerDesktopSessionId: string | null,
@@ -1272,7 +1271,6 @@ async function executePrepare(
       {
         deliveryId,
         claimDigest: taken.claim.claimDigest,
-        streamRevision: binding.expectedStreamRevision + 1,
         generation: 1,
       },
       controllerDesktopSessionId,

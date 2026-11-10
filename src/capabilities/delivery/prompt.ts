@@ -108,10 +108,13 @@ export function deliveryPromptRequirementPackage(
   });
 }
 
+/**
+ * 交回指针与派发记录。不带流修订（H11）：准备投递时的修订到目标导入时一定已经过期——Controller
+ * 随后就记录投递结局——印在 prompt 里只会被目标拿去当 `expectedStreamRevision` 而撞上并发冲突。
+ */
 export interface DeliveryPromptReturn {
   readonly deliveryId: string;
   readonly claimDigest: string;
-  readonly streamRevision: number;
   readonly generation: number;
 }
 
@@ -493,7 +496,6 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
       `- deliveryId: ${input.returnPointer.deliveryId}`,
       `- generation: ${input.returnPointer.generation}`,
       `- claimDigest: ${input.returnPointer.claimDigest}`,
-      `- streamRevision: ${input.returnPointer.streamRevision}`,
     ]),
   ];
   const prompt = lines.join("\n");

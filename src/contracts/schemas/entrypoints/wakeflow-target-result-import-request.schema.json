@@ -7,15 +7,7 @@
   "$comment": "The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "idempotencyKey",
-    "expectedStreamRevision",
-    "deliveryId",
-    "claimDigest",
-    "report"
-  ],
+  "required": ["root", "demandId", "idempotencyKey", "deliveryId", "claimDigest", "report"],
   "properties": {
     "root": {
       "$ref": "#/$defs/workspaceRoot"
@@ -50,7 +42,7 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out. The delivery identity and claimDigest guard this append, and the stream moves while a target works. When given it must equal the current revision."
     },
     "supersedes": {
       "type": "string",

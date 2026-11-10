@@ -189,7 +189,8 @@ export async function recordFixtureEvidence(
 
 export interface ImportFixtureImplementationOptions {
   readonly idempotencyKey?: string;
-  readonly expectedStreamRevision?: number;
+  /** 缺省取当前修订；`null` 即请求里不带这个字段（H11：目标不断言流修订）。 */
+  readonly expectedStreamRevision?: number | null;
   readonly reportedAt?: UtcInstant;
   readonly evidence?: Readonly<FixtureEvidence>;
   /** 报告内容原样进入导入请求（请求参数本身是 unknown，由切片解析）；用于 needs-review 等变体。 */
@@ -219,8 +220,12 @@ export async function importFixtureImplementationResult(
       root: fixture.workspacePath,
       demandId: fixture.demandId,
       idempotencyKey: options.idempotencyKey ?? "fixture-import-1",
-      expectedStreamRevision:
-        options.expectedStreamRevision ?? (await currentFixtureStreamRevision(fixture)),
+      ...(options.expectedStreamRevision === null
+        ? {}
+        : {
+            expectedStreamRevision:
+              options.expectedStreamRevision ?? (await currentFixtureStreamRevision(fixture)),
+          }),
       deliveryId: delivered.prepared.delivery.deliveryId,
       claimDigest: delivered.prepared.permit.fence.claimDigest,
       report: { workType: "implementation", content },

@@ -119,7 +119,6 @@ function render(
     returnPointer: {
       deliveryId: "delivery-1",
       claimDigest: `sha256:${"1".repeat(64)}`,
-      streamRevision: 7,
       generation: 1,
     },
     rework: null,
@@ -229,7 +228,6 @@ test("验收锚点超过上限时点明其余条数，不静默略去（§13.134
       returnPointer: {
         deliveryId: "delivery-1",
         claimDigest: `sha256:${"1".repeat(64)}`,
-        streamRevision: 7,
         generation: 1,
       },
       rework: null,
@@ -266,7 +264,6 @@ test("重跑只跑失败子集时测试合同点明范围，首次尝试没有�
       returnPointer: {
         deliveryId: "delivery-1",
         claimDigest: `sha256:${"1".repeat(64)}`,
-        streamRevision: 7,
         generation: 1,
       },
       rework: null,
@@ -323,7 +320,6 @@ test("禁止边界超过上限时同样点明其余条数，不再只渲染第�
       returnPointer: {
         deliveryId: "delivery-1",
         claimDigest: `sha256:${"1".repeat(64)}`,
-        streamRevision: 7,
         generation: 1,
       },
       rework: null,

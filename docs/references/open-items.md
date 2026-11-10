@@ -13,14 +13,14 @@
 - **1.3.0 批 1 助手进静态门**：D5、Y5
 - **1.3.0 批 2 宿主事实与观察**：A3、G14、K2、X4、X28、X29、Y6、Y10
 - **1.3.0 批 3 信任边界**：F1、F9、Y7
-- **1.3.0 批 4 Demand 流程**：D3、D4、H5、H6、W40
+- **1.3.0 批 4 Demand 流程**：D3、D4、D12（限制与提醒）、H2、H3、H5、H6、H10、W40
 - **1.3.0 批 5 并发、恢复与配置演进**：B7、B8、B9、B11、B13、B14、C7
 - **1.3.0 批 6 诊断与成本**：G1、G3、G5、G8、G9、G13、K5、K8
 - **1.3.0 批 7 发布、Codex 文本与文档**：C12、E4、I9、J4、M2、M3、M4、Y8
 - **1.3.0 批 8 架构债**：L1、L2、L4、L5、L6、L8
-- **待裁决**：D12、H2、H3、H7、H10，以及 Q7、Q10 里关于 pod 的一半
+- **已裁决（2026-11-09）**：Q7 → 批 4（H2、H3、H10）；Q10 的 pod 重新设计 → 1.4（H7、D12，批 4 只写明限制并提醒）；部署 → 开发工作树；批 8 六项全做
 - **只差终验**：C6、D1、V6、X13
-- **不进 1.3.0**：E1、E3、K4、W36
+- **不进 1.3.0**：E1、E3、K4、W36，以及 pod 重新设计（H7，1.4）
 - **宿主约束与观察（不计入开放）**：G15、I20、X3、X9、X10、X11、X12、X14、X26、Y11、Y12、Y13
 
 ## 待裁决（需要用户决定）
@@ -31,15 +31,17 @@
 - **Q4** 产品和 Test 窗口的权限怎么授予：启动时用 --allowedTools 或 --settings 注入；写进所有者管理的产品仓库；还是由 Controller 引导用户逐窗口批准一次。默认 permissionMode 是否作为 init 时的显式选择。（**已裁决 2026-09-26**：用 Claude Code 的 auto 权限模式——"就是用 auto 模式吧，不然很多权限需要人为确认"；配置的 permissionMode 增加 `auto` 并作为启动默认值。已实现于 §13.134：配置枚举为 auto | acceptEdits | bypassPermissions，Claude 宿主画像缺省 auto。）
 - **Q5** 威胁模型的范围：是否把“被仓库内容注入的产品 Agent”当作对手来防。这决定调用者身份检查、--add-dir 的收窄、helper 完整性校验、hook 记录认证是否要做，以及做到什么程度。（**已裁决 2026-10-18**，ADR-0020 `accepted`：B 类（被仓库内容牵引的产品或 Test Agent）为设计对手，C 类（同用户其他进程）只检测不防护；决定 6 排在第一轮现场之后的控制进 1.3.0 批 3。）
 - **Q6** bug 和 supplement 需求包是否必须有验收标准（§13.131 待裁决），以及发布时是否强制至少有一个列表项。（**已裁决 2026-10-02**：用户确认修复设计；requirement、bug、supplement 新发布前必须有非空、可引用的验收列表；研究型保持独立语义，见 ADR-0014。）
-- **Q7** 后续工作由哪个机制负责：让 continue_demand 接受补充需求包；还是让 supplement 包带上父 Demand 或父需求的链接。升级后文档承诺的“补充包认领出口”是实现出来，还是改文档，说明实际路径是 record-decision 或取消后重新认领。（**事实状态 2026-10-09**：`wakeflow_continue_demand` 只接受 optimization、requirement-supplement、verified-bug 三种 kind 的续接；“补充包认领出口”未实现，§13.165 批次 0 已把升级选项文本与需求文档改为实际路径（record-decision，或取消后重新认领）；supplement 的父链接与归档写回归 H2/H10，仍待裁决。）（**2026-11-09**：仍待裁决，建议见 [1.3.0 收敛计划](../reviews/2026-11-09-1.3.0-consolidation-plan.md) 第 2 节裁决 2。）
+- **Q7** 后续工作由哪个机制负责：让 continue_demand 接受补充需求包；还是让 supplement 包带上父 Demand 或父需求的链接。升级后文档承诺的“补充包认领出口”是实现出来，还是改文档，说明实际路径是 record-decision 或取消后重新认领。（**事实状态 2026-10-09**：`wakeflow_continue_demand` 只接受 optimization、requirement-supplement、verified-bug 三种 kind 的续接；“补充包认领出口”未实现，§13.165 批次 0 已把升级选项文本与需求文档改为实际路径（record-decision，或取消后重新认领）；supplement 的父链接与归档写回归 H2/H10，仍待裁决。）（**2026-11-09**：仍待裁决，建议见 [1.3.0 收敛计划](../reviews/2026-11-09-1.3.0-consolidation-plan.md) 第 2 节裁决 2。）（**已裁决 2026-11-09**：supplement 包声明它补充的需求，`continue_demand` 的 requirement-supplement 续接引用这个包——历史留在原 Demand，新验收标准来自冻结的包，归档带上它；1.3.0 批 4。）
 - **Q8** Demand 完成时，未被任何任务或测试覆盖的验收标准怎么处理：阻断完成，还是由 Controller 逐条豁免并记入归档。（**已裁决 2026-10-02**：用户确认修复设计；缺项默认阻断，无隐式豁免；controller-only 由已接受实现锚点覆盖，real-environment 由当前已接受测试合同覆盖，见 ADR-0014。）
 - **Q9** v1 是否需要退出路径：删除或改动仓库和窗口，把仓库切出 managed-block，分离整个工作区。另外，managed-block 的默认值是否改为 owner-managed，托管块能否不带工作区专属的 id。（**已落地 2026-10-28**，ADR-0024、§13.217：`detach-repository` 与 `detach-workspace`；引导文本推荐 owner-managed 并说明 managed-block 的后果。）
-- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 一步即停——2026-10-22 §13.208 改为连续执行 Controller 自有步骤、四类停点（V3）；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）（**2026-11-09**：`/wakeflow:next` 的停点再收窄为 owner 变化且无自有工作、用户决定点、阻塞，见 V3 / I21。）
+- **Q10** pod 能否只包含部分仓库，关闭后能否不拆除就认领下一个 Demand。/wakeflow:next 能否连续执行 Controller 自己负责的机械步骤。是否在 skill 里要求每个 Demand 使用一个新的 Controller 会话。（**事实状态 2026-10-09**：pod 仍是全仓库、关闭即拆除；`/wakeflow:next` 一步即停——2026-10-22 §13.208 改为连续执行 Controller 自有步骤、四类停点（V3）；§13.165 批次 0 在技能与命令里写明任何步骤边界换新 Controller 会话都安全并建议按 Demand 与 pod 开关换会话，未强制。）（**2026-11-09**：`/wakeflow:next` 的停点再收窄为 owner 变化且无自有工作、用户决定点、阻塞，见 V3 / I21。）（**已裁决 2026-11-09**：pod 的重新设计——检出按工作区布局成组摆放、只含部分仓库——放 1.4；1.3.0 批 4 只写明相对 `file:` 依赖的限制并在创建 pod 时提醒。）
 - **Q11** 平台范围怎么声明：仅支持 macOS 和 Linux 的本地文件系统，是否明确拒绝网络文件系统。Node 的 engines 范围是否放宽到 26。（**已裁决 2026-10-18**，ADR-0021 决定 4：只支持 macOS 的本地文件系统，两个制品的 `package.json` 声明 `os: ["darwin"]`；网络文件系统的预检阻塞仍待议。）
 - **Q12** 架构目标是重新定基线还是排期去做：ADR-0004 的 tools/list 小于 60 KB，ADR-0013 的 foundation 不超过 20 个文件和单一错误类型。约 2,100 行没有生产调用者的恢复模块，逐个决定接进恢复入口还是删除。（**已裁决 2026-10-18**，§13.180：按现状重定基线——领域层保留、foundation 规模按当前目录接受、tools/list 预算按实测重定、八个无调用者模块删除。）
 - **Q13** 桌面传输下产品仓库的信任由谁写（X19、X23，2026-11-05 提出）：Claude Code 的信任不跨 Git 仓库边界继承（探针 E9），N 个产品仓库就要 N 条信任记录。现行文本要求用户逐个在桌面 app 里打开仓库并接受弹窗；用户在 L18 表达过"由 Wakeflow 在桌面端新建会话、用户只点同意"的倾向。可选：(a) 维持现状；(b) 引导会话列出仓库清单并讲明含义，用户一次同意后由助手用 `claude --desktop <仓库>` 逐个打开（当前 app 版本直接写入信任记录、不再弹窗）；(c) 账号有 `start_session` 时逐仓库出确认卡，用户点卡后在弹出的信任框里再点一次。推荐 (b) 并保留 (a) 作为用户不同意时的路径。（**已裁决 2026-11-06**：用户"Q13 按你的推荐"——(b)，保留 (a)；落地为 ADR-0025 D11 与桌面助手的 `trust --window <windowId> --user-agreed`，§13.228。我的会话执行同一动作被 auto 分类器以"削弱安全"拒绝，只能由带着助手允许规则的引导会话在用户同意后执行。**现场 L23（§13.229）已验证**：全新工作区里 5 个窗口都被拒为 `not-trusted`，引导会话把目录收齐只问了用户一次，用户同意后 `trust` 逐个打开，五条信任记录写下，5 个窗口随后开出并登记。）
 
 ## 路线图
+
+> **完成情况（2026-11-09 收敛）**：阶段 0、1、3 已完成（登记、默认安装主流程与十余轮现场、格式基线与 v1.1.0 – v1.2.2）；阶段 2 余项 → 1.3.0 批 5；阶段 4 余项 → 批 6；阶段 5 余项 → 批 3；阶段 6（Codex）维持 preview，不进 1.3.0；阶段 7 余项 → 批 4；阶段 8 余项 → 批 2 与批 6；阶段 9 的退出路径已完成（ADR-0024），其余 → 批 1 与批 8。1.1.x 补齐、测试门清理与 1.2、Codex 审阅修复三份计划已执行完，余 W36、W40。
 
 - **阶段 0**（S）阶段 0：先把基线立起来。新建 docs/references/open-items.md，把本次分析的全部条目登记进去。更正 §13.121 勘误和 §13.130 第 15 项。用脚本从当前产物刷新本地缓存，并核对 manifest 摘要。用 HEAD 对测试工作区的 7 份归档和活动根做一次只读回放，结果记入 gate-log。 理由：后续每一步都需要一个可追踪的清单，以及一个真实加载了当前代码的宿主。归档回放成本最低，又能直接回答当前 HEAD 还能不能读旧数据。
 - **阶段 1**（M）阶段 1：修默认安装的主流程阻断。启动意图注入 --allowedTools 或 --settings；deliver 发送前检查对话框状态；只剔除会话级的 CLAUDE* 变量；preflight 报告 tmux、node、claude 的版本和路径。然后在 acceptEdits 下、产品仓库不带遗留内容的新工作区跑一次完整现场：包括一次 rework、一次 rearm、一次 blocked 后重新决策、continue 后再次完成、一个经 helper 创建并在锁定 checkout 下关闭的 pod。逐项核销 §13.130 的“未执行”清单。 理由：这是新用户第一次使用就会撞上的问题。当前的现场证据不能代表默认安装。
@@ -340,7 +342,7 @@
 - **D11** [低 / 噪音] 新增或移除 pod 的配置事务让 main pod 的全部窗口显示 `launchIntent: drifted`（计划阶段 2；§13.185 观察 A）。成因：`intentDigest` 的基底含整份配置的 `configDigest`。已修 T1 §13.225：摘要改覆盖窗口自身基底加 `{hosts, storage.ledgerRoot}` 的规范摘要（两宿主渲染器只读这些），`configDigest` 字段仍在意图里、launch-set 摘要不变；此前登记的窗口会显示一次 `drifted` 直到下次 replace（仅信息，无门比较它）。状态：已修。
   - 说明：意图摘要把整份配置的变化都算了进去，而这些窗口的参数、启动目录、tmux 名称都没变；没有门因此失败，但 Design 与 Controller 都把它当成需要处理的事反复提及。
   - 建议：意图摘要只覆盖该窗口自己的启动参数与根，或在 status 里把"仅摘要变化"与"参数变化"分开标注。
-- **D12** [中 / 缺口] 相对 `file:` 依赖在 `<repo>/.claude/worktrees/<name>` 布局下解析不到（计划阶段 2；状态：开放，§13.185 观察 B）（**2026-11-09 收敛：待裁决**——worktree 检出里相对 `file:` 依赖解析不到，Alembic 五仓库正是这种依赖：见裁决 3（pod 布局））
+- **D12** [中 / 缺口] 相对 `file:` 依赖在 `<repo>/.claude/worktrees/<name>` 布局下解析不到（计划阶段 2；状态：开放，§13.185 观察 B）（**2026-11-09 收敛并裁决**：1.3.0 批 4 写明限制并在创建 pod 时提醒；重新设计放 1.4）
   - 说明：AlembicAgent 的 `@alembic/core` 指向 `../AlembicCore`，在 worktree 里成了悬空链接，仓库自带的 `npm run test` 跑不起来；实现窗口只能用仓库外的临时别名验证。pod 文本没有提醒这类依赖，worktree 位置也不可配置。
   - 建议：pod 文本写明相对路径依赖在 worktree 里的解析方式；评估把 pod 的 worktree 放到与主检出并列的目录（保持 `../X` 关系），或在创建 pod 时对 `file:` 依赖发出预警。
 
@@ -512,11 +514,11 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 2026-10-02 复验（§13.140）：段落验收、表格验收、没有验收节的 bug 包，都经过公共初始化、发布与认领，随后规划被 anchor-item-unknown 拒绝。修复应统一发布与规划所用的解析语义，在确认前展示实际可引用的标准。
   - 2026-10-02 修复（§13.141）：发布、规划、完成共用验收列表解析；摘要包含验收节且上限同步到生成 Schema。v1 Ledger 历史读取的必需章节表未改变，不以新发布规则破坏旧记录。
 
-- **H2** [中 / 缺口] 后续工作被拆成两个各缺一半的机制：continue_demand 保留了历史但不能带入新的验收标准，supplement Demand 能带新标准却和之前的工作没有任何关联（计划阶段 7；状态：开放）（**2026-11-09 收敛：待裁决**——补充需求的机制：见裁决 2）
+- **H2** [中 / 缺口] 后续工作被拆成两个各缺一半的机制：continue_demand 保留了历史但不能带入新的验收标准，supplement Demand 能带新标准却和之前的工作没有任何关联（计划阶段 7；状态：开放）（**2026-11-09 收敛并裁决**：1.3.0 批 4（Q7 已裁决））
   - 说明：类型为 requirement-supplement 的 continue 带不进新标准，所以这个类型本身是自相矛盾的；supplement 包又没有和父 Demand 或分支的机器链接，从需求追溯到结果的链条在第一次后续工作时就断了。文档承诺的“带新验收标准、并挂在原工作上的补充”，两条路径都做不到。
   - 证据：wakeflow-demand-continuation-request.schema.json：continuation 只有 {kind: optimization|requirement-supplement|verified-bug, summary}，没有 requirementId；tasking/decide.ts:63-71、:230-238：anchor 必须带本 Demand 自己的包 recordDigest，并使用其中的 itemId；requirement publication packageInput 没有任何指向父 Demand 或父需求的字段；design requirement-package.md:48 把 supplement 描述为“对已完成工作的补充”；卡片 04 Q3 两条路径都保留；验证者更正：verified-bug 和 optimization 类型的 continue 可以合理地锚回原有标准，supplement Demand 自身的追溯是成立的
   - 建议：为后续工作确定唯一的负责机制：要么让 continue_demand 接受一个已发布的 supplement/bug requirementId，anchor 可以绑定到原记录和补充记录的并集；要么在 packageInput 加 `supplements: <demandId|requirementId>`，写进 Demand 身份和 status，并由路由建议基于父分支或父提交继续。选定的那条路径要补一个端到端场景。
-- **H3** [中 / 缺陷] 升级（escalate）或阻塞之后，文档承诺的“补充包认领后退出”并不存在，rework 刹车的选项文本也在误导用户（计划阶段 7；状态：文本已改（§13.165 批次 0）：rework 刹车选项的 impact 改为“用 wakeflow_continue_demand 的 record-decision 记答复；重述的需求只能在取消本 Demand、重新认领后以新包进入”，04-demand-lifecycle 与功能总览加更正；补充包并入升级中 Demand 的出口未实现，归 Q7）（**2026-11-09 收敛：待裁决**——同 H2；文本已改为实际路径）
+- **H3** [中 / 缺陷] 升级（escalate）或阻塞之后，文档承诺的“补充包认领后退出”并不存在，rework 刹车的选项文本也在误导用户（计划阶段 7；状态：文本已改（§13.165 批次 0）：rework 刹车选项的 impact 改为“用 wakeflow_continue_demand 的 record-decision 记答复；重述的需求只能在取消本 Demand、重新认领后以新包进入”，04-demand-lifecycle 与功能总览加更正；补充包并入升级中 Demand 的出口未实现，归 Q7）（**2026-11-09 收敛并裁决**：1.3.0 批 4（Q7 已裁决））
   - 说明：用户选了 Wakeflow 自己推荐的“重述需求”后，Design 发布的补充包在认领时会被 pod-busy 拒绝，awaiting-decision 也不会因为认领而清除。实际能走的路是 record-decision 或取消后重新认领，但 skill 没有写。pod 只是等用户回答（这是设计如此），而“补充包出口”这个承诺是假的。
   - 证据：docs/requirements/capabilities/04-demand-lifecycle.md:139 和 functions 文档 F8.5（:184）：awaiting-decision 可以因补充包被认领而退出；demand-aggregate-state.ts:2735-2743：只有匹配 escalationEventId 的 decision-recorded 才会清除 awaitingDecision；demand/decide.ts:234,279 和 demand-active-guard.ts:153：pod 上有活动 Demand 时 create_demand 报 pod-busy；decider.ts:1606-1610：rework 刹车的选项写着“需要 Design 提供补充需求包”；requirement/service.ts:738：已认领的包不能被 supersede；delivery-and-review.md:186-193 只提 record-decision
   - 建议：二选一：实现卡片 04 描述的出口（以升级中的 Demand 为父的补充包并入该 Demand，清除 awaitingDecision，并把它的标准加入 anchor 集合）；或者把升级选项文本、需求文档和 Controller skill 改成实际的路径（record-decision，或取消后重新认领）。补一个“升级 → 重述需求 → 恢复”的场景。
@@ -535,7 +537,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：文本把 Controller 引向“等证据”，而在 pane 错了或死了的情况下，证据永远不会来；再次记录只会一直得到 landing-evidence-missing，窗口 claim 也一直被占着。在 Claude 上重发可以作为部分出口，但 binding 错误、窗口死掉以及整个 Codex 情形，都需要那个没教过的 resolution。
   - 证据：capabilities/delivery/decide.ts:111-130、:136-159：当 prompt 从未到达窗口时，唯一的出口是 resolution{disposition: accepted|rejected-before-send, hookRecordId, rationale}；service.ts:1632-1645 超过静默阈值后报 landing-silence-exceeded；在 assets/agent-text 和两个 profile 中 grep resolution、landing-silence-exceeded 都没有结果；SKILL.md:102-105 和 delivery-and-review.md:88 说“indeterminate 从不重发”，而 Claude 的 RESEND_GUARD（profile:80-84）和 helper（tmux-asset.ts:1080-1085）允许在没有落地记录时重发；demand-controller-route.ts:277 把 host-effect-indeterminate 指向 target-result-import（等待目标方）；卡片 06 Q3 的设计有 card-06 ambiguous-resolution 场景覆盖
   - 建议：在 delivery-and-review.md 第 8 步加一段“解决 indeterminate 投递”：出现 landing-silence-exceeded，或 helper 显示 pane 已死或不对时，先用 panes/inspect 确认 prompt 不在目标会话里，然后记录 resolution rejected-before-send 并 re-arm；如果存在匹配的 user-prompt-submit 记录只是漏看了，就用 resolution accepted 加 hookRecordId。同时消除“从不重发”和 resendGuard 之间的矛盾。补一个按文本流程走的场景。
-- **H7** [中 / 待决] 每个并行 Demand 都需要一个满配 pod（所有仓库、所有窗口），用完还必须关闭，并行工作代价高（计划阶段 7；状态：开放）（**2026-11-09 收敛：待裁决**——每个并行 Demand 一个满配 pod：见裁决 3）
+- **H7** [中 / 待决] 每个并行 Demand 都需要一个满配 pod（所有仓库、所有窗口），用完还必须关闭，并行工作代价高（计划阶段 7；状态：开放）（**2026-11-09 收敛并裁决**：pod 重新设计放 1.4（Q10 已裁决））
   - 说明：5 个仓库的工作区里，同时跑两个只涉及一个仓库的小 Demand，就要建 8 个窗口和 5 个 worktree，事后还要逐个处置 5 个分支（大多数根本没动过）。会话数翻倍也会让 hook 目录更快触顶。再加上一个 pod 一个 Demand、升级会卡住整个 pod，用户会被推向串行工作。
   - 证据：wakeflow-pod-request.schema.json createIntent 只有 {kind, name, idempotencyKey}，窗口集合由 Wakeflow 推导，每个仓库一个产品窗口加一个 worktree，外加 Controller、Design、Test；demand/decide.ts:234,279：每个 pod 只能有一个 Demand；gate-log §13.128：8 窗口 pod 意味着一台机器上 16 个 Claude 会话，启动和关闭各花十几分钟；§13.130 D9：只要存在 worktree pod，加仓库就在配置解析时被拒（configReason topology）
   - 建议：让用户决定 pod 的范围：createIntent 可以指定仓库，只生成这些仓库的产品窗口和 worktree；考虑让处置完毕的 pod 不拆除就认领下一个 Demand。把结论记入 ADR-0010。
@@ -547,7 +549,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：§13.135 现场：测试期间有人在 AlembicDashboard 放了一个文件，ts-5 以 environment 失败；Controller 记 blocked，用户删掉文件后，`request-another-attempt` 仍因 `classification:ts-5:environment` 被拒，唯一可记的是再 blocked 或 escalate。D7 规则只允许 harness-defect、flaky、missing-evidence 重跑。
   - 证据：`result-review/decide.ts` 的 `rerunBlockers`；`test-step-vocabulary.ts` 的 `RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS`；聚合的恢复准入（`condition-cleared` 只接 blocked）本来就允许从 test-review-blocked 记任何决定。
   - 建议：（已做）见状态。
-- **H10** [中 / 缺口] requirement-supplement 续接从不写回需求包：归档里的 requirement.md 仍是补充前的定义，补充内容只在续接事件摘要与任务包里（计划阶段 5；状态：开放，§13.135 现场；与 Q7 同一问题域）（**2026-11-09 收敛：待裁决**——同 H2：补充内容写回归档）
+- **H10** [中 / 缺口] requirement-supplement 续接从不写回需求包：归档里的 requirement.md 仍是补充前的定义，补充内容只在续接事件摘要与任务包里（计划阶段 5；状态：开放，§13.135 现场；与 Q7 同一问题域）（**2026-11-09 收敛并裁决**：1.3.0 批 4（Q7 已裁决））
   - 说明：§13.135 现场续接"在文件末尾加一行"：实现窗口、Test 与 Controller 都指出 requirement.md 仍写"只有一句话"，以后只看需求文档的人会以为结果与需求不符。
   - 证据：§13.135 现场；`wakeflow_continue_demand` 只追加续接事件，需求包成员不可变。
   - 建议：随 Q7 一并裁决：补充包作为新的需求包成员（或新包 supersedes 原包）进入归档，或者归档的 manifest 把续接摘要列为需求的一部分。

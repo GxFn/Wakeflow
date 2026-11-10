@@ -31,6 +31,10 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   directly, so every artifact rebuild is a deployment (ADR-0026). Rebuild only at
   the end of a stage, after checking that workspace has no active Demand, and
   say so in the handoff; run experiments in disposable test workspaces only.
+  A consolidation release is developed in one worktree under
+  `.claude/worktrees/` on `dev/<version>` (ADR-0026 addendum): rebuilds there
+  are not deployments, `main` stays where it was until the release is
+  fast-forwarded once, and the gate-log and register move with the branch.
 
 ## Source Ownership
 

@@ -347,6 +347,50 @@ test("record_delivery_outcome：围栏不符被拒；无落地证据为 indeterm
   }
 });
 
+test("ADR-0027：宿主改动了投递文本——摘要不符但记录带着许可标识，结局 accepted（hook-record-identity）；截断掉身份行的仍是 indeterminate", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    const prepared = await prepareFixtureDelivery(fixture);
+    const prompt = prepared.permit.prompt;
+    // 许可身份行是 prompt 的最后一行，带的就是这次投递的 deliveryId。
+    equal(prompt.trimEnd().endsWith(`\n- permitId: ${prepared.delivery.deliveryId}`), true);
+    // 截断：最后一行没到，记录里没有身份，摘要也不符——与"什么都没到"一样是 indeterminate。
+    await landFixturePrompt(fixture, fixture.route, prompt.slice(0, prompt.lastIndexOf("\n")));
+    const pending = await recordFixtureDeliveryOutcome(fixture, prepared);
+    equal(pending.outcome.disposition, "indeterminate");
+    equal(pending.outcome.evidenceKind, "agent-declaration");
+    equal(pending.next.blockers.includes("landing-evidence-missing"), true);
+    // 改字：整段都到了，宿主把一个字符换了。摘要不符，身份还在。
+    const altered = prompt.replace(":", "：");
+    equal(altered === prompt, false);
+    equal(computeDeliveryPromptDigest(altered) === prepared.permit.promptDigest, false);
+    const landed = await landFixturePrompt(
+      fixture,
+      fixture.route,
+      altered,
+      parseUtcInstant("2026-08-29T12:18:00.000Z"),
+    );
+    const accepted = await recordFixtureDeliveryOutcome(
+      fixture,
+      prepared,
+      {
+        idempotencyKey: "fixture-outcome-identity",
+        expectedStreamRevision: pending.event.streamRevision,
+        observedAt: parseUtcInstant("2026-08-29T12:19:00.000Z"),
+      },
+      { clock: () => parseUtcInstant("2026-08-29T12:19:00.000Z") },
+    );
+    equal(accepted.outcome.disposition, "accepted");
+    equal(accepted.outcome.evidenceKind, "hook-record-identity");
+    equal(accepted.outcome.hookRecordId, landed.record.recordId);
+    equal(accepted.outcome.claimHandling, "retain");
+    equal(accepted.target.phase, "host-effect-accepted");
+    equal(accepted.next.frontier, "implementation-target-result-import");
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
 test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并可 rearm 至上限，之后重新准备新信封", async () => {
   const fixture = await createDeliveryWorkspaceFixture();
   try {

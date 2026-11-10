@@ -768,7 +768,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "keep the tool's return unchanged as `attempt.sendReturn`",
       '`"failed-before-send"` when nothing was sent',
       "before recording the outcome",
-      `\`${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} landing --window <windowId> --prompt-digest <the permit's promptDigest>\``,
+      `\`${CLAUDE_CODE_DESKTOP_ASSET_COMMAND} landing --window <windowId> --prompt-ref <the permit's promptRef>\``,
       "only the target's `user-prompt-submit` record proves landing",
     ],
     "deliveryAction",
@@ -971,7 +971,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
     "### `preflight`",
     "### `launch --window <windowId> [--wait <seconds>] [--wait-session-start <seconds>] [--force]`",
     "### `sessions`",
-    "### `landing --window <windowId> --prompt-digest <sha256:…> [--wait-landing <seconds>]`",
+    "### `landing --window <windowId> --prompt-ref <promptRef> [--wait-landing <seconds>]`",
   ]) {
     ok(desktop.includes(`\n${usage}\n`), `desktop reference lacks the usage heading ${usage}`);
   }

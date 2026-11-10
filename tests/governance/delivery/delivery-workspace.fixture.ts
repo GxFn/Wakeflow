@@ -28,6 +28,10 @@ import {
   type WriteHostHookObservationReceipt,
   writeHostHookObservation,
 } from "../../../src/kernel/hook-observations.js";
+import {
+  countPromptCharacters,
+  extractPromptPermitIds,
+} from "../../../src/kernel/prompt-digest.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
@@ -345,7 +349,10 @@ export function fixtureLandingInstant(attempt: number): UtcInstant {
       );
 }
 
-/** 在目标会话里落地一条与许可 prompt 摘要一致的 `user-prompt-submit` 记录。 */
+/**
+ * 在目标会话里落地一条 `user-prompt-submit` 记录，三件 prompt 事实与观察器写的相同：摘要、许可标识
+ * 与字符数（ADR-0027）。传入被改动过的文本即得到"摘要不符、身份还在"的记录。
+ */
 export async function landFixturePrompt(
   fixture: Readonly<{
     readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"];
@@ -361,6 +368,8 @@ export async function landFixturePrompt(
     cwd: route.windowPath,
     recordedAt,
     promptDigest: computeDeliveryPromptDigest(prompt),
+    promptPermitIds: extractPromptPermitIds(prompt),
+    promptCharacters: countPromptCharacters(prompt),
   });
 }
 

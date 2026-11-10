@@ -5788,3 +5788,21 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **残留。** 正式工作区还没有走过 1.2.0 → 1.2.1 → 1.2.2 的升级路径（Controller 与 Design 的会话已在 1.2.1 的观察器下重新起过，尚无 prompt）；H11 与 I21 的现场要等下一个 Demand；X28。
 
 **结论：通过（第 2 级门 run-XxwbnK 1758/1758）。`v1.2.1` 发布闭环；1.2.2 让目标导入不再必撞一次冲突、Finder 的元数据文件不再让严格校验失败，已重建并部署。**
+
+### 13.235 `v1.2.2` tag 与 `release:check`；1.3 第一批：落地按许可身份判定，整段摘要降为完整性事实（ADR-0027）（2026-11-09）
+
+- **`v1.2.2`。** 用户推送 §13.234 的三个提交后，轻量 tag `v1.2.2` 打在 `d8e89099` 并推送，`npm run release:check` 一次通过（`main`、树干净、tag 在 HEAD、`origin/main` 同一提交、六个版本源都是 1.2.2）；都是用户执行的。
+- **为什么做（ADR-0027）。** 落地由"目标会话的 prompt 记录摘要等于许可摘要"证明，而文本要经过宿主，宿主两周内三次改动它（L18 的 system-reminder 前缀、X25 的反斜杠解码、X27 的 `@` 折成全角），每次都让投递落入 indeterminate、现场排查一轮。其后的出路是 Controller 引用那条摘要不同的记录显式接受——它看不到收到的文本，这一步并不核对内容。"prompt 到了那个会话"与"文本一字未改"是两件事，被一个摘要同时回答。
+- **做了什么。**
+  - 许可身份行：投递与回调 prompt 的最后一行 `- permitId: <target-delivery 标识>`（投递是 `deliveryId`，回调是 `callbackId`）；内核 `prompt-digest.ts` 给出渲染、按整行抽取、字符数与唯一一条匹配规则 `findPromptLanding`（先摘要、后身份）。
+  - hook 记录加两个可选键 `promptPermitIds`（至多 4 个）与 `promptCharacters`；观察器在解包宿主外壳之后算出摘要、标识与字符数，三者各算各的。记录仍不含正文。
+  - 投递结局：摘要相符为 `hook-record`，摘要不符但记录带着许可标识为新的证据种类 `hook-record-identity`，都记为 accepted；都没有时与原来相同。四份 Schema 的枚举同步，生成类型重建。
+  - 回调：评审单元的 `callbackLanding` 与回调重发的静默判断按同一规则；决定记录的形状不变。
+  - 两个助手同批（双传输对等）：tmux 的 `deliver` 与桌面的 `landing` 从许可的 prompt 文件读出摘要与标识，输出 `match: "digest" | "identity"`；桌面 `landing` 改收 `--prompt-ref`（只给 `--prompt-digest` 的旧用法仍按摘要查）。助手的 prompt 摘要改为与内核同一条规则——1.2.1 之后 tmux 助手核对许可文件时没有折回全角 `＠`，许可文本里真写了它会被拒 `prompt-digest-mismatch`（Y17，读代码所得，未在现场发生）。
+  - 文本：桌面参考的 `landing` 小节与 Step 8、投递参考的 accepted 条目、`deliveryAction` 取值；两份参考仍 400 / 362 行，Controller 技能渲染预算未动。
+- **接受语义的变化。** 带着许可标识、文本被改动的 prompt 现在自动接受并标为 `hook-record-identity`；此前由 Controller 不核对内容地手工接受。截断（身份行没到）仍是 indeterminate。完整性是事实不是门：Controller 在回报里告诉用户哪次投递的文本被改动，目标照旧以任务包为准。
+- **验证。** 第 2 级门一次通过：run-twCvLr 1768/1768、`inputsUnchanged`（我的运行；重建前只读核对正式工作区没有活动 Demand）。之前的 tier 0：内核、hook 记录、观察器、两处决定与两个 prompt 74/74（新增：身份行渲染与抽取、整行匹配与不可信文本、字符数、匹配规则、记录可选键往返与旧记录、观察器在外壳加改字下仍记下标识而截断后没有），投递与评审服务 20/20（新增：截断的落地是 indeterminate、改字的落地是 accepted 且证据种类 `hook-record-identity`），桌面助手 17/17（新增：`--prompt-ref` 下按摘要与按身份、两者都给须一致、旧用法认不出身份落地），tmux 助手 31/31（新增：带全角 `＠` 的许可文本摘要与内核相同、身份落地后不再粘贴第二遍），文本钉与两个助手 82/82；`schema:check` 无漂移。`smoke:artifacts` 4/4；`wf timings apply` 写入耗时；`wf handoff` 八项通过。本节随源码、测试与文档提交，制品另一提交。
+- **发布。** `assets/release/version.json` 1.2.2 → 1.3.0（新证据种类与记录字段，ADR-0026 决定 3），重建即部署。`v1.3.0` 的 tag 不随本批：小版本 tag 前两种传输各做一次窗口生命周期现场（ADR-0026 决定 5），1.3 的第二批也在 tag 之前。
+- **残留。** 现场证据全部待做：身份落地（正式工作区下一次带 `@` 的投递即是）、桌面 `landing --prompt-ref`、tmux `deliver` 的 `match`、连续 `/next`（I21）、导入不带修订（H11）、插件升级路径（1.2.0 → 1.3.0）；`promptCharacters` 只进记录与助手，没有进公共工具结果（ADR-0027 未决）；1.3 第二批：绑定记录宿主版本与启动参数取值（G14）、回调许可带 transport（X29 后续）、诊断落点（G1）。
+
+**结论：通过（第 2 级门 run-twCvLr 1768/1768）。`v1.2.2` 发布闭环；落地按许可身份判定、整段摘要降为完整性事实，在共享层、两个助手与文本上同批落地，1.3.0 已重建并部署，tag 待两传输现场。**

@@ -112,7 +112,13 @@
       "required": ["kind", "hookRecordId", "rationale"],
       "properties": {
         "kind": {
-          "enum": ["hook-record", "host-send-return", "agent-declaration", "controller-resolution"]
+          "enum": [
+            "hook-record",
+            "hook-record-identity",
+            "host-send-return",
+            "agent-declaration",
+            "controller-resolution"
+          ]
         },
         "hookRecordId": {
           "oneOf": [
@@ -203,7 +209,12 @@
             "type": "object",
             "properties": {
               "kind": {
-                "enum": ["hook-record", "host-send-return", "controller-resolution"]
+                "enum": [
+                  "hook-record",
+                  "hook-record-identity",
+                  "host-send-return",
+                  "controller-resolution"
+                ]
               }
             }
           }
@@ -239,7 +250,7 @@
             "type": "object",
             "properties": {
               "kind": {
-                "const": "hook-record"
+                "enum": ["hook-record", "hook-record-identity"]
               }
             },
             "required": ["kind"]

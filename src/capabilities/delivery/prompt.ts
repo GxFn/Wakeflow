@@ -11,6 +11,7 @@ import type { RequirementSection } from "../../governance/ledger/ledger-authorit
 import type { LedgerAuthorityMemberReference } from "../../governance/ledger/ledger-authority-store-contract.js";
 import type { TaskPackage } from "../../governance/tasking/task-package.js";
 import { fail } from "../../kernel/error.js";
+import { renderPromptPermitIdLine } from "../../kernel/prompt-digest.js";
 import { DELIVERY_REQUIRED_SKILLS } from "./decide.js";
 
 /**
@@ -496,6 +497,7 @@ export function renderDeliveryPortablePrompt(input: Readonly<RenderDeliveryPromp
       `- deliveryId: ${input.returnPointer.deliveryId}`,
       `- generation: ${input.returnPointer.generation}`,
       `- claimDigest: ${input.returnPointer.claimDigest}`,
+      renderPromptPermitIdLine(input.returnPointer.deliveryId),
     ]),
   ];
   const prompt = lines.join("\n");

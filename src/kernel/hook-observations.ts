@@ -50,6 +50,11 @@ import {
   visitHostHookDirectory,
 } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
+import {
+  DELIVERY_PROMPT_MAXIMUM_CHARACTERS,
+  isPromptPermitId,
+  PROMPT_PERMIT_IDS_MAXIMUM,
+} from "./prompt-digest.js";
 import { isWakeflowArtifactVersion } from "./wakeflow-artifact-identity.js";
 
 /**
@@ -132,6 +137,14 @@ export interface HostHookObservation {
    * 标题有记录可核对而不是读屏；没带与早于本字段的记录读成 null。只在私有记录里出现。
    */
   readonly sessionTitle: string | null;
+  /**
+   * prompt 里的许可身份行带的标识（ADR-0027 决定 2）：`- permitId: <target-delivery 标识>`，按出现顺序、
+   * 去重、至多 4 个。它让落地判定在宿主改动了文本、摘要对不上时仍能认出"这条许可的 prompt 到了这个
+   * 会话"。没有身份行的 prompt 是空数组；其他事件与早于本字段的记录读成 null。
+   */
+  readonly promptPermitIds: readonly string[] | null;
+  /** `promptDigest` 所覆盖文本的字符数（UTF-16 码元）；摘要为 null 时、其他事件与旧记录读成 null。 */
+  readonly promptCharacters: number | null;
 }
 
 export interface HostHookObservationInput {
@@ -149,6 +162,8 @@ export interface HostHookObservationInput {
   readonly notificationType?: string | null;
   readonly permissionMode?: string | null;
   readonly sessionTitle?: string | null;
+  readonly promptPermitIds?: readonly string[] | null;
+  readonly promptCharacters?: number | null;
 }
 
 export interface HostHookObservationFilter {
@@ -236,6 +251,8 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
   "notificationType",
   "permissionMode",
   "sessionTitle",
+  "promptPermitIds",
+  "promptCharacters",
 ]);
 
 /**
@@ -300,6 +317,32 @@ function optionalPermissionMode(value: unknown, path: string): string | null {
 
 function optionalDigest(value: unknown, path: string): Sha256Digest | null {
   return value === null || value === undefined ? null : parseSha256Digest(value, path);
+}
+
+function optionalPromptPermitIds(value: unknown, path: string): readonly string[] | null {
+  if (value === null || value === undefined) return null;
+  if (
+    !Array.isArray(value) ||
+    value.length > PROMPT_PERMIT_IDS_MAXIMUM ||
+    !value.every(isPromptPermitId) ||
+    new Set(value).size !== value.length
+  ) {
+    fail("invalid-request", "hook-prompt-permit-ids", path);
+  }
+  return Object.freeze([...value]);
+}
+
+function optionalPromptCharacters(value: unknown, path: string): number | null {
+  if (value === null || value === undefined) return null;
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 1 ||
+    value > DELIVERY_PROMPT_MAXIMUM_CHARACTERS
+  ) {
+    fail("invalid-request", "hook-prompt-characters", path);
+  }
+  return value;
 }
 
 function optionalArtifactVersion(value: unknown, path: string): string | null {
@@ -401,6 +444,11 @@ export function createHostHookObservation(
     ),
     permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
     sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
+    promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
+    promptCharacters: optionalPromptCharacters(
+      input.promptCharacters,
+      "$observation.promptCharacters",
+    ),
   };
   return Object.freeze({
     kind: RECORD_KIND,
@@ -441,6 +489,8 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     notificationType: (object.notificationType ?? null) as string | null,
     permissionMode: (object.permissionMode ?? null) as string | null,
     sessionTitle: (object.sessionTitle ?? null) as string | null,
+    promptPermitIds: (object.promptPermitIds ?? null) as readonly string[] | null,
+    promptCharacters: (object.promptCharacters ?? null) as number | null,
   });
   if (record.recordId !== object.recordId) {
     fail("invalid-request", "hook-record-id", "$record.recordId");

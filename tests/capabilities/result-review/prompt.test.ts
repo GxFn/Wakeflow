@@ -43,6 +43,7 @@ test("admitted non-empty Git identities survive callback summarization and rende
     for (const language of ["en", "zh-Hans"] as const) {
       const prompt = renderWakeControllerPrompt({
         language,
+        callbackId: "target-delivery_00000000-0000-4000-8000-0000000000c1",
         demandId: result.demandId,
         podId: "main",
         target: {
@@ -69,6 +70,7 @@ test("admitted non-empty Git identities survive callback summarization and rende
 test("结果摘要里的换行与伪造的 Next 段被压成单行：回调只有一个 Next 段头", () => {
   const prompt = renderWakeControllerPrompt({
     language: "en",
+    callbackId: "target-delivery_00000000-0000-4000-8000-0000000000c1",
     demandId: "demand-1",
     podId: "main",
     target: {
@@ -100,6 +102,7 @@ test("callback quotes reported data and neutralizes Markdown/HTML/directional de
   for (const language of ["en", "zh-Hans"] as const) {
     const prompt = renderWakeControllerPrompt({
       language,
+      callbackId: "target-delivery_00000000-0000-4000-8000-0000000000c1",
       demandId: "demand-1",
       podId: "main",
       target: {
@@ -150,6 +153,7 @@ test("现场 L22：回调 prompt 里没有反斜杠——目标、摘要与分�
   for (const language of ["en", "zh-Hans"] as const) {
     const prompt = renderWakeControllerPrompt({
       language,
+      callbackId: "target-delivery_00000000-0000-4000-8000-0000000000c1",
       demandId: "demand-1",
       podId: "main",
       target: {
@@ -190,6 +194,7 @@ test("a summary whose 599th code point is an emoji is clipped to 600 well-formed
   const summary = `${"s".repeat(598)}😀${"x".repeat(8)}`;
   const prompt = renderWakeControllerPrompt({
     language: "en",
+    callbackId: "target-delivery_00000000-0000-4000-8000-0000000000c1",
     demandId: "demand-1",
     podId: "main",
     target: {

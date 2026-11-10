@@ -291,6 +291,11 @@ test("两宿主 × 四事件：从工作区根提交的宿主 payload 各落一�
     );
     equal(byEvent.get("stop")?.promptDigest, null);
     equal(byEvent.get("session-start")?.promptDigest, null);
+    // ADR-0027：提交的 prompt 还留下许可标识（没有身份行即空数组）与摘要所覆盖文本的字符数；其他事件为 null。
+    deepEqual(byEvent.get("user-prompt-submit")?.promptPermitIds, []);
+    equal(byEvent.get("user-prompt-submit")?.promptCharacters, PROMPT.trim().length);
+    equal(byEvent.get("stop")?.promptPermitIds, null);
+    equal(byEvent.get("stop")?.promptCharacters, null);
     // D3：lastAssistantMessageDigest 是 last_assistant_message 原文的 UTF-8 sha256，只在 stop 上。
     equal(
       byEvent.get("stop")?.lastAssistantMessageDigest,
@@ -1125,6 +1130,47 @@ test("Claude Code 的传输外壳不进摘要：粘贴块与跨会话消息剥�
         : [computeDeliveryPromptDigest(pasted), computeDeliveryPromptDigest(crossSession)].sort();
     deepEqual(digests, expected, host);
   }
+});
+
+test("ADR-0027：宿主改动了文本时摘要对不上，许可标识照样进记录；截断掉身份行就没有标识", async (t) => {
+  const fixture = createFixture(t);
+  const cwd = path.join(fixture.repository, "src");
+  const permitId = "target-delivery_00000000-0000-4000-8000-0000000000d1";
+  const permitPrompt = `不升级 @types/node。\n\n派发记录:\n- deliveryId: ${permitId}\n- permitId: ${permitId}`;
+  // 现场 X27 的形状加一种还没见过的改法（把 ASCII 引号换成弯引号）：外壳、框架文字、字符替换。
+  const altered = `Another Claude session sent a message:\n<cross-session-message from="local_1" from-name="Controller">\n${permitPrompt.replace("不升级", "“不升级”")}\n</cross-session-message>\n\nThis came from another Claude session.`;
+  const truncated = permitPrompt.slice(0, permitPrompt.lastIndexOf("\n"));
+  const host: HostId = "claude-code";
+  const sessionId = SESSION_IDS[host];
+  equal(
+    (await observe(host, hookPayload("SessionStart", sessionId, cwd, fixture.transcriptPath))).code,
+    null,
+  );
+  writeBinding(fixture.workspace, host, sessionId);
+  for (const [index, prompt] of [permitPrompt, altered, truncated].entries()) {
+    const outcome = await observe(
+      host,
+      hookPayload("UserPromptSubmit", sessionId, cwd, fixture.transcriptPath, {
+        prompt,
+        prompt_id: `prompt-${index}`,
+      }),
+    );
+    equal(outcome.code, null);
+  }
+  const records = (await readBack(fixture.workspace, host)).records.filter(
+    (record) => record.event === "user-prompt-submit",
+  );
+  const byTurn = new Map(records.map((record) => [record.turnId, record]));
+  const intact = byTurn.get("prompt-0");
+  const changed = byTurn.get("prompt-1");
+  const cut = byTurn.get("prompt-2");
+  equal(intact?.promptDigest, computeDeliveryPromptDigest(permitPrompt));
+  deepEqual(intact?.promptPermitIds, [permitId]);
+  equal(intact?.promptCharacters, permitPrompt.length);
+  equal(changed?.promptDigest === intact?.promptDigest, false);
+  deepEqual(changed?.promptPermitIds, [permitId]);
+  equal(changed?.promptCharacters, permitPrompt.length + 2);
+  deepEqual(cut?.promptPermitIds, []);
 });
 
 test("launcher 交来的制品 manifest 摘要与版本原样进记录，没交时为 null（§13.127；§3.6 C6）", async (t) => {

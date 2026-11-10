@@ -13,6 +13,7 @@ import type {
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 
 /**
  * Wakeflow Capabilities / Delivery：投递切片的纯决定（能力卡 6，ADR-0009，ADR-0012 D2）。
@@ -42,6 +43,8 @@ export const DELIVERY_REQUIRED_SKILLS: Readonly<
 export interface HookLandingRecord {
   readonly recordId: string;
   readonly promptDigest: Sha256Digest | null;
+  /** 记录里的许可标识（ADR-0027）；早于该字段的记录是 null。 */
+  readonly promptPermitIds: readonly string[] | null;
   readonly recordedAt: UtcInstant;
 }
 
@@ -62,6 +65,8 @@ export interface DispositionInput {
   /** 目标会话在许可签发之后的 `user-prompt-submit` 记录。 */
   readonly landingRecords: readonly Readonly<HookLandingRecord>[];
   readonly expectedPromptDigest: Sha256Digest;
+  /** 本许可的标识（投递的 `deliveryId`）：摘要不符时凭它认出落地（ADR-0027 决定 3）。 */
+  readonly permitId: string;
   readonly resolution: Readonly<{
     readonly disposition: "accepted" | "rejected-before-send";
     readonly hookRecordId: string | null;
@@ -120,15 +125,23 @@ function resolutionDecision(input: DispositionInput): DispositionDecision {
 }
 
 /**
- * 处置派生（能力卡 6 修订）：匹配的 hook 记录 → accepted；发送调用失败且未触碰会话 →
+ * 处置派生（能力卡 6 修订；ADR-0027）：摘要相符的 hook 记录 → accepted（`hook-record`）；摘要不符但
+ * 带着许可标识的记录 → accepted（`hook-record-identity`，文本被宿主改动）；发送调用失败且未触碰会话 →
  * rejected-before-send；Codex 的发送返回摘要 → accepted；其余 indeterminate。显式解决优先。
  */
 export function deriveDeliveryDisposition(input: Readonly<DispositionInput>): DispositionDecision {
   if (input.resolution !== null) return resolutionDecision(input);
-  const landed = input.landingRecords.find(
-    (record) => record.promptDigest === input.expectedPromptDigest,
-  );
-  if (landed !== undefined) return decided("accepted", "hook-record", landed.recordId);
+  const landed = findPromptLanding(input.landingRecords, {
+    promptDigest: input.expectedPromptDigest,
+    permitId: input.permitId,
+  });
+  if (landed !== null) {
+    return decided(
+      "accepted",
+      landed.match === "digest" ? "hook-record" : "hook-record-identity",
+      landed.record.recordId,
+    );
+  }
   if (input.attempt.status === "failed-before-send") {
     if (input.currentlyIndeterminate) {
       return Object.freeze({ accepted: false as const, blocker: "attempt-status" });

@@ -61,6 +61,7 @@ const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
 const REPORTED_AT = parseUtcInstant("2026-08-29T12:10:00.000Z");
 const ISSUED_AT = parseUtcInstant("2026-08-29T12:10:30.000Z");
+const CALLBACK_ID = "target-delivery_00000000-0000-4000-8000-0000000000c1";
 const TARGET_A =
   "target-task_99999999-9999-4999-8999-999999999999" as WakeflowDurableId<"target-task">;
 const TARGET_B =
@@ -147,24 +148,28 @@ test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落
       recordId: "r0",
       event: "stop",
       promptDigest: null,
+      promptPermitIds: null,
       recordedAt: parseUtcInstant("2026-08-29T12:09:00.000Z"),
     },
     {
       recordId: "r2",
       event: "turn-complete",
       promptDigest: null,
+      promptPermitIds: null,
       recordedAt: parseUtcInstant("2026-08-29T12:12:00.000Z"),
     },
     {
       recordId: "r1",
       event: "stop",
       promptDigest: null,
+      promptPermitIds: null,
       recordedAt: parseUtcInstant("2026-08-29T12:11:00.000Z"),
     },
     {
       recordId: "r3",
       event: "user-prompt-submit",
       promptDigest: DIGEST,
+      promptPermitIds: null,
       recordedAt: parseUtcInstant("2026-08-29T12:11:30.000Z"),
     },
   ];
@@ -175,17 +180,65 @@ test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落
     observedAt: parseUtcInstant("2026-08-29T12:11:00.000Z"),
   });
   deepEqual(deriveTargetCompletion(records.slice(0, 1), REPORTED_AT), { status: "pending" });
-  deepEqual(deriveCallbackLanding(records, DIGEST, ISSUED_AT), {
-    recordId: "r3",
-    landedAt: parseUtcInstant("2026-08-29T12:11:30.000Z"),
-  });
-  equal(deriveCallbackLanding(records, OTHER_DIGEST, ISSUED_AT), null);
-  equal(deriveCallbackLanding(records, DIGEST, parseUtcInstant("2026-08-29T12:12:00.000Z")), null);
+  deepEqual(
+    deriveCallbackLanding(records, { promptDigest: DIGEST, permitId: CALLBACK_ID }, ISSUED_AT),
+    {
+      recordId: "r3",
+      landedAt: parseUtcInstant("2026-08-29T12:11:30.000Z"),
+    },
+  );
+  equal(
+    deriveCallbackLanding(
+      records,
+      { promptDigest: OTHER_DIGEST, permitId: CALLBACK_ID },
+      ISSUED_AT,
+    ),
+    null,
+  );
+  // ADR-0027 决定 5：摘要不符但带着回调许可标识的记录也是落地；状态同样是 landed。
+  const alteredCallback = [
+    {
+      recordId: "r4",
+      event: "user-prompt-submit",
+      promptDigest: OTHER_DIGEST,
+      promptPermitIds: [CALLBACK_ID],
+      recordedAt: parseUtcInstant("2026-08-29T12:11:40.000Z"),
+    },
+  ];
+  deepEqual(
+    deriveCallbackLanding(
+      alteredCallback,
+      { promptDigest: DIGEST, permitId: CALLBACK_ID },
+      ISSUED_AT,
+    ),
+    { recordId: "r4", landedAt: parseUtcInstant("2026-08-29T12:11:40.000Z") },
+  );
+  equal(
+    deriveTargetResultCallbackStatus({
+      issuedAt: ISSUED_AT,
+      promptDigest: DIGEST,
+      callbackId: CALLBACK_ID,
+      landingRecords: alteredCallback,
+      acknowledged: false,
+      now: parseUtcInstant("2026-08-29T12:21:00.000Z"),
+      silenceMilliseconds: 10 * 60 * 1000,
+    }).status,
+    "landed",
+  );
+  equal(
+    deriveCallbackLanding(
+      records,
+      { promptDigest: DIGEST, permitId: CALLBACK_ID },
+      parseUtcInstant("2026-08-29T12:12:00.000Z"),
+    ),
+    null,
+  );
   const silenceMilliseconds = 10 * 60 * 1000;
   equal(
     deriveTargetResultCallbackStatus({
       issuedAt: ISSUED_AT,
       promptDigest: DIGEST,
+      callbackId: CALLBACK_ID,
       landingRecords: [],
       acknowledged: false,
       now: parseUtcInstant("2026-08-29T12:15:00.000Z"),
@@ -197,6 +250,7 @@ test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落
     deriveTargetResultCallbackStatus({
       issuedAt: ISSUED_AT,
       promptDigest: DIGEST,
+      callbackId: CALLBACK_ID,
       landingRecords: [],
       acknowledged: false,
       now: parseUtcInstant("2026-08-29T12:21:00.000Z"),
@@ -208,6 +262,7 @@ test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落
     deriveTargetResultCallbackStatus({
       issuedAt: ISSUED_AT,
       promptDigest: DIGEST,
+      callbackId: CALLBACK_ID,
       landingRecords: records,
       acknowledged: false,
       now: parseUtcInstant("2026-08-29T12:21:00.000Z"),
@@ -219,6 +274,7 @@ test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落
     deriveTargetResultCallbackStatus({
       issuedAt: ISSUED_AT,
       promptDigest: DIGEST,
+      callbackId: CALLBACK_ID,
       landingRecords: [],
       acknowledged: true,
       now: parseUtcInstant("2026-08-29T12:21:00.000Z"),

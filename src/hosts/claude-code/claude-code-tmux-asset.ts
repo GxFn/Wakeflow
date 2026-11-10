@@ -78,7 +78,8 @@ import { CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR } from "./claude-code-window-lau
  *   许可里的 prompt；先核对 pane（与定位器相关的 pane 恰好一个、活着、跑的是 claude、标识与坐标都对），
  *   粘贴前截屏一次：尾部看不到输入框（权限、信任对话框或选择菜单）就拒绝为 failed-before-send 的
  *   `target-not-at-prompt`（`--force` 不跳过），截屏失败为 `capture-failed`；
- *   粘贴、回车一次、回读一次，再等目标会话的 user-prompt-submit hook 记录（默认 3 秒），打印
+ *   粘贴、回车一次、回读一次，再等目标会话里这条许可的 user-prompt-submit hook 记录（默认 3 秒；摘要相符为
+ *   landing.match digest，带着许可标识而摘要不符为 identity——文本被宿主改动，ADR-0027），打印
  *   `wakeflow_record_delivery_outcome` 的 attempt、readback 与 landing。回读（§13.130 H1）看两种
  *   屏幕证据：prompt 首行子串，或 Claude Code 把粘贴折叠成的 `[Pasted text #N +M lines]` 指示且
  *   M 与 prompt 行数一致；都看不到才是 pending。回读只是屏幕摘要，落地仍只看 hook 记录。
@@ -316,6 +317,27 @@ function sha256(text) {
   return "sha256:" + createHash("sha256").update(text, "utf8").digest("hex");
 }
 
+// 摘要规则与内核同一条（kernel/prompt-digest.ts）：去首尾空白、全角 ＠（U+FF20）折回 @ 之后的 UTF-8 SHA-256。
+// 桌面 app 把跨会话消息里的 @ 折成全角（X27）；许可文件里真写了全角的也按折回后的文本算。
+function promptDigestOf(prompt) {
+  return sha256(prompt.trim().replace(/＠/gu, "@"));
+}
+
+// 许可身份行（ADR-0027）：prompt 最后一行 "- permitId: <target-delivery 标识>"，按整行匹配；规则与内核同一条。
+const PERMIT_ID_LINE_PATTERN = /^- permitId: (target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
+const PERMIT_IDS_MAXIMUM = 4;
+
+function promptPermitIdsOf(prompt) {
+  const found = [];
+  for (const line of prompt.split("\n")) {
+    const match = PERMIT_ID_LINE_PATTERN.exec(line.trim());
+    if (match === null || found.includes(match[1])) continue;
+    found.push(match[1]);
+    if (found.length === PERMIT_IDS_MAXIMUM) break;
+  }
+  return found;
+}
+
 function readBoundedJson(file, maximumBytes) {
   let descriptor = null;
   try {
@@ -420,6 +442,24 @@ function latestHookRecord(event, sessionId, promptDigest = null) {
     if (basename > latestName) { latestName = basename; latest = record; }
   }
   return latest;
+}
+
+// 落地记录（ADR-0027 决定 3）：先找摘要相符的（文本完整），没有再找带着许可标识的（文本被宿主改动）；
+// 各取最新一条。服务端按同一规则判定，这里只是让调用方在记录结局之前看到它会怎么判。
+function landingRecord(sessionId, promptDigest, permitIds) {
+  const intact = latestHookRecord("user-prompt-submit", sessionId, promptDigest);
+  if (intact !== null) return { record: intact, match: "digest" };
+  if (permitIds.length === 0) return null;
+  let latest = null;
+  let latestName = "";
+  for (const name of hookNames("user-prompt-submit")) {
+    const record = readHookRecord(name);
+    if (record === null || record.sessionId !== sessionId || !Array.isArray(record.promptPermitIds)) continue;
+    if (!record.promptPermitIds.some((id) => permitIds.includes(id))) continue;
+    const basename = path.basename(name);
+    if (basename > latestName) { latestName = basename; latest = record; }
+  }
+  return latest === null ? null : { record: latest, match: "identity" };
 }
 
 function readStdinBytes() {
@@ -1735,7 +1775,7 @@ function readPermitPrompt(promptRef, promptDigest) {
     refuse("prompt-ref-invalid");
   }
   if (text.trim().length === 0) refuse("prompt-ref-empty");
-  if (sha256(text.trim()) !== promptDigest) refuse("prompt-digest-mismatch");
+  if (promptDigestOf(text) !== promptDigest) refuse("prompt-digest-mismatch");
   return text;
 }
 
@@ -1794,25 +1834,24 @@ function sessionConversed(sessionId) {
   return latestHookRecord("user-prompt-submit", sessionId) !== null;
 }
 
-// 落地证据是目标会话的 user-prompt-submit hook 记录：摘要按内核规则取去首尾空白后 UTF-8 的 SHA-256；
-// 观察脚本已剥掉宿主的粘贴外壳，所以记录里的摘要就是这里算的值。只查已存在的记录，不推断。
-function promptSubmitRecord(sessionId, promptDigest) {
-  return latestHookRecord("user-prompt-submit", sessionId, promptDigest);
-}
-
+// 落地证据是目标会话的 user-prompt-submit hook 记录：摘要与许可相符（match: "digest"），或记录带着许可
+// 标识而摘要不符——prompt 到了、文本被宿主改动（match: "identity"，ADR-0027）。观察脚本已剥掉宿主的粘贴
+// 外壳，所以记录里的摘要就是这里算的值。只查已存在的记录，不推断。
 function observeLanding(windowId, prompt, seconds) {
   const binding = readBoundedJson(path.join(ROOT, ...BINDINGS.split("/"), windowId + ".json"), MAX_RECORD_BYTES);
   const sessionId = binding?.handle?.kind === HANDLE_KIND ? binding.handle.value : null;
   if (typeof sessionId !== "string") return { status: "unavailable" };
-  const promptDigest = sha256(prompt.trim());
+  const promptDigest = promptDigestOf(prompt);
+  const permitIds = promptPermitIdsOf(prompt);
   const deadline = Date.now() + seconds * 1000;
   for (;;) {
-    const record = promptSubmitRecord(sessionId, promptDigest);
-    if (record !== null) {
+    const landed = landingRecord(sessionId, promptDigest, permitIds);
+    if (landed !== null) {
       return {
         status: "observed",
-        recordId: typeof record.recordId === "string" ? record.recordId : null,
-        recordedAt: typeof record.recordedAt === "string" ? record.recordedAt : null,
+        match: landed.match,
+        recordId: typeof landed.record.recordId === "string" ? landed.record.recordId : null,
+        recordedAt: typeof landed.record.recordedAt === "string" ? landed.record.recordedAt : null,
       };
     }
     if (Date.now() >= deadline) return { status: "pending", promptDigest };

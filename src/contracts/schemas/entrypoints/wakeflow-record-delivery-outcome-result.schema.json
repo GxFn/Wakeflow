@@ -203,7 +203,13 @@
           "enum": ["accepted", "indeterminate", "rejected-before-send"]
         },
         "evidenceKind": {
-          "enum": ["hook-record", "host-send-return", "agent-declaration", "controller-resolution"]
+          "enum": [
+            "hook-record",
+            "hook-record-identity",
+            "host-send-return",
+            "agent-declaration",
+            "controller-resolution"
+          ]
         },
         "hookRecordId": {
           "oneOf": [

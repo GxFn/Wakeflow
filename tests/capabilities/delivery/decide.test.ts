@@ -30,6 +30,8 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 const PROMPT_DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
 const ISSUED_AT = parseUtcInstant("2026-09-09T10:00:00.000Z");
+const PERMIT_ID = "target-delivery_00000000-0000-4000-8000-0000000000d1";
+const OTHER_PERMIT_ID = "target-delivery_00000000-0000-4000-8000-0000000000d2";
 
 function input(overrides: Partial<DispositionInput> = {}): DispositionInput {
   return {
@@ -38,6 +40,7 @@ function input(overrides: Partial<DispositionInput> = {}): DispositionInput {
     readback: { status: "pending", evidenceDigest: null },
     landingRecords: [],
     expectedPromptDigest: PROMPT_DIGEST,
+    permitId: PERMIT_ID,
     resolution: null,
     resolutionRecordFound: false,
     currentlyIndeterminate: false,
@@ -50,8 +53,18 @@ test("处置派生：匹配的 hook 记录为 accepted，发送前失败为 reje
     deriveDeliveryDisposition(
       input({
         landingRecords: [
-          { recordId: "r-1", promptDigest: OTHER_DIGEST, recordedAt: ISSUED_AT },
-          { recordId: "r-2", promptDigest: PROMPT_DIGEST, recordedAt: ISSUED_AT },
+          {
+            recordId: "r-1",
+            promptDigest: OTHER_DIGEST,
+            promptPermitIds: null,
+            recordedAt: ISSUED_AT,
+          },
+          {
+            recordId: "r-2",
+            promptDigest: PROMPT_DIGEST,
+            promptPermitIds: null,
+            recordedAt: ISSUED_AT,
+          },
         ],
       }),
     ),
@@ -177,10 +190,71 @@ test("indeterminate 之后：再次无证据的记录被阻塞，显式解决只
     input({
       resolution: { disposition: "rejected-before-send", hookRecordId: null, rationale: "误发。" },
       currentlyIndeterminate: true,
-      landingRecords: [{ recordId: "r-2", promptDigest: PROMPT_DIGEST, recordedAt: ISSUED_AT }],
+      landingRecords: [
+        {
+          recordId: "r-2",
+          promptDigest: PROMPT_DIGEST,
+          promptPermitIds: null,
+          recordedAt: ISSUED_AT,
+        },
+      ],
     }),
   );
   equal(resolved.accepted && resolved.evidenceKind, "controller-resolution");
+});
+
+test("ADR-0027：摘要不符但带着许可标识的记录按身份落地（hook-record-identity），摘要相符的优先，别的许可的标识不算", () => {
+  const altered = {
+    recordId: "r-altered",
+    promptDigest: OTHER_DIGEST,
+    promptPermitIds: [PERMIT_ID],
+    recordedAt: ISSUED_AT,
+  };
+  const byIdentity = deriveDeliveryDisposition(input({ landingRecords: [altered] }));
+  deepEqual(byIdentity, {
+    accepted: true,
+    disposition: "accepted",
+    evidenceKind: "hook-record-identity",
+    hookRecordId: "r-altered",
+    rationale: null,
+  });
+  // 同一会话里既有被改动的一条、又有原样的一条：认原样的那条，证据种类是 hook-record。
+  const both = deriveDeliveryDisposition(
+    input({
+      landingRecords: [
+        altered,
+        {
+          recordId: "r-intact",
+          promptDigest: PROMPT_DIGEST,
+          promptPermitIds: [PERMIT_ID],
+          recordedAt: ISSUED_AT,
+        },
+      ],
+    }),
+  );
+  equal(both.accepted && both.evidenceKind, "hook-record");
+  equal(both.accepted && both.hookRecordId, "r-intact");
+  // 别的许可的标识、没有标识的记录、旧记录（null）都不是这条许可的落地。
+  const foreign = deriveDeliveryDisposition(
+    input({
+      landingRecords: [
+        {
+          recordId: "r-a",
+          promptDigest: OTHER_DIGEST,
+          promptPermitIds: [OTHER_PERMIT_ID],
+          recordedAt: ISSUED_AT,
+        },
+        { recordId: "r-b", promptDigest: OTHER_DIGEST, promptPermitIds: [], recordedAt: ISSUED_AT },
+        {
+          recordId: "r-c",
+          promptDigest: OTHER_DIGEST,
+          promptPermitIds: null,
+          recordedAt: ISSUED_AT,
+        },
+      ],
+    }),
+  );
+  equal(foreign.accepted && foreign.disposition, "indeterminate");
 });
 
 test("静默阈值以签发时刻起算，十分钟整不算超过", () => {

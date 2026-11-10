@@ -493,6 +493,7 @@ async function sessionRecords(
       recordId: record.recordId,
       event: record.event,
       promptDigest: record.promptDigest,
+      promptPermitIds: record.promptPermitIds,
       recordedAt: record.recordedAt,
     }),
   );
@@ -948,8 +949,10 @@ async function issueCallback(
   const controllerWindowId = scope.controllerWindow.windowId;
   const window = await loadWindow(context, controllerWindowId);
   const summary = summarizeResultForCallback(result);
+  const callbackId = deriveTargetResultCallbackId(result.targetResultId);
   const prompt = renderWakeControllerPrompt({
     language: context.authority.config.model.presentation.language,
+    callbackId,
     demandId: result.demandId,
     podId: `${scope.pod.name} (${scope.pod.podId})`,
     target: {
@@ -971,7 +974,7 @@ async function issueCallback(
   });
   try {
     const callback = parseTargetResultCallbackRecord({
-      callbackId: deriveTargetResultCallbackId(result.targetResultId),
+      callbackId,
       controllerWindowId,
       bindingId: window.binding.bindingId,
       bindingDigest: window.bindingDigest,
@@ -1307,7 +1310,7 @@ async function loadReviewEvidence(
     targetCompletion: deriveTargetCompletion(targetRecords, result.report.reportedAt),
     callbackLanding: deriveCallbackLanding(
       callbackRecords,
-      callback.promptDigest,
+      { promptDigest: callback.promptDigest, permitId: callback.callbackId },
       callback.issuedAt,
     ),
     callbackRecords,
@@ -1544,6 +1547,7 @@ async function inspectReview(
   const callbackStatus = deriveTargetResultCallbackStatus({
     issuedAt: callback.issuedAt,
     promptDigest: callback.promptDigest,
+    callbackId: callback.callbackId,
     landingRecords: evidence.callbackRecords,
     acknowledged: unit.currentDecision !== null,
     now: nowFrom(context.options),

@@ -18,9 +18,86 @@ const HOST_FOLDED_AT_SIGN = /\uff20/gu;
 /** 投递 prompt 的字符上限：能力卡 6 的 65,536 进记录合同；渲染与摘要共用同一个上界。 */
 export const DELIVERY_PROMPT_MAXIMUM_CHARACTERS = 65_536;
 
+/** 摘要所覆盖的文本：去除首尾空白、全角 `＠` 折回 `@`；空或超过上限为 null。 */
+function digestedPromptText(prompt: string): string | null {
+  const text = prompt.trim().replace(HOST_FOLDED_AT_SIGN, "@");
+  return text.length === 0 || text.length > DELIVERY_PROMPT_MAXIMUM_CHARACTERS ? null : text;
+}
+
 /** 去除首尾空白、全角 `＠` 折回 `@` 后的 UTF-8 字节的 SHA-256；空或超过上限为 null。 */
 export function computePromptDigest(prompt: string): Sha256Digest | null {
-  const trimmed = prompt.trim().replace(HOST_FOLDED_AT_SIGN, "@");
-  if (trimmed.length === 0 || trimmed.length > DELIVERY_PROMPT_MAXIMUM_CHARACTERS) return null;
-  return computeSha256Digest(encodeUtf8(trimmed, "$prompt"), "$prompt");
+  const text = digestedPromptText(prompt);
+  return text === null ? null : computeSha256Digest(encodeUtf8(text, "$prompt"), "$prompt");
+}
+
+/**
+ * 摘要所覆盖文本的字符数（UTF-16 码元，与上限同一量纲）；空或超过上限为 null。它进 hook 记录
+ * （ADR-0027 决定 2）：摘要对不上时，字符数相同说明是字符被替换，不同说明文本被增删。
+ */
+export function countPromptCharacters(prompt: string): number | null {
+  return digestedPromptText(prompt)?.length ?? null;
+}
+
+/**
+ * 许可身份行（ADR-0027 决定 1）：投递与回调 prompt 的最后一行 `- permitId: <target-delivery 标识>`。
+ * 按行精确匹配（先去掉行两端的空白），所以夹在一行中间的标识——例如单行 JSON 字面量里的不可信
+ * 文本——不算；宿主把整段文本包进外壳或在前后加字都不影响它，把文本截断则它不在了。
+ */
+const PERMIT_ID_LINE =
+  /^- permitId: (target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
+
+/** 一条 prompt 记录至多保留的许可标识数：正常是 1，上限只为记录有界。 */
+export const PROMPT_PERMIT_IDS_MAXIMUM = 4;
+
+/** 渲染一条许可身份行；投递与回调的 prompt 渲染器把它放在最后一行。 */
+export function renderPromptPermitIdLine(permitId: string): string {
+  const line = `- permitId: ${permitId}`;
+  if (!PERMIT_ID_LINE.test(line)) throw new TypeError("permitId is not a target-delivery id");
+  return line;
+}
+
+/** 按出现顺序抽出 prompt 里的许可标识，去重，至多 `PROMPT_PERMIT_IDS_MAXIMUM` 个。 */
+export function extractPromptPermitIds(prompt: string): readonly string[] {
+  const found: string[] = [];
+  for (const line of prompt.split("\n")) {
+    const match = PERMIT_ID_LINE.exec(line.trim());
+    const id = match?.[1];
+    if (id === undefined || found.includes(id)) continue;
+    found.push(id);
+    if (found.length === PROMPT_PERMIT_IDS_MAXIMUM) break;
+  }
+  return Object.freeze(found);
+}
+
+/** 落地判定要用的记录字段：摘要与许可标识（旧记录没有标识，读成 null）。 */
+export interface PromptLandingRecord {
+  readonly promptDigest: Sha256Digest | null;
+  readonly promptPermitIds: readonly string[] | null;
+}
+
+/** 一条许可的落地判据：它的 prompt 摘要与它的标识。 */
+export interface PromptLandingPermit {
+  readonly promptDigest: Sha256Digest;
+  readonly permitId: string;
+}
+
+/**
+ * 在候选记录里找出这条许可的落地记录（ADR-0027 决定 3）：先找摘要相符的（文本完整），没有再找带着
+ * 许可标识的（文本被宿主改动）。候选由调用方按会话与签发时间筛好；返回记录与匹配方式，没有即 null。
+ */
+export function findPromptLanding<Record extends PromptLandingRecord>(
+  records: readonly Record[],
+  permit: Readonly<PromptLandingPermit>,
+): Readonly<{ readonly record: Record; readonly match: "digest" | "identity" }> | null {
+  const intact = records.find((record) => record.promptDigest === permit.promptDigest);
+  if (intact !== undefined) return Object.freeze({ record: intact, match: "digest" as const });
+  const altered = records.find((record) => record.promptPermitIds?.includes(permit.permitId));
+  return altered === undefined
+    ? null
+    : Object.freeze({ record: altered, match: "identity" as const });
+}
+
+/** 一个值是不是许可标识的文法（hook 记录的 `promptPermitIds` 逐项核对）。 */
+export function isPromptPermitId(value: unknown): value is string {
+  return typeof value === "string" && PERMIT_ID_LINE.test(`- permitId: ${value}`);
 }

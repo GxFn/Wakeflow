@@ -47,8 +47,13 @@ const OUTCOME_SCHEMA_VERSION = 1 as const;
 export const DELIVERY_LANDING_SILENCE_MILLISECONDS = 10 * 60 * 1000;
 
 export type DeliveryDisposition = "accepted" | "indeterminate" | "rejected-before-send";
+/**
+ * `hook-record`：目标会话的 prompt 记录摘要与许可相符；`hook-record-identity`：记录带着许可标识而
+ * 摘要不符——prompt 到了，文本被宿主改动（ADR-0027）。两者都由宿主观察证明落地。
+ */
 export type DeliveryEvidenceKind =
   | "hook-record"
+  | "hook-record-identity"
   | "host-send-return"
   | "agent-declaration"
   | "controller-resolution";

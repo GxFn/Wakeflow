@@ -149,7 +149,7 @@ streamRevision: number
 export interface Outcome {
 outcomeDigest: WakeflowSha256DigestText
 disposition: ("accepted" | "indeterminate" | "rejected-before-send")
-evidenceKind: ("hook-record" | "host-send-return" | "agent-declaration" | "controller-resolution")
+evidenceKind: ("hook-record" | "hook-record-identity" | "host-send-return" | "agent-declaration" | "controller-resolution")
 readbackStatus: ("confirmed" | "pending" | "unavailable")
 claimHandling: ("retain" | "release-authorized")
 observedAt: WakeflowUtcInstantText

@@ -331,7 +331,7 @@ const DELIVERY_ACTION =
   "`SendMessage` to the Controller's desktop id that the delivery prompt names), keep the " +
   'tool\'s return unchanged as `attempt.sendReturn` (`status: "sent"`, or ' +
   '`"failed-before-send"` when nothing was sent), then, before recording the outcome, run ' +
-  `\`${DESKTOP_HELPER} landing --window <windowId> --prompt-digest <the permit's promptDigest>\` ` +
+  `\`${DESKTOP_HELPER} landing --window <windowId> --prompt-ref <the permit's promptRef>\` ` +
   "(`--wait-landing <seconds>` after `queued`): only the target's `user-prompt-submit` " +
   "record proves landing.";
 

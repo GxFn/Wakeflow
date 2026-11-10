@@ -31,7 +31,7 @@ status: ("confirmed" | "pending" | "unavailable")
 evidenceDigest: (WakeflowSha256DigestText | null)
 }
 evidence: {
-kind: ("hook-record" | "host-send-return" | "agent-declaration" | "controller-resolution")
+kind: ("hook-record" | "hook-record-identity" | "host-send-return" | "agent-declaration" | "controller-resolution")
 hookRecordId: (string | null)
 rationale: (string | null)
 }

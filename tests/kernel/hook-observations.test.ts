@@ -636,6 +636,88 @@ test("权限模式与会话标题是后加的可选键：原样往返、不参�
   );
 });
 
+test("许可标识与字符数是后加的可选键（ADR-0027）：原样往返、不参与标识，旧记录没有它们读成 null，不合文法的值以 invalid-request 拒绝", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const at = "2026-11-09T14:00:00.000Z" as UtcInstant;
+  const permitId = "target-delivery_00000000-0000-4000-8000-0000000000d1";
+  const plain = createHostHookObservation(
+    observation(workspace, at, { event: "user-prompt-submit" }),
+  );
+  const prompt = await writeHostHookObservation(
+    root,
+    observation(workspace, at, {
+      event: "user-prompt-submit",
+      promptPermitIds: [permitId],
+      promptCharacters: 3818,
+    }),
+  );
+  deepEqual(prompt.record.promptPermitIds, [permitId]);
+  equal(prompt.record.promptCharacters, 3818);
+  equal(prompt.record.recordId, plain.recordId, "许可标识与字符数不参与记录标识");
+  equal(plain.promptPermitIds, null);
+  equal(plain.promptCharacters, null);
+  // 旧记录：没有这两个键，读成 null。
+  const start = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "session-start" }),
+  );
+  const file = path.join(workspace, start.resourceRef);
+  const rendered = readFileSync(file, "utf8");
+  const parsed = JSON.parse(rendered) as Record<string, unknown>;
+  equal(parsed.promptPermitIds, null);
+  equal(parsed.promptCharacters, null);
+  delete parsed.promptPermitIds;
+  delete parsed.promptCharacters;
+  const sorted = Object.fromEntries(
+    Object.entries(parsed).sort(([left], [right]) => (left < right ? -1 : 1)),
+  );
+  writeFileSync(
+    file,
+    rendered.startsWith("{\n")
+      ? `${JSON.stringify(sorted, null, 2)}\n`
+      : `${JSON.stringify(sorted)}\n`,
+  );
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.skipped, 0);
+  deepEqual(
+    Object.fromEntries(
+      inventory.records.map((record) => [
+        record.recordId,
+        [record.promptPermitIds, record.promptCharacters],
+      ]),
+    ),
+    {
+      [prompt.record.recordId]: [[permitId], 3818],
+      [start.record.recordId]: [null, null],
+    },
+  );
+  for (const promptPermitIds of [
+    ["delivery-1"],
+    [permitId, permitId],
+    Array.from(
+      { length: 5 },
+      (_, index) => `target-delivery_00000000-0000-4000-8000-00000000000${index}`,
+    ),
+  ]) {
+    await rejects(
+      writeHostHookObservation(
+        root,
+        observation(workspace, at, { event: "stop", promptPermitIds }),
+      ),
+      (error: unknown) => isWakeflowError(error) && error.reason === "hook-prompt-permit-ids",
+    );
+  }
+  for (const promptCharacters of [0, 1.5, 65_537]) {
+    await rejects(
+      writeHostHookObservation(
+        root,
+        observation(workspace, at, { event: "stop", promptCharacters }),
+      ),
+      (error: unknown) => isWakeflowError(error) && error.reason === "hook-prompt-characters",
+    );
+  }
+});
+
 // ---- §13.134 B12：原子暂存残留 --------------------------------------------------------------
 
 const MINUTE = 60 * 1000;

@@ -1763,8 +1763,14 @@
           "enum": ["accepted", "indeterminate"]
         },
         "evidenceKind": {
-          "description": "结局的证据等级（ADR-0020 决定 2）：hook-record 是宿主观察所得，host-send-return 与 agent-declaration 是 Agent 自述，controller-resolution 是 Controller 的解决。",
-          "enum": ["hook-record", "host-send-return", "agent-declaration", "controller-resolution"]
+          "description": "结局的证据等级（ADR-0020 决定 2）：hook-record 是宿主观察所得（摘要相符），hook-record-identity 是宿主观察所得但文本被宿主改动（凭许可身份认出，ADR-0027），host-send-return 与 agent-declaration 是 Agent 自述，controller-resolution 是 Controller 的解决。",
+          "enum": [
+            "hook-record",
+            "hook-record-identity",
+            "host-send-return",
+            "agent-declaration",
+            "controller-resolution"
+          ]
         },
         "readbackStatus": {
           "enum": ["confirmed", "pending", "unavailable"]

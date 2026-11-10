@@ -20,6 +20,7 @@ import {
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import { deriveDurableId } from "../../kernel/ids.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 import {
   parseWakeflowWindowHostBindingId,
   type WakeflowWindowHostBindingId,
@@ -312,12 +313,16 @@ export type TargetResultCallbackStatus = "pending" | "landed" | "silent" | "ackn
 export interface CallbackLandingRecordView {
   readonly recordId: string;
   readonly promptDigest: Sha256Digest | null;
+  /** 记录里的许可标识（ADR-0027）；早于该字段的记录是 null。 */
+  readonly promptPermitIds: readonly string[] | null;
   readonly recordedAt: UtcInstant;
 }
 
 export interface CallbackStatusInput {
   readonly issuedAt: UtcInstant;
   readonly promptDigest: Sha256Digest;
+  /** 回调许可的标识：摘要不符时凭它认出落地（ADR-0027 决定 5）。 */
+  readonly callbackId: string;
   /** Controller 会话在 `issuedAt` 之后的 `user-prompt-submit` 记录。 */
   readonly landingRecords: readonly Readonly<CallbackLandingRecordView>[];
   readonly acknowledged: boolean;
@@ -335,11 +340,11 @@ export type CallbackStatusView = Readonly<{
 export function deriveTargetResultCallbackStatus(
   input: Readonly<CallbackStatusInput>,
 ): CallbackStatusView {
-  const landed = input.landingRecords.find(
-    (record) =>
-      record.promptDigest === input.promptDigest &&
-      Date.parse(record.recordedAt) >= Date.parse(input.issuedAt),
-  );
+  const issued = Date.parse(input.issuedAt);
+  const landed = findPromptLanding(
+    input.landingRecords.filter((record) => Date.parse(record.recordedAt) >= issued),
+    { promptDigest: input.promptDigest, permitId: input.callbackId },
+  )?.record;
   if (input.acknowledged) {
     return Object.freeze({
       status: "acknowledged" as const,

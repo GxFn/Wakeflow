@@ -75,7 +75,7 @@ function renderInput(
       ),
     },
     returnPointer: {
-      deliveryId: "delivery-1",
+      deliveryId: "target-delivery_00000000-0000-4000-8000-0000000000d1",
       claimDigest: `sha256:${"1".repeat(64)}`,
       generation: 1,
     },

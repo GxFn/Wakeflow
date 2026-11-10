@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
+import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -1212,6 +1213,89 @@ test("sessions maps the interactive rows of claude agents --json to the desktop-
   equal(invalid.json.reason, "agents-json-invalid");
 });
 
+test("landing --prompt-ref reads the permit file: a record with the same digest matches by digest, one that only carries the permit id matches by identity (ADR-0027)", async (t) => {
+  const current = await fixture(t);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  const demandId = "demand_11111111-1111-4111-8111-111111111111";
+  const permitId = "target-delivery_22222222-2222-4222-8222-222222222222";
+  const promptRef = `.wakeflow-active/current/${demandId}/artifacts/permits/delivery/${permitId}.txt`;
+  // 许可文本里有 @：摘要规则与内核同一条，全角 ＠ 折回后再算，文件里写哪一种都得到同一个摘要。
+  const prompt = `不升级 @types/node。\n\n派发记录:\n- deliveryId: ${permitId}\n- permitId: ${permitId}`;
+  const promptFile = path.join(current.root, ...promptRef.split("/"));
+  mkdirSync(path.dirname(promptFile), { recursive: true });
+  writeFileSync(promptFile, prompt);
+  const digest = computeDeliveryPromptDigest(prompt);
+  equal(computeDeliveryPromptDigest(prompt.replace("@", "＠")), digest);
+  const landing = (args: readonly string[]): HelperRun =>
+    runHelper(current, ["landing", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0", ...args]);
+  // 还没有记录：未落地，报出从文件算出的摘要。
+  deepEqual(landing(["--prompt-ref", promptRef]).json, {
+    ok: true,
+    command: "landing",
+    windowId: PRODUCT_WINDOW_ID,
+    landed: false,
+    promptDigest: digest,
+  });
+  // 同时给了摘要：必须与文件一致。
+  equal(
+    landing(["--prompt-ref", promptRef, "--prompt-digest", PROMPT_DIGEST]).json.reason,
+    "prompt-digest-mismatch",
+  );
+  equal(landing(["--prompt-ref", promptRef, "--prompt-digest", digest]).json.landed, false);
+  // 宿主改动了文本：摘要不同，记录带着许可标识——按身份落地。只给摘要的旧用法认不出它。
+  writeHookRecord(
+    path.join(current.hooks, "20261109", "aa"),
+    "20261109T000001000Z",
+    "user-prompt-submit",
+    {
+      recordId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      sessionId: SESSION_ID,
+      recordedAt: "2026-11-09T00:00:01.000Z",
+      promptDigest: `sha256:${"ef".repeat(32)}`,
+      promptPermitIds: [permitId],
+      promptCharacters: prompt.length,
+    },
+  );
+  deepEqual(landing(["--prompt-ref", promptRef]).json, {
+    ok: true,
+    command: "landing",
+    windowId: PRODUCT_WINDOW_ID,
+    landed: true,
+    match: "identity",
+    recordId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    recordedAt: "2026-11-09T00:00:01.000Z",
+  });
+  equal(landing(["--prompt-digest", digest]).json.landed, false);
+  // 别的会话带着同一个标识的记录不算；别的许可的标识也不算。
+  // 原样落地的一条随后出现：摘要相符的优先。
+  writeHookRecord(
+    path.join(current.hooks, "20261109", "bb"),
+    "20261109T000002000Z",
+    "user-prompt-submit",
+    {
+      recordId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      sessionId: SESSION_ID,
+      recordedAt: "2026-11-09T00:00:02.000Z",
+      promptDigest: digest,
+      promptPermitIds: [permitId],
+      promptCharacters: prompt.length,
+    },
+  );
+  const intact = landing(["--prompt-ref", promptRef]).json;
+  equal(intact.match, "digest");
+  equal(intact.recordId, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+  // 路径只认许可目录；文件不在是 prompt-ref-missing。landing 从不调用宿主命令。
+  equal(landing(["--prompt-ref", "wakeflow.config.json"]).json.reason, "prompt-ref-invalid");
+  equal(
+    landing([
+      "--prompt-ref",
+      promptRef.replace(permitId, "target-delivery_33333333-3333-4333-8333-333333333333"),
+    ]).json.reason,
+    "prompt-ref-missing",
+  );
+  deepEqual(callLog(current), []);
+});
+
 test("landing reports the bound session's user-prompt-submit record for the given digest and never sends anything", async (t) => {
   const current = await fixture(t);
   const landing = (args: readonly string[]): HelperRun =>
@@ -1284,6 +1368,7 @@ test("landing reports the bound session's user-prompt-submit record for the give
     command: "landing",
     windowId: PRODUCT_WINDOW_ID,
     landed: true,
+    match: "digest",
     recordId: "abababab-abab-4aba-8aba-abababababab",
     recordedAt: "2026-09-24T00:00:04.000Z",
   });

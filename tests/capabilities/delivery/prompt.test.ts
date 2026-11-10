@@ -117,7 +117,7 @@ function render(
     },
     readingOrder: order,
     returnPointer: {
-      deliveryId: "delivery-1",
+      deliveryId: "target-delivery_00000000-0000-4000-8000-0000000000d1",
       claimDigest: `sha256:${"1".repeat(64)}`,
       generation: 1,
     },
@@ -226,7 +226,7 @@ test("验收锚点超过上限时点明其余条数，不静默略去（§13.134
       },
       readingOrder: readingOrder({ requirementSections: ["landing-plan"] }),
       returnPointer: {
-        deliveryId: "delivery-1",
+        deliveryId: "target-delivery_00000000-0000-4000-8000-0000000000d1",
         claimDigest: `sha256:${"1".repeat(64)}`,
         generation: 1,
       },
@@ -262,7 +262,7 @@ test("重跑只跑失败子集时测试合同点明范围，首次尝试没有�
       },
       readingOrder: readingOrder(),
       returnPointer: {
-        deliveryId: "delivery-1",
+        deliveryId: "target-delivery_00000000-0000-4000-8000-0000000000d1",
         claimDigest: `sha256:${"1".repeat(64)}`,
         generation: 1,
       },
@@ -318,7 +318,7 @@ test("禁止边界超过上限时同样点明其余条数，不再只渲染第�
       },
       readingOrder: readingOrder(),
       returnPointer: {
-        deliveryId: "delivery-1",
+        deliveryId: "target-delivery_00000000-0000-4000-8000-0000000000d1",
         claimDigest: `sha256:${"1".repeat(64)}`,
         generation: 1,
       },

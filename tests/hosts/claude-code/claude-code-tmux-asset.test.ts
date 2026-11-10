@@ -37,6 +37,7 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
 import { claudeCodeTmuxWindowNameFor } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import { hostWindowLocatorsRootRef } from "../../../src/kernel/layout.js";
+import { computePromptDigest } from "../../../src/kernel/prompt-digest.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
@@ -1675,6 +1676,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   assertFailedBeforeSend(alreadyLanded.json);
   deepEqual(alreadyLanded.json.landing, {
     status: "observed",
+    match: "digest",
     recordId,
     recordedAt: "2026-09-24T01:00:00.000Z",
   });
@@ -1692,6 +1694,7 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   equal(observedLanding.status, 0, JSON.stringify(observedLanding.json));
   deepEqual(observedLanding.json.landing, {
     status: "observed",
+    match: "digest",
     recordId,
     recordedAt: "2026-09-24T01:00:00.000Z",
   });
@@ -1700,6 +1703,59 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
       input: prompt,
     }).json.reason,
     "wait-landing-invalid",
+  );
+});
+
+test("deliver recognizes a landing by permit identity when the host altered the text, and digests a fullwidth at sign like the kernel (ADR-0027, X27)", async (t) => {
+  const current = await fixture(t);
+  writeLocator(current, PRODUCT_WINDOW_ID);
+  writeBinding(current, PRODUCT_WINDOW_ID, SESSION_ID);
+  writeFileSync(
+    path.join(current.state, "panes.txt"),
+    `${paneRow({ window: "@5", pane: "%9", options: LIVE_OPTIONS })}\n`,
+  );
+  writeFileSync(path.join(current.state, "capture.txt"), "──────────\n❯ \n──────────\n");
+  const permitId = "target-delivery_22222222-2222-4222-8222-222222222222";
+  const prompt = `不升级 ＠types/node。\n\n派发记录:\n- deliveryId: ${permitId}\n- permitId: ${permitId}\n`;
+  const deliver = (args: readonly string[] = []): HelperRun =>
+    runHelper(current, ["deliver", "--window", PRODUCT_WINDOW_ID, "--wait-landing", "0", ...args], {
+      input: prompt,
+    });
+  // 摘要规则与内核同一条：全角 ＠ 折回 @ 后再算，pending 里报出的就是内核给许可算的那个摘要。
+  const pending = deliver();
+  equal(pending.status, 0, JSON.stringify(pending.json));
+  deepEqual(pending.json.landing, {
+    status: "pending",
+    promptDigest: computePromptDigest(prompt),
+  });
+  // 目标会话里有一条摘要不同、带着许可标识的记录：prompt 到了，文本被宿主改动——按身份落地，不再粘贴第二遍。
+  const recordId = "33333333-3333-4333-8333-333333333333";
+  const directory = path.join(current.hooks, "20261109", "33");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    path.join(directory, `20261109T010000000Z-user-prompt-submit-${recordId}.json`),
+    JSON.stringify({
+      kind: "WakeflowHostHookObservation",
+      event: "user-prompt-submit",
+      sessionId: SESSION_ID,
+      promptDigest: `sha256:${"ef".repeat(32)}`,
+      promptPermitIds: [permitId],
+      recordId,
+      recordedAt: "2026-11-09T01:00:00.000Z",
+    }),
+  );
+  resetLog(current);
+  const alreadyLanded = deliver();
+  equal(alreadyLanded.json.reason, "already-landed");
+  deepEqual(alreadyLanded.json.landing, {
+    status: "observed",
+    match: "identity",
+    recordId,
+    recordedAt: "2026-11-09T01:00:00.000Z",
+  });
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),
+    false,
   );
 });
 

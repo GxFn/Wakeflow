@@ -2,6 +2,7 @@ import type { WakeflowPresentationLanguage } from "../../configuration/wakeflow-
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { renderMarkdownJsonStringLiteral } from "../../foundation/text/markdown-json-string-literal.js";
 import { fail } from "../../kernel/error.js";
+import { renderPromptPermitIdLine } from "../../kernel/prompt-digest.js";
 import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "./contract.js";
 
 /**
@@ -14,6 +15,8 @@ import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "./con
 
 export interface WakeControllerPromptInput {
   readonly language: WakeflowPresentationLanguage;
+  /** 本回调许可的标识：渲染成最后一行的许可身份行，落地判定凭它认出这条回调（ADR-0027）。 */
+  readonly callbackId: string;
   readonly demandId: string;
   readonly podId: string;
   readonly target: Readonly<{
@@ -181,6 +184,7 @@ export function renderWakeControllerPrompt(input: Readonly<WakeControllerPromptI
       `- tool: ${WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME}`,
       `- demandId: ${input.demandId}`,
       `- targetTaskId: ${target.targetTaskId}`,
+      renderPromptPermitIdLine(input.callbackId),
     ]),
   ];
   const prompt = lines.join("\n");

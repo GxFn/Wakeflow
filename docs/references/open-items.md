@@ -259,7 +259,7 @@
   - 2026-10-02 实施（§13.146）：v2 配置挡住不认识该版本的旧 writer，新 writer 在 v1 上拒绝普通变更；升级前必须排空已经取得旧快照的在途操作。此为本次协议边界，不是通用构建排序、跨机混用或事件演进协议。
   - 2026-10-02 后续裁决（ADR-0018 / §13.147）：新验证从空工作区开始，不共享旧开发版状态；保留严格格式边界和独立构建目录，不据此承诺任意两个构建可混写。
 
-- **C12** [中 / 缺口] 没有 CI，也没有 pre-push 守卫：公开的 main 分支（即安装渠道）完全靠本地自律（计划阶段 3；状态：大部分已修（§13.155）：`.github/workflows/verify.yml` 在 Ubuntu 与 macOS 跑 `wf verify gate|artifact` 并只上传有界的 `ci export` 报告；仍缺 v* tag 触发的 `release:check` 作业与 pre-push 守卫，远端运行需在 gate-log 记录）（**2026-11-09 收敛：1.3.0 批 7**——tag 触发的 `release:check` 作业与 pre-push 守卫）
+- **C12** [中 / 缺口] 没有 CI，也没有 pre-push 守卫：公开的 main 分支（即安装渠道）完全靠本地自律（计划阶段 3；状态：大部分已修（§13.155）：`.github/workflows/verify.yml` 在 Ubuntu 与 macOS 跑 `wf verify gate|artifact` 并只上传有界的 `ci export` 报告；仍缺 v* tag 触发的 `release:check` 作业与 pre-push 守卫，远端运行需在 gate-log 记录）（**2026-11-10，§13.237**：远端 `gate` 作业自 2026-10-19 起连续 29 次失败而无人查看，`v1.1.0` – `v1.2.2` 六个 tag 打在远端为红的提交上；原因已修（未使用代码检查被主检出的旧编译产物遮住）。批 7 追加两项：`release:check --require-remote` 要求该提交的远端门为绿；`wf handoff` 增加只读的远端门状态，`gh` 不可用时标为未核对）（**2026-11-09 收敛：1.3.0 批 7**——tag 触发的 `release:check` 作业与 pre-push 守卫）
   - 说明：没有任何机制阻止一次 plugins/ 与 src 不同步、跳过 gate 或 smoke 失败的 push 进入 main。测试从未在 Linux 或干净机器上跑过，也没有对 vendored 运行时依赖（ajv、MCP SDK、zod）做审计。
   - 证据：仓库里没有 .github 或任何 CI 配置（只有 vendored node_modules 里有）；.git/hooks 只有 sample；gate 在一台 macOS 机器上本地运行，约 336 秒（gate-log §13.120 L3454）；smoke 按设计不在 npm test 内；1.x 系列从未通过 release:check
   - 建议：加一个最小的 GitHub Actions：Node 24、npm ci、npm test、npm run smoke:artifacts，在 ubuntu 和 macos 上对 push 到 main 运行；v* tag 上运行 release:check。可以再加 npm audit --omit=dev 和 dependabot。

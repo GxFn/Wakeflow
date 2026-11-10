@@ -34,7 +34,6 @@
         "tests/**/*.ts"
       ],
       "ignore": [
-        ".build/**",
         "src/contracts/generated/**"
       ],
       "ignoreDependencies": [

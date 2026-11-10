@@ -5818,3 +5818,15 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 1 级（`impact report`：agent-text 与测试变化，不涉及 `src/`）：制品重建后 `wf verify quick --changed` 137/137（含 `tests/artifacts` 与新测试 6/6），`smoke:artifacts` 4/4，`wf handoff` 八项通过（`test-durations` 提示新测试文件要到下一道完整门才有实测耗时）。重建前只读核对正式工作区没有活动 Demand；本节随测试、文本与文档提交，制品另一提交。
 
 **结论：通过（第 1 级，quick 137/137、smoke 4/4）。1.3.0 读得回磁盘上全部旧历史；五段真实旧历史进了门；失败时用户拿得到 incident 标识。**
+
+### 13.237 远端门自 2026-10-19 起连续 29 次失败而没有被看见：未使用代码检查被主检出里的旧编译产物遮住（C12）（2026-11-10）
+
+1.3.0 收敛的开发工作树（ADR-0026 补充）是第一份干净检出。在里面跑的第一道 `wf verify quick` 停在 `check:unused`，由此查到远端。
+
+- **事实。** `gh run list`：`verify.yml` 的 `gate` 作业（Ubuntu 与 macOS）从 2026-10-19 的 `ac3572f0` 到 2026-11-10 的 `c7edb70e` 连续 29 次推送全部失败，上一次通过是 `6fc7d70a`；同一批运行里 `artifact` 与 `handoff` 作业一直通过。`v1.1.0`、`v1.1.1`、`v1.1.2`、`v1.2.0`、`v1.2.1`、`v1.2.2` 六个 tag 都打在远端门为红的提交上。远端日志只有有界的 `ci export` 摘要（`verificationStatus: failed`，约一分半钟退出），不带阶段名；原因由干净检出复现加配置差异确定。
+- **原因。** 测试夹具 `delivery-records.fixture.ts` 导出的 `DELIVERY_CLAIM_ID` 自 2026-09-10 起没有外部引用（最后一个引用者 `test-card-planning-service.test.ts` 随测试卡片族删除，`ff38f1e6`），当时 knip 的 `ignore` 里有 `tests/governance/**`，所以不报。2026-10-19 的 Q12 导出清理（`b30b2b6e`）去掉了这些豁免——它是连续失败的第一笔推送里的提交。从那以后干净检出必报这一条；主检出不报，是因为 `check:unused` 带 `--no-gitignore`，knip 的 node:test 插件把 `.build/tests/` 下早已没有源文件的旧编译测试（`tsc -b` 不删除已删除源文件的产物）当成入口，那份旧产物仍然导入这个常量。本地每一道门因此都是绿的。
+- **修正。** 夹具常量不再导出；`check:unused` 去掉 `--no-gitignore`，knip 按 `.gitignore` 跳过 `.build/`，`knip.json` 里随之多余的 `.build/**` 豁免删除。修正后 knip 在工作树里通过，对主检出则如实报出这一条（主检出要等这笔提交到达才会干净）。
+- **我这一侧的缺口。** C12 的状态里早就写着"远端运行需在 gate-log 记录"，而 §13.185 之后的每一节记的都只是本地门，推送之后没有人看过远端结果。CLAUDE.md 说"A green local gate is not a remote run; say which one ran"——本地门如实标注了，远端那一半一直缺着。补法进批 7（C12）：`release:check` 在 `--require-remote` 下要求该提交的远端门为绿，`wf handoff` 增加一项只读的远端门状态（`gh` 不可用时标为未核对，而不是通过）；在那之前，每次用户推送后由我读一次 `gh run list` 并把结果写进当节。
+- **验证。** 第 2 级门在干净工作树里一次通过：run-q2a7xs 1774/1774、`inputsUnchanged`（我的运行，输入是 `c7edb70e` 加上面三处修改）。这是第一道在干净检出上跑完的门——此前被 13 秒挡在后面的 lint、格式、测试、Schema 漂移与 `build:check` 各阶段在干净检出上没有别的问题。`wf timings apply` 已按这份回执更新时长表（350 个文件，§13.236 新增的 golden 回放测试有了实测耗时）。本节不触及 `src/`、`assets/` 与 `plugins/`，不是部署。远端：修正到达 `main` 之前远端仍然是红的，到达之后的第一次运行结果补记在下一节。
+
+**结论：通过（第 2 级，1774/1774，干净检出）。本地门与远端门不一致的原因已消除；远端转绿待这笔提交推送后核对。**

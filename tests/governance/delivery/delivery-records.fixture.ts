@@ -40,7 +40,7 @@ export const DELIVERY_ID = parseWakeflowDurableIdOfKind(
   "target-delivery_88888888-8888-4888-8888-888888888888",
   "target-delivery",
 );
-export const DELIVERY_CLAIM_ID = parseWakeflowDurableIdOfKind(
+const DELIVERY_CLAIM_ID = parseWakeflowDurableIdOfKind(
   "work-claim_11111111-1111-4111-8111-111111111111",
   "work-claim",
 );

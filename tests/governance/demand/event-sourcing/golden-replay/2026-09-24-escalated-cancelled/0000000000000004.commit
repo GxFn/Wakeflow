@@ -1,0 +1,59 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_4d24393b-310a-4100-b1ed-949058728948",
+  "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+  "commitSequence": 4,
+  "commandDigest": "sha256:0ed8324d1f7562e347ddb7c05ff502a73438807d03a2bcc7b93c92b01d8dc88b",
+  "expectedStreamRevision": 3,
+  "firstStreamRevision": 4,
+  "lastStreamRevision": 4,
+  "previousCommitDigest": "sha256:abdee9533046b30b2e24469a8089b5c5fcf7c2aabab547e82da77517d44f34fb",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_4559fd2f-c3de-4386-bf58-e5cce464b6c1",
+      "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+      "streamRevision": 4,
+      "recordedAt": "2026-09-24T23:37:54.000Z",
+      "eventType": "delivery.delivery-outcome-recorded",
+      "eventVersion": 1,
+      "data": {
+        "outcome": {
+          "kind": "WakeflowDeliveryOutcome",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_844beec4-10d3-4695-bdb0-2a6542e21c92",
+          "generation": 1,
+          "fence": {
+            "claimId": "work-claim_fd4a693b-1a5c-4f19-b85d-357fbc8df051",
+            "claimDigest": "sha256:e6b13151624c03405b84101768d63a47bd69e339a71f99cb306cb13488320c26"
+          },
+          "disposition": "accepted",
+          "attempt": {
+            "status": "sent",
+            "evidenceDigest": "sha256:7ce3aa8aa11561b9748222f4e556fe7a7116634f5fb7f7028de6a51c66ad6aba"
+          },
+          "readback": {
+            "status": "pending",
+            "evidenceDigest": "sha256:b52a57d54103b232e9c12f8b4ac14b9da9d2e0d037b6080924482366dd1ac186"
+          },
+          "evidence": {
+            "kind": "hook-record",
+            "hookRecordId": "7f23e79b-16e8-4fa0-b372-08364f8b0d51",
+            "rationale": null
+          },
+          "claimHandling": "retain",
+          "observedAt": "2026-09-24T23:37:54.000Z",
+          "outcomeDigest": "sha256:d43a2204cb3ec7434167cd67fdc861399b569969c30d3139d4f56f3c5906747b"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:771e2fe0b5d9c03b304a2bced91c077f8b090467a84be5ba919b2909acd70bbb"
+    }
+  ],
+  "idempotency": {
+    "key": "delivery-outcome-round5-g1-v1",
+    "requestDigest": "sha256:0bb7770435dee4880ceef99bb0095f7befd977635658c5224e63973dc83e2697"
+  }
+}

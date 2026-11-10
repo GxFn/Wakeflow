@@ -1,0 +1,79 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_23aacba8-b00a-49c2-a49e-4259d447ad6e",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 14,
+  "commandDigest": "sha256:c4b3d6c572d2ff663b4dd746adf94dc6cda5a87b63ff882de9fcdd30f3da2875",
+  "expectedStreamRevision": 13,
+  "firstStreamRevision": 14,
+  "lastStreamRevision": 14,
+  "previousCommitDigest": "sha256:be6bc412b212bbb1f2641c9df9c32aba3204815f8eb49243e5c111cbb5cbe014",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_1ae31f45-6153-47b8-b12c-bac6244ea470",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 14,
+      "recordedAt": "2026-09-25T04:54:14.463Z",
+      "eventType": "delivery.delivery-prepared",
+      "eventVersion": 1,
+      "data": {
+        "envelope": {
+          "kind": "WakeflowDeliveryEnvelope",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_9ff8b518-42cf-4fe9-b2f5-a00a83c49fce",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "target": {
+            "targetTaskId": "target-task_d1a56b30-e7db-426c-8980-d59434077d2a",
+            "taskPackageId": "task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0",
+            "taskPackageRef": ".wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/artifacts/task-packages/task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0.json",
+            "taskPackageDigest": "sha256:43b67790dc3bb64365d51056a2657b25729f8089f60efc670651a8f638453e87"
+          },
+          "route": {
+            "hostId": "claude-code",
+            "windowId": "window_6a9a3c45-045f-4dac-9c7e-f24ae32c191b",
+            "bindingId": "window_binding_edf9e207-62cf-4fd5-beae-06a4843dca42",
+            "bindingDigest": "sha256:1d515b2ca83bc2a93f1c441296cb0064fa3234cc08fff7f160120c64d7a2dd5c"
+          },
+          "language": "zh-Hans",
+          "portablePrompt": "继续当前窗口任务: Test/target-task_d1a56b30-e7db-426c-8980-d59434077d2a\n\n目标:\n在本工作区的 AlembicPlugin 检出（main 分支）中，按任务包里冻结的测试契约只读实测 ts-1 至 ts-5，确认实现落地的 `docs/wakeflow-smoke-round6.md` 满足验收标准 1–5：是普通文件；两行共 44 字节且 SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`；`git status --porcelain docs/` 相对基线只多这一个未跟踪文件；HEAD 仍为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 且在 main。\n\n完成焦点:\n- 逐步原样执行契约里的命令，把每一步的原始输出保存到 Test 支持面 `fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/<stepId>.txt`，再登记为 test-output 托管证据；报告逐步给出 observed、证据的 locator 与 digest 和 verdict，不通过的步骤给出分类、owner 与建议动作。\n- 导入后用 tmux 助手 deliver 把回调原样送回 Controller 窗口，如实记下助手打印的 attempt、readback 与 landing，然后结束本轮；整体结论由 Wakeflow 从各步记录推导，不要自行断言。\n\n优先上下文:\n需求包的测试决策为 real-environment：环境是本工作区中的 AlembicPlugin 检出（main 分支），不需要任何凭据、账号、网络或外部服务，也不需要安装依赖或构建；须在真实环境中逐项执行只读命令并记录实际输出，覆盖验收标准 1–5；五项全部一致为通过，任一项不一致为失败；标准 6–10 由 Controller 只读核对。\n\n关键边界:\n- 只观察，不改动 AlembicPlugin 检出中的任何文件、目录、暂存区、HEAD 或分支；不增加、跳过或改写步骤，不调整期望值，不用 mock 或其他环境代替；只在 Test 支持面的 `fixtures/` 与 `harnesses/` 下写文件；不运行测试套件、构建或安装，不使用凭据或网络；不做评审决定，回调只经 tmux 助手 deliver 发送。\n- forbidden: 在 AlembicPlugin 检出中创建、修改、删除或移动任何文件或目录（包括 `docs/wakeflow-smoke-round6.md` 与前几轮的四个冒烟文件），或运行 `git add`、`git commit`、stash、checkout、clean、reset 等改变 HEAD、分支、暂存区或工作树的命令。\n\n测试合同:\n- question: 在本工作区的 AlembicPlugin 检出（main 分支）中，实现目标落地的 `docs/wakeflow-smoke-round6.md` 是否满足验收标准 1–5：文件存在且为普通文件、逐字节内容为两行共 44 字节、`docs/` 状态相对基线只多这一个未跟踪文件、HEAD 提交不变、HEAD 仍在 main？\n- object boundary: 被测对象是本工作区 AlembicPlugin 检出中的 `docs/wakeflow-smoke-round6.md` 以及该检出的 git 状态（`docs/` 下的未跟踪条目、HEAD 与分支）；只观察、不修改。其他仓库、其他文件与验收标准 6–10 不在本测试范围内（由 Controller 核对）。\n- attempt: 1 of 2\n- environment: requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/landing.md\n- setup: reuse-confirmed-environment\n- ts-1: given 本工作区的 AlembicPlugin 检出（main 分支）处于实现目标被接受后的状态，测试开始前未做任何改动；命令在 AlembicPlugin 仓库根目录运行。; when 运行 `test -f docs/wakeflow-smoke-round6.md && test ! -L docs/wakeflow-smoke-round6.md; echo $?`。; then 输出 `0`：该路径存在，是普通文件（不是符号链接，也不是目录）。\n- ts-2: given 同 ts-1；命令在 AlembicPlugin 仓库根目录运行。; when 依次运行 `wc -c < docs/wakeflow-smoke-round6.md`、`shasum -a 256 docs/wakeflow-smoke-round6.md` 与 `od -c docs/wakeflow-smoke-round6.md`。; then `wc -c` 输出 44；SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`；`od -c` 逐字节显示 `# Wakeflow smoke round 6`、一个 `\\n`、`round six verified`、一个 `\\n`，末行偏移为 `0000054`（共 44 字节），没有 BOM、没有 `\\r`、没有第三行。\n- ts-3: given 同 ts-1；基线为实现前的四行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke.md`。; when 在 AlembicPlugin 仓库根目录运行 `git --no-optional-locks status --porcelain docs/`。; then 恰好五行且都是 `??` 状态：`?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`；相对基线只多出 `?? docs/wakeflow-smoke-round6.md`，没有暂存或其他状态的条目。\n- ts-4: given 同 ts-1；命令在 AlembicPlugin 仓库根目录运行。; when 运行 `git --no-optional-locks rev-parse HEAD`。; then 输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`。\n- ts-5: given 同 ts-1；命令在 AlembicPlugin 仓库根目录运行。; when 运行 `git --no-optional-locks symbolic-ref HEAD`。; then 输出 `refs/heads/main`。\n- allowed skills: skills/wakeflow-test/SKILL.md, skills/wakeflow-target/SKILL.md\n- stop when: 任何步骤需要修改 AlembicPlugin 的工作树、暂存区、提交历史或任何文件才能继续时，立即停止并报告，不做修改。\n- stop when: 测试前确认的落地不是 main 分支、HEAD `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 上的工作树时，停止并按 environment 报告，不尝试恢复。\n- stop when: 需要凭据、网络、外部服务、安装依赖或构建才能继续时，停止并按 environment 报告。\n- stop when: 尝试预算（2 次）用尽时停止，并报告每次尝试的情况。\n\n按序阅读:\n1. ../.wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/artifacts/task-packages/task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0.json\n2. requirement.md\n3. ../CLAUDE.md\n4. ../.wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n\n必需技能:\n- skills/wakeflow-target/SKILL.md\n- skills/wakeflow-test/SKILL.md\n\n身份:\n- demand: demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 窗口: window_6a9a3c45-045f-4dac-9c7e-f24ae32c191b\n- 绑定: window_binding_edf9e207-62cf-4fd5-beae-06a4843dca42\n- 工作区根（相对本窗口根）: ..\n\n交回:\n用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。\n- tool: wakeflow_import_target_result\n- deliveryId: target-delivery_9ff8b518-42cf-4fe9-b2f5-a00a83c49fce\n- claimDigest: sha256:c03c40088e7d2cd8a963691dd70a2a097abaec591a1228c672434613da28d318\n不得把本 prompt 转发给其他窗口。\n\n派发记录:\n- deliveryId: target-delivery_9ff8b518-42cf-4fe9-b2f5-a00a83c49fce\n- generation: 1\n- claimDigest: sha256:c03c40088e7d2cd8a963691dd70a2a097abaec591a1228c672434613da28d318\n- streamRevision: 14",
+          "promptDigest": "sha256:e9ee6ed0a7de16d0999df64cceed7b70c476689bd287382064e2959b84629947",
+          "fence": {
+            "claimId": "work-claim_049c3e5b-485b-4fcd-bae3-3b777524d64c",
+            "claimDigest": "sha256:c03c40088e7d2cd8a963691dd70a2a097abaec591a1228c672434613da28d318",
+            "expectedStreamRevision": 13
+          },
+          "preparedAt": "2026-09-25T04:54:14.463Z",
+          "workType": "test",
+          "attempt": {
+            "kind": "WakeflowTestExecutionAttempt",
+            "schemaVersion": 1,
+            "testAttemptId": "test-attempt_d65cdf0e-add3-4261-829c-92336ffbe9fe",
+            "targetTaskId": "target-task_d1a56b30-e7db-426c-8980-d59434077d2a",
+            "contract": {
+              "taskPackageId": "task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0",
+              "taskPackageDigest": "sha256:43b67790dc3bb64365d51056a2657b25729f8089f60efc670651a8f638453e87"
+            },
+            "environmentSetup": {
+              "policy": "reuse-existing",
+              "directive": "reuse-confirmed-environment"
+            },
+            "ordinal": 1,
+            "mode": "initial"
+          },
+          "envelopeDigest": "sha256:20f5b18273a1610393992bd834aed567dd3adf64097caa60b246ac2afbc5ef2f"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:55f222ac445373d70ce2ab07c9a0fc621dc18deb976d34f4ce17a46289844df8"
+    }
+  ],
+  "idempotency": {
+    "key": "deliver-alembicplugin-smoke-round6-test-v1",
+    "requestDigest": "sha256:6e351472e96bef595aeeffc795b67c428400a64a27b224496ddf809dfae953c5"
+  }
+}

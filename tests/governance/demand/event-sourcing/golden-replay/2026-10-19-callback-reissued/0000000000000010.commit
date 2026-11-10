@@ -1,0 +1,109 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_b5f6375b-9f86-4016-866a-0d4e03410dde",
+  "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+  "commitSequence": 10,
+  "commandDigest": "sha256:daef3ca84bfed7ba0edbdc3e6fae8a18d7dfb8f0b1129afc78b47b134612ade4",
+  "expectedStreamRevision": 9,
+  "firstStreamRevision": 10,
+  "lastStreamRevision": 10,
+  "previousCommitDigest": "sha256:c64a60d58273a70ec110f4e006fa276d93c0174766f84b5aa24f21e3c4fbd1a5",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_95ea67bf-e071-4536-90e0-28050e51f4d1",
+      "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+      "streamRevision": 10,
+      "recordedAt": "2026-10-19T12:21:08.990Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_95ea67bf-e071-4536-90e0-28050e51f4d1",
+          "programId": "program_752efd09-8d60-4ea9-83c6-d1fb5027efab",
+          "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+          "targetTaskId": "target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b",
+          "controllerWindowId": "window_6b712685-14e3-4c6d-8509-bcccb33f96d2",
+          "reviewed": {
+            "snapshotDigest": "sha256:11547ce67aed3e24de00f5e9b4c7e51a3fda7897b5c62c3c484b66f7e5a85623",
+            "reviewUnitDigest": "sha256:627bcf5afce0327a3a8c80dc9bcf51a0396e0a9d4434c2565c75382d34275e7b",
+            "stateDigest": "sha256:a5b2380e7a2b1a321f60a9c9e17373c2de0368e28c5b783976a7577cfa90bd08",
+            "streamRevision": 9,
+            "taskPackageId": "task-package_8b15999e-b40f-43b2-a265-70094fa85fb1",
+            "taskPackageDigest": "sha256:02ab6a667b9415f1b8f2b7304adbf8fc9735d715bf90f1939e3e3f573927048b",
+            "targetResultId": "target-result_57ee8b7e-89c0-4600-9ed2-ea94800629ac",
+            "targetResultDigest": "sha256:aea55b009a325dc1750ebef9fe7242aa146bb2831bd99f57e4d0c0d7b8b7efbf",
+            "targetResultOutcome": "needs-review",
+            "targetResultReportedAt": "2026-10-19T12:08:19.558Z"
+          },
+          "decision": "accept",
+          "assessment": {
+            "requirementAlignment": "aligned",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "ac1-probe-post-fix",
+              "method": "Controller 在 AlembicPlugin 根目录（main，HEAD 4473414，改动未提交）不带 --apply 运行 node scripts/clean-scratch.mjs --retention-days \"\" 与 --retention-days \"   \"，记录退出码、stderr 与 stdout；输出已存为 evidence_26528592-3d59-4605-9215-d3f6106ddf61（test-output）。",
+              "outcome": "passed",
+              "observation": "两次均 exit=1，stderr 含 Error: --retention-days requires a non-negative number，stdout 为空，would delete 行 0、dry-run retention= 汇总行 0。对照：abc 与缺值 exit=1 同一错误；0、3、7 exit=0（仓库无 scratch/，打印 nothing to clean）。"
+            },
+            {
+              "checkId": "ac1-defect-reproduced-pre-fix",
+              "method": "把 HEAD 版本的 scripts/clean-scratch.mjs（git show HEAD:）复制到 Controller 草稿目录中的临时根，放一个 mtime 早于 7 天的 afapi-stale-probe.json，不带 --apply 运行空值与纯空白值。",
+              "outcome": "passed",
+              "observation": "修复前两次均 exit=0，打印 would delete afapi-stale-probe.json 与 dry-run retention=0d 汇总，证实缺陷存在且修复针对的正是这一路径；fixture 未被删除。"
+            },
+            {
+              "checkId": "ac1-unit-test-and-lint",
+              "method": "npx vitest run --config vitest.unit.config.ts test/unit/CleanScratchScript.test.ts --reporter=verbose；npm run lint；npx biome check 两个改动文件（同在 evidence_26528592-3d59-4605-9215-d3f6106ddf61）。并阅读 evidence_f513ba81-0745-47a4-b146-fc36012fdedf（脚本 diff）与 evidence_71f64288-4db4-4f0f-8bb2-f561d7c81c54（新测试文件）。",
+              "outcome": "passed",
+              "observation": "8/8 用例通过（空串、纯空白、缺值、abc 拒绝且 fixture 保留；0、3、7、默认在 dry-run 中解析为对应 Nd）。npm run lint exit=0，无 clean-scratch 相关告警；biome 对两文件无问题。diff 只改 --retention-days 分支两行逻辑并加中文注释，错误在模块顶层扫描 scratch/ 之前抛出；测试在临时目录复制脚本运行，不触碰仓库 scratch/。git status 只有这两个文件，未提交。"
+            }
+          ],
+          "rationale": "验收锚点 plugin-ac1-empty-retention-days-rejected 由 Controller 独立核实：修复后空值与纯空白值均以 exit=1 和 --retention-days requires a non-negative number 退出，stdout 无 would delete 行和 dry-run retention= 汇总（evidence_26528592…）；用 HEAD 版脚本在临时根复现了修复前按 0 天保留并列出待删条目的缺陷。scripts/clean-scratch.mjs 的改动最小且只在 parseArgs 的 --retention-days 分支（evidence_f513ba81…），缺值/非数字/合法值行为不变；新增单元测试 8 例全部通过并覆盖拒绝与合法值两侧（evidence_71f64288…）。lint 通过，未越界：未带 --apply、未触碰 scratch/、未改依赖或其他仓库、改动按任务包保持未提交。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "Number() 仍接受 0x10、1e2 等写法，属需求 non-goals，如需只接受十进制需另开任务。",
+            "--report-path 缺值时仍静默变为 null，属 out-of-scope，仅作观察。",
+            "改动未提交：提交 scripts/clean-scratch.mjs 与 test/unit/CleanScratchScript.test.ts 需要用户另行授权。",
+            "未运行完整 npm run test:unit 与 build:check；改动不涉及 TypeScript 源码，任务包未要求。"
+          ],
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "08d318b2-dc08-4419-87fb-5f7344a3506b",
+            "landedAt": "2026-10-19T12:18:45.763Z"
+          },
+          "targetCompletion": {
+            "recordId": "2f6e20e1-97e6-426a-aad3-e5dfdedf7bcd",
+            "event": "stop",
+            "observedAt": "2026-10-19T12:08:49.533Z"
+          },
+          "anchorEvidence": [
+            {
+              "anchorId": "plugin-ac1-empty-retention-days-rejected",
+              "evidenceIds": [
+                "evidence_26528592-3d59-4605-9215-d3f6106ddf61",
+                "evidence_f513ba81-0745-47a4-b146-fc36012fdedf",
+                "evidence_71f64288-4db4-4f0f-8bb2-f561d7c81c54"
+              ]
+            }
+          ],
+          "decidedAt": "2026-10-19T12:21:08.990Z",
+          "decisionDigest": "sha256:d636dd5e2e9afe1dcef267c73d4a6b3dd651c112019e343b7d30a40557150eb8"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:66babbb26e77c28485cbe6ed047843a2aa90ce108c9afd6aa2bd12c9e6fc32e2"
+    }
+  ],
+  "idempotency": {
+    "key": "impl-review-accept-57ee8b7e-r9",
+    "requestDigest": "sha256:1b9d71921718dfc4f31b82d8a883ce340bde1bb05982ddcbd5a4056259784d8f"
+  }
+}

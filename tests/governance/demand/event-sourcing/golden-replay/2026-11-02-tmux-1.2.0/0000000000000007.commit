@@ -1,0 +1,78 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_7afaeb82-2f86-443b-9f75-9235a88d3a35",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 7,
+  "commandDigest": "sha256:7f83ca9d3c42c09d4e1f8fe0d6f31eed756b71e00596645fd7f3a12e2447d906",
+  "expectedStreamRevision": 6,
+  "firstStreamRevision": 7,
+  "lastStreamRevision": 7,
+  "previousCommitDigest": "sha256:bf982bda67c91d17d6c01d3500106c3b253f3e7ff45b97714a663b6581fdfc66",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_3945e9bc-b655-4a5b-8e02-2c170972b385",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 7,
+      "recordedAt": "2026-11-02T01:31:37.908Z",
+      "eventType": "evidence.managed-evidence-recorded",
+      "eventVersion": 1,
+      "data": {
+        "manifest": {
+          "artifactKind": "wakeflow-managed-evidence-manifest",
+          "schemaVersion": 1,
+          "evidenceId": "evidence_41714a56-8dfd-4407-b525-1a6ee1e75eda",
+          "programId": "program_a7bee80a-bd53-40e9-b726-daa5f6abe462",
+          "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+          "demandAuthorityDigest": "sha256:61198c8c7591232a694be82b3047669cdde2b91ee30535925d884ef26fc845a4",
+          "kind": "diff",
+          "capturedAt": "2026-11-02T01:31:37.908Z",
+          "recordedBy": {
+            "windowId": "window_afa4699e-438c-4e00-bb53-695245e7b28d",
+            "configDigest": "sha256:3f8c1f8bbbe45a2f5c1a75d2d77851eea693246654ef398b83422e8960e57523"
+          },
+          "source": {
+            "kind": "managed-path",
+            "root": {
+              "kind": "support-surface",
+              "surfaceId": "surface_8ce75f08-5cba-4770-9e26-c70df2b769e4"
+            },
+            "path": "controller-checks/demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8/l19-alembic-commit-diff.txt",
+            "resourceType": "file"
+          },
+          "payload": {
+            "artifactDigest": "sha256:d3fbeaef6592349f720ce656835db5943d163d0b09adbfdece60b1486bfc5a7b",
+            "treeManifest": {
+              "artifactKind": "wakeflow-loaded-artifact-tree",
+              "fileCount": 1,
+              "files": [
+                {
+                  "bytes": 732,
+                  "digest": "sha256:2a0f8adb46f77d5d6f7f413cdc71c21659c19077bae858958c422840a29e96f0",
+                  "executable": false,
+                  "ref": "content"
+                }
+              ],
+              "schemaVersion": 1,
+              "totalBytes": 732
+            }
+          },
+          "contentReview": {
+            "disposition": "not-required",
+            "opaqueFileRefs": [],
+            "privacyFindings": []
+          },
+          "manifestDigest": "sha256:bb1c31090931b970aebb4b6c355db21b1cd74cb7af83e6788447b6c37ca83343"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:f1d482e97c1a2970f731afdfdb9496093626cbc7ea051bdcf4106095fb62525e"
+    }
+  ],
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

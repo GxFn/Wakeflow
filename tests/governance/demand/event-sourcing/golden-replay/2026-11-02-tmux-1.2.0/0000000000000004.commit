@@ -1,0 +1,63 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_164bf018-67cf-4db8-9612-d89ab1d0ab40",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 4,
+  "commandDigest": "sha256:35906686cb7e19aea1472d540806a939868441e3269b4ecfd59d207c538f3e10",
+  "expectedStreamRevision": 3,
+  "firstStreamRevision": 4,
+  "lastStreamRevision": 4,
+  "previousCommitDigest": "sha256:20ed584ed660ae6cf5ed2d63f6125811f882466c2d543a61c6eceb96de55b305",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_8dd15d3b-d59e-4c67-adcc-3a17bea6fadb",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 4,
+      "recordedAt": "2026-11-02T01:14:33Z",
+      "eventType": "delivery.delivery-outcome-recorded",
+      "eventVersion": 1,
+      "data": {
+        "outcome": {
+          "kind": "WakeflowDeliveryOutcome",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_19ae6904-7728-4d07-b31f-bd82929f7701",
+          "generation": 1,
+          "fence": {
+            "claimId": "work-claim_6cbaa7c4-6a63-410c-bbab-bdf8f4ca3b7d",
+            "claimDigest": "sha256:c5bf169874d97fb4db2539c58336b6fd9f3102207b2875078900cb776cdc3ab5"
+          },
+          "disposition": "accepted",
+          "attempt": {
+            "status": "sent",
+            "evidenceDigest": "sha256:eb80f11713d3be7f319508b8a5ecae34f51835fcf2f7e71bdb60fac23e86db6a"
+          },
+          "readback": {
+            "status": "pending",
+            "evidenceDigest": "sha256:b9334b1598b742b489d29bc247e9dd8a1825b21ac57d1b39cea8ae87bcd1383f"
+          },
+          "evidence": {
+            "kind": "hook-record",
+            "hookRecordId": "42f446b9-0124-4106-bc70-a43c88832906",
+            "rationale": null
+          },
+          "claimHandling": "retain",
+          "observedAt": "2026-11-02T01:14:33Z",
+          "outcomeDigest": "sha256:4cac570b970e1e3772588f41ace52b25c257a2d1ca4cf15f7d127589e6edde03"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:5931553208e43b86189cd49b2a4475ef6f53a41fedeb552897f4e0ef24b50f80"
+    }
+  ],
+  "idempotency": {
+    "key": "l19-outcome-alembic-readme-g1",
+    "requestDigest": "sha256:43fdffe2c92759cc301b08cacd38a2aa77573f4e612fb426ed1613a20d2a4e57"
+  },
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

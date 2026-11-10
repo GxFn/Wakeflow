@@ -1,0 +1,82 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_1c89e885-64bb-4513-b43f-74e3e74f4cc5",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 10,
+  "commandDigest": "sha256:62cca139d62ce13b53b0c46d429b61f151e43d0b0e6270522bfbdb6986d97dc8",
+  "expectedStreamRevision": 9,
+  "firstStreamRevision": 10,
+  "lastStreamRevision": 10,
+  "previousCommitDigest": "sha256:b3ebf4ca25bd620bc9c58fe3b065bd456711b9871d97d08d6d5ebb895569fd44",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_45405a89-015d-4e2b-88be-8dac83d4ace4",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 10,
+      "recordedAt": "2026-09-24T21:16:18.948Z",
+      "eventType": "delivery.delivery-prepared",
+      "eventVersion": 1,
+      "data": {
+        "envelope": {
+          "kind": "WakeflowDeliveryEnvelope",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_ebaf4c1b-5645-43e9-8b1a-fa2aca748860",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69",
+          "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+          "target": {
+            "targetTaskId": "target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe",
+            "taskPackageId": "task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1",
+            "taskPackageRef": ".wakeflow-active/current/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/artifacts/task-packages/task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1.json",
+            "taskPackageDigest": "sha256:5b53712212d92b3985545af84f22514d04e339bf76e7da37cfcb0b899047b1e0"
+          },
+          "route": {
+            "hostId": "claude-code",
+            "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7",
+            "bindingId": "window_binding_58af5d97-5d34-4afa-8150-18a682775cea",
+            "bindingDigest": "sha256:61d945fd6d11ca098b89ada810eb510068b355b62247f404e6d37352b6998485"
+          },
+          "language": "zh-Hans",
+          "portablePrompt": "继续当前窗口任务: AlembicPlugin/target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe\n\n目标:\n上一轮在 AlembicPlugin 新建的 `docs/wakeflow-smoke-round2.md` 已通过 Controller 的独立核对；本轮只重做报告：不改动仓库，以 outcome=completed 重新导入，并按返工更正引用 Controller 已登记的三条托管证据。\n\n完成焦点:\n- 证据引用：evidenceLocators 与 anchorEvidence 按返工更正逐字照抄 kind、ref 与 digest（证据 A、B、C），五个锚点都要有引用；导入被拒时按拒绝原因修正报告后再导入，不要动仓库。\n- 回调：导入成功后只用 tmux 助手 deliver 把回调 prompt 原样送进 Controller 窗口，然后结束本轮。\n\n优先上下文:\n用户于 2026-09-24 在 Design 窗口给出并确认：目标仓库 AlembicPlugin；文件路径 `docs/wakeflow-smoke-round2.md`；内容恰好一行 `Wakeflow joint test round 2` 加一个 LF（UTF-8，无 BOM，共 28 字节）；不改动其他文件，不提交、不 `git add`；验收须能被 Controller 只读核对：文件存在且为普通文件、字节完全一致、`git status --porcelain` 只多这一个未跟踪文件、仓库 HEAD 不变。\n\n关键边界:\n- 不创建、修改、移动或删除 AlembicPlugin 中的任何文件（包括上一轮新建的文件和第一轮的 `docs/wakeflow-smoke.md`），不 `git add`、不提交、不 stash、不动 HEAD 与分支，不运行测试、构建或安装命令，不碰其他四个仓库；不做登记证据、评审等 Controller 操作，也不用 SendMessage 等其他方式发送回调。\n- forbidden: 修改、删除、移动、重命名或重新格式化任何已有文件，包括第一轮留下的未跟踪文件 `docs/wakeflow-smoke.md`、`README.md`、`README_CN.md`、`CHANGELOG.md`、`package.json`、`CLAUDE.md`、`AGENTS.md`、`.gitignore`、`docs/` 下现有文件和任何测试；也不把任何文件加入 `.gitignore`。\n\n验收锚点:\n- ac-1-regular-file: AlembicPlugin 仓库中存在路径为 `docs/wakeflow-smoke-round2.md` 的普通文件（不是符号链接，也不是目录）。\n- ac-2-exact-bytes: `docs/wakeflow-smoke-round2.md` 的内容逐字节等于 `Wakeflow joint test round 2` 后接一个 LF：UTF-8、无 BOM、共 28 字节。\n- ac-3-status-one-new-entry: 相对基线，`git status --porcelain` 只多出新文件这一行未跟踪条目。\n- ac-4-head-unchanged: AlembicPlugin 仓库 HEAD 不变：提交仍为基线 `7b2c53a`，且 HEAD 仍指向 `refs/heads/main`。\n\n返工依据（继续执行同一 TaskPackage）:\n- decision: target-review-decision_9e1355e1-6053-4fe4-8088-31b29cafba20 / sha256:b92d340d24719e96b06b69e6c6c7533eda7768fd104932eb3df6baed6983ec33\n- previous result: target-result_d9619a67-d400-464b-975f-e127def82095 / sha256:f2519eaa56c90bba4780fe386656001df7a0c93eb7919d446c257e2772c3edfb\n- rationale: 我独立核对了验收锚点 1–5，全部通过（见 independentChecks）：原始输出已登记为 test-output 证据 B（evidence_e81d15db-8a2f-470a-b035-04023013922d），新文件与第一轮文件分别登记为 document 证据 A（evidence_71426014-5f02-40a8-8259-b5d65cf96e17）与 C（evidence_e20dc896-d382-4002-af04-dd7b8367ba94），两者的 payload 摘要分别等于 `3b1b1f6b…a36b44` 与 `953170c4…b4e3`。产品改动正确，所以 requirementAlignment=aligned、implementationQuality=satisfactory。返工只针对报告：结果以 needs-review 导入，五个锚点的 anchorEvidence 都为空，按规则不能接受；这是任务包预先约定的首轮做法，不是目标窗口的过错。唯一失败的检查项 report-anchor-evidence 就是目标窗口要做的更正：不改动仓库，以 outcome=completed 重新导入并按锚点引用证据 A、B、C，再用 tmux 助手把回调送进 Controller 窗口。\n- [failed] report-anchor-evidence\n  method: 阅读评审单元中导入的报告：outcome=needs-review，anchorEvidence 与 evidenceLocators 都为空。这是任务包约定的首轮做法，但五个锚点都没有托管证据支撑，按规则不能接受。\n  observed: 更正（只改报告，不改仓库）：不要创建、修改或删除 AlembicPlugin 中的任何文件；先只读复核新文件与仓库状态仍与上次一致，然后以 outcome=completed 重新导入报告。evidenceLocators 列出以下三条托管证据（kind、ref、digest 原样照抄）：\n证据 A：kind document，ref `artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/cont…\n\n按序阅读:\n1. ../.wakeflow-active/current/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/artifacts/task-packages/task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1.json\n2. requirement.md (goal, scope, completion-definition, non-goals, acceptance-criteria, user-confirmation, code-facts, landing-plan, testing-decision)\n3. ../CLAUDE.md\n4. CLAUDE.md\n5. ../.wakeflow-active/current/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n\n必需技能:\n- skills/wakeflow-target/SKILL.md\n\n身份:\n- demand: demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 窗口: window_e867c0c2-7d25-44ae-a0de-c98e472e62c7\n- 仓库: repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1\n- 绑定: window_binding_58af5d97-5d34-4afa-8150-18a682775cea\n- 工作区根（相对本窗口根）: ..\n\n交回:\n用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。\n- tool: wakeflow_import_target_result\n- deliveryId: target-delivery_ebaf4c1b-5645-43e9-8b1a-fa2aca748860\n- claimDigest: sha256:20335bba8bc650b07ae998ba1ab53a464c941ea0610267f16f134cf9a63555b3\n不得把本 prompt 转发给其他窗口。\n\n派发记录:\n- deliveryId: target-delivery_ebaf4c1b-5645-43e9-8b1a-fa2aca748860\n- generation: 1\n- claimDigest: sha256:20335bba8bc650b07ae998ba1ab53a464c941ea0610267f16f134cf9a63555b3\n- streamRevision: 10",
+          "promptDigest": "sha256:b7222c9a3490c3b68d894364854cbb9318f19c9dcc60d40cc69c3a9c134e59ef",
+          "fence": {
+            "claimId": "work-claim_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0",
+            "claimDigest": "sha256:20335bba8bc650b07ae998ba1ab53a464c941ea0610267f16f134cf9a63555b3",
+            "expectedStreamRevision": 9
+          },
+          "preparedAt": "2026-09-24T21:16:18.948Z",
+          "workType": "implementation",
+          "rework": {
+            "decision": {
+              "targetReviewDecisionId": "target-review-decision_9e1355e1-6053-4fe4-8088-31b29cafba20",
+              "decisionDigest": "sha256:b92d340d24719e96b06b69e6c6c7533eda7768fd104932eb3df6baed6983ec33"
+            },
+            "previousResult": {
+              "targetResultId": "target-result_d9619a67-d400-464b-975f-e127def82095",
+              "resultDigest": "sha256:f2519eaa56c90bba4780fe386656001df7a0c93eb7919d446c257e2772c3edfb"
+            },
+            "rationaleSummary": "我独立核对了验收锚点 1–5，全部通过（见 independentChecks）：原始输出已登记为 test-output 证据 B（evidence_e81d15db-8a2f-470a-b035-04023013922d），新文件与第一轮文件分别登记为 document 证据 A（evidence_71426014-5f02-40a8-8259-b5d65cf96e17）与 C（evidence_e20dc896-d382-4002-af04-dd7b8367ba94），两者的 payload 摘要分别等于 `3b1b1f6b…a36b44` 与 `953170c4…b4e3`。产品改动正确，所以 requirementAlignment=aligned、implementationQuality=satisfactory。返工只针对报告：结果以 needs-review 导入，五个锚点的 anchorEvidence 都为空，按规则不能接受；这是任务包预先约定的首轮做法，不是目标窗口的过错。唯一失败的检查项 report-anchor-evidence 就是目标窗口要做的更正：不改动仓库，以 outcome=completed 重新导入并按锚点引用证据 A、B、C，再用 tmux 助手把回调送进 Controller 窗口。",
+            "requiredCorrections": [
+              {
+                "checkId": "report-anchor-evidence",
+                "outcome": "failed",
+                "methodSummary": "阅读评审单元中导入的报告：outcome=needs-review，anchorEvidence 与 evidenceLocators 都为空。这是任务包约定的首轮做法，但五个锚点都没有托管证据支撑，按规则不能接受。",
+                "observationSummary": "更正（只改报告，不改仓库）：不要创建、修改或删除 AlembicPlugin 中的任何文件；先只读复核新文件与仓库状态仍与上次一致，然后以 outcome=completed 重新导入报告。evidenceLocators 列出以下三条托管证据（kind、ref、digest 原样照抄）：\n证据 A：kind document，ref `artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/cont…"
+              }
+            ]
+          },
+          "envelopeDigest": "sha256:0a6652a9215e1189489c1c9bd8f269c0ae02291b2e3f7f614e527d367f1f0468"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:f548012b55f6b12e074ee6dd29556b0a7ad0c039bb062efa03e91119d76a08ee"
+    }
+  ],
+  "idempotency": {
+    "key": "prepare-alembicplugin-smoke-round2-rework1-v1",
+    "requestDigest": "sha256:20eae63ae070673aecfcdbcb0ce4f87d731eb09ee2cb59221e1c3337afa92d99"
+  }
+}

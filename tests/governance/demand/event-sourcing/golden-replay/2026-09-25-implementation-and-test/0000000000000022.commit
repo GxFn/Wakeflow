@@ -1,0 +1,74 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_77300ca3-2499-4020-8e7e-5440cd341f16",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 22,
+  "commandDigest": "sha256:b1884ad5563b0e9584224602c4ce50e1182e9a10c1b693bbfa223f5553a3da8c",
+  "expectedStreamRevision": 21,
+  "firstStreamRevision": 22,
+  "lastStreamRevision": 22,
+  "previousCommitDigest": "sha256:9ba66005e1d8d89dbd8f31c54ca688a328977abe20e96f486240d27f2d6771be",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_87ff9f52-ef70-441c-a66b-35f0d372d3a6",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 22,
+      "recordedAt": "2026-09-25T05:06:02.856Z",
+      "eventType": "evidence.managed-evidence-recorded",
+      "eventVersion": 1,
+      "data": {
+        "manifest": {
+          "artifactKind": "wakeflow-managed-evidence-manifest",
+          "schemaVersion": 1,
+          "evidenceId": "evidence_de71debf-77e4-439e-b74d-eeb8ce1633d9",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "demandAuthorityDigest": "sha256:122ace240ca4b327149e18f55845fa976deb8d4d9f53b93397752d01e25a80f5",
+          "kind": "test-output",
+          "capturedAt": "2026-09-25T05:06:02.856Z",
+          "recordedBy": {
+            "windowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+            "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69"
+          },
+          "source": {
+            "kind": "managed-path",
+            "root": {
+              "kind": "support-surface",
+              "surfaceId": "surface_2f5a165d-1a3c-4321-a2fc-6043789b40f7"
+            },
+            "path": "evidence/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/alembicplugin-controller-test-review-probes.txt",
+            "resourceType": "file"
+          },
+          "payload": {
+            "artifactDigest": "sha256:1cee382ad85ef968f6af23998697b66d9de43a9bcbaf8aa21f7b26b09eca08b0",
+            "treeManifest": {
+              "artifactKind": "wakeflow-loaded-artifact-tree",
+              "fileCount": 1,
+              "files": [
+                {
+                  "bytes": 4964,
+                  "digest": "sha256:1c17570e8ed0cd88478627873e182dfd4b9cba9e433b9ba3ef450f2157c069da",
+                  "executable": false,
+                  "ref": "content"
+                }
+              ],
+              "schemaVersion": 1,
+              "totalBytes": 4964
+            }
+          },
+          "contentReview": {
+            "disposition": "not-required",
+            "opaqueFileRefs": [],
+            "privacyFindings": []
+          },
+          "manifestDigest": "sha256:100f3f0159dbf303d079afaa0ec87c7c3409b4df655267052e5a99f7a8988a60"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:9d9197b4c95fbb73b8c5acae3905422df47ae6fd4eb1633d498b8b60238d69e5"
+    }
+  ]
+}

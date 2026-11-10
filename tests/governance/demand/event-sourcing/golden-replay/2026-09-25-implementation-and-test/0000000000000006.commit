@@ -1,0 +1,74 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_b96195fd-cf88-4a7a-ae0f-f03ab384ee61",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 6,
+  "commandDigest": "sha256:2746513e8a213ee3d3ab654c48faabd65d58f34e854c49ac40aed800eb2f95b0",
+  "expectedStreamRevision": 5,
+  "firstStreamRevision": 6,
+  "lastStreamRevision": 6,
+  "previousCommitDigest": "sha256:e0d90ff3c9a17b6bc46a7c90ff0ad54c74b417aae0c882995fb0ad3d5e0941c9",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_1a056ed7-85d5-44e3-b8cc-cf7d4900c8f2",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 6,
+      "recordedAt": "2026-09-25T04:47:24.334Z",
+      "eventType": "evidence.managed-evidence-recorded",
+      "eventVersion": 1,
+      "data": {
+        "manifest": {
+          "artifactKind": "wakeflow-managed-evidence-manifest",
+          "schemaVersion": 1,
+          "evidenceId": "evidence_cfbec12e-5b52-4988-97c4-378234282210",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "demandAuthorityDigest": "sha256:122ace240ca4b327149e18f55845fa976deb8d4d9f53b93397752d01e25a80f5",
+          "kind": "test-output",
+          "capturedAt": "2026-09-25T04:47:24.334Z",
+          "recordedBy": {
+            "windowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+            "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69"
+          },
+          "source": {
+            "kind": "managed-path",
+            "root": {
+              "kind": "support-surface",
+              "surfaceId": "surface_2f5a165d-1a3c-4321-a2fc-6043789b40f7"
+            },
+            "path": "evidence/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/alembicplugin-controller-impl-review-probes.txt",
+            "resourceType": "file"
+          },
+          "payload": {
+            "artifactDigest": "sha256:fdba8d1126de257c2dee3ded547043b9153797a39f5c471635f7479965de5777",
+            "treeManifest": {
+              "artifactKind": "wakeflow-loaded-artifact-tree",
+              "fileCount": 1,
+              "files": [
+                {
+                  "bytes": 9671,
+                  "digest": "sha256:9b81cc0c34f31bb3b46f098c0c191539c870aa66c2fac5865bf38f0bf9703388",
+                  "executable": false,
+                  "ref": "content"
+                }
+              ],
+              "schemaVersion": 1,
+              "totalBytes": 9671
+            }
+          },
+          "contentReview": {
+            "disposition": "not-required",
+            "opaqueFileRefs": [],
+            "privacyFindings": []
+          },
+          "manifestDigest": "sha256:8cbf9ca6bd673f4a89554f560bf31f7fedf4e228ebde9a8b4f65c81bba965f57"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:706d1432bc54c35eb69630df75184a791f5560db3c35e5c3d9514f114846352a"
+    }
+  ]
+}

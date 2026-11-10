@@ -1,0 +1,138 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_aa202dba-d147-4e71-a8b7-0356a74e3473",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 23,
+  "commandDigest": "sha256:2d8e399243bd2f5335b76d8f1b84742256b4450c6a6fc20a2194fe43c13af1cc",
+  "expectedStreamRevision": 22,
+  "firstStreamRevision": 23,
+  "lastStreamRevision": 23,
+  "previousCommitDigest": "sha256:d9f794a8b697dddc484bdcfe75d20fa8b51a1cc7643f4898b2b96e9c69db2e4c",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_58eac8c3-5218-46ac-83d3-b6a8c15fdd36",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 23,
+      "recordedAt": "2026-09-25T05:07:31.209Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerTestReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_58eac8c3-5218-46ac-83d3-b6a8c15fdd36",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "targetTaskId": "target-task_d1a56b30-e7db-426c-8980-d59434077d2a",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "reviewed": {
+            "snapshotDigest": "sha256:2ea7132b5ed0753e455a5184ef0412b62c8cd88424b17795fc82b7b537f27d2e",
+            "reviewUnitDigest": "sha256:e1751f354e7e067baaa6112d42b9c2c9ef80f56c5db994b7d4d3977ace226f03",
+            "stateDigest": "sha256:9d9197b4c95fbb73b8c5acae3905422df47ae6fd4eb1633d498b8b60238d69e5",
+            "streamRevision": 22,
+            "taskPackageId": "task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0",
+            "taskPackageDigest": "sha256:43b67790dc3bb64365d51056a2657b25729f8089f60efc670651a8f638453e87",
+            "targetResultId": "target-result_049c3e5b-485b-4fcd-bae3-3b777524d64c",
+            "targetResultDigest": "sha256:45339db0ecc39e474c282a1d7412d650a210900264d2344439363dc20e4c6689",
+            "targetResultOutcome": "completed",
+            "targetResultReportedAt": "2026-09-25T05:03:12.169Z"
+          },
+          "testExecution": {
+            "testAttemptId": "test-attempt_d65cdf0e-add3-4261-829c-92336ffbe9fe"
+          },
+          "decision": "accept",
+          "assessment": {
+            "conclusion": "satisfied",
+            "evidenceSufficiency": "sufficient"
+          },
+          "independentChecks": [
+            {
+              "checkId": "chk-ts-1-evidence",
+              "method": "读取 ts-1 的托管证据 evidence_23ec53aa-4a47-4980-97f4-564b5d789882 的 payload 内容并复算 SHA-256，与报告引用和冻结的期望对照。",
+              "outcome": "passed",
+              "observation": "内容为 `0`（2 字节），SHA-256 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa 与报告引用一致，与期望输出 `0` 相符。"
+            },
+            {
+              "checkId": "chk-ts-2-evidence",
+              "method": "读取 ts-2 的托管证据 evidence_b2b3d0a6-1949-4d0b-8c0b-d45acf309b46 的 payload 内容并复算 SHA-256，与冻结的期望逐项对照。",
+              "outcome": "passed",
+              "observation": "内容依次是 `wc -c` 的 `      44`、`87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd  docs/wakeflow-smoke-round6.md`，以及 `od -c` 的三行数据和末行偏移 `0000054`（两行文字各接一个 `\\n`，没有 BOM、`\\r` 或第三行）；SHA-256 0cc6032111e59c2c8d552cf27f219694a1e66b659d3ac8b73e8d5299fdfc5208 与报告引用一致。"
+            },
+            {
+              "checkId": "chk-ts-3-evidence",
+              "method": "读取 ts-3 的托管证据 evidence_0861709f-51c7-4646-8986-59676d440770 的 payload 内容并复算 SHA-256，与冻结的期望对照。",
+              "outcome": "passed",
+              "observation": "恰好五行 `??`：round2、round3、round4、round6 与 wakeflow-smoke.md，相对基线只多出 round6；SHA-256 e1412b9db18f0fc25d4df03d68484721c47b9728eee2d121371f43ba7a480c25 与报告引用一致。"
+            },
+            {
+              "checkId": "chk-ts-4-evidence",
+              "method": "读取 ts-4 的托管证据 evidence_2ce586db-17a9-4527-9aa4-410db320e675 的 payload 内容并复算 SHA-256。",
+              "outcome": "passed",
+              "observation": "内容为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`，与期望一致；SHA-256 535d7f30baa7af24d2e55f5104a4bf115e5b5ee3764c1bba0b2bde5318b34e4a 与报告引用一致。"
+            },
+            {
+              "checkId": "chk-ts-5-evidence",
+              "method": "读取 ts-5 的托管证据 evidence_2c2c5a22-d9da-44a5-8a42-254393f6e062 的 payload 内容并复算 SHA-256。",
+              "outcome": "passed",
+              "observation": "内容为 `refs/heads/main`，与期望一致；SHA-256 599bbcd7b7f94b50d9b83318ba0dd4b8e1ba9e39d1d3ee73d1fbbd70496d0f93 与报告引用一致。"
+            },
+            {
+              "checkId": "chk-evidence-provenance",
+              "method": "查看五条步骤证据的清单与本 Demand 的事件序列。",
+              "outcome": "passed",
+              "observation": "五条证据均为 test-output，来源是 Test 支持面 `fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/ts-1.txt` 至 `ts-5.txt`，与契约要求的证据位置一致；投递结果（rev 15）之后恰好是五次证据登记（rev 16–20）加一次导入（rev 21），没有重复或遗漏。"
+            },
+            {
+              "checkId": "chk-controller-recheck-criteria-1-10",
+              "method": "测试结束后 Controller 在 AlembicPlugin 只读复核标准 1–10，原始输出登记为托管证据 evidence_de71debf-77e4-439e-b74d-eeb8ce1633d9（test-output）。",
+              "outcome": "passed",
+              "observation": "标准 1–5 仍成立（普通文件、44 字节、SHA-256 87366ae7…、docs/ 五行 `??`、HEAD 7b2c53aae21489d2daad651a0261d02c6d1bdd95 指向 refs/heads/main）；标准 6 全仓库状态与 docs/ 状态逐行一致、无暂存或工作区 diff、无新提交或 stash；标准 7–10 四个旧文件的字节数与 SHA-256 不变。"
+            },
+            {
+              "checkId": "chk-test-run-side-effects",
+              "method": "用 python os.walk 加 lstat 列出 AlembicPlugin 与 Test 支持面中 mtime 或 ctime 不早于测试许可签发时刻 2026-09-25T04:54:14.463Z 的路径（输出在 evidence_de71debf-77e4-439e-b74d-eeb8ce1633d9）。",
+              "outcome": "passed",
+              "observation": "AlembicPlugin 中没有任何路径变化（(none)）；Test 支持面只新增 `fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/` 下的 ts-1.txt 至 ts-5.txt，测试窗口没有越出 fixtures/ 与 harnesses/。"
+            },
+            {
+              "checkId": "chk-mid-run-prompt",
+              "method": "查看 Test 会话在投递之后的 hook 记录，并在其 transcript 中核对这次额外的用户输入。",
+              "outcome": "passed",
+              "observation": "2026-09-25T05:01:56Z 的一次额外提交是用户在 Test 窗口手动输入的继续执行提示（执行遇到 API 错误后恢复），没有改变范围；本次仍是第 1 次尝试，没有重复登记证据或额外导入。"
+            }
+          ],
+          "rationale": "接受测试结果。Test 窗口在第 1 次尝试（预算 2 次）中按冻结契约原样执行了 ts-1 至 ts-5，每一步的原始输出保存在 Test 支持面 fixtures 下并登记为 test-output 托管证据。Controller 逐条读取这 5 条证据并复算摘要，内容与各步冻结的期望完全一致：ts-1 输出 0；ts-2 为 44 字节、SHA-256 87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd、od -c 末行偏移 0000054；ts-3 恰好五行 ??；ts-4 为 7b2c53aae21489d2daad651a0261d02c6d1bdd95；ts-5 为 refs/heads/main。报告的 observed 与证据一致，Wakeflow 从各步记录推导的测试判定为 pass。测试结束后，Controller 的只读复核（evidence_de71debf-77e4-439e-b74d-eeb8ce1633d9）确认标准 1–10 仍然成立，测试期间 AlembicPlugin 没有任何路径变化，Test 窗口只在 fixtures/ 下写了五个步骤文件。执行中途用户在 Test 窗口输入过一条让中断的执行继续的提示，没有改变范围，也没有造成重复登记或额外尝试。证据充分，结论为满足。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "五个冒烟文件（含本轮的 round6）都是未跟踪文件，git clean、checkout 或 stash -u 可能删掉它们；本需求不授权提交。",
+            "测试只运行了一次（第 1 次尝试）；各步是对静态文件与 git 状态的确定性只读观察，没有做重复运行。",
+            "Test 窗口执行中途遇到过一次 API 错误，由用户手动提示后继续；事件序列与证据没有显示重复或遗漏，但这次中断没有被 Wakeflow 单独记录。"
+          ],
+          "stepIds": null,
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "53fb9669-7eaa-4e4c-8e0f-fa8f8064ce41",
+            "landedAt": "2026-09-25T05:03:34.984Z"
+          },
+          "targetCompletion": {
+            "recordId": "34f69deb-fd6b-4a8c-83ca-59b3d8bace65",
+            "event": "stop",
+            "observedAt": "2026-09-25T05:03:53.203Z"
+          },
+          "decidedAt": "2026-09-25T05:07:31.209Z",
+          "decisionDigest": "sha256:0ba0e016452264fe72ef66a7b46bc6cc2161056aff8f4e5290397a50b653364f"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:4a09197dc1a6185a2cc2f33e803c61d5f59ac6c589a450d461be1b29352f8ab4"
+    }
+  ],
+  "idempotency": {
+    "key": "review-accept-alembicplugin-smoke-round6-test-v1",
+    "requestDigest": "sha256:7188486abe9c434cf787de8d46a02ceded2d200cc91555f245f09c6eb4fac1a0"
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_275f60b6-216e-4ba7-9c1c-ce5640c50dd4",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 10,
+  "commandDigest": "sha256:b2bb9d5755cbbaa6a38491aee8c611f2fdceb34203f6c37af29395aa4035aeda",
+  "expectedStreamRevision": 9,
+  "firstStreamRevision": 10,
+  "lastStreamRevision": 10,
+  "previousCommitDigest": "sha256:7a6a9720ab7f53529503a5b60e5182b24d65a92f9ce138bb24d14b02cf39a31b",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_7fc82933-2936-489c-a154-1d6973299f53",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 10,
+      "recordedAt": "2026-11-02T01:33:11.185Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_7fc82933-2936-489c-a154-1d6973299f53",
+          "programId": "program_a7bee80a-bd53-40e9-b726-daa5f6abe462",
+          "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+          "targetTaskId": "target-task_2022a73b-6dc2-4d53-a85a-6f523ae3d033",
+          "controllerWindowId": "window_afa4699e-438c-4e00-bb53-695245e7b28d",
+          "reviewed": {
+            "snapshotDigest": "sha256:8741e4fa4b08ddce93b3aa2c16efcdd8e1c32a229c7da2bb92025f5f0bdc1b6b",
+            "reviewUnitDigest": "sha256:053da8b4e1b070ce7ec103e119762adf9974b2579ec389a3b507ff38b0587549",
+            "stateDigest": "sha256:42849292716d266d279acdea788fc839c63287d4f40c227a2af2a3bfff0a0de3",
+            "streamRevision": 9,
+            "taskPackageId": "task-package_0a813d85-d113-4b61-8b4c-ae9c5cadc618",
+            "taskPackageDigest": "sha256:346c679060b3a1ce48c894d3bbcdaf511791e3f197e39eae35b17b5a55a30ae4",
+            "targetResultId": "target-result_6cbaa7c4-6a63-410c-bbab-bdf8f4ca3b7d",
+            "targetResultDigest": "sha256:12d1ba880f857ae8ad6150039a0051d07ac485ec1e1edeada30cb3e0c12e7aa4",
+            "targetResultOutcome": "needs-review",
+            "targetResultReportedAt": "2026-11-02T01:15:22.688Z"
+          },
+          "decision": "accept",
+          "assessment": {
+            "requirementAlignment": "aligned",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "ac1-readme-tail",
+              "method": "Read `git -C Alembic show HEAD:README.md | tail -n 6 | cat -e` and `tail -c 16 Alembic/README.md | xxd`, and confirmed with `git -C Alembic diff --quiet HEAD -- README.md` that the worktree README.md equals HEAD; output recorded as evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e.",
+              "outcome": "passed",
+              "observation": "The last heading in README.md is `## Live check`; under it the L13 sentence is unchanged, followed by a blank line and, as the final line, exactly `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.`; the file ends with a single newline byte (0x0a)."
+            },
+            {
+              "checkId": "ac2-commit-scope",
+              "method": "Read `git -C Alembic show --stat --patch` for ab70d375be7da66793227d1e8992f0615f4cbc82 (recorded as evidence_41714a56-8dfd-4407-b525-1a6ee1e75eda), plus `git rev-parse HEAD HEAD^`, `git diff --numstat 44c1462 ab70d375`, `git status --short --branch` and `git tag --points-at HEAD` (recorded as evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e); the commit itself is recorded as evidence_c1cc8fb2-47a7-4b82-b86f-ad4ad1e59d4e.",
+              "outcome": "passed",
+              "observation": "HEAD is ab70d375 with the single parent 44c146212d73419abad5a187f07705cc3ee44678; the commit changes README.md alone (numstat `2 0 README.md`, one hunk adding a blank line and the L19 sentence, no deletions); the Alembic working tree is clean on main and no tag points at HEAD."
+            },
+            {
+              "checkId": "non-goals-other-repositories",
+              "method": "Ran `git rev-parse HEAD` and `git status --short` in AlembicAgent, AlembicCore, AlembicDashboard, AlembicPlugin and the Alembic live16 worktree and compared the heads with those observed before the delivery; output recorded as evidence_dda3027c-3126-4467-aca5-4cba8e213a8d.",
+              "outcome": "passed",
+              "observation": "All four repositories are still at their pre-delivery heads (9a03f949, c573f6b9, 8de67862, b903c7aa) with clean working trees, and the live16 worktree is clean at its detached 345cd63, so no other repository changed."
+            },
+            {
+              "checkId": "no-push-or-history-rewrite",
+              "method": "Compared `git -C Alembic status --short --branch` (in evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e) with the pre-delivery state, and listed `git -C Alembic branch -a` directly.",
+              "outcome": "passed",
+              "observation": "main is `ahead 2` of origin/main, which is the earlier unpushed L13 commit 44c1462 plus ab70d375, so nothing was pushed; 44c1462 is still the parent, so no history was rewritten; the local branches are still only main and the pre-existing worktree-wakeflow-live16."
+            }
+          ],
+          "rationale": "Goal as I understood it: append the exact sentence `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.` as the last line of the existing `## Live check` section of Alembic/README.md and commit only that file on main. I checked both anchors myself against recorded evidence, not against the report: ac1-readme-l19-last-line (requirement ac-1) holds from the README tail at HEAD in evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e, and ac2-readme-only-change (requirement ac-2) holds from the commit's stat and patch in evidence_41714a56-8dfd-4407-b525-1a6ee1e75eda, with the commit ab70d375 recorded as evidence_c1cc8fb2-47a7-4b82-b86f-ad4ad1e59d4e. The non-goals also hold: no other repository or the live16 worktree changed (evidence_dda3027c-3126-4467-aca5-4cba8e213a8d). The result arrived as needs-review only because this Demand held no managed evidence the target could cite; the change itself matches the package and the completion definition, so it is accepted with Controller-bound anchor evidence rather than sent back. Nothing about the two acceptance criteria is left unverified. Next step: preview completion and archive the Demand.",
+          "blockingReasons": [],
+          "residualRisks": [
+            "The commit exists only locally: Alembic main is ahead 2 of origin/main (this commit plus the earlier unpushed L13 commit 44c1462); pushing was out of scope and needs the user's separate authorization.",
+            "The commit's author date is local 2026-11-01 17:14 -0800 while the sentence names 2026-11-02, the UTC date the package requires; a reader comparing the two may see a one-day offset."
+          ],
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "0b67e84d-a516-405b-b142-277ac1700cd5",
+            "landedAt": "2026-11-02T01:15:30.789Z"
+          },
+          "targetCompletion": {
+            "recordId": "397d5281-f272-4d03-b296-412b1f5e5ca0",
+            "event": "stop",
+            "observedAt": "2026-11-02T01:15:39.385Z"
+          },
+          "anchorEvidence": [
+            {
+              "anchorId": "ac1-readme-l19-last-line",
+              "evidenceIds": [
+                "evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e",
+                "evidence_41714a56-8dfd-4407-b525-1a6ee1e75eda",
+                "evidence_c1cc8fb2-47a7-4b82-b86f-ad4ad1e59d4e"
+              ]
+            },
+            {
+              "anchorId": "ac2-readme-only-change",
+              "evidenceIds": [
+                "evidence_41714a56-8dfd-4407-b525-1a6ee1e75eda",
+                "evidence_2b5ee2fe-7ec3-435e-be7e-9b2976d7ca6e",
+                "evidence_c1cc8fb2-47a7-4b82-b86f-ad4ad1e59d4e"
+              ]
+            }
+          ],
+          "decidedAt": "2026-11-02T01:33:11.185Z",
+          "decisionDigest": "sha256:fffc5531f63fdb9d6b2c2840f386bd5d51e71cda98916ba25afb38a9bb3fc08e"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:a966811d9b9ab1ad1b6adffba979a380cbae8b9f0bb26980acb04de379336719"
+    }
+  ],
+  "idempotency": {
+    "key": "l19-review-alembic-readme-accept-v1",
+    "requestDigest": "sha256:497712a85f2fff10be76324ea99715042bf8773ed43caeb44e108853f2c94f34"
+  },
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_d1cae88e-2b0d-4dbe-8197-6d2d1868739b",
+  "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+  "commitSequence": 6,
+  "commandDigest": "sha256:b91cf71a556034ef7c5d10a38cb2fc944270550f749361f9c99897a85fb06fd1",
+  "expectedStreamRevision": 5,
+  "firstStreamRevision": 6,
+  "lastStreamRevision": 6,
+  "previousCommitDigest": "sha256:3b6b5075cd2f8e8e8cecc7269072c4365b08fc70e61074a6ec3e65246f5014ae",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_6ce55f50-6d2e-4e33-bbfb-c36330d979e0",
+      "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+      "streamRevision": 6,
+      "recordedAt": "2026-10-19T12:18:36.892Z",
+      "eventType": "result.callback-reissued",
+      "eventVersion": 1,
+      "data": {
+        "reissue": {
+          "targetResultId": "target-result_57ee8b7e-89c0-4600-9ed2-ea94800629ac",
+          "callbackId": "target-delivery_b7403728-44e4-4a14-ade9-c92aaf4bf5e8",
+          "previousGeneration": 1,
+          "generation": 2,
+          "controllerWindowId": "window_6b712685-14e3-4c6d-8509-bcccb33f96d2",
+          "bindingId": "window_binding_97c9485d-9bc4-4050-95ad-48324eb707e5",
+          "bindingDigest": "sha256:733c72c2a2b7c19a1ee0c87f66e5f2cd740987d6a8ade49a09fb837e50b6d627",
+          "promptDigest": "sha256:b47c893c3f9fad9c6002f718327fb178784bf3104bf98858f78b01bbefbf3d99",
+          "issuedAt": "2026-10-19T12:18:36.892Z"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:89acfe94469135f81e5d4fdc7aec9c3931a82ee01567b558ed40a7221c78f856"
+    }
+  ],
+  "idempotency": {
+    "key": "callback-rearm-b7403728-ctl-97c9485d-b",
+    "requestDigest": "sha256:434cbe29f96cc91d917b30d588c211c7a052a01bb0086dae74b11af13a1e00fa"
+  }
+}

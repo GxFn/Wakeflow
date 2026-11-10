@@ -1,0 +1,268 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_6cb14d82-7d7b-478f-92ca-5907515f58d1",
+  "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+  "commitSequence": 7,
+  "commandDigest": "sha256:d7a3a28cde15d26a38af38d4aeb0f0472d704c31287c9c1e3ef06d4dbf4abe0b",
+  "expectedStreamRevision": 6,
+  "firstStreamRevision": 7,
+  "lastStreamRevision": 8,
+  "previousCommitDigest": "sha256:1de3271565695f0e986e18fc02018dc38dbc3911ac99833b530907267400ae49",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_baf2e28e-4d53-4ecc-a550-031ba8bd9ffc",
+      "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+      "streamRevision": 7,
+      "recordedAt": "2026-09-24T23:45:07.776Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_baf2e28e-4d53-4ecc-a550-031ba8bd9ffc",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+          "targetTaskId": "target-task_748b16d1-0542-4cf0-9ab7-2723fe7a8663",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "reviewed": {
+            "snapshotDigest": "sha256:2fcfea7be3ada6ca2edcba0373570fcd1bbaeaa8382f51bccddd324a4014c383",
+            "reviewUnitDigest": "sha256:f0ef8cb02450e9af562c4473cc87bf0eeada3953d1f312a326900a1899519766",
+            "stateDigest": "sha256:b64e226d31761b6294fa8d85c9ea387b32230aab4194dece9867e820a6118af1",
+            "streamRevision": 6,
+            "taskPackageId": "task-package_47372ca4-503d-431a-9736-b2592ba01830",
+            "taskPackageDigest": "sha256:dc3af2699fef4d47290895e1cd88254338553841d3a258f8792d534a2a5c9ee7",
+            "targetResultId": "target-result_fd4a693b-1a5c-4f19-b85d-357fbc8df051",
+            "targetResultDigest": "sha256:63c7a2ce843d09d0f5aa751bb62342d1232391c6174f4ed426fd35271fc63289",
+            "targetResultOutcome": "blocked",
+            "targetResultReportedAt": "2026-09-24T23:39:29.285Z"
+          },
+          "decision": "escalate",
+          "assessment": {
+            "requirementAlignment": "unresolved",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "chk-precondition-docs-archive",
+              "method": "在 AlembicPlugin 仓库根目录只读运行 `test -e`、`test -d`、`test -L docs/archive`，`ls -1A docs`，`find docs -mindepth 1 -type d | wc -l`，`git ls-files docs/archive` 与 `git ls-tree HEAD docs/`；原始输出在托管证据 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a 的 precondition 段。",
+              "outcome": "passed",
+              "observation": "三个 test 都输出 1；docs/ 下子目录数为 0；git ls-files 无输出；HEAD 的 docs/ 只有 declared-effects.md 与 legacy-register.md 两个 blob。`docs/archive/` 确实不存在，报告的阻塞原因属实。"
+            },
+            {
+              "checkId": "chk-ac-1-file-in-existing-archive-dir",
+              "method": "`test -d docs/archive && test ! -L docs/archive && test -f docs/archive/wakeflow-smoke-round5.md; echo $?`（输出在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a 的 ac-1 段）。",
+              "outcome": "failed",
+              "observation": "输出 1：锚点未满足。原因是需求的前置条件不成立（目录不存在且不允许新建），不是实现缺陷。"
+            },
+            {
+              "checkId": "chk-ac-2-exact-bytes",
+              "method": "`wc -c < docs/archive/wakeflow-smoke-round5.md`（输出在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a 的 ac-2 段）。",
+              "outcome": "failed",
+              "observation": "bash 报 No such file or directory，退出码 1：文件不存在，锚点未满足，原因同 ac-1。"
+            },
+            {
+              "checkId": "chk-ac-3-status-one-new-entry",
+              "method": "`git --no-optional-locks status --porcelain`、`--untracked-files=all`、`--ignored --untracked-files=all` 与 `diff --name-status`、`diff --cached --name-status`（输出在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a 的 ac-3 段）。",
+              "outcome": "failed",
+              "observation": "仍恰好是基线四行，没有新文件条目，也没有目录条目；--ignored 只多出既有的 `!! .DS_Store`；两个 diff 均无输出。锚点期望的新条目不存在，同时证明仓库未被改动。"
+            },
+            {
+              "checkId": "chk-ac-4-head-unchanged",
+              "method": "`git --no-optional-locks rev-parse HEAD`、`symbolic-ref HEAD`、`log --oneline 7b2c53aae21489d2daad651a0261d02c6d1bdd95..HEAD`、`branch --list` 与 `stash list`（输出在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a 的 ac-4 段）。",
+              "outcome": "passed",
+              "observation": "HEAD 为 7b2c53aae21489d2daad651a0261d02c6d1bdd95，指向 refs/heads/main；没有新提交；只有 main；stash 为空。锚点成立。"
+            },
+            {
+              "checkId": "chk-no-new-dir-or-substitute",
+              "method": "`find . -path ./.git -prune -o -name 'wakeflow-smoke-round5*' -print`；用 python os.walk 加 lstat 列出投递许可签发时刻 2026-09-24T23:37:40.883Z 之后 mtime 或 ctime 变化的路径（排除 .git）；四个旧冒烟文件的 `wc -c` 与 `shasum -a 256`；输出均在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a。",
+              "outcome": "passed",
+              "observation": "find 无输出；变化路径为 (none)；四个旧文件仍为 31/28/28/28 字节，哈希与基线一致。目标窗口没有新建目录，没有把文件改放到别处或改名，也没有改动任何路径。"
+            },
+            {
+              "checkId": "chk-other-repositories-untouched",
+              "method": "对 Alembic、AlembicAgent、AlembicCore、AlembicDashboard 各只读运行 `git --no-optional-locks rev-parse HEAD`、`symbolic-ref HEAD` 与 `status --porcelain | wc -l`；输出在 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a。",
+              "outcome": "passed",
+              "observation": "四个仓库的 HEAD 与 Demand 创建时一致（d5bfeb128fc86f6447bf9d1f74ebdac7f95e003f、00a27d7f12b7478a4f6bdf79aabf48b0ebd00a05、e274e31ea4e4611314124eeb1111a44975c48896、b6df7904e668301013f4d120fb24027d1f1edd6c），都在 main，status 均为 0 行。"
+            },
+            {
+              "checkId": "chk-report-consistency",
+              "method": "逐项对照目标报告的 summary、verification 与 repositoryChange 和 Controller 的独立观察。",
+              "outcome": "passed",
+              "observation": "报告的前置条件核对、各锚点结论、基线四行、HEAD 与四个旧文件哈希都与独立观察一致；repositoryChange 为 no-changes（branch main、无提交），与仓库现状相符。"
+            }
+          ],
+          "rationale": "升级给用户决定。Controller 独立只读核对确认：AlembicPlugin 中 `docs/archive/` 不存在（test -e/-d/-L 均为 1，docs/ 下子目录数为 0，git 与 HEAD 都没有 docs/archive 条目）。需求同时要求“文件必须放在已存在的 docs/archive/ 下”和“不得新建任何目录、不得改放到其他位置”，在当前仓库状态下两者无法同时满足；需求原文也写明“否则不能创建文件”。目标窗口按任务包的失败分支正确停下：没有新建目录，没有把文件改放到别处或改名，仓库与基线完全一致（git status 仍是基线四行，投递后没有任何路径变化，HEAD、分支与四个旧冒烟文件都未变），报告与独立观察逐项一致（托管证据 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a）。ac-1、ac-2、ac-3 因前置条件不成立而未满足，ac-4 成立。这不是实现缺陷：返工无法在不违反需求约束的前提下完成，阻塞也不会自行解除。是新建 docs/archive/、改用已存在的路径还是取消本 Demand，需要用户决定，因此记 escalate，而不是 rework 或 blocked。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "前四轮留下的四个冒烟文件仍是未跟踪文件，git clean、checkout 或 stash -u 可能删掉它们。",
+            "若选择新建 docs/archive/：新目录首次出现时，默认的 `git status --porcelain` 会折叠显示为 `?? docs/archive/`，与 ac-3 的原写法不一致，需要按 --untracked-files=all 核对或调整验收写法；docs/ 下的子目录与仓库文档目的地约定不一致，也可能进入 IndependentMcpProjectLocation 测试的 docs/ 扫描范围（是否递归子目录未核实）。",
+            "本 Demand 在等待决定期间占用 main pod 的唯一活动 Demand 位置，Controller 不能认领其他需求包。"
+          ],
+          "escalation": {
+            "issue": "需求要求把 `docs/archive/wakeflow-smoke-round5.md` 放在“已存在的” `docs/archive/` 目录中，同时禁止新建任何目录、禁止把文件改放到其他位置；而 AlembicPlugin 中 `docs/archive/` 不存在——Controller 在认领前与评审时两次只读确认，目标窗口的报告与之一致。在不修改需求的前提下，本 Demand 无法完成。目标窗口已按任务包的失败分支停下，仓库保持基线不变（托管证据 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a）。如何继续需要用户决定。",
+            "requirementRefs": [
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "goal"
+              },
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "scope"
+              },
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "completion-definition"
+              },
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "non-goals"
+              },
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "acceptance-criteria"
+              },
+              {
+                "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+                "sectionAnchor": "code-facts"
+              }
+            ],
+            "evidence": [
+              {
+                "kind": "target-result",
+                "id": "target-result_fd4a693b-1a5c-4f19-b85d-357fbc8df051",
+                "digest": "sha256:63c7a2ce843d09d0f5aa751bb62342d1232391c6174f4ed426fd35271fc63289"
+              },
+              {
+                "kind": "managed-evidence",
+                "id": "evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a",
+                "digest": "sha256:1494422c4c2ab0b9b8460180b215077b4843699fb540c8da3f75098442d9c9f1"
+              }
+            ],
+            "options": [
+              {
+                "option": "取消本 Demand（wakeflow_cancel_demand），以“目标窗口按规则停下并如实报告、Controller 独立核对后升级给用户”作为这次失败路径测试的结论。",
+                "impact": "需求包转为 withdrawn，目标结果、评审决定与证据都保留；AlembicPlugin 保持现状，不会新建目录或文件；main pod 空出后可以认领下一个需求包。"
+              },
+              {
+                "option": "由用户在 AlembicPlugin 中自行创建 `docs/archive/`（或明确授权新建这一个目录），满足前置条件后再让目标窗口按原任务包重新执行。",
+                "impact": "需要用户放宽或亲自完成“不得新建任何目录”这一条；新目录首次出现时默认的 `git status --porcelain` 会显示 `?? docs/archive/` 而不是文件条目，ac-3 需按 --untracked-files=all 核对；docs/ 下的子目录与仓库文档目的地约定不一致，也可能进入 IndependentMcpProjectLocation 测试的扫描范围（是否递归未核实）。"
+              },
+              {
+                "option": "修改需求：改用已存在的目录（例如 `docs/wakeflow-smoke-round5.md`，与前四轮一致），由 Design 发布修订后的需求包，再在本 Demand 中改为替换任务包，或取消本 Demand 后作为新 Demand 认领。",
+                "impact": "不需要新建目录，风险最低，与前四轮做法一致；但偏离了用户原话“必须放在 docs/archive/”，需要重新发布并确认需求，当前任务包会被替换（superseded）。"
+              },
+              {
+                "option": "维持现状等待：保留本 Demand，直到 `docs/archive/` 通过其他已授权的变更出现后再继续。",
+                "impact": "目前没有任何计划中的变更会创建该目录；等待期间本 Demand 占用 main pod 的唯一活动 Demand 位置，Controller 不能认领其他需求包。"
+              }
+            ],
+            "recommendation": "建议选项 1：取消本 Demand。这是一次有意的失败路径测试，要验证的行为已经全部出现并有证据：目标窗口检查了前置条件，没有新建目录也没有改放文件，以 blocked 如实报告；Controller 独立核对后升级给用户。需求本身在当前仓库状态下自相矛盾，继续推进必须先改需求。如果确实需要第五轮文件，建议走选项 3（改用已存在的 docs/ 路径并重新发布需求），而不是放宽“不得新建任何目录”。"
+          },
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "c280f7d0-4c8f-4543-91af-0796c4245a8f",
+            "landedAt": "2026-09-24T23:39:49.394Z"
+          },
+          "targetCompletion": {
+            "recordId": "0d3aaa57-3e8c-4f19-b13e-561115601e8d",
+            "event": "stop",
+            "observedAt": "2026-09-24T23:40:04.257Z"
+          },
+          "decidedAt": "2026-09-24T23:45:07.776Z",
+          "anchorEvidence": null,
+          "decisionDigest": "sha256:1c429b1d1f06e431be4e350b6f41ad3de99d055d77d3073e7f97516bcb31be2e"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:a73b1a3dcc761a6d83abdfe77ca5803b8f17d6acf346c2bb3482e4ee09c73045"
+    },
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_212a0114-8515-4787-b211-81d9d2320265",
+      "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+      "streamRevision": 8,
+      "recordedAt": "2026-09-24T23:45:07.776Z",
+      "eventType": "lifecycle.demand-escalated",
+      "eventVersion": 1,
+      "data": {
+        "escalation": {
+          "issue": "需求要求把 `docs/archive/wakeflow-smoke-round5.md` 放在“已存在的” `docs/archive/` 目录中，同时禁止新建任何目录、禁止把文件改放到其他位置；而 AlembicPlugin 中 `docs/archive/` 不存在——Controller 在认领前与评审时两次只读确认，目标窗口的报告与之一致。在不修改需求的前提下，本 Demand 无法完成。目标窗口已按任务包的失败分支停下，仓库保持基线不变（托管证据 evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a）。如何继续需要用户决定。",
+          "requirementRefs": [
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "goal"
+            },
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "scope"
+            },
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "completion-definition"
+            },
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "non-goals"
+            },
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "acceptance-criteria"
+            },
+            {
+              "recordDigest": "sha256:dcafeaa23f6d84e3eab844ff85661b3ddc1ac1b146ee9ff2da6282a0ca03da44",
+              "sectionAnchor": "code-facts"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "target-result",
+              "id": "target-result_fd4a693b-1a5c-4f19-b85d-357fbc8df051",
+              "digest": "sha256:63c7a2ce843d09d0f5aa751bb62342d1232391c6174f4ed426fd35271fc63289"
+            },
+            {
+              "kind": "managed-evidence",
+              "id": "evidence_eacb00fd-3c94-4e83-a4c7-31a62dd0471a",
+              "digest": "sha256:1494422c4c2ab0b9b8460180b215077b4843699fb540c8da3f75098442d9c9f1"
+            }
+          ],
+          "options": [
+            {
+              "option": "取消本 Demand（wakeflow_cancel_demand），以“目标窗口按规则停下并如实报告、Controller 独立核对后升级给用户”作为这次失败路径测试的结论。",
+              "impact": "需求包转为 withdrawn，目标结果、评审决定与证据都保留；AlembicPlugin 保持现状，不会新建目录或文件；main pod 空出后可以认领下一个需求包。"
+            },
+            {
+              "option": "由用户在 AlembicPlugin 中自行创建 `docs/archive/`（或明确授权新建这一个目录），满足前置条件后再让目标窗口按原任务包重新执行。",
+              "impact": "需要用户放宽或亲自完成“不得新建任何目录”这一条；新目录首次出现时默认的 `git status --porcelain` 会显示 `?? docs/archive/` 而不是文件条目，ac-3 需按 --untracked-files=all 核对；docs/ 下的子目录与仓库文档目的地约定不一致，也可能进入 IndependentMcpProjectLocation 测试的扫描范围（是否递归未核实）。"
+            },
+            {
+              "option": "修改需求：改用已存在的目录（例如 `docs/wakeflow-smoke-round5.md`，与前四轮一致），由 Design 发布修订后的需求包，再在本 Demand 中改为替换任务包，或取消本 Demand 后作为新 Demand 认领。",
+              "impact": "不需要新建目录，风险最低，与前四轮做法一致；但偏离了用户原话“必须放在 docs/archive/”，需要重新发布并确认需求，当前任务包会被替换（superseded）。"
+            },
+            {
+              "option": "维持现状等待：保留本 Demand，直到 `docs/archive/` 通过其他已授权的变更出现后再继续。",
+              "impact": "目前没有任何计划中的变更会创建该目录；等待期间本 Demand 占用 main pod 的唯一活动 Demand 位置，Controller 不能认领其他需求包。"
+            }
+          ],
+          "recommendation": "建议选项 1：取消本 Demand。这是一次有意的失败路径测试，要验证的行为已经全部出现并有证据：目标窗口检查了前置条件，没有新建目录也没有改放文件，以 blocked 如实报告；Controller 独立核对后升级给用户。需求本身在当前仓库状态下自相矛盾，继续推进必须先改需求。如果确实需要第五轮文件，建议走选项 3（改用已存在的 docs/ 路径并重新发布需求），而不是放宽“不得新建任何目录”。",
+          "source": {
+            "kind": "review-decision",
+            "targetTaskId": "target-task_748b16d1-0542-4cf0-9ab7-2723fe7a8663",
+            "targetReviewDecisionId": "target-review-decision_baf2e28e-4d53-4ecc-a550-031ba8bd9ffc",
+            "decisionDigest": "sha256:1c429b1d1f06e431be4e350b6f41ad3de99d055d77d3073e7f97516bcb31be2e"
+          }
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:258d4f46d3bb7b85f06916938b59674e0abbe12b62f5da3f4a23ccd8d704fd0b"
+    }
+  ],
+  "idempotency": {
+    "key": "review-escalate-alembicplugin-failure-path-round5-v1",
+    "requestDigest": "sha256:5b2fd93d01ffbf328928ee63f45c2692b6cb09c3d4005dfe946735c35d511661"
+  }
+}

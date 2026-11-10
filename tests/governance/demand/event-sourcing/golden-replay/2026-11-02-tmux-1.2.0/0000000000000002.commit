@@ -1,0 +1,148 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_999139c4-3bc7-4d61-a755-2a074788bb9b",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 2,
+  "commandDigest": "sha256:8702a0205c478184448ba9f39d957d06ad803846c974e443e43d2b5df0eb3e80",
+  "expectedStreamRevision": 1,
+  "firstStreamRevision": 2,
+  "lastStreamRevision": 2,
+  "previousCommitDigest": "sha256:6a87599099fabe6984386967ee67a9a11de0152d468905269796733c80bed79c",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_ef7c757d-c288-4c34-a043-5ad650ed7c21",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 2,
+      "recordedAt": "2026-11-02T01:13:15.978Z",
+      "eventType": "tasking.target-task-planned",
+      "eventVersion": 1,
+      "data": {
+        "taskPackage": {
+          "artifactKind": "wakeflow-task-package",
+          "schemaVersion": 1,
+          "programId": "program_a7bee80a-bd53-40e9-b726-daa5f6abe462",
+          "configDigest": "sha256:3f8c1f8bbbe45a2f5c1a75d2d77851eea693246654ef398b83422e8960e57523",
+          "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+          "demandAuthorityDigest": "sha256:61198c8c7591232a694be82b3047669cdde2b91ee30535925d884ef26fc845a4",
+          "taskPackageId": "task-package_0a813d85-d113-4b61-8b4c-ae9c5cadc618",
+          "targetTaskId": "target-task_2022a73b-6dc2-4d53-a85a-6f523ae3d033",
+          "createdAt": "2026-11-02T01:13:15.978Z",
+          "objective": "Append the sentence `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.` as the new last line of the existing `## Live check` section at the end of Alembic/README.md, and commit that one-file change on the current branch.",
+          "confirmedContext": [
+            "Alembic is on branch main at 44c1462 (`docs(readme): add Live check note for Wakeflow live check L13`) with a clean working tree, as observed by the Controller on 2026-11-02.",
+            "Alembic/README.md currently ends with the heading `## Live check`, a blank line, and the single sentence `Wakeflow live check L13 touched this README on 2026-10-28.` followed by one newline.",
+            "The landing plan appends the L19 sentence as the new last line of that existing section and commits README.md alone on the current branch.",
+            "Testing is controller-only: the Controller reviews the diff and the README tail; no real environment, build or test run is involved."
+          ],
+          "selectedAuthorityRefs": [
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7",
+              "recordRef": "requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/record.json",
+              "recordDigest": "sha256:6e323b49f43c763ccedb224c092a5d8d305e48db09d0a361b198380e2d364569",
+              "memberPath": "requirement.md",
+              "memberRef": "requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/requirement.md",
+              "memberDigest": "sha256:c2951ca1a71dc4110b5ecb291062e16b2ffcafa93ab08d2cecdf02fecbd56502",
+              "role": "requirement",
+              "mediaType": "text/markdown"
+            },
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7",
+              "recordRef": "requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/record.json",
+              "recordDigest": "sha256:6e323b49f43c763ccedb224c092a5d8d305e48db09d0a361b198380e2d364569",
+              "memberPath": "landing.md",
+              "memberRef": "requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/landing.md",
+              "memberDigest": "sha256:84e35288196c221d8c1da449eaddff8196323b7b64a242353a51eb95a7cbbd6a",
+              "role": "landing",
+              "mediaType": "text/markdown"
+            }
+          ],
+          "boundaries": {
+            "inScope": [
+              "Alembic/README.md: add the L19 sentence as its own paragraph after the existing L13 sentence, so it becomes the file's last line.",
+              "One commit on the current branch (main) of the Alembic main checkout containing only that README change."
+            ],
+            "outOfScope": [
+              "Any other file in Alembic: code, build, configuration, lockfiles or other documentation.",
+              "Rewording, reformatting or reordering existing README content, including the L13 sentence and the License section.",
+              "The other workspace repositories (AlembicAgent, AlembicCore, AlembicDashboard, AlembicPlugin) and the live16 worktree checkout of Alembic."
+            ],
+            "forbidden": [
+              "Pushing, tagging, creating or switching branches, amending, rebasing or otherwise rewriting existing history.",
+              "Editing Wakeflow-owned resources (.wakeflow-active/, .wakeflow-local/, the ledger, wakeflow.config.json) or any CLAUDE.md managed block."
+            ]
+          },
+          "completionExpectations": [
+            "Alembic/README.md ends with the `## Live check` section whose last line is exactly `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.`, with the L13 sentence unchanged above it.",
+            "Exactly one new commit on main, parented on 44c1462, changes README.md only, and `git status --short` is clean afterwards.",
+            "The report names the new commit id and quotes the README tail and the commit's file list as evidence for both anchors."
+          ],
+          "requiredEvidenceKinds": [
+            "commit"
+          ],
+          "assignment": {
+            "repositoryId": "repository_0e71a6d3-cf4f-4052-a125-e477cb1711fa",
+            "windowId": "window_003173f9-66dd-4731-a73f-6797d44bd72b"
+          },
+          "workType": "implementation",
+          "commitExpectation": "commit",
+          "acceptanceAnchors": [
+            {
+              "anchorId": "ac1-readme-l19-last-line",
+              "claim": "Alembic README.md ends with the `## Live check` section whose last line is exactly the L19 sentence.",
+              "probe": "At the delivered commit, read the end of Alembic/README.md (for example `tail -n 5 README.md`) and check the last heading and the final line.",
+              "expected": "The last heading is `## Live check`; its last line is exactly `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.`; the L13 sentence above it is unchanged; the file ends with a single newline.",
+              "requirementRef": {
+                "recordDigest": "sha256:6e323b49f43c763ccedb224c092a5d8d305e48db09d0a361b198380e2d364569",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-1"
+              }
+            },
+            {
+              "anchorId": "ac2-readme-only-change",
+              "claim": "The change touches README.md alone in the Alembic checkout.",
+              "probe": "`git show --stat HEAD` for the delivered commit and `git status --short` in the Alembic checkout afterwards.",
+              "expected": "The delivered commit's parent is 44c1462 and it changes README.md only, with additions only; `git status --short` prints nothing afterwards.",
+              "requirementRef": {
+                "recordDigest": "sha256:6e323b49f43c763ccedb224c092a5d8d305e48db09d0a361b198380e2d364569",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-2"
+              }
+            }
+          ],
+          "lineage": null,
+          "planReview": {
+            "reviewer": "controller"
+          },
+          "sectionAnchors": [
+            "goal",
+            "completion-definition",
+            "non-goals",
+            "acceptance-criteria",
+            "code-facts",
+            "landing-plan",
+            "testing-decision"
+          ]
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:25e02701cd03473af2e7f20954dd97cd1c37a91d4d5c1a4ab980beceee89d59c"
+    }
+  ],
+  "idempotency": {
+    "key": "l19-plan-alembic-readme-v1",
+    "requestDigest": "sha256:81c399d0a61031cb80d78a3b5fc1632af394999690fa810f19525bb1c963659c"
+  },
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

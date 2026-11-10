@@ -1,0 +1,226 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_e8f1445a-f6fa-4181-9c27-ac1a249ec096",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 12,
+  "commandDigest": "sha256:50f8060be2cbdf8ab5f8f5b4b426e5312e91831f1cb0dd7406e70a6f234b0d21",
+  "expectedStreamRevision": 11,
+  "firstStreamRevision": 12,
+  "lastStreamRevision": 12,
+  "previousCommitDigest": "sha256:e0b638fd7f60503c7d9a95e079b18253969dbe936c71ac16f782613f03b003b2",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_b236e4a9-2da9-463f-97ba-a1bcb7bcc3e1",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 12,
+      "recordedAt": "2026-09-25T04:49:28.507Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_b236e4a9-2da9-463f-97ba-a1bcb7bcc3e1",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "targetTaskId": "target-task_69318c74-7641-4f58-b448-1ac60988af29",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "reviewed": {
+            "snapshotDigest": "sha256:1deff62b2a65f426cf5b2e5d50c41f16cf38aad2aebb9f947f262c323137e06c",
+            "reviewUnitDigest": "sha256:a173c1ae0c9c88d87cdba3d59e0a3e8dea2343f100da50e51200e7206bdcd17b",
+            "stateDigest": "sha256:5bf0e9d9e9d84be2bbf4e92527a53bcb0ae7a41da17833c3c6533546ac23d7c8",
+            "streamRevision": 11,
+            "taskPackageId": "task-package_a6b63da3-1837-499d-ba23-df87a34cc263",
+            "taskPackageDigest": "sha256:7e9cb6dda6a4d5f67bba06a8eafe0350ae8b5ec28a5328058217f998565cd2ea",
+            "targetResultId": "target-result_80832bdc-14b2-4f16-821c-a5209ab5a38f",
+            "targetResultDigest": "sha256:5efb6b3496d3194d72c8f7875431ef3c26e6fa8c33c6fa7295c1f06ae3893218",
+            "targetResultOutcome": "needs-review",
+            "targetResultReportedAt": "2026-09-25T04:42:43.032Z"
+          },
+          "decision": "accept",
+          "assessment": {
+            "requirementAlignment": "aligned",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "chk-ac-1-regular-file",
+              "method": "在 AlembicPlugin 仓库根目录只读运行 `test -f docs/wakeflow-smoke-round6.md && test ! -L docs/wakeflow-smoke-round6.md; echo $?` 与 `stat -f '%HT, %z bytes'`；原始输出在托管证据 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-1 段。",
+              "outcome": "passed",
+              "observation": "`echo $?` 输出 0；stat 输出 `Regular File, 44 bytes`。该路径是普通文件，不是符号链接或目录。"
+            },
+            {
+              "checkId": "chk-ac-2-exact-bytes",
+              "method": "只读运行 `wc -c`、`shasum -a 256`、`printf '# Wakeflow smoke round 6\\nround six verified\\n' | cmp -`、`od -c`、统计 LF 与 CR 的 `tr -dc | wc -c`、`head -c 3 | od -An -tx1`、`grep -c 'resume relocate verified'` 与 `grep -n ' $'`（输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-2 段），并把该文件登记为 document 证据 evidence_09056c8e-232f-4433-a27c-9c13053ff9be。",
+              "outcome": "passed",
+              "observation": "44 字节；SHA-256 为 87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd，与 document 证据清单记录的文件摘要一致；cmp 无差异、退出码 0；od -c 为两行文字各接一个 `\\n`；LF 计数 2、CR 计数 0；前三字节 23 20 57（无 BOM）；旧第二行命中 0；没有尾随空格。"
+            },
+            {
+              "checkId": "chk-ac-3-docs-status",
+              "method": "只读运行 `git --no-optional-locks status --porcelain docs/`；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-3 段。",
+              "outcome": "passed",
+              "observation": "恰好五行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`，相对基线四行只多出新文件一行。"
+            },
+            {
+              "checkId": "chk-ac-4-head-commit",
+              "method": "只读运行 `git --no-optional-locks rev-parse HEAD` 与 `log --oneline 7b2c53aae21489d2daad651a0261d02c6d1bdd95..HEAD`；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-4 段。",
+              "outcome": "passed",
+              "observation": "HEAD 为 7b2c53aae21489d2daad651a0261d02c6d1bdd95，基线之后没有新提交。"
+            },
+            {
+              "checkId": "chk-ac-5-head-on-main",
+              "method": "只读运行 `git --no-optional-locks symbolic-ref HEAD`、`branch --list` 与 `stash list`；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-5 段。",
+              "outcome": "passed",
+              "observation": "输出 refs/heads/main；只有 main 一个分支；stash 为空。"
+            },
+            {
+              "checkId": "chk-ac-6-repo-status-matches-docs",
+              "method": "只读运行全仓库 `git --no-optional-locks status --porcelain`、`diff <(全仓库 status) <(docs/ status)`、`--untracked-files=all`、`--ignored --untracked-files=all`、`diff --name-status` 与 `diff --cached --name-status`；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210 的 ac-6 段。",
+              "outcome": "passed",
+              "observation": "全仓库状态与 docs/ 状态完全相同（diff 退出 0），都是上述五行；--ignored 只多出既有的 `!! .DS_Store`；两个 diff 均无输出，docs/ 之外没有任何新增、修改、删除或暂存条目。"
+            },
+            {
+              "checkId": "chk-ac-7-round1-file",
+              "method": "只读运行 `wc -c` 与 `shasum -a 256 docs/wakeflow-smoke.md` 并查看 mtime（输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210），并登记为 document 证据 evidence_0df42ab3-994b-46ff-acee-8d5ec00d4957。",
+              "outcome": "passed",
+              "observation": "31 字节；SHA-256 为 953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3，与需求包和证据清单一致；mtime 早于本轮投递。"
+            },
+            {
+              "checkId": "chk-ac-8-round2-file",
+              "method": "只读运行 `wc -c` 与 `shasum -a 256 docs/wakeflow-smoke-round2.md` 并查看 mtime（输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210），并登记为 document 证据 evidence_037ddc39-a23f-4449-b703-fb7924ef19b7。",
+              "outcome": "passed",
+              "observation": "28 字节；SHA-256 为 3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44，与需求包和证据清单一致；mtime 早于本轮投递。"
+            },
+            {
+              "checkId": "chk-ac-9-round3-file",
+              "method": "只读运行 `wc -c` 与 `shasum -a 256 docs/wakeflow-smoke-round3.md` 并查看 mtime（输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210），并登记为 document 证据 evidence_a42dac68-da09-4e8f-81c7-b55cc359caa0。",
+              "outcome": "passed",
+              "observation": "28 字节；SHA-256 为 d1b808459e29a479884cf11b5c2769b2065fcff39873013fe653c01ad2402f9f，与需求包和证据清单一致；mtime 早于本轮投递。"
+            },
+            {
+              "checkId": "chk-ac-10-round4-file",
+              "method": "只读运行 `wc -c` 与 `shasum -a 256 docs/wakeflow-smoke-round4.md` 并查看 mtime（输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210），并登记为 document 证据 evidence_04c5aae4-ad98-46d4-bbbc-7fe1a86f34ab。",
+              "outcome": "passed",
+              "observation": "28 字节；SHA-256 为 ab07de6de9c8f41807987303679af1265f72ab957c0fe40caa35bc391fe63961，与需求包和证据清单一致；mtime 早于本轮投递。"
+            },
+            {
+              "checkId": "chk-scope-no-other-changes",
+              "method": "用 python os.walk 加 lstat 列出 AlembicPlugin 中（排除 .git）mtime 或 ctime 不早于投递许可签发时刻 2026-09-25T04:40:07.669Z 的路径；并用 `ls -1A docs`、`find docs -mindepth 1 -type d | wc -l`、`test -e docs/archive` 与 `test -e docs/wakeflow-smoke-round5.md` 核对；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210。",
+              "outcome": "passed",
+              "observation": "投递后变化的路径只有 `./docs` 与 `./docs/wakeflow-smoke-round6.md`；docs/ 下 0 个子目录；docs/archive 与第五轮文件都不存在，没有补建已撤回的内容。"
+            },
+            {
+              "checkId": "chk-other-repositories-untouched",
+              "method": "对 Alembic、AlembicAgent、AlembicCore、AlembicDashboard 各只读运行 `git --no-optional-locks rev-parse HEAD`、`symbolic-ref HEAD` 与 `status --porcelain | wc -l`；输出在 evidence_cfbec12e-5b52-4988-97c4-378234282210。",
+              "outcome": "passed",
+              "observation": "四个仓库的 HEAD 与 Demand 创建时一致，都在 main，status 均为 0 行。"
+            },
+            {
+              "checkId": "chk-retired-identifiers",
+              "method": "对 test/unit/IndependentMcpProjectLocation.test.ts 扫描的 19 个废弃标识符逐个 `grep -cF` 新文件；测试本身未运行。",
+              "outcome": "passed",
+              "observation": "19 个标识符命中数全为 0。"
+            }
+          ],
+          "rationale": "接受实现结果。Controller 没有依赖报告的自述，而是在 AlembicPlugin 仓库只读复核了全部十个验收锚点，把原始输出登记为托管证据 evidence_cfbec12e-5b52-4988-97c4-378234282210（test-output），并以 document 证据固定了新文件与前几轮四个文件的内容。ac-1：新文件是普通文件。ac-2：44 字节，SHA-256 87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd，cmp 一致，恰好两个 LF，没有 BOM、CR 或尾随空格，第二行是更正后的 `round six verified`（旧第二行命中 0），evidence_09056c8e-232f-4433-a27c-9c13053ff9be 记录的文件摘要与之相同。ac-3：`git status --porcelain docs/` 恰好五行。ac-4：HEAD 仍为 7b2c53aae21489d2daad651a0261d02c6d1bdd95，没有新提交。ac-5：HEAD 指向 refs/heads/main，只有 main，stash 为空。ac-6：全仓库状态与 docs/ 状态逐行一致（diff 退出 0），没有暂存或工作区 diff。ac-7 到 ac-10：四个旧文件的哈希不变（evidence_0df42ab3-994b-46ff-acee-8d5ec00d4957、evidence_037ddc39-a23f-4449-b703-fb7924ef19b7、evidence_a42dac68-da09-4e8f-81c7-b55cc359caa0、evidence_04c5aae4-ad98-46d4-bbbc-7fe1a86f34ab）。投递后仓库里只有 docs/ 目录与新文件发生变化，没有补建第五轮的文件或目录，其他四个仓库不变。结果以 needs-review 导入只是因为导入时本 Demand 尚无托管证据；改动本身正确、范围干净，不需要返工，每个锚点已用 anchorEvidence 绑定。目标会话的完成记录（stop，2026-09-25T04:45:00.802Z）已由评审单元确认。按测试决策，标准 1–5 仍需 Test 窗口在真实环境中实测，本决定只接受实现目标。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "标准 1–5 的真实环境测试尚未进行：按测试决策，须由 Test 窗口实测并被接受后才能完成本 Demand。",
+            "五个冒烟文件都是未跟踪文件，git clean、checkout 或 stash -u 可能删掉它们；Test 窗口实测前应避免这类操作。",
+            "新文件位于 docs/，与仓库文档目的地约定不一致；这是用户明确指定并沿用前几轮的做法，约定本身未改。"
+          ],
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "fabb63b9-5567-457e-8768-c34e9b80ae72",
+            "landedAt": "2026-09-25T04:44:46.307Z"
+          },
+          "targetCompletion": {
+            "recordId": "b2dea335-eaf3-40ea-a3a4-04a0ba93e8d3",
+            "event": "stop",
+            "observedAt": "2026-09-25T04:45:00.802Z"
+          },
+          "anchorEvidence": [
+            {
+              "anchorId": "ac-1-regular-file",
+              "evidenceIds": [
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210",
+                "evidence_09056c8e-232f-4433-a27c-9c13053ff9be"
+              ]
+            },
+            {
+              "anchorId": "ac-2-exact-bytes",
+              "evidenceIds": [
+                "evidence_09056c8e-232f-4433-a27c-9c13053ff9be",
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-3-docs-status-one-new-entry",
+              "evidenceIds": [
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-4-head-commit-unchanged",
+              "evidenceIds": [
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-5-head-on-main",
+              "evidenceIds": [
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-6-repo-status-matches-docs",
+              "evidenceIds": [
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-7-round1-file-unchanged",
+              "evidenceIds": [
+                "evidence_0df42ab3-994b-46ff-acee-8d5ec00d4957",
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-8-round2-file-unchanged",
+              "evidenceIds": [
+                "evidence_037ddc39-a23f-4449-b703-fb7924ef19b7",
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-9-round3-file-unchanged",
+              "evidenceIds": [
+                "evidence_a42dac68-da09-4e8f-81c7-b55cc359caa0",
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            },
+            {
+              "anchorId": "ac-10-round4-file-unchanged",
+              "evidenceIds": [
+                "evidence_04c5aae4-ad98-46d4-bbbc-7fe1a86f34ab",
+                "evidence_cfbec12e-5b52-4988-97c4-378234282210"
+              ]
+            }
+          ],
+          "decidedAt": "2026-09-25T04:49:28.507Z",
+          "decisionDigest": "sha256:879ecac302b20637351e4609a8381b49db6ab32c874e2668b3612377d2f48970"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:1601a1798183d1243eaa1082b8e94544bd5abe9453c7e71597f6cc750acfc709"
+    }
+  ],
+  "idempotency": {
+    "key": "review-accept-alembicplugin-smoke-round6-impl-v1",
+    "requestDigest": "sha256:6a6716482e6a38ce3d8ea48b5c55414f01cf904c2b4538bf8684384027489027"
+  }
+}

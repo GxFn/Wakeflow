@@ -1,0 +1,136 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_870860cd-2d3c-4397-985f-ddd4ef6b7e9f",
+  "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+  "commitSequence": 2,
+  "commandDigest": "sha256:7ec14f8d60cb87c7b209c6a29ae3a24fd5604ed4f961b9740121b7cf9a881600",
+  "expectedStreamRevision": 1,
+  "firstStreamRevision": 2,
+  "lastStreamRevision": 2,
+  "previousCommitDigest": "sha256:e86f9b8f22d2fc58f7a949a7abe9f31e5e8dbe2f2274cc612c6d399117411eac",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_d94cc364-3fe3-44de-b151-115ed85d82b9",
+      "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+      "streamRevision": 2,
+      "recordedAt": "2026-10-19T12:00:07.428Z",
+      "eventType": "tasking.target-task-planned",
+      "eventVersion": 1,
+      "data": {
+        "taskPackage": {
+          "artifactKind": "wakeflow-task-package",
+          "schemaVersion": 1,
+          "programId": "program_752efd09-8d60-4ea9-83c6-d1fb5027efab",
+          "configDigest": "sha256:9c4082de7256a2f5fac88bb09f511c939c839bc7beaba05d3ae03b860cf2dbe0",
+          "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+          "demandAuthorityDigest": "sha256:552c6d3928df0e3d316e308025270b6885c4bfc2147abc77f3272f274f5717a6",
+          "taskPackageId": "task-package_8b15999e-b40f-43b2-a265-70094fa85fb1",
+          "targetTaskId": "target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b",
+          "createdAt": "2026-10-19T12:00:07.428Z",
+          "objective": "修复 AlembicPlugin `scripts/clean-scratch.mjs` 的 `parseArgs`：`--retention-days` 的值为空字符串或只含空白时，要和缺值、非数字一样抛出 `--retention-days requires a non-negative number` 并以非零退出码结束，不进入扫描和删除流程；合法非负数值（如 0、3、7）与不传参数时的默认 7 天行为不变；在 `test/unit/` 新增覆盖该行为的单元测试，满足验收标准 ac-1。",
+          "confirmedContext": [
+            "`scripts/clean-scratch.mjs` 第 45 行在模块顶层调用 `parseArgs(process.argv.slice(2))`，之后才读取仓库根下的 `scratch/`；第 165 行起的 `parseArgs` 中，`--retention-days` 分支执行 `const value = Number(args[++i])`，只在 `!Number.isFinite(value) || value < 0` 时抛出 `--retention-days requires a non-negative number`。`Number('')` 与 `Number('   ')` 都等于 0，所以空值和纯空白值会被当成 0 天保留。",
+            "缺值（`--retention-days` 后没有参数）与非数字（如 `abc`）已经会抛出上述错误；合法值如 `3` 解析为 3；默认 `DEFAULT_RETENTION_DAYS = 7`。",
+            "该脚本默认 dry-run，`--apply` 时用 `rmSync(..., { recursive: true, force: true })` 真实删除 `scratch/` 下非白名单的 `afapi-*` 条目；本仓库 CLAUDE.md 把它列为回收 `afapi-*` 验收/探针产物的仓库维护脚本。本任务经用户确认、由 Controller 明确分配给 AlembicPlugin。",
+            "`package.json`：`npm run lint` 为 `biome check lib/ bin/ config/ scripts/`（覆盖该脚本），`npm run test:unit` 为 `vitest run --config vitest.unit.config.ts`（收录 `test/unit/**/*.test.ts`）；`test/unit/` 已有以子进程运行脚本的测试可参考，例如 `CodexDevReloadScript.test.ts`、`CodexPluginStartScript.test.ts`。",
+            "检出位于 `main`（HEAD `4473414`），工作树干净；没有 `node_modules`，有 `package-lock.json`；当前检出中没有 `scratch/` 目录，`.gitignore` 忽略 `scratch/`。"
+          ],
+          "selectedAuthorityRefs": [
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922",
+              "recordRef": "requirements/requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922/record.json",
+              "recordDigest": "sha256:ada8255c5929f09058157ffddcb911a72a496c30a9d53e856d4a880a67b7b4eb",
+              "memberPath": "requirement.md",
+              "memberRef": "requirements/requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922/requirement.md",
+              "memberDigest": "sha256:509cbe322b7c66e7d6c26458eb62c4c7ca1d8674e17594b4ebdd697d79c800c4",
+              "role": "requirement",
+              "mediaType": "text/markdown"
+            },
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922",
+              "recordRef": "requirements/requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922/record.json",
+              "recordDigest": "sha256:ada8255c5929f09058157ffddcb911a72a496c30a9d53e856d4a880a67b7b4eb",
+              "memberPath": "landing.md",
+              "memberRef": "requirements/requirement_67e9cf92-00a6-4eca-93e0-8e523ea01922/landing.md",
+              "memberDigest": "sha256:6c932286192ae0351fca127e246c937510553e2ebb9d2528ddc1a57bf580062d",
+              "role": "landing",
+              "mediaType": "text/markdown"
+            }
+          ],
+          "boundaries": {
+            "inScope": [
+              "修改 `scripts/clean-scratch.mjs` 中 `parseArgs` 的 `--retention-days` 校验：在转成数字之前拒绝缺失、空字符串或只含空白的值，沿用现有错误信息。",
+              "在 `test/unit/` 新增一个单元测试：以子进程运行该脚本并传入空值与纯空白值（不带 `--apply`），断言非零退出码、错误信息，以及标准输出没有 `would delete` 行和 `dry-run retention=` 汇总行；并用合法值确认解析行为不变（同样不带 `--apply`，且不触碰仓库 `scratch/`）。",
+              "依赖未安装时，在本仓库根目录运行 `npm ci`（只写入被 ignore 的 `node_modules`），再运行 `npm run lint`、用 `vitest.unit.config.ts` 单独运行新测试，以及 `node scripts/clean-scratch.mjs --retention-days \"\"` 自检。"
+            ],
+            "outOfScope": [
+              "`--apply`、`--json`、`--report-path` 的解析与默认值；`Number()` 接受的其他写法（如 `0x10`、`1e2`）。",
+              "保留期判定、白名单、`afapi-` 前缀范围、条目年龄计算与报告格式。",
+              "`lib/`、插件 runtime、MCP、skills、marketplace、发布脚本，以及 Alembic、AlembicAgent、AlembicCore、AlembicDashboard 仓库。"
+            ],
+            "forbidden": [
+              "任何运行、测试和验证都不得带 `--apply`；不得创建、修改、移动或删除仓库 `scratch/` 下的任何内容。",
+              "不得提交、暂存、推送、打标签或新建分支：改动留在工作树中，提交需要用户另行授权。",
+              "不得修改 `package.json`、`package-lock.json` 或任何依赖版本，不得修改本仓库以外的文件。"
+            ]
+          },
+          "completionExpectations": [
+            "不带 `--apply` 运行 `node scripts/clean-scratch.mjs --retention-days \"\"` 与 `--retention-days \"   \"`：退出码非 0，错误输出包含 `--retention-days requires a non-negative number`，标准输出没有 `would delete` 行或 `dry-run retention=` 汇总行。",
+            "缺值、非数字仍报同样的错误；合法非负数值与默认 7 天的解析结果不变。",
+            "`npm run lint` 退出码为 0；新增单元测试用 `vitest.unit.config.ts` 单独运行时通过。",
+            "结果报告按仓库 CLAUDE.md 的回填要求写明：完成范围、改动文件、no-commit 理由（任务包要求改动留在工作树，提交需用户另行授权）、实际运行的命令与退出码及关键输出、为何不需要插件 / marketplace / session 证据（改动只涉及一个仓库维护脚本的参数校验）、遗留风险和下一步建议。",
+            "改动保持未提交；`git status` 中只出现本任务改动的文件。"
+          ],
+          "assignment": {
+            "repositoryId": "repository_3d5dffb7-d9fe-4234-916b-53c3b6fb310c",
+            "windowId": "window_6ccee48d-6975-47c5-82aa-63fdf264c50b"
+          },
+          "workType": "implementation",
+          "commitExpectation": "leave-uncommitted",
+          "acceptanceAnchors": [
+            {
+              "anchorId": "plugin-ac1-empty-retention-days-rejected",
+              "claim": "`--retention-days` 的值为空字符串或只含空白时，clean-scratch 以错误退出，不进入扫描和删除流程。",
+              "probe": "在 AlembicPlugin 仓库根目录、不带 `--apply`，运行 `node scripts/clean-scratch.mjs --retention-days \"\"` 与 `node scripts/clean-scratch.mjs --retention-days \"   \"`，记录退出码、标准错误和标准输出；并运行覆盖该行为的新增单元测试。",
+              "expected": "两次运行的退出码都非 0，标准错误包含 `--retention-days requires a non-negative number`，标准输出中没有任何 `would delete` 行或 `dry-run retention=` 汇总行；新增单元测试通过。",
+              "requirementRef": {
+                "recordDigest": "sha256:ada8255c5929f09058157ffddcb911a72a496c30a9d53e856d4a880a67b7b4eb",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-1"
+              }
+            }
+          ],
+          "lineage": null,
+          "planReview": {
+            "reviewer": "controller"
+          },
+          "sectionAnchors": [
+            "reproduction",
+            "scope",
+            "completion-definition",
+            "non-goals",
+            "acceptance-criteria",
+            "code-facts",
+            "fix-plan",
+            "testing-decision"
+          ]
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:fedbacc3de9d1a554eeb40352cc63fdf513f3f223c3538ba39d7d3ee53cdd61c"
+    }
+  ],
+  "idempotency": {
+    "key": "plan-impl-alembicplugin-ac1-1",
+    "requestDigest": "sha256:a3cf60a1b6f48563a29005d98cb03075c8c939e6f0a0a7d7174f0823feba8258"
+  }
+}

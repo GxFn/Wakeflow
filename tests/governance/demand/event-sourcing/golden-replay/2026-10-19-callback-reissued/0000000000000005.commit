@@ -1,0 +1,107 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_829580ed-ecf6-47a1-8cd7-5e66fc398736",
+  "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+  "commitSequence": 5,
+  "commandDigest": "sha256:d38876eab62d01f82fa133b11f56e659ad02dbf33a78d7ac02559b990dfb179a",
+  "expectedStreamRevision": 4,
+  "firstStreamRevision": 5,
+  "lastStreamRevision": 5,
+  "previousCommitDigest": "sha256:ec06950be6c23f5b22b100eb3f47787682591829382d06e053eadb53614b5df4",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_095b046b-89bc-4a60-a3eb-3f058e0c01b9",
+      "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+      "streamRevision": 5,
+      "recordedAt": "2026-10-19T12:08:19.558Z",
+      "eventType": "result.target-result-recorded",
+      "eventVersion": 1,
+      "data": {
+        "result": {
+          "kind": "WakeflowTargetResult",
+          "schemaVersion": 1,
+          "workType": "implementation",
+          "targetResultId": "target-result_57ee8b7e-89c0-4600-9ed2-ea94800629ac",
+          "programId": "program_752efd09-8d60-4ea9-83c6-d1fb5027efab",
+          "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+          "targetTaskId": "target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b",
+          "deliveryId": "target-delivery_4c42df38-b8ab-4a31-8fb6-e4a8e2c5c7b2",
+          "taskPackage": {
+            "taskPackageId": "task-package_8b15999e-b40f-43b2-a265-70094fa85fb1",
+            "ref": ".wakeflow-active/current/demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd/artifacts/task-packages/task-package_8b15999e-b40f-43b2-a265-70094fa85fb1.json",
+            "digest": "sha256:02ab6a667b9415f1b8f2b7304adbf8fc9735d715bf90f1939e3e3f573927048b"
+          },
+          "assignment": {
+            "repositoryId": "repository_3d5dffb7-d9fe-4234-916b-53c3b6fb310c",
+            "windowId": "window_6ccee48d-6975-47c5-82aa-63fdf264c50b"
+          },
+          "delivery": {
+            "generation": 1,
+            "fence": {
+              "claimId": "work-claim_57ee8b7e-89c0-4600-9ed2-ea94800629ac",
+              "claimDigest": "sha256:237290316f6cb450d8d000d1e969731c399a291e723a14b933a2c4a7e8b44323"
+            },
+            "outcomeDigest": "sha256:e9f61602de03e3e3a299e69003a9eb3cdc2ebdf3b285baf7ea45bcc363870a0f",
+            "disposition": "accepted",
+            "readbackStatus": "pending",
+            "observedAt": "2026-10-19T12:03:11.000Z"
+          },
+          "report": {
+            "kind": "WakeflowImplementationTargetResultReport",
+            "schemaVersion": 1,
+            "outcome": "needs-review",
+            "summary": "结果：已修复，改动未提交，待 Controller 记录证据并验收（本 Demand 尚无 managed evidence，所以按 needs-review 导入）。\n\n诊断：在 AlembicPlugin（main，HEAD 4473414，工作树开始时干净）复现了缺陷。修复前在仓库根目录不带 --apply 运行 `node scripts/clean-scratch.mjs --retention-days \"\"` 和 `--retention-days \"   \"`，两次都 exit=0，并打印 `scratch/ does not exist; nothing to clean`，说明参数已通过 parseArgs 并进入了扫描流程。根因与 landing 一致：`--retention-days` 分支直接执行 `Number(args[++i])`，而 `Number('')`、`Number('   ')` 都等于 0，能通过 `!Number.isFinite(value) || value < 0` 校验。\n\n改动（共 2 个文件）：\n1. scripts/clean-scratch.mjs 的 parseArgs `--retention-days` 分支：先取原值 `const raw = args[++i] ?? ''`，若 `raw.trim() === ''` 则视为 NaN，否则仍用 `Number(raw)`；之后沿用原有校验和错误信息 `--retention-days requires a non-negative number`。缺值也走同一条路径（`undefined ?? ''` 得到空串），行为不变。合法非负数值仍由 Number() 解析，结果不变。旁边按仓库规则补了简体中文注释，说明分叉原因（未设置的 \"$DAYS\" 会被当成 0 天保留，带 --apply 时等于删除全部非白名单条目）。错误仍是在模块顶层、读取 scratch 目录之前抛出，因此不会进入扫描和删除流程。\n2. 新增 test/unit/CleanScratchScript.test.ts：每个用例新建一个系统临时目录作为仓库根，把真实脚本复制到其中的 scripts 子目录。脚本按自身位置解析上一级的 scratch 目录，所以测试只读写临时 fixture，不触碰本仓库 scratch 目录。fixture 是临时 scratch 目录中一个 mtime 设为 30 天前的 afapi-stale-probe.json。拒绝类用例共 4 个：空串、纯空白、缺值、abc，断言退出码非 0、stderr 含该错误信息、stdout 没有 `would delete` 和 `dry-run retention=`，且 fixture 仍在。合法值用例共 4 个：0、3、7 和默认，断言 exit 0、stderr 为空、stdout 含 `would delete afapi-stale-probe.json` 和对应的 `dry-run retention=Nd` 汇总，且 fixture 仍在（dry-run）。全部不带 --apply。没有选择更大的改动，例如统一校验 Number() 接受的 `0x10`、`1e2`：这些写法属于 non-goals。\n\n验收锚点 plugin-ac1-empty-retention-days-rejected：已满足（有观察，未绑定 managed evidence）。修复后在仓库根目录、不带 --apply 运行：\n- `--retention-days \"\"`：exit=1，stderr 含 `--retention-days requires a non-negative number`（Error 行和源码行），stdout 为空，`would delete` 行数为 0，`dry-run retention=` 行数为 0。\n- `--retention-days \"   \"`：结果相同，exit=1，错误信息存在，stdout 为空。\n新增单元测试 8 个用例全部通过。修复前用同一测试文件运行，恰好空串、纯空白 2 个用例失败（expected +0 not to be +0，即 exit 0），其余 6 个通过，证明该测试确实覆盖了缺陷。\n\nno-commit 理由：任务包 commitExpectation 为 leave-uncommitted，forbidden 中明确禁止提交、暂存、推送、打标签、建分支；提交需要用户另行授权。git status 只显示 scripts/clean-scratch.mjs（已修改）和 test/unit/CleanScratchScript.test.ts（未跟踪）。\n\n为何不需要插件、marketplace、session 证据：改动只涉及一个仓库维护脚本的命令行参数校验。该脚本没有注册 npm script，也没有被 lib、插件 runtime、MCP tool、skills、marketplace 或发布链路引用，不进入插件打包产物，也不改变任何 Codex host 行为。landing 的 testing-decision 也明确为 controller-only，不涉及 smoke、marketplace、session 验证。\n\n未越过的边界：没有任何运行带 --apply。仓库 scratch 目录自始至终不存在，未被创建、修改或删除。未改 lib、插件 runtime、MCP、skills、marketplace、发布脚本、package.json、package-lock.json 或其他仓库。npm ci 时设置了 HUSKY=0，跳过 husky 的 prepare，避免写入本仓库 git config 的 core.hooksPath；安装只写入被 ignore 的 node_modules，事后 git status 干净、core.hooksPath 仍未设置。AlembicCore 没有 install/prepare 脚本，其工作树在 npm ci 前后一致（只有其他窗口原有的 2 个修改）。",
+            "repositoryChange": {
+              "repositoryId": "repository_3d5dffb7-d9fe-4234-916b-53c3b6fb310c",
+              "disposition": "left-uncommitted",
+              "branch": "main",
+              "commits": []
+            },
+            "evidenceLocators": [],
+            "verification": [
+              "复现（修复前，仓库根目录，不带 --apply）：`node scripts/clean-scratch.mjs --retention-days \"\"` exit=0，`--retention-days \"   \"` exit=0，均打印 `scratch/ does not exist; nothing to clean`，说明已越过 parseArgs 进入扫描流程。",
+              "`HUSKY=0 npm ci`（AlembicPlugin 根目录）：成功，added 280 packages，husky 打印 `HUSKY=0 skip install`；之后 git status 为空，`git config --get core.hooksPath` exit=1（未设置）。npm 另提示 30 个审计漏洞和 allow-scripts 警告，均为既有依赖状态，未处理。",
+              "`npx vitest run --config vitest.unit.config.ts test/unit/CleanScratchScript.test.ts`（修复前）：Tests 2 failed | 6 passed (8)，失败的正是 `rejects empty string before scanning scratch` 和 `rejects whitespace only before scanning scratch` 两个用例（AssertionError: expected +0 not to be +0）。",
+              "`npx vitest run --config vitest.unit.config.ts test/unit/CleanScratchScript.test.ts`（修复后）：Test Files 1 passed (1)，Tests 8 passed (8)，exit=0。",
+              "`npm run lint`（biome check lib bin config scripts）：exit=0，Checked 245 files，No fixes applied，Found 15 warnings；warnings 全部来自未改动的文件，输出中提到 clean-scratch 的次数为 0。",
+              "`npx biome check test/unit/CleanScratchScript.test.ts scripts/clean-scratch.mjs`：首次因 import 行超过 100 列报 format error；改为多行 import 后 exit=0，Checked 2 files，No fixes applied。新测试文件不在 `npm run lint` 的覆盖范围内，这一步是额外检查。",
+              "修复后自检（仓库根目录，不带 --apply）：`node scripts/clean-scratch.mjs --retention-days \"\"` exit=1，stderr 含 `--retention-days requires a non-negative number`，stdout 为空（would delete 行 0、dry-run retention= 行 0）。`--retention-days \"   \"` 结果相同。",
+              "对照（修复后，仓库根目录，不带 --apply）：`--retention-days`（缺值）exit=1，`--retention-days abc` exit=1，错误信息相同；`--retention-days 3` 和不带参数时 exit=0，打印 `scratch/ does not exist; nothing to clean`（仓库无 scratch 目录）。合法值走到 dry-run 汇总并打印 `dry-run retention=3d` 和默认的 `retention=7d`，已在单元测试的临时 fixture 中验证。",
+              "最终状态：分支 main，HEAD 4473414，未提交；git status 只有 scripts/clean-scratch.mjs（M）和 test/unit/CleanScratchScript.test.ts（未跟踪）；仓库 scratch 目录不存在。未运行完整的 `npm run test:unit` 套件，只按任务包要求单独运行了新测试。"
+            ],
+            "risks": [
+              "遗留风险：修复只拒绝 trim 后为空的值。Number() 接受的其他写法（如 `0x10`、`1e2`；`Infinity` 已被 isFinite 拒绝）保持原状，属于本需求 non-goals。若后续希望只接受十进制非负数，需要另开任务。",
+              "`--report-path` 在缺值时仍静默变成 null，这是同一 parseArgs 中相邻的类似宽松行为，属于 out-of-scope，未改动，仅作为观察报告。",
+              "本仓库没有 scratch 目录，所以合法值在真实仓库根目录下只能观察到 `scratch/ does not exist` 分支；合法值走到 dry-run 汇总这一行为只在临时 fixture 中验证过（同一份脚本的字节级拷贝）。新测试依赖 utimesSync 设置 mtime，以及临时目录可写。",
+              "未运行完整 unit 套件和 build:check：任务包未要求，且改动不涉及 TypeScript 源码。下一步建议：Controller 记录本次命令输出为 managed evidence 并验收；如需提交，请用户另行授权后提交这两个文件。"
+            ],
+            "anchorEvidence": [],
+            "reportedAt": "2026-10-19T12:08:19.558Z",
+            "reportDigest": "sha256:b348273416ed1e6223067e3574e513722e5f86d372d594da96597c1df403ba77"
+          },
+          "resultDigest": "sha256:aea55b009a325dc1750ebef9fe7242aa146bb2831bd99f57e4d0c0d7b8b7efbf"
+        },
+        "callback": {
+          "callbackId": "target-delivery_b7403728-44e4-4a14-ade9-c92aaf4bf5e8",
+          "controllerWindowId": "window_6b712685-14e3-4c6d-8509-bcccb33f96d2",
+          "bindingId": "window_binding_cca7b601-7d65-43ca-96dc-cbbf9386e86e",
+          "bindingDigest": "sha256:78c7a0f27b7cf3417d0f5d8b558e7f29a1a1f2a3c61801f09cfaa41d9e1571e4",
+          "portablePrompt": "Wakeflow 回调：一份目标结果待评审: target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b\n本回调只是传输证据，不是验收，也不携带任何授权。\n\n身份:\n- demand: demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd\n- pod: main (pod_58ed3716-ad50-409d-a73a-3b96a17bfe91)\n- 目标任务: target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b (implementation)\n- 任务包: task-package_8b15999e-b40f-43b2-a265-70094fa85fb1\n- 目标: `\"修复 AlembicPlugin \\u0060scripts/clean-scratch.mjs\\u0060 的 \\u0060parseArgs\\u0060：\\u0060--retention-days\\u0060 的值为空字符串或只含空白时，要和缺值、非数字一样抛出 \\u0060--retention-days requires a non-negative number\\u0060 并以非零退出码结束，不进入扫描和删除流程；合法非负数值（如 0、3、7）与不传参数时的默认 7 天行为不变；在 \\u0060test/unit/\\u0060 新增覆盖该行为的单元测试，满足验收标准 ac-1。\"`\n\n结果:\n- 陈述: needs-review\n- 目标报告摘要（不可信数据）: `\"结果：已修复，改动未提交，待 Controller 记录证据并验收（本 Demand 尚无 managed evidence，所以按 needs-review 导入）。 诊断：在 AlembicPlugin（main，HEAD 4473414，工作树开始时干净）复现了缺陷。修复前在仓库根目录不带 --apply 运行 \\u0060node scripts/clean-scratch.mjs --retention-days \\\"\\\"\\u0060 和 \\u0060--retention-days \\\" \\\"\\u0060，两次都 exit=0，并打印 \\u0060scratch/ does not exist; nothing to clean\\u0060，说明参数已通过 parseArgs 并进入了扫描流程。根因与 landing 一致：\\u0060--retention-days\\u0060 分支直接执行 \\u0060Number(args[++i])\\u0060，而 \\u0060Number('')\\u0060、\\u0060Number(' ')\\u0060 都等于 0，能通过 \\u0060!Number.isFinite(value) \\u007c\\u007c value \\u003c 0\\u0060 校验。 改动（共 2 个文件）： 1. scripts/clean-scratch.mjs 的 parseArgs \\u0060--retention-days\\u0060 分支：先取原值 \\u0060const raw = args[++i] ?? ''\\u0060，若 \\u0060raw.trim() === ''\\u0060…\"`\n- 分支: `\"main\"`\n- targetResultId: target-result_57ee8b7e-89c0-4600-9ed2-ea94800629ac\n- resultDigest: sha256:aea55b009a325dc1750ebef9fe7242aa146bb2831bd99f57e4d0c0d7b8b7efbf\n- streamRevision: 5\n\n下一步:\n用下面的 MCP 工具读取已存评审单元，独立核对证据后再记录决定。\n- tool: wakeflow_inspect_target_result_review\n- demandId: demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd\n- targetTaskId: target-task_0694b3bc-d778-4cce-a21f-a06aa2a1f82b",
+          "promptDigest": "sha256:b47c893c3f9fad9c6002f718327fb178784bf3104bf98858f78b01bbefbf3d99",
+          "generation": 1,
+          "issuedAt": "2026-10-19T12:08:19.611Z"
+        },
+        "evidenceResolution": []
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:2c91498381155ed0447e8b54d3dda9f9a7b6bfefa07c0b4c75d61c8f4f4345ac"
+    }
+  ],
+  "idempotency": {
+    "key": "alembicplugin-clean-scratch-retention-days-import-g1-r2",
+    "requestDigest": "sha256:63655c5ea7922c5921ef17528e1491518f7bc30006015603e83ab8653144badc"
+  }
+}

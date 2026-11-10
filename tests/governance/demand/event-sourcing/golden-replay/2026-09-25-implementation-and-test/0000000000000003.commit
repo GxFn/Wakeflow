@@ -1,0 +1,63 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_cebf8c14-72e4-46c1-a9f1-badc2cc3a245",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 3,
+  "commandDigest": "sha256:2b24d868e246e5804dade1f57ab64cd531d941341f7fca2d3006b4b318525272",
+  "expectedStreamRevision": 2,
+  "firstStreamRevision": 3,
+  "lastStreamRevision": 3,
+  "previousCommitDigest": "sha256:9225de42b510c2ed3cf39c1d1954b49c85711c00f36756b121745577f70bd03e",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_5ca0737c-a9f1-42b0-bc4c-5f321279695a",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 3,
+      "recordedAt": "2026-09-25T04:40:07.669Z",
+      "eventType": "delivery.delivery-prepared",
+      "eventVersion": 1,
+      "data": {
+        "envelope": {
+          "kind": "WakeflowDeliveryEnvelope",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_304a3538-5e48-473d-987a-6a6d6747e5b5",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "target": {
+            "targetTaskId": "target-task_69318c74-7641-4f58-b448-1ac60988af29",
+            "taskPackageId": "task-package_a6b63da3-1837-499d-ba23-df87a34cc263",
+            "taskPackageRef": ".wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/artifacts/task-packages/task-package_a6b63da3-1837-499d-ba23-df87a34cc263.json",
+            "taskPackageDigest": "sha256:7e9cb6dda6a4d5f67bba06a8eafe0350ae8b5ec28a5328058217f998565cd2ea"
+          },
+          "route": {
+            "hostId": "claude-code",
+            "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7",
+            "bindingId": "window_binding_58af5d97-5d34-4afa-8150-18a682775cea",
+            "bindingDigest": "sha256:61d945fd6d11ca098b89ada810eb510068b355b62247f404e6d37352b6998485"
+          },
+          "language": "zh-Hans",
+          "portablePrompt": "继续当前窗口任务: AlembicPlugin/target-task_69318c74-7641-4f58-b448-1ac60988af29\n\n目标:\n在 AlembicPlugin 仓库根目录新建 `docs/wakeflow-smoke-round6.md`，内容恰好两行 `# Wakeflow smoke round 6` 与 `round six verified`，每行一个 LF（UTF-8、无 BOM、共 44 字节），让它以未跟踪文件留在工作树里。这是第六轮 Wakeflow 联合测试（更正版），第二行已从旧的 `resume relocate verified` 更正为 `round six verified`；实现之后还会由 Test 窗口在真实环境中实测。\n\n完成焦点:\n- 写入后用只读命令逐条核对十个验收锚点（普通文件、44 字节与 SHA-256、`git status --porcelain docs/` 与全仓库状态都恰好五行 `??`、HEAD 与分支不变、前几轮四个文件的 SHA-256 不变），把每条命令的原始输出逐锚点写进报告的 verification。\n- 本 Demand 没有托管证据，报告以 outcome=needs-review 导入（anchorEvidence 与 evidenceLocators 为空）；导入后用 tmux 助手 deliver 把回调原样送回 Controller 窗口，如实记下助手打印的 attempt、readback 与 landing，然后结束本轮。\n\n优先上下文:\n本包更正并替代 `requirement_92349d0c-6fbe-4f00-b02f-11cd375e09db`：用户于 2026-09-25 在 Design 窗口把文件第二行由 `resume relocate verified` 改为 `round six verified`，第一行不变，仍恰好两行、末尾一个换行，其余要求不变；用户于 2026-09-25T04:16:31Z 确认了更正包的一页摘要并授权以 pending 发布。被替代的原包已撤回，从未被认领或实现。\n\n关键边界:\n- 只新增这一个文件：不得使用旧第二行，不加第三行、BOM、CR 或尾随空格；不 `git add`、不提交、不动 HEAD 与分支；不修改、移动或删除任何已有文件，尤其是前几轮留下的四个冒烟文件；不补建第五轮的文件或 `docs/archive/`；不运行测试、构建、安装或发布命令；不碰其他四个仓库；不登记证据、不做评审决定，回调只经 tmux 助手 deliver 发送。\n- forbidden: 使用被替代包中的旧第二行 `resume relocate verified`，或改变两行的文字、大小写或标点。\n\n验收锚点:\n- ac-1-regular-file: AlembicPlugin 仓库中存在路径为 `docs/wakeflow-smoke-round6.md` 的普通文件（不是符号链接，也不是目录）。\n- ac-2-exact-bytes: `docs/wakeflow-smoke-round6.md` 的内容逐字节等于 `# Wakeflow smoke round 6` LF `round six verified` LF：UTF-8、无 BOM、共 44 字节。\n- ac-3-docs-status-one-new-entry: `git status --porcelain docs/` 相对基线四行只多出 `?? docs/wakeflow-smoke-round6.md` 这一行。\n- ac-4-head-commit-unchanged: AlembicPlugin 仓库 HEAD 指向的提交不变。\n\n按序阅读:\n1. ../.wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/artifacts/task-packages/task-package_a6b63da3-1837-499d-ba23-df87a34cc263.json\n2. requirement.md (goal, scope, completion-definition, non-goals, acceptance-criteria, user-confirmation, code-facts, landing-plan, testing-decision)\n3. ../CLAUDE.md\n4. CLAUDE.md\n5. ../.wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n\n必需技能:\n- skills/wakeflow-target/SKILL.md\n\n身份:\n- demand: demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 窗口: window_e867c0c2-7d25-44ae-a0de-c98e472e62c7\n- 仓库: repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1\n- 绑定: window_binding_58af5d97-5d34-4afa-8150-18a682775cea\n- 工作区根（相对本窗口根）: ..\n\n交回:\n用下面的 MCP 工具导入结果，不写本地结果文件；投递成功不等于验收。\n- tool: wakeflow_import_target_result\n- deliveryId: target-delivery_304a3538-5e48-473d-987a-6a6d6747e5b5\n- claimDigest: sha256:28b73a27cba055fc779ca053258a4cae883a0c05e2a58899d013144a79f1e89d\n不得把本 prompt 转发给其他窗口。\n\n派发记录:\n- deliveryId: target-delivery_304a3538-5e48-473d-987a-6a6d6747e5b5\n- generation: 1\n- claimDigest: sha256:28b73a27cba055fc779ca053258a4cae883a0c05e2a58899d013144a79f1e89d\n- streamRevision: 3",
+          "promptDigest": "sha256:201ee566aa055092b22c89ad5e3fad6335404c9bba3c44b17db6614bbdc67c41",
+          "fence": {
+            "claimId": "work-claim_80832bdc-14b2-4f16-821c-a5209ab5a38f",
+            "claimDigest": "sha256:28b73a27cba055fc779ca053258a4cae883a0c05e2a58899d013144a79f1e89d",
+            "expectedStreamRevision": 2
+          },
+          "preparedAt": "2026-09-25T04:40:07.669Z",
+          "workType": "implementation",
+          "envelopeDigest": "sha256:0903f9aa16a0c7041e6ee10988f5762b179029cf783497a68f62795df379b393"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:92832dc41a085dd350461937a753b63edad3d2195023d85817520f051c1201e6"
+    }
+  ],
+  "idempotency": {
+    "key": "deliver-alembicplugin-smoke-round6-impl-v1",
+    "requestDigest": "sha256:a32c641fa7cf58d5d214a1e888a98eb44a754605965a9f26493a88c258723ef3"
+  }
+}

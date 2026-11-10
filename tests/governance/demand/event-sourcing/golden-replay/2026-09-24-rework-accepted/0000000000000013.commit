@@ -1,0 +1,123 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_dbd2a470-5a8e-49ca-8211-14ff258e94e5",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 13,
+  "commandDigest": "sha256:af8d4b83a58064be69cee6a7d43268826d2bbbbd439e0f64ce6762ea8cdcb1cd",
+  "expectedStreamRevision": 12,
+  "firstStreamRevision": 13,
+  "lastStreamRevision": 13,
+  "previousCommitDigest": "sha256:ea2c4957ef619a17d8a4fc3dab565d4e884671f7bf1ea2bf12c4335a6e73a97b",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_19f03751-63f8-42d6-907d-f33e9b028bc0",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 13,
+      "recordedAt": "2026-09-24T21:20:01.514Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_19f03751-63f8-42d6-907d-f33e9b028bc0",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+          "targetTaskId": "target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "reviewed": {
+            "snapshotDigest": "sha256:0b0fb77f5401db02c1932ddcc710020103001741545ab0534c22c669e0c849b0",
+            "reviewUnitDigest": "sha256:75e2fddb80daec9858e7ca4527f6268a9c02015fe2e62b26dc1bc5b2d16d827a",
+            "stateDigest": "sha256:95dcc6b4bf8b5898512d230abb2975b23b7608593c8a64d2231938978a730f6a",
+            "streamRevision": 12,
+            "taskPackageId": "task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1",
+            "taskPackageDigest": "sha256:5b53712212d92b3985545af84f22514d04e339bf76e7da37cfcb0b899047b1e0",
+            "targetResultId": "target-result_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0",
+            "targetResultDigest": "sha256:5981f2eb4d8d4fd62978646afb7707d0ebac34de59fb388931cf893eb1fe5f63",
+            "targetResultOutcome": "completed",
+            "targetResultReportedAt": "2026-09-24T21:18:03.725Z"
+          },
+          "decision": "accept",
+          "assessment": {
+            "requirementAlignment": "aligned",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "ac-1-regular-file",
+              "method": "在 AlembicPlugin 仓库根目录运行 `test -f docs/wakeflow-smoke-round2.md && test ! -L docs/wakeflow-smoke-round2.md; echo $?` 与 `stat -f '%HT, %z bytes'`（原始输出在 test-output 证据 B，evidence_e81d15db-8a2f-470a-b035-04023013922d）；2026-09-24T21:18:48Z 重新只读复核，并对该文件重做证据登记预览。",
+              "outcome": "passed",
+              "observation": "输出 `0`，`Regular File, 28 bytes`；复核时仍为 28 字节的普通文件；证据预览返回同一 evidence_71426014-5f02-40a8-8259-b5d65cf96e17 且 recorded=true，即内容自登记后未变。"
+            },
+            {
+              "checkId": "ac-2-exact-bytes",
+              "method": "`wc -c`、`shasum -a 256`、`printf 'Wakeflow joint test round 2\\n' | cmp -`、`od -c`、CR 字节计数与前 3 字节十六进制（证据 B）；文件字节在 document 证据 A；21:18:48Z 复核 `shasum -a 256`。",
+              "outcome": "passed",
+              "observation": "28 字节，SHA-256 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`（与证据 A 的 payload 摘要、需求包验收标准 2 一致）；cmp 退出码 0；首字节 `W`、无 BOM、无 CR、唯一换行是末字节；复核摘要不变。"
+            },
+            {
+              "checkId": "ac-3-status-one-new-entry",
+              "method": "`git --no-optional-locks status --porcelain`（含 `--ignored --untracked-files=all`）、`git diff --name-status`、`git diff --cached --name-status`，与 21:06:40Z 投递前基线比对（证据 B）；21:18:48Z 复核同样命令。",
+              "outcome": "passed",
+              "observation": "恰好两行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke.md`；忽略项只有 `!! .DS_Store`，与基线相同；已跟踪与暂存区都没有变化；复核结果相同。"
+            },
+            {
+              "checkId": "ac-4-head-unchanged",
+              "method": "`git rev-parse HEAD`、`git symbolic-ref HEAD`、`git log --oneline 7b2c53aae21489d2daad651a0261d02c6d1bdd95..HEAD`、`git stash list`（证据 B）；21:18:48Z 复核。",
+              "outcome": "passed",
+              "observation": "HEAD `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 指向 `refs/heads/main`；没有新提交，stash 为空；复核结果相同。"
+            },
+            {
+              "checkId": "ac-5-round1-file-unchanged",
+              "method": "`wc -c` 与 `shasum -a 256 docs/wakeflow-smoke.md`（证据 B）；文件本身为 document 证据 C；21:18:48Z 复核，并对该文件重做证据登记预览。",
+              "outcome": "passed",
+              "observation": "31 字节，SHA-256 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`，与基线一致；证据预览返回同一 evidence_e20dc896-d382-4002-af04-dd7b8367ba94 且 recorded=true。"
+            },
+            {
+              "checkId": "retired-identifiers-inspection",
+              "method": "把 `test/unit/IndependentMcpProjectLocation.test.ts` 第 60–80 行扫描的 19 个废弃标识符逐条用 `grep -cF` 在新文件中查找（证据 B）；未执行测试。",
+              "outcome": "passed",
+              "observation": "19 个标识符命中 0 项。"
+            },
+            {
+              "checkId": "report-anchor-evidence",
+              "method": "阅读评审单元中的报告 target-result_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0，把 evidenceLocators 与 anchorEvidence 逐条对照三条托管证据的 manifest。",
+              "outcome": "passed",
+              "observation": "outcome=completed；evidenceLocators 为 A（document，`3b1b1f6b…a36b44`）、B（test-output，`46b75e7e…9bc0`）、C（document，`953170c4…b4e3`），ref 与 digest 均与 manifest 一致；五个锚点按更正引用（ac-1/ac-2：A+B，ac-3/ac-4：B，ac-5：C+B）；repositoryChange 为 left-uncommitted、main、无提交，与复核一致。"
+            }
+          ],
+          "rationale": "接受。验收标准 1–5 都由 Controller 独立只读核对通过，并由托管证据支撑：新文件（document 证据 A，evidence_71426014-5f02-40a8-8259-b5d65cf96e17）、Controller 探针原始输出（test-output 证据 B，evidence_e81d15db-8a2f-470a-b035-04023013922d）、第一轮文件（document 证据 C，evidence_e20dc896-d382-4002-af04-dd7b8367ba94）。重新导入的报告 outcome=completed，按锚点正确引用这三条证据；目标会话的完成记录已确认（stop 161c2fbd-916f-43f6-a3a9-362f4a34fd81），回调已在 Controller 窗口落地（e2bc2791-80f5-4368-9d18-4cd6c0ae8cbb）。2026-09-24T21:18:48Z 的复核显示仓库状态与登记证据时完全相同，A、C 的重登记预览均为 recorded=true。改动恰好是需求要求的一个 28 字节未跟踪文件，没有越界。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "`docs/wakeflow-smoke-round2.md` 与 `docs/wakeflow-smoke.md` 都保持未跟踪，任何 `git clean`、checkout 或 `stash -u` 都可能删掉它们；托管证据 A 与 C 保留了两者的字节。",
+            "可选单元测试 `test/unit/IndependentMcpProjectLocation.test.ts` 没有执行，只把它扫描的 19 个废弃标识符逐条比对，命中 0。",
+            "新文件放在 `docs/`，偏离仓库的文档目的地约定；路径由用户明确指定，沿用第一轮做法。",
+            "Controller 的探针输出沿用第一轮做法放在 Test 支持面 `evidence/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/` 下，不属于 Test 窗口的 harness 或 fixture。"
+          ],
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "e2bc2791-80f5-4368-9d18-4cd6c0ae8cbb",
+            "landedAt": "2026-09-24T21:18:25.595Z"
+          },
+          "targetCompletion": {
+            "recordId": "161c2fbd-916f-43f6-a3a9-362f4a34fd81",
+            "event": "stop",
+            "observedAt": "2026-09-24T21:18:34.960Z"
+          },
+          "decidedAt": "2026-09-24T21:20:01.514Z",
+          "decisionDigest": "sha256:41535d75de5838823d411d6172f241489a8c9782d2ea2a3cf6bdd2594388153e"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:98e4c3bd88772ed31b20a5011fa1620e05fbffe46a5b692c969070f29640d8b4"
+    }
+  ],
+  "idempotency": {
+    "key": "review-accept-alembicplugin-smoke-round2-v1",
+    "requestDigest": "sha256:ae02f679514d0939685645bda7d9b9157dc52c0bf81f16a52350b707c5206130"
+  }
+}

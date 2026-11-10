@@ -1,0 +1,103 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_929f929e-0370-4359-a80c-24a7e8696ccf",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 5,
+  "commandDigest": "sha256:84f0ee7506c1af7dfac25a14e6c18eabdf403f973ed3c5d40737a8c6690c3e13",
+  "expectedStreamRevision": 4,
+  "firstStreamRevision": 5,
+  "lastStreamRevision": 5,
+  "previousCommitDigest": "sha256:72d24dd9c0545b3fccc833531925b625d18e7465b466dca40a47e2f1d1864557",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_9c85a702-6def-4130-a756-a1a0be97eb45",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 5,
+      "recordedAt": "2026-09-24T21:10:54.303Z",
+      "eventType": "result.target-result-recorded",
+      "eventVersion": 1,
+      "data": {
+        "result": {
+          "kind": "WakeflowTargetResult",
+          "schemaVersion": 1,
+          "workType": "implementation",
+          "targetResultId": "target-result_d9619a67-d400-464b-975f-e127def82095",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+          "targetTaskId": "target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe",
+          "deliveryId": "target-delivery_b096512a-668c-4e51-91d0-4fce5e2ab8fb",
+          "taskPackage": {
+            "taskPackageId": "task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1",
+            "ref": ".wakeflow-active/current/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/artifacts/task-packages/task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1.json",
+            "digest": "sha256:5b53712212d92b3985545af84f22514d04e339bf76e7da37cfcb0b899047b1e0"
+          },
+          "assignment": {
+            "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+            "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7"
+          },
+          "delivery": {
+            "generation": 1,
+            "fence": {
+              "claimId": "work-claim_d9619a67-d400-464b-975f-e127def82095",
+              "claimDigest": "sha256:242918427486773f5c3cb9a938ca840f30a756065a78c4edff5facde49148ccf"
+            },
+            "outcomeDigest": "sha256:1561c1096f60079276d11f7d291e9a4fb5f4a0bcc42a7a1ca974f586e60c0488",
+            "disposition": "accepted",
+            "readbackStatus": "pending",
+            "observedAt": "2026-09-24T21:09:57.000Z"
+          },
+          "report": {
+            "kind": "WakeflowImplementationTargetResultReport",
+            "schemaVersion": 1,
+            "outcome": "needs-review",
+            "summary": "在 AlembicPlugin 仓库新建未跟踪文件 docs/wakeflow-smoke-round2.md，内容为 `Wakeflow joint test round 2` 加一个 LF（28 字节，UTF-8，无 BOM）。写入前确认该路径不存在，并用 `set -o noclobber` 加 `printf 'Wakeflow joint test round 2\\n' >` 写入，避免覆盖和多余字符。五个验收锚点的只读核对全部符合预期（原始输出见 verification）。没有改动、移动或删除其他文件（包括第一轮的 docs/wakeflow-smoke.md），没有 git add、提交、stash 或改动 HEAD/分支，也没有运行测试、构建或安装命令。本 Demand 尚无 Controller 登记的托管证据，因此按任务包以 needs-review 导入，anchorEvidence 和 evidenceLocators 为空，等待 Controller 只读核对并登记证据。",
+            "repositoryChange": {
+              "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+              "disposition": "left-uncommitted",
+              "branch": "main",
+              "commits": []
+            },
+            "evidenceLocators": [],
+            "verification": [
+              "基线（写入前）：`git status --porcelain` 输出 `?? docs/wakeflow-smoke.md`；`git rev-parse HEAD` 输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`；`git symbolic-ref HEAD` 输出 `refs/heads/main`；`ls -la docs/wakeflow-smoke-round2.md` 输出 `No such file or directory`；`wc -c < docs/wakeflow-smoke.md` 输出 `31`；`shasum -a 256 docs/wakeflow-smoke.md` 输出 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3  docs/wakeflow-smoke.md`。",
+              "ac-1-regular-file：满足。`test -f docs/wakeflow-smoke-round2.md && test ! -L docs/wakeflow-smoke-round2.md; echo $?` 输出 `0`。",
+              "ac-2-exact-bytes：满足。`wc -c < docs/wakeflow-smoke-round2.md` 输出 `      28`；`shasum -a 256 docs/wakeflow-smoke-round2.md` 输出 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44  docs/wakeflow-smoke-round2.md`；`printf 'Wakeflow joint test round 2\\n' | cmp - docs/wakeflow-smoke-round2.md; echo $?` 没有差异输出，只输出 `0`；`od -c docs/wakeflow-smoke-round2.md` 输出：\n0000000    W   a   k   e   f   l   o   w       j   o   i   n   t       t\n0000020    e   s   t       r   o   u   n   d       2  \\n\n0000034\n首字节是 `W`（无 BOM），唯一的换行是最后一个字节 `\\n`，全文没有 `\\r`。",
+              "ac-3-status-one-new-entry：满足。`git status --porcelain` 恰好输出两行：\n?? docs/wakeflow-smoke-round2.md\n?? docs/wakeflow-smoke.md\n相对基线只多出新文件这一行（git 按路径排序，所以新文件排在前面）。另外，`git diff --stat` 与 `git diff --cached --stat` 都没有输出，说明已跟踪文件和暂存区都没有变化。",
+              "ac-4-head-unchanged：满足。`git rev-parse HEAD` 输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`；`git symbolic-ref HEAD` 输出 `refs/heads/main`。",
+              "ac-5-round1-file-unchanged：满足。`wc -c < docs/wakeflow-smoke.md` 输出 `      31`；`shasum -a 256 docs/wakeflow-smoke.md` 输出 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3  docs/wakeflow-smoke.md`，与基线一致。"
+            ],
+            "risks": [
+              "以上锚点答案都是产品窗口自己的观察，还不是托管证据；验收要等 Controller 只读复核并登记证据。按任务包约定，Controller 登记证据后会另行投递，要求以 completed 重新导入并引用这些证据。",
+              "新文件放在 docs/，与仓库 CLAUDE.md/AGENTS.md 的文档目的地约定不一致；这是用户明确指定的路径，沿用第一轮做法，本窗口没有改路径，也没有改约定。",
+              "文件保持未跟踪，工作树里的后续操作（例如 git clean 或 stash -u）可能把它清掉；Controller 核对前应避免这类操作。"
+            ],
+            "anchorEvidence": [],
+            "reportedAt": "2026-09-24T21:10:54.303Z",
+            "reportDigest": "sha256:904a1edb6d84d0c86124f7c93b151ac9acec0797d43b97b97ba0beff6af2399b"
+          },
+          "resultDigest": "sha256:f2519eaa56c90bba4780fe386656001df7a0c93eb7919d446c257e2772c3edfb"
+        },
+        "callback": {
+          "callbackId": "target-delivery_82c5b193-f7f8-4712-8cc1-e7e12e9046e4",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "bindingId": "window_binding_078b6eab-d8cc-4a65-bfac-9706ed712809",
+          "bindingDigest": "sha256:ee1f4f207a154711c112243737c95637344a8c269b34c49ea3b54b3274d1229b",
+          "portablePrompt": "Wakeflow 回调：一份目标结果待评审: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe\n\n身份:\n- demand: demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 目标任务: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe (implementation)\n- 任务包: task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1\n- 目标: 在 AlembicPlugin 仓库新建文件 `docs/wakeflow-smoke-round2.md`，内容恰好是一行 `Wakeflow joint test round 2` 后接一个 LF 换行（共 28 字节，UTF-8，无 BOM）；仓库中其他文件一律不动（包括第一轮留下的未跟踪文件 `docs/wakeflow-smoke.md`），新文件不暂存、不提交，以未跟踪文件留在工作树中，HEAD 与分支保持不变。\n\n结果:\n- 陈述: needs-review\n- 摘要: 在 AlembicPlugin 仓库新建未跟踪文件 docs/wakeflow-smoke-round2.md，内容为 `Wakeflow joint test round 2` 加一个 LF（28 字节，UTF-8，无 BOM）。写入前确认该路径不存在，并用 `set -o noclobber` 加 `printf 'Wakeflow joint test round 2\\n' >` 写入，避免覆盖和多余字符。五个验收锚点的只读核对全部符合预期（原始输出见 verification）。没有改动、移动或删除其他文件（包括第一轮的 docs/wakeflow-smoke.md），没有 git add、提交、stash 或改动 HEAD/分支，也没有运行测试、构建或安装命令。本 Demand 尚无 Controller 登记的托管证据，因此按任务包以 needs-review 导入，anchorEvidence 和 evidenceLocators 为空，等待 Controller 只读核对并登记证据。\n- 分支: main\n- targetResultId: target-result_d9619a67-d400-464b-975f-e127def82095\n- resultDigest: sha256:f2519eaa56c90bba4780fe386656001df7a0c93eb7919d446c257e2772c3edfb\n- streamRevision: 5\n\n下一步:\n用下面的 MCP 工具读取评审单元，再记录你的决定。\n- tool: wakeflow_inspect_target_result_review\n- demandId: demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n- targetTaskId: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe\n本回调只是传输证据，不是验收，也不携带任何授权。",
+          "promptDigest": "sha256:9afd38d22278d45214264f9be0078a4bd5d5a79876bb4d76fd330a8e297a0596",
+          "generation": 1,
+          "issuedAt": "2026-09-24T21:10:54.355Z"
+        },
+        "evidenceResolution": []
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:f24281662bd38fbcac19675310395c81bcbd3c2930ef74a006c7939bbb39cbdb"
+    }
+  ],
+  "idempotency": {
+    "key": "alembicplugin-target-task_b7b88971-import-g1-r1",
+    "requestDigest": "sha256:78691c6aa1ff4e27535661b693096f4bc8f389074e06071bbdf1df519a16770b"
+  }
+}

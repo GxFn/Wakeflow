@@ -1,0 +1,78 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_091f825c-689b-40f1-b154-dcac7e3342c5",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 9,
+  "commandDigest": "sha256:a3e4d8dd718e588843aac83d95fb4cc280c89189e40414792b008fb2b92bf100",
+  "expectedStreamRevision": 8,
+  "firstStreamRevision": 9,
+  "lastStreamRevision": 9,
+  "previousCommitDigest": "sha256:8fc9d6b92fec5c58a489ff673391ea780e8f0ca93165feaede780ff485c02908",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_80e24f4f-2f86-4127-b022-69ed4f04af50",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 9,
+      "recordedAt": "2026-11-02T01:31:55.859Z",
+      "eventType": "evidence.managed-evidence-recorded",
+      "eventVersion": 1,
+      "data": {
+        "manifest": {
+          "artifactKind": "wakeflow-managed-evidence-manifest",
+          "schemaVersion": 1,
+          "evidenceId": "evidence_dda3027c-3126-4467-aca5-4cba8e213a8d",
+          "programId": "program_a7bee80a-bd53-40e9-b726-daa5f6abe462",
+          "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+          "demandAuthorityDigest": "sha256:61198c8c7591232a694be82b3047669cdde2b91ee30535925d884ef26fc845a4",
+          "kind": "test-output",
+          "capturedAt": "2026-11-02T01:31:55.859Z",
+          "recordedBy": {
+            "windowId": "window_afa4699e-438c-4e00-bb53-695245e7b28d",
+            "configDigest": "sha256:3f8c1f8bbbe45a2f5c1a75d2d77851eea693246654ef398b83422e8960e57523"
+          },
+          "source": {
+            "kind": "managed-path",
+            "root": {
+              "kind": "support-surface",
+              "surfaceId": "surface_8ce75f08-5cba-4770-9e26-c70df2b769e4"
+            },
+            "path": "controller-checks/demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8/l19-other-repositories-status.txt",
+            "resourceType": "file"
+          },
+          "payload": {
+            "artifactDigest": "sha256:5919a8df622a03b8b1004775cb0b5a41777a02143279bca431f390e48cc74e6d",
+            "treeManifest": {
+              "artifactKind": "wakeflow-loaded-artifact-tree",
+              "fileCount": 1,
+              "files": [
+                {
+                  "bytes": 641,
+                  "digest": "sha256:7970774d9194ebd9c447666751dbaabc277cdc3b97bb2b16da55b8367ee5ad07",
+                  "executable": false,
+                  "ref": "content"
+                }
+              ],
+              "schemaVersion": 1,
+              "totalBytes": 641
+            }
+          },
+          "contentReview": {
+            "disposition": "not-required",
+            "opaqueFileRefs": [],
+            "privacyFindings": []
+          },
+          "manifestDigest": "sha256:40d227c5155f66172ea9f9c637784cea01c914635f77b8ed68b9235491d15f2f"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:42849292716d266d279acdea788fc839c63287d4f40c227a2af2a3bfff0a0de3"
+    }
+  ],
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

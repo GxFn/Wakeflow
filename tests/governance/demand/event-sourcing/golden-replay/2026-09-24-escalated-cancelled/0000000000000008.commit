@@ -1,0 +1,33 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_6120649a-b26a-47d7-a66f-103dc3865b22",
+  "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+  "commitSequence": 8,
+  "commandDigest": "sha256:b48d9c2656c734392778048c76b29e453455ba4b0296868f49343d1e41a83502",
+  "expectedStreamRevision": 8,
+  "firstStreamRevision": 9,
+  "lastStreamRevision": 9,
+  "previousCommitDigest": "sha256:006d24461fe4b242ce06b5a928238662982e1b82dc8256cab154a24b1739f286",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_c97e9683-5ccf-4a41-a123-04d4de8a1dd0",
+      "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+      "streamRevision": 9,
+      "recordedAt": "2026-09-24T23:46:52.767Z",
+      "eventType": "lifecycle.decision-recorded",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "escalationEventId": "demand-event_212a0114-8515-4787-b211-81d9d2320265",
+          "text": "用户答复：“选 1：取消这个 Demand。”用户要求先用 wakeflow_continue_demand 的 record-decision 记录这一决定，再执行 wakeflow_cancel_demand 的 preview 与 apply，取消原因为“失败路径测试：需求在当前仓库状态下自相矛盾，验证目标已达成”。不新建 docs/archive/，不改路径，不替换任务包。",
+          "chosenOption": "取消本 Demand（wakeflow_cancel_demand），以“目标窗口按规则停下并如实报告、Controller 独立核对后升级给用户”作为这次失败路径测试的结论。"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:a73b1a3dcc761a6d83abdfe77ca5803b8f17d6acf346c2bb3482e4ee09c73045"
+    }
+  ]
+}

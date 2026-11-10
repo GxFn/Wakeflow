@@ -1,0 +1,195 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_0d449476-e807-43fa-a53c-25f0212976f7",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 12,
+  "commandDigest": "sha256:0bc622c8c4644db1b92dea5f7439cd88c8f5fd70cf662f095da2562c237581c6",
+  "expectedStreamRevision": 11,
+  "firstStreamRevision": 12,
+  "lastStreamRevision": 12,
+  "previousCommitDigest": "sha256:2ea1e987cb8e7e983713ff32ab746829293d1fc137d9e7f1e24676665019dc96",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_76ed4bc1-1035-4bdb-8cbf-21ec84355806",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 12,
+      "recordedAt": "2026-09-24T21:18:03.725Z",
+      "eventType": "result.target-result-recorded",
+      "eventVersion": 1,
+      "data": {
+        "result": {
+          "kind": "WakeflowTargetResult",
+          "schemaVersion": 1,
+          "workType": "implementation",
+          "targetResultId": "target-result_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+          "targetTaskId": "target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe",
+          "deliveryId": "target-delivery_ebaf4c1b-5645-43e9-8b1a-fa2aca748860",
+          "taskPackage": {
+            "taskPackageId": "task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1",
+            "ref": ".wakeflow-active/current/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/artifacts/task-packages/task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1.json",
+            "digest": "sha256:5b53712212d92b3985545af84f22514d04e339bf76e7da37cfcb0b899047b1e0"
+          },
+          "assignment": {
+            "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+            "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7"
+          },
+          "delivery": {
+            "generation": 1,
+            "fence": {
+              "claimId": "work-claim_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0",
+              "claimDigest": "sha256:20335bba8bc650b07ae998ba1ab53a464c941ea0610267f16f134cf9a63555b3"
+            },
+            "outcomeDigest": "sha256:62967ed58ebed6943715a4556fcf9ac15b697590b6bc1304bd1a91e32ffc553d",
+            "disposition": "accepted",
+            "readbackStatus": "pending",
+            "observedAt": "2026-09-24T21:16:42.000Z"
+          },
+          "report": {
+            "kind": "WakeflowImplementationTargetResultReport",
+            "schemaVersion": 1,
+            "outcome": "completed",
+            "summary": "按返工决定 target-review-decision_9e1355e1-6053-4fe4-8088-31b29cafba20 只重做报告，没有改动仓库。上一轮在 AlembicPlugin 新建的未跟踪文件 docs/wakeflow-smoke-round2.md（`Wakeflow joint test round 2` 加一个 LF，28 字节，UTF-8，无 BOM）保持原样。本轮先只读复核了五个验收锚点，结果与上一轮和 Controller 独立核对一致；再核对三条托管证据的 payload SHA-256 与返工更正给出的 digest 一致。然后以 outcome=completed 导入，evidenceLocators 按更正照抄证据 A（document，新文件）、B（test-output，Controller 只读探针输出）、C（document，第一轮文件），五个锚点都按更正引用了证据。没有 git add、提交、stash 或改动 HEAD/分支，没有运行测试、构建或安装命令，也没有碰其他仓库。",
+            "repositoryChange": {
+              "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+              "disposition": "left-uncommitted",
+              "branch": "main",
+              "commits": []
+            },
+            "evidenceLocators": [
+              {
+                "kind": "document",
+                "ref": "artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/content",
+                "digest": "sha256:3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44"
+              },
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+              },
+              {
+                "kind": "document",
+                "ref": "artifacts/managed-evidence/evidence_e20dc896-d382-4002-af04-dd7b8367ba94/payload/content",
+                "digest": "sha256:953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3"
+              }
+            ],
+            "verification": [
+              "本轮只读复核（没有改动任何文件）。ac-1-regular-file：满足。`test -f docs/wakeflow-smoke-round2.md && test ! -L docs/wakeflow-smoke-round2.md; echo $?` 输出 `0`。引用证据 A 与 B。",
+              "ac-2-exact-bytes：满足。`wc -c < docs/wakeflow-smoke-round2.md` 输出 `      28`；`shasum -a 256 docs/wakeflow-smoke-round2.md` 输出 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44  docs/wakeflow-smoke-round2.md`；`printf 'Wakeflow joint test round 2\\n' | cmp - docs/wakeflow-smoke-round2.md; echo $?` 没有差异输出，只输出 `0`；`od -c docs/wakeflow-smoke-round2.md` 输出：\n0000000    W   a   k   e   f   l   o   w       j   o   i   n   t       t\n0000020    e   s   t       r   o   u   n   d       2  \\n\n0000034\n首字节是 `W`（无 BOM），唯一的换行是最后一个字节，没有 `\\r`。证据 A 的 payload SHA-256 为 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`（manifest 记录 28 字节），与文件一致。引用证据 A 与 B。",
+              "ac-3-status-one-new-entry：满足。`git status --porcelain` 恰好输出两行：\n?? docs/wakeflow-smoke-round2.md\n?? docs/wakeflow-smoke.md\n`git diff --stat` 与 `git diff --cached --stat` 都没有输出。引用证据 B。",
+              "ac-4-head-unchanged：满足。`git rev-parse HEAD` 输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`；`git symbolic-ref HEAD` 输出 `refs/heads/main`。引用证据 B。",
+              "ac-5-round1-file-unchanged：满足。`wc -c < docs/wakeflow-smoke.md` 输出 `      31`；`shasum -a 256 docs/wakeflow-smoke.md` 输出 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3  docs/wakeflow-smoke.md`。证据 C 的 payload SHA-256 为 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`（manifest 记录 31 字节），与文件一致。引用证据 C 与 B。",
+              "托管证据核对：对三条证据的 payload/content 运行 `shasum -a 256`，得到 A `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`、B `46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0`、C `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`，与返工更正给出的 digest 逐一相同。证据 B 的内容是 Controller 的只读探针输出，覆盖 ac-1 到 ac-5，与本窗口观察到的输出一致。"
+            ],
+            "risks": [
+              "docs/wakeflow-smoke-round2.md 与 docs/wakeflow-smoke.md 都保持未跟踪，后续的 git clean、checkout 或 stash -u 可能删掉它们；托管证据 A 与 C 保留了两者的字节。",
+              "新文件放在 docs/，与仓库 CLAUDE.md/AGENTS.md 的文档目的地约定不一致；这是用户明确指定的路径，沿用第一轮做法，本窗口没有改路径，也没有改约定。"
+            ],
+            "anchorEvidence": [
+              {
+                "anchorId": "ac-1-regular-file",
+                "evidenceRefs": [
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/content",
+                    "digest": "sha256:3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44"
+                  },
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                    "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+                  }
+                ]
+              },
+              {
+                "anchorId": "ac-2-exact-bytes",
+                "evidenceRefs": [
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/content",
+                    "digest": "sha256:3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44"
+                  },
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                    "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+                  }
+                ]
+              },
+              {
+                "anchorId": "ac-3-status-one-new-entry",
+                "evidenceRefs": [
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                    "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+                  }
+                ]
+              },
+              {
+                "anchorId": "ac-4-head-unchanged",
+                "evidenceRefs": [
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                    "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+                  }
+                ]
+              },
+              {
+                "anchorId": "ac-5-round1-file-unchanged",
+                "evidenceRefs": [
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e20dc896-d382-4002-af04-dd7b8367ba94/payload/content",
+                    "digest": "sha256:953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3"
+                  },
+                  {
+                    "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+                    "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0"
+                  }
+                ]
+              }
+            ],
+            "reportedAt": "2026-09-24T21:18:03.725Z",
+            "reportDigest": "sha256:1169eaa6c2a7595251bdbcdac349fb867747fff2347c3cd4e2bacebc49fe738a"
+          },
+          "resultDigest": "sha256:5981f2eb4d8d4fd62978646afb7707d0ebac34de59fb388931cf893eb1fe5f63"
+        },
+        "callback": {
+          "callbackId": "target-delivery_fff72a4c-8070-4358-8616-080905b6688a",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "bindingId": "window_binding_078b6eab-d8cc-4a65-bfac-9706ed712809",
+          "bindingDigest": "sha256:ee1f4f207a154711c112243737c95637344a8c269b34c49ea3b54b3274d1229b",
+          "portablePrompt": "Wakeflow 回调：一份目标结果待评审: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe\n\n身份:\n- demand: demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 目标任务: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe (implementation)\n- 任务包: task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1\n- 目标: 在 AlembicPlugin 仓库新建文件 `docs/wakeflow-smoke-round2.md`，内容恰好是一行 `Wakeflow joint test round 2` 后接一个 LF 换行（共 28 字节，UTF-8，无 BOM）；仓库中其他文件一律不动（包括第一轮留下的未跟踪文件 `docs/wakeflow-smoke.md`），新文件不暂存、不提交，以未跟踪文件留在工作树中，HEAD 与分支保持不变。\n\n结果:\n- 陈述: completed\n- 摘要: 按返工决定 target-review-decision_9e1355e1-6053-4fe4-8088-31b29cafba20 只重做报告，没有改动仓库。上一轮在 AlembicPlugin 新建的未跟踪文件 docs/wakeflow-smoke-round2.md（`Wakeflow joint test round 2` 加一个 LF，28 字节，UTF-8，无 BOM）保持原样。本轮先只读复核了五个验收锚点，结果与上一轮和 Controller 独立核对一致；再核对三条托管证据的 payload SHA-256 与返工更正给出的 digest 一致。然后以 outcome=completed 导入，evidenceLocators 按更正照抄证据 A（document，新文件）、B（test-output，Controller 只读探针输出）、C（document，第一轮文件），五个锚点都按更正引用了证据。没有 git add、提交、stash 或改动 HEAD/分支，没有运行测试、构建或安装命令，也没有碰其他仓库。\n- 分支: main\n- targetResultId: target-result_b7adfc02-d7bf-42f2-9ea3-f9f96f6a52b0\n- resultDigest: sha256:5981f2eb4d8d4fd62978646afb7707d0ebac34de59fb388931cf893eb1fe5f63\n- streamRevision: 12\n\n下一步:\n用下面的 MCP 工具读取评审单元，再记录你的决定。\n- tool: wakeflow_inspect_target_result_review\n- demandId: demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f\n- targetTaskId: target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe\n本回调只是传输证据，不是验收，也不携带任何授权。",
+          "promptDigest": "sha256:fb6008ff4d76c15ceed628c59a3e1642d814a4bc37dce03baaef197d9f0121a1",
+          "generation": 1,
+          "issuedAt": "2026-09-24T21:18:03.730Z"
+        },
+        "evidenceResolution": [
+          {
+            "ref": "artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/content",
+            "digest": "sha256:3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44",
+            "evidenceId": "evidence_71426014-5f02-40a8-8259-b5d65cf96e17",
+            "bytes": 28
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content",
+            "digest": "sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0",
+            "evidenceId": "evidence_e81d15db-8a2f-470a-b035-04023013922d",
+            "bytes": 3982
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_e20dc896-d382-4002-af04-dd7b8367ba94/payload/content",
+            "digest": "sha256:953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3",
+            "evidenceId": "evidence_e20dc896-d382-4002-af04-dd7b8367ba94",
+            "bytes": 31
+          }
+        ]
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:95dcc6b4bf8b5898512d230abb2975b23b7608593c8a64d2231938978a730f6a"
+    }
+  ],
+  "idempotency": {
+    "key": "alembicplugin-target-task_b7b88971-rework-ebaf4c1b-g1-r1",
+    "requestDigest": "sha256:b87f73581cb3d0aeb026c06e352ae43707d34965aa0f70002803699f825d7ed2"
+  }
+}

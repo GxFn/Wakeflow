@@ -1,0 +1,241 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_16f83e68-8c4e-45fe-81a9-f8c1224088b9",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 2,
+  "commandDigest": "sha256:167a82d355ded42f622d727c5d6ed72709d5d2b6d7c91c8a6a16df4cd1920298",
+  "expectedStreamRevision": 1,
+  "firstStreamRevision": 2,
+  "lastStreamRevision": 2,
+  "previousCommitDigest": "sha256:c80209e4b81b9f63ee127b36340deeca8815988341c4bd555b5f53e9d7a03912",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_cb453e16-ff9d-424e-be5c-01a90130e58d",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 2,
+      "recordedAt": "2026-09-25T04:38:54.562Z",
+      "eventType": "tasking.target-task-planned",
+      "eventVersion": 1,
+      "data": {
+        "taskPackage": {
+          "artifactKind": "wakeflow-task-package",
+          "schemaVersion": 1,
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "demandAuthorityDigest": "sha256:122ace240ca4b327149e18f55845fa976deb8d4d9f53b93397752d01e25a80f5",
+          "taskPackageId": "task-package_a6b63da3-1837-499d-ba23-df87a34cc263",
+          "targetTaskId": "target-task_69318c74-7641-4f58-b448-1ac60988af29",
+          "createdAt": "2026-09-25T04:38:54.562Z",
+          "objective": "在 AlembicPlugin 仓库新建文件 `docs/wakeflow-smoke-round6.md`，内容恰好两行：`# Wakeflow smoke round 6` 与 `round six verified`，每行后接一个 LF（共 44 字节，UTF-8，无 BOM，文件末尾恰好一个换行）；仓库中其他文件一律不动（包括前几轮留下的四个未跟踪文件），新文件不暂存、不提交，以未跟踪文件留在工作树中，HEAD 与分支保持不变。",
+          "confirmedContext": [
+            "本包更正并替代 `requirement_92349d0c-6fbe-4f00-b02f-11cd375e09db`：用户于 2026-09-25 在 Design 窗口把文件第二行由 `resume relocate verified` 改为 `round six verified`，第一行不变，仍恰好两行、末尾一个换行，其余要求不变；用户于 2026-09-25T04:16:31Z 确认了更正包的一页摘要并授权以 pending 发布。被替代的原包已撤回，从未被认领或实现。",
+            "原包由用户确认的其余要求继续有效：目标仓库 AlembicPlugin；只新增 `docs/wakeflow-smoke-round6.md`；不改其他任何文件，不提交、不 `git add`；验收标准 1–5 由真实环境测试观察确认，标准 6–10 由 Controller 只读核对。",
+            "Controller 在认领前（2026-09-25 约 04:30Z）只读复核，基线与需求包一致：HEAD 为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 且指向 `refs/heads/main`；`git status --porcelain` 与 `--untracked-files=all` 都恰好四行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke.md`；`docs/` 下没有子目录；四个旧文件的字节数与 SHA-256 与需求包一致；`docs/wakeflow-smoke-round6.md` 尚不存在。",
+            "目标内容 `# Wakeflow smoke round 6` LF `round six verified` LF 共 44 字节（第一行 24 字符加 LF，第二行 18 字符加 LF），SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`（Controller 已复算）。",
+            "文件放在 `docs/` 与仓库 CLAUDE.md / AGENTS.md 的文档目的地约定有偏离；路径由用户明确指定并沿用前几轮做法：按指定路径执行，不改路径，也不改约定。",
+            "测试决策为 real-environment：实现被接受后，Controller 会另行规划测试任务，由 Test 窗口在本工作区的 AlembicPlugin 检出中实测标准 1–5；本任务只负责实现并用只读命令自查。需求包规定任务计划评审由 Controller 完成，本任务包已由 Controller 评审。",
+            "本 Demand 目前没有托管证据记录，因此报告以 outcome=needs-review 导入，anchorEvidence 与 evidenceLocators 为空，并在 verification 中逐锚点附上核对命令的原始输出。needs-review 导入就是本目标的正常结束：Controller 会自行核对并登记证据，在验收决定中用 anchorEvidence 把每个锚点绑定到这些证据后直接接受，不会为了补报告再发返工。"
+          ],
+          "selectedAuthorityRefs": [
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+              "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+              "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+              "memberPath": "requirement.md",
+              "memberRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/requirement.md",
+              "memberDigest": "sha256:1cad6f59b653054aeb41d177e0204c0521a3cf86b15488564198fa2580cb170d",
+              "role": "requirement",
+              "mediaType": "text/markdown"
+            },
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+              "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+              "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+              "memberPath": "landing.md",
+              "memberRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/landing.md",
+              "memberDigest": "sha256:39602182702b5b79c4a2f7ce6ab41c4f998b3d86de2ade756a82c8a5a17285dc",
+              "role": "landing",
+              "mediaType": "text/markdown"
+            }
+          ],
+          "boundaries": {
+            "inScope": [
+              "在 AlembicPlugin 仓库根目录下新建 `docs/wakeflow-smoke-round6.md` 这一个文件，写入 `# Wakeflow smoke round 6` LF `round six verified` LF（共 44 字节）；写入前先确认该路径不存在。",
+              "用只读命令（如 `test`、`wc -c`、`shasum -a 256`、`od -c`、`cmp`、`git status --porcelain`、`git rev-parse HEAD`、`git symbolic-ref HEAD`）核对结果，并把原始输出逐锚点写进报告的 verification。",
+              "调用 `wakeflow_import_target_result` 导入报告；导入成功后，用 tmux 助手 deliver 把回调许可的 prompt 原样送进许可 host action 指明的 Controller 窗口（从产品窗口在助手路径前加上启动时 `--add-dir` 给的工作区根），并如实记下助手打印的 attempt、readback 与 landing。"
+            ],
+            "outOfScope": [
+              "Alembic、AlembicAgent、AlembicCore、AlembicDashboard 四个仓库。",
+              "真实环境测试：由 Controller 另行规划给 Test 窗口，本任务不做。",
+              "为 `docs/` 新增索引、链接或目录说明；在 CHANGELOG 中登记；调整 `docs/` 的文档目的地约定；创建 `../wakeflow-ledger/` 目录；补建第五轮已撤回的 `docs/wakeflow-smoke-round5.md` 或 `docs/archive/`。",
+              "`test/unit/IndependentMcpProjectLocation.test.ts` 及其他任何测试：本任务不运行。"
+            ],
+            "forbidden": [
+              "使用被替代包中的旧第二行 `resume relocate verified`，或改变两行的文字、大小写或标点。",
+              "在新文件中加入第三行、front matter、BOM、CR（CRLF）、额外空行或尾随空格。",
+              "修改、删除、移动、重命名或重新格式化任何已有文件，包括前几轮留下的 `docs/wakeflow-smoke.md`、`docs/wakeflow-smoke-round2.md`、`docs/wakeflow-smoke-round3.md`、`docs/wakeflow-smoke-round4.md`，以及 `README.md`、`CHANGELOG.md`、`package.json`、`CLAUDE.md`、`AGENTS.md`、`.gitignore`、`docs/` 下现有文件和任何测试；也不把任何文件加入 `.gitignore`。",
+              "`git add`、`git commit`、stash、切换或新建分支、改动 HEAD、推送、打标签、发布或发版。",
+              "运行测试、构建、打包、依赖安装或任何会在仓库里生成其他文件或目录的命令。",
+              "登记证据、做评审决定或其他 Controller 操作；用 SendMessage、跨会话消息、文件或 tmux 助手 deliver 以外的任何方式发送回调。"
+            ]
+          },
+          "completionExpectations": [
+            "`docs/wakeflow-smoke-round6.md` 是 AlembicPlugin 工作树中的普通文件，内容逐字节为 `# Wakeflow smoke round 6` LF `round six verified` LF，共 44 字节，SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`。",
+            "`git status --porcelain docs/` 与全仓库 `git status --porcelain` 都恰好五行：`?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`；HEAD 仍为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 且指向 `refs/heads/main`；四个旧文件的字节数与 SHA-256 不变。",
+            "报告逐个回答十个验收锚点并附核对命令的原始输出；repositoryChange 为 left-uncommitted、分支 main、无提交。本 Demand 尚无托管证据，报告以 outcome=needs-review 导入，anchorEvidence 与 evidenceLocators 为空；不得为了 completed 编造证据引用。",
+            "导入成功后，回调经 tmux 助手 deliver 送进 Controller 窗口，助手返回的 attempt 为 sent，并在本轮回复中如实写出助手打印的 attempt、readback 与 landing；这是本目标的最后一个动作，之后结束本轮，不轮询、不重发。"
+          ],
+          "assignment": {
+            "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+            "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7"
+          },
+          "workType": "implementation",
+          "commitExpectation": "leave-uncommitted",
+          "acceptanceAnchors": [
+            {
+              "anchorId": "ac-1-regular-file",
+              "claim": "AlembicPlugin 仓库中存在路径为 `docs/wakeflow-smoke-round6.md` 的普通文件（不是符号链接，也不是目录）。",
+              "probe": "在 AlembicPlugin 仓库根目录运行 `test -f docs/wakeflow-smoke-round6.md && test ! -L docs/wakeflow-smoke-round6.md; echo $?`。",
+              "expected": "输出 `0`：该路径存在，是普通文件，不是目录或符号链接。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-1"
+              }
+            },
+            {
+              "anchorId": "ac-2-exact-bytes",
+              "claim": "`docs/wakeflow-smoke-round6.md` 的内容逐字节等于 `# Wakeflow smoke round 6` LF `round six verified` LF：UTF-8、无 BOM、共 44 字节。",
+              "probe": "`wc -c < docs/wakeflow-smoke-round6.md`；`shasum -a 256 docs/wakeflow-smoke-round6.md`；`printf '# Wakeflow smoke round 6\\nround six verified\\n' | cmp - docs/wakeflow-smoke-round6.md; echo $?`；`od -c docs/wakeflow-smoke-round6.md`。",
+              "expected": "`wc -c` 输出 44；SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`；`cmp` 没有差异输出且退出码为 0；`od -c` 首字节是 `#`（无 BOM），恰好两个 `\\n`（第 25 个字节与最后一个字节），没有 `\\r`，第二行是 `round six verified` 而不是旧的 `resume relocate verified`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-2"
+              }
+            },
+            {
+              "anchorId": "ac-3-docs-status-one-new-entry",
+              "claim": "`git status --porcelain docs/` 相对基线四行只多出 `?? docs/wakeflow-smoke-round6.md` 这一行。",
+              "probe": "在 AlembicPlugin 仓库根目录运行 `git status --porcelain docs/`。",
+              "expected": "输出恰好五行：`?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-3"
+              }
+            },
+            {
+              "anchorId": "ac-4-head-commit-unchanged",
+              "claim": "AlembicPlugin 仓库 HEAD 指向的提交不变。",
+              "probe": "在 AlembicPlugin 仓库根目录运行 `git rev-parse HEAD`。",
+              "expected": "输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-4"
+              }
+            },
+            {
+              "anchorId": "ac-5-head-on-main",
+              "claim": "AlembicPlugin 仓库 HEAD 仍在 `main` 分支。",
+              "probe": "在 AlembicPlugin 仓库根目录运行 `git symbolic-ref HEAD`。",
+              "expected": "输出 `refs/heads/main`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-5"
+              }
+            },
+            {
+              "anchorId": "ac-6-repo-status-matches-docs",
+              "claim": "全仓库 `git status --porcelain` 的输出与标准 3 的五行完全相同，`docs/` 之外没有任何新增、修改、删除或暂存条目。",
+              "probe": "在 AlembicPlugin 仓库根目录运行 `git status --porcelain`，并与 `git status --porcelain docs/` 的输出逐行比较。",
+              "expected": "两者输出完全相同，都是标准 3 的五行 `??` 条目。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-6"
+              }
+            },
+            {
+              "anchorId": "ac-7-round1-file-unchanged",
+              "claim": "前几轮留下的 `docs/wakeflow-smoke.md` 未被改动。",
+              "probe": "`wc -c < docs/wakeflow-smoke.md`；`shasum -a 256 docs/wakeflow-smoke.md`。",
+              "expected": "31 字节；SHA-256 为 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-7"
+              }
+            },
+            {
+              "anchorId": "ac-8-round2-file-unchanged",
+              "claim": "前几轮留下的 `docs/wakeflow-smoke-round2.md` 未被改动。",
+              "probe": "`wc -c < docs/wakeflow-smoke-round2.md`；`shasum -a 256 docs/wakeflow-smoke-round2.md`。",
+              "expected": "28 字节；SHA-256 为 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-8"
+              }
+            },
+            {
+              "anchorId": "ac-9-round3-file-unchanged",
+              "claim": "前几轮留下的 `docs/wakeflow-smoke-round3.md` 未被改动。",
+              "probe": "`wc -c < docs/wakeflow-smoke-round3.md`；`shasum -a 256 docs/wakeflow-smoke-round3.md`。",
+              "expected": "28 字节；SHA-256 为 `d1b808459e29a479884cf11b5c2769b2065fcff39873013fe653c01ad2402f9f`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-9"
+              }
+            },
+            {
+              "anchorId": "ac-10-round4-file-unchanged",
+              "claim": "前几轮留下的 `docs/wakeflow-smoke-round4.md` 未被改动。",
+              "probe": "`wc -c < docs/wakeflow-smoke-round4.md`；`shasum -a 256 docs/wakeflow-smoke-round4.md`。",
+              "expected": "28 字节；SHA-256 为 `ab07de6de9c8f41807987303679af1265f72ab957c0fe40caa35bc391fe63961`。",
+              "requirementRef": {
+                "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                "sectionAnchor": "acceptance-criteria",
+                "itemId": "ac-10"
+              }
+            }
+          ],
+          "lineage": null,
+          "planReview": {
+            "reviewer": "controller"
+          },
+          "sectionAnchors": [
+            "goal",
+            "scope",
+            "completion-definition",
+            "non-goals",
+            "acceptance-criteria",
+            "user-confirmation",
+            "code-facts",
+            "landing-plan",
+            "testing-decision"
+          ]
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:f2551332d7a0ed002535900f522401a55a66635bbedc9242974559352aa1c87f"
+    }
+  ],
+  "idempotency": {
+    "key": "plan-alembicplugin-smoke-round6-impl-v1",
+    "requestDigest": "sha256:0d22698ef3ca7528446ad0ba268cff95e46415ef822d75269e979121f475f00d"
+  }
+}

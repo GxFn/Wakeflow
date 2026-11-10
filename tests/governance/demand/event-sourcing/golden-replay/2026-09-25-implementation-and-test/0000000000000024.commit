@@ -1,0 +1,54 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_02abc581-2bdd-423c-8c4a-f275a9a67ab2",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 24,
+  "commandDigest": "sha256:f4be24e3b6154d6b7df2f9c0878c63e69b5ea534f635d11b1c0cf93a3e109ac9",
+  "expectedStreamRevision": 23,
+  "firstStreamRevision": 24,
+  "lastStreamRevision": 24,
+  "previousCommitDigest": "sha256:0a6d3163ef706196a7a59fc44ee625286e8b3e548b9a4e869bb28629391af7fa",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_1d03e209-67ea-417f-ab87-d4fa29edfb37",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 24,
+      "recordedAt": "2026-09-25T05:20:54.513Z",
+      "eventType": "lifecycle.demand-completed",
+      "eventVersion": 1,
+      "data": {
+        "completion": {
+          "kind": "WakeflowDemandCompletion",
+          "schemaVersion": 1,
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "authorityDigest": "sha256:122ace240ca4b327149e18f55845fa976deb8d4d9f53b93397752d01e25a80f5",
+          "testingMode": "real-environment",
+          "postAcceptanceRouteDigest": "sha256:226ae9bd03afc81f44a9ef7e5829e8223cb9925a60e9fa1a59966773b937aaae",
+          "reviewSnapshotDigest": "sha256:6e96707adeae55f282bc0d5c39b02e8680c91d8d339e0e272003b8705a608cf6",
+          "observedState": {
+            "streamRevision": 23,
+            "stateDigest": "sha256:4a09197dc1a6185a2cc2f33e803c61d5f59ac6c589a450d461be1b29352f8ab4",
+            "lastEventId": "demand-event_58eac8c3-5218-46ac-83d3-b6a8c15fdd36",
+            "lastEventDigest": "sha256:6d2b93dc413e302d7b6cf3d96aaa1cf769badfde1be3fb0e651bdde184d737b3"
+          },
+          "packageSource": {
+            "requirementId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+            "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+            "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+            "claimStateRevision": 2,
+            "claimStateDigest": "sha256:1a79bc1933e9416f20131e946677dd6d2fd67c23281a6b66dc84c3e7a9c3e528"
+          },
+          "completedAt": "2026-09-25T05:20:54.513Z",
+          "completionDigest": "sha256:857e49a3870e1085ba7fb578ff4d96ff9454c8e486cc70f8a86bb2790646b001"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:ccb4527410506676ecf11869508c86048c889805e0b9463eb09bc2cebf442aee"
+    }
+  ]
+}

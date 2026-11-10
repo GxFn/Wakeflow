@@ -46,7 +46,7 @@ of test work, and it overrides one target rule: you do record managed evidence
   When the budget is exhausted, report that, do not quietly continue.
 - A tool answer whose code is unexpected or io-failure is a failure, not a
   verdict on any step: retry at most once, then report the tool name, its code
-  and reason and any `causeCode`, and stop.
+  and reason, `details.incidentId` and any `causeCode`, and stop.
 - Every step's evidence must be a managed evidence record of this Demand,
   cited by locator and digest (step 3). Nobody else sees your run, so you
   record it: save each step's exact output under the Test surface, then

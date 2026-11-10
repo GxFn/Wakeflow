@@ -1,0 +1,32 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_327ff088-225b-457c-9790-1e849324dd81",
+  "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+  "commitSequence": 1,
+  "commandDigest": "sha256:9ca8a0b1f13838e4142f69bc3443dd6c63f46337c0757b6fbef449e651d55a84",
+  "expectedStreamRevision": 0,
+  "firstStreamRevision": 1,
+  "lastStreamRevision": 1,
+  "previousCommitDigest": null,
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_e59b8f7b-738b-4793-bc1a-9aff4fcd8afa",
+      "demandId": "demand_9c2190c6-d8a8-4b18-8726-e1a6b88cafbd",
+      "streamRevision": 1,
+      "recordedAt": "2026-10-19T11:58:26.622Z",
+      "eventType": "publication.demand-published",
+      "eventVersion": 1,
+      "data": {
+        "identityRef": "identity.json",
+        "identityDigest": "sha256:3c2fdfc65a4200a6f66ac394344c61fd1fff864cbd1ee911a6c93ac4144a0cbb",
+        "authorityRef": "authority.json",
+        "authorityDigest": "sha256:552c6d3928df0e3d316e308025270b6885c4bfc2147abc77f3272f274f5717a6"
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:4db4e9e5c04fc493a47494e0eec4b17c7bf5373ca219ccd11d3b5c1588bf085f"
+    }
+  ]
+}

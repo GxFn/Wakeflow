@@ -1,0 +1,59 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_65edd877-2037-4a9a-ad26-7c76c2d71e75",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 4,
+  "commandDigest": "sha256:ace3df9e1b0bb98878465065a74b87a5891ad0072d83cca304d2d0eb4411273e",
+  "expectedStreamRevision": 3,
+  "firstStreamRevision": 4,
+  "lastStreamRevision": 4,
+  "previousCommitDigest": "sha256:8d9ee6e0923b42ebe01b0563600cf96215ddee2bc9c12033abb4474604a01a0c",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_f201ce4f-18bc-40fe-bc52-5a43a141921f",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 4,
+      "recordedAt": "2026-09-24T21:09:57.000Z",
+      "eventType": "delivery.delivery-outcome-recorded",
+      "eventVersion": 1,
+      "data": {
+        "outcome": {
+          "kind": "WakeflowDeliveryOutcome",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_b096512a-668c-4e51-91d0-4fce5e2ab8fb",
+          "generation": 1,
+          "fence": {
+            "claimId": "work-claim_d9619a67-d400-464b-975f-e127def82095",
+            "claimDigest": "sha256:242918427486773f5c3cb9a938ca840f30a756065a78c4edff5facde49148ccf"
+          },
+          "disposition": "accepted",
+          "attempt": {
+            "status": "sent",
+            "evidenceDigest": "sha256:70892a67d61253969978f7eb40b19875162d3f9905588c7ea9179341dde80f2e"
+          },
+          "readback": {
+            "status": "pending",
+            "evidenceDigest": "sha256:cac710e27096a6d811f2a144f27fcbe8841f837743329656ccc122939892a305"
+          },
+          "evidence": {
+            "kind": "hook-record",
+            "hookRecordId": "f7c55669-65bf-4923-9c5b-3bd0a559177a",
+            "rationale": null
+          },
+          "claimHandling": "retain",
+          "observedAt": "2026-09-24T21:09:57.000Z",
+          "outcomeDigest": "sha256:1561c1096f60079276d11f7d291e9a4fb5f4a0bcc42a7a1ca974f586e60c0488"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:c5afa81bf7ef6e785b61ef382d726da69e909dc63ed6c9fa68db20aeceb4bd52"
+    }
+  ],
+  "idempotency": {
+    "key": "record-outcome-alembicplugin-smoke-round2-g1-v1",
+    "requestDigest": "sha256:39259d1836e9bc8edd9a6d97ede8668c5593b460afbe4e76f2e8c21db2589f38"
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_bcf940be-5e80-4532-86d1-955ace9457ad",
+  "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+  "commitSequence": 9,
+  "commandDigest": "sha256:42082cf2044f4814449f075e758e8fa8900d68136eb2b8de70c3e1bb0890b5a4",
+  "expectedStreamRevision": 8,
+  "firstStreamRevision": 9,
+  "lastStreamRevision": 9,
+  "previousCommitDigest": "sha256:fa04410e9fa998fdaac352f117ad09214b44228719d93d3e473ef55eb6c05603",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_9e1355e1-6053-4fe4-8088-31b29cafba20",
+      "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+      "streamRevision": 9,
+      "recordedAt": "2026-09-24T21:15:57.061Z",
+      "eventType": "review.target-result-decided",
+      "eventVersion": 1,
+      "data": {
+        "decision": {
+          "kind": "WakeflowControllerImplementationReviewDecision",
+          "schemaVersion": 1,
+          "targetReviewDecisionId": "target-review-decision_9e1355e1-6053-4fe4-8088-31b29cafba20",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f",
+          "targetTaskId": "target-task_b7b88971-817e-4abf-a0e4-bfae8f489afe",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "reviewed": {
+            "snapshotDigest": "sha256:c1d2ed058a0b5135b43283954d740bf34963c1b2f1a2490ed28de5989e295993",
+            "reviewUnitDigest": "sha256:bb197ddbc25947b6eaf85775b5b0af1e7a83cabe28c45ec713b99c1ecd4cf513",
+            "stateDigest": "sha256:4142cefcc7c82bc6039ded21ce5ebf839dc9ab2ff132f471a9c2ab419f5cfc28",
+            "streamRevision": 8,
+            "taskPackageId": "task-package_4a44f6b4-b5ba-4d16-8e00-0b9cac84bee1",
+            "taskPackageDigest": "sha256:5b53712212d92b3985545af84f22514d04e339bf76e7da37cfcb0b899047b1e0",
+            "targetResultId": "target-result_d9619a67-d400-464b-975f-e127def82095",
+            "targetResultDigest": "sha256:f2519eaa56c90bba4780fe386656001df7a0c93eb7919d446c257e2772c3edfb",
+            "targetResultOutcome": "needs-review",
+            "targetResultReportedAt": "2026-09-24T21:10:54.303Z"
+          },
+          "decision": "rework",
+          "assessment": {
+            "requirementAlignment": "aligned",
+            "implementationQuality": "satisfactory"
+          },
+          "independentChecks": [
+            {
+              "checkId": "ac-1-regular-file",
+              "method": "在 AlembicPlugin 仓库根目录运行 `test -f docs/wakeflow-smoke-round2.md && test ! -L docs/wakeflow-smoke-round2.md; echo $?` 与 `stat -f '%HT, %z bytes' docs/wakeflow-smoke-round2.md`；原始输出已登记为 test-output 证据 B（evidence_e81d15db-8a2f-470a-b035-04023013922d），文件本身已登记为 document 证据 A（evidence_71426014-5f02-40a8-8259-b5d65cf96e17）。",
+              "outcome": "passed",
+              "observation": "输出 `0`；stat 显示 `Regular File, 28 bytes`：路径存在，是普通文件，不是目录或符号链接。"
+            },
+            {
+              "checkId": "ac-2-exact-bytes",
+              "method": "`wc -c`、`shasum -a 256`、`printf 'Wakeflow joint test round 2\\n' | cmp - docs/wakeflow-smoke-round2.md`、`od -c`、CR 字节计数（`tr -dc \"\\r\" | wc -c`）与前 3 字节十六进制；原始输出在证据 B，文件字节在证据 A（payload 摘要与文件 SHA-256 一致）。",
+              "outcome": "passed",
+              "observation": "28 字节；SHA-256 `3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`；cmp 退出码 0；od -c 首字节 `W`、唯一换行是末字节 `\\n`；CR 字节数 0；前 3 字节 `57 61 6b`，无 BOM。"
+            },
+            {
+              "checkId": "ac-3-status-one-new-entry",
+              "method": "`git --no-optional-locks status --porcelain`（另加 `--untracked-files=all` 与 `--ignored --untracked-files=all`）、`git diff --name-status`、`git diff --cached --name-status`，并与 Controller 于 2026-09-24T21:06:40Z 投递前的基线比对；原始输出在证据 B。",
+              "outcome": "passed",
+              "observation": "status 恰好两行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke.md`；含忽略项时只多新文件一行，`!! .DS_Store` 不变；两条 diff 都没有输出。"
+            },
+            {
+              "checkId": "ac-4-head-unchanged",
+              "method": "`git rev-parse HEAD`、`git symbolic-ref HEAD`、`git log --oneline 7b2c53aae21489d2daad651a0261d02c6d1bdd95..HEAD`、`git stash list`（均带 --no-optional-locks）；原始输出在证据 B。",
+              "outcome": "passed",
+              "observation": "HEAD 为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`，指向 `refs/heads/main`；没有新提交；stash 为空。"
+            },
+            {
+              "checkId": "ac-5-round1-file-unchanged",
+              "method": "`wc -c < docs/wakeflow-smoke.md` 与 `shasum -a 256 docs/wakeflow-smoke.md`；原始输出在证据 B，文件本身已登记为 document 证据 C（evidence_e20dc896-d382-4002-af04-dd7b8367ba94）。",
+              "outcome": "passed",
+              "observation": "31 字节；SHA-256 `953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`，与基线和证据 C 的 payload 摘要一致。"
+            },
+            {
+              "checkId": "retired-identifiers-inspection",
+              "method": "把 `test/unit/IndependentMcpProjectLocation.test.ts` 第 60–80 行扫描的 19 个废弃标识符逐条用 `grep -cF` 在新文件中查找；未执行测试（任务包 outOfScope）；结果在证据 B。",
+              "outcome": "passed",
+              "observation": "19 个标识符命中 0 项。"
+            },
+            {
+              "checkId": "report-anchor-evidence",
+              "method": "阅读评审单元中导入的报告：outcome=needs-review，anchorEvidence 与 evidenceLocators 都为空。这是任务包约定的首轮做法，但五个锚点都没有托管证据支撑，按规则不能接受。",
+              "outcome": "failed",
+              "observation": "更正（只改报告，不改仓库）：不要创建、修改或删除 AlembicPlugin 中的任何文件；先只读复核新文件与仓库状态仍与上次一致，然后以 outcome=completed 重新导入报告。evidenceLocators 列出以下三条托管证据（kind、ref、digest 原样照抄）：\n证据 A：kind document，ref `artifacts/managed-evidence/evidence_71426014-5f02-40a8-8259-b5d65cf96e17/payload/content`，digest `sha256:3b1b1f6b04588d2b8ab83de6bd9d1d13270aa82ffb4577da72c883a8e3a36b44`（新文件本身）；\n证据 B：kind test-output，ref `artifacts/managed-evidence/evidence_e81d15db-8a2f-470a-b035-04023013922d/payload/content`，digest `sha256:46b75e7ee4bff84a42b94e88054e8592106203cac25c82c2c72590ec820a9bc0`（Controller 的只读探针输出）；\n证据 C：kind document，ref `artifacts/managed-evidence/evidence_e20dc896-d382-4002-af04-dd7b8367ba94/payload/content`，digest `sha256:953170c48b50a2ccf9e2925d073e1d4e9eb23c4d0715d76459f0d84b6888b4e3`（第一轮文件）。\nanchorEvidence：ac-1-regular-file 引用 A 与 B；ac-2-exact-bytes 引用 A 与 B；ac-3-status-one-new-entry 引用 B；ac-4-head-unchanged 引用 B；ac-5-round1-file-unchanged 引用 C 与 B。repositoryChange 保持 left-uncommitted、分支 main、无提交。导入成功后只用 tmux 助手 deliver 把回调送进 Controller 窗口，然后结束本轮。"
+            }
+          ],
+          "rationale": "我独立核对了验收锚点 1–5，全部通过（见 independentChecks）：原始输出已登记为 test-output 证据 B（evidence_e81d15db-8a2f-470a-b035-04023013922d），新文件与第一轮文件分别登记为 document 证据 A（evidence_71426014-5f02-40a8-8259-b5d65cf96e17）与 C（evidence_e20dc896-d382-4002-af04-dd7b8367ba94），两者的 payload 摘要分别等于 `3b1b1f6b…a36b44` 与 `953170c4…b4e3`。产品改动正确，所以 requirementAlignment=aligned、implementationQuality=satisfactory。返工只针对报告：结果以 needs-review 导入，五个锚点的 anchorEvidence 都为空，按规则不能接受；这是任务包预先约定的首轮做法，不是目标窗口的过错。唯一失败的检查项 report-anchor-evidence 就是目标窗口要做的更正：不改动仓库，以 outcome=completed 重新导入并按锚点引用证据 A、B、C，再用 tmux 助手把回调送进 Controller 窗口。",
+          "blockingReasons": [],
+          "residualRisks": [
+            "`docs/wakeflow-smoke-round2.md` 与 `docs/wakeflow-smoke.md` 都保持未跟踪，任何 `git clean`、checkout 或 `stash -u` 都可能删掉它们；托管证据 A 与 C 保留了两者的字节。",
+            "可选单元测试 `test/unit/IndependentMcpProjectLocation.test.ts` 没有执行，只把它扫描的 19 个废弃标识符逐条比对，命中 0。",
+            "新文件放在 `docs/`，偏离仓库的文档目的地约定；路径由用户明确指定，沿用第一轮做法。",
+            "Controller 的探针输出沿用第一轮做法放在 Test 支持面 `evidence/demand_b9f2fc11-1323-4997-8b09-0b1a57c8299f/` 下，不属于 Test 窗口的 harness 或 fixture。"
+          ],
+          "escalation": null,
+          "resumption": null,
+          "callbackLanding": {
+            "recordId": "7e48e78d-a3a2-490a-874d-460e4419965b",
+            "landedAt": "2026-09-24T21:11:17.890Z"
+          },
+          "targetCompletion": {
+            "recordId": "122425e3-0be0-4408-b1a9-7b1ce54ebbea",
+            "event": "stop",
+            "observedAt": "2026-09-24T21:11:30.333Z"
+          },
+          "decidedAt": "2026-09-24T21:15:57.061Z",
+          "decisionDigest": "sha256:b92d340d24719e96b06b69e6c6c7533eda7768fd104932eb3df6baed6983ec33"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:af89314522566c691fb9cb8cbe7be6659a50906c48a202ed1f844c145bda52bc"
+    }
+  ],
+  "idempotency": {
+    "key": "review-rework-alembicplugin-smoke-round2-r1-v1",
+    "requestDigest": "sha256:746693e09af1f8e8947ab9d6d4da9e7d2f6d6b77d5306d950306dcdeafe655a8"
+  }
+}

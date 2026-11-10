@@ -1,0 +1,29 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_7f6c9599-04c4-4967-ab9b-071d081acbc7",
+  "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+  "commitSequence": 9,
+  "commandDigest": "sha256:0219244c8dc913a4f0d84b85c8db24d9552e9061bf96e2f6a28d166edd954e90",
+  "expectedStreamRevision": 9,
+  "firstStreamRevision": 10,
+  "lastStreamRevision": 10,
+  "previousCommitDigest": "sha256:2e97ad306c6f9eb46c70dbe317de5b59b8ca78a1b7e222731d5ab53f417d3df4",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_283d0f2e-0c71-4122-a318-a42771a14048",
+      "demandId": "demand_c59491c9-1db7-47f4-af88-75c2caa7d417",
+      "streamRevision": 10,
+      "recordedAt": "2026-09-24T23:47:16.454Z",
+      "eventType": "lifecycle.demand-cancelled",
+      "eventVersion": 1,
+      "data": {
+        "reason": "失败路径测试：需求在当前仓库状态下自相矛盾，验证目标已达成"
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:ef7026f59e802c20df85979709c42fed2d8218363f2030905a055e0015d174b5"
+    }
+  ]
+}

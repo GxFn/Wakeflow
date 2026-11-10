@@ -1,0 +1,67 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_9401e3ff-ed9b-43e1-9141-80290805ff7c",
+  "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+  "commitSequence": 3,
+  "commandDigest": "sha256:ab20e54427e0442b1c6e9bced8221100aaa1ede0632e743fe39b0cb37942435b",
+  "expectedStreamRevision": 2,
+  "firstStreamRevision": 3,
+  "lastStreamRevision": 3,
+  "previousCommitDigest": "sha256:a33753106e3b9961ee9aad141342e9b92b6d0fa4ad3e981d06c652d4726e1015",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_433aef0a-ac43-4317-b37b-d572506ecb06",
+      "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+      "streamRevision": 3,
+      "recordedAt": "2026-11-02T01:13:54.370Z",
+      "eventType": "delivery.delivery-prepared",
+      "eventVersion": 1,
+      "data": {
+        "envelope": {
+          "kind": "WakeflowDeliveryEnvelope",
+          "schemaVersion": 1,
+          "deliveryId": "target-delivery_19ae6904-7728-4d07-b31f-bd82929f7701",
+          "programId": "program_a7bee80a-bd53-40e9-b726-daa5f6abe462",
+          "configDigest": "sha256:3f8c1f8bbbe45a2f5c1a75d2d77851eea693246654ef398b83422e8960e57523",
+          "demandId": "demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8",
+          "target": {
+            "targetTaskId": "target-task_2022a73b-6dc2-4d53-a85a-6f523ae3d033",
+            "taskPackageId": "task-package_0a813d85-d113-4b61-8b4c-ae9c5cadc618",
+            "taskPackageRef": ".wakeflow-active/current/demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8/artifacts/task-packages/task-package_0a813d85-d113-4b61-8b4c-ae9c5cadc618.json",
+            "taskPackageDigest": "sha256:346c679060b3a1ce48c894d3bbcdaf511791e3f197e39eae35b17b5a55a30ae4"
+          },
+          "route": {
+            "hostId": "claude-code",
+            "windowId": "window_003173f9-66dd-4731-a73f-6797d44bd72b",
+            "bindingId": "window_binding_c053bb43-c9ec-4ec2-8362-3023879c4119",
+            "bindingDigest": "sha256:6a3a9db88d2f3f7a103143ba1c745aad4885d11daab6d54cad51aa19534f5009"
+          },
+          "language": "en",
+          "portablePrompt": "Continue current window task: Alembic/target-task_2022a73b-6dc2-4d53-a85a-6f523ae3d033\n\nGoal:\n在 Alembic 仓库 README.md 末尾已有的 `## Live check` 小节里，把句子 `Wakeflow live check L19 touched this README through the tmux transport on 2026-11-02.` 追加为该小节、也是整个文件的最后一行，然后只把这一处改动提交到当前分支 main。任务包中的两个验收锚点（ac-1、ac-2）就是完成标准。\n\nCompletion focus:\n- 保留现有 L13 句子原样，在它后面空一行再写 L19 句子；句子必须逐字一致，文件以单个换行结尾。\n- 提交后在报告里给出新提交的 id、`git show --stat HEAD` 的文件列表和 README 末尾几行，作为两个锚点的证据。\n\nPriority context:\nAlembic is on branch main at 44c1462 (`docs(readme): add Live check note for Wakeflow live check L13`) with a clean working tree, as observed by the Controller on 2026-11-02.\n\nCritical boundary:\n- 只改 Alembic/README.md 这一个文件，只做一次提交，父提交应为 44c1462。不要改动其他文件或其他仓库（包括 live16 worktree），不要改写 README 现有内容；不要推送、打标签、新建或切换分支、amend 或 rebase；不要编辑 Wakeflow 拥有的资源。实际情况与任务包不符时，报告阻塞，不要自行扩大范围。\n- forbidden: Pushing, tagging, creating or switching branches, amending, rebasing or otherwise rewriting existing history.\n- forbidden: Editing Wakeflow-owned resources (.wakeflow-active/, .wakeflow-local/, the ledger, wakeflow.config.json) or any CLAUDE.md managed block.\n\nAcceptance anchors:\n- ac1-readme-l19-last-line: Alembic README.md ends with the `## Live check` section whose last line is exactly the L19 sentence.\n- ac2-readme-only-change: The change touches README.md alone in the Alembic checkout.\n\nExecution root (relative to workspace): Alembic\nResolve the paths below from this execution root; read its instructions and use explicit command workdir. The chat's initial cwd may differ.\n\nRead in this order:\n1. ../.wakeflow-active/current/demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8/artifacts/task-packages/task-package_0a813d85-d113-4b61-8b4c-ae9c5cadc618.json\n2. ../ledger/requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/requirement.md\n   sections: goal, completion-definition, non-goals, acceptance-criteria\n3. ../ledger/requirements/requirement_86d9a451-8a7d-42be-b4ad-1cd0bd803dd7/landing.md\n   sections: code-facts, landing-plan, testing-decision\n4. ../CLAUDE.md\n5. CLAUDE.md\n6. ../.wakeflow-active/current/demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8\n\nRequired skills:\n- skills/wakeflow-target/SKILL.md\nLoad each skill from the plugin as installed on disk now, even if a copy is already in your context: the plugin may have been updated since this session began.\n\nIdentity:\n- demand: demand_454b97c2-b4c5-4838-8f39-0c5b8e7277d8\n- pod: main (pod_d918a675-7f8c-4daf-b7b3-ff655e747b96)\n- window: window_003173f9-66dd-4731-a73f-6797d44bd72b\n- repository: repository_0e71a6d3-cf4f-4052-a125-e477cb1711fa\n- binding: window_binding_c053bb43-c9ec-4ec2-8362-3023879c4119\n- workspace root (relative to this window's root): ..\n\nReturn:\nImport the result with the MCP tool below; do not write result files. Delivery is not acceptance.\n- tool: wakeflow_import_target_result\n- deliveryId: target-delivery_19ae6904-7728-4d07-b31f-bd82929f7701\n- claimDigest: sha256:c5bf169874d97fb4db2539c58336b6fd9f3102207b2875078900cb776cdc3ab5\nNever send this prompt onward to another window.\n\nDispatch record:\n- deliveryId: target-delivery_19ae6904-7728-4d07-b31f-bd82929f7701\n- generation: 1\n- claimDigest: sha256:c5bf169874d97fb4db2539c58336b6fd9f3102207b2875078900cb776cdc3ab5\n- streamRevision: 3",
+          "promptDigest": "sha256:34ce00d89efc72abc8dc85bf86c2d682f0e741d14d015b9ed3638728927a92ab",
+          "fence": {
+            "claimId": "work-claim_6cbaa7c4-6a63-410c-bbab-bdf8f4ca3b7d",
+            "claimDigest": "sha256:c5bf169874d97fb4db2539c58336b6fd9f3102207b2875078900cb776cdc3ab5",
+            "expectedStreamRevision": 2
+          },
+          "preparedAt": "2026-11-02T01:13:54.370Z",
+          "workType": "implementation",
+          "envelopeDigest": "sha256:14455bcc6638bf29c71a68333d7542f69780522ab22a5903307fa427cbd9d74d"
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:3bd3ed30f5ad0311f6c66ca748fae538b1eee35bf158ade16c8c5b7778cfa8b5"
+    }
+  ],
+  "idempotency": {
+    "key": "l19-deliver-alembic-readme-v1",
+    "requestDigest": "sha256:703a9dc2bd35af5a3a3a30615bdcf2f303bcca2bbffddc8bceacca8c35a37672"
+  },
+  "writer": {
+    "version": "1.2.0",
+    "manifestDigest": "sha256:fc48be402b65e78b175f941cc4af688156c323f972c68d472d4b4daecca053c3"
+  }
+}

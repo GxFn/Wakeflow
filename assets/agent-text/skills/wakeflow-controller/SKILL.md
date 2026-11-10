@@ -48,7 +48,7 @@ command syntax: the references and the tool descriptions hold it.
   a failure, not a refusal: there is no cause for you to fix. Retry at most
   once, only when `retryable` is true or the call was a read; then run
   `wakeflow_status` and `wakeflow_verify`, stop, and give the user the tool
-  name, `code`/`reason` and any `causeCode` (an `E…` name such as `EACCES` or
+  name, `code`/`reason`, `details.incidentId` and any `causeCode` (an `E…` name such as `EACCES` or
   `ENOSPC` is the operating-system error they must fix). Edit nothing.
 - Never invent an identifier, a digest, a revision or an acceptance anchor.
   Carry back exactly what the previous call returned.

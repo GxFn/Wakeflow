@@ -1,0 +1,203 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_f90c4e9f-7fc0-41b3-8329-4a85b8776b57",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 21,
+  "commandDigest": "sha256:970e9692d00167d15e21637fdaec2917247316ca41ed2cb69c4689fd1842a817",
+  "expectedStreamRevision": 20,
+  "firstStreamRevision": 21,
+  "lastStreamRevision": 21,
+  "previousCommitDigest": "sha256:298b30407bba70f70f356c4f603f2e9b70b62b70e4cdef67e6410cdc0fc90f2a",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_25252e5c-c591-44c4-9a51-4d7962712c80",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 21,
+      "recordedAt": "2026-09-25T05:03:12.169Z",
+      "eventType": "result.target-result-recorded",
+      "eventVersion": 1,
+      "data": {
+        "result": {
+          "kind": "WakeflowTargetResult",
+          "schemaVersion": 1,
+          "workType": "test",
+          "targetResultId": "target-result_049c3e5b-485b-4fcd-bae3-3b777524d64c",
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "targetTaskId": "target-task_d1a56b30-e7db-426c-8980-d59434077d2a",
+          "deliveryId": "target-delivery_9ff8b518-42cf-4fe9-b2f5-a00a83c49fce",
+          "taskPackage": {
+            "taskPackageId": "task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0",
+            "ref": ".wakeflow-active/current/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/artifacts/task-packages/task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0.json",
+            "digest": "sha256:43b67790dc3bb64365d51056a2657b25729f8089f60efc670651a8f638453e87"
+          },
+          "assignment": {
+            "windowId": "window_6a9a3c45-045f-4dac-9c7e-f24ae32c191b"
+          },
+          "delivery": {
+            "generation": 1,
+            "fence": {
+              "claimId": "work-claim_049c3e5b-485b-4fcd-bae3-3b777524d64c",
+              "claimDigest": "sha256:c03c40088e7d2cd8a963691dd70a2a097abaec591a1228c672434613da28d318"
+            },
+            "outcomeDigest": "sha256:2abb770b66e70ee3cae4732a648f22a25266fe82b14c65afed7ec6935b0dc57d",
+            "disposition": "accepted",
+            "readbackStatus": "pending",
+            "observedAt": "2026-09-25T04:54:54.815Z"
+          },
+          "testExecution": {
+            "testAttemptId": "test-attempt_d65cdf0e-add3-4261-829c-92336ffbe9fe",
+            "ordinal": 1,
+            "stepIds": null
+          },
+          "report": {
+            "kind": "WakeflowTestTargetResultReport",
+            "schemaVersion": 1,
+            "outcome": "completed",
+            "summary": "第 1 次尝试（预算 2 次）：在本工作区 AlembicPlugin 检出（main，HEAD 7b2c53aae21489d2daad651a0261d02c6d1bdd95）的仓库根目录按冻结契约原样执行 ts-1 至 ts-5 的只读命令，未增减或改写步骤。每步原始输出（stdout 与 stderr 合并）原样保存到 Test 支持面 fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/<stepId>.txt，并逐一登记为本 Demand 的 test-output 托管证据；各步 observed、verdict 与证据引用见 steps。整体结论由 Wakeflow 从各步记录推导。",
+            "evidenceLocators": [
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_23ec53aa-4a47-4980-97f4-564b5d789882/payload/content",
+                "digest": "sha256:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+              },
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_b2b3d0a6-1949-4d0b-8c0b-d45acf309b46/payload/content",
+                "digest": "sha256:0cc6032111e59c2c8d552cf27f219694a1e66b659d3ac8b73e8d5299fdfc5208"
+              },
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_0861709f-51c7-4646-8986-59676d440770/payload/content",
+                "digest": "sha256:e1412b9db18f0fc25d4df03d68484721c47b9728eee2d121371f43ba7a480c25"
+              },
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_2ce586db-17a9-4527-9aa4-410db320e675/payload/content",
+                "digest": "sha256:535d7f30baa7af24d2e55f5104a4bf115e5b5ee3764c1bba0b2bde5318b34e4a"
+              },
+              {
+                "kind": "test-output",
+                "ref": "artifacts/managed-evidence/evidence_2c2c5a22-d9da-44a5-8a42-254393f6e062/payload/content",
+                "digest": "sha256:599bbcd7b7f94b50d9b83318ba0dd4b8e1ba9e39d1d3ee73d1fbbd70496d0f93"
+              }
+            ],
+            "verification": [
+              "落地确认（测试前）：wakeflow_status 观察到 AlembicPlugin 仓库 branch main、head 7b2c53aae21489d2daad651a0261d02c6d1bdd95、非 detached，与契约 environment 一致；setup 为复用已确认环境，未做任何准备改动。",
+              "证据核对：五条 test-output 托管证据的 payload/content SHA-256 与 Test 支持面 fixtures 中对应文件逐一一致（ts-1 9a271f2a…、ts-2 0cc60321…、ts-3 e1412b9d…、ts-4 535d7f30…、ts-5 599bbcd7…）。",
+              "边界自检（测试后，只读，不作为契约步骤）：`git --no-optional-locks status --porcelain` 全仓库仍为五行 `??` 条目（round2、round3、round4、round6、wakeflow-smoke.md），`git --no-optional-locks diff --cached --name-only` 无输出；本次执行未在 AlembicPlugin 检出中创建、修改或删除任何文件，未改变 HEAD、分支或暂存区。",
+              "所有命令均加 `--no-optional-locks`（git）或为纯读取命令；未使用凭据、网络、外部服务，未安装依赖、未构建、未运行测试套件。"
+            ],
+            "risks": [
+              "验收标准 6–10（全仓库状态与前几轮四个冒烟文件的字节数和 SHA-256）不在本测试契约范围内，本报告未对其作结论，需 Controller 只读核对；上面的全仓库 status 只是边界自检，不代替 Controller 核对。",
+              "ts-2 中 `wc -c` 为 macOS BSD 实现，输出带前导空格（`      44`）；数值为 44，按期望判定为一致。",
+              "本次只运行一次（第 1 次尝试），未做重复运行；各步都是对静态文件和 git 状态的确定性只读观察，未见不稳定迹象。"
+            ],
+            "steps": [
+              {
+                "stepId": "ts-1",
+                "observed": "在 AlembicPlugin 仓库根目录运行 `test -f docs/wakeflow-smoke-round6.md && test ! -L docs/wakeflow-smoke-round6.md; echo $?`，输出恰好一行 `0`，无 stderr。与期望 `0` 一致：路径存在、是普通文件、不是符号链接或目录。",
+                "evidence": {
+                  "ref": "artifacts/managed-evidence/evidence_23ec53aa-4a47-4980-97f4-564b5d789882/payload/content",
+                  "digest": "sha256:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+                },
+                "verdict": "pass"
+              },
+              {
+                "stepId": "ts-2",
+                "observed": "依次运行三条命令：`wc -c < docs/wakeflow-smoke-round6.md` 输出 `      44`（数值 44）；`shasum -a 256 docs/wakeflow-smoke-round6.md` 输出 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd  docs/wakeflow-smoke-round6.md`；`od -c` 输出三行数据加偏移行：0000000 起为 `#`、空格、`Wakeflow`、空格、`smoke`，0000020 起为空格、`round`、空格、`6`、`\\n`、`round`、空格、`s`，0000040 起为 `ix`、空格、`verified`、`\\n`，末行偏移 `0000054`（八进制，即 44 字节）。首字节为 `#`（无 BOM），没有 `\\r`，只有两个 `\\n` 且位于第一行末与文件末，没有第三行。三项均与期望一致。",
+                "evidence": {
+                  "ref": "artifacts/managed-evidence/evidence_b2b3d0a6-1949-4d0b-8c0b-d45acf309b46/payload/content",
+                  "digest": "sha256:0cc6032111e59c2c8d552cf27f219694a1e66b659d3ac8b73e8d5299fdfc5208"
+                },
+                "verdict": "pass"
+              },
+              {
+                "stepId": "ts-3",
+                "observed": "在 AlembicPlugin 仓库根目录运行 `git --no-optional-locks status --porcelain docs/`，输出恰好五行，全部为 `??`：`?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`。相对基线四行只多出 `?? docs/wakeflow-smoke-round6.md`，没有暂存或其他状态的条目，与期望一致。",
+                "evidence": {
+                  "ref": "artifacts/managed-evidence/evidence_0861709f-51c7-4646-8986-59676d440770/payload/content",
+                  "digest": "sha256:e1412b9db18f0fc25d4df03d68484721c47b9728eee2d121371f43ba7a480c25"
+                },
+                "verdict": "pass"
+              },
+              {
+                "stepId": "ts-4",
+                "observed": "在 AlembicPlugin 仓库根目录运行 `git --no-optional-locks rev-parse HEAD`，输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`，与期望一致。",
+                "evidence": {
+                  "ref": "artifacts/managed-evidence/evidence_2ce586db-17a9-4527-9aa4-410db320e675/payload/content",
+                  "digest": "sha256:535d7f30baa7af24d2e55f5104a4bf115e5b5ee3764c1bba0b2bde5318b34e4a"
+                },
+                "verdict": "pass"
+              },
+              {
+                "stepId": "ts-5",
+                "observed": "在 AlembicPlugin 仓库根目录运行 `git --no-optional-locks symbolic-ref HEAD`，输出 `refs/heads/main`，与期望一致。",
+                "evidence": {
+                  "ref": "artifacts/managed-evidence/evidence_2c2c5a22-d9da-44a5-8a42-254393f6e062/payload/content",
+                  "digest": "sha256:599bbcd7b7f94b50d9b83318ba0dd4b8e1ba9e39d1d3ee73d1fbbd70496d0f93"
+                },
+                "verdict": "pass"
+              }
+            ],
+            "verdict": "pass",
+            "reportedAt": "2026-09-25T05:03:12.169Z",
+            "reportDigest": "sha256:c331947ca199bf3762b76ede9047f309f12a27c396ca78dbe22f15a5d2035ac2"
+          },
+          "resultDigest": "sha256:45339db0ecc39e474c282a1d7412d650a210900264d2344439363dc20e4c6689"
+        },
+        "callback": {
+          "callbackId": "target-delivery_3943c95e-6c57-4187-bb10-16d76df68334",
+          "controllerWindowId": "window_d5b1e5d1-af61-4e65-9f70-5f7249827657",
+          "bindingId": "window_binding_5cd26698-9382-4a54-a08c-c5b1d5300056",
+          "bindingDigest": "sha256:ff7f238ffe747fdce40acfa30414a9e5c35bed66f4c0694eb56560cb63e574a0",
+          "portablePrompt": "Wakeflow 回调：一份目标结果待评审: target-task_d1a56b30-e7db-426c-8980-d59434077d2a\n\n身份:\n- demand: demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n- pod: main (pod_32572592-e6da-4883-a4f1-f4fc9a21977e)\n- 目标任务: target-task_d1a56b30-e7db-426c-8980-d59434077d2a (test)\n- 任务包: task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0\n- 目标: 在本工作区的 AlembicPlugin 检出（main 分支）中，按冻结的测试契约只读实测验收标准 1–5：`docs/wakeflow-smoke-round6.md` 存在且为普通文件；内容逐字节为 `# Wakeflow smoke round 6` LF `round six verified` LF（44 字节，SHA-256 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`）；`git status --porcelain docs/` 相对基线只多这一个未跟踪文件；HEAD 仍为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`；HEAD 仍在 main。逐步记录实际观察与证据，不修改检出中的任何内容。\n\n结果:\n- 陈述: completed\n- 测试判定: pass\n- 摘要: 第 1 次尝试（预算 2 次）：在本工作区 AlembicPlugin 检出（main，HEAD 7b2c53aae21489d2daad651a0261d02c6d1bdd95）的仓库根目录按冻结契约原样执行 ts-1 至 ts-5 的只读命令，未增减或改写步骤。每步原始输出（stdout 与 stderr 合并）原样保存到 Test 支持面 fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/<stepId>.txt，并逐一登记为本 Demand 的 test-output 托管证据；各步 observed、verdict 与证据引用见 steps。整体结论由 Wakeflow 从各步记录推导。\n- targetResultId: target-result_049c3e5b-485b-4fcd-bae3-3b777524d64c\n- resultDigest: sha256:45339db0ecc39e474c282a1d7412d650a210900264d2344439363dc20e4c6689\n- streamRevision: 21\n\n下一步:\n用下面的 MCP 工具读取评审单元，再记录你的决定。\n- tool: wakeflow_inspect_target_result_review\n- demandId: demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc\n- targetTaskId: target-task_d1a56b30-e7db-426c-8980-d59434077d2a\n本回调只是传输证据，不是验收，也不携带任何授权。",
+          "promptDigest": "sha256:41e47a327451dd2b8de1a23ec57c9a146c9da23d56660021033b3a2041ed2085",
+          "generation": 1,
+          "issuedAt": "2026-09-25T05:03:12.189Z"
+        },
+        "evidenceResolution": [
+          {
+            "ref": "artifacts/managed-evidence/evidence_23ec53aa-4a47-4980-97f4-564b5d789882/payload/content",
+            "digest": "sha256:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+            "evidenceId": "evidence_23ec53aa-4a47-4980-97f4-564b5d789882",
+            "bytes": 2
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_b2b3d0a6-1949-4d0b-8c0b-d45acf309b46/payload/content",
+            "digest": "sha256:0cc6032111e59c2c8d552cf27f219694a1e66b659d3ac8b73e8d5299fdfc5208",
+            "evidenceId": "evidence_b2b3d0a6-1949-4d0b-8c0b-d45acf309b46",
+            "bytes": 332
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_0861709f-51c7-4646-8986-59676d440770/payload/content",
+            "digest": "sha256:e1412b9db18f0fc25d4df03d68484721c47b9728eee2d121371f43ba7a480c25",
+            "evidenceId": "evidence_0861709f-51c7-4646-8986-59676d440770",
+            "bytes": 158
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_2ce586db-17a9-4527-9aa4-410db320e675/payload/content",
+            "digest": "sha256:535d7f30baa7af24d2e55f5104a4bf115e5b5ee3764c1bba0b2bde5318b34e4a",
+            "evidenceId": "evidence_2ce586db-17a9-4527-9aa4-410db320e675",
+            "bytes": 41
+          },
+          {
+            "ref": "artifacts/managed-evidence/evidence_2c2c5a22-d9da-44a5-8a42-254393f6e062/payload/content",
+            "digest": "sha256:599bbcd7b7f94b50d9b83318ba0dd4b8e1ba9e39d1d3ee73d1fbbd70496d0f93",
+            "evidenceId": "evidence_2c2c5a22-d9da-44a5-8a42-254393f6e062",
+            "bytes": 16
+          }
+        ]
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:421a72ca5c9e6db2400a8dc8e0467a5a1d19a94d58170a5107515a301249f6f0"
+    }
+  ],
+  "idempotency": {
+    "key": "test-import:target-delivery_9ff8b518:gen1:attempt1",
+    "requestDigest": "sha256:ec54a8c38f60e8333853a1b193af07e1674aceebc955cd3053ec7a7c32d2396c"
+  }
+}

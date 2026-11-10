@@ -1,0 +1,210 @@
+{
+  "artifactKind": "wakeflow-demand-event-stream-commit",
+  "schemaVersion": 1,
+  "commitId": "demand-event-commit_8f943d4a-88c3-48c5-bbf5-a0e82f2c3763",
+  "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+  "commitSequence": 13,
+  "commandDigest": "sha256:2c3c0958ae5b82b85422e5e4dd2afffa612985497a6811e48c97eda044266961",
+  "expectedStreamRevision": 12,
+  "firstStreamRevision": 13,
+  "lastStreamRevision": 13,
+  "previousCommitDigest": "sha256:771910bf974e5401e623a1ab593e9a697b43723df6677caeae58d8dd2a645298",
+  "events": [
+    {
+      "artifactKind": "wakeflow-demand-event-sourcing-event",
+      "schemaVersion": 1,
+      "eventId": "demand-event_63e46290-02b7-4bd4-8a72-d3e51615d77a",
+      "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+      "streamRevision": 13,
+      "recordedAt": "2026-09-25T04:53:04.306Z",
+      "eventType": "tasking.target-task-planned",
+      "eventVersion": 1,
+      "data": {
+        "taskPackage": {
+          "artifactKind": "wakeflow-task-package",
+          "schemaVersion": 1,
+          "programId": "program_8c7f84d0-6dda-4e71-9258-6d4f8fc30ee9",
+          "configDigest": "sha256:3746420665bc96458aeba4c8b8da94afc6326b5fcd5a913a26a7649efca93f69",
+          "demandId": "demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc",
+          "demandAuthorityDigest": "sha256:122ace240ca4b327149e18f55845fa976deb8d4d9f53b93397752d01e25a80f5",
+          "taskPackageId": "task-package_d62ee068-66b3-4929-a8bb-50aa2beb8ff0",
+          "targetTaskId": "target-task_d1a56b30-e7db-426c-8980-d59434077d2a",
+          "createdAt": "2026-09-25T04:53:04.306Z",
+          "objective": "在本工作区的 AlembicPlugin 检出（main 分支）中，按冻结的测试契约只读实测验收标准 1–5：`docs/wakeflow-smoke-round6.md` 存在且为普通文件；内容逐字节为 `# Wakeflow smoke round 6` LF `round six verified` LF（44 字节，SHA-256 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`）；`git status --porcelain docs/` 相对基线只多这一个未跟踪文件；HEAD 仍为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`；HEAD 仍在 main。逐步记录实际观察与证据，不修改检出中的任何内容。",
+          "confirmedContext": [
+            "需求包的测试决策为 real-environment：环境是本工作区中的 AlembicPlugin 检出（main 分支），不需要任何凭据、账号、网络或外部服务，也不需要安装依赖或构建；须在真实环境中逐项执行只读命令并记录实际输出，覆盖验收标准 1–5；五项全部一致为通过，任一项不一致为失败；标准 6–10 由 Controller 只读核对。",
+            "实现目标 target-task_69318c74-7641-4f58-b448-1ac60988af29 已于 2026-09-25T04:49:28Z 被 Controller 接受（target-review-decision_b236e4a9-2da9-463f-97ba-a1bcb7bcc3e1）。Controller 当时的只读核对显示文件为 44 字节普通文件、`git status --porcelain docs/` 五行、HEAD 指向 refs/heads/main；本测试须独立实测，不以这些核对结果代替观察。",
+            "期望内容：`# Wakeflow smoke round 6` LF `round six verified` LF，共 44 字节（第一行 24 字符加 LF，第二行 18 字符加 LF），SHA-256 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`；第二行是更正后的文字，不是被替代包中的旧第二行 `resume relocate verified`。",
+            "基线：实现前 `git status --porcelain docs/` 恰好四行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke.md`；HEAD 为 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`，分支 main。",
+            "需求包规定任务计划评审由 Controller 完成，本测试任务包及其冻结的测试契约已由 Controller 评审。"
+          ],
+          "selectedAuthorityRefs": [
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+              "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+              "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+              "memberPath": "requirement.md",
+              "memberRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/requirement.md",
+              "memberDigest": "sha256:1cad6f59b653054aeb41d177e0204c0521a3cf86b15488564198fa2580cb170d",
+              "role": "requirement",
+              "mediaType": "text/markdown"
+            },
+            {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+              "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+              "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+              "memberPath": "landing.md",
+              "memberRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/landing.md",
+              "memberDigest": "sha256:39602182702b5b79c4a2f7ce6ab41c4f998b3d86de2ade756a82c8a5a17285dc",
+              "role": "landing",
+              "mediaType": "text/markdown"
+            }
+          ],
+          "boundaries": {
+            "inScope": [
+              "在本工作区 AlembicPlugin 检出的仓库根目录，按冻结的测试契约依次执行 ts-1 至 ts-5 的只读命令，不增不减、不改写步骤。",
+              "把每一步的原始输出原样保存到 Test 支持面 `fixtures/demand_e70f27e0-ff97-4379-897e-6e0596c9f3fc/<stepId>.txt`，再用 `wakeflow_record_evidence`（kind test-output，preview 后 apply）登记为本 Demand 的托管证据，报告中逐步引用其 locator 与 digest。",
+              "逐步给出 expected、observed 与 verdict，不通过的步骤给出 failure 分类、likelyOwner 与建议动作；用 `wakeflow_import_target_result` 导入测试报告。",
+              "导入成功后，用 tmux 助手 deliver 把回调许可的 prompt 原样送进 Controller 窗口（从 Test 窗口在助手路径前加上启动时 `--add-dir` 给的工作区根），并如实记下助手打印的 attempt、readback 与 landing。"
+            ],
+            "outOfScope": [
+              "验收标准 6–10（全仓库状态与前几轮四个文件保持原样）：由 Controller 只读核对，不在本测试中。",
+              "Alembic、AlembicAgent、AlembicCore、AlembicDashboard 四个仓库，以及 AlembicPlugin 的测试套件、lint、构建与打包。",
+              "修复任何不符项：发现不符只记录与分类，由 Controller 决定后续。"
+            ],
+            "forbidden": [
+              "在 AlembicPlugin 检出中创建、修改、删除或移动任何文件或目录（包括 `docs/wakeflow-smoke-round6.md` 与前几轮的四个冒烟文件），或运行 `git add`、`git commit`、stash、checkout、clean、reset 等改变 HEAD、分支、暂存区或工作树的命令。",
+              "修改测试契约：增加、跳过或改写步骤，调整期望值，或用 mock、捷径、其他环境代替真实检出。",
+              "在 Test 支持面 `fixtures/` 与 `harnesses/` 之外创建或修改文件；在证据或报告中写入秘密、会话句柄、本机绝对路径或无界日志。",
+              "使用凭据、网络或外部服务，安装依赖或构建。",
+              "做评审决定或其他 Controller 操作；用 tmux 助手 deliver 以外的方式发送回调。"
+            ]
+          },
+          "completionExpectations": [
+            "五个步骤都在真实环境中执行并各有一条托管证据（test-output）；报告逐步给出 observed、证据引用（locator 与 digest）与 verdict，全部一致时 verdict 均为 pass、报告 outcome 为 completed；整体结论由 Wakeflow 从各步记录推导，不自行断言。",
+            "任一步不一致时，该步 verdict 为 fail（或 blocked、cannot-conclude），并给出 failure 分类、likelyOwner 与建议动作；不修复，不超出尝试预算。",
+            "测试前后 AlembicPlugin 检出保持不变：`git status --porcelain` 仍为五行 `??` 条目，HEAD 与分支不变。",
+            "导入成功后，回调经 tmux 助手 deliver 送进 Controller 窗口，助手返回的 attempt 为 sent，并在本轮回复中如实写出 attempt、readback 与 landing；之后结束本轮，不轮询、不重发。"
+          ],
+          "assignment": {
+            "windowId": "window_6a9a3c45-045f-4dac-9c7e-f24ae32c191b"
+          },
+          "workType": "test",
+          "acceptanceAnchors": [],
+          "testContract": {
+            "question": "在本工作区的 AlembicPlugin 检出（main 分支）中，实现目标落地的 `docs/wakeflow-smoke-round6.md` 是否满足验收标准 1–5：文件存在且为普通文件、逐字节内容为两行共 44 字节、`docs/` 状态相对基线只多这一个未跟踪文件、HEAD 提交不变、HEAD 仍在 main？",
+            "objectBoundary": "被测对象是本工作区 AlembicPlugin 检出中的 `docs/wakeflow-smoke-round6.md` 以及该检出的 git 状态（`docs/` 下的未跟踪条目、HEAD 与分支）；只观察、不修改。其他仓库、其他文件与验收标准 6–10 不在本测试范围内（由 Controller 核对）。",
+            "steps": [
+              {
+                "stepId": "ts-1",
+                "given": "本工作区的 AlembicPlugin 检出（main 分支）处于实现目标被接受后的状态，测试开始前未做任何改动；命令在 AlembicPlugin 仓库根目录运行。",
+                "when": "运行 `test -f docs/wakeflow-smoke-round6.md && test ! -L docs/wakeflow-smoke-round6.md; echo $?`。",
+                "then": "输出 `0`：该路径存在，是普通文件（不是符号链接，也不是目录）。",
+                "requirementRef": {
+                  "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                  "sectionAnchor": "acceptance-criteria",
+                  "itemId": "ac-1"
+                }
+              },
+              {
+                "stepId": "ts-2",
+                "given": "同 ts-1；命令在 AlembicPlugin 仓库根目录运行。",
+                "when": "依次运行 `wc -c < docs/wakeflow-smoke-round6.md`、`shasum -a 256 docs/wakeflow-smoke-round6.md` 与 `od -c docs/wakeflow-smoke-round6.md`。",
+                "then": "`wc -c` 输出 44；SHA-256 为 `87366ae7e04fbf5445e9330cdbc5130e112d2529bad638494bda3f4ec00566fd`；`od -c` 逐字节显示 `# Wakeflow smoke round 6`、一个 `\\n`、`round six verified`、一个 `\\n`，末行偏移为 `0000054`（共 44 字节），没有 BOM、没有 `\\r`、没有第三行。",
+                "requirementRef": {
+                  "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                  "sectionAnchor": "acceptance-criteria",
+                  "itemId": "ac-2"
+                }
+              },
+              {
+                "stepId": "ts-3",
+                "given": "同 ts-1；基线为实现前的四行 `?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke.md`。",
+                "when": "在 AlembicPlugin 仓库根目录运行 `git --no-optional-locks status --porcelain docs/`。",
+                "then": "恰好五行且都是 `??` 状态：`?? docs/wakeflow-smoke-round2.md`、`?? docs/wakeflow-smoke-round3.md`、`?? docs/wakeflow-smoke-round4.md`、`?? docs/wakeflow-smoke-round6.md`、`?? docs/wakeflow-smoke.md`；相对基线只多出 `?? docs/wakeflow-smoke-round6.md`，没有暂存或其他状态的条目。",
+                "requirementRef": {
+                  "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                  "sectionAnchor": "acceptance-criteria",
+                  "itemId": "ac-3"
+                }
+              },
+              {
+                "stepId": "ts-4",
+                "given": "同 ts-1；命令在 AlembicPlugin 仓库根目录运行。",
+                "when": "运行 `git --no-optional-locks rev-parse HEAD`。",
+                "then": "输出 `7b2c53aae21489d2daad651a0261d02c6d1bdd95`。",
+                "requirementRef": {
+                  "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                  "sectionAnchor": "acceptance-criteria",
+                  "itemId": "ac-4"
+                }
+              },
+              {
+                "stepId": "ts-5",
+                "given": "同 ts-1；命令在 AlembicPlugin 仓库根目录运行。",
+                "when": "运行 `git --no-optional-locks symbolic-ref HEAD`。",
+                "then": "输出 `refs/heads/main`。",
+                "requirementRef": {
+                  "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+                  "sectionAnchor": "acceptance-criteria",
+                  "itemId": "ac-5"
+                }
+              }
+            ],
+            "environment": {
+              "artifactKind": "wakeflow-ledger-authority-member-reference",
+              "schemaVersion": 1,
+              "family": "requirement",
+              "recordId": "requirement_2bb96620-799f-4fd0-a11f-46555ed3611a",
+              "recordRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/record.json",
+              "recordDigest": "sha256:62655c15cbad1a526ed6f3934899016716845387edac9ec9b59374b5510ee440",
+              "memberPath": "landing.md",
+              "memberRef": "requirements/requirement_2bb96620-799f-4fd0-a11f-46555ed3611a/landing.md",
+              "memberDigest": "sha256:39602182702b5b79c4a2f7ce6ab41c4f998b3d86de2ade756a82c8a5a17285dc",
+              "role": "landing",
+              "mediaType": "text/markdown"
+            },
+            "allowedSkills": [
+              "skills/wakeflow-test/SKILL.md",
+              "skills/wakeflow-target/SKILL.md"
+            ],
+            "setupPolicy": "reuse-existing",
+            "maxAttempts": 2,
+            "stopConditions": [
+              "任何步骤需要修改 AlembicPlugin 的工作树、暂存区、提交历史或任何文件才能继续时，立即停止并报告，不做修改。",
+              "测试前确认的落地不是 main 分支、HEAD `7b2c53aae21489d2daad651a0261d02c6d1bdd95` 上的工作树时，停止并按 environment 报告，不尝试恢复。",
+              "需要凭据、网络、外部服务、安装依赖或构建才能继续时，停止并按 environment 报告。",
+              "尝试预算（2 次）用尽时停止，并报告每次尝试的情况。"
+            ]
+          },
+          "implementationBaselines": [
+            {
+              "targetTaskId": "target-task_69318c74-7641-4f58-b448-1ac60988af29",
+              "taskPackageId": "task-package_a6b63da3-1837-499d-ba23-df87a34cc263",
+              "taskPackageDigest": "sha256:7e9cb6dda6a4d5f67bba06a8eafe0350ae8b5ec28a5328058217f998565cd2ea",
+              "repositoryId": "repository_08d1b31f-1acb-4a71-bc23-e0d21b9822f1",
+              "windowId": "window_e867c0c2-7d25-44ae-a0de-c98e472e62c7",
+              "targetResultId": "target-result_80832bdc-14b2-4f16-821c-a5209ab5a38f",
+              "resultDigest": "sha256:5efb6b3496d3194d72c8f7875431ef3c26e6fa8c33c6fa7295c1f06ae3893218",
+              "targetReviewDecisionId": "target-review-decision_b236e4a9-2da9-463f-97ba-a1bcb7bcc3e1",
+              "decisionDigest": "sha256:879ecac302b20637351e4609a8381b49db6ab32c874e2668b3612377d2f48970"
+            }
+          ],
+          "lineage": null
+        }
+      },
+      "resultingStateModelVersion": 1,
+      "resultingStateDigest": "sha256:3c192dd2830820ce256170f1527f7821ed70aee3a3f3fa39b30ce5cc8ced11b9"
+    }
+  ],
+  "idempotency": {
+    "key": "plan-alembicplugin-smoke-round6-test-v1",
+    "requestDigest": "sha256:c9bd4337a831644c389ff00bc3f8afcd482e7876fbedb86d3cb654cb2e74838e"
+  }
+}

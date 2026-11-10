@@ -2659,8 +2659,15 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-desktop-asset.js",
-      "bytes": 65729,
-      "sha256": "sha256:20f520f4dabbb8709862fa20c6e414eaf78697621fd9dd4bd893302f362de948",
+      "bytes": 7528,
+      "sha256": "sha256:01a8a29cf4e6dc892f8eecff9818f9484e392d9c8a221e158b13c2d53d153dc9",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/claude-code-helper-asset-template.js",
+      "bytes": 2949,
+      "sha256": "sha256:7642685b2dd759aaf7edadd8e9e41258dea8b7dad47188cd721dafef21c5d9ee",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2729,8 +2736,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-statusline-asset.js",
-      "bytes": 10274,
-      "sha256": "sha256:753534a7b86418ac4aef495517525b3391ba84d3f1febdd7f63cda3a4dc37d49",
+      "bytes": 3710,
+      "sha256": "sha256:7df6aca0e53ef3527e73a1e13b34226c57071f678f84b7e6fdc65389b6d613cb",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2750,8 +2757,8 @@
     },
     {
       "path": "lib/hosts/claude-code/claude-code-tmux-asset.js",
-      "bytes": 111264,
-      "sha256": "sha256:ae58ccd1a3c2fc76034ee39a60c0f9ecf46d65cd15be05f54c2aa64239230e03",
+      "bytes": 11534,
+      "sha256": "sha256:f107fb816ac29193cfbb4034d8da626b9564f90973b9412f8ad9b6eca69f10eb",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2773,6 +2780,27 @@
       "path": "lib/hosts/claude-code/claude-code-window-transport-retirement.js",
       "bytes": 16407,
       "sha256": "sha256:58635a44c81d04d4f4e48cab35b85f84c910a4f0d367de83890838f4390a806f",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/generated/claude-code-desktop-helper.generated.js",
+      "bytes": 82301,
+      "sha256": "sha256:920ddb24565716fdd41b7ca9b5dddff23ae6e150700879c4d5d4d53751b0d19b",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/generated/claude-code-statusline-script.generated.js",
+      "bytes": 9008,
+      "sha256": "sha256:3c006f7295d70625a012e261754f6f2f40a886e0908864d97b4e2ef141f275bc",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/generated/claude-code-tmux-helper.generated.js",
+      "bytes": 138859,
+      "sha256": "sha256:407e53aaa0a2ac087ec1bce2775adb3427ccaaa40fc7cf86406f42326f5cb248",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -2918,8 +2946,8 @@
     },
     {
       "path": "lib/kernel/prompt-digest.js",
-      "bytes": 4704,
-      "sha256": "sha256:c660055183afd6601d026ffdae378c7b8512bf3f94b77103ae686bc2d202efee",
+      "bytes": 4739,
+      "sha256": "sha256:056b1fbf5f6a4bd0ad78da9c065521ee8fcccd093c275e0ece9b58655ce58849",
       "mode": "0644",
       "scope": "shared"
     },

@@ -2746,8 +2746,8 @@
     },
     {
       "path": "lib/kernel/prompt-digest.js",
-      "bytes": 4704,
-      "sha256": "sha256:c660055183afd6601d026ffdae378c7b8512bf3f94b77103ae686bc2d202efee",
+      "bytes": 4739,
+      "sha256": "sha256:056b1fbf5f6a4bd0ad78da9c065521ee8fcccd093c275e0ece9b58655ce58849",
       "mode": "0644",
       "scope": "shared"
     },

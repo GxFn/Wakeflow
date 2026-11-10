@@ -98,7 +98,7 @@ export const TARGET_RESULT_IMPORT_TOOL_REGISTRATION = Object.freeze({
     shape: "append",
     executor: "importTargetResult",
     title: "Import Wakeflow Target Result",
-    description: "Import the target-authored implementation or test report of one accepted or indeterminate delivery (deliveryId plus fence claimDigest) in one call with the observed stream revision and a client idempotency key. Wakeflow resolves every evidence locator inside this Demand's managed evidence records and checks its digest, scans report text for privacy, derives the test verdict from the per-step records, appends the TargetResult event, releases the claim, and returns the wake-controller callback permit whose prompt the Agent sends to the Controller window. Review input only, never acceptance.",
+    description: "Import the target-authored implementation or test report of one accepted or indeterminate delivery (deliveryId plus fence claimDigest) in one call with a client idempotency key; no stream revision is needed. Wakeflow resolves every evidence locator inside this Demand's managed evidence records and checks its digest, scans report text for privacy, derives the test verdict from the per-step records, appends the TargetResult event, releases the claim, and returns the wake-controller callback permit whose prompt the Agent sends to the Controller window. Review input only, never acceptance.",
     requestSchema: WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_TARGET_RESULT_IMPORT_RESULT_SCHEMA,
     annotations: APPEND_ANNOTATIONS,

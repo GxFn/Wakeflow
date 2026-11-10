@@ -303,6 +303,8 @@ function receipts(commandResult) {
         stateDigest: last.resultingStateDigest,
     };
 }
+/** 信封里"未断言流修订"的占位：导入请求 Schema 的下限是 1，0 不会是调用方给出的值。 */
+const UNOBSERVED_STREAM_REVISION = 0;
 /** 回调许可一经签发（含重放），prompt 就以文件落在 Demand 根下，目标侧助手按 `promptRef` 读取并核对摘要（K6）。 */
 async function materializedCallbackPermit(context, outcome) {
     await materializeDeliveryPermitPrompt(context.authority.demandRoot, "callback", outcome.callback.callbackId, outcome.callback.portablePrompt, signalOptions(context.options.signal));
@@ -591,7 +593,13 @@ async function executeImport(context, input, binding) {
     if (bound !== null) {
         return replayImport(context, { commit: bound, aggregate: authority.loaded.aggregate });
     }
-    assertFreshRevision(context, binding);
+    const appendBinding = input.observedStreamRevision === null
+        ? Object.freeze({
+            ...binding,
+            expectedStreamRevision: authority.loaded.aggregate.streamRevision,
+        })
+        : binding;
+    assertFreshRevision(context, appendBinding);
     const target = deliveryTargetOf(context, input.deliveryId);
     if (input.supersedes === undefined) {
         if (!IMPORTABLE_PHASES.includes(target.phase)) {
@@ -622,7 +630,7 @@ async function executeImport(context, input, binding) {
     const result = buildResult(input, target, envelope, taskPackage, options);
     assertWorktreeBranch(context, result);
     const now = nowFrom(options);
-    const issued = await issueCallback(context, result, taskPackage, binding.expectedStreamRevision + 1, now);
+    const issued = await issueCallback(context, result, taskPackage, appendBinding.expectedStreamRevision + 1, now);
     const command = parseDemandEventSourcingCommand({
         commandType: "result.record-target-result",
         commandVersion: 1,
@@ -630,7 +638,7 @@ async function executeImport(context, input, binding) {
         callback: issued.callback,
         evidenceResolution,
     });
-    const commandResult = await appendCommand(repository, command, binding, options);
+    const commandResult = await appendCommand(repository, command, appendBinding, options);
     if (commandResult.disposition === "idempotent")
         return replayImport(context, commandResult);
     await releaseFence(context, envelope.route.windowId, result.delivery.fence);
@@ -683,13 +691,14 @@ export async function executeTargetResultImportRequest(facade, value, options = 
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({
                     deliveryId: request.deliveryId,
                     claimDigest: request.claimDigest,
                     report: request.report,
                     ...(request.supersedes === undefined ? {} : { supersedes: request.supersedes }),
+                    observedStreamRevision: request.expectedStreamRevision ?? null,
                 }),
             });
         },

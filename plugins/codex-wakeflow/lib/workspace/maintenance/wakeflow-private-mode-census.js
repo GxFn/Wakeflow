@@ -87,10 +87,23 @@ function freezeCensus(status, drifted, unsafe, issue) {
         censusDigest: censusDigestOf(status, drifted, unsafe),
     });
 }
+/**
+ * Finder 在用户浏览过的目录里留下 `.DS_Store`（0644）。它不是 Wakeflow 的文件，内容只是视图状态，
+ * 父目录的 0700 已经挡住别的用户；把它算作漂移只会让用户每浏览一次、下一次严格校验就失败一次
+ * （G16，正式工作区首个 Demand）。只豁免"安全漂移的普通文件"：同名的目录、符号链接与 unsafe 节点
+ * （别人可写、属主不对、带特殊位）照常报告。
+ */
+const HOST_METADATA_FILE_NAME = ".DS_Store";
+function isHostMetadataFile(resourcePath, node) {
+    return node.kind === "file" && resourcePath.split("/").at(-1) === HOST_METADATA_FILE_NAME;
+}
 function record(resourcePath, node, drifted, unsafe) {
     const nodeClass = classifyPrivateNode(node);
-    if (nodeClass === "safe-drift")
+    if (nodeClass === "safe-drift") {
+        if (isHostMetadataFile(resourcePath, node))
+            return;
         drifted.push(Object.freeze({ resourcePath, node }));
+    }
     else if (nodeClass === "unsafe")
         unsafe.push(resourcePath);
 }

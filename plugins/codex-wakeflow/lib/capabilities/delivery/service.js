@@ -674,7 +674,6 @@ async function executePrepare(context, input, binding) {
         const portablePrompt = renderPrompt(context, input, sources.prompt, {
             deliveryId,
             claimDigest: taken.claim.claimDigest,
-            streamRevision: binding.expectedStreamRevision + 1,
             generation: 1,
         }, controllerDesktopSessionId);
         envelope = createEnvelope(input, sources, taken.claim, {

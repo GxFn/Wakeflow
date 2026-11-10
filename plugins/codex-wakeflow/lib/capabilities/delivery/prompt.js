@@ -273,7 +273,6 @@ export function renderDeliveryPortablePrompt(input) {
             `- deliveryId: ${input.returnPointer.deliveryId}`,
             `- generation: ${input.returnPointer.generation}`,
             `- claimDigest: ${input.returnPointer.claimDigest}`,
-            `- streamRevision: ${input.returnPointer.streamRevision}`,
         ]),
     ];
     const prompt = lines.join("\n");

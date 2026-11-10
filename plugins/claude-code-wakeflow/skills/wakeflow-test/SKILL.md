@@ -96,7 +96,8 @@ of test work, and it overrides one target rule: you do record managed evidence
    between another attempt, a rework and an escalation, so guessing here costs
    a whole cycle (`references/test-execution.md`).
 5. Call `wakeflow_import_target_result` with the delivery identity and fence
-   from the prompt, importing one record per step: the step id (`ts-1`,
+   from the prompt and no `expectedStreamRevision` (the stream moves while
+   you work), importing one record per step: the step id (`ts-1`,
    `ts-2`, ... as the contract numbers them), what was observed, its evidence
    reference and digest, its verdict and, unless it passed, its failure
    classification. Wakeflow derives the overall verdict from these records -

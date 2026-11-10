@@ -4,7 +4,7 @@
   "hostId": "claude-code",
   "pluginName": "wakeflow",
   "packageName": "claude-code-wakeflow",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/claude-code-wakeflow-mcp.ts",
@@ -187,8 +187,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 10404,
-      "sha256": "sha256:03c052624c618e13f597145164a54ccdf6e5c00a6f1866e8aa898786eb93de09"
+      "bytes": 10513,
+      "sha256": "sha256:bfabcf10bf243c013b09045d0a7e8068babb6c076840d72027a137043e9cca1f"
     },
     {
       "path": "skills/wakeflow-target/references/craft.md",
@@ -197,8 +197,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 9157,
-      "sha256": "sha256:385fded074a8b1c3232eff9afaa69f324675457aef313607a96c8e78f7c57029"
+      "bytes": 9226,
+      "sha256": "sha256:f7f70b34c933d16ab4faec210d81abcda9a123690e01b88778a87b51b73a1f55"
     },
     {
       "path": "skills/wakeflow-test/references/test-execution.md",
@@ -210,7 +210,7 @@
     {
       "path": ".claude-plugin/plugin.json",
       "bytes": 997,
-      "sha256": "sha256:bb2fdd833a0cd7f0dfba0b95c4de91bb4f704f082919cbfb43e532ec51179f4d",
+      "sha256": "sha256:235d8315eb24e5fee0308fb78ce509a313cebc230698458d80363d318f62dad7",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -314,15 +314,15 @@
     },
     {
       "path": "lib/capabilities/delivery/prompt.js",
-      "bytes": 14103,
-      "sha256": "sha256:75f9fb1d104d18d0bc2d7d26219b553c839dde3c984e1fe2380727370dcf859c",
+      "bytes": 14032,
+      "sha256": "sha256:e2317eb2039957f1e45998732cba71035a63de1ac2a77eaa183f0e7e8627f0e6",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/delivery/service.js",
-      "bytes": 82663,
-      "sha256": "sha256:d04cc95bf0d68bfddec723120486f47137e591012ce637b3ab210a882f7f5ef4",
+      "bytes": 82599,
+      "sha256": "sha256:8f1f0ced10b5a19dd06c46e554db25fdd9a2240b28c726cec3749865572fcf57",
       "mode": "0644",
       "scope": "shared"
     },
@@ -517,8 +517,8 @@
     },
     {
       "path": "lib/capabilities/result-review/contract.js",
-      "bytes": 10069,
-      "sha256": "sha256:5d91f7d3be670eca92189cf1f4df29fbbb56897858042c771e9273782b6bcb6b",
+      "bytes": 10066,
+      "sha256": "sha256:764ec58e6b107228c628339d04a7260cb4ecdfcb6c91eb95a9b9f5dcf89ee8cf",
       "mode": "0644",
       "scope": "shared"
     },
@@ -538,8 +538,8 @@
     },
     {
       "path": "lib/capabilities/result-review/service.js",
-      "bytes": 72225,
-      "sha256": "sha256:aaf9a71d2ac864eda370404a8e94e33e75c046c517be2d3cc5e698e3138d93f6",
+      "bytes": 72739,
+      "sha256": "sha256:fea3597adaec49886534862a6b940b8b0addf91e5f39136aa00686fc6c9eadbe",
       "mode": "0644",
       "scope": "shared"
     },
@@ -853,8 +853,8 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-target-result-import-request.generated.js",
-      "bytes": 9997,
-      "sha256": "sha256:a3a696cd54896c8d630392e226faf193125e681a7eaa9bef6b0cd5835f7342cc",
+      "bytes": 10070,
+      "sha256": "sha256:1bcee9171acd8ec4edbae30f44d767cd9e1d8052c572e85d250aed5947bba00b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3100,8 +3100,8 @@
     },
     {
       "path": "lib/workspace/maintenance/wakeflow-private-mode-census.js",
-      "bytes": 8351,
-      "sha256": "sha256:2e6704eab86720b23755d4555a4157c3ab4ec4bc4723ab9496432b3276859271",
+      "bytes": 9099,
+      "sha256": "sha256:a48008f2f61e8bc3a2566f7ec3b50e735895ce493cc1b567ed1ead48e0423123",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3500,7 +3500,7 @@
     {
       "path": "mcp/server.mjs",
       "bytes": 1747,
-      "sha256": "sha256:0dad09f31bc6d80968d286d73b0f7be7add7987497d0be0d73145856455d903d",
+      "sha256": "sha256:7fd805c13eaa1397236618231e11640671fe69364d5f2a066f1c85b5070ccced",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -6846,7 +6846,7 @@
     {
       "path": "package.json",
       "bytes": 1314,
-      "sha256": "sha256:eb58d2e6282b52fe731cb196de47f1d175b4c86537453ba66c46e77dabdc1ef6",
+      "sha256": "sha256:a52daddd1fc6508b094290f588b7e2f08b0afdc3ade4f35a89e574be239b2a7a",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -6908,8 +6908,8 @@
     },
     {
       "path": "skills/wakeflow-target/SKILL.md",
-      "bytes": 10404,
-      "sha256": "sha256:03c052624c618e13f597145164a54ccdf6e5c00a6f1866e8aa898786eb93de09",
+      "bytes": 10513,
+      "sha256": "sha256:bfabcf10bf243c013b09045d0a7e8068babb6c076840d72027a137043e9cca1f",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6922,8 +6922,8 @@
     },
     {
       "path": "skills/wakeflow-test/SKILL.md",
-      "bytes": 9157,
-      "sha256": "sha256:385fded074a8b1c3232eff9afaa69f324675457aef313607a96c8e78f7c57029",
+      "bytes": 9226,
+      "sha256": "sha256:f7f70b34c933d16ab4faec210d81abcda9a123690e01b88778a87b51b73a1f55",
       "mode": "0644",
       "scope": "agent-text"
     },

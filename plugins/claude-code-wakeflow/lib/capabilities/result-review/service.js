@@ -207,6 +207,8 @@ async function loadWindow(context, windowId) {
         binding,
         bindingDigest: computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding")),
         handleDigest: computeSha256Digest(encodeUtf8(binding.handle.value, "$handle"), "$handle"),
+        transport: facade.resourceProfile.launch.kind,
+        desktopSessionId: (await facade.readControllerDesktopSessionId?.(context.workspaceRoot, binding.windowId, binding.bindingId, context.options.signal)) ?? null,
         displayTitle: intent.displayTitle,
     });
 }
@@ -674,6 +676,8 @@ function importResult(envelope, outcome, nextProjection) {
                     displayTitle: window.displayTitle,
                     bindingId: callback.bindingId,
                     handleDigest: window.handleDigest,
+                    transport: window.transport,
+                    desktopSessionId: window.desktopSessionId,
                 },
                 generation: callback.generation,
                 issuedAt: callback.issuedAt,

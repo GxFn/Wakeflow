@@ -121,9 +121,9 @@ takes three steps in the intent's root:
    `--wait-session-start` seconds (default 30) for a new session-start record
    of that session.
 
-The result carries `observation` (the creation observation to register
-verbatim: `handle`, `desktop.sessionId`, and for a worktree pod's product
-window the git worktree facts), `created: launched`,
+The result carries `observation` (`handle`, `desktop.sessionId`, and for a
+worktree pod's product window the git worktree facts) with `observationFile`,
+the reference you pass as the registration's `observation`, `created: launched`,
 `hook: { sessionStart: "observed" }`, `window` (title and cwd relative to the
 workspace root), `background` (the short id, the first turn's state, whether
 the stop succeeded) and `worktreePrepared`. A refusal after the checkout was
@@ -180,7 +180,7 @@ It never sends. Use it after every send, and before any second send.
 
 `wakeflow_register_window_binding` refuses on its own side too:
 `desktop-session-required` when a register or replace observation lacks
-`desktop.sessionId` (register the helper's `observation` verbatim, never a
+`desktop.sessionId` (register the helper's `observationFile`, never a
 hand-built one), `locator-kind-mismatch` when it carries tmux coordinates in
 a desktop workspace, and `relocate-not-applicable` for `relocate`.
 
@@ -208,7 +208,7 @@ edit files, do not read the helper's source.
 2. For each window: inspect, pipe the result into `launch --window
    <windowId>`, one call per Bash command. `launch` returns only after the
    session-start record exists, so register that window from the printed
-   `observation` as soon as the call returns, before launching the next one
+   `observationFile` as soon as the call returns, before launching the next one
    or in launch order afterwards - never wait for the user between windows
    unless a refusal names them. `not-trusted` does not stop the round: launch
    the remaining windows first, then name every distinct `trustRoot` to the
@@ -287,9 +287,9 @@ settings rules maintenance writes are unchanged, and a product repository's
    cross-session messages for approval. The
    one-time fix is step 3 of Step 1: `set_session_permission_mode` with its
    `desktop.sessionId` and `"auto"`, the user approving the card once for
-   that folder. The blocker is not stored and `wakeflow_status` does not show
-   it: each outcome derives it again from the landing record it cites, so the
-   next delivery to that window reports it gone or still there.
+   that folder. `wakeflow_status` shows the same fact without a delivery: the
+   window's `session.permissionMode` and a `permission-mode-mismatch` entry in
+   `nextActions`, both gone once a later record reports the launch mode.
 
 The tmux helper's `deliver`, `nudge` and `panes` do not exist here; the
 `desktop-sessions` observation from `list_sessions` is the liveness lookup

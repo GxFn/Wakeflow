@@ -1,35 +1,35 @@
 import path from "node:path";
 import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { parseJsonValue, } from "../../foundation/data/json-value.js";
 import { observeAbsoluteNode } from "../../foundation/filesystem/absolute-node-observation.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservations, } from "../../kernel/hook-observations.js";
-import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
+import { hostHelperObservationsRootRef, hostRuntimeRootRef, parseWakeflowHostId, } from "../../kernel/layout.js";
 import { admitPodWorktreeObservation, candidateWorktreePaths, createPodWorktreeReceipt, findPodWorktreeReceiptByPath, listPodWorktreeReceipts, writePodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
 import { inspectWorkClaim, releaseWorkClaim, WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS, } from "../../kernel/work-claims.js";
+import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { createWakeflowWindowHostBinding, renderWakeflowWindowHostBinding, } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { createWakeflowWindowHostBindingInStore, inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, withWakeflowWindowHostBindingStore, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { parseWakeflowWindowHostHandle, parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { compileWakeflowWindowLaunchIntents, computeWakeflowWindowLaunchExecutionDigest, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { compileWakeflowWindowRuntimeDesiredTopology, } from "../../workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
 import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRef, wakeflowWindowHostBindingRootRef, } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
-import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { parseWakeflowWorkspaceHostResourceProfile, wakeflowWorkspaceHostLocatorProvider, } from "../../workspace/workspace-host-resource-profile.js";
 import { admitWindowBindingResult, parseWindowBindingRequest, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { decideEndpointCommand, rejectForeignHandleOwner, } from "./decide.js";
@@ -63,6 +63,9 @@ function admitFacade(facade) {
             ...(facade.transports === undefined ? {} : { transports: facade.transports }),
             identityProfile,
             renderLaunchInstructions: facade.renderLaunchInstructions,
+            ...(typeof facade.renderLaunchValues === "function"
+                ? { renderLaunchValues: facade.renderLaunchValues }
+                : {}),
         });
     }
     catch (error) {
@@ -493,6 +496,27 @@ function nextFor(context, bindings, registered, claim, claimExpired) {
         unregisteredWindowIds,
     });
 }
+/**
+ * 握手时的启动事实（open-items G14、A3）：取值与摘要由服务端按此刻的 Config 与宿主画像为这个窗口算出，
+ * 不取 Agent 的说法；宿主版本是助手读出、Agent 转报的，原样记下。门面没有取值渲染器时不记。
+ */
+function launchFactsFor(context, observation) {
+    const render = context.facade.renderLaunchValues;
+    if (render === undefined || context.intent === null)
+        return {};
+    const values = render({
+        model: context.snapshot.model,
+        intent: context.intent,
+        profile: context.facade.resourceProfile,
+    });
+    return {
+        launch: Object.freeze({
+            executionDigest: computeWakeflowWindowLaunchExecutionDigest(context.intent, values, context.snapshot.model.storage.ledgerRoot),
+            values,
+            hostVersion: observation.hostVersion ?? null,
+        }),
+    };
+}
 function bindingSummary(binding) {
     return {
         bindingId: binding.bindingId,
@@ -693,6 +717,7 @@ async function applyRegister(context, store, window, current, request, replayed,
         launchIntentDigest: observation.launchIntentDigest,
         handle: admitHandle(context, observation),
         observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
+        ...launchFactsFor(context, observation),
     }, store);
     const summary = await recordWorktree(context, binding, worktree, observation.observedAt);
     return Object.freeze({ disposition: "registered", binding, worktree: summary });
@@ -717,6 +742,7 @@ async function applyReplace(context, store, window, current, request, loaded) {
         launchIntentDigest: observation.launchIntentDigest,
         observedAt: parseUtcInstant(observation.observedAt, "$request.observation.observedAt"),
         registeredAt,
+        ...launchFactsFor(context, observation),
     }, context.facade.identityProfile);
     try {
         await replaceFileAtomically(context.root, bindingRef, encodeUtf8(renderWakeflowWindowHostBinding(replacement, context.facade.identityProfile), "$binding"), {
@@ -904,6 +930,85 @@ function mutationResult(context, request, outcome) {
         next: outcome.next,
     });
 }
+/** 助手一次观察的上限：16 个 pane 的两份清单加 git worktree 原文远小于它。 */
+const OBSERVATION_FILE_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$observationFile.maximumBytes");
+function isObservationFileReference(value) {
+    return (typeof value === "object" &&
+        value !== null &&
+        typeof value.file === "string" &&
+        typeof value.digest === "string");
+}
+/** 请求里按引用给出的那一项观察在哪里：字段路径、引用本身，以及换成内联值之后的请求。 */
+function observationFileSlot(request) {
+    const raw = request;
+    if ("observation" in request && isObservationFileReference(request.observation)) {
+        return {
+            path: "$request.observation",
+            reference: request.observation,
+            inline: (value) => ({ ...raw, observation: value }),
+        };
+    }
+    if ("closure" in request && isObservationFileReference(request.closure)) {
+        return {
+            path: "$request.closure",
+            reference: request.closure,
+            inline: (value) => ({ ...raw, closure: value }),
+        };
+    }
+    if ("evidence" in request && isObservationFileReference(request.evidence.liveness)) {
+        return {
+            path: "$request.evidence.liveness",
+            reference: request.evidence.liveness,
+            inline: (value) => ({ ...raw, evidence: { liveness: value } }),
+        };
+    }
+    return null;
+}
+/**
+ * 宿主观察按引用（open-items K2）：助手把观察落在本宿主的私有观察目录里并给出文件与摘要，Agent 传引用而不是
+ * 把几千字的 JSON 逐字抄一遍。这里按引用读回——只认本宿主那个目录里的文件、有界、不跟随符号链接、字节摘要
+ * 必须相符——再把内容放回请求原处，用同一份 Schema 重新准入。从此以后它与内联给出的观察没有区别：它仍是
+ * Agent 转报的宿主观察，不因为走了文件就多一分可信。
+ */
+async function resolveObservationFiles(context, request) {
+    const slot = observationFileSlot(request);
+    if (slot === null)
+        return request;
+    const directory = `${hostHelperObservationsRootRef(context.facade.hostId)}/`;
+    if (!slot.reference.file.startsWith(directory)) {
+        fail("invalid-request", "observation-file-host", `${slot.path}.file`);
+    }
+    let read;
+    try {
+        read = await readStableFile(context.root, parsePortableResourcePath(slot.reference.file, `${slot.path}.file`), { maximumBytes: OBSERVATION_FILE_MAXIMUM_BYTES, ...signalOptions(context.signal) });
+    }
+    catch (error) {
+        if (error instanceof StableFileReadError) {
+            if (error.reason === "aborted")
+                fail("io-failure", "aborted", "$signal", { cause: error });
+            fail("precondition-failed", `observation-file-${error.reason}`, `${slot.path}.file`, {
+                cause: error,
+            });
+        }
+        throw error;
+    }
+    if (read.digest !== slot.reference.digest) {
+        fail("precondition-failed", "observation-file-digest", `${slot.path}.digest`);
+    }
+    let content;
+    try {
+        content = parseJsonValue(JSON.parse(decodeUtf8(read.bytes, slot.path)), slot.path);
+    }
+    catch {
+        fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
+    }
+    // 文件里不许再是一个引用：内联之后重新准入的请求必须已经没有引用。
+    const resolved = parseWindowBindingRequest(slot.inline(content));
+    if (observationFileSlot(resolved) !== null) {
+        fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
+    }
+    return resolved;
+}
 async function executeOperation(context, request) {
     const loaded = await loadState(context, request.operation === "register" ||
         request.operation === "replace" ||
@@ -958,5 +1063,5 @@ export async function executeWindowBindingRequest(facadeValue, value, options = 
         // worktree 观察是 git 原文，检出路径必然在工作区根或 home 之下；内核准入要原文，
         // 回执是私有的，公共结果只回 head / branch / locked（§13.128）。
         requestPrivacyExemptPaths: ["observation.worktree"],
-    }, value, () => { }, (context, binding) => executeOperation(context, binding.input), commandShellExecutionOptions(options.durability, options.signal));
+    }, value, () => { }, async (context, binding) => executeOperation(context, await resolveObservationFiles(context, binding.input)), commandShellExecutionOptions(options.durability, options.signal));
 }

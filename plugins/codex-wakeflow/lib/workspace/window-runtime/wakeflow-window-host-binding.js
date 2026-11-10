@@ -15,6 +15,10 @@ import { parseWakeflowWindowHostHandle, parseWakeflowWindowHostIdentityProfile, 
  * 记录只回答“当前宿主的哪个 opaque handle 对应哪个稳定 windowId”，并保存产生该
  * 事实的 Agent host-create observation。它不保存窗口角色、逻辑根、宿主可用性或
  * Delivery 状态；公开consumer只能取得脱敏ref与bindingId。
+ *
+ * `launch`（1.3.0，open-items G14 / A3）是握手那一刻这个窗口自己的启动事实：服务端按当时的 Config 与宿主
+ * 画像解析出的取值与摘要，加上助手读出的宿主版本。status 用它按字段说明漂移；1.3.0 之前写下的绑定没有
+ * 这一项，文件里不出现，照旧按整份启动意图摘要比较。
  */
 const WAKEFLOW_WINDOW_HOST_BINDING_KIND = "WakeflowWindowHostBinding";
 const WAKEFLOW_WINDOW_HOST_BINDING_VERSION = 1;
@@ -63,16 +67,27 @@ function bindingId(value) {
         throw error;
     }
 }
-function digest(value) {
+function digest(value, path = "$/source/launchIntentDigest") {
     try {
-        return parseSha256Digest(value, "$/source/launchIntentDigest");
+        return parseSha256Digest(value, path);
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            fail("schema", "$/source/launchIntentDigest");
+            fail("schema", path);
         }
         throw error;
     }
+}
+/** 取值表按名字排序后冻结：同一组取值只有一种写法，记录的字节才确定。 */
+function launchFacts(wire) {
+    const values = {};
+    for (const name of Object.keys(wire.values).sort())
+        values[name] = wire.values[name] ?? null;
+    return Object.freeze({
+        executionDigest: digest(wire.executionDigest, "$/launch/executionDigest"),
+        values: Object.freeze(values),
+        hostVersion: wire.hostVersion,
+    });
 }
 function instant(value, path) {
     try {
@@ -139,6 +154,8 @@ export function parseWakeflowWindowHostBinding(value, identityProfileValue) {
             launchIntentDigest: digest(wire.source.launchIntentDigest),
             observedAt,
         }),
+        // 没有这一项的旧记录不补 null：文件里没有的键，解析后也没有，确定性字节才对得上。
+        ...(wire.launch === undefined ? {} : { launch: launchFacts(wire.launch) }),
         registeredAt,
     });
 }
@@ -157,6 +174,7 @@ export function createWakeflowWindowHostBinding(input, identityProfileValue) {
             launchIntentDigest: input.launchIntentDigest,
             observedAt: input.observedAt,
         },
+        ...(input.launch === undefined ? {} : { launch: input.launch }),
         registeredAt: input.registeredAt,
     }, identityProfileValue);
 }

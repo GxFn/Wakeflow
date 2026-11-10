@@ -108,10 +108,9 @@ report, return the callback. You own no other step and no Controller authority.
    A `needs-review` import is then a normal ending: the Controller records the
    evidence, verifies every anchor itself and accepts your report directly.
 6. The import returns a wake-controller callback permit. Send its prompt to the
-   Controller window the permit's host action names, by the host's own means
-   for this workspace's one transport - the delivery prompt's return section
-   names a Controller desktop id under desktop sessions (no tmux helper exists
-   there), otherwise it is tmux: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. That is the only route for this send - not a file, not
+   Controller window the permit's host action names, by the one route that
+   host action gives - its `transport`, never a guess from the prompt's
+   wording: send the permit's prompt into the target window's thread with your Codex thread tool, once, and keep exactly what that send call returned. When you record the outcome, pass that return value unchanged as `attempt.sendReturn`: Wakeflow stores only the sha256 of its canonical JSON as the attempt's evidence digest. This is your own report of the send, not host evidence; a `user-prompt-submit` hook record from the target thread, when one exists, outranks it. That is the only route for this send - not a file, not
    another window, not a messaging tool the permit's host action did not name -
    because landing is proven by the hook record of a prompt submitted in that window.
    That send is the last thing you do for this target.

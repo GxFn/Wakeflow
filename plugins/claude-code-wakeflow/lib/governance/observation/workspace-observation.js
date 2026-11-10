@@ -265,11 +265,23 @@ async function hookDirectoryState(root, hostId) {
         throw error;
     }
 }
+/** 会话的一项事实取"最近一条带了它的记录"：记录没带这一项不动，键不早于已记下的才覆盖。 */
+function keepLatestFact(keys, values, sessionId, key, value) {
+    if (value === null || (keys.get(sessionId) ?? "") > key)
+        return;
+    keys.set(sessionId, key);
+    values.set(sessionId, value);
+}
 async function observeHostHooks(root, hostId, current, signal) {
     try {
         const directory = await hookDirectoryState(root, hostId);
         const latestBySession = new Map();
         const conversed = new Set();
+        // 两项会话事实各取"最近一条带了它的记录"：不是每条记录都带模型或权限模式。
+        const modelKeys = new Map();
+        const models = new Map();
+        const modeKeys = new Map();
+        const modes = new Map();
         const latestKeys = new Map();
         const startKeys = new Map();
         const startDigests = new Map();
@@ -289,7 +301,9 @@ async function observeHostHooks(root, hostId, current, signal) {
                     startDigests.set(record.sessionId, record.artifactManifestDigest);
                     startVersions.set(record.sessionId, record.artifactVersion);
                 }
+                keepLatestFact(modelKeys, models, record.sessionId, key, record.model);
             }
+            keepLatestFact(modeKeys, modes, record.sessionId, key, record.permissionMode);
             const previous = latestKeys.get(record.sessionId);
             if (previous === undefined || previous <= key) {
                 latestKeys.set(record.sessionId, key);
@@ -301,6 +315,8 @@ async function observeHostHooks(root, hostId, current, signal) {
                     sessionStartObserverManifestDigest: null,
                     sessionStartArtifactVersion: null,
                     conversed: false,
+                    sessionStartModel: null,
+                    permissionMode: null,
                 });
             }
         }, signalOptions(signal));
@@ -310,6 +326,8 @@ async function observeHostHooks(root, hostId, current, signal) {
                 sessionStartObserverManifestDigest: startDigests.get(sessionId) ?? null,
                 sessionStartArtifactVersion: startVersions.get(sessionId) ?? null,
                 conversed: conversed.has(sessionId),
+                sessionStartModel: models.get(sessionId) ?? null,
+                permissionMode: modes.get(sessionId) ?? null,
             });
         }
         const writeFailures = await countIncidents(root, { source: "hook-observer", hostId }, signalOptions(signal));

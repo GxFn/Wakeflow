@@ -70,6 +70,8 @@ const CREATE_DEMAND_TOOL = "wakeflow_create_demand";
  */
 export const STALE_WINDOW_RELAUNCH = "stale-window-relaunch";
 export const STALE_WINDOW_RESUME = "stale-window-resume";
+/** 窗口会话的权限模式与启动要求不同（open-items X4）；与投递结局里的同名阻塞是同一件事。 */
+const PERMISSION_MODE_MISMATCH = "permission-mode-mismatch";
 /** 空闲工作区的下一步：用户在 Design 窗口起草需求（§13.188 I1）。 */
 export const IDLE_REQUIREMENT_AUTHORING = "requirement-authoring";
 /**
@@ -101,7 +103,7 @@ function staleWindowActions(staleWindows) {
 }
 /**
  * 顺序：制品过期（用户）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
- * （primary 先，再按 demandId）> 待认领需求包；去重，上限 64。
+ * （primary 先，再按 demandId）> 待认领需求包 > 权限模式不一致的窗口（排在最后，不抢前沿）；去重，上限 64。
  */
 export function deriveNextActions(input) {
     const actions = [];
@@ -167,6 +169,14 @@ export function deriveNextActions(input) {
     // （§13.188 I1）；status 的 next 从此不再为空。
     if (actions.length === 0) {
         actions.push({ owner: "user", tool: null, reason: IDLE_REQUIREMENT_AUTHORING, subject: null });
+    }
+    for (const windowId of [...(input.permissionModeMismatchWindows ?? [])].sort()) {
+        actions.push({
+            owner: "controller",
+            tool: null,
+            reason: PERMISSION_MODE_MISMATCH,
+            subject: windowId,
+        });
     }
     const seen = new Set();
     const unique = actions.filter((action) => {

@@ -103,6 +103,13 @@ export function hostWindowLocatorsRootRef(hostId) {
 export function hostHookObservationsRootRef(hostId) {
     return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/observations/hooks`, "$layout");
 }
+/**
+ * 助手落盘的宿主观察：`.wakeflow-local/runtime/hosts/<host>/observations/helper`（open-items K2）。助手把登记、
+ * 关窗与存活观察写成这里的一份 JSON 文件并给出引用与摘要，登记工具按引用读入，不再由模型逐字转抄。
+ */
+export function hostHelperObservationsRootRef(hostId) {
+    return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/observations/helper`, "$layout");
+}
 /** pod 回执根：`.wakeflow-local/runtime/hosts/<host>/pods`（ADR-0010 D6：回执放本地运行时目录）。 */
 export function hostPodReceiptsRootRef(hostId) {
     return parsePortableResourcePath(`${hostRuntimeRootRef(hostId)}/pods`, "$layout");

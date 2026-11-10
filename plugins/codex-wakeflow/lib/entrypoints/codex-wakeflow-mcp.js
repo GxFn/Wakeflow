@@ -1,4 +1,3 @@
-import { renderCodexWindowLaunchInstructions } from "../hosts/codex/codex-window-launch-instructions.js";
 import { executePrepareDeliveryRequest, executeRearmDeliveryRequest, executeRecordDeliveryOutcomeRequest, } from "../capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
@@ -7,6 +6,7 @@ import { executeImplementationReviewDecisionRequest, executeTargetResultImportRe
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
+import { renderCodexWindowLaunchInstructions, renderCodexWindowLaunchValues, } from "../hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
@@ -26,6 +26,8 @@ const CODEX_HOST_FACADE = Object.freeze({
     resourceProfile: codexWorkspaceHostResourceProfile,
     identityProfile: codexWindowHostIdentityProfile,
     renderLaunchInstructions: renderCodexWindowLaunchInstructions,
+    // G14：握手时把这个窗口解析后的启动取值记进绑定。
+    renderLaunchValues: renderCodexWindowLaunchValues,
     /** Codex 没有已发布资产面，没有东西可核对（F1）。 */
     assets: null,
 });
@@ -66,6 +68,8 @@ const CODEX_OBSERVATION_FACADE = Object.freeze({
             identityProfile: codexWindowHostIdentityProfile,
             statuslineAsset: null,
             artifact: CODEX_ARTIFACT,
+            // G14：status 按字段比较本宿主窗口的启动取值；对端宿主的渲染器不进本制品，它的窗口按整份意图摘要比。
+            renderLaunchValues: renderCodexWindowLaunchValues,
         }),
         Object.freeze({
             hostId: "claude-code",

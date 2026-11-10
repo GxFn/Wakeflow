@@ -372,6 +372,7 @@ export async function createWakeflowWindowHostBindingInStore(root, authority, co
             launchIntentDigest: authority.launchIntentDigest,
             observedAt: authority.observedAt,
             registeredAt,
+            ...(authority.launch === undefined ? {} : { launch: authority.launch }),
         }, authority.identityProfile);
     }
     catch (error) {

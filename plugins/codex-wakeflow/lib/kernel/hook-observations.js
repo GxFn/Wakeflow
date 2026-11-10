@@ -113,6 +113,7 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
     "notificationType",
     "permissionMode",
     "sessionTitle",
+    "model",
     "promptPermitIds",
     "promptCharacters",
 ]);
@@ -167,6 +168,16 @@ function optionalPermissionMode(value, path) {
         return null;
     if (typeof value !== "string" || !PERMISSION_MODE_PATTERN.test(value)) {
         fail("invalid-request", "hook-permission-mode", path);
+    }
+    return value;
+}
+/** 模型标识是宿主给的标签：可打印、不带空白，至多 256 个字符（云提供方的 ARN 形式也在内）。 */
+const MODEL_LABEL_PATTERN = /^[!-~]{1,256}$/u;
+function optionalModel(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "string" || !MODEL_LABEL_PATTERN.test(value)) {
+        fail("invalid-request", "hook-model", path);
     }
     return value;
 }
@@ -264,6 +275,7 @@ export function createHostHookObservation(input) {
         notificationType: optionalNotificationType(input.notificationType, "$observation.notificationType"),
         permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
         sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
+        model: optionalModel(input.model, "$observation.model"),
         promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
         promptCharacters: optionalPromptCharacters(input.promptCharacters, "$observation.promptCharacters"),
     };
@@ -303,6 +315,7 @@ function parseHostHookObservation(value) {
         notificationType: (object.notificationType ?? null),
         permissionMode: (object.permissionMode ?? null),
         sessionTitle: (object.sessionTitle ?? null),
+        model: (object.model ?? null),
         promptPermitIds: (object.promptPermitIds ?? null),
         promptCharacters: (object.promptCharacters ?? null),
     });

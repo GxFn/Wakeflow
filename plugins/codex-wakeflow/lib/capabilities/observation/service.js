@@ -24,7 +24,7 @@ import { readWakeflowMaintenanceJournalOrNull, WakeflowMaintenanceJournalStoreEr
 import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { compileWakeflowWindowLaunchIntents, computeWakeflowWindowLaunchExecutionDigest, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { capStatusList, DETACHED_WORKSPACE_NEXT, deriveNextActions, deriveServerRuntime, deriveWindowRuntime, deriveWorkspaceGates, detachedWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
 /** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
@@ -310,6 +310,7 @@ function windowBindingOf(observation, windowId) {
                 bindingId: binding.bindingId,
                 handleValue: binding.handle.value,
                 launchIntentDigest: binding.source.launchIntentDigest,
+                launch: binding.launch ?? null,
             };
         }
     }
@@ -464,6 +465,13 @@ function windowRuntimeDomainView(observation) {
             issue: `${unavailable.hostId}:${unavailable.issue ?? "unavailable"}`,
         };
 }
+/** 会话的权限模式与启动要求不同的绑定窗口（open-items X4），按拓扑顺序。 */
+function permissionModeMismatchWindowIds(context) {
+    const intents = new Map();
+    return context.snapshot.model.topology.windows
+        .filter((window) => sessionFactsOf(context, windowBindingOf(context.observation, window.windowId), window.windowId, intents)?.permissionMode.status === "mismatch")
+        .map((window) => window.windowId);
+}
 function windowViews(context) {
     const { observation, snapshot } = context;
     const bindingsObserved = observation.bindings.every((host) => host.status === "observed");
@@ -484,23 +492,82 @@ function windowViews(context) {
             projection: windowProjectionOf(observation, window.windowId),
             runtime: windowRuntimeOf(context, binding, bindingsObserved, runtime),
             launchIntent: launchIntentOf(context, binding, window.windowId, intents),
+            session: sessionFactsOf(context, binding, window.windowId, intents),
         };
     });
 }
+/** 登记时与现在不同的取值，按名字排序；两边都没有的名字不出现。 */
+function launchValueChanges(registered, current) {
+    return [...new Set([...Object.keys(registered), ...Object.keys(current)])]
+        .sort()
+        .filter((field) => (registered[field] ?? null) !== (current[field] ?? null))
+        .map((field) => ({
+        field,
+        registered: registered[field] ?? null,
+        current: current[field] ?? null,
+    }));
+}
 /**
- * 绑定登记时的启动意图摘要对照当前 Config 与宿主画像编译出的意图（C18）：不同即 `drifted`——窗口是在旧意图
- * 下启动或续接的，relocate 不改登记摘要，只有替换握手会刷新。每个宿主的意图集只编译一次；画像编不出
- * 意图（不该发生，Config 已经过权威校验）时给 null，不让 status 失败。
+ * 窗口的启动参数是否还是登记时的那一套（C18，open-items G14）。1.3.0 起的绑定带着握手时的启动事实：按这个
+ * 窗口自己的启动摘要比较（`comparison: "window"`），不同即 `drifted`，`changes` 逐项列出变了的取值——空表
+ * 说明变的是取值之外的窗口事实（根、pod、标题或宿主画像）。更早的绑定只有整份意图摘要
+ * （`comparison: "config"`）：`hosts` 段里任何改动都会让它显示 drifted，说不出是哪一项。relocate 不改登记
+ * 的事实，只有替换握手会刷新。每个宿主的意图集只编译一次；画像编不出意图（不该发生，Config 已经过权威
+ * 校验）时给 null，不让 status 失败。
  */
 function launchIntentOf(context, binding, windowId, intents) {
     if (binding === null)
         return null;
+    const current = currentLaunchOf(context, binding, windowId, intents);
+    if (current === null)
+        return null;
+    const digests = {
+        registeredDigest: binding.launchIntentDigest,
+        currentDigest: current.intentDigest,
+        hostVersion: binding.launch?.hostVersion ?? null,
+    };
+    if (binding.launch !== null && current.execution !== null) {
+        const drifted = binding.launch.executionDigest !== current.execution.digest;
+        return Object.freeze({
+            status: drifted ? "drifted" : "current",
+            ...digests,
+            comparison: "window",
+            changes: drifted ? launchValueChanges(binding.launch.values, current.execution.values) : [],
+        });
+    }
+    return Object.freeze({
+        status: current.intentDigest === binding.launchIntentDigest
+            ? "current"
+            : "drifted",
+        ...digests,
+        comparison: "config",
+        changes: [],
+    });
+}
+/** 绑定所在宿主此刻为这个窗口编译出的启动意图；每个宿主只编译一次。 */
+function currentLaunchOf(context, binding, windowId, intents) {
     if (!intents.has(binding.hostId)) {
-        const profile = context.facade.hosts.find((host) => host.hostId === binding.hostId)?.resourceProfile;
+        const host = context.facade.hosts.find((entry) => entry.hostId === binding.hostId);
+        const profile = host?.resourceProfile;
         let compiled = null;
         if (profile !== undefined) {
             try {
-                compiled = new Map(compileWakeflowWindowLaunchIntents(context.snapshot.model, profile).intents.map((intent) => [intent.windowId, intent.intentDigest]));
+                const model = context.snapshot.model;
+                compiled = new Map(compileWakeflowWindowLaunchIntents(model, profile).intents.map((intent) => {
+                    const values = host?.renderLaunchValues?.({ model, intent, profile }) ?? null;
+                    return [
+                        intent.windowId,
+                        {
+                            intentDigest: intent.intentDigest,
+                            execution: values === null
+                                ? null
+                                : {
+                                    digest: computeWakeflowWindowLaunchExecutionDigest(intent, values, model.storage.ledgerRoot),
+                                    values,
+                                },
+                        },
+                    ];
+                }));
             }
             catch {
                 compiled = null;
@@ -508,14 +575,35 @@ function launchIntentOf(context, binding, windowId, intents) {
         }
         intents.set(binding.hostId, compiled);
     }
-    const current = intents.get(binding.hostId)?.get(windowId) ?? null;
-    if (current === null)
+    return intents.get(binding.hostId)?.get(windowId) ?? null;
+}
+/**
+ * 宿主在 hook 记录里报告的会话事实，对照这个窗口现在配置的启动取值（open-items X28、X4）。模型只并排给出：
+ * 配置里可以写别名（`opus`），宿主报的是完整标识，两者不能机械比较。权限模式是同一套词，可以比：
+ * `mismatch` 说明会话不在启动要求的模式里——它仍能工作，但会停下来要权限、扣住跨会话消息。宿主没报过
+ * 或宿主没有模式要求时是 `unknown`，从不算不一致。没有绑定为 null。
+ */
+function sessionFactsOf(context, binding, windowId, intents) {
+    if (binding === null)
         return null;
-    return Object.freeze({
-        status: current === binding.launchIntentDigest ? "current" : "drifted",
-        registeredDigest: binding.launchIntentDigest,
-        currentDigest: current,
-    });
+    const latest = context.observation.hooks
+        .find((entry) => entry.hostId === binding.hostId)
+        ?.latestBySession.get(binding.handleValue);
+    const configured = currentLaunchOf(context, binding, windowId, intents)?.execution?.values ?? {};
+    const configuredMode = configured.permissionMode ?? null;
+    const observedMode = latest?.permissionMode ?? null;
+    return {
+        model: { configured: configured.model ?? null, observed: latest?.sessionStartModel ?? null },
+        permissionMode: {
+            configured: configuredMode,
+            observed: observedMode,
+            status: configuredMode === null || observedMode === null
+                ? "unknown"
+                : configuredMode === observedMode
+                    ? "match"
+                    : "mismatch",
+        },
+    };
 }
 function claimViews(observation) {
     const orphans = new Set(orphanWorkClaims(observation).map((claim) => claim.claimId));
@@ -665,6 +753,7 @@ function nextActionInput(context, runtime) {
             windowId,
             conversed: sessionConversed(context.observation, windowBindingOf(context.observation, windowId)),
         })),
+        permissionModeMismatchWindows: permissionModeMismatchWindowIds(context),
         artifactServerUnavailable: context.facade.artifact !== undefined &&
             (runtime.view.artifactManifestDigest === null || runtime.view.artifactOnDisk === "unknown"),
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。

@@ -1,4 +1,3 @@
-import { renderClaudeCodeWindowLaunchInstructions } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
 import { executePrepareDeliveryRequest, executeRearmDeliveryRequest, executeRecordDeliveryOutcomeRequest, } from "../capabilities/delivery/service.js";
 import { readWindowDesktopSessionId } from "../capabilities/endpoint/locator-store.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
@@ -7,9 +6,10 @@ import { executePodRequest } from "../capabilities/pod/service.js";
 import { executeImplementationReviewDecisionRequest, executeTargetResultImportRequest, executeTargetResultReviewInspectionRequest, executeTestReviewDecisionRequest, } from "../capabilities/result-review/service.js";
 import { CLAUDE_CODE_DESKTOP_ASSET_DIGEST, CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-desktop-asset.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_DIGEST, CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-statusline-asset.js";
-import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, claudeCodeStatuslineSettingsEntry, claudeCodeStatuslineEntryIsWakeflows, } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
+import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, claudeCodeStatuslineEntryIsWakeflows, claudeCodeStatuslineSettingsEntry, } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_DIGEST, CLAUDE_CODE_TMUX_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { renderClaudeCodeWindowLaunchInstructions, renderClaudeCodeWindowLaunchValues, } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -69,6 +69,8 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
     transports: claudeCodeWorkspaceHostTransportTable,
     identityProfile: claudeCodeWindowHostIdentityProfile,
     renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
+    // G14：握手时把这个窗口解析后的启动取值记进绑定。
+    renderLaunchValues: renderClaudeCodeWindowLaunchValues,
     // F1（ADR-0020）：投递许可签发前核对选出传输的这些资产的字节。
     transportAssets: CLAUDE_CODE_HOST_ASSETS_BY_TRANSPORT,
     // X15：桌面会话传输下投递 prompt 的回传段由服务端渲染 Controller 的桌面会话 id；tmux 定位器读出 null。
@@ -114,6 +116,8 @@ const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
             identityProfile: claudeCodeWindowHostIdentityProfile,
             transportAssets: CLAUDE_CODE_HOST_ASSETS_BY_TRANSPORT,
             artifact: CLAUDE_CODE_ARTIFACT,
+            // G14：status 按字段比较本宿主窗口的启动取值；对端宿主的渲染器不进本制品，它的窗口按整份意图摘要比。
+            renderLaunchValues: renderClaudeCodeWindowLaunchValues,
         }),
         Object.freeze({
             hostId: "codex",

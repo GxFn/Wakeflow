@@ -145,6 +145,7 @@ function parsePayload(stdin) {
         notificationType: optionalString(object.notification_type),
         permissionMode: optionalString(object.permission_mode),
         sessionTitle: optionalString(object.session_title),
+        model: optionalString(object.model),
     }));
 }
 // ---- 记录映射（D3）--------------------------------------------------------------
@@ -265,6 +266,8 @@ function withOptionalField(required, field, value) {
             return { ...required, permissionMode: value };
         case "sessionTitle":
             return { ...required, sessionTitle: value };
+        case "model":
+            return { ...required, model: value };
         default:
             return { ...required, notificationType: value };
     }
@@ -288,6 +291,8 @@ function recordInput(hostId, payload, event, clock, artifactManifestDigest, arti
         // 模式与标题是会话事实，按宿主交回的原样逐字段降级；不带它们的宿主（Codex）与事件自然是 null。
         permissionMode: degradeToKernel(required, "permissionMode", payload.permissionMode),
         sessionTitle: degradeToKernel(required, "sessionTitle", payload.sessionTitle),
+        // 模型只在会话启动时有意义：别的事件即使带了同名字段也不记（X28）。
+        model: event === "session-start" ? degradeToKernel(required, "model", payload.model) : null,
     });
 }
 async function nodeKind(target) {

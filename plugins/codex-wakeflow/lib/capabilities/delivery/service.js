@@ -31,6 +31,7 @@ import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookObservations, } from "../../kernel/hook-observations.js";
+import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
@@ -244,6 +245,16 @@ async function controllerDesktopSessionIdFor(context, route) {
         return null;
     return read(context.workspaceRoot, controller.windowId, binding.bindingId, context.options.signal);
 }
+/**
+ * 接收窗口自己的桌面会话 id（X29）：只有本宿主的绑定、且组合根注入了读取端时才读；tmux 定位器读出 null。
+ * 许可的 hostAction 带着它，Agent 发送时不必再去翻登记结果。
+ */
+async function windowDesktopSessionIdFor(context, binding) {
+    const read = context.facade.readControllerDesktopSessionId;
+    if (read === undefined || binding.hostId !== context.facade.hostId)
+        return null;
+    return read(context.workspaceRoot, binding.windowId, binding.bindingId, context.options.signal);
+}
 function digestBinding(binding) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(binding, "$binding"));
 }
@@ -257,6 +268,8 @@ async function loadRoute(context, windowId) {
         binding,
         bindingDigest: digestBinding(binding),
         handleDigest: computeSha256Digest(encodeUtf8(binding.handle.value, "$handle"), "$handle"),
+        transport: facade.resourceProfile.launch.kind,
+        desktopSessionId: await windowDesktopSessionIdFor(context, binding),
         displayTitle: intent.displayTitle,
         configuredPlacement: intent.root.configuredPlacement,
         podId: intent.podId,
@@ -899,6 +912,8 @@ function permitBody(envelope, outcome, nextProjection) {
                 displayTitle: route.displayTitle,
                 bindingId: route.binding.bindingId,
                 handleDigest: route.handleDigest,
+                transport: route.transport,
+                desktopSessionId: route.desktopSessionId,
             },
             fence: {
                 claimId: outcome.fence.claimId,
@@ -960,6 +975,8 @@ function callbackPermitBody(envelope, outcome, nextProjection) {
                 displayTitle: route.displayTitle,
                 bindingId: route.binding.bindingId,
                 handleDigest: route.handleDigest,
+                transport: route.transport,
+                desktopSessionId: route.desktopSessionId,
             },
             fence: null,
             issuedAt: outcome.issuedAt,
@@ -1108,6 +1125,7 @@ async function sessionRecords(context, sessionId, since) {
         recordedAt: record.recordedAt,
         event: record.event,
         permissionMode: record.permissionMode,
+        promptCharacters: record.promptCharacters,
     }));
 }
 /** 启动要求的模式：配置覆盖按选出 profile 的宿主键读取，再落到 profile 的启动模板（X4）。 */
@@ -1122,12 +1140,24 @@ function permissionModeBlockers(context, windowId, landed) {
     return blocker === null ? Object.freeze([]) : Object.freeze([blocker]);
 }
 /**
- * 重放时按处置引用的记录标识重读那条记录，让结果与首次记录报同样的窗口发现；记录已被修剪或读不出时只是
- * 不再报，重放的处置不受影响。
+ * 按身份落地时文本被宿主改动了多少，一眼看得出（ADR-0027 未决 1）：许可的 prompt 与落地记录覆盖的文本各有
+ * 多少字符。摘要相符时两数相等；记录早于该字段或已被修剪时那一边为 null。没有引用记录就没有这一项。
  */
-async function replayPermissionModeBlockers(context, windowId, hookRecordId) {
+function landingCharacters(prompt, hookRecordId, landed) {
     if (hookRecordId === null)
-        return Object.freeze([]);
+        return null;
+    return Object.freeze({
+        permitCharacters: countPromptCharacters(prompt),
+        recordCharacters: landed?.promptCharacters ?? null,
+    });
+}
+/**
+ * 重放时按处置引用的记录标识重读那条记录，让结果与首次记录报同样的窗口发现与字符数；记录已被修剪或读不出时
+ * 只不再报，重放的处置不受影响。
+ */
+async function replayLandingFindings(context, windowId, prompt, hookRecordId) {
+    if (hookRecordId === null)
+        return { windowBlockers: Object.freeze([]), landing: null };
     let read;
     try {
         read = await readHostHookObservationRecord(context.workspaceRoot, context.facade.hostId, hookRecordId, signalOptions(context.options.signal));
@@ -1135,9 +1165,15 @@ async function replayPermissionModeBlockers(context, windowId, hookRecordId) {
     catch (error) {
         if (context.options.signal?.aborted === true)
             throw error;
-        return Object.freeze([]);
+        return {
+            windowBlockers: Object.freeze([]),
+            landing: landingCharacters(prompt, hookRecordId, null),
+        };
     }
-    return permissionModeBlockers(context, windowId, read?.record);
+    return {
+        windowBlockers: permissionModeBlockers(context, windowId, read?.record),
+        landing: landingCharacters(prompt, hookRecordId, read?.record),
+    };
 }
 function outcomeDraft(input, target, decision) {
     if (!decision.accepted)
@@ -1196,6 +1232,7 @@ function replayOutcome(context, envelope, bound, binding) {
         workType: envelope.workType,
         eventId: stored.eventId,
         windowBlockers: Object.freeze([]),
+        landing: null,
     });
 }
 function assertOutcomeRecordable(target, claimDigest) {
@@ -1273,7 +1310,7 @@ async function executeOutcome(context, input, binding) {
         const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
         const replayed = Object.freeze({
             ...recorded,
-            windowBlockers: await replayPermissionModeBlockers(context, replayedEnvelope.route.windowId, recorded.outcome.evidence.hookRecordId),
+            ...(await replayLandingFindings(context, replayedEnvelope.route.windowId, replayedEnvelope.portablePrompt, recorded.outcome.evidence.hookRecordId)),
         });
         // 追加已提交而释放未完成的裂缝由重放路径补做；助手对缺失或已易主的声明无事可做。
         if (replayed.outcome.claimHandling === "release-authorized") {
@@ -1321,6 +1358,7 @@ async function executeOutcome(context, input, binding) {
         workType: target.workType === "test" ? "test" : "implementation",
         eventId: committed.stored.eventId,
         windowBlockers: permissionModeBlockers(context, envelope.route.windowId, landed),
+        landing: landingCharacters(envelope.portablePrompt, outcome.evidence.hookRecordId, landed),
     });
 }
 /** 只释放仍属于本次投递的声明；缺失或已易主（例如已被 rearm 重取）都不是错误。 */
@@ -1370,6 +1408,7 @@ function outcomeResult(envelope, outcome, nextProjection) {
             claimHandling: outcome.outcome.claimHandling,
             observedAt: outcome.outcome.observedAt,
             outcomeDigest: outcome.outcome.outcomeDigest,
+            landing: outcome.landing,
         },
         target: { targetTaskId: outcome.targetTaskId, workType: outcome.workType, phase },
         event: { eventId: outcome.eventId, streamRevision: stored.streamRevision },

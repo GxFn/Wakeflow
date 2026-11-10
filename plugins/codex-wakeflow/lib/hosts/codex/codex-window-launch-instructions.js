@@ -1,3 +1,16 @@
+/**
+ * 这个窗口解析后的启动取值（open-items G14）：Codex 的窗口是项目聊天，Wakeflow 只在用户配置了模型或思考档
+ * 时把它们交给 `create_thread`，没配置就是 null（由 app 的缺省决定）。
+ */
+export const renderCodexWindowLaunchValues = (input) => {
+    const launch = input.model.hosts?.codex?.launch;
+    const role = input.intent.role;
+    return {
+        transport: "project-thread",
+        model: launch?.modelByRole?.[role] ?? launch?.modelByRole?.default ?? null,
+        effort: launch?.reasoningEffortByRole?.[role] ?? launch?.reasoningEffortByRole?.default ?? null,
+    };
+};
 /** Codex owns project selection, tool arguments and the separation from product Git worktrees. */
 export function renderCodexWindowLaunchInstructions(input) {
     const { model, intent, profile, attachedWorktrees: attached } = input;

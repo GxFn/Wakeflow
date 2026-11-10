@@ -148,7 +148,11 @@ window there to the `auto` permission mode (the folder remembers it). Maintenanc
 writes precise allow rules for the published helper and the Wakeflow MCP tools into the
 workspace root's `.claude/settings.json`, and every window the helper launches is started
 with those two tools allowed, so product and test windows do not stop at a permission prompt for them
-either; nothing broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow
+either; nothing broader such as `Bash(tmux *)` is written. Windows other than the Controller
+also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,
+`.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that
+lowers the chance of a stray edit and is not isolation - a process running as you can still
+write there. A trust dialog for a root Wakeflow
 wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a
 `..` directory in that list is 0.9.x residue or the repository's own settings: delete or
 review it before accepting, because accepting activates it.

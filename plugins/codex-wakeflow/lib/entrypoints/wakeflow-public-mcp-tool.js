@@ -173,7 +173,7 @@ const WAKEFLOW_JSON_SCHEMA_VALIDATOR = Object.freeze({
  * `tools/list` 只公开请求 Schema（ADR-0004）；结果由各 owner 按结果 Schema 校验。
  * 本函数不保存动态 registry、不选择领域 owner，也不解释业务错误。
  */
-export function registerWakeflowPublicMcpCatalog(server, catalog, executors, beforeMutation, writer = null) {
+export function registerWakeflowPublicMcpCatalog(server, catalog, executors, beforeMutation, writer = null, authorizeCall) {
     for (const registration of catalog.tools) {
         const execute = executors[registration.executor];
         if (typeof execute !== "function") {
@@ -188,6 +188,8 @@ export function registerWakeflowPublicMcpCatalog(server, catalog, executors, bef
         }, async (request, context) => {
             try {
                 const input = parseJsonValue(request, "$request");
+                // 按窗口角色的归属表（ADR-0020 决定 3）：认得出调用方角色而工具不归它时，在任何读写之前拒绝。
+                await authorizeCall?.(definition.name, input, context.mcpReq.signal);
                 const inspected = input !== null &&
                     typeof input === "object" &&
                     (("mode" in input && input.mode === "preview") ||

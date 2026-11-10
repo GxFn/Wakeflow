@@ -9,12 +9,15 @@ import { CLAUDE_CODE_STATUSLINE_ASSET_DIGEST, CLAUDE_CODE_STATUSLINE_ASSET_FILE_
 import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, claudeCodeStatuslineEntryIsWakeflows, claudeCodeStatuslineSettingsEntry, } from "../hosts/claude-code/claude-code-statusline-settings-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_DIGEST, CLAUDE_CODE_TMUX_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
-import { renderClaudeCodeWindowLaunchInstructions, renderClaudeCodeWindowLaunchValues, } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeWindowExecutionPlacement, renderClaudeCodeWindowLaunchInstructions, renderClaudeCodeWindowLaunchValues, } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
+import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { selectWakeflowWorkspaceHostResourceProfile } from "../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
+import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -135,6 +138,14 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion) {
         serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
         beforeMutation: CLAUDE_CODE_OBSERVATION_FACADE.artifact.assertUnchanged,
+        // ADR-0020 决定 3（F1）：服务进程的工作目录是某一种角色的窗口的执行根时，归属表之外的工具被拒绝。
+        authorizeCall: createWakeflowCallerRoleGate({
+            cwd: process.cwd(),
+            executionRoots: (model) => compileWakeflowWindowLaunchIntents(model, selectWakeflowWorkspaceHostResourceProfile(CLAUDE_CODE_HOST_FACADE, model)).intents.map((intent) => ({
+                role: intent.role,
+                placement: claudeCodeWindowExecutionPlacement(intent),
+            })),
+        }),
         // C11：每次调用的执行上下文带本进程的写者戳；没有 manifest 的构建为 null。
         writer: wakeflowArtifactWriterOf(CLAUDE_CODE_ARTIFACT),
         ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,

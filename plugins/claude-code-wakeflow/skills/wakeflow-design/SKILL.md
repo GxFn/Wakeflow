@@ -44,6 +44,9 @@ Nothing you write reaches an implementer except through it.
 - Never put a credential, a token, a private handle or an absolute local path
   into a package. The privacy scan will refuse it, and refusing late wastes the
   user's turn.
+- A refusal whose `reason` is `tool-not-for-role` means that tool belongs to
+  another role's window - planning, delivery, review and maintenance are the
+  Controller's. Do not retry it by any route; tell the user what you needed.
 - A tool answer whose `code` is `unexpected` or `io-failure` is a failure, not
   a refusal to fix: retry at most once, then tell the user the tool name,
   `code`/`reason`, `details.incidentId` (the record of it is under

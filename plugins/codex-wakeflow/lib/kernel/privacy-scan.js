@@ -135,8 +135,13 @@ function scanMatches(text, policy, roots) {
     collect(text, CREDENTIAL_ASSIGNMENT_PATTERN, "credential-assignment", () => true, matches);
     collect(text, AUTHORIZATION_PATTERN, "credential-assignment", () => true, matches);
     collect(text, URL_CREDENTIAL_PATTERN, "credential-assignment", () => true, matches);
-    collect(text, ABSOLUTE_PATH_PATTERN, "unlisted-absolute-path", (match) => !pathIsAllowed(match[0], roots), matches);
-    collect(text, UUID_PATTERN, "bare-uuid", (match) => !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes), matches);
+    const systemOnly = policy.pathScope === "system";
+    collect(text, ABSOLUTE_PATH_PATTERN, "unlisted-absolute-path", (match) => !pathIsAllowed(match[0], roots) && (!systemOnly || isSystemAbsolutePath(match[0])), matches);
+    const privateUuids = policy.privateUuids === undefined
+        ? null
+        : new Set(policy.privateUuids.map((value) => value.toLowerCase()));
+    collect(text, UUID_PATTERN, "bare-uuid", (match) => !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes) &&
+        (privateUuids === null || privateUuids.has(match[0].toLowerCase())), matches);
     collect(text, EMBEDDED_PATH_PATTERN, "unlisted-absolute-path", (match) => isSystemAbsolutePath(match[0]) && !pathIsAllowed(match[0], roots), matches);
     return matches;
 }
@@ -155,8 +160,8 @@ function withoutCsi(text) {
     parts.push(text.slice(cursor));
     return { text: parts.join(""), offsets };
 }
-/** Requirement prose may name site routes; explicit filesystem locators stay private. */
-export function isSystemAbsolutePath(text) {
+/** Free text may name site routes; explicit filesystem locators stay private (`pathScope: "system"`). */
+function isSystemAbsolutePath(text) {
     const candidate = withoutCsi(text).text;
     if (/^(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|~\/|\$HOME\/)/iu.test(candidate))
         return true;

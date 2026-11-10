@@ -159,6 +159,17 @@ export const renderClaudeCodeWindowLaunchValues = (input) => {
         tmuxSession: claudeCodeTmuxSessionNameFor(host?.tmux?.sessionName ?? template.sessionName, input.intent),
     };
 };
+/**
+ * 这个窗口的会话实际在哪个目录里启动（相对工作区根）：pod 的产品窗口在助手准备的检出里
+ * （`<仓库>/.claude/worktrees/<名字>`，tmux 由 `claude --worktree` 进入，桌面以它为 cwd），其余窗口就在配置的
+ * 落点。按窗口角色的运行时工具校验用它从服务进程的工作目录认出调用方（ADR-0020 决定 3）。
+ */
+export function claudeCodeWindowExecutionPlacement(intent) {
+    const placement = intent.root.configuredPlacement;
+    return intent.worktree === null
+        ? placement
+        : `${placement}/.claude/worktrees/${intent.worktree.suggestedName}`;
+}
 /** Claude owns its CLI, window-transport and attached-directory arguments. */
 export function renderClaudeCodeWindowLaunchInstructions(input) {
     const template = input.profile.launch;

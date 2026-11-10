@@ -6,10 +6,12 @@ import { executeImplementationReviewDecisionRequest, executeTargetResultImportRe
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
-import { renderCodexWindowLaunchInstructions, renderCodexWindowLaunchValues, } from "../hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowExecutionPlacement, renderCodexWindowLaunchInstructions, renderCodexWindowLaunchValues, } from "../hosts/codex/codex-window-launch-instructions.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
+import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -90,6 +92,11 @@ export function createCodexWakeflowMcpServer(serverVersion) {
         serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
         beforeMutation: CODEX_OBSERVATION_FACADE.artifact.assertUnchanged,
+        // ADR-0020 决定 3（F1）：同一道门；Codex 的窗口都从项目根启动，所以它在这里认不出角色、不收窄。
+        authorizeCall: createWakeflowCallerRoleGate({
+            cwd: process.cwd(),
+            executionRoots: (model) => compileWakeflowWindowLaunchIntents(model, codexWorkspaceHostResourceProfile).intents.map((intent) => ({ role: intent.role, placement: codexWindowExecutionPlacement() })),
+        }),
         // C11：每次调用的执行上下文带本进程的写者戳；没有 manifest 的构建为 null。
         writer: wakeflowArtifactWriterOf(CODEX_ARTIFACT),
         ...WAKEFLOW_SHARED_PUBLIC_EXECUTORS,

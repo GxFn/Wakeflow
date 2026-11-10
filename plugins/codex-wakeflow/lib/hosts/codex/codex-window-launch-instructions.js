@@ -11,6 +11,13 @@ export const renderCodexWindowLaunchValues = (input) => {
         effort: launch?.reasoningEffortByRole?.[role] ?? launch?.reasoningEffortByRole?.default ?? null,
     };
 };
+/**
+ * Codex 的窗口都是工作区根这一个项目里的聊天：会话与它的服务进程从项目根启动，角色目录只是执行目录。所以
+ * 每个窗口的启动目录都是根——按工作目录认不出角色，运行时工具校验在这个宿主上不收窄（ADR-0020 决定 3）。
+ */
+export function codexWindowExecutionPlacement() {
+    return ".";
+}
 /** Codex owns project selection, tool arguments and the separation from product Git worktrees. */
 export function renderCodexWindowLaunchInstructions(input) {
     const { model, intent, profile, attachedWorktrees: attached } = input;

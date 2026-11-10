@@ -45,6 +45,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         "serverVersion",
         ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
         ...(record.writer === undefined ? [] : ["writer"]),
+        ...(record.authorizeCall === undefined ? [] : ["authorizeCall"]),
     ].sort();
     const keys = Object.keys(record).sort();
     if (keys.length !== expectedKeys.length ||
@@ -54,6 +55,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
     const executors = {};
     const beforeMutation = admitBeforeMutation(record.beforeMutation);
     const writer = admitWriter(record.writer);
+    const authorizeCall = admitAuthorizeCall(record.authorizeCall);
     for (const field of executorFields) {
         const executor = record[field];
         if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -67,7 +69,16 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         serverVersion: nonEmptyText(record.serverVersion, "server-version"),
         ...(beforeMutation === undefined ? {} : { beforeMutation }),
         ...(writer === undefined ? {} : { writer }),
+        ...(authorizeCall === undefined ? {} : { authorizeCall }),
     });
+}
+/** `authorizeCall` 省略即 undefined，否则必须是非 Proxy 的函数。 */
+function admitAuthorizeCall(value) {
+    if (value === undefined)
+        return undefined;
+    if (typeof value !== "function" || types.isProxy(value))
+        fail("options");
+    return value;
 }
 /** `beforeMutation` 省略即 undefined，否则必须是非 Proxy 的函数。 */
 function admitBeforeMutation(value) {

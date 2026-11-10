@@ -101,15 +101,15 @@ A setup session is never proven and only bootstraps.
 
 Stdin is the inspect result (or its `launchIntent`). The helper checks the
 intent (its `execution.kind` must be `claude-code-desktop`; `--session-id`,
-`--worktree`, `--bg`, `--resume`, `--name` and `--allowedTools` must not be
-in its arguments - the helper adds what it needs), refuses `locator-live`
+`--worktree`, `--bg`, `--resume`, `--name`, `--allowedTools` and `--disallowedTools` must not
+be in its arguments - the helper adds what it needs), refuses `locator-live`
 while the window's recorded desktop session is still in the sidebar (`--force`
 opens a second one anyway; archive or use the live one instead), and then
 takes three steps in the intent's root:
 
 1. `claude --bg "<startup prompt>" --name "<title>" <intent arguments>
-   --allowedTools <the role's Wakeflow rules and this helper>`. The startup
-   prompt is fixed: it names the role, the window id and title, says the
+   --allowedTools <the role's Wakeflow rules and this helper>` (and the managed-path deny rules). The
+   startup prompt is fixed: it names the role, the window id and title, says the
    working directory is the execution root, and asks the session to load
    nothing and reply only `ok`; the first real prompt is yours, sent later.
    The host assigns the session id, which the helper reads back from the
@@ -125,8 +125,8 @@ The result carries `observation` (`handle`, `desktop.sessionId`, and for a
 worktree pod's product window the git worktree facts) with `observationFile`,
 the reference you pass as the registration's `observation`, `created: launched`,
 `hook: { sessionStart: "observed" }`, `window` (title and cwd relative to the
-workspace root), `background` (the short id, the first turn's state, whether
-the stop succeeded) and `worktreePrepared`. A refusal after the checkout was
+workspace root), `background` (the short id, the first turn's state, whether the stop
+succeeded), `writeDeny` (rule counts) and `worktreePrepared`. A refusal after the checkout was
 prepared still carries `worktreePrepared` and `worktreeBranch`.
 
 ### `trust --window <windowId> --user-agreed`
@@ -235,9 +235,9 @@ edit files, do not read the helper's source.
    session in the sidebar and to archive this setup session.
 
 Permissions are the same as under tmux: the helper starts every session with
-`--allowedTools` for its role's Wakeflow tools and the helper itself; the
-settings rules maintenance writes are unchanged, and a product repository's
-`.claude/settings.json` is never written.
+`--allowedTools` for its role's Wakeflow tools and the helper itself, and outside the Controller
+with the managed-path deny rules (whether those outlive step 3's takeover is not yet confirmed); the
+settings rules maintenance writes are unchanged, and a product repository's `.claude/settings.json` is never written.
 
 ## Step 8 - delivering on this transport
 

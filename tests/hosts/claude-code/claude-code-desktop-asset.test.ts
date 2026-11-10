@@ -44,6 +44,10 @@ import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
+import {
+  expectedClaudeCodeRuleArguments,
+  expectedClaudeCodeWriteDenyReport,
+} from "./claude-code-session-rules.fixture.js";
 
 useDisposableDurability();
 
@@ -448,13 +452,19 @@ function assertSessionPermissionRules(
   words: readonly string[],
   role: WakeflowWindowRole = "product",
 ): void {
-  const expected = [
-    "--allowedTools",
-    ...claudeCodeMcpPermissionRulesFor(role),
-    `Bash(node ${current.assetPath} *)`,
-  ];
+  const expected = expectedClaudeCodeRuleArguments({
+    role,
+    root: current.root,
+    ledgerRoot: "Ledger",
+    assetPath: current.assetPath,
+  });
   deepEqual(words.slice(-expected.length), expected);
   equal(words.filter((word) => word === "--allowedTools").length, 1, words.join(" "));
+  equal(
+    words.filter((word) => word === "--disallowedTools").length,
+    role === "controller" ? 0 : 1,
+    words.join(" "),
+  );
 }
 
 test("desktop asset is a fixed 0600 file whose command and permission rule agree, carries no paths or unfilled build tokens, and its operation plans, publishes and recovers byte-exactly", async (t) => {
@@ -699,6 +709,8 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
   deepEqual(run.json.background, { id: SHORT_ID, firstTurn: "done", stopped: true });
   equal(run.json.worktreePrepared, "not-requested");
   equal(run.json.worktreeObservation, undefined);
+  // 受管路径的写拒绝（F1）：规则随后台会话的启动参数带入，结果只报数目。
+  deepEqual(run.json.writeDeny, expectedClaudeCodeWriteDenyReport("product"));
   const observation = run.json.observation as Record<string, unknown>;
   deepEqual(Object.keys(observation).sort(), [
     "desktop",
@@ -782,6 +794,7 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
   const controllerStart = callLog(current)[1] ?? [];
   equal(controllerStart[2], startupPrompt(CONTROLLER_WINDOW_ID, "controller", "Controller"));
   assertSessionPermissionRules(current, controllerStart.slice(1), "controller");
+  deepEqual(controller.json.writeDeny, expectedClaudeCodeWriteDenyReport("controller"));
   deepEqual(controller.json.window, { name: "Controller", cwd: "." });
   equal(readFileSync(path.join(current.state, "bg-cwd.txt"), "utf8").trim(), current.root);
 });
@@ -964,6 +977,7 @@ test("launch refuses malformed or forbidden intents before touching any host com
     ["--worktree", "feature"],
     ["--resume", SESSION_ID],
     ["--allowedTools", "Bash(ls)"],
+    ["--disallowedTools", "Edit"],
     ["--name", "other"],
   ] as const) {
     const run = refusal(withArguments([flag, value]));

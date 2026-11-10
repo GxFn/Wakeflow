@@ -1,3 +1,5 @@
+import { WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
+import { WAKEFLOW_CONFIG_FILE_REF } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { WAKEFLOW_WINDOW_ROLES } from "../../contracts/vocabulary/wakeflow-role-tool-access.js";
 import {
   parseWakeflowNodeEngineBounds,
@@ -17,6 +19,21 @@ import { CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR } from "./claude-code-window-lau
  */
 
 /**
+ * 受管路径的写拒绝（ADR-0020 决定 6，open-items F1）：Controller 之外每个角色的会话在启动与续上时带的 deny
+ * 规则指向这些路径（相对工作区根；账本根在配置里，助手自己读）。目录整棵拒绝，文件按名字拒绝：两份 settings
+ * 是放行助手免提示运行的地方，`.claude/` 下的其余内容（worktree 检出）不在其列。
+ */
+export const CLAUDE_CODE_MANAGED_WRITE_DENY = Object.freeze({
+  roles: Object.freeze(WAKEFLOW_WINDOW_ROLES.filter((role) => role !== "controller")),
+  directories: Object.freeze([WAKEFLOW_LOCAL_ROOT, WAKEFLOW_ACTIVE_ROOT]),
+  files: Object.freeze([
+    String(WAKEFLOW_CONFIG_FILE_REF),
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+  ]),
+});
+
+/**
  * 两个助手共用的构建期取值。记号名与 `assets/build-values.d.ts` 里给 `checkJs` 看的环境声明一一对应：
  * 加一个记号要同时加这里的取值与那里的声明。
  */
@@ -28,6 +45,8 @@ export const CLAUDE_CODE_HELPER_BUILD_VALUES = Object.freeze({
   __WAKEFLOW_NODE_ENGINE_BOUNDS__: JSON.stringify(
     parseWakeflowNodeEngineBounds(WAKEFLOW_NODE_ENGINES),
   ),
+  /** 受管路径的写拒绝表：launch 与 resume 的 `--disallowedTools`。 */
+  __WAKEFLOW_MANAGED_WRITE_DENY__: JSON.stringify(CLAUDE_CODE_MANAGED_WRITE_DENY),
   /** pod 窗口显示名里 pod 名与标题之间的分隔（open-items W28）：tmux 助手的 mark 据此算窗口名。 */
   __WAKEFLOW_POD_WINDOW_TITLE_SEPARATOR__: JSON.stringify(CLAUDE_CODE_POD_WINDOW_TITLE_SEPARATOR),
   /** 按角色的 MCP 允许规则（ADR-0020 决定 3，F2，§13.168）：launch 与 resume 的 `--allowedTools`。 */

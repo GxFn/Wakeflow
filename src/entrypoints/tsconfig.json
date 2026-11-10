@@ -11,11 +11,12 @@
     "codex-wakeflow-maintenance.ts",
     "codex-wakeflow-mcp.ts",
     "wakeflow-artifact-identity.ts",
+    "wakeflow-caller-role-gate.ts",
     "wakeflow-hook-observer.ts",
     "wakeflow-mcp-stdio.ts",
     "wakeflow-public-mcp-catalog.ts",
-    "wakeflow-public-mcp-server.ts",
     "wakeflow-public-mcp-server-configuration.ts",
+    "wakeflow-public-mcp-server.ts",
     "wakeflow-public-mcp-shared-executors.ts",
     "wakeflow-public-mcp-tool.ts"
   ],

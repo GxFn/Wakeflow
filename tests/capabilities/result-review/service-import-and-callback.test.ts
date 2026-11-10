@@ -4,15 +4,20 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { executeTargetResultImportRequest } from "../../../src/capabilities/result-review/service.js";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
+import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
+  registerFixtureWindowRoute,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
   prepareFixtureDelivery,
@@ -64,6 +69,61 @@ const SILENCE_PLUS_ONE_MINUTE = 11 * 60_000;
 function after(instant: string, milliseconds: number): UtcInstant {
   return parseUtcInstant(new Date(Date.parse(instant) + milliseconds).toISOString());
 }
+
+test("报告的隐私口径（open-items F9）：站内路由、模块别名与产品自己的 UUID 不再让报告被拒；用户目录的路径与本工作区窗口的会话句柄照挡", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    // Controller 窗口以 UUID 形状的句柄登记（Claude Code 的会话 id 就是这个形状）：它是这个工作区的私有标识。
+    const controllerSession = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+    const controllerWindowId = compileWakeflowWindowLaunchIntents(
+      parseWakeflowConfig(createMinimalWakeflowConfig()),
+      codexWorkspaceHostResourceProfile,
+    ).intents.find((intent) => intent.role === "controller")?.windowId;
+    if (controllerWindowId === undefined) throw new Error("Expected a Controller window.");
+    await registerFixtureWindowRoute(fixture, controllerWindowId, {
+      value: controllerSession,
+      uuid: "c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0",
+      observedAt: parseUtcInstant("2026-08-29T12:00:10.000Z"),
+      registeredAt: parseUtcInstant("2026-08-29T12:00:20.000Z"),
+    });
+    const delivered = await deliverFixtureTarget(fixture);
+    const evidence = await recordFixtureEvidence(fixture);
+    const taskPackage = await loadFixtureTaskPackage(
+      fixture,
+      delivered.envelope.target.taskPackageId,
+    );
+    const base = createImplementationTargetResultReportContentFixture(taskPackage, evidence);
+    const withSummary = (summary: string) => ({ ...base, summary: `${base.summary} ${summary}` });
+    const rejected = async (key: string, summary: string, rule: string) => {
+      await rejects(
+        importFixtureImplementationResult(fixture, delivered, {
+          idempotencyKey: key,
+          evidence,
+          content: withSummary(summary),
+        }),
+        (error: unknown) =>
+          isWakeflowError(error) &&
+          error.code === "precondition-failed" &&
+          JSON.stringify(error.details ?? {}).includes(`privacy:${rule}`),
+      );
+    };
+    // 该挡的照挡：用户目录的路径、显式的文件系统写法、本工作区窗口的会话句柄。
+    await rejected("f9-path", "see /Users/example/notes.txt", "unlisted-absolute-path");
+    await rejected("f9-file-uri", "see file:///Users/example/notes.txt", "unlisted-absolute-path");
+    await rejected("f9-session", `session ${controllerSession}`, "bare-uuid");
+    // 产品里的正常内容：路由、模块别名、请求号。一份报告里都有，照常导入。
+    const imported = await importFixtureImplementationResult(fixture, delivered, {
+      idempotencyKey: "f9-ordinary",
+      evidence,
+      content: withSummary(
+        'GET /api/v1/users 返回 200；import 自 "@/components/Button"；请求号 123e4567-e89b-42d3-a456-426614174000。',
+      ),
+    });
+    equal(imported.status, "committed");
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
 
 test("import 重放幂等、已回报目标拒绝二次导入；回调只在静默后重发，重放幂等，第四代之后到顶", async () => {
   const fixture = await createControllerImplementationReviewDecisionServiceFixture();

@@ -49,7 +49,8 @@ import {
   readConfig,
   realpathOrNull,
   resolvePlacement,
-  sessionPermissionRules,
+  sessionRuleArguments,
+  sessionWriteDenyReport,
 } from "./shared/workspace.mjs";
 import { WORKTREE_NAME_PATTERN, observeWorktree, prepareWorktree } from "./shared/worktree.mjs";
 
@@ -107,6 +108,8 @@ const FORBIDDEN_ARGUMENTS = Object.freeze([
   "-p",
   "--allowedTools",
   "--allowed-tools",
+  "--disallowedTools",
+  "--disallowed-tools",
   "--name",
   "-n",
 ]);
@@ -708,8 +711,7 @@ function commandLaunch(options) {
     "--name",
     title,
     ...resolvedArguments,
-    "--allowedTools",
-    ...sessionPermissionRules(launchIntent.role),
+    ...sessionRuleArguments(launchIntent.role),
   ];
   assertPromptPosition(argv, prompt);
   assertLocatorNotLive(windowId, options);
@@ -755,6 +757,8 @@ function commandLaunch(options) {
       hook: { sessionStart: "observed" },
       window: { name: title, cwd: cwd.relative },
       background: { id: session.shortId, firstTurn: session.state, stopped },
+      // 规则随后台会话的启动参数带入；接管进桌面之后是否仍然生效，宿主文档没有写（open-items X）。
+      writeDeny: sessionWriteDenyReport(launchIntent.role),
       ...(prepared !== null && worktree === null ? { worktreeObservation: "pending" } : {}),
       worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,
       ...(prepared === null

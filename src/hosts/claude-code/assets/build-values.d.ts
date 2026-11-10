@@ -23,3 +23,9 @@ declare const __WAKEFLOW_NODE_ENGINE_BOUNDS__: Readonly<{
 declare const __WAKEFLOW_POD_WINDOW_TITLE_SEPARATOR__: string;
 /** 窗口角色到该角色 MCP 允许规则的表。 */
 declare const __WAKEFLOW_ROLE_MCP_PERMISSION_RULES__: Readonly<Record<string, readonly string[]>>;
+/** 受管路径的写拒绝：带规则的角色，以及工作区根下受管的目录与文件（相对工作区根）。 */
+declare const __WAKEFLOW_MANAGED_WRITE_DENY__: Readonly<{
+  roles: readonly string[];
+  directories: readonly string[];
+  files: readonly string[];
+}>;

@@ -44,6 +44,9 @@ of test work, and it overrides one target rule: you do record managed evidence
   observations and their verdicts; acceptance is the Controller's.
 - Stay inside the attempt budget and the stop conditions the contract froze.
   When the budget is exhausted, report that, do not quietly continue.
+- A refusal whose reason is tool-not-for-role means that tool belongs to
+  another role's window. Do not retry it by any route; say in your report what
+  you needed it for.
 - A tool answer whose code is unexpected or io-failure is a failure, not a
   verdict on any step: retry at most once, then report the tool name, its code
   and reason, `details.incidentId` and any `causeCode`, and stop.

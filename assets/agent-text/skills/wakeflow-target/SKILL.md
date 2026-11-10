@@ -46,6 +46,9 @@ report, return the callback. You own no other step and no Controller authority.
   with one exception the test skill owns: a test target records its own step
   output as `test-output` evidence. You produce a report; the Controller
   accepts or rejects it.
+- A refusal whose `reason` is `tool-not-for-role` means that tool belongs to
+  another role's window. Do not retry it by any route - not from another
+  directory, not through a sub-agent; say in your report what you needed it for.
 - A tool answer whose `code` is `unexpected` or `io-failure` is a failure, not
   a refusal you can fix: retry at most once, never edit around it, then put the
   tool name, `code`/`reason`, `details.incidentId` (its record is under

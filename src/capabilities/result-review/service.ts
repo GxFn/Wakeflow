@@ -151,7 +151,7 @@ import {
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
+import { DEFAULT_ALLOWED_ID_PREFIXES, type PrivacyScanPolicy } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
@@ -287,6 +287,20 @@ const REPORT_PRIVACY_POLICY = Object.freeze({
   allowedPathRoots: Object.freeze([]),
   allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
 });
+
+/**
+ * 报告正文的扫描口径（open-items F9）。报告写的是产品里发生了什么：站内路由（`/api/v1/users`）、模块别名与
+ * 产品自己的 UUID 是正常内容，不该让整份报告被拒；该挡的是指向用户或系统目录的路径，和这个工作区里各窗口
+ * 的会话句柄（不该进 git 跟踪的 ledger，ADR-0020 决定 4）。凭证类命中与口径无关，照旧无条件拒绝。
+ */
+async function reportPrivacyPolicy(context: SliceContext): Promise<PrivacyScanPolicy> {
+  const bindings = await loadBindings(context);
+  return Object.freeze({
+    ...REPORT_PRIVACY_POLICY,
+    pathScope: "system" as const,
+    privateUuids: Object.freeze(bindings.map((binding) => binding.handle.value)),
+  });
+}
 const MANIFEST_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, "$limit");
 const PAYLOAD_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes, "$limit");
 const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, string, string]>> =
@@ -444,7 +458,10 @@ function assertWorktreeBranch(context: SliceContext, result: Readonly<TargetResu
   }
 }
 
-async function loadWindow(context: SliceContext, windowId: string): Promise<WindowView> {
+/** 本宿主在这个工作区登记的全部窗口绑定。 */
+async function loadBindings(
+  context: SliceContext,
+): Promise<readonly Readonly<WakeflowWindowHostBinding>[]> {
   const { facade, authority } = context;
   let bindings: readonly Readonly<WakeflowWindowHostBinding>[];
   try {
@@ -467,6 +484,12 @@ async function loadWindow(context: SliceContext, windowId: string): Promise<Wind
     }
     throw error;
   }
+  return bindings;
+}
+
+async function loadWindow(context: SliceContext, windowId: string): Promise<WindowView> {
+  const { facade, authority } = context;
+  const bindings = await loadBindings(context);
   const binding = bindings.find((entry) => entry.windowId === windowId);
   if (binding === undefined) fail("precondition-failed", "binding-missing", "$request.demandId");
   if (binding.hostId !== facade.hostId) {
@@ -1090,7 +1113,10 @@ async function executeImport(
   if (target.currentDelivery.fence.claimDigest !== input.claimDigest) {
     await assertEarlierGenerationFence(repository, input, options.signal);
   }
-  const privacyRules = derivePrivacyRules(reportTexts(input.report.content), REPORT_PRIVACY_POLICY);
+  const privacyRules = derivePrivacyRules(
+    reportTexts(input.report.content),
+    await reportPrivacyPolicy(context),
+  );
   if (privacyRules.length > 0) {
     rejectWith(
       privacyRules.map((rule) => `privacy:${rule}`),

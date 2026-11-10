@@ -52,7 +52,8 @@ import {
   readConfig,
   realpathOrNull,
   resolvePlacement,
-  sessionPermissionRules,
+  sessionRuleArguments,
+  sessionWriteDenyReport,
 } from "./shared/workspace.mjs";
 import { WORKTREE_NAME_PATTERN, observeWorktree, prepareWorktree } from "./shared/worktree.mjs";
 
@@ -833,13 +834,14 @@ function assertPaneAlive(context, command, coordinates) {
   }
 }
 
-// pane 里启动 claude 的整条命令：--allowedTools 是变长参数，必须放在意图自己的参数之后、作为最后一个选项，只加一次。
+// pane 里启动 claude 的整条命令：规则参数（--allowedTools，以及非 Controller 角色的 --disallowedTools）是变长
+// 参数，必须放在意图自己的参数之后、作为最后的选项，各只加一次。
 /**
  * @param {readonly string[]} resolvedArguments
  * @param {unknown} role
  */
 function claudePaneCommand(resolvedArguments, role) {
-  return [claudeBinary(), ...resolvedArguments, "--allowedTools", ...sessionPermissionRules(role)]
+  return [claudeBinary(), ...resolvedArguments, ...sessionRuleArguments(role)]
     .map(shellQuote)
     .join(" ");
 }
@@ -1077,6 +1079,7 @@ function resumeInPlace(context, windowId, launchIntent, execution, sessionId, op
       self: true,
       scheduled: true,
       restartAfterSeconds: SELF_RESTART_DELAY_SECONDS,
+      writeDeny: sessionWriteDenyReport(launchIntent.role),
     };
   }
   // 从未有过对话的会话 claude 拒绝 --resume，respawn 只会把窗口杀掉（§13.133 现场：没收到过投递的产品窗口）。
@@ -1127,6 +1130,7 @@ function resumeInPlace(context, windowId, launchIntent, execution, sessionId, op
     ),
     hook: { sessionStart: hook.status },
     window: { name: windowName, cwd: placement.relative },
+    writeDeny: sessionWriteDenyReport(launchIntent.role),
   };
 }
 
@@ -1193,6 +1197,7 @@ function commandResume(config, options) {
       cwd: opened.placement.relative,
       created: opened.exists ? "new-window" : "new-session",
     },
+    writeDeny: sessionWriteDenyReport(launchIntent.role),
     ...(opened.exists ? {} : sessionHandover(context, opened.sessionName)),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
   };
@@ -1390,6 +1395,7 @@ function commandLaunch(config, options) {
       cwd: opened.placement.relative,
       created: opened.exists ? "new-window" : "new-session",
     },
+    writeDeny: sessionWriteDenyReport(launchIntent.role),
     ...(opened.exists ? {} : sessionHandover(context, opened.sessionName)),
     ...(worktreeRequested && worktree === null ? { worktreeObservation: "pending" } : {}),
     worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,

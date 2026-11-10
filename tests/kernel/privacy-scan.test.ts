@@ -5,6 +5,7 @@ import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   assertPrivacyClean,
   DEFAULT_ALLOWED_ID_PREFIXES,
+  type PrivacyScanPolicy,
   scanPrivacy,
   scanPrivacyText,
 } from "../../src/kernel/privacy-scan.js";
@@ -235,4 +236,47 @@ test("运行时身份前缀与持久身份一样放行：window_binding_ 与 mai
     deepEqual(scanPrivacy(`- binding: ${prefix}${uuid}`, policy), [], prefix);
   }
   equal(scanPrivacy(`unknown_binding_${uuid}`, policy)[0]?.kind, "bare-uuid");
+});
+
+test("口径可按调用方收窄（open-items F9）：system 只算用户或系统目录与显式文件系统写法，站内路由与模块别名通过；给了私有标识表就只算表里的 UUID", () => {
+  const any = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
+  const scoped = { ...any, pathScope: "system" as const };
+  const kinds = (text: string, scan: PrivacyScanPolicy = scoped) =>
+    scanPrivacy(text, scan).map((finding) => finding.kind);
+  // 自由文本里的站内路径不是私有路径。
+  for (const text of [
+    "GET /api/v1/users returns 200",
+    "POST /v2/payments/{id}/capture",
+    'import x from "@/components/Button"',
+    "see /docs/spec.md for the contract",
+  ]) {
+    deepEqual(kinds(text), [], text);
+    deepEqual(kinds(text, any), ["unlisted-absolute-path"], text);
+  }
+  // 指向用户或系统目录的路径，以及显式的文件系统写法，在收窄的口径下照挡。
+  for (const text of [
+    "/Users/alice/project/src/a.ts",
+    "cwd:/Users/alice/project",
+    "path=/home/alice/x",
+    "file:///Users/alice/secret.txt",
+    "C:\\Users\\alice\\x",
+    "the /tmp/out.log file",
+    "/etc/hosts was read",
+    "~/.ssh/config",
+    "$HOME/notes.txt",
+  ]) {
+    deepEqual(kinds(text), ["unlisted-absolute-path"], text);
+  }
+
+  const session = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+  const product = "123e4567-e89b-42d3-a456-426614174000";
+  const known = { ...scoped, privateUuids: [session.toUpperCase()] };
+  // 产品自己的 UUID 通过；本工作区的会话句柄（不分大小写）照挡；带已知前缀的照旧通过。
+  deepEqual(kinds(`request ${product} failed`, known), []);
+  deepEqual(kinds(`session ${session}`, known), ["bare-uuid"]);
+  deepEqual(kinds(`window_${session}`, known), []);
+  // 没给表：任何裸 UUID 都算（缺省不变）。
+  deepEqual(kinds(`request ${product} failed`), ["bare-uuid"]);
+  // 空表：没有需要挡的私有标识。
+  deepEqual(kinds(`request ${product} failed`, { ...scoped, privateUuids: [] }), []);
 });

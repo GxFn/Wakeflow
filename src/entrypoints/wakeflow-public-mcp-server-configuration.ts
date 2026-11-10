@@ -3,6 +3,7 @@ import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import type { DemandEventStreamCommitWriter } from "../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import type { WakeflowToolCatalog } from "../kernel/tool-registry.js";
+import type { WakeflowCallAuthorizer } from "./wakeflow-caller-role-gate.js";
 import type { WakeflowPublicMcpExecutors } from "./wakeflow-public-mcp-catalog.js";
 
 /** Public Server固定组合所需的完整、关闭依赖集合。 */
@@ -15,6 +16,11 @@ export interface CreateWakeflowPublicMcpServerOptions extends WakeflowPublicMcpE
    * 即不盖戳（测试构建没有 manifest）。形状在这里只核对到两个文本字段，严格准入归各持久写入。
    */
   readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
+  /**
+   * 每次工具调用之前的调用方校验（ADR-0020 决定 3，open-items F1）：组合根给出按窗口角色的门；省略即不校验
+   * （测试与没有窗口身份可认的构建）。
+   */
+  readonly authorizeCall?: WakeflowCallAuthorizer;
 }
 
 export type WakeflowPublicMcpServerConfigurationErrorReason =
@@ -79,6 +85,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     "serverVersion",
     ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
     ...(record.writer === undefined ? [] : ["writer"]),
+    ...(record.authorizeCall === undefined ? [] : ["authorizeCall"]),
   ].sort();
   const keys = Object.keys(record).sort();
   if (
@@ -90,6 +97,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(
   const executors: Record<string, unknown> = {};
   const beforeMutation = admitBeforeMutation(record.beforeMutation);
   const writer = admitWriter(record.writer);
+  const authorizeCall = admitAuthorizeCall(record.authorizeCall);
   for (const field of executorFields) {
     const executor = record[field];
     if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -103,7 +111,15 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     serverVersion: nonEmptyText(record.serverVersion, "server-version"),
     ...(beforeMutation === undefined ? {} : { beforeMutation }),
     ...(writer === undefined ? {} : { writer }),
+    ...(authorizeCall === undefined ? {} : { authorizeCall }),
   });
+}
+
+/** `authorizeCall` 省略即 undefined，否则必须是非 Proxy 的函数。 */
+function admitAuthorizeCall(value: unknown): WakeflowCallAuthorizer | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "function" || types.isProxy(value)) fail("options");
+  return value as WakeflowCallAuthorizer;
 }
 
 /** `beforeMutation` 省略即 undefined，否则必须是非 Proxy 的函数。 */

@@ -12,7 +12,7 @@
 
 - **1.3.0 批 1 助手进静态门**：已完成（§13.238）；余项见 D5
 - **1.3.0 批 2 宿主事实与观察**：已完成（§13.239）；余项见 A3（版本不固定）、K2（读入的 token、桌面清单仍内联）；X4、X28 的现场核对归终验
-- **1.3.0 批 3 信任边界**：F1、F9、Y7
+- **1.3.0 批 3 信任边界**：已完成（§13.240）；余项见 F1（规则拦不住任意子进程）、F2（认不出角色就不收窄）、X30（桌面接管后规则是否保留）；两项控制在真实窗口里的核对归终验
 - **1.3.0 批 4 Demand 流程**：D3、D4、D12（限制与提醒）、H2、H3、H5、H6、H10、W40
 - **1.3.0 批 5 并发、恢复与配置演进**：B7、B8、B9、B11、B13、B14、C7
 - **1.3.0 批 6 诊断与成本**：G1、G3、G5、G8、G9、G13、K5、K8
@@ -380,11 +380,11 @@
 
 高。产品窗口会处理不受信任的仓库内容，却能自动写入整个工作区根，包括 Controller 免提示执行的 helper。调用者身份不做校验，Controller 专属动作只靠 skill 文本约束。回调文本以用户轮次的身份进入 Controller。hook 记录这种“宿主证明”可以被伪造。凭证扫描漏掉了常见格式，而它是 git 跟踪的 ledger 前唯一的一道网。以上所有取舍都没有 ADR 可以对照。
 
-- **F1** [高 / 风险] 产品和 Test 窗口对整个工作区根拥有自动接受的编辑权，可以改写 Controller 免提示运行的 tmux helper（计划阶段 5；状态：部分（§13.168 批次 3，ADR-0020 决定 1 B 类）：`wakeflow_prepare_delivery` 在签发许可前由服务器（制品字节）核对本宿主已发布资产（状态栏与伴随的 tmux 助手）的字节，不是 current 即拒绝 `host-asset-<status>`；status 新增 `hostAssets`，Controller 文本写明被改写的助手不该跑、由对账重新发布。助手不自检（被改写的文件核对不出自己）；`--add-dir` 收窄与权限面不变，归 Q5）（**2026-11-09 收敛：1.3.0 批 3**——ADR-0020 决定 6 排在第一轮现场之后的控制：产品与 Test 窗口对受管路径的写拒绝规则、按窗口角色的运行时工具校验）
+- **F1** [高 / 风险] 产品和 Test 窗口对整个工作区根拥有自动接受的编辑权，可以改写 Controller 免提示运行的 tmux helper（计划阶段 5；状态：部分（§13.168 批次 3，ADR-0020 决定 1 B 类）：`wakeflow_prepare_delivery` 在签发许可前由服务器（制品字节）核对本宿主已发布资产（状态栏与伴随的 tmux 助手）的字节，不是 current 即拒绝 `host-asset-<status>`；status 新增 `hostAssets`，Controller 文本写明被改写的助手不该跑、由对账重新发布。助手不自检（被改写的文件核对不出自己）；`--add-dir` 收窄与权限面不变，归 Q5）（**2026-11-09 收敛：1.3.0 批 3**——ADR-0020 决定 6 排在第一轮现场之后的控制：产品与 Test 窗口对受管路径的写拒绝规则、按窗口角色的运行时工具校验）（**已做 1.3.0 批 3，§13.240**：两个助手在启动与续上 Controller 之外每个角色的会话时带 `--disallowedTools`，规则指向工作区根的 `.wakeflow-local/**`、`.wakeflow-active/**`、`wakeflow.config.json`、根上的 `.claude/settings.json` 与 `settings.local.json`、账本根 `/**`；Design 一并带上（它同样把工作区根挂成附加目录、同样读仓库内容）。助手结果的 `writeDeny` 只报数目，写不成规则的路径计入 `unexpressed`。规则语法在 CLI 2.1.303 上以 print 模式探明：Write 与指向受管目录的 Bash 重定向被拒，别处照常。运行时工具校验见 F2。**余项**：它只拦宿主的编辑工具与宿主认得的文件命令，任意子进程照写——ADR-0020 的承诺不变；`--add-dir` 没有收窄；桌面接管后规则是否保留见 X30；真实窗口里的一次核对归终验）
   - 说明：产品 Agent（包括被仓库内容注入的 Agent）可以在用户不知情时改写 tmux.mjs。Controller 下一次 deliver、launch 或 inspect 时，改写后的代码就在 Controller 自动允许的 Bash 规则下运行。同样的权限还能改 hook 记录、binding、配置和活动 Demand 文件。文件层写明的威胁模型与“处理不受信任内容的 Agent 共享同一权限”的设计不相符。
   - 证据：endpoint/service.ts:748-757：所有 placement 不为 '.' 的窗口都带 `--add-dir <工作区根>`；:790-805 加上 permissionMode acceptEdits；工作区根里有 .wakeflow-local（hook 记录、binding、helper）、.wakeflow-active（Demand 流、证据）、ledger/、wakeflow.config.json；现场 helper tmux.mjs 是用户自有的 0600 普通文件，根目录 settings.json 自动允许 `Bash(node .wakeflow-local/.../tmux.mjs *)`；只有 verify 的 host-settings-assets gate（observation/decide.ts:643-669）会检查 helper 是否被篡改，每次运行前不检查；rooted-directory.ts 头注释的威胁模型是“受信任的单用户工作区”，不防同权限的恶意进程
   - 建议：只给产品和 Test 窗口需要的访问：--add-dir 限定到 Test surface 或具体的 ledger/证据路径，或者设为只读。helper 每次运行前按 artifact manifest 自检摘要，或者直接从 Agent 不会去编辑的插件缓存（${CLAUDE_PLUGIN_ROOT}）运行。允许规则锚定绝对路径或插件根。把真实的威胁模型写进 ADR。
-- **F2** [中 / 风险] 不校验是哪个窗口在调用工具，Controller 专属动作（评审决策、完成、pod）只受 skill 文本约束（计划阶段 5；状态：第一步已做（§13.168 批次 3，ADR-0020 决定 3）：contracts 的角色工具归属表（Design：inspect_board/publish_requirement/status；产品：import_target_result/status；Test：import_target_result/record_evidence/status），Claude 的支撑面设置与窗口启动的 `--allowedTools` 按角色逐工具放行并精确删除以前写的整服务器规则，诚实性测试核对表与技能正文一致；运行时调用者身份校验仍待 Q5；§13.140 的复现仍成立）
+- **F2** [中 / 风险] 不校验是哪个窗口在调用工具，Controller 专属动作（评审决策、完成、pod）只受 skill 文本约束（计划阶段 5；状态：第一步已做（§13.168 批次 3，ADR-0020 决定 3）：contracts 的角色工具归属表（Design：inspect_board/publish_requirement/status；产品：import_target_result/status；Test：import_target_result/record_evidence/status），Claude 的支撑面设置与窗口启动的 `--allowedTools` 按角色逐工具放行并精确删除以前写的整服务器规则，诚实性测试核对表与技能正文一致；运行时调用者身份校验仍待 Q5；§13.140 的复现仍成立）（**已做 1.3.0 批 3，§13.240**：公共 MCP 入口在执行器与 `beforeMutation` 之前按服务进程的工作目录认调用方——目录恰好是配置里某一种角色的窗口的执行根（pod 产品窗口是它的检出）时，归属表之外的工具以 `precondition-failed` / `tool-not-for-role` 拒绝，`details` 带角色与工具名。§13.140 的复现（从产品窗口的 cwd 起服务，记录 accept 并 complete）现在被拒。本机三个在跑的服务进程的工作目录都等于各自会话的启动目录（工作区根、Design 面、源码仓库），这是观察所得，宿主文档没有写。**余项**：认不出就不收窄——工作目录是工作区根（Controller；Codex 的窗口都从项目根启动，所以 Codex 上这道门不起作用）、不是任何窗口的执行根、同一目录属于两种角色、配置读不出；同一用户换个目录另起一个服务即可绕过，这是降低误用，不是身份认证）
   - 说明：产品或 Test Agent 可以先 inspect 拿到 snapshotDigest 和 reviewUnitDigest，再在之后的回合对自己的结果记录 accept，甚至 complete Demand。Test 窗口本来就会自己记录证据。“独立评审”和“独立测试”这两项产品承诺，实际上依赖 prompt 服从，而不是运行时。
   - 证据：所有请求只带一个自由的 root，没有调用者或窗口身份；src 里 grep process.cwd/CLAUDE_SESSION/caller 没有结果；Test/、Design/ 的 settings.json 用通配 `mcp__plugin_wakeflow_wakeflow` 免提示放行全部 20 个工具（portable-settings-transition.ts:33-34）；wakeflow-target/SKILL.md:37-39 是唯一的约束；gate-log L2786 只作为 pod 切片的残留记了一笔，没有 ADR；部分缓解：accept 要求 targetCompletion 已确认（result-review/decide.ts:338），同回合自我接受会被拒；Controller SKILL.md:120 要求独立判断；全新工作区里产品窗口调用 MCP 会弹提示；这个现场工作区因为遗留规则而免提示
   - 建议：先用 ADR 记录立场。然后加一道低成本的 binding 校验：MCP server 通过进程祖先匹配 hook session-start，或者用 helper 在启动环境里放置的逐窗口 token 识别自己的会话，非 Controller binding 调用 decision、complete、cancel、plan、prepare、pod 变更时拒绝。至少把各根的允许规则收窄到该角色实际使用的工具，不要用通配。
@@ -420,7 +420,7 @@
   - 建议：分类和扫描之前先剥掉 ANSI CSI/OSC 序列，只有真正的二进制才判为 opaque；有了调用者身份之后，controller-confirmed 要记录确认者，并拒绝非 Controller 的调用。
   - 2026-10-03 已修复跳过扫描：有效 UTF-8 即使含未知控制字符仍扫描；CSI 格式视图保留原文位置映射，原文凭证同时检查，未知控制和非 UTF-8 保留 opaque 审阅。独立 MCP 进程证明 controller-confirmed 不能放行检出的凭证，正常彩色文本可以落账且字节不变。
   - 2026-10-05 后续（§13.161）：非 UTF-8 的 opaque 成员改为按宽松解码做凭证类扫描（证据捕获与归档负载都适用），模型测试不再以 opaque 豁免漏检；ANSI 已由 §13.150 的 CSI 剥离覆盖。
-- **F9** [低 / 债务] 报告隐私扫描会误拒普通的 URL 路由和产品 UUID，却放过 file://、`key:/path` 和 Windows 路径（计划阶段 5；状态：开放）（**2026-11-09 收敛：1.3.0 批 3**——隐私扫描的误拒与漏放）
+- **F9** [低 / 债务] 报告隐私扫描会误拒普通的 URL 路由和产品 UUID，却放过 file://、`key:/path` 和 Windows 路径（计划阶段 5；状态：开放）（**2026-11-09 收敛：1.3.0 批 3**——隐私扫描的误拒与漏放）（**已修 1.3.0 批 3，§13.240**：扫描器的口径成为策略的两个可选项。`pathScope: "system"` 只算指向用户或系统目录的路径与显式的文件系统写法（`file://`、盘符、UNC、`~/`、`$HOME/`、`key:/path`），站内路由与模块别名通过；需求与报告两处共用它，需求切片自己的那份过滤删掉。`privateUuids` 把裸 UUID 收窄为本工作区登记的会话句柄，产品自己的 UUID 通过。缺省口径不变，受管证据的扫描不受影响）
   - 说明：Web 产品的报告经常引用 API 路由和实体 id，导入因此被拒，Agent 就学会转述证据，评审质量随之下降；而真正像泄漏的路径形式反而漏掉了。
   - 证据：result-review/service.ts:244-247 REPORT_PRIVACY_POLICY 没有允许的根，result-review/decide.ts:161-170 不做 SYSTEM_PATH 过滤（requirement/decide.ts:79-99 有）；用同样的正则复现：'/api/orders' 被标记，而 'file://<本机路径>'、'cwd:<本机路径>'、'$HOME/…'、'C:\\Users\\…' 不被标记；bare-uuid（privacy-scan.ts:56-57）拒绝所有不带 Wakeflow 前缀的 UUID
   - 建议：报告也使用 requirement 那套 SYSTEM_PATH 过滤，或者把配置的根加入允许列表；让 lookbehind 把 file:// 和 ':' 前缀视为路径起点，并加上盘符模式；把 bare-uuid 换成对已知私有标识（绑定的会话 id、hook 记录 id）的精确值检查。
@@ -677,7 +677,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 说明：一个已接受的 ADR 目标看起来像是在执行，其实没有，唯一的 gate 是目标的 2.1 倍，推迟它的注释也过时了。成本主要落在没有延迟加载的 Codex 上；Claude Code 是按需加载工具的。
   - 证据：ADR-0004:5,41 目标低于 60 KB；计划 TSD-13 把它列为 L0 退出条件；wakeflow-public-mcp-catalog.test.ts:196 INTERIM 预算 128 KiB；:311 的注释说“L1 之后复测”，而 L1 已经结束；早期测量为 18 个工具时 85,016 B（gate-log L2748）；§13.140 实测 20 工具数组为 92,681 B，含外壳响应为 92,691 B；20 个 request schema 压缩后共 77,343 B，加上描述等估计约 90 KB（约 2.6 万 token，估算值）；仅 $defs 去重省不到 60 KB；smoke 只检查工具名（smoke-plugin-artifacts.ts:365-374）
   - 建议：在 gate-log 记录当前 tools/list 的实测大小；要么分步把测试预算降向 60 KB，要么修订 ADR-0004，改为按宿主或按角色的预算；删除过时的“L1 复测”注释；在 smoke:artifacts 中加入大小断言。
-- **K4** [中 / 缺口] 每个窗口都拿到全部 20 个工具，在没有延迟加载的 Codex 上，按角色给子集可以省掉大部分目录成本（计划阶段 8；状态：开放，§13.140 已测量目录；角色裁剪尚未实现）（**2026-11-09 收敛：不进 1.3.0**——按宿主或角色裁剪工具目录要等 Codex 的按项目启用；安全一侧由批 3 的运行时角色校验承担）
+- **K4** [中 / 缺口] 每个窗口都拿到全部 20 个工具，在没有延迟加载的 Codex 上，按角色给子集可以省掉大部分目录成本（计划阶段 8；状态：开放，§13.140 已测量目录；角色裁剪尚未实现）（**2026-11-09 收敛：不进 1.3.0**——按宿主或角色裁剪工具目录要等 Codex 的按项目启用；安全一侧由批 3 的运行时角色校验承担）（**1.3.0 批 3，§13.240**：运行时角色校验已做，见 F2；目录裁剪不变）
   - 说明：当前服务端不按角色裁剪，Product 进程也可发现全部 20 工具。§13.140 实测 tools 数组为 92681 UTF-8 字节；先前 2.6 万 token 及逐窗口费用是估算，不能用作本轮宿主用量结论。按角色给子集可减少目录字节与误调用，执行鉴权还需可信窗口上下文。
   - 证据：两个插件的 .mcp.json 都启动同一个不带角色参数的 wakeflow server；wakeflow-public-mcp-server.ts:26-45 无条件注册全部工具；ADR-0004 L17：Codex 目前没有延迟加载工具定义的机制；Claude 通过 ToolSearch 按需加载；各角色实际用到的工具数：Design 3、Target 2、Test 3、Controller 18；schema 字节数约 8.0/8.5/14.2/64.0 KB，全量 77.3 KB；8 窗口工作区在 Codex 上每一轮总量约从 700 KB 降到 150 KB（估算，未在真实 Codex 上验证）
   - 建议：先确认宿主提供的可信会话/角色事实，再按角色注册目录并在执行端重复授权检查；未知或未绑定角色应有明确的 bootstrap 能力。按角色测量目录，真实 token、费用和时延另测；不能用目录隐藏冒充权限隔离。
@@ -895,6 +895,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **X27** [高 / 事实] 桌面 app（Claude.app 4.23118.0 / Claude Code 2.1.303）把跨会话消息里的每个 `@`（U+0040）折成全角 `＠`（U+FF20）以阻止 @ 提及：Controller 边界文本里的 `@types/node` 让投递与回调的落地摘要都对不上许可，`landing` 给 `landed: false` 加 `latestPrompt`，`record_delivery_outcome` 判 indeterminate，Controller 以 resolution 接受（每次多一步）；不带 `@` 的投递摘要相符。会话记录里标签外还有框架文字（引语一行与一段说明），hook 的 prompt 没带上，不是成因（正式工作区首个 Demand，§13.232）。**已修 1.2.1**：内核 `computePromptDigest` 先把 `＠` 折回 `@` 再算（许可与 hook 共用，宿主折不折都相等）；剥壳不再锚定整条消息作加固。（**1.3**：ADR-0027 之后这类改字不再让投递落入 indeterminate，`＠` 折回保留为让常见情况维持"文本完整"。）
 - **X28** [中 / 未验证] 桌面传输下配置的 `hosts.claude-code.launch.modelByRole` 只在开窗时以 `claude --bg --model` 生效，能否跨过 app 接管未验证（权限模式当时没跨过去，L17）；桌面参考没有提模型。下次重开窗口时验证；验证前文本只说未验证。（**2026-11-09 收敛：1.3.0 批 2**——配置的模型能否跨过桌面接管：批 2 给出可观察的事实，终验核对）（**1.3.0 批 2，§13.239**：观察器把 SessionStart 的 `model` 记进记录，status 的 `session.model` 把配置的与宿主报告的并排给出——有了可读的事实，结论仍待终验在桌面传输上看一次）
 - **X29** [中 / 文本] 正式工作区首个 Demand：AlembicPlugin 窗口导入报告后先去跑 tmux 助手的 `deliver`（桌面工作区里没有这个文件），再读 desktop.mjs 找发送命令，91 秒后自己想到"这个工作区是桌面传输"，用 app 的 send_message 发出回调（§13.232）。成因：`deliveryAction` 取值以"run the helper from the workspace root"开头，传输的选择只隐含在回传段的 Controller 桌面 id 里。**已改 1.2.1**：目标与测试技能的回调步在 `deliveryAction` 之前先说按本工作区的传输选路（回传段有 Controller 桌面 id 即桌面会话，那里没有 tmux 助手；否则是 tmux）；`deliveryAction` 取值本身不动，Controller 技能的 14 KiB 预算已到顶。后续（1.2.2）：回调许可的 `hostAction` 带 transport 与桌面会话 id，文本只需指向它。（**2026-11-09**：许可带 transport 的后续并入 1.3"宿主漂移可诊断"，不单独做。）（**2026-11-09 收敛：1.3.0 批 2**——回调许可的 hostAction 带传输）（**已修 1.3.0 批 2，§13.239**：投递、重发与回调许可的 `hostAction` 带 `transport` 与 `desktopSessionId`，投递动作文本与目标、测试技能按它选路）
+- **X30** [中 / 未验证] 受管路径的写拒绝规则（F1，§13.240）在桌面传输下只随第一步 `claude --bg` 的启动参数带入，第三步 `claude --desktop --resume` 不带任何参数：规则能否跨过 app 的接管没有核对过（权限模式当时没有跨过去，L17 E4；同样随参数带入的 `--allowedTools` 也从未单独核对）。不保留的话，桌面传输要换载体：Design 与 Test 面可以写进 Wakeflow 已经在写的 `settings.local.json`，产品仓库里 Wakeflow 不写任何 settings，没有现成的载体。终验在桌面传输上核对一次（产品窗口里对 `.wakeflow-local` 下一个文件的 Write 是否被拒）；核对之前，文本只说未确认，并要求 Controller 不向用户声称窗口写不了那里。
 
 ## Y. Claude 宿主 tmux 传输（2026-10-30 汇总）
 
@@ -906,7 +907,7 @@ tmux 传输的问题分册（[双传输规划](../reviews/2026-10-30-claude-host
 - **Y4** [P3] replace / relocate 缺 expectedBindingId 与 Digest 时的拒绝码措辞 → W39（T1）。已修 §13.225。
 - **Y5** [高] 助手是约两千行无类型的 JS 字符串，游离在静态门之外 → D5（与 desktop.mjs 一起做类型化与合同共享）。（**2026-11-09 收敛：1.3.0 批 1**——→ D5）（**已修 1.3.0 批 1，§13.238**）
 - **Y6** [高] 屏幕抓取与 wrapper 剥离依赖未公开的 UI 文本，Claude Code 版本不检测不固定 → A3。（见 A3 的 1.3 进展：落地判定按许可身份，ADR-0027。）（**2026-11-09 收敛：1.3.0 批 2**——→ A3）（**1.3.0 批 2，§13.239**：见 A3）
-- **Y7** [高] 产品与 Test 窗口可改写 Controller 免提示运行的助手 → F1（部分缓解：投递前核对已发布资产字节）。（**2026-11-09 收敛：1.3.0 批 3**——→ F1）
+- **Y7** [高] 产品与 Test 窗口可改写 Controller 免提示运行的助手 → F1（部分缓解：投递前核对已发布资产字节）。（**2026-11-09 收敛：1.3.0 批 3**——→ F1）（**1.3.0 批 3，§13.240**：见 F1——tmux 的 launch 与 resume（新窗格、原地、自重启）三条启动命令都带规则）
 - **Y8** [中] 长寿会话按旧技能文字行事，插件更新后照旧流程刷新窗口 → I9（部分）。（**2026-11-09 收敛：1.3.0 批 7**——→ I9）
 - **Y9** [低] pod 配置事务后 main pod 全部窗口显示 `drifted` → D11（T1）。已修 §13.225（旧窗口一次性 `drifted` 到下次 replace）。
 - **Y10** [中] 宿主观察经模型逐字转抄，pod 开关每窗口约一万输出 token，16 窗格上限 → K2。（**2026-11-09 收敛：1.3.0 批 2**——→ K2）（**已做 1.3.0 批 2，§13.239**：见 K2）

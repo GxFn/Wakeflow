@@ -63,6 +63,7 @@ export function createWakeflowPublicMcpServer(
     serverVersion: _serverVersion,
     beforeMutation,
     writer,
+    authorizeCall,
     ...executors
   } = admitted;
   registerWakeflowPublicMcpCatalog(
@@ -71,6 +72,7 @@ export function createWakeflowPublicMcpServer(
     executors as Readonly<Record<string, WakeflowPublicMcpExecutor<unknown>>>,
     beforeMutation,
     writer ?? null,
+    authorizeCall,
   );
   return server;
 }

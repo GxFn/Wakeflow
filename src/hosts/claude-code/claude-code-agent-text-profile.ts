@@ -92,7 +92,15 @@ const WINDOW_LAUNCH =
   "the observation out (a helper result's `closureFile` and a liveness `observationFile` go " +
   "the same way into `closure` and `evidence.liveness`). The window " +
   "starts with `--allowedTools` for its role's Wakeflow tools and the helper, in the " +
-  "permission mode from step 0; the workspace root's `.claude/settings.json` carries those " +
+  "permission mode from step 0. A Design, Test or product window also starts with deny " +
+  "rules (`--disallowedTools`) for edits to the paths Wakeflow manages - `.wakeflow-local`, " +
+  "`.wakeflow-active`, `wakeflow.config.json`, the root's two Claude settings files and the " +
+  "ledger - and the result's `writeDeny` counts them: `unexpressed` above 0 means that many " +
+  "of those paths got no rule (the path has characters a rule cannot spell, or the config " +
+  "names no ledger root), so tell the user. The rules stop the host's edit tools and the " +
+  "file commands it recognizes, not every process, and it is not yet confirmed that they " +
+  "outlive the takeover into the desktop app: never tell the user a window cannot write " +
+  "there. The workspace root's `.claude/settings.json` carries those " +
   "two rules, Design and Test carry only their role's tools, and a product repository's " +
   "`.claude/settings.json` is never written, so a trust dialog for a Wakeflow-written root " +
   "lists only those rules. Entries it lists beyond them - `Bash(git *)`, `Bash(node *)`, " +
@@ -422,7 +430,11 @@ const HOST_TRUST_STEPS_EN = [
   "writes precise allow rules for the published helper and the Wakeflow MCP tools into the",
   "workspace root's `.claude/settings.json`, and every window the helper launches is started",
   "with those two tools allowed, so product and test windows do not stop at a permission prompt for them",
-  "either; nothing broader such as `Bash(tmux *)` is written. A trust dialog for a root Wakeflow",
+  "either; nothing broader such as `Bash(tmux *)` is written. Windows other than the Controller",
+  "also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,",
+  "`.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that",
+  "lowers the chance of a stray edit and is not isolation - a process running as you can still",
+  "write there. A trust dialog for a root Wakeflow",
   "wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a",
   "`..` directory in that list is 0.9.x residue or the repository's own settings: delete or",
   "review it before accepting, because accepting activates it.",
@@ -460,7 +472,10 @@ const HOST_TRUST_STEPS_ZH = [
   "Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",
   "即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
   "Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口",
-  "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。因此 Wakeflow 写过的根，",
+  "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。Controller 之外的窗口启动时还带着",
+  "对 Wakeflow 自身文件（`.wakeflow-local`、`.wakeflow-active`、`wakeflow.config.json`、根上的 Claude",
+  "settings 与账本）的编辑拒绝规则：它降低误改的机会，不是隔离——以你的身份运行的进程仍然写得了那里。",
+  "因此 Wakeflow 写过的根，",
   "其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，",
   "那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。",
   "",

@@ -42,6 +42,17 @@ export interface PrivacyScanPolicy {
   readonly allowedPathRoots: readonly string[];
   /** 允许直接跟在 UUID 前面的前缀，例如 `demand_`。 */
   readonly allowedIdPrefixes: readonly string[];
+  /**
+   * 绝对路径的口径（open-items F9）。缺省 `any`：任何不在允许根之下的绝对路径都算。`system` 只算指向用户
+   * 目录或系统目录的路径与显式的文件系统写法（`file://`、盘符、UNC、`~/`、`$HOME/`）——自由文本里常见的
+   * 站内路由（`/api/v1/users`）与模块别名（`@/components`）不是私有路径。
+   */
+  readonly pathScope?: "any" | "system";
+  /**
+   * 裸 UUID 的口径（open-items F9）。缺省全部算。给了这张表就只算表里的值（不分大小写）：调用方把本工作区
+   * 的会话句柄交进来，产品自己的 UUID（请求号、记录号）不再被误拒，真正要挡的私有标识照挡。
+   */
+  readonly privateUuids?: readonly string[];
 }
 
 /** 持久身份与运行时身份（窗口绑定、维护操作）的前缀同出一源：新前缀只登记在 contracts。 */
@@ -186,18 +197,25 @@ function scanMatches(
   collect(text, CREDENTIAL_ASSIGNMENT_PATTERN, "credential-assignment", () => true, matches);
   collect(text, AUTHORIZATION_PATTERN, "credential-assignment", () => true, matches);
   collect(text, URL_CREDENTIAL_PATTERN, "credential-assignment", () => true, matches);
+  const systemOnly = policy.pathScope === "system";
   collect(
     text,
     ABSOLUTE_PATH_PATTERN,
     "unlisted-absolute-path",
-    (match) => !pathIsAllowed(match[0], roots),
+    (match) => !pathIsAllowed(match[0], roots) && (!systemOnly || isSystemAbsolutePath(match[0])),
     matches,
   );
+  const privateUuids =
+    policy.privateUuids === undefined
+      ? null
+      : new Set(policy.privateUuids.map((value) => value.toLowerCase()));
   collect(
     text,
     UUID_PATTERN,
     "bare-uuid",
-    (match) => !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes),
+    (match) =>
+      !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes) &&
+      (privateUuids === null || privateUuids.has(match[0].toLowerCase())),
     matches,
   );
   collect(
@@ -231,8 +249,8 @@ function withoutCsi(text: string): { text: string; offsets: readonly RemovedCsi[
   return { text: parts.join(""), offsets };
 }
 
-/** Requirement prose may name site routes; explicit filesystem locators stay private. */
-export function isSystemAbsolutePath(text: string): boolean {
+/** Free text may name site routes; explicit filesystem locators stay private (`pathScope: "system"`). */
+function isSystemAbsolutePath(text: string): boolean {
   const candidate = withoutCsi(text).text;
   if (/^(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|~\/|\$HOME\/)/iu.test(candidate)) return true;
   const normalized = normalizePath(candidate);

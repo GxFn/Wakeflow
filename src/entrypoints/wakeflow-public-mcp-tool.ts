@@ -18,6 +18,7 @@ import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { assertCanonicalTextWithinLimit } from "../kernel/limits.js";
 import { assertPublicJson, createRedactionBoundary } from "../kernel/redaction.js";
 import { publicToolDefinition, type WakeflowToolCatalog } from "../kernel/tool-registry.js";
+import type { WakeflowCallAuthorizer } from "./wakeflow-caller-role-gate.js";
 
 /**
  * Wakeflow Entrypoint / MCP：公共工具的协议边界。
@@ -256,6 +257,7 @@ export function registerWakeflowPublicMcpCatalog(
   executors: Readonly<Record<string, WakeflowPublicMcpExecutor<unknown>>>,
   beforeMutation?: () => void,
   writer: Readonly<DemandEventStreamCommitWriter> | null = null,
+  authorizeCall?: WakeflowCallAuthorizer,
 ): void {
   for (const registration of catalog.tools) {
     const execute = executors[registration.executor];
@@ -277,6 +279,8 @@ export function registerWakeflowPublicMcpCatalog(
       async (request: unknown, context) => {
         try {
           const input = parseJsonValue(request, "$request");
+          // 按窗口角色的归属表（ADR-0020 决定 3）：认得出调用方角色而工具不归它时，在任何读写之前拒绝。
+          await authorizeCall?.(definition.name, input, context.mcpReq.signal);
           const inspected =
             input !== null &&
             typeof input === "object" &&

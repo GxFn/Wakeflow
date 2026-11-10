@@ -23,7 +23,6 @@ import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { claudeCodeMcpPermissionRulesFor } from "../../../src/hosts/claude-code/claude-code-mcp-permission-rules.js";
 import {
   CLAUDE_CODE_TMUX_ASSET_COMMAND,
   CLAUDE_CODE_TMUX_ASSET_CONTENT,
@@ -43,6 +42,11 @@ import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { writeFakeCli } from "../../support/fake-cli.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
+import {
+  expectedClaudeCodeRuleArguments,
+  expectedClaudeCodeWriteDenyReport,
+  expectedClaudeCodeWriteDenyRules,
+} from "./claude-code-session-rules.fixture.js";
 
 useDisposableDurability();
 
@@ -236,13 +240,19 @@ function assertSessionPermissionRules(
   role: WakeflowWindowRole = "product",
 ): void {
   const words = shellWords(command);
-  const expected = [
-    "--allowedTools",
-    ...claudeCodeMcpPermissionRulesFor(role),
-    `Bash(node ${current.assetPath} *)`,
-  ];
+  const expected = expectedClaudeCodeRuleArguments({
+    role,
+    root: current.root,
+    ledgerRoot: "Ledger",
+    assetPath: current.assetPath,
+  });
   deepEqual(words.slice(-expected.length), expected);
   equal(words.filter((word) => word === "--allowedTools").length, 1, command);
+  equal(
+    words.filter((word) => word === "--disallowedTools").length,
+    role === "controller" ? 0 : 1,
+    command,
+  );
 }
 
 interface HelperRun {
@@ -700,6 +710,58 @@ test("launch and resume grant the Wakeflow MCP tools and the helper by its absol
   const command = reopened.at(-1)?.at(-1) ?? "";
   assertSessionPermissionRules(current, command);
   equal(shellWords(command).includes("--resume"), true);
+  // 结果只报规则的数目：规则本身带绝对路径，从不输出。
+  deepEqual(launched.json.writeDeny, expectedClaudeCodeWriteDenyReport("product"));
+  deepEqual(resumed.json.writeDeny, expectedClaudeCodeWriteDenyReport("product"));
+  equal(JSON.stringify([launched.json, resumed.json]).includes(current.parent), false);
+});
+
+test("a managed path the rule syntax cannot spell gets no deny rule and is counted; a symlinked ledger is denied under both spellings; a ledger the config does not name is counted（F1）", async (t) => {
+  const launchProduct = (target: Fixture): { run: HelperRun; words: readonly string[] } => {
+    const run = runHelper(target, ["launch", "--window", PRODUCT_WINDOW_ID, "--wait", "1"], {
+      input: JSON.stringify({
+        windowId: PRODUCT_WINDOW_ID,
+        launchIntent: launchIntent("Product A", "../ProductA"),
+      }),
+      env: { WAKEFLOW_STUB_HOOKS: target.hooks },
+    });
+    equal(run.status, 0, JSON.stringify(run.json));
+    const created = tmuxLog(target).filter(
+      (entry) => entry[0] === "new-session" || entry[0] === "new-window",
+    );
+    return { run, words: shellWords(created.at(-1)?.at(-1) ?? "") };
+  };
+  // 工作区路径里有括号：规则写不准，六处都不出规则，命令里没有 --disallowedTools，结果报六处未覆盖。
+  const odd = await fixture(t, "wakeflow-tmux-asset (odd) ");
+  const unspelled = launchProduct(odd);
+  deepEqual(unspelled.run.json.writeDeny, { rules: 0, unexpressed: 6 });
+  equal(unspelled.words.includes("--disallowedTools"), false);
+  equal(unspelled.words.filter((word) => word === "--allowedTools").length, 1);
+
+  // 账本根是符号链接：字面路径与真实路径各一条。
+  const linked = await fixture(t);
+  const realLedger = path.join(linked.parent, "RealLedger");
+  mkdirSync(realLedger);
+  symlinkSync(realLedger, path.join(linked.root, "Ledger"));
+  const both = launchProduct(linked);
+  deepEqual(both.run.json.writeDeny, { rules: 7, unexpressed: 0 });
+  const denied = both.words.slice(both.words.indexOf("--disallowedTools") + 1);
+  deepEqual(denied, [
+    ...expectedClaudeCodeWriteDenyRules(linked.root, "Ledger"),
+    `Edit(/${realLedger}/**)`,
+  ]);
+
+  // 配置里没有账本根：其余五处照常，账本这一处报未覆盖。
+  const unnamed = await fixture(t);
+  const config = createMinimalWakeflowConfig();
+  delete (config.storage as Record<string, unknown>).ledgerRoot;
+  writeFileSync(
+    path.join(unnamed.root, "wakeflow.config.json"),
+    `${JSON.stringify(config, null, 2)}\n`,
+  );
+  const partial = launchProduct(unnamed);
+  deepEqual(partial.run.json.writeDeny, { rules: 5, unexpressed: 1 });
+  equal(partial.words.filter((word) => word === "--disallowedTools").length, 1);
 });
 
 test("launch opens the session or a window from the intent, freezes the title, writes the identity options and returns the observation", async (t) => {
@@ -736,6 +798,8 @@ test("launch opens the session or a window from the intent, freezes the title, w
   equal(observation.worktree, undefined);
   deepEqual(first.json.hook, { sessionStart: "observed" });
   deepEqual(first.json.window, { name: "Controller", cwd: ".", created: "new-session" });
+  // Controller 的会话不带写拒绝规则：受管路径正是它要维护的。
+  deepEqual(first.json.writeDeny, expectedClaudeCodeWriteDenyReport("controller"));
   // 新建会话时告诉 Agent 让用户执行的那一条 attach 命令；已有会话时不重复。
   equal(first.json.attach, "tmux attach -t wakeflow");
 
@@ -2874,6 +2938,7 @@ test("resume --in-place from inside the window's own pane checks the session, sc
     self: true,
     scheduled: true,
     restartAfterSeconds: 2,
+    writeDeny: expectedClaudeCodeWriteDenyReport("product"),
   });
   // 返回时只读过 pane 清单：没有截屏，也没有同步 respawn 自己。
   deepEqual(

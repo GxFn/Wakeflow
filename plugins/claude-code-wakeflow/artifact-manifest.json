@@ -117,13 +117,13 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 17501,
-      "sha256": "sha256:7e4b655f0920d160f11207ba269b5e005663a44b3646160741efcea195b07a51"
+      "bytes": 17515,
+      "sha256": "sha256:90dfb8b4381e950a93ecb06bb84f38800c22ec8801c194b4a45aa804b45addd4"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 16044,
-      "sha256": "sha256:6793ca711f6dbb4e34daf6ff60181e8687e5dda1b867b3478aaf68947046f278"
+      "bytes": 16060,
+      "sha256": "sha256:4d894bfdc5d89bf1b003c3d3115a3e8b9324ef0caeb981f1f27558275b44ebaf"
     },
     {
       "path": "commands/init.md",
@@ -235,15 +235,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 17501,
-      "sha256": "sha256:7e4b655f0920d160f11207ba269b5e005663a44b3646160741efcea195b07a51",
+      "bytes": 17515,
+      "sha256": "sha256:90dfb8b4381e950a93ecb06bb84f38800c22ec8801c194b4a45aa804b45addd4",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 16044,
-      "sha256": "sha256:6793ca711f6dbb4e34daf6ff60181e8687e5dda1b867b3478aaf68947046f278",
+      "bytes": 16060,
+      "sha256": "sha256:4d894bfdc5d89bf1b003c3d3115a3e8b9324ef0caeb981f1f27558275b44ebaf",
       "mode": "0644",
       "scope": "agent-text"
     },

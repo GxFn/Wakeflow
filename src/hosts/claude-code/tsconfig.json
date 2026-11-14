@@ -21,6 +21,7 @@
     "claude-code-portable-settings-operation-executor.ts",
     "claude-code-portable-settings-publication.ts",
     "claude-code-portable-settings-transition.ts",
+    "claude-code-prompt-envelope.ts",
     "claude-code-statusline-asset-operation.ts",
     "claude-code-statusline-asset.ts",
     "claude-code-statusline-settings-operation.ts",

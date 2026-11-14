@@ -29,14 +29,14 @@ export class ManagedEvidenceResourcePathError extends Error {
     code = "wakeflow-managed-evidence-resource-path";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ManagedEvidenceResourcePathError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceResourcePathError(reason, path, cause === undefined ? undefined : { cause });
 }
 function evidenceId(value, path) {
     try {
@@ -44,7 +44,7 @@ function evidenceId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -91,7 +91,7 @@ export function parseManagedEvidenceRecordDirectoryName(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceResourcePathError) {
-            fail("record-directory-name", "$directoryName");
+            fail("record-directory-name", "$directoryName", error);
         }
         throw error;
     }
@@ -116,7 +116,7 @@ export function parseManagedEvidenceStageDirectoryName(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceResourcePathError) {
-            fail("stage-directory-name", "$directoryName");
+            fail("stage-directory-name", "$directoryName", error);
         }
         throw error;
     }

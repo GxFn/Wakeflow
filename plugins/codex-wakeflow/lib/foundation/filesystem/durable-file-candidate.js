@@ -31,16 +31,16 @@ export class DurableFileCandidateError extends Error {
     code = "wakeflow-durable-file-candidate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 /** 与耐久原子单文件写入一致的Foundation单文件硬上限。 */
 const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
-function fail(reason, path) {
-    throw new DurableFileCandidateError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableFileCandidateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -57,7 +57,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "mode") ||
@@ -96,8 +96,8 @@ function snapshotInput(value) {
     try {
         bytes = Buffer.from(value);
     }
-    catch {
-        fail("capacity", "$bytes");
+    catch (cause) {
+        fail("capacity", "$bytes", cause);
     }
     let digest;
     try {
@@ -105,7 +105,7 @@ function snapshotInput(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("hash-failure", "$bytes");
+            fail("hash-failure", "$bytes", error);
         throw error;
     }
     return Object.freeze({
@@ -128,8 +128,8 @@ function snapshotNode(value, reason) {
     try {
         return createFileNodeSnapshot(value, "$candidate");
     }
-    catch {
-        fail(reason, "$candidate");
+    catch (cause) {
+        fail(reason, "$candidate", cause);
     }
 }
 async function snapshotHandle(handle, reason) {
@@ -139,7 +139,7 @@ async function snapshotHandle(handle, reason) {
     catch (error) {
         if (error instanceof DurableFileCandidateError)
             throw error;
-        fail(reason, "$candidate");
+        fail(reason, "$candidate", error);
     }
 }
 async function assertParentCurrent(parent, reason, path) {
@@ -148,7 +148,7 @@ async function assertParentCurrent(parent, reason, path) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
 }
@@ -158,7 +158,7 @@ async function inspectParentTarget(parent, reason, path) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
 }
@@ -168,7 +168,7 @@ async function syncParent(parent) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail("durability-failure", "$candidate");
+            fail("durability-failure", "$candidate", error);
         }
         throw error;
     }
@@ -181,9 +181,9 @@ async function writeAll(handle, bytes, signal) {
         try {
             ({ bytesWritten: written } = await handle.write(bytes, offset, bytes.byteLength - offset, offset));
         }
-        catch {
+        catch (cause) {
             assertNotAborted(signal);
-            fail("write-failure", "$candidate");
+            fail("write-failure", "$candidate", cause);
         }
         if (written <= 0 || written > bytes.byteLength - offset) {
             fail("write-failure", "$candidate");
@@ -197,8 +197,8 @@ async function verifyBytes(handle, input, signal) {
     try {
         scratch = Buffer.allocUnsafe(Math.min(input.byteCount || 1, 512 * 1024));
     }
-    catch {
-        fail("candidate-changed", "$candidate");
+    catch (cause) {
+        fail("candidate-changed", "$candidate", cause);
     }
     let offset = 0;
     while (offset < input.byteCount) {
@@ -210,9 +210,9 @@ async function verifyBytes(handle, input, signal) {
             try {
                 ({ bytesRead: read } = await handle.read(scratch, filled, length - filled, offset + filled));
             }
-            catch {
+            catch (cause) {
                 assertNotAborted(signal);
-                fail("candidate-changed", "$candidate");
+                fail("candidate-changed", "$candidate", cause);
             }
             if (read <= 0 || read > length - filled) {
                 fail("candidate-changed", "$candidate");
@@ -233,7 +233,7 @@ async function verifyBytes(handle, input, signal) {
     catch (error) {
         if (error instanceof DurableFileCandidateError)
             throw error;
-        fail("candidate-changed", "$candidate");
+        fail("candidate-changed", "$candidate", error);
     }
     const after = await snapshotHandle(handle, "candidate-changed");
     if (!sameFileNodeSnapshot(before, after)) {
@@ -277,10 +277,10 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "input")
-                fail("input", "$resourcePath");
-            fail("parent", "$resourcePath");
+                fail("input", "$resourcePath", error);
+            fail("parent", "$resourcePath", error);
         }
         throw error;
     }
@@ -299,17 +299,17 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "EEXIST") {
-                fail("target-exists", "$resourcePath");
+                fail("target-exists", "$resourcePath", error);
             }
-            fail("create-failure", "$candidate");
+            fail("create-failure", "$candidate", error);
         }
         await writeAll(handle, input.bytes, options.signal);
         assertNotAborted(options.signal);
         try {
             await handle.chmod(options.mode);
         }
-        catch {
-            fail("write-failure", "$candidate");
+        catch (cause) {
+            fail("write-failure", "$candidate", cause);
         }
         let prepared = await verifyBytes(handle, input, options.signal);
         if (prepared.kind !== "file" ||
@@ -324,8 +324,8 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
             try {
                 await handle.sync();
             }
-            catch {
-                fail("sync-failure", "$candidate");
+            catch (cause) {
+                fail("sync-failure", "$candidate", cause);
             }
         }
         prepared = await verifyBytes(handle, input, options.signal);

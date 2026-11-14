@@ -45,7 +45,7 @@ export function parseDemandEventStreamCommitWriter(value, path = "$writer") {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -72,7 +72,7 @@ function parseIdempotency(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -108,8 +108,8 @@ export class DemandEventStreamCommitError extends Error {
     code = "wakeflow-demand-event-stream-commit";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -122,8 +122,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_STRE
 const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"]);
 const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency", "writer"]);
 const ISSUED_PREPARED_COMMITS = new WeakSet();
-function fail(reason, path) {
-    throw new DemandEventStreamCommitError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventStreamCommitError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -131,7 +131,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -147,7 +147,7 @@ function parseCommitId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -157,7 +157,7 @@ function parseDemandId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -169,7 +169,7 @@ export function parseDemandEventStreamCommit(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -190,7 +190,7 @@ export function parseDemandEventStreamCommit(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", error.path);
+            fail("position", error.path, error);
         }
         throw error;
     }
@@ -206,7 +206,7 @@ export function parseDemandEventStreamCommit(value) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingStoredEventError) {
-                fail("event", `$/events/${index}`);
+                fail("event", `$/events/${index}`, error);
             }
             throw error;
         }
@@ -257,7 +257,7 @@ export function parseDemandEventStreamCommitDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$commit");
+            fail("representation", "$commit", error);
         }
         throw error;
     }
@@ -277,7 +277,7 @@ function parsePrepareInput(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$input");
+            fail("input", "$input", error);
         throw error;
     }
     const keys = Object.keys(record)
@@ -295,7 +295,7 @@ function parsePrepareInput(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$/events");
+            fail("input", "$/events", error);
         throw error;
     }
     if (values.length === 0)
@@ -306,7 +306,7 @@ function parsePrepareInput(value) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingEventError) {
-                fail("event", `$/events/${index}`);
+                fail("event", `$/events/${index}`, error);
             }
             throw error;
         }
@@ -375,7 +375,7 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingAggregateError) {
-                fail("aggregate", "$aggregate");
+                fail("aggregate", "$aggregate", error);
             }
             throw error;
         }
@@ -400,7 +400,7 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingStateVersionError) {
-                fail("state-version", `$/events/${index}/resultingStateModelVersion`);
+                fail("state-version", `$/events/${index}/resultingStateModelVersion`, error);
             }
             throw error;
         }
@@ -411,9 +411,9 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         catch (error) {
             if (error instanceof DemandEventSourcingUpcasterError) {
                 if (error.reason === "unsupported-version" || error.reason === "unsupported-event-type") {
-                    fail("event-version", `$/events/${index}/eventVersion`);
+                    fail("event-version", `$/events/${index}/eventVersion`, error);
                 }
-                fail("event", `$/events/${index}`);
+                fail("event", `$/events/${index}`, error);
             }
             throw error;
         }
@@ -424,7 +424,7 @@ export function applyDemandEventStreamCommit(currentValue, commitValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingDecisionError) {
-                fail("transition", `$/events/${index}`);
+                fail("transition", `$/events/${index}`, error);
             }
             throw error;
         }
@@ -473,7 +473,7 @@ function buildDemandEventStreamCommit(currentValue, inputValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingAggregateError) {
-                fail("aggregate", "$aggregate");
+                fail("aggregate", "$aggregate", error);
             }
             throw error;
         }
@@ -506,7 +506,7 @@ function buildDemandEventStreamCommit(currentValue, inputValue) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingDecisionError) {
-                fail("transition", `$/events/${index}`);
+                fail("transition", `$/events/${index}`, error);
             }
             throw error;
         }

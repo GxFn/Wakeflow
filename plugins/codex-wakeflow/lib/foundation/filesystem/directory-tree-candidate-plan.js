@@ -36,8 +36,8 @@ export class DurableDirectoryTreeCandidateError extends Error {
     code = "wakeflow-durable-directory-tree-candidate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -69,11 +69,11 @@ const PLAN_FIELDS = Object.freeze([
 ]);
 const PLAN_FILE_FIELDS = Object.freeze(["byteCount", "digest", "mode", "path"]);
 const INPUT_FILE_FIELDS = Object.freeze(["bytes", "mode", "path"]);
-export function throwDirectoryTreeCandidateError(reason, path) {
-    return fail(reason, path);
+export function throwDirectoryTreeCandidateError(reason, path, cause) {
+    return fail(reason, path, cause);
 }
-function fail(reason, path) {
-    throw new DurableDirectoryTreeCandidateError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableDirectoryTreeCandidateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function compareText(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -91,7 +91,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -102,8 +102,8 @@ function denseArray(value, maximumLength, path) {
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
             if (error.reason === "array-length")
-                fail("capacity", path);
-            fail("input", path);
+                fail("capacity", path, error);
+            fail("input", path, error);
         }
         throw error;
     }
@@ -138,7 +138,7 @@ function byteCount(value, path) {
     }
     catch (error) {
         if (error instanceof ByteCountError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -204,7 +204,7 @@ export function parseDirectoryTreeCandidatePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -214,7 +214,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -307,7 +307,7 @@ function planDigestValue(directoryMode, directories, files, totalBytes) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", "$plan");
+            fail("input", "$plan", error);
         throw error;
     }
 }
@@ -322,7 +322,7 @@ function buildPlan(directoryMode, files) {
         }
         catch (error) {
             if (error instanceof ByteCountError)
-                fail("capacity", "$/files");
+                fail("capacity", "$/files", error);
             throw error;
         }
     }
@@ -373,8 +373,8 @@ export function prepareDirectoryTreeCandidate(filesValue, optionsValue) {
         try {
             bytes = new Uint8Array(inputBytes);
         }
-        catch {
-            fail("capacity", `$files/${index}/bytes`);
+        catch (cause) {
+            fail("capacity", `$files/${index}/bytes`, cause);
         }
         return Object.freeze({
             path: parsePlanPath(input.path, `$files/${index}/path`),

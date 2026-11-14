@@ -34,8 +34,8 @@ export class DeliveryOutcomeError extends Error {
     code = "wakeflow-delivery-outcome";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -47,8 +47,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DELIVERY_OUTCOME_
     WAKEFLOW_TASK_PACKAGE_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new DeliveryOutcomeError(reason, path);
+function fail(reason, path, cause) {
+    throw new DeliveryOutcomeError(reason, path, cause === undefined ? undefined : { cause });
 }
 function id(value, kind, path) {
     try {
@@ -56,7 +56,7 @@ function id(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -66,7 +66,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -79,7 +79,7 @@ function instant(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -128,7 +128,7 @@ export function parseDeliveryOutcome(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const validated = validateWire(json);

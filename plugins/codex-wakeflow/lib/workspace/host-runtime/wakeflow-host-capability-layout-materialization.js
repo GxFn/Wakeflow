@@ -24,14 +24,14 @@ export class WakeflowHostCapabilityLayoutMaterializationError extends Error {
     code = "wakeflow-host-capability-layout-materialization";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowHostCapabilityLayoutMaterializationError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowHostCapabilityLayoutMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseOptions(value) {
     let record;
@@ -40,7 +40,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "recoveringFreshLayout") ||
@@ -109,7 +109,7 @@ async function optionalDirectory(root, resourcePath) {
             throw error;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -128,10 +128,10 @@ async function readDirectory(root, resourcePath, maximumEntries, signal) {
         }
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("prefix-conflict", `$layout/${resourcePath}`);
+                fail("root-scope", "$root", error);
+            fail("prefix-conflict", `$layout/${resourcePath}`, error);
         }
         throw error;
     }
@@ -192,8 +192,8 @@ async function ensureDirectory(root, resourcePath, recovering, signal) {
         }
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("operation-failure", `$layout/${resourcePath}`);
+                fail("aborted", "$signal", error);
+            fail("operation-failure", `$layout/${resourcePath}`, error);
         }
         throw error;
     }
@@ -209,7 +209,7 @@ function parseProfileAndAuthority(profileValue) {
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError ||
             error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }
@@ -326,8 +326,8 @@ export async function ensureWakeflowHostCapabilityLayout(rootValue, profileValue
         catch (error) {
             if (error instanceof DurableDirectoryMaterializationError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("operation-failure", `$layout/${resourcePath}`);
+                    fail("aborted", "$signal", error);
+                fail("operation-failure", `$layout/${resourcePath}`, error);
             }
             throw error;
         }

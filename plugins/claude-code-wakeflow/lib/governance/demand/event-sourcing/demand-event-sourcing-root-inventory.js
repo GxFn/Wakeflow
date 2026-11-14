@@ -24,8 +24,8 @@ export class DemandEventSourcingRootInventoryError extends Error {
     code = "wakeflow-demand-event-sourcing-root-inventory";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -44,8 +44,8 @@ const EVENT_SOURCING_NAMES = Object.freeze([
     "snapshots",
 ]);
 const ARTIFACT_NAMES = new Set(["managed-evidence", "permits", "task-packages"]);
-function fail(reason, path) {
-    throw new DemandEventSourcingRootInventoryError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingRootInventoryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function exactNames(read, names, path) {
     if (read.entries.length !== names.length ||
@@ -88,7 +88,7 @@ function mapReadError(error, path) {
         error.reason === "not-directory") {
         fail("tree-shape", path);
     }
-    fail("operation-failure", path);
+    fail("operation-failure", path, error);
 }
 function mapManagedEvidenceError(error) {
     if (error.reason === "aborted")
@@ -108,7 +108,7 @@ function mapManagedEvidenceError(error) {
         error.reason === "record") {
         fail("tree-shape", "$managed-evidence");
     }
-    fail("operation-failure", "$managed-evidence");
+    fail("operation-failure", "$managed-evidence", error);
 }
 async function readResource(root, ref, maximumEntries, signal, expectedNode) {
     try {
@@ -131,7 +131,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "phase" && key !== "signal") ||
@@ -173,7 +173,7 @@ function permitPromptKind(name, path) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingPathError)
-            fail("tree-shape", path);
+            fail("tree-shape", path, error);
         throw error;
     }
 }
@@ -197,7 +197,7 @@ async function inspectPermitPrompts(root, artifacts, signal) {
             }
             catch (error) {
                 if (error instanceof DemandEventSourcingPathError) {
-                    fail("tree-shape", `$permits/${kind}/${index}`);
+                    fail("tree-shape", `$permits/${kind}/${index}`, error);
                 }
                 throw error;
             }
@@ -220,7 +220,7 @@ function isToleratedSnapshotStageResidue(name, path, node) {
     }
     catch (error) {
         if (error instanceof DurableAtomicFileStageAddressError)
-            fail("tree-shape", path);
+            fail("tree-shape", path, error);
         throw error;
     }
     const owner = readDurableAtomicFileStageOwnerState(stage, node);
@@ -288,7 +288,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
         }
         catch (error) {
             if (error instanceof TaskPackageProjectionPathError) {
-                fail("tree-shape", `$task-packages/${index}`);
+                fail("tree-shape", `$task-packages/${index}`, error);
             }
             throw error;
         }
@@ -343,7 +343,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingPathError) {
-                fail("tree-shape", `$commits/${index}`);
+                fail("tree-shape", `$commits/${index}`, error);
             }
             throw error;
         }
@@ -361,7 +361,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingPathError) {
-                fail("tree-shape", `$snapshots/${index}`);
+                fail("tree-shape", `$snapshots/${index}`, error);
             }
             throw error;
         }
@@ -375,7 +375,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingPathError) {
-                fail("tree-shape", `$index/${index}`);
+                fail("tree-shape", `$index/${index}`, error);
             }
             throw error;
         }

@@ -58,8 +58,8 @@ export class WakeflowWorkspaceHostResourceProfileError extends Error {
     code = "wakeflow-workspace-host-resource-profile";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -94,8 +94,8 @@ const WORKTREE_FIELDS = new Set(["launch", "attachedDirectories"]);
 const WORKTREE_LAUNCH_SET = new Set(WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES);
 const ATTACHED_DIRECTORY_MODE_SET = new Set(WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES);
 const STATUSLINE_ASSET_FIELDS = new Set(["fileName"]);
-function fail(reason, path) {
-    throw new WakeflowWorkspaceHostResourceProfileError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWorkspaceHostResourceProfileError(reason, path, cause === undefined ? undefined : { cause });
 }
 function propertyPath(base, key) {
     const escaped = key.replaceAll("~", "~0").replaceAll("/", "~1");
@@ -114,7 +114,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -134,7 +134,7 @@ function parseComponent(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("component", path);
+            fail("component", path, error);
         throw error;
     }
 }
@@ -144,7 +144,7 @@ function parseResourcePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("path", path);
+            fail("path", path, error);
         throw error;
     }
 }

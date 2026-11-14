@@ -18,8 +18,8 @@ export class WakeflowHostMaintenanceContributionError extends Error {
     code = "wakeflow-host-maintenance-contribution";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -32,8 +32,8 @@ const TARGET_KEY_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,255}$/u;
 const MAXIMUM_OPERATIONS = 128;
 const MAXIMUM_BLOCKERS = 128;
 const MAXIMUM_IDENTITY_LENGTH = 256;
-function fail(reason, path) {
-    throw new WakeflowHostMaintenanceContributionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowHostMaintenanceContributionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function digest(value, path) {
     try {
@@ -41,7 +41,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -70,7 +70,7 @@ function parsePayload(value, path) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("payload", error.path);
+            fail("payload", error.path, error);
         throw error;
     }
 }
@@ -82,7 +82,7 @@ function parseOperation(value, index, requirePayloadDigest, basePath) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const expectedFields = requirePayloadDigest
@@ -170,7 +170,7 @@ export function createWakeflowHostMaintenanceContribution(requestValue) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (Object.keys(record).sort().join("\u0000") !==
@@ -217,7 +217,7 @@ export function parseWakeflowHostMaintenanceContribution(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (Object.keys(record).sort().join("\u0000") !==

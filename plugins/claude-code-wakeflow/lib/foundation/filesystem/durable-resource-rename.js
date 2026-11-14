@@ -40,14 +40,14 @@ export class DurableResourceRenameError extends Error {
     code = "wakeflow-durable-resource-rename";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableResourceRenameError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableResourceRenameError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseResourcePath(value, path) {
     try {
@@ -55,7 +55,7 @@ function parseResourcePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -91,7 +91,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$options.expectedSourceNode");
+            fail("input", "$options.expectedSourceNode", error);
         }
         throw error;
     }
@@ -104,7 +104,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set(["expectedSourceNode", "signal"]);
@@ -171,7 +171,7 @@ async function assertParentCurrent(parent, errorPath, afterCommit = false) {
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
             if (afterCommit)
-                fail("commit-uncertain", errorPath);
+                fail("commit-uncertain", errorPath, error);
             mapParentHandleError(error, "current", errorPath);
         }
         throw error;
@@ -364,9 +364,9 @@ export async function renameResourceDurably(root, sourceResourcePath, destinatio
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "EXDEV") {
-                fail("cross-device", "$destinationResourcePath");
+                fail("cross-device", "$destinationResourcePath", error);
             }
-            fail("rename-failure", "$destinationResourcePath");
+            fail("rename-failure", "$destinationResourcePath", error);
         }
         await assertSourceAbsent(sourceParent);
         const movedNode = await inspectMovedDestination(destinationParent, source);

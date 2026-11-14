@@ -43,8 +43,8 @@ export class DemandEventSourcingSnapshotError extends Error {
     code = "wakeflow-demand-event-sourcing-snapshot";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -57,8 +57,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_SOUR
     WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new DemandEventSourcingSnapshotError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingSnapshotError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -66,7 +66,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -77,7 +77,7 @@ export function parseDemandEventSourcingSnapshot(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -92,7 +92,7 @@ export function parseDemandEventSourcingSnapshot(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", error.path);
+            fail("identifier", error.path, error);
         }
         throw error;
     }
@@ -102,7 +102,7 @@ export function parseDemandEventSourcingSnapshot(value) {
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError)
-            fail("state", "$/state");
+            fail("state", "$/state", error);
         throw error;
     }
     const stateDigest = parseDigest(wire.stateDigest, "$/stateDigest");
@@ -115,7 +115,7 @@ export function parseDemandEventSourcingSnapshot(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", error.path);
+            fail("position", error.path, error);
         }
         throw error;
     }
@@ -146,7 +146,7 @@ export function createDemandEventSourcingSnapshot(aggregateValue) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingAggregateError) {
-            fail("aggregate", "$aggregate");
+            fail("aggregate", "$aggregate", error);
         }
         throw error;
     }
@@ -173,7 +173,7 @@ export function restoreDemandEventSourcingSnapshot(snapshotValue, anchorCommitVa
     }
     catch (error) {
         if (error instanceof DemandEventStreamCommitError)
-            fail("commit", "$commit");
+            fail("commit", "$commit", error);
         throw error;
     }
     const lastEvent = anchor.events.at(-1);
@@ -201,7 +201,7 @@ export function restoreDemandEventSourcingSnapshot(snapshotValue, anchorCommitVa
     }
     catch (error) {
         if (error instanceof DemandEventSourcingAggregateError) {
-            fail("mismatch", "$snapshot");
+            fail("mismatch", "$snapshot", error);
         }
         throw error;
     }
@@ -216,7 +216,7 @@ export function parseDemandEventSourcingSnapshotDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$snapshot");
+            fail("representation", "$snapshot", error);
         }
         throw error;
     }

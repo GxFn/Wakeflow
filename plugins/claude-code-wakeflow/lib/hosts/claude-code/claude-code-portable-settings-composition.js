@@ -24,14 +24,14 @@ class ClaudeCodePortableSettingsCompositionError extends Error {
     code = "wakeflow-claude-code-portable-settings-composition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodePortableSettingsCompositionError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodePortableSettingsCompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseRequest(value) {
     let record;
@@ -40,7 +40,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     if (!Object.hasOwn(record, "action") ||
@@ -62,7 +62,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
     let profile;
@@ -71,7 +71,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -85,7 +85,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsTransitionError)
-            fail("profile", "$/profile");
+            fail("profile", "$/profile", error);
         throw error;
     }
     return Object.freeze({
@@ -171,11 +171,11 @@ async function inspectRootSettings(root, options) {
             throw error;
         }
         if (error.reason === "aborted")
-            fail("aborted", "$signal");
+            fail("aborted", "$signal", error);
         if (BLOCKING_PUBLICATION_REASONS.has(error.reason)) {
             return { blockedReason: error.reason };
         }
-        fail("inspection", "$settings");
+        fail("inspection", "$settings", error);
     }
 }
 async function inspectPresentRoot(absolutePath, options) {
@@ -185,7 +185,7 @@ async function inspectPresentRoot(absolutePath, options) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-open", "$configuredRoot");
+            fail("root-open", "$configuredRoot", error);
         throw error;
     }
     let inspection;
@@ -229,7 +229,7 @@ async function rootPlacements(workspaceRoot, model) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("placement", error.path);
+            fail("placement", error.path, error);
         }
         throw error;
     }

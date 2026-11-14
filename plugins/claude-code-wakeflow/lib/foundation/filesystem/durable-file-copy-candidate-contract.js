@@ -33,14 +33,14 @@ export class DurableFileCopyCandidateError extends Error {
     code = "wakeflow-durable-file-copy-candidate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failDurableFileCopyCandidate(reason, path) {
-    throw new DurableFileCopyCandidateError(reason, path);
+export function failDurableFileCopyCandidate(reason, path, cause) {
+    throw new DurableFileCopyCandidateError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function assertDurableFileCopyRoot(value, path) {
     if (typeof value !== "object" ||
@@ -56,7 +56,7 @@ export function parseDurableFileCopyPath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            failDurableFileCopyCandidate("input", path);
+            failDurableFileCopyCandidate("input", path, error);
         }
         throw error;
     }
@@ -67,7 +67,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failDurableFileCopyCandidate("input", path);
+            failDurableFileCopyCandidate("input", path, error);
         }
         throw error;
     }
@@ -88,7 +88,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            failDurableFileCopyCandidate("input", "$expectation.expectedNode");
+            failDurableFileCopyCandidate("input", "$expectation.expectedNode", error);
         }
         throw error;
     }
@@ -114,7 +114,7 @@ export function parseDurableFileCopyExpectation(value) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            failDurableFileCopyCandidate("input", "$expectation.byteCount");
+            failDurableFileCopyCandidate("input", "$expectation.byteCount", error);
         }
         throw error;
     }
@@ -123,7 +123,7 @@ export function parseDurableFileCopyExpectation(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            failDurableFileCopyCandidate("input", "$expectation.digest");
+            failDurableFileCopyCandidate("input", "$expectation.digest", error);
         }
         throw error;
     }
@@ -160,7 +160,7 @@ export function parseDurableFileCopyOptions(value) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            failDurableFileCopyCandidate("input", "$options.maximumBytes");
+            failDurableFileCopyCandidate("input", "$options.maximumBytes", error);
         }
         throw error;
     }
@@ -182,7 +182,7 @@ export function snapshotDurableFileCopyNode(value, reason, path) {
     try {
         return createFileNodeSnapshot(value, path);
     }
-    catch {
-        failDurableFileCopyCandidate(reason, path);
+    catch (cause) {
+        failDurableFileCopyCandidate(reason, path, cause);
     }
 }

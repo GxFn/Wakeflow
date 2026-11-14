@@ -27,8 +27,8 @@ export class BoundedDirectoryTreeScanError extends Error {
     code = "wakeflow-bounded-directory-tree-scan";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -47,8 +47,8 @@ const LOWER_REASON_MAP = {
     aborted: "aborted",
     "close-failure": "close-failure",
 };
-function fail(reason, path) {
-    throw new BoundedDirectoryTreeScanError(reason, path);
+function fail(reason, path, cause) {
+    throw new BoundedDirectoryTreeScanError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -69,7 +69,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const required = ["maximumDepth", "maximumEntries"];
@@ -131,7 +131,7 @@ async function readOneDirectory(root, resourcePath, maximumEntries, expectedNode
                 (error.reason === "not-found" ||
                     error.reason === "symlink" ||
                     error.reason === "not-directory")) {
-                fail("source-changed", "$options.expectedNode");
+                fail("source-changed", "$options.expectedNode", error);
             }
             mapDirectoryReadError(error, limitReason);
         }

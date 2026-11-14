@@ -14,14 +14,14 @@ export class WakeflowWindowLaunchIntentError extends Error {
     code = "wakeflow-window-launch-intent";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowWindowLaunchIntentError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowLaunchIntentError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseConfig(value) {
     try {
@@ -29,7 +29,7 @@ function parseConfig(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
 }
@@ -39,7 +39,7 @@ function parseProfile(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }

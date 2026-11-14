@@ -24,8 +24,8 @@ export class WakeflowMaintenanceGateError extends Error {
     code = "wakeflow-maintenance-gate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -33,8 +33,8 @@ export class WakeflowMaintenanceGateError extends Error {
 const ACTIVE_CONTEXTS = new WeakSet();
 const CONTEXT_ROOTS = new WeakMap();
 const CONTEXT_CORE_INSPECTIONS = new WeakMap();
-function fail(reason, path) {
-    throw new WakeflowMaintenanceGateError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceGateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function admittedOperationId(value, path) {
     try {
@@ -42,7 +42,7 @@ function admittedOperationId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("input", path);
+            fail("input", path, error);
         }
         throw error;
     }
@@ -55,7 +55,7 @@ function createOperationId(factory) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("input", "$options.uuidFactory");
+            fail("input", "$options.uuidFactory", error);
         }
         throw error;
     }
@@ -75,7 +75,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set([
@@ -110,7 +110,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            fail("input", "$options.expectedCoreLayoutInspectionDigest");
+            fail("input", "$options.expectedCoreLayoutInspectionDigest", error);
         }
         throw error;
     }
@@ -149,8 +149,8 @@ async function materialize(root, resourcePath, signal) {
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("effect-failure", "$bootstrap");
+                fail("aborted", "$signal", error);
+            fail("effect-failure", "$bootstrap", error);
         }
         throw error;
     }
@@ -250,7 +250,7 @@ function parseWakeflowExistingMaintenanceGateOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "acquireTimeoutMilliseconds" &&
@@ -307,8 +307,8 @@ async function admitLockedCoreInspection(root, before, expectedLockToken, signal
     catch (error) {
         if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("bootstrap-conflict", "$bootstrap");
+                fail("aborted", "$signal", error);
+            fail("bootstrap-conflict", "$bootstrap", error);
         }
         throw error;
     }
@@ -340,8 +340,8 @@ export async function withWakeflowMaintenanceGate(rootValue, optionsValue, opera
     catch (error) {
         if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("bootstrap-conflict", "$bootstrap");
+                fail("aborted", "$signal", error);
+            fail("bootstrap-conflict", "$bootstrap", error);
         }
         throw error;
     }

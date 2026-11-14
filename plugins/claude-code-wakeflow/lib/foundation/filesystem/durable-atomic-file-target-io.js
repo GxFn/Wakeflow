@@ -112,20 +112,20 @@ export async function assertExpectedDurableAtomicFileTarget(root, resourcePath, 
     catch (error) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "input")
-                fail("input", "$resourcePath");
+                fail("input", "$resourcePath", error);
             if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-                fail("root-scope", "$resourcePath");
+                fail("root-scope", "$resourcePath", error);
             }
             if (error.reason === "not-found" ||
                 error.reason === "symlink" ||
                 error.reason === "not-file" ||
                 error.reason === "expectation-changed" ||
                 error.reason === "source-changed") {
-                fail("expectation-changed", "$resourcePath");
+                fail("expectation-changed", "$resourcePath", error);
             }
-            fail("expectation-read-failure", "$resourcePath");
+            fail("expectation-read-failure", "$resourcePath", error);
         }
         throw error;
     }

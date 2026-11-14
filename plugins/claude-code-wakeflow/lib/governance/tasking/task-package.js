@@ -46,8 +46,8 @@ export class TaskPackageError extends Error {
     code = "wakeflow-task-package";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -102,8 +102,8 @@ const TEST_DRAFT_FIELDS = Object.freeze([
     "workType",
 ]);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z", "$draftValidationInstant");
-function fail(reason, path) {
-    throw new TaskPackageError(reason, path);
+function fail(reason, path, cause) {
+    throw new TaskPackageError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseCanonicalText(value, path) {
     if (!value.isWellFormed() ||
@@ -119,7 +119,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -129,7 +129,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -139,7 +139,7 @@ function parseCreationTime(value) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/createdAt");
+            fail("time", "$/createdAt", error);
         throw error;
     }
 }
@@ -172,7 +172,7 @@ function parseSelectedAuthorityRefs(values) {
         }
         catch (error) {
             if (error instanceof LedgerAuthorityStoreError) {
-                fail("reference", `$/selectedAuthorityRefs/${index}`);
+                fail("reference", `$/selectedAuthorityRefs/${index}`, error);
             }
             throw error;
         }
@@ -235,7 +235,7 @@ function parsePlanReview(value) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/planReview/confirmedAt");
+            fail("time", "$/planReview/confirmedAt", error);
         throw error;
     }
     return Object.freeze({ reviewer: "user", confirmedAt });
@@ -295,7 +295,7 @@ function parseTestContract(value) {
     }
     catch (error) {
         if (error instanceof LedgerAuthorityStoreError)
-            fail("reference", "$/testContract/environment");
+            fail("reference", "$/testContract/environment", error);
         throw error;
     }
     const stopConditions = parseNonEmptyTextList(value.stopConditions, "$/testContract/stopConditions");
@@ -448,7 +448,7 @@ export function parseTaskPackage(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -463,7 +463,7 @@ function readCreationTime(options) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "clock")) {
@@ -473,6 +473,7 @@ function readCreationTime(options) {
         return readUtcWallClock(record.clock);
     }
     catch (error) {
+        // 时钟是注入的回调：它抛出的东西不留作 cause（测试钉住的净化约定），只说读时间失败。
         if (error instanceof UtcWallClockError)
             fail("time", "$options/clock");
         throw error;
@@ -486,7 +487,7 @@ export function createTaskPackage(draft, options = {}) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$draft");
+            fail("input", "$draft", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -550,7 +551,7 @@ export function parseTaskPackageDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

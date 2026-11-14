@@ -28,14 +28,14 @@ export class DemandEventSourcingStoredEventError extends Error {
     code = "wakeflow-demand-event-sourcing-stored-event";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandEventSourcingStoredEventError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingStoredEventError(reason, path, cause === undefined ? undefined : { cause });
 }
 function mapEnvelopeError(error) {
     if (error.reason === "json")
@@ -70,7 +70,7 @@ export function createDemandEventSourcingStoredEvent(eventValue, streamRevisionV
     }
     catch (error) {
         if (error instanceof DemandEventSourcingEventError)
-            fail("event", "$event");
+            fail("event", "$event", error);
         throw error;
     }
     let state;
@@ -79,7 +79,7 @@ export function createDemandEventSourcingStoredEvent(eventValue, streamRevisionV
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError)
-            fail("state", "$state");
+            fail("state", "$state", error);
         throw error;
     }
     if (state.demandId !== event.demandId)
@@ -91,7 +91,7 @@ export function createDemandEventSourcingStoredEvent(eventValue, streamRevisionV
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("revision", "$streamRevision");
+            fail("revision", "$streamRevision", error);
         }
         throw error;
     }

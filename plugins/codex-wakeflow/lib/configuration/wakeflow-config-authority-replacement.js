@@ -46,7 +46,7 @@ async function replaceCurrentBytes(root, current, desired, signal) {
         if (error instanceof DurableAtomicFileWriteError) {
             mapAtomicReplaceError(error);
         }
-        fail("replacement-failure", "$resourcePath");
+        fail("replacement-failure", "$resourcePath", error);
     }
 }
 function assertReplacementReadback(source, effect, authority, desired, expectedUserId) {
@@ -129,7 +129,7 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
         if (error instanceof RootedExclusiveFileLockError) {
             mapWakeflowConfigAuthorityLockError(error, committed);
         }
-        fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath");
+        fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath", error);
     }
 }
 export { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";

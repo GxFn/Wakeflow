@@ -22,21 +22,21 @@ async function inspectCurrent(root, request, signal, afterCommit) {
     }
     catch (error) {
         if (afterCommit)
-            fail("commit-uncertain", "$resourcePath");
+            fail("commit-uncertain", "$resourcePath", error);
         if (error instanceof WakeflowGitignoreInspectionError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "target-capacity")
-                fail("capacity", "$target");
+                fail("capacity", "$target", error);
             if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-                fail("input", error.path);
+                fail("input", error.path, error);
             }
             if (error.reason === "git" || error.reason === "git-repository") {
-                fail("observation-failure", "$git");
+                fail("observation-failure", "$git", error);
             }
-            fail("source-invalid", "$source");
+            fail("source-invalid", "$source", error);
         }
-        fail("observation-failure", "$git");
+        fail("observation-failure", "$git", error);
     }
 }
 function mapAtomicError(error) {
@@ -89,7 +89,7 @@ async function publishTarget(root, inspection, signal) {
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError)
             mapAtomicError(error);
-        fail("effect-failure", "$resourcePath");
+        fail("effect-failure", "$resourcePath", error);
     }
 }
 function sameSource(left, right) {
@@ -181,7 +181,7 @@ export async function recomposeWakeflowWorkspaceGitignore(rootValue, requestValu
         if (error instanceof RootedExclusiveFileLockError) {
             mapWakeflowGitignoreRecompositionLockError(error, committed);
         }
-        fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
+        fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);
     }
 }
 export { WakeflowGitignoreRecompositionError, } from "./wakeflow-gitignore-recomposition-contract.js";

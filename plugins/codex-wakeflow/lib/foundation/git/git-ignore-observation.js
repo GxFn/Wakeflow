@@ -41,14 +41,14 @@ export class GitIgnoreObservationError extends Error {
     code = "wakeflow-git-ignore-observation";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new GitIgnoreObservationError(reason, path);
+function fail(reason, path, cause) {
+    throw new GitIgnoreObservationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value, path) {
     if (typeof value !== "object" ||
@@ -71,7 +71,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const keys = Object.keys(record);
@@ -90,7 +90,7 @@ function parseProbePaths(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$probePaths");
+            fail("input", "$probePaths", error);
         throw error;
     }
     if (members.length === 0)
@@ -105,7 +105,7 @@ function parseProbePaths(value) {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError) {
-                fail("input", `$probePaths/${index}`);
+                fail("input", `$probePaths/${index}`, error);
             }
             throw error;
         }
@@ -130,7 +130,7 @@ async function assertRootCurrent(root, path) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", path);
+            fail("root-scope", path, error);
         throw error;
     }
 }
@@ -309,7 +309,7 @@ function parseOutput(result, probePaths) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("protocol", "$git.stdout");
+            fail("protocol", "$git.stdout", error);
         throw error;
     }
     const fields = output.split("\u0000");

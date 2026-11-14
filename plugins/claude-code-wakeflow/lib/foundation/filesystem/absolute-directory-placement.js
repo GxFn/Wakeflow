@@ -15,16 +15,16 @@ export class AbsoluteDirectoryPlacementError extends Error {
     code = "wakeflow-absolute-directory-placement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
-function fail(reason, path) {
-    throw new AbsoluteDirectoryPlacementError(reason, path);
+function fail(reason, path, cause) {
+    throw new AbsoluteDirectoryPlacementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function normalizeErrorPath(value) {
     return typeof value === "string" && value.length > 0 ? value : "$directory";
@@ -49,7 +49,7 @@ function snapshotDirectoryNode(stats, path) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("inspection-failure", path);
+            fail("inspection-failure", path, error);
         }
         throw error;
     }
@@ -67,7 +67,7 @@ async function inspectOnePath(physicalPath, errorPath) {
     catch (error) {
         if (readNodeSystemErrorCode(error) === "ENOENT")
             return null;
-        fail("inspection-failure", errorPath);
+        fail("inspection-failure", errorPath, error);
     }
     return snapshotDirectoryNode(stats, errorPath);
 }

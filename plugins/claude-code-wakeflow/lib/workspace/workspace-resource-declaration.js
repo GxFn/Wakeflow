@@ -60,8 +60,8 @@ export class WakeflowWorkspaceResourceDeclarationError extends Error {
     code = "wakeflow-workspace-resource-declaration";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -98,8 +98,8 @@ const DIRECTORY_NODE_POLICY_FIELDS = new Set([
     "existingModePolicy",
 ]);
 const TREE_NODE_POLICY_FIELDS = new Set(["kind", "rootMode", "symlinkPolicy", "executablePolicy"]);
-function fail(reason, path) {
-    throw new WakeflowWorkspaceResourceDeclarationError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWorkspaceResourceDeclarationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function propertyPath(base, key) {
     const escaped = key.replaceAll("~", "~0").replaceAll("/", "~1");
@@ -118,7 +118,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -169,7 +169,7 @@ function parseLogicalRoot(value) {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError) {
-                fail("placement", "$/placement/root/surfaceId");
+                fail("placement", "$/placement/root/surfaceId", error);
             }
             throw error;
         }
@@ -184,7 +184,7 @@ function parseLogicalRoot(value) {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError) {
-                fail("placement", "$/placement/root/repositoryId");
+                fail("placement", "$/placement/root/repositoryId", error);
             }
             throw error;
         }
@@ -203,7 +203,7 @@ function parseRelativePath(value, root) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("placement", "$/placement/relativePath");
+            fail("placement", "$/placement/relativePath", error);
         }
         throw error;
     }
@@ -297,7 +297,7 @@ function parseProcessing(value) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("processing", rebaseProcessingPath(error.path));
+            fail("processing", rebaseProcessingPath(error.path), error);
         }
         throw error;
     }

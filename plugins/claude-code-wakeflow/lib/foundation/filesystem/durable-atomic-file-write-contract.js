@@ -39,14 +39,14 @@ export class DurableAtomicFileWriteError extends Error {
     code = "wakeflow-durable-atomic-file-write";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failDurableAtomicFileWrite(reason, path) {
-    throw new DurableAtomicFileWriteError(reason, path);
+export function failDurableAtomicFileWrite(reason, path, cause) {
+    throw new DurableAtomicFileWriteError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function assertDurableAtomicFileNotAborted(signal) {
     if (signal?.aborted === true) {
@@ -80,7 +80,7 @@ function parseOptionRecord(value, required, optional = []) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failDurableAtomicFileWrite("input", "$options");
+            failDurableAtomicFileWrite("input", "$options", error);
         }
         throw error;
     }
@@ -129,7 +129,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            failDurableAtomicFileWrite("input", "$options.expected.node");
+            failDurableAtomicFileWrite("input", "$options.expected.node", error);
         }
         throw error;
     }
@@ -146,7 +146,7 @@ function parseExpectation(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failDurableAtomicFileWrite("input", "$options.expected");
+            failDurableAtomicFileWrite("input", "$options.expected", error);
         }
         throw error;
     }
@@ -164,7 +164,7 @@ function parseExpectation(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            failDurableAtomicFileWrite("input", "$options.expected.resourcePath");
+            failDurableAtomicFileWrite("input", "$options.expected.resourcePath", error);
         }
         throw error;
     }
@@ -174,7 +174,7 @@ function parseExpectation(value) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            failDurableAtomicFileWrite("input", "$options.expected.byteCount");
+            failDurableAtomicFileWrite("input", "$options.expected.byteCount", error);
         }
         throw error;
     }
@@ -184,7 +184,7 @@ function parseExpectation(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            failDurableAtomicFileWrite("input", "$options.expected.digest");
+            failDurableAtomicFileWrite("input", "$options.expected.digest", error);
         }
         throw error;
     }
@@ -219,8 +219,8 @@ export function snapshotDurableAtomicFileInputBytes(value) {
     try {
         bytes = Buffer.from(value);
     }
-    catch {
-        failDurableAtomicFileWrite("capacity", "$bytes");
+    catch (cause) {
+        failDurableAtomicFileWrite("capacity", "$bytes", cause);
     }
     let digest;
     try {
@@ -228,7 +228,7 @@ export function snapshotDurableAtomicFileInputBytes(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            failDurableAtomicFileWrite("hash-failure", "$bytes");
+            failDurableAtomicFileWrite("hash-failure", "$bytes", error);
         }
         throw error;
     }

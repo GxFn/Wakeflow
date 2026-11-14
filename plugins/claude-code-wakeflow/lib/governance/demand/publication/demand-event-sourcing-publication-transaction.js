@@ -48,8 +48,8 @@ export class DemandEventSourcingPublicationTransactionError extends Error {
     code = "wakeflow-demand-event-sourcing-publication-transaction";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -73,8 +73,8 @@ const CREATE_FIELDS = Object.freeze([
     "identity",
     "recordedAt",
 ]);
-function fail(reason, path) {
-    throw new DemandEventSourcingPublicationTransactionError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingPublicationTransactionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -82,7 +82,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -92,7 +92,7 @@ function parsePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("path", path);
+            fail("path", path, error);
         throw error;
     }
 }
@@ -106,7 +106,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -119,7 +119,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$/demandId");
+            fail("identifier", "$/demandId", error);
         }
         throw error;
     }
@@ -129,7 +129,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$/requirementId");
+            fail("identifier", "$/requirementId", error);
         }
         throw error;
     }
@@ -139,7 +139,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof DemandIdentityError)
-            fail("identity", "$/identity");
+            fail("identity", "$/identity", error);
         throw error;
     }
     let authority;
@@ -148,7 +148,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof DemandAuthorityError)
-            fail("authority", "$/authority");
+            fail("authority", "$/authority", error);
         throw error;
     }
     let initialCommand;
@@ -161,7 +161,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError) {
-            fail("command", "$/initialCommand");
+            fail("command", "$/initialCommand", error);
         }
         throw error;
     }
@@ -171,7 +171,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamCommitError) {
-            fail("commit", "$/initialCommit");
+            fail("commit", "$/initialCommit", error);
         }
         throw error;
     }
@@ -193,7 +193,7 @@ export function parseDemandEventSourcingPublicationTransaction(value) {
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError ||
             error instanceof DemandEventStreamCommitError) {
-            fail("relation", "$transaction");
+            fail("relation", "$transaction", error);
         }
         throw error;
     }
@@ -241,7 +241,7 @@ export function createDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$input");
+            fail("input", "$input", error);
         throw error;
     }
     const keys = Object.keys(input).sort();
@@ -261,7 +261,7 @@ export function createDemandEventSourcingPublicationTransaction(value) {
         if (error instanceof DemandIdentityError ||
             error instanceof DemandAuthorityError ||
             error instanceof WakeflowDurableIdError) {
-            fail("input", "$input");
+            fail("input", "$input", error);
         }
         throw error;
     }
@@ -286,7 +286,7 @@ export function createDemandEventSourcingPublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError) {
-            fail("input", "$input");
+            fail("input", "$input", error);
         }
         throw error;
     }
@@ -302,7 +302,7 @@ export function createDemandEventSourcingPublicationTransaction(value) {
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError ||
             error instanceof DemandEventStreamCommitError) {
-            fail("commit", "$initialCommit");
+            fail("commit", "$initialCommit", error);
         }
         throw error;
     }
@@ -334,7 +334,7 @@ export function parseDemandEventSourcingPublicationTransactionDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$transaction");
+            fail("representation", "$transaction", error);
         }
         throw error;
     }

@@ -79,7 +79,7 @@ function admitCommitPublication(commit) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", error);
         }
         throw error;
     }
@@ -127,8 +127,8 @@ export class DemandFileEventStore {
                     throw error;
                 if (error instanceof DurableDirectoryMaterializationError) {
                     if (error.reason === "aborted")
-                        fail("aborted", "$signal");
-                    fail("operation-failure", `$${ref}`);
+                        fail("aborted", "$signal", error);
+                    fail("operation-failure", `$${ref}`, error);
                 }
                 throw error;
             }
@@ -248,8 +248,8 @@ export class DemandFileEventStore {
         catch (error) {
             if (error instanceof ExactRegularFileUnlinkError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("cleanup-required", "$candidate");
+                    fail("aborted", "$signal", error);
+                fail("cleanup-required", "$candidate", error);
             }
             throw error;
         }
@@ -264,8 +264,8 @@ export class DemandFileEventStore {
         catch (error) {
             if (error instanceof DurableRegularFileSettlementError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("commit-uncertain", "$commit");
+                    fail("aborted", "$signal", error);
+                fail("commit-uncertain", "$commit", error);
             }
             throw error;
         }
@@ -281,7 +281,7 @@ export class DemandFileEventStore {
             }
             catch (error) {
                 if (error instanceof DemandEventSourcingPathError) {
-                    fail("candidate-conflict", `$candidates/${index}`);
+                    fail("candidate-conflict", `$candidates/${index}`, error);
                 }
                 throw error;
             }
@@ -372,7 +372,7 @@ export class DemandFileEventStore {
         }
         catch (error) {
             if (error instanceof DemandEventStreamCommitError)
-                fail("input", "$commit");
+                fail("input", "$commit", error);
             throw error;
         }
         const commit = parseDemandEventStreamCommit(preparedValue.commit);
@@ -407,11 +407,11 @@ export class DemandFileEventStore {
             ACTIVE_APPEND_CANDIDATE_TOKENS.delete(ownerToken);
             if (error instanceof DurableFileCandidateError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 if (error.reason === "target-exists") {
-                    fail("candidate-conflict", "$candidate");
+                    fail("candidate-conflict", "$candidate", error);
                 }
-                fail("operation-failure", "$candidate");
+                fail("operation-failure", "$candidate", error);
             }
             throw error;
         }
@@ -435,11 +435,11 @@ export class DemandFileEventStore {
                 if (committed === null || !sameDemandEventStreamCommit(committed.commit, commit)) {
                     await this.#retireCandidate(candidateRef, candidateNode, undefined);
                     if (error.reason === "destination-exists") {
-                        fail("concurrency-conflict", "$commit");
+                        fail("concurrency-conflict", "$commit", error);
                     }
                     if (error.reason === "aborted")
-                        fail("aborted", "$signal");
-                    fail("commit-uncertain", "$commit");
+                        fail("aborted", "$signal", error);
+                    fail("commit-uncertain", "$commit", error);
                 }
                 await this.#settleCommitTarget(commitRef, committed.node, undefined);
                 linkedNode =

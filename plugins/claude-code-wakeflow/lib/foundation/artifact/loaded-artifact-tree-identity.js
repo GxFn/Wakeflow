@@ -57,8 +57,8 @@ export class LoadedArtifactTreeIdentityError extends Error {
     code = "wakeflow-loaded-artifact-tree-identity";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -79,8 +79,8 @@ const MANIFEST_FIELDS = Object.freeze([
     "totalBytes",
 ]);
 const FILE_FIELDS = Object.freeze(["bytes", "digest", "executable", "ref"]);
-function fail(reason, path) {
-    throw new LoadedArtifactTreeIdentityError(reason, path);
+function fail(reason, path, cause) {
+    throw new LoadedArtifactTreeIdentityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function compareText(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -112,7 +112,7 @@ function parseLimits(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options.limits");
+            fail("input", "$options.limits", error);
         throw error;
     }
     assertExactFields(record, LIMIT_FIELDS, "$options.limits", "input");
@@ -140,7 +140,7 @@ function parseIdentityOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set(["limits", "signal"]);
@@ -162,7 +162,7 @@ function parseValidationOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "limits")) {
@@ -176,7 +176,7 @@ function parseManifestByteCount(value, path) {
     }
     catch (error) {
         if (error instanceof ByteCountError)
-            fail("manifest-shape", path);
+            fail("manifest-shape", path, error);
         throw error;
     }
 }
@@ -186,7 +186,7 @@ function parseManifestRef(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("manifest-shape", path);
+            fail("manifest-shape", path, error);
         throw error;
     }
 }
@@ -196,7 +196,7 @@ function parseManifestDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("manifest-shape", path);
+            fail("manifest-shape", path, error);
         throw error;
     }
 }
@@ -216,7 +216,7 @@ function parseManifestFile(value, index, limits) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("manifest-shape", path);
+            fail("manifest-shape", path, error);
         throw error;
     }
     assertExactFields(record, FILE_FIELDS, path, "manifest-shape");
@@ -279,7 +279,7 @@ function parseManifest(value, limits) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("manifest-shape", "$manifest");
+            fail("manifest-shape", "$manifest", error);
         throw error;
     }
     assertExactFields(record, MANIFEST_FIELDS, "$manifest", "manifest-shape");
@@ -294,9 +294,9 @@ function parseManifest(value, limits) {
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
             if (error.reason === "array-length") {
-                fail("file-count", "$manifest.files");
+                fail("file-count", "$manifest.files", error);
             }
-            fail("manifest-shape", "$manifest.files");
+            fail("manifest-shape", "$manifest.files", error);
         }
         throw error;
     }
@@ -316,7 +316,7 @@ function parseManifest(value, limits) {
         }
         catch (error) {
             if (error instanceof ByteCountError)
-                fail("manifest-totals", "$manifest.totalBytes");
+                fail("manifest-totals", "$manifest.totalBytes", error);
             throw error;
         }
         if (totalBytes > limits.maxTotalBytes) {
@@ -430,7 +430,7 @@ function manifestJsonValue(manifest) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("manifest-shape", error.path);
+            fail("manifest-shape", error.path, error);
         throw error;
     }
 }

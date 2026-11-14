@@ -46,14 +46,14 @@ export class WakeflowConfigAuthorityReplacementError extends Error {
     code = "wakeflow-config-authority-replacement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failWakeflowConfigAuthorityReplacement(reason, path) {
-    throw new WakeflowConfigAuthorityReplacementError(reason, path);
+export function failWakeflowConfigAuthorityReplacement(reason, path, cause) {
+    throw new WakeflowConfigAuthorityReplacementError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function assertWakeflowConfigAuthorityRoot(value) {
     if (typeof value !== "object" ||
@@ -73,8 +73,8 @@ function optionRecord(value) {
     try {
         return parsePlainRecord(value === undefined ? {} : value, "$options");
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$options");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("input", "$options", cause);
     }
 }
 function parsePositiveMilliseconds(value, path) {
@@ -129,9 +129,9 @@ export async function assertCurrentUserWakeflowConfigAuthorityRoot(root, expecte
         if (error instanceof WakeflowConfigAuthorityReplacementError)
             throw error;
         if (error instanceof RootedDirectoryError) {
-            failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+            failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
         }
-        failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+        failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
     }
 }
 export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
@@ -144,8 +144,8 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
             const sourceProjected = pickOwnDataProperties(projected.source, ["byteCount", "digest", "node", "resourcePath"], "$/expected/source");
             return { projected, programProjected, sourceProjected };
         }
-        catch {
-            return failWakeflowConfigAuthorityReplacement("input", "$expected");
+        catch (cause) {
+            return failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
         }
     })();
     if (typeof projected.workspaceRoot !== "string" ||
@@ -161,15 +161,15 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
     try {
         configDigest = parseSha256Digest(projected.configDigest, "$/expected/configDigest");
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest", cause);
     }
     let programId;
     try {
         programId = parseWakeflowDurableIdOfKind(programProjected.programId, "program", "$/expected/model/program/programId");
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId", cause);
     }
     let source;
     try {
@@ -183,8 +183,8 @@ export function parseWakeflowConfigAuthorityExpectation(value, expectedUserId) {
             },
         }).expected;
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$expected");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
     }
     if (source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
         source.node.linkCount !== 1n ||
@@ -206,9 +206,9 @@ export function prepareWakeflowConfigAuthorityDesired(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError) {
-            failWakeflowConfigAuthorityReplacement("config", error.path);
+            failWakeflowConfigAuthorityReplacement("config", error.path, error);
         }
-        failWakeflowConfigAuthorityReplacement("config", "$config");
+        failWakeflowConfigAuthorityReplacement("config", "$config", error);
     }
     let bytes;
     try {
@@ -216,9 +216,9 @@ export function prepareWakeflowConfigAuthorityDesired(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError || error instanceof Utf8Error) {
-            failWakeflowConfigAuthorityReplacement("config", "$config");
+            failWakeflowConfigAuthorityReplacement("config", "$config", error);
         }
-        failWakeflowConfigAuthorityReplacement("config", "$config");
+        failWakeflowConfigAuthorityReplacement("config", "$config", error);
     }
     if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
         failWakeflowConfigAuthorityReplacement("capacity", "$config");
@@ -231,8 +231,8 @@ export function prepareWakeflowConfigAuthorityDesired(value) {
             configDigest: computeWakeflowConfigDigest(model),
         });
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("config", "$config");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("config", "$config", cause);
     }
 }
 export async function assertWakeflowConfigAuthorityDesiredPlacements(root, model) {
@@ -242,14 +242,14 @@ export async function assertWakeflowConfigAuthorityDesiredPlacements(root, model
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
             if (error.reason === "root-scope") {
-                failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+                failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
             }
             if (error.reason === "input") {
-                failWakeflowConfigAuthorityReplacement("input", error.path);
+                failWakeflowConfigAuthorityReplacement("input", error.path, error);
             }
-            failWakeflowConfigAuthorityReplacement("placement", error.path);
+            failWakeflowConfigAuthorityReplacement("placement", error.path, error);
         }
-        failWakeflowConfigAuthorityReplacement("placement", "$placements");
+        failWakeflowConfigAuthorityReplacement("placement", "$placements", error);
     }
 }
 export async function readCurrentWakeflowConfigAuthority(root, signal, afterCommit) {
@@ -258,21 +258,21 @@ export async function readCurrentWakeflowConfigAuthority(root, signal, afterComm
     }
     catch (error) {
         if (afterCommit) {
-            failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath");
+            failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath", error);
         }
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted") {
-                failWakeflowConfigAuthorityReplacement("aborted", "$signal");
+                failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
             }
             if (error.reason === "root-scope") {
-                failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+                failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
             }
             if (error.reason === "source-policy") {
-                failWakeflowConfigAuthorityReplacement("source-policy", "$source");
+                failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
             }
-            failWakeflowConfigAuthorityReplacement("source-invalid", "$source");
+            failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
         }
-        failWakeflowConfigAuthorityReplacement("source-invalid", "$source");
+        failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
     }
 }
 export function assertWakeflowConfigAuthoritySourcePolicy(snapshot, expectedUserId) {
@@ -291,8 +291,8 @@ export function sameWakeflowConfigAuthoritySource(left, right) {
             left.digest === right.digest &&
             sameFileNodeSnapshot(left.node, right.node));
     }
-    catch {
-        failWakeflowConfigAuthorityReplacement("input", "$expected");
+    catch (cause) {
+        failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
     }
 }
 export function matchesWakeflowConfigAuthorityExpectation(root, current, expected) {

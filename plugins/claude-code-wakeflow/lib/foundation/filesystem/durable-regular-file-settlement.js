@@ -28,14 +28,14 @@ export class DurableRegularFileSettlementError extends Error {
     code = "wakeflow-durable-regular-file-settlement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableRegularFileSettlementError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableRegularFileSettlementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -69,7 +69,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$options.expectedNode");
+            fail("input", "$options.expectedNode", error);
         }
         throw error;
     }
@@ -86,7 +86,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "expectedNode") ||

@@ -40,14 +40,14 @@ export class WakeflowManagedTextEnvelopeError extends Error {
     code = "wakeflow-managed-text-envelope";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowManagedTextEnvelopeError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowManagedTextEnvelopeError(reason, path, cause === undefined ? undefined : { cause });
 }
 function digestBytes(bytes, path) {
     try {
@@ -55,7 +55,7 @@ function digestBytes(bytes, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("hash-failure", path);
+            fail("hash-failure", path, error);
         throw error;
     }
 }
@@ -69,7 +69,7 @@ function digestParts(parts, path) {
     }
     catch (error) {
         if (error instanceof Sha256HasherError)
-            fail("hash-failure", path);
+            fail("hash-failure", path, error);
         throw error;
     }
 }
@@ -77,8 +77,8 @@ function concatenate(parts, path) {
     try {
         return Buffer.concat(parts);
     }
-    catch {
-        fail("capacity", path);
+    catch (cause) {
+        fail("capacity", path, cause);
     }
 }
 function snapshotBytes(value) {
@@ -93,8 +93,8 @@ function snapshotBytes(value) {
     try {
         return Buffer.from(value);
     }
-    catch {
-        fail("capacity", "$source");
+    catch (cause) {
+        fail("capacity", "$source", cause);
     }
 }
 function decodeSource(bytes) {
@@ -103,7 +103,7 @@ function decodeSource(bytes) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("utf8", "$source");
+            fail("utf8", "$source", error);
         throw error;
     }
 }
@@ -171,7 +171,7 @@ function inputRecord(value, path, expectedKeys) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -287,7 +287,7 @@ function renderOwnedBlock(target, ownsSeparator) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("body-profile", "$target.body");
+            fail("body-profile", "$target.body", error);
         throw error;
     }
     const digest = digestBytes(bodyBytes, "$target.body");
@@ -296,8 +296,8 @@ function renderOwnedBlock(target, ownsSeparator) {
     try {
         return Buffer.from(`${ownsSeparator ? "\n" : ""}${marker("begin")}\n${target.body}${marker("end")}\n`, "utf8");
     }
-    catch {
-        fail("capacity", "$target.body");
+    catch (cause) {
+        fail("capacity", "$target.body", cause);
     }
 }
 function resultBytes(bytes) {

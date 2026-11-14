@@ -31,8 +31,8 @@ export class WakeflowFreshConfigSelectionError extends Error {
     code = "wakeflow-fresh-config-selection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -45,8 +45,8 @@ const TOP_LEVEL_FIELDS = Object.freeze([
     "storage",
     "topology",
 ]);
-function fail(reason, path) {
-    throw new WakeflowFreshConfigSelectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowFreshConfigSelectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function record(value, path) {
     try {
@@ -54,7 +54,7 @@ function record(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -64,7 +64,7 @@ function snapshotSelection(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -75,8 +75,8 @@ function array(value, path) {
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
             if (error.reason === "array-length")
-                fail("capacity", path);
-            fail("input", error.path);
+                fail("capacity", path, error);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -131,7 +131,7 @@ function allocateId(kind, options, seenUuid, seed, key) {
     }
     catch (error) {
         if (error instanceof UuidV4Error)
-            fail("id-source", "$options.uuidFactory");
+            fail("id-source", "$options.uuidFactory", error);
         throw error;
     }
     if (seenUuid.has(uuid))
@@ -339,7 +339,7 @@ export function compileWakeflowFreshConfigSelection(selectionValue, optionsValue
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
     return Object.freeze({

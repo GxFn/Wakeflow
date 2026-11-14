@@ -47,14 +47,14 @@ export class DemandEventSourcingRepositoryError extends Error {
     code = "wakeflow-demand-event-sourcing-repository";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandEventSourcingRepositoryError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingRepositoryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseSignal(value) {
     let record;
@@ -63,7 +63,7 @@ function parseSignal(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -84,7 +84,7 @@ function replayCommits(initial, commits) {
         }
         catch (error) {
             if (error instanceof DemandEventStreamCommitError) {
-                fail("stream", `$commits/${index}`);
+                fail("stream", `$commits/${index}`, error);
             }
             throw error;
         }
@@ -110,12 +110,12 @@ function mapStoreError(error) {
             error.reason === "capacity") {
             fail("stream", "$commits");
         }
-        fail("operation-failure", "$eventStore");
+        fail("operation-failure", "$eventStore", error);
     }
     if (error instanceof DemandFileEventSnapshotStoreError) {
         if (error.reason === "aborted")
             fail("aborted", "$signal");
-        fail("operation-failure", "$snapshotStore");
+        fail("operation-failure", "$snapshotStore", error);
     }
     throw error;
 }
@@ -301,7 +301,7 @@ export class DemandEventSourcingRepository {
                 }
                 catch (error) {
                     if (error instanceof DemandEventSourcingUpcasterError) {
-                        fail("stream", "$events");
+                        fail("stream", "$events", error);
                     }
                     throw error;
                 }
@@ -699,7 +699,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError) {
-                fail("input", "$taskPackageId");
+                fail("input", "$taskPackageId", error);
             }
             throw error;
         }
@@ -733,7 +733,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError)
-                fail("input", "$deliveryId");
+                fail("input", "$deliveryId", error);
             throw error;
         }
         const found = await this.#findUniqueEvent("delivery.delivery-prepared", (event) => event.eventType === "delivery.delivery-prepared" &&
@@ -769,7 +769,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError)
-                fail("input", "$deliveryId");
+                fail("input", "$deliveryId", error);
             throw error;
         }
         const aggregate = await this.#currentAggregate(signal);
@@ -783,7 +783,7 @@ export class DemandEventSourcingRepository {
             }
             catch (error) {
                 if (error instanceof DemandEventSourcingUpcasterError)
-                    fail("stream", "$events");
+                    fail("stream", "$events", error);
                 throw error;
             }
             if (event.eventType !== "delivery.delivery-outcome-recorded" ||
@@ -806,7 +806,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError)
-                fail("input", "$claimId");
+                fail("input", "$claimId", error);
             throw error;
         }
         const found = await this.#findUniqueEvent("result.target-result-recorded", (event) => event.eventType === "result.target-result-recorded" &&
@@ -891,7 +891,7 @@ export class DemandEventSourcingRepository {
             }
             catch (error) {
                 if (error instanceof DemandEventSourcingUpcasterError) {
-                    fail("stream", "$events");
+                    fail("stream", "$events", error);
                 }
                 throw error;
             }
@@ -914,7 +914,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError)
-                fail("input", "$commitId");
+                fail("input", "$commitId", error);
             throw error;
         }
         const located = await this.#eventStore.readIndex(null, signal === undefined ? undefined : { signal });
@@ -986,7 +986,7 @@ export class DemandEventSourcingRepository {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingSnapshotError) {
-                fail("input", "$aggregate");
+                fail("input", "$aggregate", error);
             }
             throw error;
         }
@@ -996,8 +996,8 @@ export class DemandEventSourcingRepository {
         catch (error) {
             if (error instanceof DemandFileEventSnapshotStoreError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("snapshot", "$snapshot");
+                    fail("aborted", "$signal", error);
+                fail("snapshot", "$snapshot", error);
             }
             throw error;
         }
@@ -1025,7 +1025,7 @@ export class DemandEventSourcingRepository {
                 throw error;
             // 退休失败只计数，但中止不是失败：照常上抛。
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
         }
         return Object.freeze({ snapshot: receipt.disposition, retiredSnapshots });
     }

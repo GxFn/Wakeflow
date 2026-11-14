@@ -13,15 +13,15 @@ export class WholeFileContentTransitionError extends Error {
     code = "wakeflow-whole-file-content-transition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
-function fail(reason, path) {
-    throw new WholeFileContentTransitionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WholeFileContentTransitionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function snapshotBytes(value, path) {
     if (typeof value !== "object" ||
@@ -51,7 +51,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -64,7 +64,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");

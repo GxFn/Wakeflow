@@ -47,14 +47,14 @@ export class DemandFileEventSnapshotStoreError extends Error {
     code = "wakeflow-demand-file-event-snapshot-store";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandFileEventSnapshotStoreError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandFileEventSnapshotStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -71,7 +71,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -128,14 +128,14 @@ async function readDirectory(root, signal, expectedNode) {
             throw error;
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "not-found")
-                fail("not-initialized", "$snapshots");
+                fail("not-initialized", "$snapshots", error);
             if (error.reason === "too-many-entries")
-                fail("capacity", "$snapshots");
+                fail("capacity", "$snapshots", error);
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("stream-changed", "$snapshots");
+                fail("root-scope", "$root", error);
+            fail("stream-changed", "$snapshots", error);
         }
         throw error;
     }
@@ -177,17 +177,17 @@ async function readSnapshotAt(root, resourcePath, sequence, node, signal) {
         }
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             }
             if (error.reason === "not-found" ||
                 error.reason === "expectation-changed" ||
                 error.reason === "source-changed") {
-                fail("stream-changed", "$snapshots");
+                fail("stream-changed", "$snapshots", error);
             }
             if (error.reason !== "too-large") {
-                fail("operation-failure", "$snapshot");
+                fail("operation-failure", "$snapshot", error);
             }
         }
         else if (!(error instanceof StrictTextFileError) &&
@@ -221,7 +221,7 @@ export class DemandFileEventSnapshotStore {
             }
             catch (error) {
                 if (error instanceof DemandEventSourcingPathError) {
-                    fail("inventory", `$snapshots/${index}`);
+                    fail("inventory", `$snapshots/${index}`, error);
                 }
                 throw error;
             }
@@ -264,8 +264,8 @@ export class DemandFileEventSnapshotStore {
                 throw error;
             if (error instanceof DurableAtomicFileStageRecoveryError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("recovery-required", "$snapshots");
+                    fail("aborted", "$signal", error);
+                fail("recovery-required", "$snapshots", error);
             }
             throw error;
         }
@@ -298,7 +298,7 @@ export class DemandFileEventSnapshotStore {
         catch (error) {
             if (error instanceof ExactRegularFileUnlinkError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 return false;
             }
             throw error;
@@ -349,7 +349,7 @@ export class DemandFileEventSnapshotStore {
             catch (error) {
                 if (error instanceof ExactRegularFileUnlinkError) {
                     if (error.reason === "aborted")
-                        fail("aborted", "$signal");
+                        fail("aborted", "$signal", error);
                     failed += 1;
                     continue;
                 }
@@ -366,7 +366,7 @@ export class DemandFileEventSnapshotStore {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingSnapshotError) {
-                fail("input", "$snapshot");
+                fail("input", "$snapshot", error);
             }
             throw error;
         }
@@ -377,7 +377,7 @@ export class DemandFileEventSnapshotStore {
         }
         catch (error) {
             if (error instanceof WakeflowResourceProcessingContractError) {
-                fail("operation-failure", "$catalog");
+                fail("operation-failure", "$catalog", error);
             }
             throw error;
         }
@@ -403,20 +403,20 @@ export class DemandFileEventSnapshotStore {
             if (!(error instanceof DurableAtomicFileWriteError))
                 throw error;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "capacity")
-                fail("capacity", "$snapshot");
+                fail("capacity", "$snapshot", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "commit-uncertain" ||
                 error.reason === "durability-failure" ||
                 error.reason === "stage-cleanup-failure" ||
                 error.reason === "stage-recovery-required" ||
                 error.reason === "close-failure") {
-                fail("recovery-required", "$snapshot");
+                fail("recovery-required", "$snapshot", error);
             }
             if (error.reason !== "target-exists") {
-                fail("operation-failure", "$snapshot");
+                fail("operation-failure", "$snapshot", error);
             }
         }
         let resource;
@@ -425,7 +425,7 @@ export class DemandFileEventSnapshotStore {
         }
         catch (error) {
             if (error instanceof RootedDirectoryError)
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             throw error;
         }
         const existing = await readSnapshotAt(this.#root, ref, snapshot.commitSequence, resource.node, signal);

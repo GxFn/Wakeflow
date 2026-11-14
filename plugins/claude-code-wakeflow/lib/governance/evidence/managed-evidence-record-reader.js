@@ -46,15 +46,15 @@ export class ManagedEvidenceRecordReaderError extends Error {
     code = "wakeflow-managed-evidence-record-reader";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const ISSUED_RECORDS = new WeakSet();
-function fail(reason, path) {
-    throw new ManagedEvidenceRecordReaderError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceRecordReaderError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -88,7 +88,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$/expectedRootNode");
+            fail("input", "$/expectedRootNode", error);
         }
         throw error;
     }
@@ -101,7 +101,7 @@ function parseLoadOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "signal")) {
@@ -119,7 +119,7 @@ function parseMemberOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "maximumBytes") ||
@@ -132,7 +132,7 @@ function parseMemberOptions(value) {
     }
     catch (error) {
         if (error instanceof ByteCountError)
-            fail("input", "$/maximumBytes");
+            fail("input", "$/maximumBytes", error);
         throw error;
     }
     return Object.freeze({
@@ -146,7 +146,7 @@ function parseEvidenceId(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("input", "$evidenceId");
+            fail("input", "$evidenceId", error);
         throw error;
     }
 }
@@ -156,7 +156,7 @@ function parseMemberRef(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$memberRef");
+            fail("input", "$memberRef", error);
         }
         throw error;
     }
@@ -167,8 +167,8 @@ function currentUserId() {
     try {
         return BigInt(process.geteuid());
     }
-    catch {
-        fail("operation-failure", "$user");
+    catch (cause) {
+        fail("operation-failure", "$user", cause);
     }
 }
 function assertPrivateDirectory(node, path) {
@@ -203,7 +203,7 @@ function mapDirectoryError(error) {
         error.reason === "too-many-entries") {
         fail("record", "$record");
     }
-    fail("operation-failure", "$record");
+    fail("operation-failure", "$record", error);
 }
 async function readRecordRoot(root, recordRootRef, expectedNode, signal) {
     try {
@@ -295,7 +295,7 @@ export async function loadManagedEvidenceRecord(rootValue, evidenceIdValue, opti
     }
     catch (error) {
         if (error instanceof ManagedEvidenceResourcePathError) {
-            fail("input", "$evidenceId");
+            fail("input", "$evidenceId", error);
         }
         throw error;
     }
@@ -318,7 +318,7 @@ export async function loadManagedEvidenceRecord(rootValue, evidenceIdValue, opti
     }
     catch (error) {
         if (error instanceof ManagedEvidenceManifestError) {
-            fail("manifest", "$record/manifest");
+            fail("manifest", "$record/manifest", error);
         }
         throw error;
     }
@@ -331,7 +331,7 @@ export async function loadManagedEvidenceRecord(rootValue, evidenceIdValue, opti
     }
     catch (error) {
         if (error instanceof ManagedEvidenceRecordTreePlanError) {
-            fail("record", "$record/manifest");
+            fail("record", "$record/manifest", error);
         }
         throw error;
     }
@@ -379,7 +379,7 @@ function mapMemberReadError(error) {
     if (error.reason === "not-found" || error.reason === "symlink" || error.reason === "not-file") {
         fail("content-mismatch", "$member");
     }
-    fail("operation-failure", "$member");
+    fail("operation-failure", "$member", error);
 }
 /** 按Manifest descriptor读取并验证一个完整payload member。 */
 export async function readManagedEvidencePayloadMember(rootValue, recordValue, memberRefValue, optionsValue) {

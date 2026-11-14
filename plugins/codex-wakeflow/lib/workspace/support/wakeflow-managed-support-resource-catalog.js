@@ -28,14 +28,14 @@ export class WakeflowManagedSupportResourceCatalogError extends Error {
     code = "wakeflow-managed-support-resource-catalog";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowManagedSupportResourceCatalogError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowManagedSupportResourceCatalogError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseConfig(value) {
     try {
@@ -43,7 +43,7 @@ function parseConfig(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
 }
@@ -53,7 +53,7 @@ function parseProfile(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -64,7 +64,7 @@ function declaration(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceResourceDeclarationError) {
-            fail("declaration", error.path);
+            fail("declaration", error.path, error);
         }
         throw error;
     }

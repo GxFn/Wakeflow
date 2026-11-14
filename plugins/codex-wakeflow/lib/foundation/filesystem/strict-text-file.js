@@ -14,14 +14,14 @@ export class StrictTextFileError extends Error {
     code = "wakeflow-strict-text-file";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new StrictTextFileError(reason, path);
+function fail(reason, path, cause) {
+    throw new StrictTextFileError(reason, path, cause === undefined ? undefined : { cause });
 }
 function decodeStrictUtf8(bytes) {
     try {
@@ -29,7 +29,7 @@ function decodeStrictUtf8(bytes) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("utf8", "$text");
+            fail("utf8", "$text", error);
         throw error;
     }
 }

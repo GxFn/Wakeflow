@@ -35,8 +35,8 @@ export class RootedDirectoryError extends Error {
     code = "wakeflow-rooted-directory";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -46,8 +46,8 @@ const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 function normalizeErrorPath(value, fallback) {
     return typeof value === "string" && value.length > 0 ? value : fallback;
 }
-function fail(reason, path) {
-    throw new RootedDirectoryError(reason, path);
+function fail(reason, path, cause) {
+    throw new RootedDirectoryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function normalizeRootPath(value, errorPath) {
     if (typeof value !== "string" ||
@@ -75,7 +75,7 @@ function normalizeDurability(value, errorPath) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("root-input", errorPath);
+            fail("root-input", errorPath, error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "durability")) {
@@ -103,7 +103,7 @@ function snapshotNode(value, errorPath) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("inspection-failure", errorPath);
+            fail("inspection-failure", errorPath, error);
         }
         throw error;
     }
@@ -115,9 +115,9 @@ async function inspectPathNode(physicalPath, errorPath, missingReason) {
     }
     catch (error) {
         if (readNodeSystemErrorCode(error) === "ENOENT") {
-            fail(missingReason, errorPath);
+            fail(missingReason, errorPath, error);
         }
-        fail("inspection-failure", errorPath);
+        fail("inspection-failure", errorPath, error);
     }
     return snapshotNode(stats, errorPath);
 }
@@ -128,9 +128,9 @@ async function inspectCanonicalPath(physicalPath, errorPath, aliasReason, change
     }
     catch (error) {
         if (readNodeSystemErrorCode(error) === "ENOENT") {
-            fail(changedReason, errorPath);
+            fail(changedReason, errorPath, error);
         }
-        fail("inspection-failure", errorPath);
+        fail("inspection-failure", errorPath, error);
     }
     if (canonical !== physicalPath)
         fail(aliasReason, errorPath);
@@ -141,9 +141,9 @@ async function resolveCanonicalRootPath(physicalPath, errorPath) {
     }
     catch (error) {
         if (readNodeSystemErrorCode(error) === "ENOENT") {
-            fail("root-changed", errorPath);
+            fail("root-changed", errorPath, error);
         }
-        fail("inspection-failure", errorPath);
+        fail("inspection-failure", errorPath, error);
     }
 }
 function resourcePhysicalPath(rootPath, segments, errorPath) {
@@ -206,10 +206,10 @@ export class RootedDirectory {
         catch (error) {
             const code = readNodeSystemErrorCode(error);
             if (code === "ELOOP")
-                fail("root-symlink", path);
+                fail("root-symlink", path, error);
             if (code === "ENOENT")
-                fail("root-changed", path);
-            fail("root-open-failure", path);
+                fail("root-changed", path, error);
+            fail("root-open-failure", path, error);
         }
         try {
             const opened = snapshotNode(await handle.stat({ bigint: true }), path);
@@ -264,7 +264,7 @@ export class RootedDirectory {
         catch (error) {
             if (error instanceof RootedDirectoryError)
                 throw error;
-            fail("root-changed", path);
+            fail("root-changed", path, error);
         }
         const current = await inspectPathNode(this.#absolutePath, path, "root-changed");
         if (current.kind === "symbolic-link")
@@ -296,7 +296,7 @@ export class RootedDirectory {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError)
-                fail("resource-path", path);
+                fail("resource-path", path, error);
             throw error;
         }
         await this.assertCurrent("$root");
@@ -361,8 +361,8 @@ export class RootedDirectory {
         try {
             await this.#handle.close();
         }
-        catch {
-            fail("close-failure", "$root");
+        catch (cause) {
+            fail("close-failure", "$root", cause);
         }
     }
     async [Symbol.asyncDispose]() {

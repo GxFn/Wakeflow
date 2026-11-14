@@ -29,14 +29,14 @@ export class ClaudeCodePortableSettingsOperationExecutionError extends Error {
     code = "wakeflow-claude-code-portable-settings-operation-execution";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodePortableSettingsOperationExecutionError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodePortableSettingsOperationExecutionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function digest(value, path) {
     try {
@@ -44,7 +44,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("operation", path);
+            fail("operation", path, error);
         throw error;
     }
 }
@@ -55,7 +55,7 @@ function operationRoot(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", "$operation.root");
+            fail("operation", "$operation.root", error);
         throw error;
     }
     const keys = Object.keys(record).sort().join("\u0000");
@@ -79,7 +79,7 @@ function operationRoot(value) {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError) {
-                fail("operation", "$operation.root.rootId");
+                fail("operation", "$operation.root.rootId", error);
             }
             throw error;
         }
@@ -93,7 +93,7 @@ function operationRoot(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("operation", "$operation.root.rootId");
+            fail("operation", "$operation.root.rootId", error);
         }
         throw error;
     }
@@ -103,7 +103,7 @@ function operationRoot(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError) {
-            fail("operation", "$operation.root.configuredPlacement");
+            fail("operation", "$operation.root.configuredPlacement", error);
         }
         throw error;
     }
@@ -125,7 +125,7 @@ function parseOperation(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", "$operation");
+            fail("operation", "$operation", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -163,7 +163,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     if (!Object.hasOwn(record, "config") ||
@@ -189,7 +189,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
     let profile;
@@ -198,7 +198,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -212,7 +212,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsTransitionError)
-            fail("profile", "$/profile");
+            fail("profile", "$/profile", error);
         throw error;
     }
     return Object.freeze({
@@ -254,8 +254,8 @@ async function executeAtRoot(root, request) {
         catch (error) {
             if (error instanceof ClaudeCodePortableSettingsPublicationError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("owner", "$stageRecovery");
+                    fail("aborted", "$signal", error);
+                fail("owner", "$stageRecovery", error);
             }
             throw error;
         }
@@ -271,8 +271,8 @@ async function executeAtRoot(root, request) {
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsPublicationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("owner", "$inspection");
+                fail("aborted", "$signal", error);
+            fail("owner", "$inspection", error);
         }
         throw error;
     }
@@ -310,14 +310,14 @@ async function executeAtRoot(root, request) {
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsPublicationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "transition-blocked") {
-                fail("transition-blocked", "$transition");
+                fail("transition-blocked", "$transition", error);
             }
             if (error.reason === "source-changed") {
-                fail("source-stale", "$operation.sourceDigest");
+                fail("source-stale", "$operation.sourceDigest", error);
             }
-            fail("owner", "$publication");
+            fail("owner", "$publication", error);
         }
         throw error;
     }
@@ -356,7 +356,7 @@ export async function executeClaudeCodePortableSettingsOperation(workspaceRootVa
         }
         catch (error) {
             if (error instanceof WakeflowConfigRootPlacementError) {
-                fail("placement", error.path);
+                fail("placement", error.path, error);
             }
             throw error;
         }
@@ -369,7 +369,7 @@ export async function executeClaudeCodePortableSettingsOperation(workspaceRootVa
         }
         catch (error) {
             if (error instanceof RootedDirectoryError)
-                fail("root-open", "$supportRoot");
+                fail("root-open", "$supportRoot", error);
             throw error;
         }
     }

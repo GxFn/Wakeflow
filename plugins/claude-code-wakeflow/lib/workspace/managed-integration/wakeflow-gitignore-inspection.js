@@ -42,14 +42,14 @@ export class WakeflowGitignoreInspectionError extends Error {
     code = "wakeflow-gitignore-inspection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowGitignoreInspectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowGitignoreInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -66,7 +66,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -121,11 +121,11 @@ async function readSource(root, signal, expectedUserId) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "symlink" || error.reason === "not-file") {
-                fail("source-policy", "$source");
+                fail("source-policy", "$source", error);
             }
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -148,10 +148,10 @@ async function revalidateSource(root, initial, signal) {
             throw error;
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (initial === null && error.reason === "not-found")
                 return;
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -168,7 +168,7 @@ function decodeOutside(bytes, envelope) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         throw error;
     }
 }
@@ -195,8 +195,8 @@ function decodeLiteralRule(rule) {
             directory,
         });
     }
-    catch {
-        fail("authority", "$authority.rules");
+    catch (cause) {
+        fail("authority", "$authority.rules", cause);
     }
 }
 function probePath(rule) {
@@ -214,8 +214,8 @@ async function observeRules(root, rules, signal) {
     catch (error) {
         if (error instanceof GitIgnoreObservationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("git", "$git");
+                fail("aborted", "$signal", error);
+            fail("git", "$git", error);
         }
         throw error;
     }
@@ -257,10 +257,10 @@ async function observeTargetRules(root, rules, target, signal) {
     catch (error) {
         if (error instanceof GitIgnoreCandidateObservationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "capacity")
-                fail("target-capacity", "$target");
-            fail("git", "$git");
+                fail("target-capacity", "$target", error);
+            fail("git", "$git", error);
         }
         throw error;
     }
@@ -280,7 +280,7 @@ function inspectEnvelope(bytes) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError) {
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         }
         throw error;
     }
@@ -297,10 +297,10 @@ async function assertGitRepositoryRoot(root) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-            fail("git-repository", "$git");
+            fail("git-repository", "$git", error);
         }
         if (error instanceof RootedDirectoryError)
-            fail("source", "$git");
+            fail("source", "$git", error);
         throw error;
     }
 }
@@ -321,7 +321,7 @@ export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue)
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-            fail("context", "$context");
+            fail("context", "$context", error);
         }
         throw error;
     }
@@ -331,7 +331,7 @@ export async function inspectWakeflowWorkspaceGitignore(rootValue, requestValue)
     }
     catch (error) {
         if (error instanceof WakeflowGitignoreBodyAuthorityError) {
-            fail("authority", "$authority");
+            fail("authority", "$authority", error);
         }
         throw error;
     }

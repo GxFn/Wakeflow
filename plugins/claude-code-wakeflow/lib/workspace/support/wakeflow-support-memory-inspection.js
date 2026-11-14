@@ -47,14 +47,14 @@ export class WakeflowSupportMemoryInspectionError extends Error {
     code = "wakeflow-support-memory-inspection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowSupportMemoryInspectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowSupportMemoryInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -68,7 +68,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -78,7 +78,7 @@ function parseConfig(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", path);
+            fail("config", path, error);
         throw error;
     }
 }
@@ -90,7 +90,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     const required = [
@@ -139,7 +139,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", "$request.profile");
+            fail("profile", "$request.profile", error);
         }
         throw error;
     }
@@ -149,7 +149,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("input", "$request.surfaceId");
+            fail("input", "$request.surfaceId", error);
         }
         throw error;
     }
@@ -193,7 +193,7 @@ async function admitRoots(workspaceRoot, supportRoot, request) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("placement", error.path);
+            fail("placement", error.path, error);
         }
         throw error;
     }
@@ -207,7 +207,7 @@ async function admitRoots(workspaceRoot, supportRoot, request) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("placement", "$supportRoot");
+            fail("placement", "$supportRoot", error);
         throw error;
     }
     if (node.kind !== "directory" ||
@@ -227,7 +227,7 @@ function currentAuthority(request) {
             return null;
         }
         if (error instanceof WakeflowSupportMemoryAuthorityError) {
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }
@@ -238,7 +238,7 @@ function desiredAuthority(request) {
     }
     catch (error) {
         if (error instanceof WakeflowSupportMemoryAuthorityError) {
-            fail(error.reason === "surface" ? "surface" : "authority", error.path);
+            fail(error.reason === "surface" ? "surface" : "authority", error.path, error);
         }
         throw error;
     }
@@ -272,13 +272,13 @@ async function readSource(supportRoot, request) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "too-large")
-                fail("capacity", "$source");
+                fail("capacity", "$source", error);
             if (error.reason === "symlink" || error.reason === "not-file") {
-                fail("source-policy", "$source");
+                fail("source-policy", "$source", error);
             }
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -301,10 +301,10 @@ async function revalidateSource(supportRoot, request, initial) {
             throw error;
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (initial === null && error.reason === "not-found")
                 return;
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -326,7 +326,7 @@ export async function inspectWakeflowSupportMemory(workspaceRootValue, supportRo
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("catalog", "$request.expectedCatalogDigest");
+            fail("catalog", "$request.expectedCatalogDigest", error);
         }
         throw error;
     }
@@ -349,9 +349,9 @@ export async function inspectWakeflowSupportMemory(workspaceRootValue, supportRo
     catch (error) {
         if (error instanceof WholeFileContentTransitionError) {
             if (error.reason === "unadmitted-source") {
-                fail("unadmitted-source", "$source");
+                fail("unadmitted-source", "$source", error);
             }
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }

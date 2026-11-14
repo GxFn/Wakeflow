@@ -11,14 +11,14 @@ export class WakeflowHostCapabilityLayoutAuthorityError extends Error {
     code = "wakeflow-host-capability-layout-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowHostCapabilityLayoutAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowHostCapabilityLayoutAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
 export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
@@ -28,7 +28,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(profileValue) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }

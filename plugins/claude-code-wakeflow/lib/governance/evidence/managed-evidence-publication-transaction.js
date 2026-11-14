@@ -50,8 +50,8 @@ export class ManagedEvidencePublicationTransactionError extends Error {
     code = "wakeflow-managed-evidence-publication-transaction";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -64,8 +64,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_MANAGED_EVIDENCE_
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
 const CREATE_FIELDS = Object.freeze(["capturePlan", "commitId", "eventId"]);
-function fail(reason, path) {
-    throw new ManagedEvidencePublicationTransactionError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidencePublicationTransactionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -73,7 +73,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -83,7 +83,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -93,7 +93,7 @@ function parseManifest(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceManifestError) {
-            fail("manifest", "$/manifest");
+            fail("manifest", "$/manifest", error);
         }
         throw error;
     }
@@ -105,7 +105,7 @@ function parseStreamRevision(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", "$/demandEventSourcingAppend/expectedStreamRevision");
+            fail("position", "$/demandEventSourcingAppend/expectedStreamRevision", error);
         }
         throw error;
     }
@@ -129,7 +129,7 @@ function buildEventSourcingCommand(manifest, eventId) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError) {
-            fail("event-sourcing", "$/demandEventSourcingAppend");
+            fail("event-sourcing", "$/demandEventSourcingAppend", error);
         }
         throw error;
     }
@@ -140,7 +140,7 @@ function deriveRecordTreePlan(manifest) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceRecordTreePlanError) {
-            fail("record-plan", "$/manifest");
+            fail("record-plan", "$/manifest", error);
         }
         throw error;
     }
@@ -160,7 +160,7 @@ function capturePlanFromTransaction(transaction) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceCapturePlanError) {
-            fail("relation", "$/capturePlanDigest");
+            fail("relation", "$/capturePlanDigest", error);
         }
         throw error;
     }
@@ -196,7 +196,7 @@ export function parseManagedEvidencePublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -222,7 +222,7 @@ export function createManagedEvidencePublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$input");
+            fail("input", "$input", error);
         throw error;
     }
     const actual = Object.keys(input).sort();
@@ -236,7 +236,7 @@ export function createManagedEvidencePublicationTransaction(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceCapturePlanError) {
-            fail("capture-plan", "$/capturePlan");
+            fail("capture-plan", "$/capturePlan", error);
         }
         throw error;
     }
@@ -280,7 +280,7 @@ export function parseManagedEvidencePublicationTransactionDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$transaction");
+            fail("representation", "$transaction", error);
         }
         throw error;
     }

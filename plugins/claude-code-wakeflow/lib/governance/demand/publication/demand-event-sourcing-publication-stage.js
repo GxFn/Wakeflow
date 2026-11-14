@@ -30,7 +30,7 @@ function mapStageError(error) {
     if (error instanceof DurableDirectoryMaterializationError) {
         if (error.reason === "aborted")
             fail("aborted", "$signal");
-        fail("operation-failure", "$stage/directories");
+        fail("operation-failure", "$stage/directories", "unknown", error);
     }
     throw error;
 }
@@ -98,7 +98,7 @@ export async function materializeDemandPublicationStage(workspaceRoot, transacti
     if (operationError !== undefined)
         mapStageError(operationError);
     if (closeError !== undefined)
-        fail("operation-failure", "$stage/close");
+        fail("operation-failure", "$stage/close", "unknown", closeError);
 }
 export async function publishDemandStage(root, transaction, signal) {
     const stageNode = await publicationNodeOrNull(root, transaction.stageRef);
@@ -164,8 +164,9 @@ export async function loadFinalDemandPublication(workspaceRoot, ledgerStore, tra
         }
         throw operationError;
     }
-    if (closeError !== undefined)
-        fail("operation-failure", "$demandRoot/close");
+    if (closeError !== undefined) {
+        fail("operation-failure", "$demandRoot/close", "unknown", closeError);
+    }
     if (loaded === undefined)
         fail("operation-failure", "$demandRoot");
     return loaded;

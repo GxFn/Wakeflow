@@ -29,15 +29,15 @@ export class TestExecutionAttemptError extends Error {
     code = "wakeflow-test-execution-attempt";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA]);
-function fail(reason, path) {
-    throw new TestExecutionAttemptError(reason, path);
+function fail(reason, path, cause) {
+    throw new TestExecutionAttemptError(reason, path, cause === undefined ? undefined : { cause });
 }
 function id(value, kind, path) {
     try {
@@ -45,7 +45,7 @@ function id(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -55,7 +55,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -71,7 +71,7 @@ function testPackage(value) {
     }
     catch (error) {
         if (error instanceof TaskPackageError)
-            fail("task-package", "$taskPackage");
+            fail("task-package", "$taskPackage", error);
         throw error;
     }
     if (taskPackage.workType !== "test")
@@ -86,7 +86,7 @@ export function parseTestExecutionAttempt(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const validated = validateWire(json);

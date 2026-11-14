@@ -15,7 +15,7 @@ function parseMembers(value, record) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$members");
+            fail("input", "$members", error);
         throw error;
     }
     if (entries.length !== record.documents.length)
@@ -27,7 +27,7 @@ function parseMembers(value, record) {
         }
         catch (error) {
             if (error instanceof PassiveOwnDataError)
-                fail("input", `$members/${index}`);
+                fail("input", `$members/${index}`, error);
             throw error;
         }
         const keys = Object.keys(input).sort();
@@ -72,7 +72,7 @@ function preparePublication(recordValue, membersValue, signal) {
     }
     catch (error) {
         if (error instanceof LedgerAuthorityRecordError)
-            fail("input", "$record");
+            fail("input", "$record", error);
         throw error;
     }
     const members = parseMembers(membersValue, record);
@@ -113,13 +113,13 @@ function preparePublication(recordValue, membersValue, signal) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             // 规划候选树先核对取消信号：已取消的调用是 aborted，不是成员输入问题（镜像测试 §13.169 发现）。
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "capacity")
-                fail("capacity", "$members");
-            fail("member", "$members");
+                fail("capacity", "$members", error);
+            fail("member", "$members", error);
         }
         if (error instanceof LedgerRecordPublicationIntentError) {
-            fail("operation-failure", "$intent");
+            fail("operation-failure", "$intent", error);
         }
         throw error;
     }
@@ -133,10 +133,10 @@ async function createOrSettleStage(root, prepared, stageNodePresent, signal) {
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "capacity")
-                fail("capacity", "$stage");
-            fail("conflict", "$stage");
+                fail("capacity", "$stage", error);
+            fail("conflict", "$stage", error);
         }
         throw error;
     }

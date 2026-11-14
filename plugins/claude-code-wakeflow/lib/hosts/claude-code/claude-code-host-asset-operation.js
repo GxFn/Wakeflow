@@ -23,14 +23,14 @@ export class ClaudeCodeHostAssetOperationError extends Error {
     code = "wakeflow-claude-code-host-asset-operation";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodeHostAssetOperationError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodeHostAssetOperationError(reason, path, cause === undefined ? undefined : { cause });
 }
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const ASSET_MODE = 0o600;
@@ -66,8 +66,8 @@ async function currentAsset(root, asset, signal) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("read", "$asset");
+                fail("aborted", "$signal", error);
+            fail("read", "$asset", error);
         }
         throw error;
     }
@@ -101,7 +101,7 @@ function parsePayload(value, asset) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         throw error;
     }
     let digest;
@@ -110,7 +110,7 @@ function parsePayload(value, asset) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("operation", "$operation.digest");
+            fail("operation", "$operation.digest", error);
         throw error;
     }
     if (Object.keys(record).sort().join(" ") !== "digest fileName" ||
@@ -130,8 +130,8 @@ async function ensureAssetsDirectory(root, signal) {
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("write", "$asset.directory");
+                fail("aborted", "$signal", error);
+            fail("write", "$asset.directory", error);
         }
         throw error;
     }
@@ -173,11 +173,11 @@ export async function executeClaudeCodeHostAssetOperation(root, asset, request) 
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "expectation-changed" || error.reason === "target-exists") {
-                fail("source-stale", "$asset");
+                fail("source-stale", "$asset", error);
             }
-            fail("write", "$asset");
+            fail("write", "$asset", error);
         }
         throw error;
     }

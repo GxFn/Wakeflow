@@ -46,8 +46,8 @@ export class ManagedEvidenceCapturePlanningServiceError extends Error {
     reason;
     causeCode;
     causeReason;
-    constructor(reason, causeCode = null, causeReason = null) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, causeCode = null, causeReason = null, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.causeCode = causeCode;
         this.causeReason = causeReason;
@@ -68,7 +68,7 @@ function ownString(value, key) {
         : null;
 }
 function fail(reason, cause) {
-    throw new ManagedEvidenceCapturePlanningServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"));
+    throw new ManagedEvidenceCapturePlanningServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"), cause === undefined ? undefined : { cause });
 }
 function parseOptions(value) {
     let record;

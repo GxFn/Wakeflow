@@ -19,23 +19,23 @@ async function inspectCurrent(root, request, signal, afterCommit) {
     }
     catch (error) {
         if (afterCommit)
-            fail("commit-uncertain", "$resourcePath");
+            fail("commit-uncertain", "$resourcePath", error);
         if (error instanceof WakeflowProgramInstructionInspectionError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "unsupported-platform") {
-                fail("unsupported-platform", "$root");
+                fail("unsupported-platform", "$root", error);
             }
             if (error.reason === "target-capacity")
-                fail("capacity", "$target");
+                fail("capacity", "$target", error);
             if (error.reason === "source-capacity")
-                fail("capacity", "$source");
+                fail("capacity", "$source", error);
             if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-                fail("input", error.path);
+                fail("input", error.path, error);
             }
-            fail("source-invalid", "$source");
+            fail("source-invalid", "$source", error);
         }
-        fail("source-invalid", "$source");
+        fail("source-invalid", "$source", error);
     }
 }
 function mapAtomicError(error) {
@@ -86,7 +86,7 @@ async function publishTarget(root, request, inspection, signal) {
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError)
             mapAtomicError(error);
-        fail("effect-failure", "$resourcePath");
+        fail("effect-failure", "$resourcePath", error);
     }
 }
 function sameSource(left, right) {
@@ -177,7 +177,7 @@ export async function recomposeWakeflowProgramInstruction(rootValue, requestValu
         if (error instanceof RootedExclusiveFileLockError) {
             mapWakeflowProgramInstructionLockError(error, committed);
         }
-        fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
+        fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);
     }
 }
 export { WakeflowProgramInstructionRecompositionError, } from "./wakeflow-program-instruction-recomposition-contract.js";

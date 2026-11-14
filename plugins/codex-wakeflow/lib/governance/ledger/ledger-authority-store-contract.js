@@ -23,14 +23,14 @@ export class LedgerAuthorityStoreError extends Error {
     code = "wakeflow-ledger-authority-store";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function throwLedgerAuthorityStoreError(reason, path) {
-    throw new LedgerAuthorityStoreError(reason, path);
+export function throwLedgerAuthorityStoreError(reason, path, cause) {
+    throw new LedgerAuthorityStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function isLedgerAbortSignal(value) {
     return (typeof value === "object" &&
@@ -45,7 +45,7 @@ export function parseLedgerAuthorityStoreOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            throwLedgerAuthorityStoreError("input", "$options");
+            throwLedgerAuthorityStoreError("input", "$options", error);
         }
         throw error;
     }

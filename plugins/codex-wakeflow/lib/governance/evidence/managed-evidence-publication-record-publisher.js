@@ -28,14 +28,14 @@ export class ManagedEvidencePublicationRecordPublisherError extends Error {
     code = "wakeflow-managed-evidence-publication-record-publisher";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ManagedEvidencePublicationRecordPublisherError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidencePublicationRecordPublisherError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -52,7 +52,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -75,7 +75,7 @@ function parseTransaction(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("input", "$transaction");
+            fail("input", "$transaction", error);
         }
         throw error;
     }
@@ -107,7 +107,7 @@ async function nodeOrNull(root, resourcePath) {
             return null;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$demandRoot");
+            fail("root-scope", "$demandRoot", error);
         throw error;
     }
 }
@@ -152,7 +152,7 @@ async function syncFinalParent(root, plan) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError)
-            fail("durability-failure", "$final");
+            fail("durability-failure", "$final", error);
         throw error;
     }
     let failure;
@@ -181,7 +181,7 @@ function admitFinalPublish(transaction) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", error);
         }
         throw error;
     }
@@ -205,7 +205,7 @@ function mapPublicationError(error) {
     if (error.reason === "source-changed" || error.reason === "source-conflict") {
         fail("stage-conflict", "$stage");
     }
-    fail("operation-failure", "$final");
+    fail("operation-failure", "$final", error);
 }
 async function currentFinalOrNull(root, transaction, plan, journalNode, signal) {
     const physical = await inspectPhysicalState(root, plan);
@@ -283,7 +283,7 @@ export async function publishManagedEvidencePublicationRecord(demandRootValue, t
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
-            fail("commit-uncertain", "$final");
+            fail("commit-uncertain", "$final", error);
         }
         throw error;
     }

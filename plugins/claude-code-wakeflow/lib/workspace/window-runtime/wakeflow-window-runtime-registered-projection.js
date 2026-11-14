@@ -22,15 +22,15 @@ export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
     code = "wakeflow-window-runtime-registered-projection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA]);
-function fail(reason, path) {
-    throw new WakeflowWindowRuntimeRegisteredProjectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowRuntimeRegisteredProjectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function projectionBasis(value) {
     return {
@@ -69,9 +69,9 @@ function compileWakeflowWindowRuntimeRegisteredProjection(profileValue, identity
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("input", "$profile");
+            fail("input", "$profile", error);
         }
-        fail("input", "$sources");
+        fail("input", "$sources", error);
     }
     assertSources(profile, source, binding);
     const reason = Object.freeze({

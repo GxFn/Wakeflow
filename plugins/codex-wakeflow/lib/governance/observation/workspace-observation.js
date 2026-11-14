@@ -11,7 +11,7 @@ import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { inspectActiveLayout, } from "../../kernel/active-projection.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, scanHostHookObservations, } from "../../kernel/hook-observations.js";
-import { countIncidents } from "../../kernel/incident.js";
+import { summarizeIncidents } from "../../kernel/incident.js";
 import { hostHookObservationsRootRef, hostRuntimeRootRef, REQUIREMENT_BOARD_INDEX_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WORK_CLAIMS_ROOT_REF, } from "../../kernel/layout.js";
 import { listPodWorktreeReceiptsAnyHost, observeWorktreeCheckout, } from "../../kernel/pod-worktree-receipts.js";
 import { listRequirementClaimStates, renderRequirementBoardIndex, } from "../../kernel/requirement-board.js";
@@ -277,7 +277,9 @@ function keepLatestFact(keys, values, sessionId, key, value) {
     keys.set(sessionId, key);
     values.set(sessionId, value);
 }
-async function observeHostHooks(root, hostId, current, signal) {
+/** hook 观察器的写失败计入门的时间窗：七天之内。 */
+const HOOK_WRITE_FAILURE_WINDOW_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
+async function observeHostHooks(root, hostId, current, observedAt, signal) {
     try {
         const directory = await hookDirectoryState(root, hostId);
         const latestBySession = new Map();
@@ -339,7 +341,11 @@ async function observeHostHooks(root, hostId, current, signal) {
                 permissionMode: modes.get(sessionId) ?? null,
             });
         }
-        const writeFailures = await countIncidents(root, { source: "hook-observer", hostId }, signalOptions(signal));
+        const writeFailures = await summarizeIncidents(root, {
+            source: "hook-observer",
+            hostId,
+            since: new Date(Date.parse(observedAt) - HOOK_WRITE_FAILURE_WINDOW_MILLISECONDS).toISOString(),
+        }, signalOptions(signal));
         return Object.freeze({
             hostId,
             current,
@@ -349,7 +355,8 @@ async function observeHostHooks(root, hostId, current, signal) {
             records: inventory.records,
             skipped: inventory.skipped,
             stageResidue: inventory.stageResidue,
-            writeFailures,
+            writeFailures: writeFailures.count,
+            latestWriteFailureAt: writeFailures.latestRecordedAt,
             latestBySession,
         });
     }
@@ -372,6 +379,7 @@ async function observeHostHooks(root, hostId, current, signal) {
             skipped: 0,
             stageResidue: 0,
             writeFailures: 0,
+            latestWriteFailureAt: null,
             latestBySession: new Map(),
         });
     }
@@ -732,7 +740,7 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
         }
         for (const host of options.hosts) {
             bindings.push(await observeHostBindings(root, snapshot, host, signal));
-            hooks.push(await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal));
+            hooks.push(await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, observedAt, signal));
             projections.push(await observeHostProjections(root, snapshot, host, host.hostId === options.currentHostId, signal));
             assets.push(await observeHostAsset(root, host, options.currentHostId, signal));
         }

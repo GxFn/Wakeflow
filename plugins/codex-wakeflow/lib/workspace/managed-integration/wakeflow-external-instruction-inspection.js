@@ -38,14 +38,14 @@ export class WakeflowExternalInstructionInspectionError extends Error {
     code = "wakeflow-external-instruction-inspection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowExternalInstructionInspectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowExternalInstructionInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -53,7 +53,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -63,7 +63,7 @@ function parseConfig(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -85,7 +85,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -109,7 +109,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("input", "$request.profile");
+            fail("input", "$request.profile", error);
         }
         throw error;
     }
@@ -119,7 +119,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -173,7 +173,7 @@ function createAuthority(config, request) {
     }
     catch (error) {
         if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }

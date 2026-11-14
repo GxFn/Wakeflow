@@ -14,8 +14,8 @@ export class FileByteRangeError extends Error {
     code = "wakeflow-file-byte-range";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -26,8 +26,8 @@ function normalizeErrorPath(value, fallback) {
 function fieldPath(basePath, field) {
     return `${basePath}.${field}`;
 }
-function fail(reason, path) {
-    throw new FileByteRangeError(reason, path);
+function fail(reason, path, cause) {
+    throw new FileByteRangeError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseOffset(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
@@ -41,7 +41,7 @@ function parseLength(value, path) {
     }
     catch (error) {
         if (error instanceof ByteCountError)
-            fail("length-range", path);
+            fail("length-range", path, error);
         throw error;
     }
 }

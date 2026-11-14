@@ -514,6 +514,20 @@ function windowViews(context) {
         };
     });
 }
+/**
+ * 摘要档（open-items K5）留在列表里的窗口：有任何一项需要 Controller 或用户看一眼。其余窗口——已登记、投影
+ * 是当前的、没有工作占用、没有待处理的宿主提示、运行身份没有判为陈旧、启动取值没有漂移、权限模式没有不符——
+ * 只计数。status 是每一步的第一次读取，窗口列表占它的大半，而平常的一步里绝大多数窗口什么都不用做。
+ */
+function windowNeedsHandling(window) {
+    return (window.identity !== "registered" ||
+        window.projection !== "current" ||
+        window.claim.status === "held" ||
+        window.attention?.status === "needed" ||
+        window.runtime.status === "stale" ||
+        window.launchIntent?.status === "drifted" ||
+        window.session?.permissionMode.status === "mismatch");
+}
 /** 登记时与现在不同的取值，按名字排序；两边都没有的名字不出现。 */
 function launchValueChanges(registered, current) {
     return [...new Set([...Object.keys(registered), ...Object.keys(current)])]
@@ -922,7 +936,10 @@ async function assembleStatus(context, request) {
     const demands = capStatusList([...(observation.demands.value ?? [])]
         .sort((left, right) => left.demandId.localeCompare(right.demandId))
         .map(demandView), STATUS_LIST_MAXIMUMS.demands);
-    const windows = capStatusList(windowViews(context), STATUS_LIST_MAXIMUMS.windows);
+    const everyWindow = windowViews(context);
+    const summary = request.detail === "summary";
+    const listedWindows = summary ? everyWindow.filter(windowNeedsHandling) : everyWindow;
+    const windows = capStatusList(listedWindows, STATUS_LIST_MAXIMUMS.windows);
     const pods = capStatusList(podViews(context), STATUS_LIST_MAXIMUMS.pods);
     return admitStatusResult({
         kind: "WakeflowStatus",
@@ -943,6 +960,10 @@ async function assembleStatus(context, request) {
         board: boardView(observation),
         demands: demands.entries,
         windows: windows.entries,
+        // 只在摘要档出现：完整档的结果与此前逐字节相同。
+        ...(summary
+            ? { detail: "summary", windowsQuiet: everyWindow.length - listedWindows.length }
+            : {}),
         claims: claims.entries,
         pods: pods.entries,
         repositories: repositories.entries,
@@ -1258,6 +1279,7 @@ async function gateFacts(context, readings) {
             skipped: host.skipped,
             stageResidue: host.stageResidue,
             writeFailures: host.writeFailures,
+            latestWriteFailureAt: host.latestWriteFailureAt,
         })),
         windows: snapshot.model.topology.windows.map((window) => ({
             windowId: window.windowId,

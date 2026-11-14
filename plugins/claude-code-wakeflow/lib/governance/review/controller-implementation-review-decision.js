@@ -45,8 +45,8 @@ export class ControllerImplementationReviewDecisionError extends Error {
     code = "wakeflow-controller-implementation-review-decision";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -58,8 +58,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_CONTROLLER_IMPLEM
     WAKEFLOW_TASK_PACKAGE_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new ControllerImplementationReviewDecisionError(reason, path);
+function fail(reason, path, cause) {
+    throw new ControllerImplementationReviewDecisionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function id(value, kind, path) {
     try {
@@ -67,7 +67,7 @@ function id(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -77,7 +77,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -87,7 +87,7 @@ function streamRevision(value, path) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", path);
+            fail("position", path, error);
         }
         throw error;
     }
@@ -98,7 +98,7 @@ function instant(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -209,7 +209,7 @@ export function parseControllerImplementationReviewDecision(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const validated = validateWire(json);
@@ -284,7 +284,7 @@ export function createControllerImplementationReviewDecision(input, options = {}
     }
     catch (error) {
         if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$uuidFactory");
+            fail("identifier", "$uuidFactory", error);
         }
         throw error;
     }
@@ -294,7 +294,7 @@ export function createControllerImplementationReviewDecision(input, options = {}
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
-            fail("time", "$clock");
+            fail("time", "$clock", error);
         throw error;
     }
     const basis = decisionBasis({
@@ -334,7 +334,7 @@ export function parseControllerImplementationReviewDecisionDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$decision");
+            fail("representation", "$decision", error);
         }
         throw error;
     }

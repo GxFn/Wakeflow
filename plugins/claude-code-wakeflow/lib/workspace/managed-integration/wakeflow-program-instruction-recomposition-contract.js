@@ -33,14 +33,14 @@ export class WakeflowProgramInstructionRecompositionError extends Error {
     code = "wakeflow-program-instruction-recomposition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failWakeflowProgramInstructionRecomposition(reason, path) {
-    throw new WakeflowProgramInstructionRecompositionError(reason, path);
+export function failWakeflowProgramInstructionRecomposition(reason, path, cause) {
+    throw new WakeflowProgramInstructionRecompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function assertWakeflowProgramInstructionRecompositionRoot(value) {
     if (typeof value !== "object" ||
@@ -56,7 +56,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowProgramInstructionRecomposition("input", path);
+            failWakeflowProgramInstructionRecomposition("input", path, error);
         }
         throw error;
     }
@@ -71,7 +71,7 @@ export function parseWakeflowProgramInstructionRecompositionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowProgramInstructionInspectionError) {
-            failWakeflowProgramInstructionRecomposition("input", error.path);
+            failWakeflowProgramInstructionRecomposition("input", error.path, error);
         }
         throw error;
     }
@@ -128,7 +128,7 @@ export async function assertCurrentUserWakeflowProgramInstructionRoot(root, expe
             throw error;
         }
         if (error instanceof RootedDirectoryError) {
-            failWakeflowProgramInstructionRecomposition("root-scope", "$root");
+            failWakeflowProgramInstructionRecomposition("root-scope", "$root", error);
         }
         throw error;
     }
@@ -144,7 +144,7 @@ export function admitWakeflowProgramInstructionLockOperations(request) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-                failWakeflowProgramInstructionRecomposition("input", "$request.matrix");
+                failWakeflowProgramInstructionRecomposition("input", "$request.matrix", error);
             }
             throw error;
         }

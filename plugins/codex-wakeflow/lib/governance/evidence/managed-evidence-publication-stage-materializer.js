@@ -34,15 +34,15 @@ export class ManagedEvidencePublicationStageMaterializationError extends Error {
     code = "wakeflow-managed-evidence-publication-stage-materialization";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME);
-function fail(reason, path) {
-    throw new ManagedEvidencePublicationStageMaterializationError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidencePublicationStageMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value, path) {
     if (typeof value !== "object" ||
@@ -59,7 +59,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -84,7 +84,7 @@ function parseTransaction(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("input", "$transaction");
+            fail("input", "$transaction", error);
         }
         throw error;
     }
@@ -126,7 +126,7 @@ function admitEvidenceRootMaterialization(transaction) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", error);
         }
         throw error;
     }
@@ -150,7 +150,7 @@ function mapDirectoryError(error, path) {
         error.reason === "close-failure") {
         fail("recovery-required", path);
     }
-    fail("operation-failure", path);
+    fail("operation-failure", path, error);
 }
 async function ensureEvidenceRoot(demandRoot, transaction, signal) {
     admitEvidenceRootMaterialization(transaction);
@@ -161,7 +161,7 @@ async function ensureEvidenceRoot(demandRoot, transaction, signal) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("destination-root-scope", "$demandRoot");
+            fail("destination-root-scope", "$demandRoot", error);
         }
         throw error;
     }
@@ -196,7 +196,7 @@ function mapCandidateError(error) {
     }
     if (error.reason === "input")
         fail("input", error.path);
-    fail("operation-failure", "$stage");
+    fail("operation-failure", "$stage", error);
 }
 async function inspectProgress(demandRoot, plan, signal) {
     try {
@@ -231,11 +231,11 @@ async function recoverManifestAtomicStages(demandRoot, plan, signal) {
     catch (error) {
         if (error instanceof DurableAtomicFileStageRecoveryError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope") {
-                fail("destination-root-scope", "$demandRoot");
+                fail("destination-root-scope", "$demandRoot", error);
             }
-            fail("recovery-required", "$manifest/stage");
+            fail("recovery-required", "$manifest/stage", error);
         }
         throw error;
     }
@@ -268,7 +268,7 @@ function mapPayloadError(error) {
     }
     if (error.reason === "input")
         fail("input", "$payload");
-    fail("operation-failure", "$payload");
+    fail("operation-failure", "$payload", error);
 }
 function onlyManifestMissing(progress) {
     return (progress.status === "incomplete" &&
@@ -295,7 +295,7 @@ function mapManifestWriteError(error) {
         error.reason === "close-failure") {
         fail("recovery-required", "$manifest");
     }
-    fail("operation-failure", "$manifest");
+    fail("operation-failure", "$manifest", error);
 }
 async function publishManifest(demandRoot, transaction, plan, signal) {
     const manifestRef = joinDirectoryTreeCandidatePath(plan.candidateRootPath, MANIFEST_REF);
@@ -367,7 +367,7 @@ export async function materializeManagedEvidencePublicationStage(sourceRootValue
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationStageMaterializationError) {
-            fail("recovery-required", "$stage");
+            fail("recovery-required", "$stage", error);
         }
         throw error;
     }

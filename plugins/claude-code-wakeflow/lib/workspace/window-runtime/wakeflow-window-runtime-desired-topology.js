@@ -24,14 +24,14 @@ export class WakeflowWindowRuntimeDesiredTopologyError extends Error {
     code = "wakeflow-window-runtime-desired-topology";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowWindowRuntimeDesiredTopologyError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowRuntimeDesiredTopologyError(reason, path, cause === undefined ? undefined : { cause });
 }
 function compareWindowId(left, right) {
     return left.windowId < right.windowId ? -1 : left.windowId > right.windowId ? 1 : 0;
@@ -91,7 +91,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(configValue, profile
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
     let profile;
@@ -100,7 +100,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(configValue, profile
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }

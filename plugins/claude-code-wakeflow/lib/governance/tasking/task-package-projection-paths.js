@@ -18,14 +18,14 @@ export class TaskPackageProjectionPathError extends Error {
     code = "wakeflow-task-package-projection-path";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new TaskPackageProjectionPathError(reason, path);
+function fail(reason, path, cause) {
+    throw new TaskPackageProjectionPathError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseTaskPackageId(value, path) {
     try {
@@ -33,7 +33,7 @@ function parseTaskPackageId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -55,7 +55,7 @@ export function parseTaskPackageProjectionFileName(value) {
     }
     catch (error) {
         if (error instanceof TaskPackageProjectionPathError) {
-            fail("file-name", "$fileName");
+            fail("file-name", "$fileName", error);
         }
         throw error;
     }

@@ -32,8 +32,8 @@ export class TargetResultCallbackError extends Error {
     code = "wakeflow-target-result-callback";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -61,8 +61,8 @@ const REISSUE_FIELDS = Object.freeze([
 ]);
 const RESOLUTION_FIELDS = Object.freeze(["bytes", "digest", "evidenceId", "ref"]);
 const MAXIMUM_EVIDENCE_RESOLUTIONS = 64;
-function fail(reason, path) {
-    throw new TargetResultCallbackError(reason, path);
+function fail(reason, path, cause) {
+    throw new TargetResultCallbackError(reason, path, cause === undefined ? undefined : { cause });
 }
 function exactRecord(value, fields, path) {
     let record;
@@ -71,7 +71,7 @@ function exactRecord(value, fields, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -86,7 +86,7 @@ function id(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -96,7 +96,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -106,7 +106,7 @@ function instant(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -116,7 +116,7 @@ function bindingId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowHostBindingIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -136,7 +136,7 @@ export function computeTargetResultCallbackPromptDigest(prompt, path = "$callbac
     }
     catch (error) {
         if (error instanceof DeliveryEnvelopeError)
-            fail("text", path);
+            fail("text", path, error);
         throw error;
     }
 }
@@ -197,7 +197,7 @@ export function parseTargetResultEvidenceResolutions(value, path = "$evidenceRes
         }
         catch (error) {
             if (error instanceof PortableResourcePathError)
-                fail("path", `${entryPath}/ref`);
+                fail("path", `${entryPath}/ref`, error);
             throw error;
         }
         if (refs.has(ref))

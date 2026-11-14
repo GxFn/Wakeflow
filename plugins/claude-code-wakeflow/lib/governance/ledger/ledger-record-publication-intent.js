@@ -38,8 +38,8 @@ export class LedgerRecordPublicationIntentError extends Error {
     code = "wakeflow-ledger-record-publication-intent";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -51,8 +51,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_LEDGER_RECORD_PUB
     WAKEFLOW_UTC_INSTANT_SCHEMA,
     WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new LedgerRecordPublicationIntentError(reason, path);
+function fail(reason, path, cause) {
+    throw new LedgerRecordPublicationIntentError(reason, path, cause === undefined ? undefined : { cause });
 }
 function normalizeRecord(value) {
     try {
@@ -60,7 +60,7 @@ function normalizeRecord(value) {
     }
     catch (error) {
         if (error instanceof LedgerAuthorityRecordError)
-            fail("record", "$/record");
+            fail("record", "$/record", error);
         throw error;
     }
 }
@@ -76,7 +76,7 @@ function normalizeTreePlan(value) {
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
-            fail("tree-plan", "$/treePlan");
+            fail("tree-plan", "$/treePlan", error);
         }
         throw error;
     }
@@ -148,7 +148,7 @@ export function parseLedgerRecordPublicationIntent(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -183,7 +183,7 @@ export function parseLedgerRecordPublicationIntentDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

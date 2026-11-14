@@ -16,8 +16,8 @@ export class DurableAtomicFileStageAddressError extends Error {
     code = "wakeflow-durable-atomic-file-stage-address";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -28,8 +28,8 @@ const MAXIMUM_STAGE_FILE_NAME_LENGTH = 238;
 const STAGE_PATTERN = /^(?:\.wakeflow-atomic-v1-)(?<operation>create|replace)-(?<target>[0-9a-f]{64})-(?<input>[0-9a-f]{64})-m(?<mode>[0-7]{3})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<attempt>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.tmp$/u;
 const ACTIVE_STAGE_TOKENS = new Set();
 const ISSUED_STAGE_ADDRESSES = new WeakSet();
-function fail(reason, path) {
-    throw new DurableAtomicFileStageAddressError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableAtomicFileStageAddressError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseOperation(value) {
     if (value !== "create" && value !== "replace") {
@@ -51,7 +51,7 @@ function parseDigestHex(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -75,8 +75,8 @@ function readAddressFileName(value) {
     try {
         descriptor = Object.getOwnPropertyDescriptor(value, "fileName");
     }
-    catch {
-        fail("input", "$address");
+    catch (cause) {
+        fail("input", "$address", cause);
     }
     if (descriptor === undefined ||
         !Object.hasOwn(descriptor, "value") ||
@@ -93,7 +93,7 @@ export function computeDurableAtomicFileStageTargetDigest(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$resourcePath");
+            fail("input", "$resourcePath", error);
         }
         throw error;
     }
@@ -126,7 +126,7 @@ export function parseDurableAtomicFileStageFileName(value) {
     }
     catch (error) {
         if (error instanceof UuidV4Error)
-            fail("identifier", "$/attempt");
+            fail("identifier", "$/attempt", error);
         throw error;
     }
     const token = `${pid}-${candidateThreadId}-${attempt}`;
@@ -151,7 +151,7 @@ export function issueDurableAtomicFileStageAddress(operationValue, resourcePathV
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", "$inputDigest");
+            fail("digest", "$inputDigest", error);
         throw error;
     }
     const mode = parseMode(modeValue);
@@ -161,7 +161,7 @@ export function issueDurableAtomicFileStageAddress(operationValue, resourcePathV
     }
     catch (error) {
         if (error instanceof UuidV4Error)
-            fail("identifier", "$/attempt");
+            fail("identifier", "$/attempt", error);
         throw error;
     }
     const token = `${process.pid}-${threadId}-${attempt}`;

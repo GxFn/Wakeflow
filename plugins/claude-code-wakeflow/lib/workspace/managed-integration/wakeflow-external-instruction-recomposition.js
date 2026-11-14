@@ -22,14 +22,14 @@ export class WakeflowExternalInstructionRecompositionError extends Error {
     code = "wakeflow-external-instruction-recomposition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowExternalInstructionRecompositionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowExternalInstructionRecompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -48,7 +48,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal")) {
@@ -83,7 +83,7 @@ function parseRequest(value, signal) {
     }
     catch (error) {
         if (error instanceof WakeflowExternalInstructionInspectionError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -94,7 +94,7 @@ function deriveAuthorities(request) {
     }
     catch (error) {
         if (error instanceof WakeflowExternalInstructionInspectionError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }

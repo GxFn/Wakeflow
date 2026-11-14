@@ -15,14 +15,14 @@ export class WakeflowFreshWindowRuntimeAuthorityError extends Error {
     code = "wakeflow-fresh-window-runtime-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowFreshWindowRuntimeAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowFreshWindowRuntimeAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 为同一 strict Config/Host 编译 Fresh Window Runtime 的完整纯目标。 */
 export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue) {
@@ -32,7 +32,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileV
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -64,7 +64,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(configValue, profileV
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
-            fail("projection", error.path);
+            fail("projection", error.path, error);
         }
         throw error;
     }

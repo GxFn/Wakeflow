@@ -37,8 +37,8 @@ export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
     code = "wakeflow-workspace-static-resource-matrix";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -67,8 +67,8 @@ function compareDeclarationIds(left, right) {
 function sortedDeclarations(declarations) {
     return Object.freeze([...declarations].sort(compareDeclarationIds));
 }
-function fail(reason, path) {
-    throw new WakeflowWorkspaceStaticResourceMatrixError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWorkspaceStaticResourceMatrixError(reason, path, cause === undefined ? undefined : { cause });
 }
 function logicalRootKey(placement) {
     const root = placement.root;
@@ -208,7 +208,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$matrix");
+            fail("input", "$matrix", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -231,7 +231,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const parsedDeclarations = declarationValues.map((declaration, index) => {
@@ -240,7 +240,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(value) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceResourceDeclarationError) {
-                fail("input", `$/declarations/${index}`);
+                fail("input", `$/declarations/${index}`, error);
             }
             throw error;
         }

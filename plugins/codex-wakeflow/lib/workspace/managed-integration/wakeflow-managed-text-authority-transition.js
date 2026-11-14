@@ -15,14 +15,14 @@ export class WakeflowManagedTextAuthorityTransitionError extends Error {
     code = "wakeflow-managed-text-authority-transition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowManagedTextAuthorityTransitionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowManagedTextAuthorityTransitionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseTarget(value, path) {
     let target;
@@ -31,7 +31,7 @@ function parseTarget(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError) {
-            fail("target", path);
+            fail("target", path, error);
         }
         throw error;
     }
@@ -41,7 +41,7 @@ function parseTarget(value, path) {
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("target", path);
+            fail("target", path, error);
         throw error;
     }
     return Object.freeze({ target, bodyDigest });
@@ -55,7 +55,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (Object.keys(record).sort().join("\u0000") !== "currentTargets\u0000desiredTarget") {
@@ -82,7 +82,7 @@ function inspectSource(value) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError) {
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         }
         throw error;
     }
@@ -122,7 +122,7 @@ export function planWakeflowManagedTextAuthorityTransition(sourceValue, requestV
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError) {
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         }
         throw error;
     }

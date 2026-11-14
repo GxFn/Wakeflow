@@ -24,8 +24,8 @@ export class ManagedEvidenceSourceSelectionError extends Error {
     code = "wakeflow-managed-evidence-source-selection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -63,8 +63,8 @@ const KINDS_BY_SOURCE = Object.freeze({
     link: Object.freeze(["link"]),
     commit: Object.freeze(["commit"]),
 });
-function fail(reason, path) {
-    throw new ManagedEvidenceSourceSelectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceSourceSelectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function compareText(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -76,7 +76,7 @@ function exactRecord(value, fields, path, reason) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
     const keys = Object.keys(record).sort(compareText);
@@ -91,7 +91,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -101,7 +101,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -115,7 +115,7 @@ function parseSourceRoot(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("source", path);
+            fail("source", path, error);
         throw error;
     }
     if (base.kind === "repository") {
@@ -150,7 +150,7 @@ function parseManagedPath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("path", `${path}/path`);
+            fail("path", `${path}/path`, error);
         throw error;
     }
     const firstSegment = resourcePath.split("/", 1)[0]?.toLowerCase();
@@ -199,7 +199,7 @@ function parseObservationSource(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", `${path}/recordedAt`);
+            fail("time", `${path}/recordedAt`, error);
         throw error;
     }
     if (record.turnId !== null &&
@@ -234,8 +234,8 @@ export function parseManagedEvidenceLinkUrl(value, path = "$/source/url") {
     try {
         url = new URL(value);
     }
-    catch {
-        fail("url", path);
+    catch (cause) {
+        fail("url", path, cause);
     }
     if (url.protocol !== "https:" ||
         url.username !== "" ||
@@ -273,7 +273,7 @@ function sourceKindOf(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("source", path);
+            fail("source", path, error);
         throw error;
     }
     if (typeof base.kind !== "string")

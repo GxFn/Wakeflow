@@ -38,14 +38,14 @@ export class DurableAtomicFileStageRecoveryError extends Error {
     code = "wakeflow-durable-atomic-file-stage-recovery";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableAtomicFileStageRecoveryError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableAtomicFileStageRecoveryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -62,7 +62,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -99,7 +99,7 @@ function parseDirectoryRef(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$directoryResourcePath");
+            fail("input", "$directoryResourcePath", error);
         }
         throw error;
     }
@@ -115,7 +115,7 @@ function parseTargetScope(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            fail("input", "$targetResourcePaths");
+            fail("input", "$targetResourcePaths", error);
         }
         throw error;
     }
@@ -131,7 +131,7 @@ function parseTargetScope(value) {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError) {
-                fail("input", `$targetResourcePaths/${index}`);
+                fail("input", `$targetResourcePaths/${index}`, error);
             }
             throw error;
         }
@@ -145,7 +145,7 @@ function parseTargetScope(value) {
         }
         catch (error) {
             if (error instanceof DurableAtomicFileStageAddressError) {
-                fail("input", `$targetResourcePaths/${index}`);
+                fail("input", `$targetResourcePaths/${index}`, error);
             }
             throw error;
         }
@@ -172,19 +172,19 @@ async function readDirectory(root, directoryResourcePath, signal) {
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "too-many-entries")
-                fail("capacity", "$directory");
+                fail("capacity", "$directory", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "source-changed")
-                fail("busy", "$directory");
+                fail("busy", "$directory", error);
             if (error.reason === "not-found" ||
                 error.reason === "symlink" ||
                 error.reason === "not-directory") {
-                fail("directory", "$directory");
+                fail("directory", "$directory", error);
             }
-            fail("operation-failure", "$directory");
+            fail("operation-failure", "$directory", error);
         }
         throw error;
     }
@@ -210,7 +210,7 @@ function collectStages(directory, tolerateUnrecognized) {
                     unrecognizedEntryCount += 1;
                     continue;
                 }
-                fail("inventory", `$stages/${index}`);
+                fail("inventory", `$stages/${index}`, error);
             }
             throw error;
         }
@@ -271,8 +271,8 @@ async function assertPublishedTarget(root, stage, target, signal) {
     catch (error) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("target-conflict", "$target");
+                fail("aborted", "$signal", error);
+            fail("target-conflict", "$target", error);
         }
         throw error;
     }
@@ -288,8 +288,8 @@ async function assertPublishedTarget(root, stage, target, signal) {
     catch (error) {
         if (error instanceof DurableRegularFileSettlementError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("target-conflict", "$target");
+                fail("aborted", "$signal", error);
+            fail("target-conflict", "$target", error);
         }
         throw error;
     }
@@ -304,8 +304,8 @@ async function retireStage(root, stage, signal) {
     catch (error) {
         if (error instanceof ExactRegularFileUnlinkError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("cleanup-required", "$stage");
+                fail("aborted", "$signal", error);
+            fail("cleanup-required", "$stage", error);
         }
         throw error;
     }

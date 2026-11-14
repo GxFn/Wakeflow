@@ -28,14 +28,14 @@ export class DurableDirectoryTreeCandidateRetirementError extends Error {
     code = "wakeflow-durable-directory-tree-candidate-retirement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableDirectoryTreeCandidateRetirementError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableDirectoryTreeCandidateRetirementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -58,7 +58,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -77,7 +77,7 @@ function parsePath(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$candidateRootPath");
+            fail("input", "$candidateRootPath", error);
         }
         throw error;
     }
@@ -96,7 +96,7 @@ function parseRootNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$candidate/rootNode");
+            fail("input", "$candidate/rootNode", error);
         }
         throw error;
     }
@@ -112,7 +112,7 @@ function parseCandidate(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$candidate");
+            fail("input", "$candidate", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -128,7 +128,7 @@ function parseCandidate(value) {
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
-            fail("input", "$candidate/plan");
+            fail("input", "$candidate/plan", error);
         }
         throw error;
     }
@@ -146,7 +146,7 @@ function parseRecoveryInput(candidateRootPathValue, planValue) {
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
-            fail("input", "$plan");
+            fail("input", "$plan", error);
         }
         throw error;
     }
@@ -172,11 +172,11 @@ async function candidateExists(root, candidateRootPath) {
             if (error.reason === "resource-not-found")
                 return false;
             if (error.reason === "resource-path")
-                fail("input", "$candidate");
+                fail("input", "$candidate", error);
             if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
-                fail("candidate-conflict", "$candidate");
+                fail("candidate-conflict", "$candidate", error);
             }
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         }
         throw error;
     }
@@ -227,7 +227,7 @@ async function captureMembers(root, candidateRootPath, plan, signal) {
         }
         catch (error) {
             if (error instanceof RootedDirectoryError) {
-                fail("source-changed", "$candidate/directory");
+                fail("source-changed", "$candidate/directory", error);
             }
             throw error;
         }
@@ -250,11 +250,11 @@ async function captureMembers(root, candidateRootPath, plan, signal) {
         catch (error) {
             if (error instanceof StableFileReadError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 if (error.reason === "source-changed") {
-                    fail("source-changed", "$candidate/file");
+                    fail("source-changed", "$candidate/file", error);
                 }
-                fail("candidate-conflict", "$candidate/file");
+                fail("candidate-conflict", "$candidate/file", error);
             }
             throw error;
         }
@@ -357,7 +357,7 @@ export async function removeEmptyDirectoryExactly(root, resourcePath, expectedId
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("source-changed", "$candidate/directory");
+            fail("source-changed", "$candidate/directory", error);
         }
         throw error;
     }
@@ -394,11 +394,11 @@ export async function removeEmptyDirectoryExactly(root, resourcePath, expectedId
         catch (error) {
             const code = readNodeSystemErrorCode(error);
             if (code === "ENOTEMPTY" || code === "EEXIST") {
-                fail("candidate-conflict", "$candidate/directory");
+                fail("candidate-conflict", "$candidate/directory", error);
             }
             if (code === "ENOENT")
-                fail("source-changed", "$candidate/directory");
-            fail("retirement-failure", "$candidate/directory");
+                fail("source-changed", "$candidate/directory", error);
+            fail("retirement-failure", "$candidate/directory", error);
         }
         committed = true;
         if ((await parent.inspectTarget()) !== null) {

@@ -55,14 +55,14 @@ export class ClaudeCodeWindowTransportRetirementError extends Error {
     code = "wakeflow-claude-code-window-transport-retirement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodeWindowTransportRetirementError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodeWindowTransportRetirementError(reason, path, cause === undefined ? undefined : { cause });
 }
 const NOT_SWITCHING = Object.freeze({
     switching: false,
@@ -82,7 +82,7 @@ async function existingNode(root, ref, path) {
         if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
             return null;
         if (error instanceof RootedDirectoryError)
-            fail("effect", path);
+            fail("effect", path, error);
         throw error;
     }
 }
@@ -113,7 +113,7 @@ function unregisteredTargets(root, config, profile) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeProjectionError)
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         throw error;
     }
 }
@@ -123,7 +123,7 @@ function bindingStoreAuthority(config, profile) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowHostBindingStoreAuthorityError)
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         throw error;
     }
 }
@@ -138,7 +138,7 @@ async function transportSwitching(root, request) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             return false;
         }
         throw error;
@@ -158,7 +158,7 @@ async function inspectBindings(root, request) {
     catch (error) {
         if (error instanceof WakeflowWindowHostBindingStoreError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             return null;
         }
         throw error;
@@ -215,7 +215,7 @@ function parsePayload(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         throw error;
     }
     if (Object.keys(record).sort().join(" ") !== "bindingId locatorPresent windowId" ||
@@ -235,7 +235,7 @@ async function unlinkExactly(root, ref, node, path, signal) {
     }
     catch (error) {
         if (error instanceof ExactRegularFileUnlinkError) {
-            fail(error.reason === "aborted" ? "aborted" : "effect", path);
+            fail(error.reason === "aborted" ? "aborted" : "effect", path, error);
         }
         throw error;
     }

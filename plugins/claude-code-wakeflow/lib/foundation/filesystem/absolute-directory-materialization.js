@@ -24,14 +24,14 @@ export class AbsoluteDirectoryMaterializationError extends Error {
     code = "wakeflow-absolute-directory-materialization";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new AbsoluteDirectoryMaterializationError(reason, path);
+function fail(reason, path, cause) {
+    throw new AbsoluteDirectoryMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -46,7 +46,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "mode") ||
@@ -74,12 +74,12 @@ async function inspect(value, path) {
     catch (error) {
         if (error instanceof AbsoluteDirectoryPlacementError) {
             if (error.reason === "input")
-                fail("input", path);
+                fail("input", path, error);
             if (error.reason === "symlink")
-                fail("symlink", path);
+                fail("symlink", path, error);
             if (error.reason === "not-directory")
-                fail("not-directory", path);
-            fail("path-changed", path);
+                fail("not-directory", path, error);
+            fail("path-changed", path, error);
         }
         throw error;
     }
@@ -97,7 +97,7 @@ function relativeResourcePath(ancestor, target) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$absolutePath");
+            fail("input", "$absolutePath", error);
         }
         throw error;
     }
@@ -160,7 +160,7 @@ export async function materializeAbsoluteDirectoryPlacement(value, optionsValue)
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-open", "$ancestor");
+            fail("root-open", "$ancestor", error);
         throw error;
     }
     let materialized;

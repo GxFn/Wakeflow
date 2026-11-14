@@ -93,14 +93,14 @@ export class ClaudeCodeStatuslineSettingsOperationError extends Error {
     code = "wakeflow-claude-code-statusline-settings-operation";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodeStatuslineSettingsOperationError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodeStatuslineSettingsOperationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
@@ -122,8 +122,8 @@ function parseSettingsDocument(bytes) {
     try {
         decoded = JSON.parse(decodeUtf8(bytes, "$settings"));
     }
-    catch {
-        fail("settings-unreadable", "$settings");
+    catch (cause) {
+        fail("settings-unreadable", "$settings", cause);
     }
     try {
         const record = parsePlainRecord(decoded, "$settings");
@@ -135,7 +135,7 @@ function parseSettingsDocument(bytes) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError || error instanceof JsonValueError) {
-            fail("settings-unreadable", "$settings");
+            fail("settings-unreadable", "$settings", error);
         }
         throw error;
     }
@@ -154,8 +154,8 @@ async function currentSettings(root, signal) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("settings-unreadable", "$settings");
+                fail("aborted", "$signal", error);
+            fail("settings-unreadable", "$settings", error);
         }
         throw error;
     }
@@ -259,7 +259,7 @@ function parseModel(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("input", "$config");
+            fail("input", "$config", error);
         throw error;
     }
 }
@@ -278,7 +278,7 @@ async function surfacePlacement(workspaceRoot, model, surface) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError)
-            fail("placement", error.path);
+            fail("placement", error.path, error);
         throw error;
     }
     const placement = placements.roots.find((entry) => entry.key === `support.${surface.surfaceId}.root`);
@@ -297,7 +297,7 @@ async function withSurfaceRoot(absolutePath, run) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-open", "$supportRoot");
+            fail("root-open", "$supportRoot", error);
         throw error;
     }
     let result;
@@ -460,7 +460,7 @@ function parsePayload(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         throw error;
     }
     const keys = Object.keys(record).sort().join(" ");
@@ -480,7 +480,7 @@ function parseSurface(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", "$operation.surface");
+            fail("operation", "$operation.surface", error);
         throw error;
     }
     if (Object.keys(record).sort().join(" ") !== "configuredPlacement surfaceId") {
@@ -494,7 +494,7 @@ function parseSurface(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError || error instanceof WakeflowConfigError) {
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         }
         throw error;
     }
@@ -520,7 +520,7 @@ function parseDigests(request) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         throw error;
     }
 }
@@ -534,8 +534,8 @@ async function ensureSettingsDirectory(root, signal) {
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("write", "$settings.directory");
+                fail("aborted", "$signal", error);
+            fail("write", "$settings.directory", error);
         }
         throw error;
     }
@@ -560,11 +560,11 @@ async function writeTarget(root, current, bytes, signal) {
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "expectation-changed" || error.reason === "target-exists") {
-                fail("source-stale", "$settings");
+                fail("source-stale", "$settings", error);
             }
-            fail("write", "$settings");
+            fail("write", "$settings", error);
         }
         throw error;
     }
@@ -617,7 +617,7 @@ function parseRemovalPayload(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("operation", error.path);
+            fail("operation", error.path, error);
         throw error;
     }
     const keys = Object.keys(record).sort().join(" ");

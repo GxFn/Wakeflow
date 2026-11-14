@@ -23,15 +23,15 @@ export class WakeflowConfigAuthorityRetirementError extends Error {
     code = "wakeflow-config-authority-retirement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const REASONS = new Set(Object.keys(ERROR_MESSAGES));
-function fail(reason, path) {
-    throw new WakeflowConfigAuthorityRetirementError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowConfigAuthorityRetirementError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 替换合同的准入错误按同名原因过桥，其余归为 retirement-failure。 */
 function mapReplacementContractError(error) {
@@ -54,7 +54,7 @@ async function configResourceExists(root) {
             return false;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -65,12 +65,12 @@ async function readCurrentOrNull(root, signal) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "source" && !(await configResourceExists(root)))
                 return null;
-            fail("source", "$config");
+            fail("source", "$config", error);
         }
         throw error;
     }
@@ -82,10 +82,10 @@ async function readDetached(root, signal) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("source", "$detached");
+                fail("root-scope", "$root", error);
+            fail("source", "$detached", error);
         }
         throw error;
     }
@@ -111,7 +111,7 @@ async function renameConfigToDetached(root, current, signal) {
     catch (error) {
         if (error instanceof DurableResourceRenameError)
             mapRenameError(error);
-        fail("retirement-failure", "$config");
+        fail("retirement-failure", "$config", error);
     }
 }
 /** 退役文件是同一个节点、同样的字节与摘要。 */
@@ -128,8 +128,8 @@ async function assertRetirementReadback(root, expected, current, renamed) {
     try {
         after = await readDetached(root, undefined);
     }
-    catch {
-        fail("commit-uncertain", "$detached");
+    catch (cause) {
+        fail("commit-uncertain", "$detached", cause);
     }
     const matches = after !== null && retiredRecordMatches(after, expected, current, renamed);
     if (after === null || !matches || (await configResourceExists(root))) {
@@ -164,7 +164,7 @@ function parseExpectedDigest(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", "$expectedConfigDigest");
+            fail("input", "$expectedConfigDigest", error);
         throw error;
     }
 }

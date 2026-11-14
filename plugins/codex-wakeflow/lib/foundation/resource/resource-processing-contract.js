@@ -57,8 +57,8 @@ export class WakeflowResourceProcessingContractError extends Error {
     code = "wakeflow-resource-processing-contract";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -121,8 +121,8 @@ const DIRECTORY_CONTAINER_FIELDS = new Set([
     "descendantAuthority",
     "recoveryStrategy",
 ]);
-function fail(reason, path) {
-    throw new WakeflowResourceProcessingContractError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowResourceProcessingContractError(reason, path, cause === undefined ? undefined : { cause });
 }
 function propertyPath(key) {
     return `$/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`;
@@ -140,7 +140,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -150,7 +150,7 @@ function denseArray(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }

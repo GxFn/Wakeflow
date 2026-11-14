@@ -74,15 +74,15 @@ async function readRecordDocument(root, recordRef, expectedNode, signal) {
     catch (error) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "too-large")
-                fail("capacity", "$record");
-            fail("conflict", "$record");
+                fail("capacity", "$record", error);
+            fail("conflict", "$record", error);
         }
         if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-            fail("record", "$record");
+            fail("record", "$record", error);
         }
         throw error;
     }
@@ -118,7 +118,7 @@ export async function loadLedgerAuthorityRecord(root, requirementId, signal) {
     }
     catch (error) {
         if (error instanceof LedgerAuthorityRecordError)
-            fail("record", "$record");
+            fail("record", "$record", error);
         throw error;
     }
     if (record.requirementId !== requirementId)
@@ -164,7 +164,7 @@ function parseReferencePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -174,7 +174,7 @@ function parseReferenceDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -186,7 +186,7 @@ export function parseLedgerAuthorityMemberReference(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const result = validateMemberReference(json);
@@ -207,7 +207,7 @@ export function parseLedgerAuthorityMemberReference(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("input", "$/recordId");
+            fail("input", "$/recordId", error);
         throw error;
     }
     const expectedRoot = requirementRootRef(recordId);
@@ -272,12 +272,12 @@ export async function resolveLoadedLedgerAuthorityMemberReference(root, loaded, 
     catch (error) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "too-large")
-                fail("capacity", "$reference");
-            fail("conflict", "$reference");
+                fail("capacity", "$reference", error);
+            fail("conflict", "$reference", error);
         }
         throw error;
     }

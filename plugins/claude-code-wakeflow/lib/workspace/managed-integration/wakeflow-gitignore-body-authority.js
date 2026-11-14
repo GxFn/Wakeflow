@@ -32,8 +32,8 @@ export class WakeflowGitignoreBodyAuthorityError extends Error {
     code = "wakeflow-gitignore-body-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -42,8 +42,8 @@ const ACTIVE_ROOT_REF = parsePortableResourcePath(WAKEFLOW_ACTIVE_ROOT);
 const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
 const GITIGNORE_MAGIC_CHARACTERS = new Set(["\\", "*", "?", "[", "]", "#", "!"]);
-function fail(reason, path) {
-    throw new WakeflowGitignoreBodyAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowGitignoreBodyAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function lexicalCompare(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -112,7 +112,7 @@ function parseProfiles(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$profiles");
+            fail("input", "$profiles", error);
         throw error;
     }
     if (values.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length) {
@@ -126,7 +126,7 @@ function parseProfiles(value) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-                fail("input", `$/profiles/${index}`);
+                fail("input", `$/profiles/${index}`, error);
             }
             throw error;
         }
@@ -199,7 +199,7 @@ function authorityRecord(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("authority", "$authority");
+            fail("authority", "$authority", error);
         throw error;
     }
 }
@@ -230,7 +230,7 @@ export function parseWakeflowGitignoreBodyAuthority(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("authority", "$authority");
+            fail("authority", "$authority", error);
         throw error;
     }
     if (hostIdValues.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length ||
@@ -256,7 +256,7 @@ export function parseWakeflowGitignoreBodyAuthority(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         throw error;
     }
     const hostIds = Object.freeze(hostIdValues);
@@ -275,7 +275,7 @@ export function parseWakeflowGitignoreBodyAuthority(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("authority", "$authority");
+            fail("authority", "$authority", error);
         throw error;
     }
     if (Object.keys(target).sort().join("\u0000") !== "body\u0000component\u0000owner" ||
@@ -306,7 +306,7 @@ function outsideSegments(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("outside", "$outside");
+            fail("outside", "$outside", error);
         throw error;
     }
     const keys = Object.keys(record).sort();

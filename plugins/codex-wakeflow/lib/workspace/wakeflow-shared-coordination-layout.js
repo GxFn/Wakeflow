@@ -41,14 +41,14 @@ export class WakeflowSharedCoordinationLayoutError extends Error {
     code = "wakeflow-shared-coordination-layout";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowSharedCoordinationLayoutError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowSharedCoordinationLayoutError(reason, path, cause === undefined ? undefined : { cause });
 }
 function currentUserId() {
     return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
@@ -75,7 +75,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "mode") ||
@@ -112,7 +112,7 @@ async function optionalDirectory(root, declaration) {
         if (error instanceof WakeflowSharedCoordinationLayoutError)
             throw error;
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -167,14 +167,14 @@ export async function materializeWakeflowSharedCoordinationLayout(root, optionsV
         }
         catch (error) {
             if (error instanceof WakeflowResourceProcessingContractError) {
-                fail("authority", "$declarations");
+                fail("authority", "$declarations", error);
             }
             if (error instanceof DurableDirectoryMaterializationError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 if (error.reason === "root-scope")
-                    fail("root-scope", "$root");
-                fail("operation-failure", `$layout/${ref}`);
+                    fail("root-scope", "$root", error);
+                fail("operation-failure", `$layout/${ref}`, error);
             }
             throw error;
         }

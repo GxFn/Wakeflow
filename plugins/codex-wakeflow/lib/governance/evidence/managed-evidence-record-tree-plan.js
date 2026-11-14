@@ -39,8 +39,8 @@ export class ManagedEvidenceRecordTreePlanError extends Error {
     code = "wakeflow-managed-evidence-record-tree-plan";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -63,8 +63,8 @@ const RECORD_CAPACITY = Object.freeze({
     maximumFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles,
     maximumTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes,
 });
-function fail(reason, path) {
-    throw new ManagedEvidenceRecordTreePlanError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceRecordTreePlanError(reason, path, cause === undefined ? undefined : { cause });
 }
 function exactRecord(value) {
     let record;
@@ -73,7 +73,7 @@ function exactRecord(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$plan");
+            fail("input", "$plan", error);
         throw error;
     }
     const actual = Object.keys(record).sort();
@@ -90,8 +90,8 @@ function parseManifest(value) {
     catch (error) {
         if (error instanceof ManagedEvidenceManifestError) {
             if (error.reason === "capacity")
-                fail("capacity", "$/manifest");
-            fail("manifest", "$/manifest");
+                fail("capacity", "$/manifest", error);
+            fail("manifest", "$/manifest", error);
         }
         throw error;
     }
@@ -102,7 +102,7 @@ function parseEvidenceId(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$/evidenceId");
+            fail("identifier", "$/evidenceId", error);
         }
         throw error;
     }
@@ -113,7 +113,7 @@ function parsePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("path", path);
+            fail("path", path, error);
         throw error;
     }
 }
@@ -123,7 +123,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("plan", path);
+            fail("plan", path, error);
         throw error;
     }
 }
@@ -134,8 +134,8 @@ function parseDirectoryPlan(value) {
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             if (error.reason === "capacity")
-                fail("capacity", "$/directoryPlan");
-            fail("plan", "$/directoryPlan");
+                fail("capacity", "$/directoryPlan", error);
+            fail("plan", "$/directoryPlan", error);
         }
         throw error;
     }
@@ -173,8 +173,8 @@ function buildBasis(manifest) {
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             if (error.reason === "capacity")
-                fail("capacity", "$/manifest/payload");
-            fail("plan", "$/manifest/payload");
+                fail("capacity", "$/manifest/payload", error);
+            fail("plan", "$/manifest/payload", error);
         }
         throw error;
     }

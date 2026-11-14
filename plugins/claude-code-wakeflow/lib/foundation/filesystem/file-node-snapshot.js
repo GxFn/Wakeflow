@@ -18,8 +18,8 @@ export class FileNodeSnapshotError extends Error {
     code = "wakeflow-file-node-snapshot";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -77,8 +77,8 @@ function normalizeErrorPath(path) {
 function fieldPath(basePath, field) {
     return `${basePath}.${field}`;
 }
-function fail(reason, path) {
-    throw new FileNodeSnapshotError(reason, path);
+function fail(reason, path, cause) {
+    throw new FileNodeSnapshotError(reason, path, cause === undefined ? undefined : { cause });
 }
 function readBigIntField(record, field, basePath, nonNegative = false) {
     const value = record[field];
@@ -107,7 +107,7 @@ export function createFileNodeSnapshot(value, errorPath) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("stat-shape", path);
+            fail("stat-shape", path, error);
         throw error;
     }
     const deviceId = readBigIntField(record, "dev", path, true);
@@ -126,7 +126,7 @@ export function createFileNodeSnapshot(value, errorPath) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            fail("stat-size", fieldPath(path, "size"));
+            fail("stat-size", fieldPath(path, "size"), error);
         }
         throw error;
     }
@@ -159,7 +159,7 @@ function parseFileNodeSnapshot(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("snapshot-shape", path);
+            fail("snapshot-shape", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -187,7 +187,7 @@ function parseFileNodeSnapshot(value, path) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            fail("snapshot-field", fieldPath(path, "byteCount"));
+            fail("snapshot-field", fieldPath(path, "byteCount"), error);
         }
         throw error;
     }

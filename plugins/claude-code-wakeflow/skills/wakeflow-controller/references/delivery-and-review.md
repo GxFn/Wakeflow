@@ -255,7 +255,7 @@ not hold, is refused.
 
 `blockingReasons` belong to `blocked` alone: accept and rework carry none, and
 rework keeps `requirementAlignment: aligned`. Rework names at least one
-`failed` independent check. The failed checks are
+`failed` independent check. A refused decision record (`record-schema`, `record-relation`) names the field in `path`, e.g. `$request/decision/blockingReasons`: fix that field, do not guess. The failed checks are
 exactly the corrections the target receives with the rework delivery, so a
 rework whose checks all passed is refused when recorded - it could never be
 delivered. Use rework when the change itself must be fixed. When the work is

@@ -27,14 +27,14 @@ export class WakeflowConfigAuthorityPublicationError extends Error {
     code = "wakeflow-config-authority-publication";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowConfigAuthorityPublicationError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowConfigAuthorityPublicationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -57,7 +57,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -87,7 +87,7 @@ async function assertCurrentUserRoot(root, expectedUserId) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthorityPublicationError)
             throw error;
-        fail("root-scope", "$root");
+        fail("root-scope", "$root", error);
     }
 }
 function parseModel(value) {
@@ -96,8 +96,8 @@ function parseModel(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
-        fail("config", "$config");
+            fail("config", error.path, error);
+        fail("config", "$config", error);
     }
 }
 function renderModelBytes(model) {
@@ -105,8 +105,8 @@ function renderModelBytes(model) {
     try {
         bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
     }
-    catch {
-        fail("config", "$config");
+    catch (cause) {
+        fail("config", "$config", cause);
     }
     if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
         fail("capacity", "$config");
@@ -120,20 +120,20 @@ async function assertPlacements(root, model) {
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "input")
-                fail("input", error.path);
-            fail("placement", error.path);
+                fail("input", error.path, error);
+            fail("placement", error.path, error);
         }
-        fail("placement", "$placements");
+        fail("placement", "$placements", error);
     }
 }
 function computeModelDigest(model) {
     try {
         return computeWakeflowConfigDigest(model);
     }
-    catch {
-        fail("config", "$config");
+    catch (cause) {
+        fail("config", "$config", cause);
     }
 }
 function mapAtomicWriteError(error) {
@@ -168,15 +168,15 @@ async function publishBytes(root, bytes, signal) {
         if (error instanceof DurableAtomicFileWriteError) {
             mapAtomicWriteError(error);
         }
-        fail("publication-failure", "$resourcePath");
+        fail("publication-failure", "$resourcePath", error);
     }
 }
 async function readBackCommittedAuthority(root) {
     try {
         return await readWakeflowConfigAuthoritySnapshot(root);
     }
-    catch {
-        fail("commit-uncertain", "$resourcePath");
+    catch (cause) {
+        fail("commit-uncertain", "$resourcePath", cause);
     }
 }
 function assertReadback(publication, authority, expectedConfigDigest, expectedUserId) {

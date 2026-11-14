@@ -44,8 +44,8 @@ export class DemandAuthorityError extends Error {
     code = "wakeflow-demand-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -71,8 +71,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_AUTHORITY_
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new DemandAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function referenceLocationKey(reference) {
     return [
@@ -90,7 +90,7 @@ function parseReferences(values) {
         }
         catch (error) {
             if (error instanceof LedgerAuthorityStoreError) {
-                fail("reference", `$/authorityRefs/${index}`);
+                fail("reference", `$/authorityRefs/${index}`, error);
             }
             throw error;
         }
@@ -128,7 +128,7 @@ function parseTestingDecision(value) {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError) {
-                fail("testing", "$/testingDecision/environmentMemberRef");
+                fail("testing", "$/testingDecision/environmentMemberRef", error);
             }
             throw error;
         }
@@ -176,7 +176,7 @@ export function parseDemandAuthority(value, identityValue) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -188,7 +188,7 @@ export function parseDemandAuthority(value, identityValue) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", "$/demandId");
+            fail("identifier", "$/demandId", error);
         throw error;
     }
     let identityDigest;
@@ -197,7 +197,7 @@ export function parseDemandAuthority(value, identityValue) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", "$/identityDigest");
+            fail("digest", "$/identityDigest", error);
         throw error;
     }
     const authority = Object.freeze({
@@ -223,7 +223,7 @@ export function createDemandAuthority(identityValue, draft) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$draft");
+            fail("input", "$draft", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -237,7 +237,7 @@ export function createDemandAuthority(identityValue, draft) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$/authorityRefs");
+            fail("input", "$/authorityRefs", error);
         throw error;
     }
     const parsedDraftRefs = draftRefs.map((value, index) => {
@@ -246,7 +246,7 @@ export function createDemandAuthority(identityValue, draft) {
         }
         catch (error) {
             if (error instanceof LedgerAuthorityStoreError) {
-                fail("reference", `$/authorityRefs/${index}`);
+                fail("reference", `$/authorityRefs/${index}`, error);
             }
             throw error;
         }
@@ -284,7 +284,7 @@ export async function admitDemandAuthority(identityValue, authorityValue, ledger
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(optionRecord).some((key) => key !== "signal") ||
@@ -306,8 +306,8 @@ export async function admitDemandAuthority(identityValue, authorityValue, ledger
     catch (error) {
         if (error instanceof LedgerAuthorityStoreError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("resolution", "$/authorityRefs");
+                fail("aborted", "$signal", error);
+            fail("resolution", "$/authorityRefs", error);
         }
         throw error;
     }
@@ -337,7 +337,7 @@ export function parseDemandAuthorityDocument(text, identityValue) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

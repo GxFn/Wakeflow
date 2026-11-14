@@ -24,14 +24,14 @@ export class LoadedArtifactTreeTransferCandidateError extends Error {
     code = "wakeflow-loaded-artifact-tree-transfer-candidate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new LoadedArtifactTreeTransferCandidateError(reason, path);
+function fail(reason, path, cause) {
+    throw new LoadedArtifactTreeTransferCandidateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value, path) {
     if (typeof value !== "object" ||
@@ -54,7 +54,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -74,8 +74,8 @@ function parsePlan(value) {
     catch (error) {
         if (error instanceof LoadedArtifactTreeTransferPlanError) {
             if (error.reason === "capacity")
-                fail("capacity", "$plan");
-            fail("input", "$plan");
+                fail("capacity", "$plan", error);
+            fail("input", "$plan", error);
         }
         throw error;
     }
@@ -127,7 +127,7 @@ function mapDirectoryError(error, allowExistingRoot) {
         error.reason === "target-exists") {
         fail("candidate-conflict", "$candidate");
     }
-    fail("operation-failure", "$candidate");
+    fail("operation-failure", "$candidate", error);
 }
 async function ensureCandidateRoot(root, plan, signal) {
     try {
@@ -154,7 +154,7 @@ function mapCandidateInspectionError(error) {
     if (error.reason === "tree-conflict" || error.reason === "source-changed") {
         fail("candidate-conflict", "$candidate");
     }
-    fail("operation-failure", "$candidate");
+    fail("operation-failure", "$candidate", error);
 }
 async function inspectProgress(root, plan, signal) {
     try {

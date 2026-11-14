@@ -40,15 +40,15 @@ export class WakeflowMaintenanceExecutionIntentError extends Error {
     code = "wakeflow-maintenance-execution-intent";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA, [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA]);
-function fail(reason, path) {
-    throw new WakeflowMaintenanceExecutionIntentError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceExecutionIntentError(reason, path, cause === undefined ? undefined : { cause });
 }
 function normalizeConfig(value) {
     try {
@@ -56,7 +56,7 @@ function normalizeConfig(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
 }
@@ -66,7 +66,7 @@ function normalizeOperationId(value) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("operation", "$/operationId");
+            fail("operation", "$/operationId", error);
         }
         throw error;
     }
@@ -77,7 +77,7 @@ function normalizePreview(value) {
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         }
         throw error;
     }
@@ -88,7 +88,7 @@ function normalizeWriter(value, path, reason) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceWriterError)
-            fail(reason, error.path);
+            fail(reason, error.path, error);
         throw error;
     }
 }
@@ -100,7 +100,7 @@ function normalizeContribution(value) {
     }
     catch (error) {
         if (error instanceof WakeflowHostMaintenanceContributionError) {
-            fail("plan", "$/hostContribution");
+            fail("plan", "$/hostContribution", error);
         }
         throw error;
     }
@@ -119,7 +119,7 @@ function normalizedRequest(preview, desiredConfig, currentHostProfileValue, host
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("request", "$/hostProfiles");
+            fail("request", "$/hostProfiles", error);
         }
         throw error;
     }
@@ -147,7 +147,7 @@ function normalize(wire) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         }
         throw error;
     }
@@ -192,7 +192,7 @@ function parseWakeflowMaintenanceExecutionIntentWithPlan(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const validated = validateWire(json);
@@ -215,7 +215,7 @@ export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planV
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         }
         throw error;
     }
@@ -225,7 +225,7 @@ export function createWakeflowMaintenanceExecutionIntent(operationIdValue, planV
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("request", "$request");
+            fail("request", "$request", error);
         }
         throw error;
     }
@@ -284,7 +284,7 @@ export function parseWakeflowMaintenanceExecutionIntentDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

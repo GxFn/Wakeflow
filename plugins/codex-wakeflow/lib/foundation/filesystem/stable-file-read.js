@@ -46,14 +46,14 @@ export class StableFileReadError extends Error {
     code = "wakeflow-stable-file-read";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new StableFileReadError(reason, path);
+function fail(reason, path, cause) {
+    throw new StableFileReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -77,7 +77,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$options.expectedNode");
+            fail("input", "$options.expectedNode", error);
         }
         throw error;
     }
@@ -90,7 +90,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
@@ -104,7 +104,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            fail("input", "$options.maximumBytes");
+            fail("input", "$options.maximumBytes", error);
         }
         throw error;
     }
@@ -136,18 +136,18 @@ async function inspectInitialResource(root, resourcePath) {
     catch (error) {
         if (error instanceof RootedDirectoryError) {
             if (error.reason === "resource-not-found") {
-                fail("not-found", "$resourcePath");
+                fail("not-found", "$resourcePath", error);
             }
             if (error.reason === "resource-path") {
-                fail("input", "$resourcePath");
+                fail("input", "$resourcePath", error);
             }
             if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-                fail("source-changed", "$resourcePath");
+                fail("source-changed", "$resourcePath", error);
             }
             if (error.reason === "unsupported-platform") {
-                fail("unsupported-platform", "$resourcePath");
+                fail("unsupported-platform", "$resourcePath", error);
             }
-            fail("root-scope", "$resourcePath");
+            fail("root-scope", "$resourcePath", error);
         }
         throw error;
     }
@@ -158,7 +158,7 @@ async function inspectFinalResource(root, resourcePath) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("source-changed", "$resourcePath");
+            fail("source-changed", "$resourcePath", error);
         }
         throw error;
     }
@@ -183,15 +183,15 @@ async function snapshotOpenedFile(handle) {
     try {
         stats = await handle.stat({ bigint: true });
     }
-    catch {
-        fail("source-changed", "$resourcePath");
+    catch (cause) {
+        fail("source-changed", "$resourcePath", cause);
     }
     try {
         return createFileNodeSnapshot(stats, "$resourcePath");
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("source-changed", "$resourcePath");
+            fail("source-changed", "$resourcePath", error);
         }
         throw error;
     }
@@ -211,9 +211,9 @@ async function openStableFile(initial) {
     catch (error) {
         const code = readNodeSystemErrorCode(error);
         if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR") {
-            fail("source-changed", "$resourcePath");
+            fail("source-changed", "$resourcePath", error);
         }
-        fail("io-failure", "$resourcePath");
+        fail("io-failure", "$resourcePath", error);
     }
 }
 /** 所有读取缓冲区分配失败都映射为稳定的运行时容量错误。 */
@@ -221,8 +221,8 @@ function allocateReadBuffer(byteLength) {
     try {
         return Buffer.allocUnsafe(byteLength);
     }
-    catch {
-        fail("too-large", "$resourcePath");
+    catch (cause) {
+        fail("too-large", "$resourcePath", cause);
     }
 }
 function createCapture(mode, byteCount) {
@@ -251,9 +251,9 @@ async function readExactFile(handle, byteCount, capture, signal) {
         try {
             ({ bytesRead } = await handle.read(target, offset, length, position));
         }
-        catch {
+        catch (cause) {
             assertNotAborted(signal);
-            fail("io-failure", "$resourcePath");
+            fail("io-failure", "$resourcePath", cause);
         }
         if (bytesRead <= 0 || bytesRead > length) {
             fail("source-changed", "$resourcePath");
@@ -263,7 +263,7 @@ async function readExactFile(handle, byteCount, capture, signal) {
         }
         catch (error) {
             if (error instanceof Sha256HasherError) {
-                fail("io-failure", "$resourcePath");
+                fail("io-failure", "$resourcePath", error);
             }
             throw error;
         }
@@ -280,7 +280,7 @@ async function readExactFile(handle, byteCount, capture, signal) {
         if (error instanceof StableFileReadError)
             throw error;
         assertNotAborted(signal);
-        fail("io-failure", "$resourcePath");
+        fail("io-failure", "$resourcePath", error);
     }
     try {
         const result = hasher.digest();
@@ -292,7 +292,7 @@ async function readExactFile(handle, byteCount, capture, signal) {
         if (error instanceof StableFileReadError)
             throw error;
         if (error instanceof Sha256HasherError)
-            fail("io-failure", "$resourcePath");
+            fail("io-failure", "$resourcePath", error);
         throw error;
     }
 }
@@ -340,9 +340,9 @@ async function readStableFileVersion(root, resourcePath, options, mode) {
     try {
         await handle.close();
     }
-    catch {
+    catch (cause) {
         if (primaryError === undefined)
-            fail("close-failure", "$resourcePath");
+            fail("close-failure", "$resourcePath", cause);
     }
     if (primaryError !== undefined)
         throw primaryError;

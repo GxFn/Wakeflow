@@ -36,8 +36,8 @@ export class WakeflowProgramInstructionBodyAuthorityError extends Error {
     code = "wakeflow-program-instruction-body-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -45,8 +45,8 @@ export class WakeflowProgramInstructionBodyAuthorityError extends Error {
 const PRESENTATION_LANGUAGE_SET = new Set(WAKEFLOW_PRESENTATION_LANGUAGES);
 const HOST_ID_SET = new Set(WAKEFLOW_WORKSPACE_HOST_IDS);
 const CONFIG_FILE_REF = "wakeflow.config.json";
-function fail(reason, path) {
-    throw new WakeflowProgramInstructionBodyAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowProgramInstructionBodyAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseConfig(value) {
     try {
@@ -54,7 +54,7 @@ function parseConfig(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError) {
-            fail("config", error.path);
+            fail("config", error.path, error);
         }
         throw error;
     }
@@ -65,7 +65,7 @@ function parseProfile(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -76,7 +76,7 @@ function markdownDataLiteral(value, path) {
     }
     catch (error) {
         if (error instanceof MarkdownJsonStringLiteralError) {
-            fail("text", error.path);
+            fail("text", error.path, error);
         }
         throw error;
     }
@@ -200,7 +200,7 @@ export function createWakeflowProgramInstructionBodyAuthority(configValue, profi
     }
     catch (error) {
         if (error instanceof Utf8Error)
-            fail("text", error.path);
+            fail("text", error.path, error);
         throw error;
     }
     const authorityDigest = computeCanonicalJsonSha256Digest(authorityDigestBasis(config.program.programId, controllerWindowId, profile.hostId, profile.instructionFileName, config.presentation.language, bodyDigest));
@@ -228,7 +228,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -238,7 +238,7 @@ function parseAuthorityId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("authority", path);
+            fail("authority", path, error);
         throw error;
     }
 }
@@ -252,7 +252,7 @@ function parseInstructionFileName(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("authority", "$authority.instructionFileName");
+            fail("authority", "$authority.instructionFileName", error);
         }
         throw error;
     }
@@ -301,7 +301,7 @@ export function parseWakeflowProgramInstructionBodyAuthority(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         throw error;
     }
     if (computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||

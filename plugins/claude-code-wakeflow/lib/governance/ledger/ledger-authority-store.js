@@ -27,7 +27,7 @@ function parseInitializeOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (record.freshLedger !== true ||
@@ -66,7 +66,7 @@ export class LedgerAuthorityStore {
         }
         catch (error) {
             if (error instanceof WakeflowDurableIdError)
-                fail("input", "$requirementId");
+                fail("input", "$requirementId", error);
             throw error;
         }
         return loadLedgerAuthorityRecord(this.#root, requirementId, signal);
@@ -103,7 +103,7 @@ export class LedgerAuthorityStore {
         }
         catch (error) {
             if (error instanceof PassiveOwnDataError)
-                fail("input", "$references");
+                fail("input", "$references", error);
             throw error;
         }
         if (values.length === 0)
@@ -114,7 +114,7 @@ export class LedgerAuthorityStore {
             }
             catch (error) {
                 if (error instanceof LedgerAuthorityStoreError) {
-                    fail("input", `$/references/${index}`);
+                    fail("input", `$/references/${index}`, error);
                 }
                 throw error;
             }

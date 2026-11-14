@@ -15,14 +15,14 @@ export class DemandEventSourcingUpcasterError extends Error {
     code = "wakeflow-demand-event-sourcing-upcaster";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandEventSourcingUpcasterError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingUpcasterError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 把任一受支持的持久化版本转换为当前归约器事件。 */
 export function upcastDemandEventSourcingStoredEvent(value) {
@@ -32,7 +32,7 @@ export function upcastDemandEventSourcingStoredEvent(value) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingPersistedEventEnvelopeError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -42,17 +42,17 @@ export function upcastDemandEventSourcingStoredEvent(value) {
     catch (error) {
         if (error instanceof EventSourcingVersionEvolutionError) {
             if (error.path === "$/eventType") {
-                fail("unsupported-event-type", "$/eventType");
+                fail("unsupported-event-type", "$/eventType", error);
             }
             if (error.reason === "unsupported-version") {
-                fail("unsupported-version", "$/eventVersion");
+                fail("unsupported-version", "$/eventVersion", error);
             }
             if (error.reason === "codec")
-                fail("codec", "$/data");
-            fail("upcast", "$/data");
+                fail("codec", "$/data", error);
+            fail("upcast", "$/data", error);
         }
         if (error instanceof DemandEventSourcingEventError) {
-            fail("event", "$event");
+            fail("event", "$event", error);
         }
         throw error;
     }

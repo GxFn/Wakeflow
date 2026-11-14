@@ -54,7 +54,7 @@ async function configResourceExists(root) {
             return false;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -67,7 +67,7 @@ async function currentSnapshot(root, signal, blockers) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             // 配置在、只是版本不是本制品读的那一版（open-items C7）：在"读不出"之外单独点名，带上文件里的版本。
             if (error.reason === "config-version" && error.schemaVersion !== null) {
                 blockers?.add(`config-version-unsupported:${error.schemaVersion}`);
@@ -321,7 +321,7 @@ async function inspectLedgerParticipant(request, report, blockers, steps) {
     catch (error) {
         if (error instanceof LedgerAuthorityStoreError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             addBlocker(blockers, `ledger-layout-${error.reason}`);
         }
         else {
@@ -367,7 +367,7 @@ async function inspectSupportGitignore(supportRoot, request, authority, surfaceI
     catch (error) {
         if (error instanceof WakeflowManagedBlockFileError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             addBlocker(blockers, `support-gitignore-${error.reason}`);
         }
         else {
@@ -445,7 +445,7 @@ async function inspectSupportMemories(root, request, current, desired, report, b
         catch (error) {
             if (error instanceof WakeflowManagedSupportRootMaterializationError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 addBlocker(blockers, "support-root-unavailable");
                 continue;
             }
@@ -549,7 +549,7 @@ async function inspectSupportMemories(root, request, current, desired, report, b
                 catch (error) {
                     if (error instanceof WakeflowSupportMemoryInspectionError) {
                         if (error.reason === "aborted")
-                            fail("aborted", "$signal");
+                            fail("aborted", "$signal", error);
                         addBlocker(blockers, `peer-support-memory-${error.reason}`);
                     }
                     else {
@@ -564,7 +564,7 @@ async function inspectSupportMemories(root, request, current, desired, report, b
         catch (error) {
             if (error instanceof WakeflowSupportMemoryInspectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 addBlocker(blockers, `support-memory-${error.reason}`);
             }
             else {
@@ -656,7 +656,7 @@ async function inspectExternalInstructions(root, request, current, desired, repo
                 catch (error) {
                     if (error instanceof WakeflowExternalInstructionInspectionError) {
                         if (error.reason === "aborted")
-                            fail("aborted", "$signal");
+                            fail("aborted", "$signal", error);
                         addBlocker(blockers, `peer-external-instruction-${error.reason}`);
                     }
                     else {
@@ -668,7 +668,7 @@ async function inspectExternalInstructions(root, request, current, desired, repo
         catch (error) {
             if (error instanceof WakeflowExternalInstructionInspectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 addBlocker(blockers, `external-instruction-${error.reason}`);
             }
             else {
@@ -695,7 +695,7 @@ async function requirementBoardRootAbsent(root) {
             return true;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -762,7 +762,7 @@ async function planHostCapabilityLayoutRepair(root, request, desired, blockers, 
     catch (error) {
         if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             addBlocker(blockers, `host-capability-layout-${error.reason}`);
             return;
         }
@@ -856,8 +856,8 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         catch (error) {
             if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("inspection", "$coreLayout");
+                    fail("aborted", "$signal", error);
+                fail("inspection", "$coreLayout", error);
             }
             throw error;
         }
@@ -868,7 +868,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         }
         catch (error) {
             if (error instanceof WakeflowMaintenanceGateError) {
-                fail("input", "$options.gateContext");
+                fail("input", "$options.gateContext", error);
             }
             throw error;
         }
@@ -1103,7 +1103,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         catch (error) {
             if (error instanceof WakeflowGitignoreInspectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 addBlocker(blockers, `gitignore-${error.reason}`);
             }
             else {
@@ -1136,7 +1136,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         catch (error) {
             if (error instanceof WakeflowProgramInstructionInspectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 addBlocker(blockers, `program-instruction-${error.reason}`);
             }
             else {
@@ -1173,7 +1173,7 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
             catch (error) {
                 if (error instanceof WakeflowProgramInstructionInspectionError) {
                     if (error.reason === "aborted")
-                        fail("aborted", "$signal");
+                        fail("aborted", "$signal", error);
                     addBlocker(blockers, `peer-program-instruction-${error.reason}`);
                 }
                 else {
@@ -1274,7 +1274,7 @@ async function planManagedBlockRemovals(root, request, config, repositoryId, rep
                 catch (error) {
                     if (error instanceof WakeflowManagedBlockFileError) {
                         if (error.reason === "aborted")
-                            fail("aborted", "$signal");
+                            fail("aborted", "$signal", error);
                         if (error.reason === "unknown-managed-body") {
                             addBlocker(blockers, `detach-unknown-managed-body:${targetKey}`);
                         }
@@ -1321,7 +1321,7 @@ async function planManagedBlockRemoval(root, request, input, blockers, steps) {
     catch (error) {
         if (error instanceof WakeflowManagedBlockFileError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "unknown-managed-body") {
                 addBlocker(blockers, `detach-unknown-managed-body:${input.targetKey}`);
             }
@@ -1398,7 +1398,7 @@ async function projectionFileExists(root, profile, windowId) {
             return false;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }

@@ -22,14 +22,14 @@ export class DurableDirectoryTreePublicationError extends Error {
     code = "wakeflow-durable-directory-tree-publication";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableDirectoryTreePublicationError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableDirectoryTreePublicationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function plainRecord(value, path) {
     try {
@@ -37,7 +37,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -47,7 +47,7 @@ function parsePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -82,7 +82,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$candidate/rootNode");
+            fail("input", "$candidate/rootNode", error);
         }
         throw error;
     }
@@ -107,7 +107,7 @@ function parseCandidate(value) {
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
-            fail("input", "$candidate/plan");
+            fail("input", "$candidate/plan", error);
         }
         throw error;
     }
@@ -154,7 +154,7 @@ function mapRenameError(error) {
         error.reason === "close-failure") {
         fail("commit-uncertain", "$destinationResourcePath");
     }
-    fail("operation-failure", "$destinationResourcePath");
+    fail("operation-failure", "$destinationResourcePath", error);
 }
 /**
  * 在同一 `RootedDirectory` 内，将清单已闭合的候选目录树发布到尚不存在的最终路径。

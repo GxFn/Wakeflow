@@ -73,8 +73,8 @@ export class DemandAggregateStateError extends Error {
     code = "wakeflow-demand-aggregate-state";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -86,8 +86,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_AGGREGATE_
     WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new DemandAggregateStateError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandAggregateStateError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 一个测试目标的尝试上限，对应 test-execution-attempt Schema 的序号最大值。 */
 const TEST_ATTEMPT_LIMIT = 10;
@@ -97,7 +97,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -108,7 +108,7 @@ function parseCurrentDeliveryBase(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowHostBindingIdError) {
-            fail("identifier", `${path}/bindingId`);
+            fail("identifier", `${path}/bindingId`, error);
         }
         throw error;
     }
@@ -141,7 +141,7 @@ function parseDeliveryOutcomeSummary(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("relation", `${path}/observedAt`);
+            fail("relation", `${path}/observedAt`, error);
         throw error;
     }
     // observedAt 只保留来源时钟的审计事实；因果顺序由事件流修订、当前状态摘要与
@@ -166,7 +166,7 @@ function parseTargetResultSummary(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("relation", `${path}/reportedAt`);
+            fail("relation", `${path}/reportedAt`, error);
         throw error;
     }
     // reportedAt只保留Report来源时钟的审计事实；Event流修订、当前状态摘要和
@@ -188,7 +188,7 @@ function parseCallbackSummary(value, targetResultId, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("relation", `${path}/issuedAt`);
+            fail("relation", `${path}/issuedAt`, error);
         throw error;
     }
     let bindingId;
@@ -197,7 +197,7 @@ function parseCallbackSummary(value, targetResultId, path) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowHostBindingIdError) {
-            fail("identifier", `${path}/bindingId`);
+            fail("identifier", `${path}/bindingId`, error);
         }
         throw error;
     }
@@ -225,7 +225,7 @@ function parseReviewDecisionSummary(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("relation", `${path}/decidedAt`);
+            fail("relation", `${path}/decidedAt`, error);
         throw error;
     }
     return Object.freeze({
@@ -300,7 +300,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -375,7 +375,7 @@ function parseProductDefectRemediationSummary(value, acceptedDecision, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError) {
-            fail("relation", `${path}/authorizedAt`);
+            fail("relation", `${path}/authorizedAt`, error);
         }
         throw error;
     }
@@ -409,7 +409,7 @@ function parseTestAttemptState(value, path) {
     }
     catch (error) {
         if (error instanceof TestExecutionAttemptError) {
-            fail("relation", `${path}/attempt`);
+            fail("relation", `${path}/attempt`, error);
         }
         throw error;
     }
@@ -419,7 +419,7 @@ function parseTestAttemptState(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError) {
-            fail("relation", `${path}/delivery/preparedAt`);
+            fail("relation", `${path}/delivery/preparedAt`, error);
         }
         throw error;
     }
@@ -460,7 +460,7 @@ function parseTestAttemptLineage(values, target, path) {
             }
             catch (error) {
                 if (error instanceof TestExecutionAttemptError) {
-                    fail("relation", `${path}/${index}/attempt`);
+                    fail("relation", `${path}/${index}/attempt`, error);
                 }
                 throw error;
             }
@@ -815,7 +815,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
     }
     catch (error) {
         if (error instanceof DeliveryEnvelopeError) {
-            fail("delivery-envelope", "$envelope");
+            fail("delivery-envelope", "$envelope", error);
         }
         throw error;
     }
@@ -878,7 +878,7 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
         }
         catch (error) {
             if (error instanceof TestExecutionAttemptError) {
-                fail("transition", "$/targetTasks");
+                fail("transition", "$/targetTasks", error);
             }
             throw error;
         }
@@ -1014,7 +1014,7 @@ export function recordDeliveryOutcomeInDemandAggregateState(currentValue, outcom
     }
     catch (error) {
         if (error instanceof DeliveryOutcomeError) {
-            fail("delivery-outcome", "$outcome");
+            fail("delivery-outcome", "$outcome", error);
         }
         throw error;
     }
@@ -1067,7 +1067,7 @@ export function rearmDeliveryInDemandAggregateState(currentValue, rearmValue) {
     }
     catch (error) {
         if (error instanceof DeliveryRearmError)
-            fail("delivery-rearm", "$rearm");
+            fail("delivery-rearm", "$rearm", error);
         throw error;
     }
     const candidates = deliveryBearingTargets(current).filter((entry) => entry.currentDelivery.deliveryId === rearm.deliveryId);
@@ -1159,7 +1159,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
     }
     catch (error) {
         if (error instanceof TargetResultError)
-            fail("target-result", "$result");
+            fail("target-result", "$result", error);
         throw error;
     }
     let callbackRecord;
@@ -1168,7 +1168,7 @@ export function recordTargetResultInDemandAggregateState(currentValue, resultVal
     }
     catch (error) {
         if (error instanceof TargetResultCallbackError) {
-            fail("target-result-callback", "$callback");
+            fail("target-result-callback", "$callback", error);
         }
         throw error;
     }
@@ -1290,7 +1290,7 @@ export function reissueCallbackInDemandAggregateState(currentValue, reissueValue
     }
     catch (error) {
         if (error instanceof TargetResultCallbackError) {
-            fail("target-result-callback", "$reissue");
+            fail("target-result-callback", "$reissue", error);
         }
         throw error;
     }
@@ -1355,7 +1355,7 @@ export function decideTargetResultReviewInDemandAggregateState(currentValue, dec
     }
     catch (error) {
         if (error instanceof ControllerReviewDecisionError) {
-            fail("controller-review-decision", "$decision");
+            fail("controller-review-decision", "$decision", error);
         }
         throw error;
     }
@@ -1455,7 +1455,7 @@ export function authorizeProductDefectRemediationInDemandAggregateState(currentV
     }
     catch (error) {
         if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-            fail("controller-product-defect-remediation-authorization", "$authorization");
+            fail("controller-product-defect-remediation-authorization", "$authorization", error);
         }
         throw error;
     }
@@ -1623,7 +1623,7 @@ function parseSupplementPackages(value) {
         }
         catch (error) {
             if (error instanceof RequirementLineageError)
-                fail("relation", `$/supplements/${index}`);
+                fail("relation", `$/supplements/${index}`, error);
             throw error;
         }
     });
@@ -1753,7 +1753,7 @@ export function recordManagedEvidenceInDemandAggregateState(currentValue, manife
     }
     catch (error) {
         if (error instanceof ManagedEvidenceManifestError) {
-            fail("managed-evidence-manifest", "$manifest");
+            fail("managed-evidence-manifest", "$manifest", error);
         }
         throw error;
     }
@@ -1784,7 +1784,7 @@ export function parseDemandAggregateState(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -1875,7 +1875,7 @@ export function planTargetTaskInDemandAggregateState(currentValue, taskPackageVa
     }
     catch (error) {
         if (error instanceof TaskPackageError)
-            fail("task-package", "$taskPackage");
+            fail("task-package", "$taskPackage", error);
         throw error;
     }
     if (current.lifecycle !== "active" ||
@@ -1983,7 +1983,7 @@ export function completeDemandAggregateState(currentValue, completionValue) {
     }
     catch (error) {
         if (error instanceof DemandCompletionError) {
-            fail("transition", "$completion");
+            fail("transition", "$completion", error);
         }
         throw error;
     }

@@ -42,13 +42,13 @@ command syntax: the references and the tool descriptions hold it.
   expects it. Neither Wakeflow nor you edits a product repository; that work
   reaches a target window only through a delivery.
 - Never edit an active Demand root, a ledger record, a config file or a binding
-  file by hand. If a call is refused, read what it returned, fix the cause, and
-  call again; do not route around a refusal.
+  file by hand. If a call is refused, act on its `code` and `reason` as
+  `references/refusals.md` says, then call again; never route around it.
 - A `code` of `unexpected` or `io-failure`, or one outside the closed table, is
   a failure, not a refusal: there is no cause for you to fix. Retry at most
   once, only when `retryable` is true or the call was a read; then run
   `wakeflow_status` and `wakeflow_verify`, stop, and give the user the tool
-  name, `code`/`reason`, `details.incidentId` and any `causeCode` (an `E…` name such as `EACCES` or
+  name, `code`/`reason`, `details.incidentId` and any `causeCode` (an `E…` name such as
   `ENOSPC` is the operating-system error they must fix). Edit nothing.
 - Never invent an identifier, a digest, a revision or an acceptance anchor.
   Carry back exactly what the previous call returned.

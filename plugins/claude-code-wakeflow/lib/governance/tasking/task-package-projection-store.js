@@ -67,14 +67,14 @@ export class TaskPackageProjectionStoreError extends Error {
     code = "wakeflow-task-package-projection-store";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new TaskPackageProjectionStoreError(reason, path);
+function fail(reason, path, cause) {
+    throw new TaskPackageProjectionStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseTaskPackageId(value) {
     try {
@@ -82,7 +82,7 @@ function parseTaskPackageId(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("input", "$taskPackageId");
+            fail("input", "$taskPackageId", error);
         }
         throw error;
     }
@@ -94,7 +94,7 @@ function parseSignal(value, allowed) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => !allowed.has(key)) ||
@@ -121,7 +121,7 @@ function parseLoadOptions(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            fail("input", "$options/expectedTaskPackageDigest");
+            fail("input", "$options/expectedTaskPackageDigest", error);
         }
         throw error;
     }
@@ -169,13 +169,13 @@ async function projectionNodeOrNull(root, taskPackageId) {
             if (error.reason === "ancestor-symlink" ||
                 error.reason === "ancestor-type" ||
                 error.reason === "resource-alias") {
-                fail("node-policy", "$projection");
+                fail("node-policy", "$projection", error);
             }
             // 并发发布者退休 stage 时目标的链接数在观察中途变化；这是要重试的瞬态，不是根失效。
             if (error.reason === "resource-changed") {
-                fail("recovery-required", "$projection");
+                fail("recovery-required", "$projection", error);
             }
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         }
         throw error;
     }
@@ -198,7 +198,7 @@ function mapProjectionReadError(error) {
         if (error.reason === "symlink" || error.reason === "not-file") {
             fail("node-policy", "$projection");
         }
-        fail("operation-failure", "$projection");
+        fail("operation-failure", "$projection", error);
     }
     if (error instanceof StrictTextFileError ||
         error instanceof DeterministicJsonDocumentError ||
@@ -257,7 +257,7 @@ function admitProjectionOperations(taskPackage) {
         if (error instanceof TaskPackageProjectionStoreError)
             throw error;
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", error);
         }
         throw error;
     }
@@ -278,7 +278,7 @@ function mapDirectoryError(error) {
         error.reason === "close-failure") {
         fail("commit-uncertain", "$projectionRoot");
     }
-    fail("operation-failure", "$projectionRoot");
+    fail("operation-failure", "$projectionRoot", error);
 }
 function mapAtomicWriteError(error) {
     if (error.reason === "aborted")
@@ -297,7 +297,7 @@ function mapAtomicWriteError(error) {
         error.reason === "close-failure") {
         fail("commit-uncertain", "$projection");
     }
-    fail("operation-failure", "$projection");
+    fail("operation-failure", "$projection", error);
 }
 export class TaskPackageProjectionStore {
     #root;
@@ -383,7 +383,7 @@ export class TaskPackageProjectionStore {
         }
         catch (error) {
             if (disposition === "created" && error instanceof TaskPackageProjectionStoreError) {
-                fail("commit-uncertain", "$projection");
+                fail("commit-uncertain", "$projection", error);
             }
             throw error;
         }

@@ -42,16 +42,16 @@ export class ManagedEvidencePublicationTransactionStoreError extends Error {
     code = "wakeflow-managed-evidence-publication-transaction-store";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const ISSUED_STORED_TRANSACTIONS = new WeakSet();
 const TRANSACTION_MAXIMUM_BYTES = parseByteCount(MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES);
-function fail(reason, path) {
-    throw new ManagedEvidencePublicationTransactionStoreError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidencePublicationTransactionStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -68,7 +68,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -111,8 +111,8 @@ function parseExpectedNode(value) {
     try {
         sameFileNodeSnapshot(value, value);
     }
-    catch {
-        fail("input", "$expectedNode");
+    catch (cause) {
+        fail("input", "$expectedNode", cause);
     }
     return value;
 }
@@ -123,7 +123,7 @@ function admitMutation(transaction, recipe) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", error);
         }
         throw error;
     }
@@ -137,7 +137,7 @@ async function journalNodeOrNull(root) {
             return null;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -176,7 +176,7 @@ async function readStoredAtNode(root, expectedNode, signal) {
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("conflict", "$transaction");
+            fail("conflict", "$transaction", error);
         }
         throw error;
     }
@@ -211,7 +211,7 @@ export async function requireCurrentManagedEvidencePublicationTransaction(root, 
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("input", "$transaction");
+            fail("input", "$transaction", error);
         }
         throw error;
     }
@@ -242,7 +242,7 @@ function mapCreateError(error) {
         error.reason === "close-failure") {
         fail("recovery-required", "$transaction");
     }
-    fail("operation-failure", "$transaction");
+    fail("operation-failure", "$transaction", error);
 }
 /** 严格absent-only创建并同步完整journal；现存exact journal也必须走显式恢复。 */
 export async function createManagedEvidencePublicationTransactionJournal(root, transactionValue, optionsValue = {}) {
@@ -255,7 +255,7 @@ export async function createManagedEvidencePublicationTransactionJournal(root, t
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("input", "$transaction");
+            fail("input", "$transaction", error);
         }
         throw error;
     }
@@ -284,7 +284,7 @@ export async function createManagedEvidencePublicationTransactionJournal(root, t
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
-            fail("recovery-required", "$transaction");
+            fail("recovery-required", "$transaction", error);
         }
         throw error;
     }
@@ -319,7 +319,7 @@ export async function retireManagedEvidencePublicationTransactionJournal(root, s
                 throw error;
             if (error.reason === "root-scope")
                 throw error;
-            fail("conflict", "$transaction");
+            fail("conflict", "$transaction", error);
         }
         throw error;
     }
@@ -338,10 +338,10 @@ export async function retireManagedEvidencePublicationTransactionJournal(root, s
     catch (error) {
         if (error instanceof ExactRegularFileUnlinkError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("recovery-required", "$transaction");
+                fail("root-scope", "$root", error);
+            fail("recovery-required", "$transaction", error);
         }
         throw error;
     }

@@ -34,7 +34,7 @@ async function inspectCurrent(workspaceRoot, supportRoot, request, signal, after
         if (error instanceof WakeflowSupportMemoryInspectionError) {
             mapInspectionError(error, afterCommit);
         }
-        fail(afterCommit ? "commit-uncertain" : "source-invalid", "$source");
+        fail(afterCommit ? "commit-uncertain" : "source-invalid", "$source", error);
     }
 }
 function mapAtomicError(error) {
@@ -89,7 +89,7 @@ async function publishTarget(supportRoot, request, inspection, signal) {
             throw error;
         if (error instanceof DurableAtomicFileWriteError)
             mapAtomicError(error);
-        fail("effect-failure", "$resourcePath");
+        fail("effect-failure", "$resourcePath", error);
     }
 }
 function sameSource(left, right) {

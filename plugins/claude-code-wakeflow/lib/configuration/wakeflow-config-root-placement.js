@@ -19,14 +19,14 @@ export class WakeflowConfigRootPlacementError extends Error {
     code = "wakeflow-config-root-placement";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowConfigRootPlacementError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowConfigRootPlacementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -117,7 +117,7 @@ async function assertCurrentRoot(root) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }

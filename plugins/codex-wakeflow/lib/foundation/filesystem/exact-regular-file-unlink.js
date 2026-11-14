@@ -36,14 +36,14 @@ export class ExactRegularFileUnlinkError extends Error {
     code = "wakeflow-exact-regular-file-unlink";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ExactRegularFileUnlinkError(reason, path);
+function fail(reason, path, cause) {
+    throw new ExactRegularFileUnlinkError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -77,7 +77,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$options.expectedNode");
+            fail("input", "$options.expectedNode", error);
         }
         throw error;
     }
@@ -90,7 +90,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set(["expectedNode", "settlement", "durability", "signal"]);
@@ -337,9 +337,9 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "ENOENT") {
-                fail("source-changed", "$resourcePath");
+                fail("source-changed", "$resourcePath", error);
             }
-            fail("unlink-failure", "$resourcePath");
+            fail("unlink-failure", "$resourcePath", error);
         }
         const nodeBefore = source.initialNodeSnapshot;
         const remainingLinkCount = nodeBefore.linkCount - 1n;

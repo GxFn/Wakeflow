@@ -11,7 +11,9 @@ in its `references/delivery-and-review.md`.
 
 First tool call: `wakeflow_status`, passing a Demand id if the user named one.
 Its next actions are the authority on what comes next - do not infer the step
-from the conversation.
+from the conversation. Pass `detail: "summary"` on these routine reads: it
+lists only the windows that need handling and counts the others in
+`windowsQuiet`; read the full status when a window problem needs every window.
 
 Before each step, say in one sentence which safe operation you are about to
 perform; the urge to act is a hard stop until that sentence exists. Then do the

@@ -12,8 +12,8 @@ function allocateScratch(byteCount, path) {
     try {
         return Buffer.allocUnsafe(Math.min(DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES, byteCount || 1));
     }
-    catch {
-        fail("capacity", path);
+    catch (cause) {
+        fail("capacity", path, cause);
     }
 }
 function createHasher(reason, path) {
@@ -22,7 +22,7 @@ function createHasher(reason, path) {
     }
     catch (error) {
         if (error instanceof Sha256HasherError)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
 }
@@ -33,7 +33,7 @@ async function snapshotHandle(handle, reason, path) {
     catch (error) {
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
-        fail(reason, path);
+        fail(reason, path, error);
     }
 }
 /**
@@ -57,15 +57,15 @@ async function inspectInitialSource(root, resourcePath, expectation, maximumByte
     catch (error) {
         if (error instanceof RootedDirectoryError) {
             if (error.reason === "resource-not-found") {
-                fail("source-not-found", "$source");
+                fail("source-not-found", "$source", error);
             }
             if (error.reason === "resource-path") {
-                fail("input", "$sourceResourcePath");
+                fail("input", "$sourceResourcePath", error);
             }
             if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-                fail("source-changed", "$source");
+                fail("source-changed", "$source", error);
             }
-            fail("source-root-scope", "$sourceRoot");
+            fail("source-root-scope", "$sourceRoot", error);
         }
         throw error;
     }
@@ -105,9 +105,9 @@ async function openSource(source) {
     catch (error) {
         const code = readNodeSystemErrorCode(error);
         if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-            fail("source-changed", "$source");
+            fail("source-changed", "$source", error);
         }
-        fail("source-read-failure", "$source");
+        fail("source-read-failure", "$source", error);
     }
 }
 async function openDestinationParent(root, resourcePath) {
@@ -117,11 +117,11 @@ async function openDestinationParent(root, resourcePath) {
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
             if (error.reason === "input")
-                fail("input", "$candidateResourcePath");
+                fail("input", "$candidateResourcePath", error);
             if (error.reason === "root-scope") {
-                fail("destination-root-scope", "$destinationRoot");
+                fail("destination-root-scope", "$destinationRoot", error);
             }
-            fail("destination-parent", "$candidateResourcePath");
+            fail("destination-parent", "$candidateResourcePath", error);
         }
         throw error;
     }
@@ -132,7 +132,7 @@ async function assertDestinationParentCurrent(parent, reason) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate");
+            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate", error);
         }
         throw error;
     }
@@ -143,7 +143,7 @@ async function inspectDestinationTarget(parent, reason) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate");
+            fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate", error);
         }
         throw error;
     }
@@ -154,7 +154,7 @@ async function syncDestinationParent(parent) {
     }
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
-            fail("durability-failure", "$candidate");
+            fail("durability-failure", "$candidate", error);
         }
         throw error;
     }
@@ -167,9 +167,9 @@ async function writeChunk(handle, bytes, length, position, signal) {
         try {
             ({ bytesWritten } = await handle.write(bytes, written, length - written, position + written));
         }
-        catch {
+        catch (cause) {
             assertDurableFileCopyNotAborted(signal);
-            fail("candidate-write-failure", "$candidate");
+            fail("candidate-write-failure", "$candidate", cause);
         }
         if (bytesWritten <= 0 || bytesWritten > length - written) {
             fail("candidate-write-failure", "$candidate");
@@ -188,9 +188,9 @@ async function copySourceBytes(sourceHandle, candidateHandle, expectation, signa
         try {
             ({ bytesRead } = await sourceHandle.read(scratch, 0, length, position));
         }
-        catch {
+        catch (cause) {
             assertDurableFileCopyNotAborted(signal);
-            fail("source-read-failure", "$source");
+            fail("source-read-failure", "$source", cause);
         }
         if (bytesRead <= 0 || bytesRead > length) {
             fail("source-changed", "$source");
@@ -200,7 +200,7 @@ async function copySourceBytes(sourceHandle, candidateHandle, expectation, signa
         }
         catch (error) {
             if (error instanceof Sha256HasherError) {
-                fail("source-read-failure", "$source");
+                fail("source-read-failure", "$source", error);
             }
             throw error;
         }
@@ -217,7 +217,7 @@ async function copySourceBytes(sourceHandle, candidateHandle, expectation, signa
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
         assertDurableFileCopyNotAborted(signal);
-        fail("source-read-failure", "$source");
+        fail("source-read-failure", "$source", error);
     }
     try {
         const hashed = hasher.digest();
@@ -230,7 +230,7 @@ async function copySourceBytes(sourceHandle, candidateHandle, expectation, signa
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
         if (error instanceof Sha256HasherError) {
-            fail("source-read-failure", "$source");
+            fail("source-read-failure", "$source", error);
         }
         throw error;
     }
@@ -245,7 +245,7 @@ async function inspectFinalSource(root, resourcePath, sourceHandle, initial) {
     catch (error) {
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
-        fail("source-changed", "$source");
+        fail("source-changed", "$source", error);
     }
     if (opened.kind !== "file" ||
         pathNode.kind !== "file" ||
@@ -268,9 +268,9 @@ async function verifyCandidate(handle, expectation, signal) {
         try {
             ({ bytesRead } = await handle.read(scratch, 0, length, position));
         }
-        catch {
+        catch (cause) {
             assertDurableFileCopyNotAborted(signal);
-            fail("candidate-changed", "$candidate");
+            fail("candidate-changed", "$candidate", cause);
         }
         if (bytesRead <= 0 || bytesRead > length) {
             fail("candidate-changed", "$candidate");
@@ -280,7 +280,7 @@ async function verifyCandidate(handle, expectation, signal) {
         }
         catch (error) {
             if (error instanceof Sha256HasherError) {
-                fail("candidate-changed", "$candidate");
+                fail("candidate-changed", "$candidate", error);
             }
             throw error;
         }
@@ -296,7 +296,7 @@ async function verifyCandidate(handle, expectation, signal) {
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
         assertDurableFileCopyNotAborted(signal);
-        fail("candidate-changed", "$candidate");
+        fail("candidate-changed", "$candidate", error);
     }
     let digest;
     assertDurableFileCopyNotAborted(signal);
@@ -311,7 +311,7 @@ async function verifyCandidate(handle, expectation, signal) {
         if (error instanceof DurableFileCopyCandidateError)
             throw error;
         if (error instanceof Sha256HasherError) {
-            fail("candidate-changed", "$candidate");
+            fail("candidate-changed", "$candidate", error);
         }
         throw error;
     }
@@ -395,9 +395,9 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "EEXIST") {
-                fail("target-exists", "$candidateResourcePath");
+                fail("target-exists", "$candidateResourcePath", error);
             }
-            fail("candidate-create-failure", "$candidate");
+            fail("candidate-create-failure", "$candidate", error);
         }
         const copiedDigest = await copySourceBytes(sourceHandle, candidateHandle, expectation, options.signal);
         const finalSourceNode = await inspectFinalSource(sourceRootValue, sourceResourcePath, sourceHandle, openedSource);
@@ -408,8 +408,8 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
         try {
             await candidateHandle.chmod(options.mode);
         }
-        catch {
-            fail("candidate-write-failure", "$candidate");
+        catch (cause) {
+            fail("candidate-write-failure", "$candidate", cause);
         }
         let candidateNode = await verifyCandidate(candidateHandle, expectation, options.signal);
         if (candidateNode.kind !== "file" ||
@@ -424,8 +424,8 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
             try {
                 await candidateHandle.sync();
             }
-            catch {
-                fail("candidate-sync-failure", "$candidate");
+            catch (cause) {
+                fail("candidate-sync-failure", "$candidate", cause);
             }
         }
         candidateNode = await verifyCandidate(candidateHandle, expectation, options.signal);

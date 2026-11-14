@@ -52,8 +52,8 @@ export class DemandEventSourcingDecisionError extends Error {
     code = "wakeflow-demand-event-sourcing-decision";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -168,8 +168,8 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
 ]);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-function fail(reason, path) {
-    throw new DemandEventSourcingDecisionError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingDecisionError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 生命周期命令的数据借事件解析器按 Schema 准入，不另写一份编解码。 */
 function lifecycleEvent(eventType, data) {
@@ -184,7 +184,7 @@ function lifecycleEvent(eventType, data) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingEventError) {
-            fail("lifecycle-data", "$/data");
+            fail("lifecycle-data", "$/data", error);
         }
         throw error;
     }
@@ -232,7 +232,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -242,7 +242,7 @@ function parseTime(value) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/recordedAt");
+            fail("time", "$/recordedAt", error);
         throw error;
     }
 }
@@ -252,7 +252,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -275,7 +275,7 @@ export function parseDemandEventSourcingCommand(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$command");
+            fail("input", "$command", error);
         throw error;
     }
     if (base.commandVersion !== 1)
@@ -312,7 +312,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof DemandAuthorityError) {
-                fail("demand-authority", "$/authority");
+                fail("demand-authority", "$/authority", error);
             }
             throw error;
         }
@@ -321,7 +321,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof DemandCompletionError) {
-                fail("demand-completion", "$/completion");
+                fail("demand-completion", "$/completion", error);
             }
             throw error;
         }
@@ -379,7 +379,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof TaskPackageError) {
-                fail("task-package", "$/taskPackage");
+                fail("task-package", "$/taskPackage", error);
             }
             throw error;
         }
@@ -398,7 +398,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof ManagedEvidenceManifestError) {
-                fail("managed-evidence-manifest", "$/manifest");
+                fail("managed-evidence-manifest", "$/manifest", error);
             }
             throw error;
         }
@@ -427,7 +427,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof DeliveryEnvelopeError) {
-                fail("delivery-envelope", "$/envelope");
+                fail("delivery-envelope", "$/envelope", error);
             }
             throw error;
         }
@@ -437,10 +437,10 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof TaskPackageError) {
-                fail("task-package", "$/taskPackage");
+                fail("task-package", "$/taskPackage", error);
             }
             if (error instanceof DeliveryEnvelopeError) {
-                fail("delivery-envelope", "$/envelope");
+                fail("delivery-envelope", "$/envelope", error);
             }
             throw error;
         }
@@ -450,7 +450,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof TestExecutionAttemptError) {
-                    fail("delivery-envelope", "$/envelope/attempt");
+                    fail("delivery-envelope", "$/envelope/attempt", error);
                 }
                 throw error;
             }
@@ -467,7 +467,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof PassiveOwnDataError) {
-                    fail("target-delivery-rework-context", "$/reworkSource");
+                    fail("target-delivery-rework-context", "$/reworkSource", error);
                 }
                 throw error;
             }
@@ -484,7 +484,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof ControllerImplementationReviewDecisionError) {
-                    fail("controller-implementation-review-decision", "$/reworkSource/decision");
+                    fail("controller-implementation-review-decision", "$/reworkSource/decision", error);
                 }
                 throw error;
             }
@@ -493,7 +493,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof TargetResultError) {
-                    fail("target-result", "$/reworkSource/previousResult");
+                    fail("target-result", "$/reworkSource/previousResult", error);
                 }
                 throw error;
             }
@@ -512,7 +512,7 @@ export function parseDemandEventSourcingCommand(value) {
                 if (error instanceof DemandEventSourcingDecisionError)
                     throw error;
                 if (error instanceof TargetDeliveryReworkContextError) {
-                    fail("target-delivery-rework-context", "$/reworkSource");
+                    fail("target-delivery-rework-context", "$/reworkSource", error);
                 }
                 throw error;
             }
@@ -528,7 +528,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof PassiveOwnDataError) {
-                    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource");
+                    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource", error);
                 }
                 throw error;
             }
@@ -545,7 +545,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-                    fail("controller-product-defect-remediation-authorization", "$/productDefectRemediationSource/authorization");
+                    fail("controller-product-defect-remediation-authorization", "$/productDefectRemediationSource/authorization", error);
                 }
                 throw error;
             }
@@ -554,7 +554,7 @@ export function parseDemandEventSourcingCommand(value) {
             }
             catch (error) {
                 if (error instanceof TargetResultError) {
-                    fail("target-result", "$/productDefectRemediationSource/previousResult");
+                    fail("target-result", "$/productDefectRemediationSource/previousResult", error);
                 }
                 throw error;
             }
@@ -573,7 +573,7 @@ export function parseDemandEventSourcingCommand(value) {
                 if (error instanceof DemandEventSourcingDecisionError)
                     throw error;
                 if (error instanceof TargetDeliveryProductDefectRemediationContextError) {
-                    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource");
+                    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource", error);
                 }
                 throw error;
             }
@@ -603,7 +603,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof DeliveryOutcomeError) {
-                fail("delivery-outcome", "$/outcome");
+                fail("delivery-outcome", "$/outcome", error);
             }
             throw error;
         }
@@ -622,7 +622,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof DeliveryRearmError)
-                fail("delivery-rearm", "$/rearm");
+                fail("delivery-rearm", "$/rearm", error);
             throw error;
         }
         return Object.freeze({
@@ -640,7 +640,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof TargetResultError) {
-                fail("target-result", "$/result");
+                fail("target-result", "$/result", error);
             }
             throw error;
         }
@@ -652,7 +652,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path);
+                fail("target-result-callback", error.path, error);
             }
             throw error;
         }
@@ -672,7 +672,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path);
+                fail("target-result-callback", error.path, error);
             }
             throw error;
         }
@@ -694,7 +694,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof ControllerReviewDecisionError) {
-                fail("controller-review-decision", "$/decision");
+                fail("controller-review-decision", "$/decision", error);
             }
             throw error;
         }
@@ -715,7 +715,7 @@ export function parseDemandEventSourcingCommand(value) {
         }
         catch (error) {
             if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-                fail("controller-product-defect-remediation-authorization", "$/authorization");
+                fail("controller-product-defect-remediation-authorization", "$/authorization", error);
             }
             throw error;
         }
@@ -750,7 +750,7 @@ function parseState(value) {
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError)
-            fail("state", "$state");
+            fail("state", "$state", error);
         throw error;
     }
 }
@@ -785,7 +785,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/managedEvidence");
+                fail("transition", "$state/managedEvidence", error);
             }
             throw error;
         }
@@ -806,7 +806,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state");
+                fail("transition", "$state", error);
             }
             throw error;
         }
@@ -827,7 +827,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -849,7 +849,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -867,7 +867,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -885,7 +885,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -906,7 +906,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -927,7 +927,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -947,7 +947,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/awaitingDecision");
+                fail("transition", "$state/awaitingDecision", error);
             }
             throw error;
         }
@@ -965,7 +965,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/awaitingDecision");
+                fail("transition", "$state/awaitingDecision", error);
             }
             throw error;
         }
@@ -985,7 +985,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/lifecycle");
+                fail("transition", "$state/lifecycle", error);
             }
             throw error;
         }
@@ -1021,7 +1021,7 @@ function decideReview(state, command) {
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError) {
-            fail("transition", "$state/targetTasks");
+            fail("transition", "$state/targetTasks", error);
         }
         throw error;
     }
@@ -1040,7 +1040,7 @@ function decideReview(state, command) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1123,7 +1123,7 @@ function reviewEscalation(decided, decision, decidedEvent) {
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError) {
-            fail("transition", "$state/awaitingDecision");
+            fail("transition", "$state/awaitingDecision", error);
         }
         throw error;
     }
@@ -1141,7 +1141,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingEventError)
-            fail("event", "$event");
+            fail("event", "$event", error);
         throw error;
     }
     if (event.eventType === "publication.demand-published") {
@@ -1159,7 +1159,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/managedEvidence");
+                fail("transition", "$state/managedEvidence", error);
             }
             throw error;
         }
@@ -1170,7 +1170,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1181,7 +1181,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1192,7 +1192,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1203,7 +1203,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1214,7 +1214,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1225,7 +1225,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1236,7 +1236,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1247,7 +1247,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/targetTasks");
+                fail("transition", "$state/targetTasks", error);
             }
             throw error;
         }
@@ -1258,7 +1258,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/awaitingDecision");
+                fail("transition", "$state/awaitingDecision", error);
             }
             throw error;
         }
@@ -1269,7 +1269,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/awaitingDecision");
+                fail("transition", "$state/awaitingDecision", error);
             }
             throw error;
         }
@@ -1280,7 +1280,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/lifecycle");
+                fail("transition", "$state/lifecycle", error);
             }
             throw error;
         }
@@ -1291,7 +1291,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/lifecycle");
+                fail("transition", "$state/lifecycle", error);
             }
             throw error;
         }
@@ -1302,7 +1302,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
-                fail("transition", "$state/lifecycle");
+                fail("transition", "$state/lifecycle", error);
             }
             throw error;
         }

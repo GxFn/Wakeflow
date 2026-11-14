@@ -26,8 +26,8 @@ export class RootedExactResourceHandleError extends Error {
     code = "wakeflow-rooted-exact-resource-handle";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -35,8 +35,8 @@ export class RootedExactResourceHandleError extends Error {
 function normalizeErrorPath(value) {
     return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
-function fail(reason, path) {
-    throw new RootedExactResourceHandleError(reason, path);
+function fail(reason, path, cause) {
+    throw new RootedExactResourceHandleError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -60,7 +60,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$expectedNode");
+            fail("input", "$expectedNode", error);
         }
         throw error;
     }
@@ -100,7 +100,7 @@ function snapshotOpenedHandle(value, errorPath) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("resource-changed", errorPath);
+            fail("resource-changed", errorPath, error);
         }
         throw error;
     }
@@ -113,17 +113,17 @@ async function inspectInitialResource(root, resourcePath, expectedNode, admissio
     catch (error) {
         if (error instanceof RootedDirectoryError) {
             if (error.reason === "resource-path")
-                fail("input", errorPath);
+                fail("input", errorPath, error);
             if (error.reason === "resource-not-found") {
-                fail("resource-not-found", errorPath);
+                fail("resource-not-found", errorPath, error);
             }
             if (error.reason === "resource-changed") {
-                fail("resource-changed", errorPath);
+                fail("resource-changed", errorPath, error);
             }
             if (error.reason === "resource-alias") {
-                fail("resource-changed", errorPath);
+                fail("resource-changed", errorPath, error);
             }
-            fail("root-scope", errorPath);
+            fail("root-scope", errorPath, error);
         }
         throw error;
     }
@@ -178,9 +178,9 @@ export class RootedExactResourceHandle {
         catch (error) {
             const code = readNodeSystemErrorCode(error);
             if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-                fail("resource-changed", errorPath);
+                fail("resource-changed", errorPath, error);
             }
-            fail("resource-open-failure", errorPath);
+            fail("resource-open-failure", errorPath, error);
         }
         try {
             const opened = snapshotOpenedHandle(await handle.stat({ bigint: true }), errorPath);
@@ -230,7 +230,7 @@ export class RootedExactResourceHandle {
         catch (error) {
             if (error instanceof RootedExactResourceHandleError)
                 throw error;
-            fail("resource-changed", this.#errorPath);
+            fail("resource-changed", this.#errorPath, error);
         }
         if (opened.kind !== this.#kind || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)) {
             fail("resource-changed", this.#errorPath);
@@ -247,7 +247,7 @@ export class RootedExactResourceHandle {
         }
         catch (error) {
             if (error instanceof RootedDirectoryError) {
-                fail("resource-changed", this.#errorPath);
+                fail("resource-changed", this.#errorPath, error);
             }
             throw error;
         }
@@ -271,8 +271,8 @@ export class RootedExactResourceHandle {
             try {
                 await this.#handle.sync();
             }
-            catch {
-                fail("sync-failure", this.#errorPath);
+            catch (cause) {
+                fail("sync-failure", this.#errorPath, cause);
             }
         }
         return this.inspectOpenedNode();
@@ -285,8 +285,8 @@ export class RootedExactResourceHandle {
         try {
             await this.#handle.close();
         }
-        catch {
-            fail("close-failure", this.#errorPath);
+        catch (cause) {
+            fail("close-failure", this.#errorPath, cause);
         }
     }
     async [Symbol.asyncDispose]() {

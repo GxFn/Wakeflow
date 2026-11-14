@@ -17,14 +17,14 @@ export class WakeflowSupportMemoryPublicationError extends Error {
     code = "wakeflow-support-memory-publication";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failWakeflowSupportMemoryPublication(reason, path) {
-    throw new WakeflowSupportMemoryPublicationError(reason, path);
+export function failWakeflowSupportMemoryPublication(reason, path, cause) {
+    throw new WakeflowSupportMemoryPublicationError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function parseWakeflowSupportMemoryPublicationRequest(value) {
     try {
@@ -36,7 +36,7 @@ export function parseWakeflowSupportMemoryPublicationRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowSupportMemoryInspectionError) {
-            failWakeflowSupportMemoryPublication("input", error.path);
+            failWakeflowSupportMemoryPublication("input", error.path, error);
         }
         throw error;
     }
@@ -48,7 +48,7 @@ export function parseWakeflowSupportMemoryPublicationOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowSupportMemoryPublication("input", "$options");
+            failWakeflowSupportMemoryPublication("input", "$options", error);
         }
         throw error;
     }

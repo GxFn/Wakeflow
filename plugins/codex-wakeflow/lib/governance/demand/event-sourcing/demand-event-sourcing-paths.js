@@ -34,14 +34,14 @@ export class DemandEventSourcingPathError extends Error {
     code = "wakeflow-demand-event-sourcing-path";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandEventSourcingPathError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingPathError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseAppendOwnerToken(value) {
     if (typeof value !== "string")
@@ -63,7 +63,7 @@ function parseAppendOwnerToken(value) {
     }
     catch (error) {
         if (error instanceof UuidV4Error) {
-            fail("append-owner-token", "$ownerToken");
+            fail("append-owner-token", "$ownerToken", error);
         }
         throw error;
     }
@@ -87,7 +87,7 @@ export function parseDemandEventStreamCommitFileName(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("commit-file-name", "$fileName");
+            fail("commit-file-name", "$fileName", error);
         }
         throw error;
     }
@@ -109,7 +109,7 @@ export function demandEventAppendCandidateRef(sequence, commitId, ownerToken) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("commit-identity", "$commitId");
+            fail("commit-identity", "$commitId", error);
         }
         throw error;
     }
@@ -145,7 +145,7 @@ export function parseDemandEventAppendCandidateFileName(value) {
         if (error instanceof WakeflowDurableIdError ||
             error instanceof DemandEventStreamPositionError ||
             error instanceof DemandEventSourcingPathError) {
-            fail("append-candidate-file-name", "$fileName");
+            fail("append-candidate-file-name", "$fileName", error);
         }
         throw error;
     }

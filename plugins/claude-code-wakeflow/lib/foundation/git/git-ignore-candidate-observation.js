@@ -39,14 +39,14 @@ export class GitIgnoreCandidateObservationError extends Error {
     code = "wakeflow-git-ignore-candidate-observation";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new GitIgnoreCandidateObservationError(reason, path);
+function fail(reason, path, cause) {
+    throw new GitIgnoreCandidateObservationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -69,7 +69,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -97,8 +97,8 @@ function snapshotCandidate(value) {
     try {
         bytes = Buffer.from(value);
     }
-    catch {
-        fail("capacity", "$candidateBytes");
+    catch (cause) {
+        fail("capacity", "$candidateBytes", cause);
     }
     let digest;
     try {
@@ -106,7 +106,7 @@ function snapshotCandidate(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("hash-failure", "$candidateBytes");
+            fail("hash-failure", "$candidateBytes", error);
         throw error;
     }
     return Object.freeze({
@@ -125,7 +125,7 @@ async function assertRepositoryRootCurrent(root) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("root-scope", "$repositoryRoot");
+            fail("root-scope", "$repositoryRoot", error);
         }
         throw error;
     }
@@ -135,8 +135,8 @@ async function createTemporaryWorkTree() {
     try {
         createdPath = await mkdtemp(nodePath.join(os.tmpdir(), TEMPORARY_WORK_TREE_PREFIX));
     }
-    catch {
-        fail("isolation-failure", "$candidateWorkTree");
+    catch (cause) {
+        fail("isolation-failure", "$candidateWorkTree", cause);
     }
     try {
         const root = await RootedDirectory.open(createdPath, "$candidateWorkTree");
@@ -146,11 +146,11 @@ async function createTemporaryWorkTree() {
         try {
             await rm(createdPath, { recursive: true, force: false });
         }
-        catch {
-            fail("cleanup-failure", "$candidateWorkTree");
+        catch (cause) {
+            fail("cleanup-failure", "$candidateWorkTree", cause);
         }
         if (error instanceof RootedDirectoryError) {
-            fail("isolation-failure", "$candidateWorkTree");
+            fail("isolation-failure", "$candidateWorkTree", error);
         }
         throw error;
     }
@@ -165,8 +165,8 @@ async function materializeCandidate(workTreeRoot, candidate, signal) {
     catch (error) {
         if (error instanceof DurableFileCandidateError) {
             if (error.reason === "aborted")
-                fail("aborted", "$options.signal");
-            fail("isolation-failure", "$candidateWorkTree");
+                fail("aborted", "$options.signal", error);
+            fail("isolation-failure", "$candidateWorkTree", error);
         }
         throw error;
     }
@@ -178,13 +178,13 @@ async function observeCandidate(repositoryRoot, workTreeRoot, probePaths, signal
     catch (error) {
         if (error instanceof GitIgnoreObservationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$options.signal");
+                fail("aborted", "$options.signal", error);
             if (error.reason === "input")
-                fail("input", error.path);
+                fail("input", error.path, error);
             if (error.reason === "root-scope" && error.path === "$repositoryRoot") {
-                fail("root-scope", "$repositoryRoot");
+                fail("root-scope", "$repositoryRoot", error);
             }
-            fail("observation-failure", "$git");
+            fail("observation-failure", "$git", error);
         }
         throw error;
     }
@@ -233,8 +233,8 @@ export async function observeGitIgnoreCandidate(repositoryRootValue, candidateBy
             force: false,
         });
     }
-    catch {
-        fail("cleanup-failure", "$candidateWorkTree");
+    catch (cause) {
+        fail("cleanup-failure", "$candidateWorkTree", cause);
     }
     if (operationError !== undefined)
         throw operationError;

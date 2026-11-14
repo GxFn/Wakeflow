@@ -22,15 +22,15 @@ export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
     code = "wakeflow-workspace-core-layout-inspection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const MAXIMUM_PROTOCOL_ENTRIES = 4_096;
-function fail(reason, path) {
-    throw new WakeflowWorkspaceCoreLayoutInspectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWorkspaceCoreLayoutInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseSignal(value) {
     if (value === undefined)
@@ -98,7 +98,7 @@ async function optionalResource(root, resourcePath) {
             return null;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -112,16 +112,16 @@ async function readDirectory(root, resourcePath, signal) {
     catch (error) {
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "too-many-entries")
-                fail("capacity", "$entries");
+                fail("capacity", "$entries", error);
             if (error.reason === "source-changed") {
-                fail("source-changed", "$resourcePath");
+                fail("source-changed", "$resourcePath", error);
             }
             if (error.reason === "root-scope" || error.reason === "expectation-changed") {
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             }
-            fail("inspection", "$resourcePath");
+            fail("inspection", "$resourcePath", error);
         }
         throw error;
     }
@@ -143,10 +143,10 @@ async function inspectActive(root, signal) {
     catch (error) {
         if (error instanceof WakeflowError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "active-layout-root-scope")
-                fail("root-scope", "$root");
-            fail("inspection", "$activeLayout");
+                fail("root-scope", "$root", error);
+            fail("inspection", "$activeLayout", error);
         }
         throw error;
     }
@@ -268,9 +268,9 @@ async function inspectLocal(root, signal, issueCodes) {
         if (!(error instanceof RootedExclusiveFileLockError))
             throw error;
         if (error.reason === "aborted")
-            fail("aborted", "$signal");
+            fail("aborted", "$signal", error);
         if (error.reason === "root-scope")
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         if (error.reason === "unsafe-lock") {
             lockState = "unsafe";
             freshCompatible = false;
@@ -280,7 +280,7 @@ async function inspectLocal(root, signal, issueCodes) {
             freshCompatible = false;
         }
         else {
-            fail("inspection", "$gate");
+            fail("inspection", "$gate", error);
         }
     }
     if (lockState === "unsafe")

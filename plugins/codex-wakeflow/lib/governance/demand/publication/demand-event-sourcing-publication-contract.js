@@ -23,13 +23,13 @@ export class DemandEventSourcingPublicationServiceError extends Error {
     reason;
     path;
     publicationAuthority;
-    constructor(reason, path, publicationAuthority = "unknown") {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, publicationAuthority = "unknown", options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
         this.publicationAuthority = publicationAuthority;
     }
 }
-export function failDemandEventSourcingPublication(reason, path, publicationAuthority = "unknown") {
-    throw new DemandEventSourcingPublicationServiceError(reason, path, publicationAuthority);
+export function failDemandEventSourcingPublication(reason, path, publicationAuthority = "unknown", cause) {
+    throw new DemandEventSourcingPublicationServiceError(reason, path, publicationAuthority, cause === undefined ? undefined : { cause });
 }

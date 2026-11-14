@@ -40,14 +40,14 @@ export class DurableRegularFileLinkError extends Error {
     code = "wakeflow-durable-regular-file-link";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DurableRegularFileLinkError(reason, path);
+function fail(reason, path, cause) {
+    throw new DurableRegularFileLinkError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseResourcePath(value, path) {
     try {
@@ -55,7 +55,7 @@ function parseResourcePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -91,7 +91,7 @@ function parseExpectedNode(value) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError) {
-            fail("input", "$options.expectedSourceNode");
+            fail("input", "$options.expectedSourceNode", error);
         }
         throw error;
     }
@@ -104,7 +104,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const allowed = new Set(["expectedSourceNode", "signal"]);
@@ -171,7 +171,7 @@ async function assertParentCurrent(parent, errorPath, afterCommit = false) {
     catch (error) {
         if (error instanceof RootedResourceParentHandleError) {
             if (afterCommit)
-                fail("commit-uncertain", errorPath);
+                fail("commit-uncertain", errorPath, error);
             mapParentHandleError(error, "current", errorPath);
         }
         throw error;
@@ -371,10 +371,10 @@ export async function linkRegularFileWithoutReplacement(root, sourceResourcePath
         catch (error) {
             const code = readNodeSystemErrorCode(error);
             if (code === "EEXIST")
-                fail("destination-exists", "$destinationResourcePath");
+                fail("destination-exists", "$destinationResourcePath", error);
             if (code === "EXDEV")
-                fail("cross-device", "$destinationResourcePath");
-            fail("link-failure", "$destinationResourcePath");
+                fail("cross-device", "$destinationResourcePath", error);
+            fail("link-failure", "$destinationResourcePath", error);
         }
         const nodeBefore = source.initialNodeSnapshot;
         const linkedPairLinkCount = nodeBefore.linkCount + 1n;

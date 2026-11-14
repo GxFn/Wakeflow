@@ -24,14 +24,14 @@ export class CodexMaintenanceCapabilityError extends Error {
     code = "wakeflow-codex-maintenance-capability";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new CodexMaintenanceCapabilityError(reason, path);
+function fail(reason, path, cause) {
+    throw new CodexMaintenanceCapabilityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** Codex 当前唯一、闭合的宿主维护端口实现。 */
 export const codexMaintenanceCapability = Object.freeze({
@@ -61,7 +61,7 @@ export const codexMaintenanceCapability = Object.freeze({
         }
         catch (error) {
             if (error instanceof WakeflowWindowRuntimeProjectionError) {
-                fail("owner", error.path);
+                fail("owner", error.path, error);
             }
             throw error;
         }
@@ -79,7 +79,7 @@ export const codexMaintenanceCapability = Object.freeze({
         }
         catch (error) {
             if (error instanceof WakeflowMaintenanceGateError)
-                fail("gate", "$context");
+                fail("gate", "$context", error);
             throw error;
         }
         if (request.profile.hostId !== "codex" ||
@@ -100,7 +100,7 @@ export const codexMaintenanceCapability = Object.freeze({
         }
         catch (error) {
             if (error instanceof WakeflowWindowRuntimeProjectionError) {
-                fail("owner", error.path);
+                fail("owner", error.path, error);
             }
             throw error;
         }

@@ -44,8 +44,8 @@ export class ImplementationTargetResultReportError extends Error {
     code = "wakeflow-implementation-target-result-report";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -56,8 +56,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_IMPLEMENTATION_TA
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new ImplementationTargetResultReportError(reason, path);
+function fail(reason, path, cause) {
+    throw new ImplementationTargetResultReportError(reason, path, cause === undefined ? undefined : { cause });
 }
 function jsonRecord(value, fields, path) {
     let json;
@@ -66,7 +66,7 @@ function jsonRecord(value, fields, path) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (json === null || Array.isArray(json) || typeof json !== "object") {
@@ -103,7 +103,7 @@ function repositoryId(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -113,7 +113,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -123,7 +123,7 @@ function resourcePath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("path", path);
+            fail("path", path, error);
         throw error;
     }
 }
@@ -133,7 +133,7 @@ function gitObjectId(value, path) {
     }
     catch (error) {
         if (error instanceof GitObjectIdError)
-            fail("git-object-id", path);
+            fail("git-object-id", path, error);
         throw error;
     }
 }
@@ -143,7 +143,7 @@ function instant(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -283,7 +283,7 @@ export function parseImplementationTargetResultReport(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const validated = validateWire(json);
@@ -319,7 +319,7 @@ export function createImplementationTargetResultReport(contentValue, options = {
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
-            fail("time", "$clock");
+            fail("time", "$clock", error);
         throw error;
     }
     const basis = reportBasis({
@@ -346,7 +346,7 @@ export function parseImplementationTargetResultReportDocument(textValue) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$report");
+            fail("representation", "$report", error);
         }
         throw error;
     }

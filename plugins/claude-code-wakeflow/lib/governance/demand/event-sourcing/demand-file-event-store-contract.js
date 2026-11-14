@@ -31,8 +31,8 @@ export class DemandFileEventStoreError extends Error {
     code = "wakeflow-demand-file-event-store";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -40,8 +40,8 @@ export class DemandFileEventStoreError extends Error {
 function currentUserId() {
     return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
 }
-export function failDemandFileEventStore(reason, path) {
-    throw new DemandFileEventStoreError(reason, path);
+export function failDemandFileEventStore(reason, path, cause) {
+    throw new DemandFileEventStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function parseDemandFileEventStoreOptions(value) {
     let record;
@@ -50,7 +50,7 @@ export function parseDemandFileEventStoreOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failDemandFileEventStore("input", "$options");
+            failDemandFileEventStore("input", "$options", error);
         }
         throw error;
     }

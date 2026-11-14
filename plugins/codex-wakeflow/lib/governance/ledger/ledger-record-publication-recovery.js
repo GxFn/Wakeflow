@@ -11,7 +11,7 @@ function parseRecordIdentity(recordIdValue) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("input", "$recordId");
+            fail("input", "$recordId", error);
         throw error;
     }
 }
@@ -21,7 +21,7 @@ function parseExpectedIntent(value) {
     }
     catch (error) {
         if (error instanceof LedgerRecordPublicationIntentError) {
-            fail("input", "$expectedIntent");
+            fail("input", "$expectedIntent", error);
         }
         throw error;
     }
@@ -65,8 +65,8 @@ async function recoverPublication(root, recordId, expectedIntent, signal) {
         catch (error) {
             if (error instanceof DurableDirectoryTreeCandidateError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("conflict", "$stage");
+                    fail("aborted", "$signal", error);
+                fail("conflict", "$stage", error);
             }
             throw error;
         }

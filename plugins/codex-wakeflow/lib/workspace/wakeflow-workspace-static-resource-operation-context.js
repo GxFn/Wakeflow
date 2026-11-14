@@ -23,14 +23,14 @@ export class WakeflowWorkspaceStaticResourceOperationContextError extends Error 
     code = "wakeflow-workspace-static-resource-operation-context";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowWorkspaceStaticResourceOperationContextError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWorkspaceStaticResourceOperationContextError(reason, path, cause === undefined ? undefined : { cause });
 }
 function plainRecord(value, path) {
     try {
@@ -38,7 +38,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -59,7 +59,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            fail("input", "$request.expectedMatrixDigest");
+            fail("input", "$request.expectedMatrixDigest", error);
         }
         throw error;
     }
@@ -77,7 +77,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(matrixValu
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-            fail("matrix", "$matrix");
+            fail("matrix", "$matrix", error);
         }
         throw error;
     }
@@ -95,7 +95,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(matrixValu
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation", "$request.recipe");
+            fail("operation", "$request.recipe", error);
         }
         throw error;
     }

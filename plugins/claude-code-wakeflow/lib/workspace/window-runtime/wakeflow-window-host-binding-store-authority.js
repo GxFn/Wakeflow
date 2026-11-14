@@ -15,14 +15,14 @@ export class WakeflowWindowHostBindingStoreAuthorityError extends Error {
     code = "wakeflow-window-host-binding-store-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowWindowHostBindingStoreAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowHostBindingStoreAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 从当前Config与Host profiles编译完整、零I/O的Binding Store读取权威。 */
 export function compileWakeflowWindowHostBindingStoreAuthority(configValue, resourceProfileValue, identityProfileValue) {
@@ -35,7 +35,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(configValue, reso
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError ||
             error instanceof WakeflowWindowHostIdentityProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -49,7 +49,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(configValue, reso
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
-            fail("topology", error.path);
+            fail("topology", error.path, error);
         }
         throw error;
     }
@@ -66,7 +66,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(configValue, reso
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError ||
             error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
-            fail("resource", "$bindingCatalog");
+            fail("resource", "$bindingCatalog", error);
         }
         throw error;
     }

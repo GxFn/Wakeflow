@@ -10,15 +10,15 @@ export class GitObjectIdError extends Error {
     code = "wakeflow-git-object-id";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_GIT_OBJECT_ID_SCHEMA);
-function fail(reason, path) {
-    throw new GitObjectIdError(reason, path);
+function fail(reason, path, cause) {
+    throw new GitObjectIdError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 严格解析一个带算法标签的完整Git object ID。 */
 export function parseGitObjectId(value, path = "$gitObjectId") {
@@ -28,7 +28,7 @@ export function parseGitObjectId(value, path = "$gitObjectId") {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const validated = validateWire(json);

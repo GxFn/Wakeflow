@@ -54,7 +54,7 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
         await assertDurableAtomicFileStageCurrent(stage);
         const verifiedStageNode = await verifyDurableAtomicFileHandleBytes(stage.handle, input, signal, "stage-changed");
         if (!sameFileNodeSnapshot(stage.node, verifiedStageNode)) {
-            fail("stage-changed", "$stage");
+            fail("stage-changed", "$stage/verified-node");
         }
         assertDurableAtomicFileNotAborted(signal);
         let finalNode;
@@ -64,9 +64,9 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
             }
             catch (error) {
                 if (readNodeSystemErrorCode(error) === "EEXIST") {
-                    fail("target-exists", "$resourcePath");
+                    fail("target-exists", "$resourcePath", error);
                 }
-                fail("publish-failure", "$resourcePath");
+                fail("publish-failure", "$resourcePath", error);
             }
             committed = true;
             const linkedNode = await inspectCommittedDurableAtomicFileTarget(parent, stage, input, mode, 2n);
@@ -74,8 +74,8 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
                 try {
                     await stage.handle.sync();
                 }
-                catch {
-                    fail("durability-failure", "$resourcePath");
+                catch (cause) {
+                    fail("durability-failure", "$resourcePath", cause);
                 }
             }
             const verifiedLinkedNode = await verifyDurableAtomicFileHandleBytes(stage.handle, input, undefined, "commit-uncertain");
@@ -96,8 +96,8 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
                 try {
                     await stage.handle.sync();
                 }
-                catch {
-                    fail("durability-failure", "$resourcePath");
+                catch (cause) {
+                    fail("durability-failure", "$resourcePath", cause);
                 }
             }
             if (durability === "fsync")
@@ -113,8 +113,8 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
             try {
                 await rename(stage.physicalPath, parent.resourceAbsolutePath);
             }
-            catch {
-                fail("publish-failure", "$resourcePath");
+            catch (cause) {
+                fail("publish-failure", "$resourcePath", cause);
             }
             committed = true;
             stagePathOwned = false;
@@ -122,8 +122,8 @@ async function performWrite(root, resourcePath, input, mode, signal, publication
                 try {
                     await stage.handle.sync();
                 }
-                catch {
-                    fail("durability-failure", "$resourcePath");
+                catch (cause) {
+                    fail("durability-failure", "$resourcePath", cause);
                 }
             }
             const verifiedCommittedNode = await verifyDurableAtomicFileHandleBytes(stage.handle, input, undefined, "commit-uncertain");

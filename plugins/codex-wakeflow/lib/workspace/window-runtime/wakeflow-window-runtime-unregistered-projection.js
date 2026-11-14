@@ -37,8 +37,8 @@ export class WakeflowWindowRuntimeUnregisteredProjectionRecordError extends Erro
     code = "wakeflow-window-runtime-unregistered-projection-record";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -55,8 +55,8 @@ export class WakeflowWindowRuntimeUnregisteredProjectionError extends Error {
     }
 }
 const validateProjectionWire = createRuntimeJsonSchemaValidator(WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA]);
-function failRecord(reason, path) {
-    throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(reason, path);
+function failRecord(reason, path, cause) {
+    throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(reason, path, cause === undefined ? undefined : { cause });
 }
 function typedId(value, kind, path) {
     try {
@@ -64,7 +64,7 @@ function typedId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            failRecord("identity", path);
+            failRecord("identity", path, error);
         throw error;
     }
 }
@@ -74,7 +74,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            failRecord("digest", path);
+            failRecord("digest", path, error);
         throw error;
     }
 }
@@ -115,7 +115,7 @@ function configuredPlacement(value, role) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError) {
-            failRecord("placement", "$/configuredPlacement");
+            failRecord("placement", "$/configuredPlacement", error);
         }
         throw error;
     }
@@ -168,7 +168,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            failRecord("input", error.path);
+            failRecord("input", error.path, error);
         throw error;
     }
     const validated = validateProjectionWire(json);
@@ -229,7 +229,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            failRecord("representation", error.path);
+            failRecord("representation", error.path, error);
         }
         throw error;
     }

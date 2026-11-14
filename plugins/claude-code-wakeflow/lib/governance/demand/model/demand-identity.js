@@ -37,8 +37,8 @@ export class DemandIdentityError extends Error {
     code = "wakeflow-demand-identity";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -63,8 +63,8 @@ const DRAFT_FIELDS = Object.freeze([
     "title",
 ]);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z", "$draftValidationInstant");
-function fail(reason, path) {
-    throw new DemandIdentityError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandIdentityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseCanonicalText(value, path) {
     if (!value.isWellFormed() ||
@@ -80,7 +80,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -91,7 +91,7 @@ function normalizeWire(wire) {
     }
     catch (error) {
         if (error instanceof RequirementLineageError)
-            fail("source", "$/source");
+            fail("source", "$/source", error);
         throw error;
     }
     let createdAt;
@@ -100,7 +100,7 @@ function normalizeWire(wire) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/createdAt");
+            fail("time", "$/createdAt", error);
         throw error;
     }
     return Object.freeze({
@@ -125,7 +125,7 @@ export function parseDemandIdentity(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -140,7 +140,7 @@ function readCreationTime(options) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "clock")) {
@@ -151,7 +151,7 @@ function readCreationTime(options) {
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
-            fail("time", "$options/clock");
+            fail("time", "$options/clock", error);
         throw error;
     }
 }
@@ -163,7 +163,7 @@ export function createDemandIdentity(draft, options = {}) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$draft");
+            fail("input", "$draft", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -199,7 +199,7 @@ export function parseDemandIdentityDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

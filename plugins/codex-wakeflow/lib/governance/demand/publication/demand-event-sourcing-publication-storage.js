@@ -27,7 +27,7 @@ function admitProcessing(processing, recipe) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("operation-failure", "$catalog");
+            fail("operation-failure", "$catalog", "unknown", error);
         }
         throw error;
     }
@@ -133,7 +133,7 @@ export async function ensureExactPublicationTextFile(root, ref, text, maximumByt
                     error.reason === "close-failure") {
                     fail("recovery-required", "$write");
                 }
-                fail("operation-failure", "$write");
+                fail("operation-failure", "$write", "unknown", error);
             }
             else {
                 throw error;
@@ -220,7 +220,7 @@ export async function initializePublicationStorage(root, signal) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            fail("operation-failure", "$initialize");
+            fail("operation-failure", "$initialize", "unknown", error);
         }
         throw error;
     }

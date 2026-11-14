@@ -79,7 +79,7 @@ async function inspectEntry(root, policy) {
             });
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -92,7 +92,7 @@ export async function inspectLedgerAuthorityLayout(rootValue, signal) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
     const entries = Object.freeze(await Promise.all(LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => inspectEntry(rootValue, policy))));
@@ -102,7 +102,7 @@ export async function inspectLedgerAuthorityLayout(rootValue, signal) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
     const status = entries.some((entry) => entry.status === "conflict")
@@ -136,8 +136,8 @@ export async function materializeLedgerAuthorityLayout(rootValue, signal) {
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("operation-failure", "$initialize");
+                fail("aborted", "$signal", error);
+            fail("operation-failure", "$initialize", error);
         }
         throw error;
     }

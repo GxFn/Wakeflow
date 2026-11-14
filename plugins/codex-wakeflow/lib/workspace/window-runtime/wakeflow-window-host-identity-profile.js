@@ -25,8 +25,8 @@ export class WakeflowWindowHostIdentityProfileError extends Error {
     code = "wakeflow-window-host-identity-profile";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -43,8 +43,8 @@ const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in profile text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const HOST_ID_SET = new Set(WAKEFLOW_WORKSPACE_HOST_IDS);
-function fail(reason, path) {
-    throw new WakeflowWindowHostIdentityProfileError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowHostIdentityProfileError(reason, path, cause === undefined ? undefined : { cause });
 }
 function record(value, path) {
     try {
@@ -52,7 +52,7 @@ function record(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
 }
@@ -94,7 +94,7 @@ export function parseWakeflowWindowHostIdentityProfile(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("reserved", error.path);
+            fail("reserved", error.path, error);
         throw error;
     }
     const seen = new Set();

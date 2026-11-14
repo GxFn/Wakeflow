@@ -58,14 +58,14 @@ export async function readDemandFileEventDirectory(root, ref, maximumEntries, si
             throw error;
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "not-found")
-                fail("not-initialized", `$${ref}`);
+                fail("not-initialized", `$${ref}`, error);
             if (error.reason === "too-many-entries")
-                fail("capacity", `$${ref}`);
+                fail("capacity", `$${ref}`, error);
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("stream-changed", `$${ref}`);
+                fail("root-scope", "$root", error);
+            fail("stream-changed", `$${ref}`, error);
         }
         throw error;
     }
@@ -85,24 +85,24 @@ export async function readDemandFileEventCommit(root, resourcePath, expectedNode
             throw error;
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             }
             if (error.reason === "not-found" ||
                 error.reason === "expectation-changed" ||
                 error.reason === "source-changed") {
-                fail("stream-changed", path);
+                fail("stream-changed", path, error);
             }
             if (error.reason === "too-large")
-                fail("capacity", path);
+                fail("capacity", path, error);
             if (error.reason === "symlink" || error.reason === "not-file") {
-                fail("stream-invalid", path);
+                fail("stream-invalid", path, error);
             }
-            fail("operation-failure", path);
+            fail("operation-failure", path, error);
         }
         if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-            fail("stream-invalid", path);
+            fail("stream-invalid", path, error);
         }
         throw error;
     }
@@ -115,7 +115,7 @@ export async function readDemandFileEventCommit(root, resourcePath, expectedNode
     }
     catch (error) {
         if (error instanceof DemandEventStreamCommitError) {
-            fail("stream-invalid", path);
+            fail("stream-invalid", path, error);
         }
         throw error;
     }
@@ -161,7 +161,7 @@ function parseCursor(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$cursor");
+            fail("input", "$cursor", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -177,7 +177,7 @@ function parseCursor(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", "$/lastCommitDigest");
+            fail("input", "$/lastCommitDigest", error);
         throw error;
     }
     try {
@@ -189,7 +189,7 @@ function parseCursor(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -214,7 +214,7 @@ function assertInventoryNames(read, policy = "private") {
         }
         catch (error) {
             if (error instanceof DemandEventSourcingPathError) {
-                fail("stream-invalid", `$commits/${index}`);
+                fail("stream-invalid", `$commits/${index}`, error);
             }
             throw error;
         }
@@ -288,7 +288,7 @@ export async function readDemandFileEventCommitOrNull(root, ref, signal, admitte
             return null;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
     return readDemandFileEventCommit(root, ref, resource.node, signal, "$commit", admittedLinkCounts);
@@ -300,7 +300,7 @@ export async function readDemandFileEventCommitAt(root, sequenceValue, signal) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("input", "$sequence");
+            fail("input", "$sequence", error);
         }
         throw error;
     }

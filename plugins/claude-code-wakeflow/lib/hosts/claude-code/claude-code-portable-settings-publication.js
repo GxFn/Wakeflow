@@ -39,8 +39,8 @@ export class ClaudeCodePortableSettingsPublicationError extends Error {
     reason;
     path;
     transitionReason;
-    constructor(reason, path, transitionReason = null) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, transitionReason = null, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
         this.transitionReason = transitionReason;
@@ -57,8 +57,8 @@ const PUBLISH_OPTION_KEYS = Object.freeze([
     ...PUBLICATION_OPTION_KEYS,
     "expectedSourceDigest",
 ]);
-function fail(reason, path, transitionReason = null) {
-    throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason);
+function fail(reason, path, transitionReason = null, cause) {
+    throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason, cause === undefined ? undefined : { cause });
 }
 function parseExpectedSourceDigest(value) {
     if (value === undefined || value === null)
@@ -239,7 +239,7 @@ async function ensureSettingsDirectory(root, inspection, signal) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
                 fail("aborted", "$signal");
-            fail("operation-failure", "$settingsDirectory");
+            fail("operation-failure", "$settingsDirectory", null, error);
         }
         throw error;
     }
@@ -300,7 +300,7 @@ async function publishTransition(root, inspection, signal) {
             if (error.reason === "stage-recovery-required") {
                 fail("recovery-required", "$settingsStage");
             }
-            fail("operation-failure", "$settings");
+            fail("operation-failure", "$settings", null, error);
         }
         throw error;
     }

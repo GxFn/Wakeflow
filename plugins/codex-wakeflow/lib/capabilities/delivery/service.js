@@ -106,6 +106,16 @@ function mapRepositoryError(error) {
     }
     throw error;
 }
+/**
+ * 记录自己说出的位置（`$/blockingReasons`、`$/anchorEvidence/0/evidenceIds`）接在请求里那份记录的位置之后，
+ * 拒绝因此点名出错的字段（open-items G13）：`$request.decision` 加 `$/blockingReasons` 是
+ * `$request/decision/blockingReasons`，与请求 Schema 拒绝的写法相同。记录没有说出更细的位置时仍是原来的路径。
+ */
+function recordFieldPath(base, recordPath) {
+    if (typeof recordPath !== "string" || !recordPath.startsWith("$/"))
+        return base;
+    return `${base.replaceAll(".", "/")}${recordPath.slice(1)}`;
+}
 function mapRecordError(error, path) {
     if (error instanceof DeliveryEnvelopeError ||
         error instanceof DeliveryOutcomeError ||
@@ -114,7 +124,9 @@ function mapRecordError(error, path) {
         error instanceof TestExecutionAttemptError ||
         error instanceof TargetDeliveryReworkContextError ||
         error instanceof TargetDeliveryProductDefectRemediationContextError) {
-        fail("precondition-failed", `record-${error.reason}`, path, { cause: error });
+        fail("precondition-failed", `record-${error.reason}`, recordFieldPath(path, "path" in error ? error.path : null), {
+            cause: error,
+        });
     }
     throw error;
 }

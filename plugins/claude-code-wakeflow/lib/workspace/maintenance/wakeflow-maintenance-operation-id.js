@@ -12,14 +12,14 @@ export class WakeflowMaintenanceOperationIdError extends Error {
     code = "wakeflow-maintenance-operation-id";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowMaintenanceOperationIdError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceOperationIdError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 严格解析一个 maintenance operation ID。 */
 export function parseWakeflowMaintenanceOperationId(value, errorPath = "$operationId") {
@@ -31,7 +31,7 @@ export function parseWakeflowMaintenanceOperationId(value, errorPath = "$operati
     }
     catch (error) {
         if (error instanceof UuidV4Error)
-            fail("format", errorPath);
+            fail("format", errorPath, error);
         throw error;
     }
     return value;
@@ -49,7 +49,7 @@ export function createWakeflowMaintenanceOperationId(uuidFactory) {
     }
     catch (error) {
         if (error instanceof UuidV4Error || error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("factory", "$uuidFactory");
+            fail("factory", "$uuidFactory", error);
         }
         throw error;
     }

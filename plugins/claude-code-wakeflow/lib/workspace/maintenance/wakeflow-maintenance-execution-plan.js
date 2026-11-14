@@ -21,16 +21,16 @@ export class WakeflowMaintenanceExecutionPlanError extends Error {
     code = "wakeflow-maintenance-execution-plan";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const HOST_ID_SET = new Set(WAKEFLOW_WORKSPACE_HOST_IDS);
 const JOURNAL_MAXIMUM_STEPS = 256;
-function fail(reason, path) {
-    throw new WakeflowMaintenanceExecutionPlanError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceExecutionPlanError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseHostId(value, path) {
     if (typeof value !== "string" || !HOST_ID_SET.has(value)) {
@@ -44,7 +44,7 @@ function parseSharedPreview(value) {
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("shared-preview", error.path);
+            fail("shared-preview", error.path, error);
         }
         throw error;
     }
@@ -57,7 +57,7 @@ function parseContribution(value) {
     }
     catch (error) {
         if (error instanceof WakeflowHostMaintenanceContributionError) {
-            fail("host-contribution", error.path);
+            fail("host-contribution", error.path, error);
         }
         throw error;
     }
@@ -166,7 +166,7 @@ export function createWakeflowMaintenanceExecutionPlan(previewValue, currentHost
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("host", error.path);
+            fail("host", error.path, error);
         }
         throw error;
     }
@@ -181,7 +181,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -192,7 +192,7 @@ function equivalentJson(left, right, path) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     return computeCanonicalJsonSha256Digest(leftJson) === computeCanonicalJsonSha256Digest(right);
@@ -205,7 +205,7 @@ export function parseWakeflowMaintenanceExecutionPlan(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (Object.keys(record).sort().join("\u0000") !==

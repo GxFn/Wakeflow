@@ -79,8 +79,8 @@ export class ManagedEvidenceManifestError extends Error {
     code = "wakeflow-managed-evidence-manifest";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -103,8 +103,8 @@ const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_MANAGED_EVIDENCE_
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
 ]);
-function fail(reason, path) {
-    throw new ManagedEvidenceManifestError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceManifestError(reason, path, cause === undefined ? undefined : { cause });
 }
 function compareText(left, right) {
     return left < right ? -1 : left > right ? 1 : 0;
@@ -115,7 +115,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -125,7 +125,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -135,7 +135,7 @@ function parseTime(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -162,7 +162,7 @@ function parsePrivacyFindings(value, payloadRefs) {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError)
-                fail("content-review", `${path}/ref`);
+                fail("content-review", `${path}/ref`, error);
             throw error;
         }
         if (!payloadRefs.has(ref))
@@ -189,9 +189,9 @@ function parsePayload(value) {
                 error.reason === "file-bytes" ||
                 error.reason === "total-bytes" ||
                 error.reason === "ref-bytes") {
-                fail("capacity", "$/payload/treeManifest");
+                fail("capacity", "$/payload/treeManifest", error);
             }
-            fail("payload", "$/payload/treeManifest");
+            fail("payload", "$/payload/treeManifest", error);
         }
         throw error;
     }
@@ -210,7 +210,7 @@ function parseContentReview(value, payload) {
         }
         catch (error) {
             if (error instanceof PortableResourcePathError) {
-                fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
+                fail("content-review", `$/contentReview/opaqueFileRefs/${index}`, error);
             }
             throw error;
         }
@@ -241,7 +241,7 @@ function manifestBasis(wire) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceSourceSelectionError) {
-            fail("source", error.path);
+            fail("source", error.path, error);
         }
         throw error;
     }
@@ -251,7 +251,7 @@ function manifestBasis(wire) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceSourceSelectionError)
-            fail("kind", "$/kind");
+            fail("kind", "$/kind", error);
         throw error;
     }
     // 目录树之外的来源（单文件与三种引用投影）都规范化为单一 `content` 成员。
@@ -286,7 +286,7 @@ export function parseManagedEvidenceManifest(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     if (
@@ -312,7 +312,7 @@ function exactDraftRecord(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$draft");
+            fail("input", "$draft", error);
         throw error;
     }
     const keys = Object.keys(record).sort(compareText);
@@ -343,7 +343,7 @@ function candidateManifest(record, capturedAt) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (json === null || Array.isArray(json) || typeof json !== "object") {
@@ -361,7 +361,7 @@ function readCaptureTime(options) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "clock")) {
@@ -372,7 +372,7 @@ function readCaptureTime(options) {
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
-            fail("time", "$options/clock");
+            fail("time", "$options/clock", error);
         throw error;
     }
 }
@@ -394,7 +394,7 @@ export function parseManagedEvidenceManifestDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$manifest");
+            fail("representation", "$manifest", error);
         }
         throw error;
     }

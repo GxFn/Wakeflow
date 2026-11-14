@@ -45,8 +45,8 @@ export class DemandEventSourcingEventError extends Error {
     code = "wakeflow-demand-event-sourcing-event";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -89,7 +89,7 @@ function lifecycleData(validate, value, path) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("lifecycle-data", path);
+            fail("lifecycle-data", path, error);
         throw error;
     }
     const result = validate(json);
@@ -112,8 +112,8 @@ const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"])
 const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze(["authorization"]);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-function fail(reason, path) {
-    throw new DemandEventSourcingEventError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingEventError(reason, path, cause === undefined ? undefined : { cause });
 }
 function exactRecord(value, fields, path) {
     let record;
@@ -122,7 +122,7 @@ function exactRecord(value, fields, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -137,7 +137,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -147,7 +147,7 @@ function parseTime(value) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/recordedAt");
+            fail("time", "$/recordedAt", error);
         throw error;
     }
 }
@@ -157,7 +157,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -215,7 +215,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof DemandCompletionError) {
-                fail("demand-completion", "$/data/completion");
+                fail("demand-completion", "$/data/completion", error);
             }
             throw error;
         }
@@ -282,7 +282,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof ManagedEvidenceManifestError) {
-                fail("managed-evidence-manifest", "$/data/manifest");
+                fail("managed-evidence-manifest", "$/data/manifest", error);
             }
             throw error;
         }
@@ -305,7 +305,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof TaskPackageError) {
-                fail("task-package", "$/data/taskPackage");
+                fail("task-package", "$/data/taskPackage", error);
             }
             throw error;
         }
@@ -328,7 +328,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof DeliveryEnvelopeError) {
-                fail("delivery-envelope", "$/data/envelope");
+                fail("delivery-envelope", "$/data/envelope", error);
             }
             throw error;
         }
@@ -351,7 +351,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof DeliveryOutcomeError) {
-                fail("delivery-outcome", "$/data/outcome");
+                fail("delivery-outcome", "$/data/outcome", error);
             }
             throw error;
         }
@@ -373,7 +373,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof DeliveryRearmError)
-                fail("delivery-rearm", "$/data/rearm");
+                fail("delivery-rearm", "$/data/rearm", error);
             throw error;
         }
         if (rearm.rearmedAt !== recordedAt)
@@ -394,7 +394,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof TargetResultError) {
-                fail("target-result", "$/data/result");
+                fail("target-result", "$/data/result", error);
             }
             throw error;
         }
@@ -406,7 +406,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path);
+                fail("target-result-callback", error.path, error);
             }
             throw error;
         }
@@ -432,7 +432,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path);
+                fail("target-result-callback", error.path, error);
             }
             throw error;
         }
@@ -456,7 +456,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof ControllerReviewDecisionError) {
-                fail("controller-review-decision", "$/data/decision");
+                fail("controller-review-decision", "$/data/decision", error);
             }
             throw error;
         }
@@ -481,7 +481,7 @@ export function parseDemandUncommittedEvent(value) {
         }
         catch (error) {
             if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-                fail("controller-product-defect-remediation-authorization", "$/data/authorization");
+                fail("controller-product-defect-remediation-authorization", "$/data/authorization", error);
             }
             throw error;
         }

@@ -52,14 +52,14 @@ class ClaudeCodeMaintenanceCapabilityError extends Error {
     code = "wakeflow-claude-code-maintenance-capability";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new ClaudeCodeMaintenanceCapabilityError(reason, path);
+function fail(reason, path, cause) {
+    throw new ClaudeCodeMaintenanceCapabilityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
 export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER = "claude-statusline-asset-unreadable";
@@ -119,7 +119,7 @@ async function planHostAsset(plan, blocker, signal) {
         if (error instanceof ClaudeCodeHostAssetOperationError) {
             if (error.reason === "read")
                 return { operation: null, blocker };
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         }
         throw error;
     }
@@ -144,7 +144,7 @@ async function planStatuslineSettings(root, request) {
             if (error.reason === "settings-unreadable") {
                 return { operations: [], blockerCodes: [CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER] };
             }
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         }
         throw error;
     }
@@ -160,7 +160,7 @@ async function planStatuslineRemoval(root, request) {
     }
     catch (error) {
         if (error instanceof ClaudeCodeStatuslineSettingsOperationError)
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         throw error;
     }
 }
@@ -215,7 +215,7 @@ async function planWindowTransportRetirement(root, request) {
     }
     catch (error) {
         if (error instanceof ClaudeCodeWindowTransportRetirementError)
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         throw error;
     }
 }
@@ -287,7 +287,7 @@ async function planProjections(root, request) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeProjectionError) {
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         }
         throw error;
     }
@@ -306,7 +306,7 @@ async function executeProjectionOperation(root, request) {
     }
     catch (error) {
         if (error instanceof WakeflowWindowRuntimeProjectionError) {
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         }
         throw error;
     }
@@ -330,7 +330,7 @@ async function executeHostAssetOperation(execute, root, request) {
     }
     catch (error) {
         if (error instanceof ClaudeCodeHostAssetOperationError)
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         throw error;
     }
 }
@@ -355,7 +355,7 @@ async function executeStatuslineSettingsOperation(root, request, execute) {
     }
     catch (error) {
         if (error instanceof ClaudeCodeStatuslineSettingsOperationError)
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         throw error;
     }
 }
@@ -365,7 +365,7 @@ async function executeWindowTransportRetirement(root, request) {
     }
     catch (error) {
         if (error instanceof ClaudeCodeWindowTransportRetirementError)
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         throw error;
     }
 }
@@ -381,7 +381,7 @@ async function executeOperation(root, context, request) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceGateError) {
-            fail("gate", "$context");
+            fail("gate", "$context", error);
         }
         throw error;
     }
@@ -433,7 +433,7 @@ async function executeOperation(root, context, request) {
     }
     catch (error) {
         if (error instanceof ClaudeCodePortableSettingsOperationExecutionError) {
-            fail("owner", error.path);
+            fail("owner", error.path, error);
         }
         throw error;
     }

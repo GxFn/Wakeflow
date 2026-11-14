@@ -22,14 +22,14 @@ export class WakeflowMaintenanceJournalError extends Error {
     code = "wakeflow-maintenance-journal";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowMaintenanceJournalError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceJournalError(reason, path, cause === undefined ? undefined : { cause });
 }
 const validateWireJournal = createRuntimeJsonSchemaValidator(WAKEFLOW_MAINTENANCE_JOURNAL_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA]);
 function digest(value, path) {
@@ -38,7 +38,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -53,7 +53,7 @@ function optionalWriterStamp(value, path, reason) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceWriterError)
-            fail(reason, error.path);
+            fail(reason, error.path, error);
         throw error;
     }
     return writer === null ? {} : { writer };
@@ -67,7 +67,7 @@ export function createPreparedWakeflowMaintenanceJournal(operationIdValue, inten
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("operation", "$operationId");
+            fail("operation", "$operationId", error);
         }
         throw error;
     }
@@ -77,7 +77,7 @@ export function createPreparedWakeflowMaintenanceJournal(operationIdValue, inten
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-            fail("plan", "$plan");
+            fail("plan", "$plan", error);
         }
         throw error;
     }
@@ -112,7 +112,7 @@ export function parseWakeflowMaintenanceJournal(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     const validated = validateWireJournal(json);
@@ -124,7 +124,7 @@ export function parseWakeflowMaintenanceJournal(value) {
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceOperationIdError) {
-            fail("operation", "$journal.operationId");
+            fail("operation", "$journal.operationId", error);
         }
         throw error;
     }

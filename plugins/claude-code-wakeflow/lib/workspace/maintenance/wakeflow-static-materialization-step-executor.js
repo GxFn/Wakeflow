@@ -73,14 +73,14 @@ export class WakeflowStaticMaterializationStepExecutionError extends Error {
     code = "wakeflow-static-materialization-step-execution";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowStaticMaterializationStepExecutionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowStaticMaterializationStepExecutionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseExecutionOptions(value) {
     let record;
@@ -89,7 +89,7 @@ function parseExecutionOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "recoveringAffectedStep") ||
@@ -113,7 +113,7 @@ function parseExecutionOptions(value) {
         }
         catch (error) {
             if (error instanceof WakeflowConfigError) {
-                fail("source-config", "$options.sourceConfig");
+                fail("source-config", "$options.sourceConfig", error);
             }
             throw error;
         }
@@ -161,8 +161,8 @@ async function optionalConfigSnapshot(root, signal) {
         }
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("owner", "$config");
+                fail("aborted", "$signal", error);
+            fail("owner", "$config", error);
         }
         throw error;
     }
@@ -181,10 +181,10 @@ async function executeLocalProtocol(root, step, signal) {
     catch (error) {
         if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$coreLayout.local");
+                fail("root-scope", "$root", error);
+            fail("owner", "$coreLayout.local", error);
         }
         throw error;
     }
@@ -216,13 +216,13 @@ async function executeActiveLayout(root, step, recovering, signal) {
     catch (error) {
         if (error instanceof WakeflowError) {
             if (error.reason === "active-layout-exists") {
-                fail("strict-absent", "$activeLayout");
+                fail("strict-absent", "$activeLayout", error);
             }
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "active-layout-root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$activeLayout");
+                fail("root-scope", "$root", error);
+            fail("owner", "$activeLayout", error);
         }
         throw error;
     }
@@ -243,13 +243,13 @@ async function executeSharedCoordinationLayout(root, step, action, recovering, s
     catch (error) {
         if (error instanceof WakeflowSharedCoordinationLayoutError) {
             if (error.reason === "strict-absent") {
-                fail("strict-absent", "$sharedCoordinationLayout");
+                fail("strict-absent", "$sharedCoordinationLayout", error);
             }
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$sharedCoordinationLayout");
+                fail("root-scope", "$root", error);
+            fail("owner", "$sharedCoordinationLayout", error);
         }
         throw error;
     }
@@ -264,7 +264,7 @@ async function requirementBoardRootExists(root) {
             return false;
         }
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -300,10 +300,10 @@ async function executeRequirementBoardInitialization(root, step, recovering, sig
         }
         if (isWakeflowError(error)) {
             if (error.reason.endsWith("-aborted"))
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason.endsWith("-root-scope"))
-                fail("root-scope", "$root");
-            fail("owner", "$board");
+                fail("root-scope", "$root", error);
+            fail("owner", "$board", error);
         }
         throw error;
     }
@@ -331,10 +331,10 @@ async function executeActiveWorkspaceProjection(root, step, desired, recovering,
     catch (error) {
         if (error instanceof WakeflowError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "projection-root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$projection");
+                fail("root-scope", "$root", error);
+            fail("owner", "$projection", error);
         }
         throw error;
     }
@@ -351,7 +351,7 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("root-scope", "$ledgerRoot");
+            fail("root-scope", "$ledgerRoot", error);
         }
         throw error;
     }
@@ -368,8 +368,8 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
     catch (error) {
         if (error instanceof AbsoluteDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("owner", "$ledgerRoot");
+                fail("aborted", "$signal", error);
+            fail("owner", "$ledgerRoot", error);
         }
         throw error;
     }
@@ -388,7 +388,7 @@ async function executeLedgerLayout(root, step, request, desired, recovering, sig
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$ledgerRoot");
+            fail("root-scope", "$ledgerRoot", error);
         throw error;
     }
     let inspection;
@@ -449,8 +449,8 @@ async function executeUnregisteredWindowRuntime(root, step, request, desired, re
         catch (error) {
             if (error instanceof WakeflowWindowRuntimeProjectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("owner", "$windowRuntime");
+                    fail("aborted", "$signal", error);
+                fail("owner", "$windowRuntime", error);
             }
             throw error;
         }
@@ -469,13 +469,13 @@ async function executeUnregisteredWindowRuntime(root, step, request, desired, re
     catch (error) {
         if (error instanceof WakeflowFreshWindowRuntimePublicationError) {
             if (error.reason === "strict-absent") {
-                fail("strict-absent", "$windowRuntime");
+                fail("strict-absent", "$windowRuntime", error);
             }
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$windowRuntime");
+                fail("root-scope", "$root", error);
+            fail("owner", "$windowRuntime", error);
         }
         throw error;
     }
@@ -504,13 +504,13 @@ async function executeHostCapabilityLayout(root, step, request, recovering, sign
     catch (error) {
         if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
             if (error.reason === "strict-absent") {
-                fail("strict-absent", "$hostCapabilityLayout");
+                fail("strict-absent", "$hostCapabilityLayout", error);
             }
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$hostCapabilityLayout");
+                fail("root-scope", "$root", error);
+            fail("owner", "$hostCapabilityLayout", error);
         }
         throw error;
     }
@@ -548,8 +548,8 @@ async function executeSupportRoot(root, step, request, desired, recovering, sign
         }
         if (error instanceof WakeflowManagedSupportRootMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("owner", "$supportRoot");
+                fail("aborted", "$signal", error);
+            fail("owner", "$supportRoot", error);
         }
         throw error;
     }
@@ -571,7 +571,7 @@ async function executeGitignore(root, step, request, signal) {
     }
     catch (error) {
         if (error instanceof WakeflowGitignoreRecompositionError) {
-            fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore");
+            fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore", error);
         }
         throw error;
     }
@@ -605,7 +605,7 @@ async function executeProgramInstruction(root, step, request, sourceConfig, desi
     }
     catch (error) {
         if (error instanceof WakeflowProgramInstructionRecompositionError) {
-            fail(error.reason === "aborted" ? "aborted" : "owner", "$program");
+            fail(error.reason === "aborted" ? "aborted" : "owner", "$program", error);
         }
         throw error;
     }
@@ -631,7 +631,7 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
     }
     catch (error) {
         if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-            fail("owner", "$externalInstruction");
+            fail("owner", "$externalInstruction", error);
         }
         throw error;
     }
@@ -642,7 +642,7 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("root-scope", "$externalRoot");
+            fail("root-scope", "$externalRoot", error);
         }
         throw error;
     }
@@ -657,7 +657,7 @@ async function executeExternalInstruction(root, step, request, sourceConfig, des
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("root-scope", "$externalRoot");
+            fail("root-scope", "$externalRoot", error);
         }
         throw error;
     }
@@ -711,7 +711,7 @@ async function executeSupportGitignore(root, step, request, desired, signal) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("root-scope", "$supportRoot");
+            fail("root-scope", "$supportRoot", error);
         }
         throw error;
     }
@@ -726,7 +726,7 @@ async function executeSupportGitignore(root, step, request, desired, signal) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("root-scope", "$supportRoot");
+            fail("root-scope", "$supportRoot", error);
         }
         throw error;
     }
@@ -781,7 +781,7 @@ async function executeSupportMemory(root, step, request, sourceConfig, desired, 
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("root-scope", "$supportRoot");
+            fail("root-scope", "$supportRoot", error);
         }
         throw error;
     }
@@ -796,7 +796,7 @@ async function executeSupportMemory(root, step, request, sourceConfig, desired, 
     }
     catch (error) {
         if (error instanceof RootedDirectoryError) {
-            fail("root-scope", "$supportRoot");
+            fail("root-scope", "$supportRoot", error);
         }
         throw error;
     }
@@ -874,10 +874,10 @@ async function executeConfig(root, step, preview, desired, signal) {
         if (error instanceof WakeflowConfigAuthorityPublicationError ||
             error instanceof WakeflowConfigAuthorityReplacementError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$config");
+                fail("root-scope", "$root", error);
+            fail("owner", "$config", error);
         }
         throw error;
     }
@@ -889,7 +889,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceGateError) {
-            fail("gate", "$gateContext");
+            fail("gate", "$gateContext", error);
         }
         throw error;
     }
@@ -900,7 +900,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("plan", error.path);
+            fail("plan", error.path, error);
         }
         throw error;
     }
@@ -910,7 +910,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -1028,7 +1028,7 @@ async function externalRootPathOrNull(root, config, target) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError)
-            fail("root-scope", "$externalRoot");
+            fail("root-scope", "$externalRoot", error);
         throw error;
     }
     const placement = placements.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target));
@@ -1086,7 +1086,7 @@ function resolveManagedBlockRemovalSpec(request, config, targetKey) {
         if (error instanceof WakeflowStaticMaterializationStepExecutionError)
             throw error;
         if (error instanceof Error && "reason" in error)
-            fail("owner", "$managedBlock");
+            fail("owner", "$managedBlock", error);
         throw error;
     }
 }
@@ -1113,7 +1113,7 @@ async function executeRemoveManagedBlock(root, step, request, sourceConfig, sign
         }
         catch (error) {
             if (error instanceof RootedDirectoryError)
-                fail("root-scope", "$externalRoot");
+                fail("root-scope", "$externalRoot", error);
             throw error;
         }
     }
@@ -1179,8 +1179,8 @@ async function executeRetireWindowProjections(root, step, request, sourceConfig,
         catch (error) {
             if (error instanceof WakeflowWindowRuntimeProjectionError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
-                fail("owner", "$windowProjections");
+                    fail("aborted", "$signal", error);
+                fail("owner", "$windowProjections", error);
             }
             throw error;
         }
@@ -1207,10 +1207,10 @@ async function executeRetireConfig(root, step, preview, signal) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthorityRetirementError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("owner", "$config");
+                fail("root-scope", "$root", error);
+            fail("owner", "$config", error);
         }
         throw error;
     }

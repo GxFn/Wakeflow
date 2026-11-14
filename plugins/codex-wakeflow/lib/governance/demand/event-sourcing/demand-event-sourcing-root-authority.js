@@ -40,14 +40,14 @@ export class DemandEventSourcingRootAuthorityError extends Error {
     code = "wakeflow-demand-event-sourcing-root-authority";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new DemandEventSourcingRootAuthorityError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingRootAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 function sameOptionalNode(left, right) {
     return left === undefined
@@ -186,16 +186,16 @@ async function readRecord(root, ref, maximumBytes, expectedNode, signal, owner) 
     catch (error) {
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope" ||
                 error.reason === "source-changed" ||
                 error.reason === "expectation-changed") {
-                fail("inventory", "$root");
+                fail("inventory", "$root", error);
             }
-            fail(owner, `$${owner}`);
+            fail(owner, `$${owner}`, error);
         }
         if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-            fail(owner, `$${owner}`);
+            fail(owner, `$${owner}`, error);
         }
         throw error;
     }
@@ -207,7 +207,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "audit" && key !== "signal") ||
@@ -246,8 +246,8 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     catch (error) {
         if (error instanceof DemandEventSourcingRootInventoryError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("inventory", "$root");
+                fail("aborted", "$signal", error);
+            fail("inventory", "$root", error);
         }
         throw error;
     }
@@ -260,7 +260,7 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     }
     catch (error) {
         if (error instanceof DemandIdentityError)
-            fail("identity", "$identity");
+            fail("identity", "$identity", error);
         throw error;
     }
     try {
@@ -268,7 +268,7 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     }
     catch (error) {
         if (error instanceof DemandAuthorityError)
-            fail("authority", "$authority");
+            fail("authority", "$authority", error);
         throw error;
     }
     let admittedAuthority;
@@ -279,9 +279,9 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
         if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
             if ((error instanceof DemandAuthorityError && error.reason === "aborted") ||
                 (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")) {
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             }
-            fail("ledger", "$authority");
+            fail("ledger", "$authority", error);
         }
         throw error;
     }
@@ -312,8 +312,8 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
         if (error instanceof DemandEventSourcingRepositoryError ||
             error instanceof DemandFileEventStoreError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("stream", "$commits");
+                fail("aborted", "$signal", error);
+            fail("stream", "$commits", error);
         }
         throw error;
     }
@@ -324,8 +324,8 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     catch (error) {
         if (error instanceof DemandFileEventStoreError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("stream", "$commits/0");
+                fail("aborted", "$signal", error);
+            fail("stream", "$commits/0", error);
         }
         throw error;
     }
@@ -339,7 +339,7 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     }
     catch (error) {
         if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$commits/0/events/0");
+            fail("stream", "$commits/0/events/0", error);
         }
         throw error;
     }
@@ -369,8 +369,8 @@ async function loadRootAuthority(root, ledgerStore, options, phase = "healthy") 
     catch (error) {
         if (error instanceof DemandEventSourcingRootInventoryError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("inventory", "$root");
+                fail("aborted", "$signal", error);
+            fail("inventory", "$root", error);
         }
         throw error;
     }

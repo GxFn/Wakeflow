@@ -20,14 +20,14 @@ export class WakeflowMaintenanceExecutionPreviewError extends Error {
     code = "wakeflow-maintenance-execution-preview";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowMaintenanceExecutionPreviewError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowMaintenanceExecutionPreviewError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
@@ -55,9 +55,9 @@ async function resolveSnapshotConfig(root, request, expectedDigest) {
     catch (error) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (expectedDigest !== null)
-                fail("source-config", "$config");
+                fail("source-config", "$config", error);
             return null;
         }
         throw error;
@@ -82,7 +82,7 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
     }
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -95,7 +95,7 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
         }
         catch (error) {
             if (error instanceof WakeflowHostMaintenanceCapabilityError) {
-                fail("capability", error.path);
+                fail("capability", error.path, error);
             }
             throw error;
         }
@@ -107,8 +107,8 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
     catch (error) {
         if (error instanceof WakeflowStaticMaterializationPreviewError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("shared-preview", error.path);
+                fail("aborted", "$signal", error);
+            fail("shared-preview", error.path, error);
         }
         throw error;
     }
@@ -135,7 +135,7 @@ export async function previewWakeflowMaintenanceExecution(rootValue, requestValu
             assertNotAborted(request.signal);
             if (error instanceof WakeflowHostMaintenanceContributionError ||
                 error instanceof WakeflowHostMaintenanceCapabilityError) {
-                fail("contribution", error.path);
+                fail("contribution", error.path, error);
             }
             throw error;
         }

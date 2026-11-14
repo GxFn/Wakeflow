@@ -41,15 +41,15 @@ export class ManagedEvidenceRecordSetInventoryError extends Error {
     code = "wakeflow-managed-evidence-record-set-inventory";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const RECORD_INSPECTION_CONCURRENCY = 4;
-function fail(reason, path) {
-    throw new ManagedEvidenceRecordSetInventoryError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceRecordSetInventoryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseExpectedNode(value, path) {
     if (value === undefined)
@@ -65,7 +65,7 @@ function parseExpectedNode(value, path) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     return value;
@@ -77,7 +77,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "expectedTransactionNode" && key !== "signal") ||
@@ -117,7 +117,7 @@ function mapDirectoryError(error) {
         error.reason === "not-directory") {
         fail("tree-shape", "$managedEvidence");
     }
-    fail("operation-failure", "$managedEvidence");
+    fail("operation-failure", "$managedEvidence", error);
 }
 function mapCandidateError(error, owner) {
     if (error.reason === "aborted")
@@ -150,7 +150,7 @@ function mapTransactionStoreError(error) {
         fail("capacity", "$transaction");
     if (error.reason === "conflict")
         fail("transaction", "$transaction");
-    fail("operation-failure", "$transaction");
+    fail("operation-failure", "$transaction", error);
 }
 async function readTransaction(root, expectedNode, signal) {
     let stored;
@@ -193,7 +193,7 @@ async function inspectRecord(root, entry, signal) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceResourcePathError) {
-            fail("tree-shape", "$managedEvidence");
+            fail("tree-shape", "$managedEvidence", error);
         }
         throw error;
     }
@@ -207,17 +207,17 @@ async function inspectRecord(root, entry, signal) {
     catch (error) {
         if (error instanceof ManagedEvidenceRecordReaderError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             if (error.reason === "capacity")
-                fail("capacity", "$record");
+                fail("capacity", "$record", error);
             if (error.reason === "source-changed") {
-                fail("source-changed", "$record");
+                fail("source-changed", "$record", error);
             }
             if (error.reason === "node-policy")
-                fail("node-policy", "$record");
-            fail("record", "$record");
+                fail("node-policy", "$record", error);
+            fail("record", "$record", error);
         }
         throw error;
     }
@@ -264,7 +264,7 @@ async function inspectStage(root, entry, transaction, signal) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceResourcePathError) {
-            fail("tree-shape", "$managedEvidence");
+            fail("tree-shape", "$managedEvidence", error);
         }
         throw error;
     }
@@ -352,7 +352,7 @@ export async function inspectManagedEvidenceRecordSetInventory(root, optionsValu
         }
         catch (error) {
             if (error instanceof ManagedEvidenceResourcePathError) {
-                fail("tree-shape", "$managedEvidence");
+                fail("tree-shape", "$managedEvidence", error);
             }
             throw error;
         }

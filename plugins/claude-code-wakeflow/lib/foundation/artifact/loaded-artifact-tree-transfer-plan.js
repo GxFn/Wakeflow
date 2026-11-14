@@ -28,14 +28,14 @@ export class LoadedArtifactTreeTransferPlanError extends Error {
     code = "wakeflow-loaded-artifact-tree-transfer-plan";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new LoadedArtifactTreeTransferPlanError(reason, path);
+function fail(reason, path, cause) {
+    throw new LoadedArtifactTreeTransferPlanError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseMode(value, path) {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
@@ -50,7 +50,7 @@ function parseModes(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -79,7 +79,7 @@ function parseCandidateRootPath(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError) {
-            fail("input", "$candidateRootPath");
+            fail("input", "$candidateRootPath", error);
         }
         throw error;
     }
@@ -96,9 +96,9 @@ function parseManifest(value) {
                 error.reason === "file-bytes" ||
                 error.reason === "total-bytes" ||
                 error.reason === "ref-bytes") {
-                fail("capacity", "$manifest");
+                fail("capacity", "$manifest", error);
             }
-            fail("manifest", "$manifest");
+            fail("manifest", "$manifest", error);
         }
         throw error;
     }
@@ -125,8 +125,8 @@ function createDirectoryPlan(files, modes) {
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             if (error.reason === "capacity")
-                fail("capacity", "$manifest");
-            fail("plan", "$manifest");
+                fail("capacity", "$manifest", error);
+            fail("plan", "$manifest", error);
         }
         throw error;
     }
@@ -147,7 +147,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -164,8 +164,8 @@ function parseDirectoryPlan(value) {
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
             if (error.reason === "capacity")
-                fail("capacity", "$plan.directoryPlan");
-            fail("plan", "$plan.directoryPlan");
+                fail("capacity", "$plan.directoryPlan", error);
+            fail("plan", "$plan.directoryPlan", error);
         }
         throw error;
     }
@@ -176,7 +176,7 @@ function parseCopyPath(value, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("plan", path);
+            fail("plan", path, error);
         throw error;
     }
 }
@@ -187,7 +187,7 @@ function parseCopies(value, maximumLength) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("plan", "$plan.copies");
+            fail("plan", "$plan.copies", error);
         throw error;
     }
     return Object.freeze(values.map((entry, index) => {
@@ -197,7 +197,7 @@ function parseCopies(value, maximumLength) {
         }
         catch (error) {
             if (error instanceof PassiveOwnDataError) {
-                fail("plan", `$plan.copies.${index}`);
+                fail("plan", `$plan.copies.${index}`, error);
             }
             throw error;
         }
@@ -221,7 +221,7 @@ export function parseLoadedArtifactTreeTransferPlan(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$plan");
+            fail("input", "$plan", error);
         throw error;
     }
     const keys = Object.keys(record).sort();

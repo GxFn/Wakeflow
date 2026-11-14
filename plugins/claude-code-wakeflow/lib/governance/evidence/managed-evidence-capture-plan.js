@@ -27,8 +27,8 @@ export class ManagedEvidenceCapturePlanError extends Error {
     code = "wakeflow-managed-evidence-capture-plan";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -48,8 +48,8 @@ const EXPECTATION_FIELDS = Object.freeze([
     "stateDigest",
     "streamRevision",
 ]);
-function fail(reason, path) {
-    throw new ManagedEvidenceCapturePlanError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidenceCapturePlanError(reason, path, cause === undefined ? undefined : { cause });
 }
 function exactRecord(value, fields, path) {
     let record;
@@ -58,7 +58,7 @@ function exactRecord(value, fields, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
     const actual = Object.keys(record).sort();
@@ -74,7 +74,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -84,7 +84,7 @@ function parseLastEventId(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$/expectedDemand/lastEventId");
+            fail("identifier", "$/expectedDemand/lastEventId", error);
         }
         throw error;
     }
@@ -97,7 +97,7 @@ function parseExpectation(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", "$/expectedDemand/streamRevision");
+            fail("position", "$/expectedDemand/streamRevision", error);
         }
         throw error;
     }
@@ -114,7 +114,7 @@ function parseManifest(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceManifestError) {
-            fail("manifest", "$/manifest");
+            fail("manifest", "$/manifest", error);
         }
         throw error;
     }

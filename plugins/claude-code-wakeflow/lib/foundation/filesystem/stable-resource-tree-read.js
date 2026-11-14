@@ -45,14 +45,14 @@ export class StableResourceTreeReadError extends Error {
     code = "wakeflow-stable-resource-tree-read";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new StableResourceTreeReadError(reason, path);
+function fail(reason, path, cause) {
+    throw new StableResourceTreeReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -72,7 +72,7 @@ function parseBytes(value, path) {
     }
     catch (error) {
         if (error instanceof ByteCountError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -83,7 +83,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     const required = Object.freeze([
@@ -204,7 +204,7 @@ function addTreeBytes(current, next) {
     }
     catch (error) {
         if (error instanceof ByteCountError) {
-            fail("total-bytes", "$tree.totalFileBytes");
+            fail("total-bytes", "$tree.totalFileBytes", error);
         }
         throw error;
     }

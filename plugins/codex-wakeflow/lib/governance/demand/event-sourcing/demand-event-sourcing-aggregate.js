@@ -21,8 +21,8 @@ export class DemandEventSourcingAggregateError extends Error {
     code = "wakeflow-demand-event-sourcing-aggregate";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -37,8 +37,8 @@ const FIELDS = Object.freeze([
     "stateDigest",
     "streamRevision",
 ]);
-function fail(reason, path) {
-    throw new DemandEventSourcingAggregateError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingAggregateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -46,7 +46,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", path);
+            fail("digest", path, error);
         throw error;
     }
 }
@@ -58,7 +58,7 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$aggregate");
+            fail("input", "$aggregate", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -71,7 +71,7 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("identifier", "$/demandId");
+            fail("identifier", "$/demandId", error);
         }
         throw error;
     }
@@ -81,7 +81,7 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingStoredEventError) {
-            fail("event", "$/lastEvent");
+            fail("event", "$/lastEvent", error);
         }
         throw error;
     }
@@ -92,7 +92,7 @@ export function parseDemandEventSourcingAggregate(value) {
     catch (error) {
         if (error instanceof DemandEventSourcingStateVersionError ||
             error instanceof DemandEventSourcingUpcasterError) {
-            fail("version", "$/lastEvent");
+            fail("version", "$/lastEvent", error);
         }
         throw error;
     }
@@ -102,7 +102,7 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError)
-            fail("state", "$/state");
+            fail("state", "$/state", error);
         throw error;
     }
     let streamRevision;
@@ -113,7 +113,7 @@ export function parseDemandEventSourcingAggregate(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("position", error.path);
+            fail("position", error.path, error);
         }
         throw error;
     }

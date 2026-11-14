@@ -48,8 +48,8 @@ export class LedgerAuthorityRecordError extends Error {
     code = "wakeflow-ledger-authority-record";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -78,8 +78,8 @@ const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
 ]);
 const OPTIONAL_DRAFT_FIELD = "supplements";
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z", "$draftValidationInstant");
-function fail(reason, path) {
-    throw new LedgerAuthorityRecordError(reason, path);
+function fail(reason, path, cause) {
+    throw new LedgerAuthorityRecordError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseCanonicalText(value, path) {
     if (!value.isWellFormed() ||
@@ -95,7 +95,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -105,7 +105,7 @@ function parseInstant(value, path) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", path);
+            fail("time", path, error);
         throw error;
     }
 }
@@ -115,7 +115,7 @@ function parseDigest(value, reason, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
 }
@@ -126,7 +126,7 @@ function parseMemberPath(value, reason, path) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail(reason, path);
+            fail(reason, path, error);
         throw error;
     }
     if (memberPath.toLowerCase() === "record.json" ||
@@ -279,7 +279,7 @@ export function parseLedgerAuthorityRecord(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     let record;
@@ -288,7 +288,7 @@ export function parseLedgerAuthorityRecord(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("schema", "$record");
+            fail("schema", "$record", error);
         throw error;
     }
     if (record.artifactKind !== REQUIREMENT_RECORD_ARTIFACT_KIND) {
@@ -306,7 +306,7 @@ function exactDraft(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$draft");
+            fail("input", "$draft", error);
         throw error;
     }
     // `supplements` 是唯一可缺省的草稿字段：只有 supplement 包带它。
@@ -326,7 +326,7 @@ function recordTime(options) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "clock")) {
@@ -337,7 +337,7 @@ function recordTime(options) {
     }
     catch (error) {
         if (error instanceof UtcWallClockError)
-            fail("time", "$options/clock");
+            fail("time", "$options/clock", error);
         throw error;
     }
 }
@@ -381,7 +381,7 @@ export function parseLedgerAuthorityRecordDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", error.path);
+            fail("representation", error.path, error);
         }
         throw error;
     }

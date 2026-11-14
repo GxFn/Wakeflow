@@ -31,15 +31,15 @@ export class WakeflowManagedBlockFileError extends Error {
     code = "wakeflow-managed-block-file";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const DEFAULT_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$managedBlockFile.maximumBytes");
-function fail(reason, path) {
-    throw new WakeflowManagedBlockFileError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowManagedBlockFileError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -65,7 +65,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", "$request.resourcePath");
+            fail("input", "$request.resourcePath", error);
         throw error;
     }
     if (value.signal !== undefined && !isAbortSignal(value.signal)) {
@@ -82,7 +82,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -93,7 +93,7 @@ function parseRequest(value) {
         }
         catch (error) {
             if (error instanceof ByteCountError)
-                fail("input", "$request.maximumBytes");
+                fail("input", "$request.maximumBytes", error);
             throw error;
         }
     }
@@ -124,7 +124,7 @@ async function assertCurrentUserRoot(root, expectedUserId) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
     if (userId !== expectedUserId)
@@ -158,13 +158,13 @@ async function readSource(root, request, expectedUserId) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "symlink" || error.reason === "not-file") {
-                fail("source-policy", "$source");
+                fail("source-policy", "$source", error);
             }
             if (error.reason === "too-large")
-                fail("source-capacity", "$source");
-            fail("source", "$source");
+                fail("source-capacity", "$source", error);
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -187,10 +187,10 @@ async function revalidateSource(root, request, initial) {
             throw error;
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (initial === null && error.reason === "not-found")
                 return;
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -208,11 +208,11 @@ async function inspectParsed(root, request, expectedUserId) {
     catch (error) {
         if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
             if (error.reason === "unadmitted-source")
-                fail("unknown-managed-body", "$source");
+                fail("unknown-managed-body", "$source", error);
             if (error.reason === "relation" || error.reason === "envelope") {
-                fail("envelope", "$source");
+                fail("envelope", "$source", error);
             }
-            fail("input", error.path);
+            fail("input", error.path, error);
         }
         throw error;
     }
@@ -280,7 +280,7 @@ async function publishTarget(root, request, inspection, createMode) {
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError)
             mapAtomicError(error);
-        fail("effect-failure", "$resourcePath");
+        fail("effect-failure", "$resourcePath", error);
     }
 }
 function sameSource(left, right) {
@@ -354,8 +354,8 @@ export async function recomposeWakeflowManagedBlockFile(rootValue, requestValue,
     try {
         after = await inspectParsed(rootValue, Object.freeze({ ...request, signal: undefined }), expectedUserId);
     }
-    catch {
-        fail("commit-uncertain", "$resourcePath");
+    catch (cause) {
+        fail("commit-uncertain", "$resourcePath", cause);
     }
     assertReadback(request, before, effect, after, expectedUserId, createMode);
     return Object.freeze({
@@ -375,7 +375,7 @@ function parseRemovalRequest(value) {
     }
     catch (error) {
         if (error instanceof PortableResourcePathError)
-            fail("input", "$request.resourcePath");
+            fail("input", "$request.resourcePath", error);
         throw error;
     }
     if (value.signal !== undefined && !isAbortSignal(value.signal)) {
@@ -392,7 +392,7 @@ function parseRemovalRequest(value) {
         }
         catch (error) {
             if (error instanceof WakeflowManagedTextEnvelopeError) {
-                fail("input", `$request.admittedTargets/${index}`);
+                fail("input", `$request.admittedTargets/${index}`, error);
             }
             throw error;
         }
@@ -416,7 +416,7 @@ function parseRemovalRequest(value) {
         }
         catch (error) {
             if (error instanceof ByteCountError)
-                fail("input", "$request.maximumBytes");
+                fail("input", "$request.maximumBytes", error);
             throw error;
         }
     }
@@ -450,7 +450,7 @@ async function inspectRemovalParsed(root, request, expectedUserId) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError)
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         throw error;
     }
     if (envelope.kind !== "managed") {
@@ -470,7 +470,7 @@ async function inspectRemovalParsed(root, request, expectedUserId) {
     }
     catch (error) {
         if (error instanceof WakeflowManagedTextEnvelopeError)
-            fail("envelope", "$source");
+            fail("envelope", "$source", error);
         throw error;
     }
     await revalidateSource(root, request, read);
@@ -528,7 +528,7 @@ async function publishRemoval(root, request, inspection) {
         catch (error) {
             if (error instanceof ExactRegularFileUnlinkError)
                 mapUnlinkError(error);
-            fail("effect-failure", "$resourcePath");
+            fail("effect-failure", "$resourcePath", error);
         }
         return;
     }
@@ -542,7 +542,7 @@ async function publishRemoval(root, request, inspection) {
     catch (error) {
         if (error instanceof DurableAtomicFileWriteError)
             mapAtomicError(error);
-        fail("effect-failure", "$resourcePath");
+        fail("effect-failure", "$resourcePath", error);
     }
 }
 /**
@@ -566,8 +566,8 @@ export async function removeWakeflowManagedBlockFile(rootValue, requestValue) {
     try {
         after = await inspectRemovalParsed(rootValue, Object.freeze({ ...request, signal: undefined }), expectedUserId);
     }
-    catch {
-        fail("commit-uncertain", "$resourcePath");
+    catch (cause) {
+        fail("commit-uncertain", "$resourcePath", cause);
     }
     const deleted = before.target.deletesFile;
     if (after.status !== "absent" ||

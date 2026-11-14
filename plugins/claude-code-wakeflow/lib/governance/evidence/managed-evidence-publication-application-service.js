@@ -35,8 +35,8 @@ export class ManagedEvidencePublicationApplicationServiceError extends Error {
     causeCode;
     causeReason;
     publicationAuthority;
-    constructor(reason, causeCode = null, causeReason = null, publicationAuthority = "unknown") {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, causeCode = null, causeReason = null, publicationAuthority = "unknown", options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.causeCode = causeCode;
         this.causeReason = causeReason;
@@ -54,7 +54,7 @@ function ownString(value, key) {
         : null;
 }
 function fail(reason, cause) {
-    throw new ManagedEvidencePublicationApplicationServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"));
+    throw new ManagedEvidencePublicationApplicationServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"), "unknown", cause === undefined ? undefined : { cause });
 }
 function parseOptions(value) {
     let record;

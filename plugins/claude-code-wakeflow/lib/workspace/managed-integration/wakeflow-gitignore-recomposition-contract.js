@@ -37,14 +37,14 @@ export class WakeflowGitignoreRecompositionError extends Error {
     code = "wakeflow-gitignore-recomposition";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failWakeflowGitignoreRecomposition(reason, path) {
-    throw new WakeflowGitignoreRecompositionError(reason, path);
+export function failWakeflowGitignoreRecomposition(reason, path, cause) {
+    throw new WakeflowGitignoreRecompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
 export function assertWakeflowGitignoreRecompositionRoot(value) {
     if (typeof value !== "object" ||
@@ -60,7 +60,7 @@ function plainRecord(value, path) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowGitignoreRecomposition("input", path);
+            failWakeflowGitignoreRecomposition("input", path, error);
         }
         throw error;
     }
@@ -72,7 +72,7 @@ function parseProfiles(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowGitignoreRecomposition("input", "$request.hostProfiles");
+            failWakeflowGitignoreRecomposition("input", "$request.hostProfiles", error);
         }
         throw error;
     }
@@ -82,7 +82,7 @@ function parseProfiles(value) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-                failWakeflowGitignoreRecomposition("input", `$request.hostProfiles/${index}`);
+                failWakeflowGitignoreRecomposition("input", `$request.hostProfiles/${index}`, error);
             }
             throw error;
         }
@@ -92,7 +92,7 @@ function parseProfiles(value) {
     }
     catch (error) {
         if (error instanceof WakeflowGitignoreBodyAuthorityError) {
-            failWakeflowGitignoreRecomposition("input", "$request.hostProfiles");
+            failWakeflowGitignoreRecomposition("input", "$request.hostProfiles", error);
         }
         throw error;
     }
@@ -120,7 +120,7 @@ export function parseWakeflowGitignoreRecompositionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-            failWakeflowGitignoreRecomposition("input", "$request.matrix");
+            failWakeflowGitignoreRecomposition("input", "$request.matrix", error);
         }
         throw error;
     }
@@ -130,7 +130,7 @@ export function parseWakeflowGitignoreRecompositionRequest(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            failWakeflowGitignoreRecomposition("input", "$request.expectedMatrixDigest");
+            failWakeflowGitignoreRecomposition("input", "$request.expectedMatrixDigest", error);
         }
         throw error;
     }
@@ -196,7 +196,7 @@ export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(root, 
         if (error instanceof WakeflowGitignoreRecompositionError)
             throw error;
         if (error instanceof RootedDirectoryError) {
-            failWakeflowGitignoreRecomposition("root-scope", "$root");
+            failWakeflowGitignoreRecomposition("root-scope", "$root", error);
         }
         throw error;
     }
@@ -212,7 +212,7 @@ export function admitWakeflowGitignoreRecompositionLockOperations(request) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-                failWakeflowGitignoreRecomposition("input", "$request.matrix");
+                failWakeflowGitignoreRecomposition("input", "$request.matrix", error);
             }
             throw error;
         }

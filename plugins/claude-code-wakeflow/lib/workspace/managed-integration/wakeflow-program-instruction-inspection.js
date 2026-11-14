@@ -43,14 +43,14 @@ export class WakeflowProgramInstructionInspectionError extends Error {
     code = "wakeflow-program-instruction-inspection";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowProgramInstructionInspectionError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowProgramInstructionInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseDigest(value, path) {
     try {
@@ -58,7 +58,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -68,7 +68,7 @@ function parseConfig(value, path) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -86,7 +86,7 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     const keys = Object.keys(record).sort();
@@ -111,7 +111,7 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-            fail("input", "$request.matrix");
+            fail("input", "$request.matrix", error);
         }
         throw error;
     }
@@ -125,7 +125,7 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("input", "$request.profile");
+            fail("input", "$request.profile", error);
         }
         throw error;
     }
@@ -212,13 +212,13 @@ async function readSource(root, request, expectedUserId) {
             if (error.reason === "not-found")
                 return null;
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "symlink" || error.reason === "not-file") {
-                fail("source-policy", "$source");
+                fail("source-policy", "$source", error);
             }
             if (error.reason === "too-large")
-                fail("source-capacity", "$source");
-            fail("source", "$source");
+                fail("source-capacity", "$source", error);
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -242,10 +242,10 @@ async function revalidateSource(root, request, initial) {
         }
         if (error instanceof StableFileReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (initial === null && error.reason === "not-found")
                 return;
-            fail("source", "$source");
+            fail("source", "$source", error);
         }
         throw error;
     }
@@ -256,7 +256,7 @@ function createAuthority(config, profile) {
     }
     catch (error) {
         if (error instanceof WakeflowProgramInstructionBodyAuthorityError) {
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }
@@ -277,7 +277,7 @@ export async function inspectWakeflowProgramInstruction(rootValue, requestValue)
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-            fail("context", "$context");
+            fail("context", "$context", error);
         }
         throw error;
     }
@@ -300,13 +300,13 @@ export async function inspectWakeflowProgramInstruction(rootValue, requestValue)
     catch (error) {
         if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
             if (error.reason === "unadmitted-source") {
-                fail("unknown-managed-body", "$source");
+                fail("unknown-managed-body", "$source", error);
             }
             if (error.reason === "relation")
-                fail("envelope", "$source");
+                fail("envelope", "$source", error);
             if (error.reason === "envelope")
-                fail("envelope", "$source");
-            fail("authority", error.path);
+                fail("envelope", "$source", error);
+            fail("authority", error.path, error);
         }
         throw error;
     }

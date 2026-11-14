@@ -66,14 +66,14 @@ export class WakeflowStaticMaterializationPreviewError extends Error {
     code = "wakeflow-static-materialization-preview";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-export function failWakeflowStaticMaterializationPreview(reason, path) {
-    throw new WakeflowStaticMaterializationPreviewError(reason, path);
+export function failWakeflowStaticMaterializationPreview(reason, path, cause) {
+    throw new WakeflowStaticMaterializationPreviewError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 验证 action-specific desired Config 与完整 Host Profile 集合。 */
 export function parseWakeflowStaticMaterializationPreviewRequest(value) {
@@ -85,7 +85,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowStaticMaterializationPreview("input", error.path);
+            failWakeflowStaticMaterializationPreview("input", error.path, error);
         }
         throw error;
     }
@@ -119,7 +119,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         }
         catch (error) {
             if (error instanceof WakeflowConfigError) {
-                failWakeflowStaticMaterializationPreview("config", error.path);
+                failWakeflowStaticMaterializationPreview("config", error.path, error);
             }
             throw error;
         }
@@ -130,7 +130,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
+            failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile", error);
         }
         throw error;
     }
@@ -140,7 +140,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
         }
         catch (error) {
             if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-                failWakeflowStaticMaterializationPreview("profile", `$request.hostProfiles/${index}`);
+                failWakeflowStaticMaterializationPreview("profile", `$request.hostProfiles/${index}`, error);
             }
             throw error;
         }
@@ -151,7 +151,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(value) {
     catch (error) {
         if (error instanceof WakeflowGitignoreBodyAuthorityError ||
             error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-            failWakeflowStaticMaterializationPreview("profile", "$request.hostProfiles");
+            failWakeflowStaticMaterializationPreview("profile", "$request.hostProfiles", error);
         }
         throw error;
     }
@@ -196,7 +196,7 @@ function digest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error) {
-            failWakeflowStaticMaterializationPreview("input", path);
+            failWakeflowStaticMaterializationPreview("input", path, error);
         }
         throw error;
     }
@@ -224,7 +224,7 @@ function parseStep(value, index) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowStaticMaterializationPreview("input", error.path);
+            failWakeflowStaticMaterializationPreview("input", error.path, error);
         }
         throw error;
     }
@@ -272,7 +272,7 @@ export function parseWakeflowStaticMaterializationPreview(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError) {
-            failWakeflowStaticMaterializationPreview("input", error.path);
+            failWakeflowStaticMaterializationPreview("input", error.path, error);
         }
         throw error;
     }

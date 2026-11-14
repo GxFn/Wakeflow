@@ -19,8 +19,8 @@ export class DemandEventSourcingCommandHandlerError extends Error {
     code = "wakeflow-demand-event-sourcing-command-handler";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -33,8 +33,8 @@ const OPTION_FIELDS = new Set([
     "signal",
 ]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
-function fail(reason, path) {
-    throw new DemandEventSourcingCommandHandlerError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingCommandHandlerError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRepository(value) {
     if (typeof value !== "object" ||
@@ -51,7 +51,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "commitId") ||
@@ -65,7 +65,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("input", "$/commitId");
+            fail("input", "$/commitId", error);
         throw error;
     }
     const expected = record.expectedStreamRevision;
@@ -84,7 +84,7 @@ function parseOptions(value) {
         }
         catch (error) {
             if (error instanceof PassiveOwnDataError)
-                fail("input", "$/idempotency");
+                fail("input", "$/idempotency", error);
             throw error;
         }
         if (Object.keys(bound).sort().join(",") !== "key,requestDigest" ||
@@ -98,7 +98,7 @@ function parseOptions(value) {
         }
         catch (error) {
             if (error instanceof Sha256Error)
-                fail("input", "$/idempotency/requestDigest");
+                fail("input", "$/idempotency/requestDigest", error);
             throw error;
         }
         idempotency = Object.freeze({ key: bound.key, requestDigest });
@@ -109,7 +109,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamCommitError)
-            fail("input", "$/writer");
+            fail("input", "$/writer", error);
         throw error;
     }
     return Object.freeze({
@@ -183,7 +183,7 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
     }
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError) {
-            fail("input", "$command");
+            fail("input", "$command", error);
         }
         throw error;
     }
@@ -247,7 +247,7 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
     }
     catch (error) {
         if (error instanceof DemandEventSourcingDecisionError) {
-            fail("decision-rejected", "$command");
+            fail("decision-rejected", "$command", error);
         }
         throw error;
     }
@@ -265,7 +265,7 @@ export async function executeDemandEventSourcingCommand(repository, commandValue
     }
     catch (error) {
         if (error instanceof DemandEventStreamCommitError) {
-            fail("decision-rejected", "$command");
+            fail("decision-rejected", "$command", error);
         }
         throw error;
     }

@@ -12,16 +12,16 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
     code = "wakeflow-host-maintenance-capability";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
-function fail(reason, path) {
-    throw new WakeflowHostMaintenanceCapabilityError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowHostMaintenanceCapabilityError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 验证一次执行所提供的唯一 capability 与当前宿主精确对应。 */
 export function assertWakeflowHostMaintenanceCapability(value, expectedHostId) {
@@ -31,7 +31,7 @@ export function assertWakeflowHostMaintenanceCapability(value, expectedHostId) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", error.path);
+            fail("input", error.path, error);
         throw error;
     }
     if (!Object.isFrozen(value) ||

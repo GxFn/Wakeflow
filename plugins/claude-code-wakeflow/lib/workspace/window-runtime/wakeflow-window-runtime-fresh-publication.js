@@ -38,14 +38,14 @@ export class WakeflowFreshWindowRuntimePublicationError extends Error {
     code = "wakeflow-fresh-window-runtime-publication";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowFreshWindowRuntimePublicationError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowFreshWindowRuntimePublicationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function admitAuthorityOperations(authority) {
     try {
@@ -58,7 +58,7 @@ function admitAuthorityOperations(authority) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("authority", "$resourceDeclarations");
+            fail("authority", "$resourceDeclarations", error);
         }
         throw error;
     }
@@ -70,7 +70,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (!Object.hasOwn(record, "recoveringFreshPublication") ||
@@ -108,7 +108,7 @@ async function assertRuntimeParent(root) {
         if (error instanceof WakeflowFreshWindowRuntimePublicationError)
             throw error;
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$runtimeRoot");
+            fail("root-scope", "$runtimeRoot", error);
         throw error;
     }
 }
@@ -141,8 +141,8 @@ async function ensureDirectory(root, resourcePath, recovering, signal) {
             catch (createError) {
                 if (createError instanceof DurableDirectoryMaterializationError) {
                     if (createError.reason === "aborted")
-                        fail("aborted", "$signal");
-                    fail("operation-failure", `$layout/${resourcePath}`);
+                        fail("aborted", "$signal", createError);
+                    fail("operation-failure", `$layout/${resourcePath}`, error);
                 }
                 throw createError;
             }
@@ -150,7 +150,7 @@ async function ensureDirectory(root, resourcePath, recovering, signal) {
         if (error instanceof WakeflowFreshWindowRuntimePublicationError)
             throw error;
         if (error instanceof RootedDirectoryError)
-            fail("root-scope", "$root");
+            fail("root-scope", "$root", error);
         throw error;
     }
 }
@@ -168,10 +168,10 @@ async function readPrivateDirectory(root, resourcePath, maximumEntries, signal) 
             throw error;
         if (error instanceof StableDirectoryReadError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("prefix-conflict", `$inventory/${resourcePath}`);
+                fail("root-scope", "$root", error);
+            fail("prefix-conflict", `$inventory/${resourcePath}`, error);
         }
         throw error;
     }
@@ -205,10 +205,10 @@ async function recoverProjectionStages(root, authority, signal) {
             throw error;
         if (error instanceof DurableAtomicFileStageRecoveryError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "root-scope")
-                fail("root-scope", "$root");
-            fail("prefix-conflict", "$projectionStages");
+                fail("root-scope", "$root", error);
+            fail("prefix-conflict", "$projectionStages", error);
         }
         throw error;
     }
@@ -242,17 +242,17 @@ async function inspectProjectionInventory(root, authority, signal) {
         }
         catch (error) {
             if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
-                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`, error);
             }
             if (error instanceof StrictTextFileError) {
-                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`, error);
             }
             if (error instanceof StableFileReadError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 if (error.reason === "root-scope")
-                    fail("root-scope", "$root");
-                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`);
+                    fail("root-scope", "$root", error);
+                fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`, error);
             }
             throw error;
         }
@@ -282,19 +282,19 @@ async function createMissingProjections(root, authority, current, signal) {
         catch (error) {
             if (error instanceof DurableAtomicFileWriteError) {
                 if (error.reason === "aborted")
-                    fail("aborted", "$signal");
+                    fail("aborted", "$signal", error);
                 if (error.reason === "capacity")
-                    fail("capacity", "$projectionWrite");
+                    fail("capacity", "$projectionWrite", error);
                 if (error.reason === "root-scope")
-                    fail("root-scope", "$root");
+                    fail("root-scope", "$root", error);
                 if (error.reason === "commit-uncertain" ||
                     error.reason === "durability-failure" ||
                     error.reason === "stage-cleanup-failure" ||
                     error.reason === "stage-recovery-required" ||
                     error.reason === "close-failure") {
-                    fail("recovery-required", "$projectionWrite");
+                    fail("recovery-required", "$projectionWrite", error);
                 }
-                fail("operation-failure", "$projectionWrite");
+                fail("operation-failure", "$projectionWrite", error);
             }
             throw error;
         }
@@ -321,7 +321,7 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
             error instanceof WakeflowWindowRuntimeDesiredTopologyError ||
             error instanceof WakeflowWorkspaceHostResourceProfileError ||
             error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError) {
-            fail("authority", error.path);
+            fail("authority", error.path, error);
         }
         throw error;
     }
@@ -369,7 +369,7 @@ export async function publishFreshWakeflowWindowRuntime(rootValue, configValue, 
         }
         catch (error) {
             if (error instanceof RootedDirectoryError) {
-                fail("root-scope", "$root");
+                fail("root-scope", "$root", error);
             }
             throw error;
         }

@@ -28,13 +28,13 @@ export class DemandResultReviewSnapshotError extends Error {
     name = "DemandResultReviewSnapshotError";
     code = "wakeflow-demand-result-review-snapshot";
     reason;
-    constructor(reason) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
     }
 }
-function fail(reason) {
-    throw new DemandResultReviewSnapshotError(reason);
+function fail(reason, cause) {
+    throw new DemandResultReviewSnapshotError(reason, cause === undefined ? undefined : { cause });
 }
 function parseSignal(value) {
     let record;
@@ -266,7 +266,7 @@ export async function readDemandResultReviewSnapshot(rootValue, options) {
             if (error.reason === "stream" || error.reason === "not-found") {
                 fail("stream");
             }
-            fail("operation-failure");
+            fail("operation-failure", error);
         }
         throw error;
     }
@@ -300,12 +300,12 @@ export async function readArchivedDemandResultReviewSnapshot(payloadRootValue, o
                 fail("input");
             if (ARCHIVED_STREAM_FAILURES.has(error.reason))
                 fail("stream");
-            fail("operation-failure");
+            fail("operation-failure", error);
         }
         if (error instanceof DemandEventSourcingRepositoryError) {
             if (error.reason === "stream" || error.reason === "not-found")
                 fail("stream");
-            fail("operation-failure");
+            fail("operation-failure", error);
         }
         throw error;
     }

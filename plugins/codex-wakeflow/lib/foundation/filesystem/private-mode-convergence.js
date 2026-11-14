@@ -33,14 +33,14 @@ export class PrivateModeConvergenceError extends Error {
     code = "wakeflow-private-mode-convergence";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new PrivateModeConvergenceError(reason, path);
+function fail(reason, path, cause) {
+    throw new PrivateModeConvergenceError(reason, path, cause === undefined ? undefined : { cause });
 }
 function currentUserId() {
     return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
@@ -78,7 +78,7 @@ function snapshotOf(value, errorPath) {
     }
     catch (error) {
         if (error instanceof FileNodeSnapshotError)
-            fail("resource-changed", errorPath);
+            fail("resource-changed", errorPath, error);
         throw error;
     }
 }
@@ -87,8 +87,8 @@ async function statHandle(handle, errorPath) {
     try {
         value = await handle.stat({ bigint: true });
     }
-    catch {
-        fail("resource-changed", errorPath);
+    catch (cause) {
+        fail("resource-changed", errorPath, cause);
     }
     return snapshotOf(value, errorPath);
 }
@@ -113,13 +113,13 @@ async function inspectPath(root, resourcePath, errorPath) {
     catch (error) {
         if (error instanceof RootedDirectoryError) {
             if (error.reason === "resource-path")
-                fail("input", errorPath);
+                fail("input", errorPath, error);
             if (error.reason === "resource-not-found" ||
                 error.reason === "resource-changed" ||
                 error.reason === "resource-alias") {
-                fail("resource-changed", errorPath);
+                fail("resource-changed", errorPath, error);
             }
-            fail("root-scope", errorPath);
+            fail("root-scope", errorPath, error);
         }
         throw error;
     }
@@ -156,9 +156,9 @@ export async function convergePrivateNodeMode(root, resourcePath, expected, opti
             throw error;
         const code = readNodeSystemErrorCode(error);
         if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-            fail("resource-changed", errorPath);
+            fail("resource-changed", errorPath, error);
         }
-        fail("chmod-failure", errorPath);
+        fail("chmod-failure", errorPath, error);
     }
     try {
         const opened = await statHandle(handle, errorPath);
@@ -170,8 +170,8 @@ export async function convergePrivateNodeMode(root, resourcePath, expected, opti
         try {
             await handle.chmod(target);
         }
-        catch {
-            fail("chmod-failure", errorPath);
+        catch (cause) {
+            fail("chmod-failure", errorPath, cause);
         }
         const hardened = await statHandle(handle, errorPath);
         if (!sameFileNodeIdentity(hardened, observed.node) || hardened.permissionBits !== target) {
@@ -181,8 +181,8 @@ export async function convergePrivateNodeMode(root, resourcePath, expected, opti
             try {
                 await handle.sync();
             }
-            catch {
-                fail("chmod-failure", errorPath);
+            catch (cause) {
+                fail("chmod-failure", errorPath, cause);
             }
         }
     }

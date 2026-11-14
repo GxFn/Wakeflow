@@ -10,14 +10,14 @@ export class WakeflowWindowHostBindingIdError extends Error {
     code = "wakeflow-window-host-binding-id";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowWindowHostBindingIdError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowWindowHostBindingIdError(reason, path, cause === undefined ? undefined : { cause });
 }
 /** 严格解析一个 Window Host Binding 代际 ID。 */
 export function parseWakeflowWindowHostBindingId(value, path = "$bindingId") {
@@ -29,7 +29,7 @@ export function parseWakeflowWindowHostBindingId(value, path = "$bindingId") {
     }
     catch (error) {
         if (error instanceof UuidV4Error)
-            fail("format", path);
+            fail("format", path, error);
         throw error;
     }
     return value;
@@ -42,7 +42,7 @@ export function createWakeflowWindowHostBindingId(uuidFactory) {
     }
     catch (error) {
         if (error instanceof UuidV4Error || error instanceof WakeflowWindowHostBindingIdError) {
-            fail("factory", "$uuidFactory");
+            fail("factory", "$uuidFactory", error);
         }
         throw error;
     }

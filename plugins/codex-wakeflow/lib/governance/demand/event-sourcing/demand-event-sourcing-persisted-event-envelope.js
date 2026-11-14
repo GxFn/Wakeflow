@@ -33,15 +33,15 @@ export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
     code = "wakeflow-demand-event-sourcing-persisted-event-envelope";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
 const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA, [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA]);
-function fail(reason, path) {
-    throw new DemandEventSourcingPersistedEventEnvelopeError(reason, path);
+function fail(reason, path, cause) {
+    throw new DemandEventSourcingPersistedEventEnvelopeError(reason, path, cause === undefined ? undefined : { cause });
 }
 function parseId(value, kind, path) {
     try {
@@ -49,7 +49,7 @@ function parseId(value, kind, path) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError)
-            fail("identifier", path);
+            fail("identifier", path, error);
         throw error;
     }
 }
@@ -64,7 +64,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", error.path);
+            fail("json", error.path, error);
         throw error;
     }
     const result = validateWire(json);
@@ -77,7 +77,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof UtcInstantError)
-            fail("time", "$/recordedAt");
+            fail("time", "$/recordedAt", error);
         throw error;
     }
     let data;
@@ -86,7 +86,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof JsonValueError)
-            fail("json", "$/data");
+            fail("json", "$/data", error);
         throw error;
     }
     if (!isJsonObject(data)) {
@@ -98,7 +98,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("digest", "$/resultingStateDigest");
+            fail("digest", "$/resultingStateDigest", error);
         throw error;
     }
     let resultingStateModelVersion;
@@ -107,7 +107,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof DemandEventSourcingStateVersionError) {
-            fail("state-version", "$/resultingStateModelVersion");
+            fail("state-version", "$/resultingStateModelVersion", error);
         }
         throw error;
     }
@@ -117,7 +117,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
-            fail("revision", "$/streamRevision");
+            fail("revision", "$/streamRevision", error);
         }
         throw error;
     }
@@ -145,7 +145,7 @@ export function parseDemandEventSourcingPersistedEventEnvelopeDocument(text) {
     }
     catch (error) {
         if (error instanceof DeterministicJsonDocumentError) {
-            fail("representation", "$event");
+            fail("representation", "$event", error);
         }
         throw error;
     }

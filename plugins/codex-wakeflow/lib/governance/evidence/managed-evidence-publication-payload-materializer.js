@@ -29,8 +29,8 @@ export class ManagedEvidencePublicationPayloadMaterializationError extends Error
     code = "wakeflow-managed-evidence-publication-payload-materialization";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
@@ -38,8 +38,8 @@ export class ManagedEvidencePublicationPayloadMaterializationError extends Error
 const PAYLOAD_REF = parsePortableResourcePath(MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME);
 const CONTENT_REF = parsePortableResourcePath("content");
 const PAYLOAD_CONTENT_REF = parsePortableResourcePath(`${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/content`);
-function fail(reason, path) {
-    throw new ManagedEvidencePublicationPayloadMaterializationError(reason, path);
+function fail(reason, path, cause) {
+    throw new ManagedEvidencePublicationPayloadMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value, path) {
     if (typeof value !== "object" ||
@@ -56,7 +56,7 @@ function parseOptions(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$options");
+            fail("input", "$options", error);
         throw error;
     }
     if (Object.keys(record).some((key) => key !== "signal") ||
@@ -75,7 +75,7 @@ function parseTransaction(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionError) {
-            fail("input", "$transaction");
+            fail("input", "$transaction", error);
         }
         throw error;
     }
@@ -86,7 +86,7 @@ function parseRecordPlan(value) {
     }
     catch (error) {
         if (error instanceof ManagedEvidenceRecordTreePlanError) {
-            fail(error.reason === "capacity" ? "capacity" : "input", "$plan");
+            fail(error.reason === "capacity" ? "capacity" : "input", "$plan", error);
         }
         throw error;
     }
@@ -139,7 +139,7 @@ function mapDirectoryError(error) {
         error.reason === "close-failure") {
         fail("recovery-required", "$payload");
     }
-    fail("operation-failure", "$payload");
+    fail("operation-failure", "$payload", error);
 }
 async function ensurePayloadRoot(demandRoot, plan, progress, signal) {
     const payloadRoot = joinDirectoryTreeCandidatePath(plan.candidateRootPath, PAYLOAD_REF);
@@ -183,7 +183,7 @@ function mapCopyError(error) {
         error.reason === "cleanup-failure") {
         fail("stage-conflict", "$payload");
     }
-    fail("operation-failure", "$payload");
+    fail("operation-failure", "$payload", error);
 }
 async function materializeFilePayload(sourceRoot, demandRoot, transaction, plan, progress, signal) {
     const payloadRoot = await ensurePayloadRoot(demandRoot, plan, progress, signal);
@@ -234,7 +234,7 @@ function mapProjectionWriteError(error) {
         error.reason === "close-failure") {
         fail("recovery-required", "$payload");
     }
-    fail("operation-failure", "$payload");
+    fail("operation-failure", "$payload", error);
 }
 /** 引用类来源：从 Manifest 来源重建投影字节，核对清单里的 content 身份后原子写入。 */
 async function materializeProjectionPayload(demandRoot, transaction, plan, progress, signal) {
@@ -281,9 +281,9 @@ async function openTreeSource(sourceRoot, transaction) {
             if (error.reason === "resource-not-found" ||
                 error.reason === "ancestor-symlink" ||
                 error.reason === "ancestor-type") {
-                fail("source-changed", "$source");
+                fail("source-changed", "$source", error);
             }
-            fail("source-root-scope", "$sourceRoot");
+            fail("source-root-scope", "$sourceRoot", error);
         }
         throw error;
     }
@@ -312,7 +312,7 @@ async function openTreeSource(sourceRoot, transaction) {
             throw error;
         }
         if (error instanceof RootedDirectoryError) {
-            fail("source-root-scope", "$sourceRoot");
+            fail("source-root-scope", "$sourceRoot", error);
         }
         throw error;
     }
@@ -333,7 +333,7 @@ function mapTransferError(error) {
     if (error.reason === "candidate-conflict") {
         fail("stage-conflict", "$payload");
     }
-    fail("operation-failure", "$payload");
+    fail("operation-failure", "$payload", error);
 }
 async function materializeTreePayload(sourceRoot, demandRoot, transaction, plan, signal) {
     const treeRoot = await openTreeSource(sourceRoot, transaction);
@@ -350,7 +350,7 @@ async function materializeTreePayload(sourceRoot, demandRoot, transaction, plan,
         }
         catch (error) {
             if (error instanceof LoadedArtifactTreeTransferPlanError) {
-                fail(error.reason === "capacity" ? "capacity" : "input", "$plan");
+                fail(error.reason === "capacity" ? "capacity" : "input", "$plan", error);
             }
             throw error;
         }

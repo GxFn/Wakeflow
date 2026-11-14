@@ -42,14 +42,14 @@ export class WakeflowManagedSupportRootMaterializationError extends Error {
     code = "wakeflow-managed-support-root-materialization";
     reason;
     path;
-    constructor(reason, path) {
-        super(ERROR_MESSAGES[reason]);
+    constructor(reason, path, options) {
+        super(ERROR_MESSAGES[reason], options);
         this.reason = reason;
         this.path = path;
     }
 }
-function fail(reason, path) {
-    throw new WakeflowManagedSupportRootMaterializationError(reason, path);
+function fail(reason, path, cause) {
+    throw new WakeflowManagedSupportRootMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function isAbortSignal(value) {
     return (typeof value === "object" &&
@@ -63,7 +63,7 @@ function parseDigest(value, path) {
     }
     catch (error) {
         if (error instanceof Sha256Error)
-            fail("input", path);
+            fail("input", path, error);
         throw error;
     }
 }
@@ -74,7 +74,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof PassiveOwnDataError)
-            fail("input", "$request");
+            fail("input", "$request", error);
         throw error;
     }
     const required = [
@@ -97,7 +97,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigError)
-            fail("config", error.path);
+            fail("config", error.path, error);
         throw error;
     }
     const configDigest = parseDigest(record.expectedConfigDigest, "$request.expectedConfigDigest");
@@ -110,7 +110,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path);
+            fail("profile", error.path, error);
         }
         throw error;
     }
@@ -120,7 +120,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
-            fail("input", "$request.surfaceId");
+            fail("input", "$request.surfaceId", error);
         }
         throw error;
     }
@@ -137,7 +137,7 @@ function parseRequest(value) {
     }
     catch (error) {
         if (error instanceof WakeflowResourceProcessingContractError) {
-            fail("catalog", "$request.expectedCatalogDigest");
+            fail("catalog", "$request.expectedCatalogDigest", error);
         }
         throw error;
     }
@@ -182,7 +182,7 @@ async function placementFor(workspaceRoot, request) {
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("placement", error.path);
+            fail("placement", error.path, error);
         }
         throw error;
     }
@@ -204,7 +204,7 @@ async function openSupportRoot(workspaceRoot, absolutePath) {
     }
     catch (error) {
         if (error instanceof RootedDirectoryError)
-            fail("placement", "$root");
+            fail("placement", "$root", error);
         throw error;
     }
 }
@@ -262,8 +262,8 @@ async function ensureScaffold(supportRoot, relativePath, expectedUserId, signal)
     catch (error) {
         if (error instanceof DurableDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("effect", `$supportRoot/${relativePath}`);
+                fail("aborted", "$signal", error);
+            fail("effect", `$supportRoot/${relativePath}`, error);
         }
         throw error;
     }
@@ -299,7 +299,7 @@ export async function inspectWakeflowManagedSupportRoot(workspaceRootValue, requ
             }
             catch (error) {
                 if (error instanceof RootedDirectoryError)
-                    fail("placement", "$root");
+                    fail("placement", "$root", error);
                 throw error;
             }
             const entries = [];
@@ -352,15 +352,15 @@ export async function materializeWakeflowManagedSupportRoot(workspaceRootValue, 
     catch (error) {
         if (error instanceof AbsoluteDirectoryMaterializationError) {
             if (error.reason === "aborted")
-                fail("aborted", "$signal");
+                fail("aborted", "$signal", error);
             if (error.reason === "symlink" ||
                 error.reason === "not-directory" ||
                 error.reason === "alias" ||
                 error.reason === "scope" ||
                 error.reason === "path-changed") {
-                fail("placement", "$root");
+                fail("placement", "$root", error);
             }
-            fail("effect", "$root");
+            fail("effect", "$root", error);
         }
         throw error;
     }
@@ -381,7 +381,7 @@ export async function materializeWakeflowManagedSupportRoot(workspaceRootValue, 
     }
     catch (error) {
         if (error instanceof WakeflowConfigRootPlacementError) {
-            fail("placement", error.path);
+            fail("placement", error.path, error);
         }
         throw error;
     }

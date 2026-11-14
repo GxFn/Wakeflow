@@ -1,4 +1,5 @@
 import { readWakeflowConfigAuthoritySnapshot } from "../../../configuration/wakeflow-config-authority-snapshot.js";
+import type { PidOwnedNodeEvidence } from "../../../foundation/node/process-instance.js";
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
@@ -244,7 +245,11 @@ async function pendingEntries(root: RootedDirectory, ref: string, signal: AbortS
  * 按可重试冲突让调用方稍后再来；死写者留下的暂存由下一次同目标写入回收，守卫跳过且不删除；
  * 所有者未知时仍按残留保守拒绝。
  */
-function isDeadWriterStage(name: string, scope: "pod-publication" | "pod-lifecycle"): boolean {
+function isDeadWriterStage(
+  entry: Readonly<{ readonly name: string; readonly node: Readonly<PidOwnedNodeEvidence> }>,
+  scope: "pod-publication" | "pod-lifecycle",
+): boolean {
+  const name = entry.name;
   if (!hasDurableAtomicFileStagePrefix(name)) return false;
   let stage: Readonly<DurableAtomicFileStageAddress>;
   try {
@@ -253,7 +258,7 @@ function isDeadWriterStage(name: string, scope: "pod-publication" | "pod-lifecyc
     if (error instanceof DurableAtomicFileStageAddressError) return false;
     throw error;
   }
-  const owner = readDurableAtomicFileStageOwnerState(stage);
+  const owner = readDurableAtomicFileStageOwnerState(stage, entry.node);
   if (owner === "active") {
     fail("concurrency-conflict", `${scope}-in-flight`, "$board", { retryable: true });
   }
@@ -273,7 +278,7 @@ async function assertNoPendingPodMutation(
     signal,
   )) {
     if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
-      if (isDeadWriterStage(entry.name, "pod-publication")) continue;
+      if (isDeadWriterStage(entry, "pod-publication")) continue;
       fail("precondition-failed", "pod-publication-residue", "$pod");
     }
     const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
@@ -287,7 +292,7 @@ async function assertNoPendingPodMutation(
   }
   for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {
     if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
-      if (isDeadWriterStage(entry.name, "pod-lifecycle")) continue;
+      if (isDeadWriterStage(entry, "pod-lifecycle")) continue;
       fail("precondition-failed", "pod-lifecycle-residue", "$pod");
     }
     const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");

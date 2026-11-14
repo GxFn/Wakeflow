@@ -1,6 +1,15 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -11,6 +20,7 @@ import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wak
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
@@ -227,4 +237,124 @@ test("Public recovery consumes only an operation ID and its private intent", asy
   equal(recovered.next.frontier, null);
   equal(existsSync(path.join(absoluteRoot, "wakeflow.config.json")), true);
   equal(JSON.stringify(recovered).includes(absoluteRoot), false);
+});
+
+test("被中断的维护事务是另一版制品写的（open-items B8）：本构建读不了它的意图时，恢复以 maintenance-recovery-artifact-mismatch 说出那一版；写者戳相同或没有戳时仍是 intent", async (t) => {
+  const absoluteRoot = await fixture(t, "recover-other-build");
+  const selected = selection();
+  const preview = await executeCodexWakeflowMaintenance({
+    root: absoluteRoot,
+    action: "fresh-initialize",
+    mode: "preview",
+    request: { selection: selected },
+  });
+  if (preview.mode !== "preview" || preview.plan === null) {
+    throw new Error("Expected a ready recovery fixture plan.");
+  }
+  const executionPlan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
+  const olderBuild = {
+    version: "1.2.9",
+    manifestDigest: parseSha256Digest(`sha256:${"a".repeat(64)}`),
+  };
+  const thisBuild = {
+    version: "1.3.0",
+    manifestDigest: parseSha256Digest(`sha256:${"b".repeat(64)}`),
+  };
+  const intentFile = path.join(
+    absoluteRoot,
+    ".wakeflow-local",
+    "runtime",
+    "maintenance",
+    "transactions",
+    `${RECOVERY_OPERATION_ID}.intent.json`,
+  );
+  /** 留下一份只有意图的中断事务；`writer` 是写它的那一版制品的戳（null 即没有戳）。 */
+  const interrupt = async (writer: typeof olderBuild | null): Promise<void> => {
+    const rooted = await RootedDirectory.open(absoluteRoot);
+    const desiredConfig = compileWakeflowFreshConfigSelection(selected, {
+      workspaceRoot: rooted.absolutePath,
+    }).config;
+    const executionRequest = Object.freeze({
+      action: "fresh-initialize" as const,
+      desiredConfig,
+      currentHostProfile: codexWorkspaceHostResourceProfile,
+      hostProfiles: Object.freeze([
+        codexWorkspaceHostResourceProfile,
+        claudeCodeWorkspaceHostResourceProfile,
+      ]),
+    });
+    const interrupted = new Error("other-build test interruption");
+    try {
+      await rejects(
+        withWakeflowMaintenanceGate(
+          rooted,
+          {
+            expectedCoreLayoutInspectionDigest:
+              executionPlan.sharedPreview.coreLayoutInspectionDigest,
+            operationId: RECOVERY_OPERATION_ID,
+          },
+          async (context) => {
+            await publishWakeflowMaintenanceExecutionIntent(
+              rooted,
+              context,
+              createWakeflowMaintenanceExecutionIntent(
+                context.operationId,
+                executionPlan,
+                executionRequest,
+                desiredConfig,
+                writer ?? undefined,
+              ),
+            );
+            throw interrupted;
+          },
+        ),
+        (error: unknown) => error === interrupted,
+      );
+    } finally {
+      await rooted.close();
+    }
+    // 另一版制品的计划代码算出的摘要与本构建不同：把存下的 planDigest 换成别的值来模拟。
+    const stored = readFileSync(intentFile, "utf8");
+    const foreign = stored.replace(
+      `"planDigest": "${executionPlan.planDigest}"`,
+      `"planDigest": "sha256:${"f".repeat(64)}"`,
+    );
+    equal(foreign === stored, false, "the stored intent carries the plan digest");
+    writeFileSync(intentFile, foreign, { mode: 0o600 });
+  };
+  const recover = async (writer: typeof thisBuild | null) => {
+    try {
+      await executeCodexWakeflowMaintenance(
+        { root: absoluteRoot, mode: "recover", operationId: RECOVERY_OPERATION_ID },
+        { writer },
+      );
+    } catch (error: unknown) {
+      if (!isWakeflowError(error)) throw error;
+      return {
+        code: error.code,
+        reason: error.reason,
+        details: JSON.parse(JSON.stringify(error.details ?? null)) as unknown,
+      };
+    }
+    throw new Error("recover unexpectedly succeeded");
+  };
+
+  await interrupt(olderBuild);
+  // 本构建（另一份 manifest）恢复不了：说出写它的那一版。没有 manifest 的测试构建同样算"不是那一版"。
+  for (const running of [thisBuild, null]) {
+    deepEqual(await recover(running), {
+      code: "recovery-required",
+      reason: "maintenance-recovery-artifact-mismatch",
+      details: { operationId: RECOVERY_OPERATION_ID, writerVersion: "1.2.9" },
+    });
+  }
+  // 同一份制品也读不了：那是意图本身坏了，不是版本问题。
+  deepEqual(await recover(olderBuild), {
+    code: "recovery-required",
+    reason: "intent",
+    details: { operationId: RECOVERY_OPERATION_ID },
+  });
+  // 什么都没有被改动：意图还在，配置没有被写出。
+  equal(existsSync(intentFile), true);
+  equal(existsSync(path.join(absoluteRoot, "wakeflow.config.json")), false);
 });

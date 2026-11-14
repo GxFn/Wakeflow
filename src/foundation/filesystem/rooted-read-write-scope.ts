@@ -149,7 +149,7 @@ async function entriesOf(root: RootedDirectory, area: PortableResourcePath) {
       throw error;
     }
     if (stage.operation !== "create" || stage.mode !== 0o600) fail("unsafe");
-    const owner = readDurableAtomicFileStageOwnerState(stage);
+    const owner = readDurableAtomicFileStageOwnerState(stage, entry.node);
     // A live contender's in-flight latch or lease create stage is not residue (§13.161 F1).
     if (owner === "active") continue;
     if (owner !== "inactive") fail("recovery-required");

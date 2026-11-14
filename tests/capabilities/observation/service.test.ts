@@ -37,6 +37,10 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import {
+  isLocalFilesystemType,
+  readFilesystemTypeName,
+} from "../../../src/foundation/node/filesystem-type.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -2057,6 +2061,49 @@ test("不是工作区的目录（旧实现 T08）：status 是 precondition-fail
   }
 });
 
+test("配置版本不认识（open-items C7）：status 是 precondition-failed/config-version-unsupported 并带两个版本，reconcile 与 fresh-initialize 的预览都点名它，零写", {
+  timeout: 120_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const configPath = path.join(root, "wakeflow.config.json");
+  const current = readFileSync(configPath, "utf8");
+  const future = current.replace('"schemaVersion": 2', '"schemaVersion": 3');
+  equal(future === current, false, "fixture config carries schemaVersion 2");
+  writeFileSync(configPath, future, { mode: 0o600 });
+  const before = snapshotTree(root);
+  await rejects(
+    executeStatusRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK),
+    (error: unknown) => {
+      if (!(error instanceof WakeflowError)) return false;
+      equal(error.code, "precondition-failed");
+      equal(error.reason, "config-version-unsupported");
+      equal(error.path, "$config.schemaVersion");
+      deepEqual(plain(error.details), { found: "3", supported: "2" });
+      return true;
+    },
+  );
+  const reconcile = await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "preview",
+    request: {},
+  });
+  if (reconcile.mode !== "preview") throw new Error("Expected a preview.");
+  equal(reconcile.status, "blocked");
+  equal(reconcile.blockerCodes.includes("config-version-unsupported:3"), true);
+  equal(reconcile.blockerCodes.includes("current-config-unavailable"), true);
+  const fresh = await executeCodexWakeflowMaintenance({
+    root,
+    action: "fresh-initialize",
+    mode: "preview",
+    request: { selection: createMinimalWakeflowFreshConfigSelection() },
+  });
+  if (fresh.mode !== "preview") throw new Error("Expected a preview.");
+  equal(fresh.blockerCodes.includes("fresh-config-present"), true);
+  equal(fresh.blockerCodes.includes("config-version-unsupported:3"), true);
+  deepEqual(snapshotTree(root), before);
+});
+
 test("被打断的维护事务（旧实现 maintenance-gate，§13.129）：transactions 残留让 verify 的 local-layout 失败、status 记 maintenance 并指向维护；清掉后恢复", {
   timeout: 120_000,
 }, async () => {
@@ -2439,4 +2486,213 @@ test("artifact-older-than-stream 门（C11 版本轴）：规划提交盖上更�
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(planning);
   }
+});
+
+test("启动来源（open-items B14）：窗口的运行时身份只取进程启动的那条 SessionStart——compact 与 clear 的记录带着新观察器的摘要也不让旧窗口显得已经换代，resume 与没有来源的记录才算", {
+  timeout: 120_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const config = parseWakeflowConfig(
+    JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
+  );
+  const designWindow = config.topology.windows.find((window) => window.role === "design");
+  if (designWindow === undefined) throw new Error("Expected a design window.");
+  const SESSION = "claude-session-start-source-design";
+  const bindingsDirectory = path.join(
+    root,
+    ...wakeflowWindowHostBindingRootRef(claudeCodeWorkspaceHostResourceProfile).split("/"),
+  );
+  mkdirSync(bindingsDirectory, { recursive: true, mode: 0o700 });
+  writeFileSync(
+    path.join(bindingsDirectory, `${designWindow.windowId}.json`),
+    `${JSON.stringify(
+      {
+        kind: "WakeflowWindowHostBinding",
+        schemaVersion: 1,
+        programId: config.program.programId,
+        hostId: "claude-code",
+        windowId: designWindow.windowId,
+        bindingId: "window_binding_b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2",
+        handle: { kind: "claude-session", value: SESSION },
+        source: {
+          kind: "agent-host-create-result",
+          launchIntentDigest: `sha256:${"1".repeat(64)}`,
+          observedAt: "2026-09-18T07:59:00.000Z",
+        },
+        registeredAt: "2026-09-18T07:59:01.000Z",
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  );
+  const installed = `sha256:${"d".repeat(64)}`;
+  const older = `sha256:${"c".repeat(64)}`;
+  const start = async (
+    recordedAt: string,
+    artifactManifestDigest: string,
+    artifactVersion: string,
+    startSource: string | null,
+  ): Promise<void> => {
+    const rooted = await RootedDirectory.open(root);
+    try {
+      await writeHostHookObservation(rooted, {
+        hostId: "claude-code",
+        event: "session-start",
+        sessionId: SESSION,
+        cwd: root,
+        recordedAt: parseUtcInstant(recordedAt),
+        artifactManifestDigest: artifactManifestDigest as never,
+        artifactVersion,
+        startSource,
+      });
+    } finally {
+      await rooted.close();
+    }
+  };
+  const artifact = Object.freeze({
+    version: "1.2.0",
+    manifestDigest: installed as never,
+    readCurrentManifestDigest: () => installed as never,
+  });
+  const claudeProcess = Object.freeze({
+    ...CODEX_OBSERVATION_FACADE,
+    hostId: "claude-code",
+    artifact,
+    hosts: CODEX_OBSERVATION_FACADE.hosts.map((host) =>
+      Object.freeze({ ...host, artifact: host.hostId === "claude-code" ? artifact : null }),
+    ),
+  }) as typeof CODEX_OBSERVATION_FACADE;
+  const runtimeStatus = async (): Promise<string | null> => {
+    const status = await executeStatusRequest(claudeProcess, { root }, CLOCK);
+    const design = status.windows.find((window) => window.windowId === designWindow.windowId);
+    if (design === undefined) throw new Error("Expected the design window.");
+    return (plain(design.runtime) as { status: string } | null)?.status ?? null;
+  };
+
+  // 进程在旧制品下启动：stale。
+  await start("2026-09-18T09:00:00.000Z", older, "1.1.9", "startup");
+  equal(await runtimeStatus(), "stale");
+  // 之后的 compact 与 clear 由新装的观察器记下（摘要与版本都是新的），但宿主进程没有重启：仍是 stale。
+  await start("2026-09-18T09:10:00.000Z", installed, "1.2.0", "compact");
+  equal(await runtimeStatus(), "stale");
+  await start("2026-09-18T09:11:00.000Z", installed, "1.2.0", "clear");
+  equal(await runtimeStatus(), "stale");
+  // resume 是一个新的宿主进程：窗口不再是 stale。
+  await start("2026-09-18T09:20:00.000Z", installed, "1.2.0", "resume");
+  const resumed = await runtimeStatus();
+  equal(resumed === "stale", false, `after resume: ${resumed}`);
+  // 没有来源的记录（Codex、1.3.0 之前的记录）照旧算一次启动：之后一条旧制品的启动记录又让它 stale。
+  await start("2026-09-18T09:30:00.000Z", older, "1.1.9", null);
+  equal(await runtimeStatus(), "stale");
+});
+
+test("暂存前缀的残留（open-items B13）：verify 在 host-hook-channel 上点名 stage-residue，reconcile 把能退役的列进计划、apply 按节点精确删除后门恢复；暂存命名的目录不由 Wakeflow 删除", {
+  timeout: 120_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const hooksDirectory = path.join(root, ...hostHookObservationsRootRef("codex").split("/"));
+  mkdirSync(hooksDirectory, { recursive: true, mode: 0o700 });
+  // 名字畸形的暂存前缀文件：没有哪个写入器会写出它。
+  const malformed = path.join(hooksDirectory, ".wakeflow-atomic-v1-broken.tmp");
+  writeFileSync(malformed, "partial", { mode: 0o600 });
+  // 名字合法、形状不是观察器会留下的（replace），所有者进程早已不在。
+  const foreign = path.join(
+    hooksDirectory,
+    `.wakeflow-atomic-v1-replace-${"a".repeat(64)}-${"b".repeat(64)}-m600__99999999-0-00000000-0000-4000-8000-000000000002.tmp`,
+  );
+  writeFileSync(foreign, "partial", { mode: 0o600 });
+  // 暂存命名的目录：只点名，不删。
+  const directory = path.join(hooksDirectory, ".wakeflow-atomic-v1-directory");
+  mkdirSync(directory, { mode: 0o700 });
+
+  const channelOf = async () => {
+    const verified = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+    const channel = verified.gates.find((gate) => gate.name === "host-hook-channel");
+    return [channel?.status, channel?.code];
+  };
+  deepEqual(await channelOf(), ["fail", "codex:skipped-3,codex:stage-residue-3"]);
+
+  const request = { root, action: "reconcile", mode: "preview", request: {} } as const;
+  const preview = await executeCodexWakeflowMaintenance(request);
+  if (preview.mode !== "preview" || preview.planDigest === null) {
+    throw new Error("Expected a ready reconcile preview.");
+  }
+  deepEqual(plain(preview.plan), {
+    kind: "WakeflowHookStageResiduePlan",
+    schemaVersion: 1,
+    hosts: [{ hostId: "codex", retirable: 2, kept: 1 }],
+  });
+  // preview 零写。
+  equal(existsSync(malformed) && existsSync(foreign) && existsSync(directory), true);
+  const applied = await executeCodexWakeflowMaintenance({
+    ...request,
+    mode: "apply",
+    planDigest: preview.planDigest,
+  });
+  if (applied.mode !== "apply") throw new Error("Expected an apply result.");
+  deepEqual(plain(applied.stepReceipts), [
+    { kind: "WakeflowHookStageResidueReceipt", retired: 2, skipped: 0 },
+  ]);
+  equal(existsSync(malformed) || existsSync(foreign), false);
+  equal(existsSync(directory), true);
+  // 留下的目录仍被点名；reconcile 不再为它出这份计划。
+  deepEqual(await channelOf(), ["fail", "codex:skipped-1,codex:stage-residue-1"]);
+  const again = await executeCodexWakeflowMaintenance(request);
+  equal(
+    (plain(again.mode === "preview" ? again.plan : null) as { kind?: string } | null)?.kind ===
+      "WakeflowHookStageResiduePlan",
+    false,
+  );
+  rmSync(directory, { recursive: true });
+  deepEqual(await channelOf(), ["pass", null]);
+});
+
+test("非本地文件系统在维护预览里阻塞（open-items B11，ADR-0021）：工作区根与账本根各探一次，类型读不出不阻塞；真实探测认得本机的卷", {
+  timeout: 120_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const request = { root, action: "reconcile", mode: "preview", request: {} } as const;
+  const blockersWith = async (
+    readFilesystemType: (absolutePath: string) => Promise<string | null>,
+  ): Promise<readonly string[]> => {
+    const preview = await executeCodexWakeflowMaintenance(request, { readFilesystemType });
+    if (preview.mode !== "preview") throw new Error("Expected a preview.");
+    return preview.blockerCodes;
+  };
+  const probed: string[] = [];
+  // 两处都在网络卷上：各点名一次，带类型名。
+  deepEqual(
+    await blockersWith(async (absolutePath) => {
+      probed.push(path.relative(root, absolutePath) || ".");
+      return absolutePath === root ? "smbfs" : "nfs";
+    }),
+    ["filesystem-unsupported:smbfs", "ledger-filesystem-unsupported:nfs"],
+  );
+  equal(probed[0], ".");
+  equal(probed.length, 2);
+  // 只有账本根在别的卷上。
+  deepEqual(
+    await blockersWith(async (absolutePath) => (absolutePath === root ? "apfs" : "exfat")),
+    ["ledger-filesystem-unsupported:exfat"],
+  );
+  // 本地卷，或读不出类型（别的平台、探测失败）：不因此阻塞。
+  for (const type of ["apfs", "hfs", null]) {
+    const blockers = await blockersWith(async () => type);
+    equal(
+      blockers.some((code) => code.includes("filesystem-unsupported")),
+      false,
+      String(type),
+    );
+  }
+  // 真实探测：macOS 上测试目录在本地卷上，别的平台读不出；两种情况都不阻塞。
+  const real = await readFilesystemTypeName(root);
+  equal(real === null || isLocalFilesystemType(real), true, String(real));
+  if (process.platform === "darwin") equal(typeof real, "string");
+  const live = await executeCodexWakeflowMaintenance(request);
+  if (live.mode !== "preview") throw new Error("Expected a preview.");
+  equal(
+    live.blockerCodes.some((code) => code.includes("filesystem-unsupported")),
+    false,
+  );
 });

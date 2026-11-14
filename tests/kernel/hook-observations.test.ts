@@ -121,7 +121,7 @@ test("hook 观察记录：确定性标识、私有文件、按事件与会话有
   const limited = await readHostHookObservations(root, "claude-code", { limit: 1 });
   equal(limited.records.length, 1);
   const codex = await readHostHookObservations(root, "codex");
-  deepEqual(codex, { records: [], skipped: 0, unreadable: 0, complete: true });
+  deepEqual(codex, { records: [], skipped: 0, unreadable: 0, stageResidue: 0, complete: true });
 });
 
 test("hook 观察记录拒绝越界输入与同名不同内容", async (t) => {
@@ -216,7 +216,7 @@ test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写
     await readHostHookObservations(root, "claude-code", {
       limit: HOST_HOOK_RECORDS_MAXIMUM,
     }),
-    { records: [], skipped: 0, unreadable: 0, complete: true },
+    { records: [], skipped: 0, unreadable: 0, stageResidue: 0, complete: true },
   );
   // 中止不被当作"读不出"吞掉。
   await rejects(
@@ -826,7 +826,9 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   // 九分钟前的与刚创建的：可能属于仍在写的 hook，不动。
   place(stageName(3), new Date(reference - 9 * MINUTE));
   place(stageName(4), null);
-  // 够旧但所有者进程还活着（例如机器休眠时挂在写入中途的 hook）：不动。
+  // 名字里的 pid 现在有进程占着（这里是父进程），但那个进程是在这份暂存最后一次被写之后才启动的：pid 被
+  // 重用了，它不是创建者，照样退休（open-items B7）。创建者确实还活着的暂存（它在写之前就已经在运行）不动，
+  // 那条规则在 process-instance 的测试里用可控的启动时刻钉住。
   place(stageName(5, { pid: process.ppid }), ANCIENT);
   // 本写入器留不下的暂存形状与无法识别的名字：再旧也不修剪。暂存命名的目录与符号链接这里摆不了：
   // foundation 的原子写入在写前清点同目录的全部暂存命名条目，见到非普通文件就拒绝写入。
@@ -848,7 +850,6 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
       recordName(next),
       stageName(3),
       stageName(4),
-      stageName(5, { pid: process.ppid }),
       stageName(6, { operation: "replace" }),
       stageName(7, { mode: "644" }),
       "stray.txt",
@@ -860,7 +861,7 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
     inventory.records.map((record) => record.recordId),
     [first.record.recordId, linked.record.recordId, next.record.recordId],
   );
-  // 留下的三个写入器暂存文件不计；replace、m644、stray.txt 照计。
+  // 留下的两个写入器暂存文件不计；replace、m644、stray.txt 照计。
   equal(inventory.skipped, 3);
 
   // 幂等重写没有新证据落地，整条修剪路径跳过；下一次 created 才退休变旧的暂存文件。
@@ -872,7 +873,8 @@ test("被遗弃的暂存文件在下一次新落地记录时退休：只动够�
   equal(latest.disposition, "created");
   equal(existsSync(path.join(directory, stageName(3))), false);
   equal(existsSync(path.join(directory, stageName(4))), true);
-  equal(existsSync(path.join(directory, stageName(5, { pid: process.ppid }))), true);
+  // 被重用的 pid 名下的那份陈年暂存在第一轮就退休了。
+  equal(existsSync(path.join(directory, stageName(5, { pid: process.ppid }))), false);
 });
 
 test("有限结果明确报告不完整；损坏旧目录不会阻断新分片，未知文件保留", async (t) => {
@@ -964,6 +966,38 @@ test("模型标识是后加的可选键（open-items X28）：原样往返、不
     await rejects(
       writeHostHookObservation(root, observation(workspace, at, { event: "stop", model })),
       (error: unknown) => isWakeflowError(error) && error.reason === "hook-model",
+    );
+  }
+});
+
+test("启动来源是后加的可选键（open-items B14）：原样往返、不参与标识，没带与旧记录读成 null，不是小写标签的以 invalid-request 拒绝", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const at = "2026-11-13T04:00:00.000Z" as UtcInstant;
+  const plain = createHostHookObservation(observation(workspace, at, { event: "session-start" }));
+  equal(plain.startSource, null);
+  const started = await writeHostHookObservation(
+    root,
+    observation(workspace, at, { event: "session-start", startSource: "compact" }),
+  );
+  equal(started.record.startSource, "compact");
+  equal(started.record.recordId, plain.recordId, "来源不参与记录标识");
+  const inventory = await readHostHookObservations(root, "claude-code");
+  equal(inventory.records[0]?.startSource, "compact");
+  // 旧记录：没有这个键，读成 null。
+  const file = path.join(workspace, started.resourceRef);
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  equal(parsed.startSource, "compact");
+  delete parsed.startSource;
+  writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`);
+  equal((await readHostHookObservations(root, "claude-code")).records[0]?.startSource, null);
+  for (const startSource of ["Compact", "two words", "", "x".repeat(40)]) {
+    throws(
+      () =>
+        createHostHookObservation(
+          observation(workspace, at, { event: "session-start", startSource }),
+        ),
+      (error: unknown) => isWakeflowError(error) && error.reason === "hook-start-source",
+      startSource,
     );
   }
 });

@@ -2,11 +2,6 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  type DurableAtomicFileStageRecoveryReceipt,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   type DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteError,
@@ -91,30 +86,6 @@ export interface WakeflowPreparedMaintenanceJournalRetirementReceipt {
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly journalDigest: Sha256Digest;
   readonly retirement: Readonly<ExactRegularFileUnlinkReceipt>;
-}
-
-/** 对一个 exact journal target 执行关闭作用域的 Foundation stage 恢复。 */
-export async function recoverWakeflowMaintenanceJournalStages(
-  root: RootedDirectory,
-  operationIdValue: unknown,
-): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  const operationId = admittedOperationId(operationIdValue);
-  try {
-    const receipt = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      Object.freeze([wakeflowMaintenanceJournalRef(operationId)]),
-    );
-    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-      fail("recovery-required", "$journalStage");
-    }
-    return receipt;
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceJournalStoreError) throw error;
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      fail("recovery-required", "$journalStage");
-    }
-    throw error;
-  }
 }
 
 export type WakeflowMaintenanceJournalStoreErrorReason =

@@ -47,3 +47,13 @@ requirement、bug、supplement 新发布前必须有非空、可引用的顶层�
 修改入口、所属能力和治理模块，更新发布摘要上限与生成 Schema、所属 skills，重建两宿主制品。将真实协议取消、关闭信号、SIGKILL 候选残留、死锁、pod 交错、缺少验收及完整验收的正负用例纳入持续测试。小批次先 focused，再执行完整 `npm test`、双宿主 smoke 和差异检查。
 
 八批路线仍分批推进。版本 bump、提交、tag、发布、安装缓存刷新与不可逆外部操作维持各自授权边界。本记录不把全部 open-items 标记为完成。
+
+## 2026-11-13 补记：维护事务自己的中断出口（1.3.0 批 5，gate-log §13.242）
+
+本决定原来只管已发布 Demand 的候选残留。真实进程的中断矩阵（open-items B9）在维护 apply 上跑出三条没有公共出口的死路，补成和它同一种做法——只读识别、`reconcile` 返回有摘要的计划、apply 重新观察后按节点精确处理：
+
+1. **一个操作的 intent 与 journal 是同一个闭合恢复集合。** 两者同在 `transactions` 目录；此前各自闭合，进程死在 journal 的暂存已链接、尚未退役的那一刻，intent 的暂存恢复就把它当成集合外的条目拒绝，`recover` 永远失败。
+2. **没有操作可恢复的门残留由 `reconcile` 收场。** 进程死在拿到维护门之后、intent 发布之前（或 intent 的暂存写好、尚未链接），磁盘上只有一把已死进程的门锁和可能的孤儿暂存，没有 operation ID 可交给 `recover`。`reconcile` 的第一份计划 `WakeflowMaintenanceGateResiduePlan` 退役它们；属主还活着或说不清时以 `maintenance-gate-residue` 拒绝，不强行清理。
+3. **锁残留的退役认得自己的创建暂存。** 持有者死在锁已链接、暂存尚未退役时，退役先结算那份暂存，锁节点的链接数与 ctime 随之改变；此后只比节点身份（令牌、内容摘要、属主状态照旧核对）。这是 foundation 的锁，所有使用它的写者一并受益。
+
+同一批里 hook 目录的暂存前缀残留也走这条路（`WakeflowHookStageResiduePlan`，open-items B13）。被另一版制品中断的维护事务不在此列：它以 `maintenance-recovery-artifact-mismatch` 点名那一版，由用户用那一版恢复（B8），本构建不替它回滚或重放。

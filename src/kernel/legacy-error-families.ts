@@ -110,6 +110,7 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-maintenance-execution-preview": "precondition-failed",
     "wakeflow-maintenance-execution-transaction": "precondition-failed",
     "wakeflow-maintenance-gate": "precondition-failed",
+    "wakeflow-maintenance-gate-residue": "precondition-failed",
     "wakeflow-maintenance-journal": "precondition-failed",
     "wakeflow-maintenance-journal-store": "precondition-failed",
     "wakeflow-maintenance-operation-id": "precondition-failed",

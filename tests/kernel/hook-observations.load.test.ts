@@ -110,7 +110,7 @@ test("旧平铺目录的 16385 条近期有效记录可完整扫描，目标查�
     target.recordId,
   );
   const scan = await scanHostHookObservations(root, "codex", {}, () => {});
-  deepEqual(scan, { records: 16_385, skipped: 0, unreadable: 0 });
+  deepEqual(scan, { records: 16_385, skipped: 0, unreadable: 0, stageResidue: 0 });
   // Upgrading does not copy or rewrite an already durable legacy fact.
   const retry = await writeHostHookObservation(root, target);
   equal(retry.disposition, "current");

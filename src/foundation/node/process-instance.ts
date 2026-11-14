@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
@@ -117,4 +117,108 @@ export function recordedProcessIsInactive(
       current.birthDigest !== null &&
       recordedBirth !== current.birthDigest)
   );
+}
+
+// ---- 只凭 pid 记下所有者的残留（open-items B7） ---------------------------------------------
+
+/** 一个只凭 pid 记下所有者的残留（原子暂存文件、追加候选）的所有者状态。 */
+export type PidOwnerState = "active" | "inactive" | "unknown";
+
+/** 残留节点上的两项事实：谁建的（文件的属主）、最后一次写它是什么时候。 */
+export interface PidOwnedNodeEvidence {
+  readonly userId: bigint;
+  readonly modifiedAtNanoseconds: bigint;
+}
+
+/** 现在占着某个 pid 的进程：属主与启动时刻（毫秒，`ps` 只给到秒）。 */
+export interface ProcessHolderFacts {
+  readonly userId: number;
+  readonly startedAtMs: number;
+}
+
+export interface ObservePidOwnerOptions {
+  readonly now?: () => number;
+  /** 读出占着这个 pid 的进程的属主与启动时刻；读不出为 null。只供测试替换。 */
+  readonly readHolder?: (pid: number) => Readonly<ProcessHolderFacts> | null;
+}
+
+// 正在落盘的暂存只存在几毫秒；残留放了这么久才值得为它去问一次 `ps`。时间本身从不是死亡的证据，
+// 它只决定要不要去取更强的证据，顺带让争用路径上看到别的进程的在途暂存时不必起子进程。
+const PID_REUSE_CHECK_MINIMUM_AGE_MS = 60_000;
+// `ps` 的启动时刻只到秒；再留一点余量。
+const STARTED_AFTER_MARGIN_MS = 2_000;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const HOLDER_LINE =
+  /^\s*([0-9]+)\s+[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+([0-9]{1,2})\s+([0-9]{2}):([0-9]{2}):([0-9]{2})\s+([0-9]{4})$/u;
+
+/** `ps -o uid=,lstart=` 的一行（TZ=UTC、LC_ALL=C）；不是这个形状为 null。 */
+export function parseProcessHolderLine(line: string): Readonly<ProcessHolderFacts> | null {
+  const match = HOLDER_LINE.exec(line.trim());
+  if (match === null) return null;
+  const month = MONTHS.indexOf(match[2] ?? "");
+  const userId = Number(match[1]);
+  if (month < 0 || !Number.isSafeInteger(userId)) return null;
+  const startedAtMs = Date.UTC(
+    Number(match[7]),
+    month,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6]),
+  );
+  return Number.isFinite(startedAtMs) ? Object.freeze({ userId, startedAtMs }) : null;
+}
+
+function readProcessHolderSync(pid: number): Readonly<ProcessHolderFacts> | null {
+  if (process.platform !== "darwin" && process.platform !== "linux") return null;
+  try {
+    const output = execFileSync("ps", ["-p", String(pid), "-o", "uid=,lstart="], {
+      encoding: "utf8",
+      timeout: 2_000,
+      maxBuffer: 4096,
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LC_ALL: "C", TZ: "UTC" },
+    });
+    return parseProcessHolderLine(output);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 只凭 pid 记下所有者的残留，它的所有者还在不在。`kill(pid, 0)` 一项答不了两种情况：pid 被别的进程重用
+ * （答"在"，残留永远退不掉），以及那个进程属于别的用户（EPERM，答不出）。残留节点自己带着两项事实，足以
+ * 证明"现在占着这个 pid 的进程不是它的创建者"：
+ *
+ * - 属主不同：残留是属主 A 的进程建的，现在占着这个 pid 的进程属于 B——不是同一个进程。
+ * - 启动得更晚：创建者在最后一次写这个文件时必然已经在运行；现在占着这个 pid 的进程在那之后才启动
+ *   ——不是同一个进程。
+ *
+ * 两项都要读一次 `ps`，所以只在 pid 确实有人占着、并且（发不了信号，或残留已经放了一分钟以上）时才读；
+ * 读不出就维持原来的回答（能发信号为 active，否则 unknown）。没有节点事实时就是原来的 `kill(pid, 0)`。
+ */
+export function observePidOwnerSync(
+  pid: number,
+  node?: Readonly<PidOwnedNodeEvidence>,
+  options: Readonly<ObservePidOwnerOptions> = {},
+): PidOwnerState {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new TypeError("Invalid process identifier.");
+  let signalable = true;
+  try {
+    process.kill(pid, 0);
+  } catch (error: unknown) {
+    if (readNodeSystemErrorCode(error) === "ESRCH") return "inactive";
+    signalable = false;
+  }
+  const fallback: PidOwnerState = signalable ? "active" : "unknown";
+  if (node === undefined) return fallback;
+  const modifiedAtMs = Number(node.modifiedAtNanoseconds / 1_000_000n);
+  const aged = (options.now ?? Date.now)() - modifiedAtMs >= PID_REUSE_CHECK_MINIMUM_AGE_MS;
+  if (signalable && !aged) return fallback;
+  const holder = (options.readHolder ?? readProcessHolderSync)(pid);
+  if (holder === null) return fallback;
+  if (BigInt(holder.userId) !== node.userId) return "inactive";
+  return aged && holder.startedAtMs > modifiedAtMs + STARTED_AFTER_MARGIN_MS
+    ? "inactive"
+    : fallback;
 }

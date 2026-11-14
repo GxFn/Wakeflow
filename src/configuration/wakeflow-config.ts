@@ -50,6 +50,10 @@ export {
   WAKEFLOW_CONFIG_SCHEMA_ID,
   WAKEFLOW_CONFIG_SCHEMA_VERSION,
 } from "../contracts/vocabulary/wakeflow-config-identity.js";
+import {
+  WAKEFLOW_CONFIG_KIND,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "../contracts/vocabulary/wakeflow-config-identity.js";
 export const WAKEFLOW_ACTIVE_ROOT = ".wakeflow-active" as const;
 export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local" as const;
 export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze(["en", "zh-Hans"] as const);
@@ -262,7 +266,8 @@ export type WakeflowConfigErrorReason =
   | "identifier-collision"
   | "reference"
   | "topology"
-  | "placement";
+  | "placement"
+  | "version";
 
 const ERROR_MESSAGES = {
   "json-value": "Wakeflow config input is not passive JSON data.",
@@ -272,6 +277,7 @@ const ERROR_MESSAGES = {
   reference: "Wakeflow config contains an unresolved typed reference.",
   topology: "Wakeflow config topology relationships are inconsistent.",
   placement: "Wakeflow config contains a non-canonical placement.",
+  version: "Wakeflow config uses a schema version this build does not read.",
 } as const satisfies Readonly<Record<WakeflowConfigErrorReason, string>>;
 
 /** 配置内存模型失败的稳定、脱敏错误。 */
@@ -280,11 +286,18 @@ export class WakeflowConfigError extends Error {
   readonly code = "wakeflow-config" as const;
   readonly reason: WakeflowConfigErrorReason;
   readonly path: string;
+  /** `version` 时文件里写的 schemaVersion；其余原因为 null。 */
+  readonly schemaVersion: number | null;
 
-  constructor(reason: WakeflowConfigErrorReason, path: string) {
+  constructor(
+    reason: WakeflowConfigErrorReason,
+    path: string,
+    schemaVersion: number | null = null,
+  ) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
+    this.schemaVersion = schemaVersion;
   }
 }
 
@@ -538,6 +551,18 @@ function validatePodScopes(
   }
 }
 
+/** kind 是 Wakeflow 的配置而 schemaVersion 是另一个整数时返回那个整数；其余情况为 null。 */
+function foreignSchemaVersion(json: JsonValue): number | null {
+  if (typeof json !== "object" || json === null || Array.isArray(json)) return null;
+  const { kind, schemaVersion } = json as Readonly<Record<string, JsonValue>>;
+  return kind === WAKEFLOW_CONFIG_KIND &&
+    typeof schemaVersion === "number" &&
+    Number.isSafeInteger(schemaVersion) &&
+    schemaVersion !== WAKEFLOW_CONFIG_SCHEMA_VERSION
+    ? schemaVersion
+    : null;
+}
+
 /** 把任意内存值解析为严格、递归冻结的公开配置领域模型。 */
 export function parseWakeflowConfig(value: unknown): WakeflowConfigModel {
   let json: JsonValue;
@@ -546,6 +571,12 @@ export function parseWakeflowConfig(value: unknown): WakeflowConfigModel {
   } catch (error: unknown) {
     if (error instanceof JsonValueError) fail("json-value", error.path);
     throw error;
+  }
+  // 是 Wakeflow 的配置、只是版本不是本制品读的那一版（open-items C7）：单独说出来，不混在 schema 失败里。
+  // 旧格式不迁移（ADR-0018）；调用方据此告诉用户该换制品还是另起工作区。
+  const foreignVersion = foreignSchemaVersion(json);
+  if (foreignVersion !== null) {
+    throw new WakeflowConfigError("version", "$/schemaVersion", foreignVersion);
   }
   const result = validateWireConfig(json);
   if (!result.ok) fail("schema", result.path);

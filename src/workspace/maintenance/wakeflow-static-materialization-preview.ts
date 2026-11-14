@@ -187,6 +187,7 @@ async function configResourceExists(root: RootedDirectory): Promise<boolean> {
 async function currentSnapshot(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
+  blockers?: Set<string>,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot> | null> {
   if (!(await configResourceExists(root))) return null;
   try {
@@ -197,6 +198,10 @@ async function currentSnapshot(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
+      // 配置在、只是版本不是本制品读的那一版（open-items C7）：在"读不出"之外单独点名，带上文件里的版本。
+      if (error.reason === "config-version" && error.schemaVersion !== null) {
+        blockers?.add(`config-version-unsupported:${error.schemaVersion}`);
+      }
       return null;
     }
     throw error;
@@ -1133,7 +1138,7 @@ export async function previewWakeflowStaticMaterialization(
   }
   const blockers = new Set<string>();
   const steps: WakeflowStaticMaterializationStep[] = [];
-  const current = await currentSnapshot(rootValue, request.signal);
+  const current = await currentSnapshot(rootValue, request.signal, blockers);
   assertNotAborted(request.signal);
   let desired = request.desiredConfig;
 

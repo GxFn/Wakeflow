@@ -6,6 +6,7 @@ import {
   WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_DETACHED_CONFIG_FILE_REF,
   type WakeflowConfigAuthoritySnapshot,
+  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -304,7 +305,7 @@ async function readSnapshot(
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     const detached = error.reason === "source" ? await detachedSnapshotOrNull(root, signal) : null;
     if (detached !== null) return { snapshot: detached, detached: true };
-    fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+    failWakeflowConfigAuthority(error);
   }
 }
 
@@ -1683,6 +1684,7 @@ async function gateFacts(
       directory: host.directory,
       records: host.records,
       skipped: host.skipped,
+      stageResidue: host.stageResidue,
       writeFailures: host.writeFailures,
     })),
     windows: snapshot.model.topology.windows.map((window) => ({

@@ -1,6 +1,7 @@
 import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
+  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -224,7 +225,7 @@ async function openContext(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+      failWakeflowConfigAuthority(error);
     }
     throw error;
   }

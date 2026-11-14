@@ -487,6 +487,8 @@ export interface WorkspaceGateFacts {
     readonly directory: "absent" | "private" | "mode";
     readonly records: number;
     readonly skipped: number;
+    /** `skipped` 里占着原子暂存前缀的非记录条目数（B13）；省略即 0。 */
+    readonly stageResidue?: number;
     /** 观察器写失败留下的事故记录数（G8）：只作信息报出，不改变 verdict。 */
     readonly writeFailures: number;
   }>[];
@@ -790,8 +792,11 @@ function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const status = aggregate(statuses);
   const code = facts.hooks.flatMap((host) => {
     const hostCode = hookHostCode(host);
+    const stageResidue = host.stageResidue ?? 0;
     return [
       ...(hostCode === null ? [] : [`${host.hostId}:${hostCode}`]),
+      // 被跳过的条目里有多少占着原子暂存前缀（B13）：它们由 reconcile 列为可退役项，不必用户自己去找。
+      ...(stageResidue > 0 ? [`${host.hostId}:stage-residue-${stageResidue}`] : []),
       ...(host.writeFailures > 0 ? [`${host.hostId}:write-failures-${host.writeFailures}`] : []),
     ];
   });

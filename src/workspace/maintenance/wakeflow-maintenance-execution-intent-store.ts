@@ -5,10 +5,9 @@ import {
 } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  type DurableAtomicFileStageRecoveryReceipt,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+  parseWakeflowMaintenanceWriter,
+  type WakeflowMaintenanceWriter,
+} from "./wakeflow-maintenance-writer.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -279,32 +278,6 @@ async function resourceNodeOrNull(
   }
 }
 
-/** 对exact intent target执行关闭作用域的Foundation stage恢复。 */
-export async function recoverWakeflowMaintenanceExecutionIntentStages(
-  root: RootedDirectory,
-  operationIdValue: unknown,
-): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  const operationId = admittedOperationId(operationIdValue);
-  try {
-    const receipt = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      Object.freeze([wakeflowMaintenanceIntentRef(operationId)]),
-    );
-    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-      fail("recovery-required", "$intentStage");
-    }
-    return receipt;
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
-      throw error;
-    }
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      fail("recovery-required", "$intentStage");
-    }
-    throw error;
-  }
-}
-
 async function readIntentAtNode(
   root: RootedDirectory,
   operationId: WakeflowMaintenanceOperationId,
@@ -373,6 +346,43 @@ export async function readWakeflowMaintenanceExecutionIntent(
 }
 
 /** 读取可选intent；absent与unsafe source严格区分。 */
+/**
+ * 只读出意图文件里的写者戳（open-items B8）。一份本构建解析不了的意图（Schema、配置或计划代码在两版制品之间
+ * 变了）仍然说得出是哪一版制品写的：恢复据此告诉用户"用那一版去恢复"，而不是只报一个没有出口的 `intent`。
+ * 节点政策与大小上限同正常读取；文件不在、读不出、没有戳或戳不合文法都是 null。它不解析意图的其余部分，
+ * 也不授权任何执行。
+ */
+export async function peekWakeflowMaintenanceIntentWriter(
+  root: RootedDirectory,
+  operationId: WakeflowMaintenanceOperationId,
+): Promise<Readonly<WakeflowMaintenanceWriter> | null> {
+  try {
+    const resourcePath = wakeflowMaintenanceIntentRef(operationId);
+    const node = await resourceNodeOrNull(root, resourcePath);
+    if (
+      node === null ||
+      node.kind !== "file" ||
+      node.permissionBits !== 0o600 ||
+      node.linkCount !== 1n ||
+      node.userId !== currentUserId()
+    ) {
+      return null;
+    }
+    const read = await readDeterministicJsonFile(root, resourcePath, {
+      maximumBytes: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES,
+      expectedNode: node,
+    });
+    const value = read.value;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+    return parseWakeflowMaintenanceWriter(
+      (value as Readonly<Record<string, unknown>>).writer,
+      "$intent.writer",
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function readWakeflowMaintenanceExecutionIntentOrNull(
   root: RootedDirectory,
   operationIdValue: unknown,

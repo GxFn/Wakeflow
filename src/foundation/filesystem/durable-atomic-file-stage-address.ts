@@ -8,7 +8,7 @@ import {
   Sha256Error,
 } from "../crypto/sha256.js";
 import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
-import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import { observePidOwnerSync, type PidOwnedNodeEvidence } from "../node/process-instance.js";
 import { encodeUtf8 } from "../text/utf8.js";
 import {
   type PortableResourcePath,
@@ -242,19 +242,19 @@ export function releaseDurableAtomicFileStageAddress(
   ISSUED_STAGE_ADDRESSES.delete(value);
 }
 
-/** 保守判断暂存资源所有者状态；未知或仍在活动时，恢复流程都不得删除资源。 */
+/**
+ * 保守判断暂存资源所有者状态；未知或仍在活动时，恢复流程都不得删除资源。别的进程留下的暂存只在名字里
+ * 记着 pid：调用方把暂存节点自己的事实（属主、最后修改时刻）交进来时，pid 被重用或属于别的用户也判得出
+ * 所有者已经不在（open-items B7，规则见 `observePidOwnerSync`）；不给节点时就是 `kill(pid, 0)`。
+ */
 export function readDurableAtomicFileStageOwnerState(
   value: Readonly<DurableAtomicFileStageAddress>,
+  node?: Readonly<PidOwnedNodeEvidence>,
 ): DurableAtomicFileStageOwnerState {
   const address = parseDurableAtomicFileStageFileName(readAddressFileName(value));
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
     return ACTIVE_STAGE_TOKENS.has(address.token) ? "active" : "inactive";
   }
-  try {
-    process.kill(address.pid, 0);
-    return "active";
-  } catch (error: unknown) {
-    return readNodeSystemErrorCode(error) === "ESRCH" ? "inactive" : "unknown";
-  }
+  return observePidOwnerSync(address.pid, node);
 }

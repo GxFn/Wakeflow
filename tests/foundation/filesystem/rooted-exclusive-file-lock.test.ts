@@ -1,11 +1,22 @@
 import { equal } from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { hrtime } from "node:process";
 import { test } from "node:test";
 import { threadId } from "node:worker_threads";
 
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { computeDurableAtomicFileStageTargetDigest } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -296,6 +307,36 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
       "owner-active",
     );
     equal(existsSync(physicalLock), true);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("持有者死在锁已链接、创建暂存尚未退役的那一刻（open-items B9）：一次退役结算暂存并删掉锁", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-linked-stage-"));
+  mkdirSync(path.join(rootPath, "state"));
+  const physicalLock = path.join(rootPath, "state", "board.lock");
+  const text = rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "33333333-3333-4333-8333-333333333333",
+  });
+  writeFileSync(physicalLock, text, { mode: 0o600 });
+  const lockPath = parsePortableResourcePath("state/board.lock");
+  // 与 foundation 签发的暂存名同形：目标摘要、内容摘要、权限位、已死的属主。
+  const hex = (digest: string) => digest.slice("sha256:".length);
+  const stageName = `.wakeflow-atomic-v1-create-${hex(
+    computeDurableAtomicFileStageTargetDigest(lockPath),
+  )}-${hex(computeSha256Digest(new TextEncoder().encode(text)))}-m600__2147483647-0-44444444-4444-4444-8444-444444444444.tmp`;
+  linkSync(physicalLock, path.join(rootPath, "state", stageName));
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const observed = await inspectRootedExclusiveFileLock(root, lockPath);
+    if (observed.status !== "held") throw new Error("Expected held lock.");
+    equal(observed.ownerState, "inactive");
+    equal(observed.node.linkCount, 2n);
+    await retireRootedExclusiveFileLockResidue(root, lockPath, observed);
+    equal(readdirSync(path.join(rootPath, "state")).length, 0);
+    equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "absent");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

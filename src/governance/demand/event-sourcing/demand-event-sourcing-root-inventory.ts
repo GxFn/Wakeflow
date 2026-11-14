@@ -1,4 +1,5 @@
 import { types } from "node:util";
+import type { PidOwnedNodeEvidence } from "../../../foundation/node/process-instance.js";
 import {
   PassiveOwnDataError,
   parsePlainRecord,
@@ -366,7 +367,11 @@ async function inspectPermitPrompts(
  * 写者还活着 → 一次检查点正在落盘，按 source-changed 让调用方稍后重来；写者已死 → 残留由下一次
  * 同目标写入回收，这里容忍、不计入快照数也不删除；所有者未知或名字畸形 → 仍按 tree-shape 拒绝。
  */
-function isToleratedSnapshotStageResidue(name: string, path: string): boolean {
+function isToleratedSnapshotStageResidue(
+  name: string,
+  path: string,
+  node: Readonly<PidOwnedNodeEvidence>,
+): boolean {
   if (!hasDurableAtomicFileStagePrefix(name)) return false;
   let stage: Readonly<DurableAtomicFileStageAddress>;
   try {
@@ -375,7 +380,7 @@ function isToleratedSnapshotStageResidue(name: string, path: string): boolean {
     if (error instanceof DurableAtomicFileStageAddressError) fail("tree-shape", path);
     throw error;
   }
-  const owner = readDurableAtomicFileStageOwnerState(stage);
+  const owner = readDurableAtomicFileStageOwnerState(stage, node);
   if (owner === "active") fail("source-changed", path);
   if (owner === "unknown") fail("tree-shape", path);
   return true;
@@ -556,7 +561,7 @@ export async function inspectDemandEventSourcingRootInventory(
   let snapshotCount = 0;
   snapshots.entries.forEach((entry, index) => {
     assertFile(entry.node, `$snapshots/${index}`);
-    if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`)) return;
+    if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`, entry.node)) return;
     try {
       parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {

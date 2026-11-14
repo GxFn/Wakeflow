@@ -18,3 +18,9 @@
 移除本轮新增的双版本配置 Schema、升级 blocker/确认字段、旧 intent 特例和锁 v1 解析分支。调整所有真实消费者、生成合同、技能和测试；保留当前格式配置变更中断后的写入隔离与公开恢复回归。旧跨构建实验是历史证据，不再作为当前支持范围。
 
 现有测试区尚未执行原地升级；此前操作方的停写确认随该升级计划取消。新测试区不继承旧目录或记录。此前已存在的业务合同与恢复路径不因本决定做无关重写，也不据此宣称未来所有构建之间具有持久格式兼容性。
+
+## 2026-11-13 补记：不认识的配置版本是一个类型化的拒绝（1.3.0 批 5，gate-log §13.242）
+
+本决定的"旧格式不迁移"此前对用户表现为一串互不相干的失败：status 报配置不可用，reconcile 与 reconfigure 报 `current-config-unavailable`，fresh-initialize 报 `fresh-config-present`。现在一份 Wakeflow 配置的 `schemaVersion` 是本构建不认识的整数时，读配置的每个公共工具都以 `precondition-failed` / `config-version-unsupported` 拒绝，`details` 带发现的与支持的版本；维护预览在原有阻塞码之外列出 `config-version-unsupported:<found>`。不是 Wakeflow 配置、或版本不是整数的文件仍是原来的 schema 失败。
+
+出口只有文字：用写下它的那一版插件，或者把那个根和它的账本留作历史，在别处以自己的账本根 fresh-initialize。"保留旧账本的 fresh-initialize"没有做——它要让新工作区接管一个由别的格式写成的账本，与决定 2（新环境不继承旧目录或记录）冲突。

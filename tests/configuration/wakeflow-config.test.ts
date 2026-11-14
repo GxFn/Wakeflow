@@ -39,18 +39,32 @@ function isDeeplyFrozen(value: unknown): boolean {
   return Object.isFrozen(value) && Object.values(value).every((child) => isDeeplyFrozen(child));
 }
 
-test("only the current config baseline is admitted", () => {
+test("only the current config baseline is admitted, and another version of a Wakeflow config is named as such（open-items C7）", () => {
   for (const schemaVersion of [1, 3]) {
-    expectConfigError(
-      () =>
-        parseWakeflowConfig({
-          ...createMinimalWakeflowConfig(),
-          $schema: `urn:wakeflow:config:v${schemaVersion}`,
-          schemaVersion,
-        }),
-      "schema",
-    );
+    const attempt = () =>
+      parseWakeflowConfig({
+        ...createMinimalWakeflowConfig(),
+        $schema: `urn:wakeflow:config:v${schemaVersion}`,
+        schemaVersion,
+      });
+    expectConfigError(attempt, "version");
+    try {
+      attempt();
+    } catch (error: unknown) {
+      equal(error instanceof WakeflowConfigError && error.schemaVersion, schemaVersion);
+      equal(error instanceof WakeflowConfigError && error.path, "$/schemaVersion");
+    }
   }
+  // 不是整数的版本、不是 Wakeflow 配置的 kind：仍是 schema 失败，不冒充"别的版本"。
+  expectConfigError(
+    () => parseWakeflowConfig({ ...createMinimalWakeflowConfig(), schemaVersion: "3" }),
+    "schema",
+  );
+  expectConfigError(
+    () =>
+      parseWakeflowConfig({ ...createMinimalWakeflowConfig(), kind: "Other", schemaVersion: 3 }),
+    "schema",
+  );
 });
 
 function topology(value: Record<string, unknown>) {

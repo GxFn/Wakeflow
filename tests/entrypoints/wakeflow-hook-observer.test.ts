@@ -1321,3 +1321,45 @@ test("ADR-0023：已绑定会话的事件投影为 tmux 窗口状态；未绑定
   equal(throwing.code, null);
   equal(throwing.written.length, 1);
 });
+
+test("启动来源（open-items B14）：SessionStart 的 source 落进 session-start 记录，别的事件不记，不是标签的取值只把该字段降级为 null", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  const start = await observe(
+    "claude-code",
+    hookPayload("SessionStart", sessionId, fixture.workspace, fixture.transcriptPath, {
+      source: "compact",
+    }),
+  );
+  equal(start.code, null);
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  const prompt = await observe(
+    "claude-code",
+    hookPayload("UserPromptSubmit", sessionId, fixture.workspace, fixture.transcriptPath, {
+      prompt: "hello",
+      turn_id: "turn-a",
+      source: "compact",
+    }),
+  );
+  equal(prompt.code, null);
+  const facts = Object.fromEntries(
+    (await readBack(fixture.workspace, "claude-code")).records.map((record) => [
+      record.event,
+      record.startSource,
+    ]),
+  );
+  deepEqual(facts, { "session-start": "compact", "user-prompt-submit": null });
+
+  const other = createFixture(t);
+  for (const source of ["Two Words", 7, ["startup"]]) {
+    const outcome = await observe(
+      "claude-code",
+      hookPayload("SessionStart", sessionId, other.workspace, other.transcriptPath, { source }),
+    );
+    equal(outcome.code, null);
+  }
+  for (const record of (await readBack(other.workspace, "claude-code")).records) {
+    equal(record.event, "session-start");
+    equal(record.startSource, null);
+  }
+});

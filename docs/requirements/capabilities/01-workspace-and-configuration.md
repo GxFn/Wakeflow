@@ -235,3 +235,13 @@
 | 1.5 退出事务的前提阻塞与终态步 | `detach-pod-open:<podId>`（含该仓库的 worktree pod 未关闭；detach-workspace 对任何打开的 pod）、`detach-demand-active:<demandId>`（活动 Demand 有该仓库的目标；detach-workspace 对任何活动 Demand）、`detach-unknown-managed-body:<targetKey>`（正文未知即不碰，另一个工作区的块同样未知）、`detach-settings-unreadable:<root>`（Claude 设置文件读不出或不是 JSON）；阻塞让 preview `blocked`、`planDigest` 为 null，apply 重算同路得 `plan-blocked`。`detach-workspace` 的终态步 `retire-config` 把 `wakeflow.config.json` 改名为 `wakeflow.detached.json`（不删，留证据），结果带 `leftBehind: string[]`。`.wakeflow-active`、`.wakeflow-local`、账本、支撑面目录、worktree 检出、分支、插件级 hooks 一律不碰并列出。 |
 | 1.4 detached 终态的观察与只读校验 | `wakeflow.config.json` 不在而 `wakeflow.detached.json` 在：`wakeflow_status` 以该文件为只读来源报 `overall: "detached"`、`next` 无 owner；`wakeflow_verify` 不失败、同样报 detached；reconcile 与 reconfigure 的 preview 阻塞 `workspace-detached`；fresh-initialize 的 preview 阻塞 `detached-file-present`（用户先把 detached 文件移走再初始化）。 |
 | 文本与场景 | 根 README 与制品 README 加"停用 Wakeflow"一节（两条意图、会删什么、不会碰什么、detached 终态与重新启用），`commands/init.md` 一句指向，Controller 的 `workspace-and-windows.md` 把"删除被拒绝"改为"删除走 detach"；场景链末尾加 `card-11/detach-workspace`（25 → 26）。 |
+
+## 修订（2026-11-13，1.3.0 批 5：[open-items B8、B9、B11、B13、C7](../../references/open-items.md)，gate-log §13.242）
+
+原则：**维护 apply 无论死在哪一步，都有一次公共调用能把工作区带回 idle；带不回去时说出原因和该找谁。**
+
+| 项 | 修订后 |
+| --- | --- |
+| 1.4 reconcile 在布局维护之前的恢复计划 | 一次只出一份，按这个顺序：`WakeflowMaintenanceGateResiduePlan`（没有操作可恢复的维护门残留：已死进程的门锁与事务目录里的孤儿暂存；属主还活着或说不清时 apply 以 `maintenance-gate-residue` 拒绝）、`WakeflowDemandRuntimeRecoveryPlan`（已有）、`WakeflowHookStageResiduePlan`（hook 目录的暂存前缀残留）。都没有才是平常的布局维护。预览始终零写。 |
+| 1.5 中断事务的恢复 | 一个操作的 intent 与 journal 是同一个闭合的暂存恢复集合；被另一版制品中断的事务以 `maintenance-recovery-artifact-mismatch` 说出那一版（`details.writerVersion`），由用户用那一版恢复。 |
+| 1.2 / 1.3 预览的环境阻塞 | 工作区根或账本根不在本地卷（`apfs` / `hfs`）上：`filesystem-unsupported:<类型>` / `ledger-filesystem-unsupported:<类型>`。配置的 `schemaVersion` 是本构建不认识的整数：读配置的工具报 `config-version-unsupported`，预览列出 `config-version-unsupported:<found>`。 |

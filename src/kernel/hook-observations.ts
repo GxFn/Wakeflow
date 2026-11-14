@@ -144,6 +144,13 @@ export interface HostHookObservation {
    */
   readonly model: string | null;
   /**
+   * 宿主 hook 输入的 `source`（open-items B14）：这条 SessionStart 是怎么来的——Claude Code 的 `startup`、`resume`、
+   * `clear`、`compact`。前两种是一个新的宿主进程（插件与它的 MCP 服务随之重新加载），后两种是同一个进程里的
+   * 会话继续：只有前两种说明"这个窗口的运行时是在这一刻装载的"。别的事件、不报它的宿主（Codex）与早于本字段
+   * 的记录读成 null，按原来的口径当作一次启动。只是标签，不维护取值表。
+   */
+  readonly startSource: string | null;
+  /**
    * prompt 里的许可身份行带的标识（ADR-0027 决定 2）：`- permitId: <target-delivery 标识>`，按出现顺序、
    * 去重、至多 4 个。它让落地判定在宿主改动了文本、摘要对不上时仍能认出"这条许可的 prompt 到了这个
    * 会话"。没有身份行的 prompt 是空数组；其他事件与早于本字段的记录读成 null。
@@ -169,6 +176,7 @@ export interface HostHookObservationInput {
   readonly permissionMode?: string | null;
   readonly sessionTitle?: string | null;
   readonly model?: string | null;
+  readonly startSource?: string | null;
   readonly promptPermitIds?: readonly string[] | null;
   readonly promptCharacters?: number | null;
 }
@@ -197,6 +205,12 @@ export interface HostHookObservationInventory {
    * 记录，证据查询不该因它失败（§13.161 B5-1）。
    */
   readonly unreadable: number;
+  /**
+   * `skipped` 里占着 Wakeflow 原子暂存前缀、却不是本写入器会留下的那种暂存的条目数（open-items B13）：名字
+   * 畸形、别的暂存形状，或暂存命名的目录与链接。它们不是记录，verify 单独点名，reconcile 把其中能安全
+   * 退役的列进计划（`listHostHookStageResidue`）。
+   */
+  readonly stageResidue: number;
   /** False means the matching set exceeded limit; absence is then not evidence. */
   readonly complete: boolean;
 }
@@ -259,6 +273,7 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
   "permissionMode",
   "sessionTitle",
   "model",
+  "startSource",
   "promptPermitIds",
   "promptCharacters",
 ]);
@@ -325,6 +340,17 @@ function optionalPermissionMode(value: unknown, path: string): string | null {
 
 /** 模型标识是宿主给的标签：可打印、不带空白，至多 256 个字符（云提供方的 ARN 形式也在内）。 */
 const MODEL_LABEL_PATTERN = /^[!-~]{1,256}$/u;
+
+/** SessionStart 的来源是宿主给的小写标签（`startup`、`resume`、`clear`、`compact`，今后可能有新词）。 */
+const START_SOURCE_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
+
+function optionalStartSource(value: unknown, path: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string" || !START_SOURCE_PATTERN.test(value)) {
+    fail("invalid-request", "hook-start-source", path);
+  }
+  return value;
+}
 
 function optionalModel(value: unknown, path: string): string | null {
   if (value === null || value === undefined) return null;
@@ -464,6 +490,7 @@ export function createHostHookObservation(
     permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
     sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
     model: optionalModel(input.model, "$observation.model"),
+    startSource: optionalStartSource(input.startSource, "$observation.startSource"),
     promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
     promptCharacters: optionalPromptCharacters(
       input.promptCharacters,
@@ -476,6 +503,11 @@ export function createHostHookObservation(
     recordId: deriveHostHookObservationId(partial),
     ...partial,
   });
+}
+
+/** 后加的可选键：旧记录里没有它，读成 null；取值由 `createHostHookObservation` 核对。 */
+function optionalKey(object: JsonObject, key: (typeof OPTIONAL_RECORD_KEYS)[number]): JsonValue {
+  return object[key] ?? null;
 }
 
 /** 严格解析一条持久化记录；键集、摘要与标识必须自洽。 */
@@ -504,14 +536,15 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     promptDigest: object.promptDigest as Sha256Digest | null,
     lastAssistantMessageDigest: object.lastAssistantMessageDigest as Sha256Digest | null,
     transcriptRef: object.transcriptRef as string | null,
-    artifactManifestDigest: (object.artifactManifestDigest ?? null) as Sha256Digest | null,
-    artifactVersion: (object.artifactVersion ?? null) as string | null,
-    notificationType: (object.notificationType ?? null) as string | null,
-    permissionMode: (object.permissionMode ?? null) as string | null,
-    sessionTitle: (object.sessionTitle ?? null) as string | null,
-    model: (object.model ?? null) as string | null,
-    promptPermitIds: (object.promptPermitIds ?? null) as readonly string[] | null,
-    promptCharacters: (object.promptCharacters ?? null) as number | null,
+    artifactManifestDigest: optionalKey(object, "artifactManifestDigest") as Sha256Digest | null,
+    artifactVersion: optionalKey(object, "artifactVersion") as string | null,
+    notificationType: optionalKey(object, "notificationType") as string | null,
+    permissionMode: optionalKey(object, "permissionMode") as string | null,
+    sessionTitle: optionalKey(object, "sessionTitle") as string | null,
+    model: optionalKey(object, "model") as string | null,
+    startSource: optionalKey(object, "startSource") as string | null,
+    promptPermitIds: optionalKey(object, "promptPermitIds") as readonly string[] | null,
+    promptCharacters: optionalKey(object, "promptCharacters") as number | null,
   });
   if (record.recordId !== object.recordId) {
     fail("invalid-request", "hook-record-id", "$record.recordId");
@@ -626,7 +659,9 @@ function recognizedRecordLocation(
 function isAbandonedStage(entry: Readonly<StableDirectoryEntry>, cutoff: bigint): boolean {
   if (entry.node.modifiedAtNanoseconds >= cutoff) return false;
   const address = hostHookStageAddress(entry);
-  return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
+  return (
+    address !== null && readDurableAtomicFileStageOwnerState(address, entry.node) === "inactive"
+  );
 }
 
 const PROBE_FOUND = Symbol("probe-found");
@@ -957,15 +992,35 @@ export interface HostHookObservationScan {
   readonly records: number;
   readonly skipped: number;
   readonly unreadable: number;
+  readonly stageResidue: number;
 }
 
 /** 外来文件名：计入 skipped，不阻断证据查询。 */
 const FOREIGN = Symbol("foreign");
 /** 记录命名但读不出，或叶子位置上的目录 / 链接：可能藏着记录，计入 skipped 与 unreadable。 */
 const UNREADABLE = Symbol("unreadable");
-type ScanOutcome = Readonly<HostHookObservation> | typeof FOREIGN | typeof UNREADABLE | null;
+/** 占着暂存前缀的非记录条目（B13）：文件按 FOREIGN 计、目录与链接按 UNREADABLE 计，另计一次残留。 */
+const STAGE_RESIDUE_FILE = Symbol("stage-residue-file");
+const STAGE_RESIDUE_NODE = Symbol("stage-residue-node");
+type ScanOutcome =
+  | Readonly<HostHookObservation>
+  | typeof FOREIGN
+  | typeof UNREADABLE
+  | typeof STAGE_RESIDUE_FILE
+  | typeof STAGE_RESIDUE_NODE
+  | null;
 // Finder、编辑器等留下的点文件不是证据通道的问题；Wakeflow 自己的暂存前缀除外。
 const IGNORED_FOREIGN_NAME_PATTERN = /^\.(?!wakeflow-)/u;
+
+/** 名字不是记录的条目：观察器自己的暂存不计，暂存前缀的残留、外来名字与叶子位置上的目录或链接各归各类。 */
+function classifyNonRecordEntry(entry: Readonly<StableDirectoryEntry>): ScanOutcome {
+  if (hostHookStageAddress(entry) !== null) return null;
+  if (hasDurableAtomicFileStagePrefix(entry.name)) {
+    return entry.node.kind === "file" ? STAGE_RESIDUE_FILE : STAGE_RESIDUE_NODE;
+  }
+  if (entry.node.kind !== "file") return UNREADABLE;
+  return IGNORED_FOREIGN_NAME_PATTERN.test(entry.name) ? null : FOREIGN;
+}
 
 async function scanEntry(
   root: RootedDirectory,
@@ -977,11 +1032,7 @@ async function scanEntry(
   readRoot: RootedDirectory = root,
 ): Promise<ScanOutcome> {
   const match = FILE_NAME_PATTERN.exec(entry.name);
-  if (match === null) {
-    if (hostHookStageAddress(entry) !== null) return null;
-    if (entry.node.kind !== "file") return UNREADABLE;
-    return IGNORED_FOREIGN_NAME_PATTERN.test(entry.name) ? null : FOREIGN;
-  }
+  if (match === null) return classifyNonRecordEntry(entry);
   if (recordId !== undefined && match[3] !== recordId) return null;
   const prefilter = namePrefilter(entry.name, filter);
   if (prefilter === null) return null;
@@ -1077,6 +1128,23 @@ async function scanEntryBatch(
 }
 
 /** Full, bounded-memory scan. Callers discard their local aggregates if it rejects. */
+/** 计数口径：文件形状的非记录只计 skipped，目录与链接再计 unreadable；暂存前缀的另记一笔残留（B13）。 */
+function tallyScanOutcome(
+  counts: { records: number; skipped: number; unreadable: number; stageResidue: number },
+  outcome: ScanOutcome,
+  visit: (record: Readonly<HostHookObservation>) => void,
+): void {
+  if (outcome === null) return;
+  if (typeof outcome !== "symbol") {
+    counts.records += 1;
+    visit(outcome);
+    return;
+  }
+  counts.skipped += 1;
+  if (outcome === UNREADABLE || outcome === STAGE_RESIDUE_NODE) counts.unreadable += 1;
+  if (outcome === STAGE_RESIDUE_FILE || outcome === STAGE_RESIDUE_NODE) counts.stageResidue += 1;
+}
+
 async function scanObservations(
   root: RootedDirectory,
   hostIdValue: WakeflowHostId,
@@ -1087,9 +1155,7 @@ async function scanObservations(
   recordId?: string,
 ): Promise<Readonly<HostHookObservationScan>> {
   const hostId = parseWakeflowHostId(hostIdValue);
-  let records = 0;
-  let skipped = 0;
-  let unreadable = 0;
+  const counts = { records: 0, skipped: 0, unreadable: 0, stageResidue: 0 };
   let observed = false;
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   const pending: Readonly<StableDirectoryEntry>[] = [];
@@ -1097,15 +1163,7 @@ async function scanObservations(
     const settled = await scanEntryBatch(root, hostId, pending.splice(0), filter, signal, recordId);
     for (const result of settled) {
       if (result.status === "rejected") throw result.reason;
-      const record = result.value;
-      if (record === FOREIGN) skipped += 1;
-      else if (record === UNREADABLE) {
-        skipped += 1;
-        unreadable += 1;
-      } else if (record !== null) {
-        records += 1;
-        visit(record);
-      }
+      tallyScanOutcome(counts, result.value, visit);
     }
   };
   try {
@@ -1139,7 +1197,7 @@ async function scanObservations(
     }
     throw error;
   }
-  return Object.freeze({ records, skipped, unreadable });
+  return Object.freeze({ ...counts });
 }
 
 /** Complete streaming scan; a callback only builds disposable local aggregates. */
@@ -1191,8 +1249,99 @@ async function readObservations(
     records: Object.freeze(records),
     skipped: scan.skipped,
     unreadable: scan.unreadable,
+    stageResidue: scan.stageResidue,
     complete: scan.records <= limit,
   });
+}
+
+// ---- 暂存前缀的残留（open-items B13） -------------------------------------------------------
+
+/** hook 目录里一个占着暂存前缀、却不是本写入器会留下的暂存的条目。 */
+export interface HostHookStageResidueEntry {
+  readonly resourcePath: PortableResourcePath;
+  readonly node: Readonly<StableDirectoryEntry["node"]>;
+  /**
+   * 能不能由 reconcile 退役：名字畸形的普通文件可以（没有哪个写入器会写出这样的名字）；名字合法但形状不对的
+   * 暂存（replace、别的模式）只在所有者确实不在时可以；目录与链接从不由 Wakeflow 删除。
+   */
+  readonly retirable: boolean;
+}
+
+function stageResidueOf(entry: Readonly<StableDirectoryEntry>): boolean | null {
+  if (!hasDurableAtomicFileStagePrefix(entry.name) || hostHookStageAddress(entry) !== null) {
+    return null;
+  }
+  if (entry.node.kind !== "file") return false;
+  try {
+    const address = parseDurableAtomicFileStageFileName(entry.name);
+    return readDurableAtomicFileStageOwnerState(address, entry.node) === "inactive";
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileStageAddressError) return true;
+    throw error;
+  }
+}
+
+/** 列出一个宿主 hook 目录里暂存前缀的残留（按路径排序，至多 `maximum` 条）；只读。 */
+export async function listHostHookStageResidue(
+  root: RootedDirectory,
+  hostIdValue: WakeflowHostId,
+  options: Readonly<ReadHostHookObservationsOptions & { readonly maximum?: number }> = {},
+): Promise<readonly Readonly<HostHookStageResidueEntry>[]> {
+  const hostId = parseWakeflowHostId(hostIdValue);
+  const maximum = options.maximum ?? 256;
+  const entries: Readonly<HostHookStageResidueEntry>[] = [];
+  try {
+    await visitHostHookDirectory(
+      root,
+      hostId,
+      async (entry) => {
+        const retirable = stageResidueOf(entry);
+        if (retirable === null || entries.length >= maximum) return;
+        entries.push(
+          Object.freeze({ resourcePath: entry.resourcePath, node: entry.node, retirable }),
+        );
+      },
+      options.signal === undefined ? {} : { signal: options.signal },
+    );
+  } catch (error: unknown) {
+    rethrowAbort(error);
+    if (error instanceof RootedDirectoryError) {
+      fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
+    }
+    if (error instanceof StableDirectoryReadError) {
+      fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
+    }
+    throw error;
+  }
+  return Object.freeze(
+    entries.sort((left, right) => left.resourcePath.localeCompare(right.resourcePath)),
+  );
+}
+
+/**
+ * 退役列出的残留里可退役的那些：按列出时的节点精确删除，节点已经变了或不在了的跳过（下一次列举再看）。
+ * 返回实际删除的条数。
+ */
+export async function retireHostHookStageResidue(
+  root: RootedDirectory,
+  entries: readonly Readonly<HostHookStageResidueEntry>[],
+  options: Readonly<ReadHostHookObservationsOptions> = {},
+): Promise<number> {
+  let retired = 0;
+  for (const entry of entries) {
+    if (!entry.retirable) continue;
+    try {
+      await unlinkRegularFileExactly(root, entry.resourcePath, {
+        expectedNode: entry.node,
+        durability: "none",
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+      retired += 1;
+    } catch (error: unknown) {
+      rethrowAbort(error);
+    }
+  }
+  return retired;
 }
 
 /** 有界读取一个宿主的记录；无法读入的条目只计数，不让证据通道整体失败。 */

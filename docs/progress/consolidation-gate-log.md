@@ -5902,3 +5902,24 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 2 级门：run-0N1tQ3 1824/1824、`inputsUnchanged`（我的运行，开发工作树；本批改了七份公共与治理 Schema、内核的验收标签与场景链，按规则走完整门）。这是第二次运行：第一次（run-k3aNJg，同样 1824/1824）之后 `wf handoff` 的空白检查点出编译产物里一处行尾空格（源文件里一条注释夹在箭头函数的 `=>` 与函数体之间），挪动注释改变了 `plugins/` 的字节，回执必须对应当前的树，所以重跑。门内新增 20 条，其中场景 8 条（四个场景、两个宿主）。之前的聚焦运行：两条场景链各 30/30（Claude Code 链在 `.claude/worktrees` 布局下），需求、Demand、任务、Ledger、观察与 pod 的切片测试全部通过，制品文本与入口 108/108。`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 用第一次运行的回执写回了耗时表，耗时表是第二次运行的输入之一。远端：没有运行（见 §13.238）。
 
 **结论：通过（第 2 级，1824/1824，本地；无远端运行）。补充需求现在挂在原 Demand 上：新的验收标准从一份冻结的包进来，历史、覆盖与归档都在同一个 Demand 里。research、indeterminate 的两个出口与测试预算用尽有了从公共工具走到底的场景；pod 创建前会点名相对路径依赖。真实窗口里的一轮留待终验。**
+
+### 13.242 1.3.0 批 5：只有 pid 的属主判断、维护事务的真实进程中断矩阵与它找出的三条死路、另一版制品中断的事务、暂存残留与文件系统预检、不认识的配置版本（B7、B8、B9、B11、B13、B14、C7）（2026-11-13）
+
+收敛计划第五批：并发、恢复与配置演进。七项里六项是按登记做的；第七项（B9 的中断矩阵）第一次跑就在维护事务里找出三条没有公共出口的死路，本批一并修掉。
+
+- **只有 pid 的属主（B7）。** 原子暂存、事件追加候选、活动守卫与 hook 目录的暂存只在名字里记着 pid，此前的判断是 `kill(pid, 0)`：pid 被别的进程重用就永远"还在"，属于别的用户就永远"说不清"。`observePidOwnerSync` 加两项来自残留节点自己的证据——pid 的持有者不是残留文件的属主用户；持有者的启动时间晚于残留的修改时间两秒以上——任一成立即属主已不在。两项读一次同步的 `ps -p <pid> -o uid=,lstart=`，只在 pid 发不了信号或残留已存在一分钟以上时才读。六个调用点把节点事实交进来。锁 v2 的进程出生摘要不变。
+- **会话内的启动记录（B14）。** 复核后仍成立的反例：`/clear` 与压缩触发 SessionStart，却在同一个进程里，不代表重新加载。hook 记录多一个可选键 `startSource`，判断窗口是否陈旧时跳过 `clear` 与 `compact`。
+- **hook 目录的暂存前缀残留（B13）。** 扫描把它们单独计数，verify 的 hook 证据门以 `<宿主>:stage-residue-<n>` 点名；`reconcile` 在布局维护之前返回 `WakeflowHookStageResiduePlan`，apply 按节点精确删除名字畸形的、或形状不对且属主确实不在的普通文件；目录与链接只计数。
+- **不认识的配置版本（C7）。** `schemaVersion` 是别的整数的 Wakeflow 配置：读配置的六个能力统一以 `precondition-failed` / `config-version-unsupported` 拒绝并带两个版本，维护预览列出 `config-version-unsupported:<found>`。出口只有文字（用写下它的那一版，或留作历史、在别处初始化）；保留旧账本的初始化没有做，理由记在 ADR-0018 的补记里。
+- **非本地文件系统（B11）。** 维护预览对工作区根与账本根各探一次卷类型（`df -P` 加 `mount`），不是 `apfs` / `hfs` 就阻塞。第一版用了 `stat -f %T`，那在 macOS 上是文件类型后缀而不是卷类型，探测结果恒为空，换掉了。
+- **另一版制品中断的事务（B8）。** 恢复时意图读不进来或重算不出同一份计划，而写者戳不是本构建的：`maintenance-recovery-artifact-mismatch`，`details.writerVersion` 说出那一版。只做识别与指引。
+- **真实进程中断矩阵（B9）。** 新的支撑 `tests/support/sync-crash-process.ts` 起一个真实的 MCP 入口，在父目录第 N 次同步了匹配路径之后停住，测试随即 SIGKILL。`maintenance-crash-recovery.load.test.ts` 用它把 reconfigure 的 apply 在维护门与事务目录的每个落盘点各杀一次（18 个点；其中 3 个是"暂存已链接、尚未退役"，再把目标名删掉得到"暂存已写好、尚未链接"的另一半），然后只用公共工具收场：一次 recover 或一次 reconcile 之后协议回到 idle、目录里没有暂存、配置非旧即新、原请求可重新预览，每条收场的路各真的重做一遍并做一次严格读。第二个用例是首次初始化在协议根还没建好的前 4 个点。
+- **矩阵找出的三条死路。** 都是此前就在的缺口，同进程注入的中断测试看不到它们——注入的失败会走写者自己的清理，真死的进程不会。
+  1. *journal 的暂存挡住 intent 的恢复。* intent 与 journal 同在 `transactions` 目录，恢复时各自以"只含自己"的闭合目标集合做暂存恢复；进程死在 journal 的暂存已链接、尚未退役时，先跑的 intent 恢复把它当成集合外的条目拒绝，`recover` 永远是 `recovery-required`。改为一个操作的两个目标同属一个闭合集合（两份仓库里各自的恢复函数删掉，事务里一处）。
+  2. *门锁已拿、intent 未发布。* 进程死在这两步之间（apply 在门内还要重推一次完整计划，这个窗口并不短），或死在 intent 的暂存写好、尚未链接时：协议是 `recovery-required`，status 的残留列表是空的或只有一份认不出的暂存，没有 operation ID 可交给 recover，reconcile 与其余维护预览都被 `maintenance-protocol-recovery-required` 挡住。新模块 `wakeflow-maintenance-gate-residue.ts` 识别这种状态（门锁不在或持有者确实不在；`transactions` 里只有暂存前缀的条目），`reconcile` 的第一份计划 `WakeflowMaintenanceGateResiduePlan` 退役它：先暂存、最后门锁，属主还活着或说不清时以 `maintenance-gate-residue` 拒绝。没有配置的根（首次初始化中断）同样可用。
+  3. *门锁自己的创建暂存还链接着。* `retireRootedExclusiveFileLockResidue` 先恢复锁的暂存、再拿当前节点与观察时的快照逐项比较——而它自己刚把暂存退役，链接数与 ctime 必然变了，于是这种残留的退役每次都以 `residue-changed` 失败。改为这种情形只比节点身份（令牌、内容摘要、属主状态照旧核对），按结算后的节点删除。foundation 的修改，看板、投影、pod、Demand 发布等所有锁使用者一并受益。
+- **文本与预算。** Controller 技能一句：`recovery-required` 且没有可恢复的残留时预览 reconcile；参考写明两份新计划、两个文件系统阻塞码、配置版本与另一版制品的出口。技能源文件 200 行，Claude 渲染后 14,320 字节（预算 14,336）；`workspace-and-windows.md` 400 行。本批没有改公共 Schema，`tools/list` 仍是 107,133 B。
+- **没有做的。** B8 的放弃或重放出口；C7 的保留旧账本的初始化；未知线程的属主；verify 探测文件系统；Demand 的创建、完成与归档等多步操作的逐点中断矩阵（屏障支撑是通用的，矩阵本身留作登记里 B9 的余项）；掉电不在矩阵范围内——SIGKILL 不丢页缓存，矩阵验证的是各步的先后。
+- **验证。** 第 2 级门：run-2NFmcH 1841/1841、`inputsUnchanged`（我的运行，开发工作树；本批改了 foundation 的进程、暂存与锁，内核的 hook 观察，按规则走完整门）。这是第二次运行：第一次（run-2sCKQt）1839/1841，失败的两条都是本批漏改的配套——`hook-observations.load.test.ts` 钉住的清点形状少了新增的 `stageResidue`，`legacy-error-families` 的错误类清单没有登记门残留模块的错误类（登记为 `precondition-failed`，与同目录的其余模块一致）；两处都只在完整门里跑到，聚焦运行按文件选的集合里没有它们。门内新增 17 条。之前的聚焦运行：中断矩阵两个用例（21 次真实进程死亡加 4 次，单文件约 100 秒，`loadSensitive`），门残留的三个边界用例，锁退役的新用例，维护事务、foundation 文件系统与制品文本的切片。`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 已按这份回执写回耗时表（357 个文件）：回执钉住的是写回之前的树，耗时表只决定派发顺序，下一批的门是第一道带着新表跑的。`wf handoff` 八项通过。远端：没有运行（见 §13.238）。
+
+**结论：通过（第 2 级，1841/1841，本地；无远端运行）。只凭 pid 留下的残留不再被 pid 重用卡住；维护 apply 无论死在哪个落盘点，都有一次公共调用能把工作区带回 idle——这句话现在由真实进程逐点验证，而不是由注入的失败推断。**

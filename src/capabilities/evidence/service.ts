@@ -1,5 +1,6 @@
 import {
   readWakeflowConfigAuthoritySnapshot,
+  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
   type WakeflowConfigAuthoritySnapshot,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
@@ -189,7 +190,7 @@ async function openContext(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+      failWakeflowConfigAuthority(error);
     }
     throw error;
   }

@@ -146,6 +146,8 @@ interface HookPayload {
   readonly sessionTitle: string | null;
   /** `model`：SessionStart 带的当前模型标识，可缺省（X28）。 */
   readonly model: string | null;
+  /** `source`：SessionStart 的来源（startup、resume、clear、compact），可缺省（B14）。 */
+  readonly startSource: string | null;
 }
 
 interface Subject {
@@ -276,6 +278,7 @@ function parsePayload(stdin: unknown): Parsed<HookPayload> {
       permissionMode: optionalString(object.permission_mode),
       sessionTitle: optionalString(object.session_title),
       model: optionalString(object.model),
+      startSource: optionalString(object.source),
     }),
   );
 }
@@ -404,7 +407,8 @@ type OptionalField =
   | "notificationType"
   | "permissionMode"
   | "sessionTitle"
-  | "model";
+  | "model"
+  | "startSource";
 
 function degradeToKernel(
   required: Readonly<HostHookObservationInput>,
@@ -436,6 +440,8 @@ function withOptionalField(
       return { ...required, sessionTitle: value };
     case "model":
       return { ...required, model: value };
+    case "startSource":
+      return { ...required, startSource: value };
     default:
       return { ...required, notificationType: value };
   }
@@ -469,6 +475,11 @@ function recordInput(
     sessionTitle: degradeToKernel(required, "sessionTitle", payload.sessionTitle),
     // 模型只在会话启动时有意义：别的事件即使带了同名字段也不记（X28）。
     model: event === "session-start" ? degradeToKernel(required, "model", payload.model) : null,
+    // 启动来源只属于 SessionStart：它决定这条记录算不算一次运行时的重新装载（B14）。
+    startSource:
+      event === "session-start"
+        ? degradeToKernel(required, "startSource", payload.startSource)
+        : null,
   });
 }
 

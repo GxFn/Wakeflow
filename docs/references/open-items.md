@@ -14,7 +14,7 @@
 - **1.3.0 批 2 宿主事实与观察**：已完成（§13.239）；余项见 A3（版本不固定）、K2（读入的 token、桌面清单仍内联）；X4、X28 的现场核对归终验
 - **1.3.0 批 3 信任边界**：已完成（§13.240）；余项见 F1（规则拦不住任意子进程）、F2（认不出角色就不收窄）、X30（桌面接管后规则是否保留）；两项控制在真实窗口里的核对归终验
 - **1.3.0 批 4 Demand 流程**：已完成（§13.241）；余项见 D3（多仓库 pod 只在现场走过）、D4（多仓库 Demand 与 `commitExpectation: commit` 归终验）、D12（只有提醒，pod 布局的重新设计在 1.4）、H2（补充包不能并入还在进行的 Demand）；补充需求的续接在真实窗口里的一轮归终验
-- **1.3.0 批 5 并发、恢复与配置演进**：B7、B8、B9、B11、B13、B14、C7
+- **1.3.0 批 5 并发、恢复与配置演进**：已完成（§13.242）；余项见 B7（未知线程的属主）、B8（只有识别与指引，没有放弃或重放的出口）、B9（Demand 侧的多步操作还没有逐点矩阵）、B11（verify 不探测文件系统）、C7（没有保留旧账本的初始化）
 - **1.3.0 批 6 诊断与成本**：G1、G3、G5、G8、G9、G13、K5、K8
 - **1.3.0 批 7 发布、Codex 文本与文档**：C12、E4、I9、J4、M2、M3、M4、Y8
 - **1.3.0 批 8 架构债**：L1、L2、L4、L5、L6、L8
@@ -149,21 +149,21 @@
   - 2026-10-02 深入复验（§13.145）：公开 pod 创建完成后，旧配置刷新仍能把 4 个窗口投影回退；公开 reconfigure 完成后，锁外捕获旧配置的活动投影也能覆盖新页面。绑定锁修复不能关闭配置来源问题。ADR-0017 随后获用户确认；§13.146 实施共享运行准入/独占结构维护、publisher 内重读配置，并将 D1/D2 改为正向回归。
   - 2026-10-02 后续裁决（ADR-0018 / §13.147）：当前基线的作用域和投影来源修复保留；新环境验证见 §13.147，不再将旧工作区迁移作为启用条件。
 
-- **B7** [中 / 风险] 锁 owner 的存活判断只用 kill(pid,0)，PID 复用或 EPERM 会让残留锁无法退役（计划阶段 2；状态：部分修复，§13.146 锁 v2 增加进程出生摘要与 registry；candidate/stage 和未知线程 owner 尚未通用化）（**2026-11-09 收敛：1.3.0 批 5**——锁 owner 存活判断推广到 candidate / stage 与未知线程 owner）
+- **B7** [中 / 风险] 锁 owner 的存活判断只用 kill(pid,0)，PID 复用或 EPERM 会让残留锁无法退役（计划阶段 2；状态：部分修复，§13.146 锁 v2 增加进程出生摘要与 registry；candidate/stage 和未知线程 owner 尚未通用化）（**2026-11-09 收敛：1.3.0 批 5**——锁 owner 存活判断推广到 candidate / stage 与未知线程 owner）（**已修 1.3.0 批 5，§13.242**：只有 pid 可看的残留（原子暂存、事件追加候选、活动守卫与 hook 目录的暂存）按三项证据判断属主——pid 不存在；pid 的持有者不是残留文件的属主用户；持有者的启动时间晚于残留的修改时间两秒以上。后两项读一次同步的 `ps`，只在 pid 发不了信号或残留已存在一分钟以上时才读，正常写入路径不付这个代价；证据不足仍是"说不清"，不删。**余项**：未知线程的属主（同进程、别的 worker 线程留下的残留）仍按原样判为说不清；判断依赖 macOS 的 `ps`，读不出时退回 `kill(pid, 0)`）
   - 说明：重启或断电后 PID 从小数开始重新分配，死掉的 server 的 pid 很容易落到一个活着的（常常是 root 的）进程上，结果读成 active 或 unknown，所有恢复路径都拒绝处理，用户只看到 owner-active，毫无线索。后果和“没有退役路径”一样，只是更少见。
   - 证据：rooted-exclusive-file-lock.ts:375-381 锁记录只有 pid、threadId、token，没有进程启动时间或 boot ID；observeOwnerState（:397-412）：kill 成功算 active，EPERM 算 unknown，退役要求 inactive（:566）；append candidate 用同一套逻辑（demand-file-event-store.ts:184-199）；维护 gate 残留 owner 为 unknown 时只报告、不可退役（core-layout-inspection.ts:402-409）
   - 建议：锁记录和 candidate、stage 名里加入 owner 进程启动时间（macOS 用 kern.proc sysctl，Linux 用 /proc/<pid>/stat）和 boot ID；pid 相同但启动时间不同就判为 inactive。遇到 EPERM 时比对记录的 uid 或启动时间，不直接返回 unknown。
   - 2026-10-02 实施（§13.146）：macOS/Linux 的出生事实可证明不同进程实例；缺失、EPERM、旧格式同 PID 和未知工作线程继续保护。真实子进程 SIGKILL 后的新许可回收通过，未声称所有平台及 candidate/stage owner 均已覆盖。
   - 2026-10-02 后续裁决（ADR-0018 / §13.147）：按 ADR-0018 移除锁 v1 解析；当前锁只使用含进程出生摘要和 registry 的 v2 形状，未知 owner 仍保护。
   - 2026-10-05 后续（§13.161）：owner 未知不再立即报 recovery-required——读写作用域与维护 gate 把未知 owner 当作活着等待，预算耗尽才请求恢复（gate 为可重试的 maintenance-owner-unknown）；进程出生证据读不到时不再缓存 null，kill(0) 成功后再确认一次 ESRCH；活写者在途的暂存不再被当作残留；共享模式积累到 64 个 reader 租约时顺手退役死 reader。PID 复用的 stage owner 判断仍只靠 kill(0)。
-- **B8** [中 / 风险] 中断的维护事务在插件解析、矩阵或计划代码变更之后无法恢复（计划阶段 2；状态：开放）（**2026-11-09 收敛：1.3.0 批 5**——中断的维护事务在制品变更后的恢复：日志带制品身份，给出回滚或以新制品重放的出口）
+- **B8** [中 / 风险] 中断的维护事务在插件解析、矩阵或计划代码变更之后无法恢复（计划阶段 2；状态：开放）（**2026-11-09 收敛：1.3.0 批 5**——中断的维护事务在制品变更后的恢复：日志带制品身份，给出回滚或以新制品重放的出口）（**已做 1.3.0 批 5，§13.242**：恢复时意图读不进来、或读得进来却按它重算不出同一份计划，而它的写者戳不是本构建的，以 `recovery-required` / `maintenance-recovery-artifact-mismatch` 拒绝，`details.writerVersion` 说出写下它的那一版；Controller 参考写明由用户用那一版恢复一次、再更新，不删事务文件。写者戳相同或没有戳时仍是原来的失败。**余项**：只有识别与指引，没有"放弃这次事务"或"以新制品重放"的出口——放弃要退役一份本构建解析不了的意图，需要一条不经解析的退役路径和它的安全论证）
   - 说明：apply 被崩溃、断连或关窗口打断后，如果恢复前插件代码更新了，recover 会在解析或计划比对时失败。status 一直显示 recovery-required，skill 一直让 Controller 去 recover，唯一的出口是手工删事务文件，而这一点没有任何文字说明。这需要“中断”和“升级”两件事叠在一起，窗口较窄。
   - 证据：wakeflow-maintenance-execution-intent.ts:245-293：normalize() 用当前代码重跑 createWakeflowMaintenanceExecutionPlan，要求 planDigest 一致；0ef5defa 之后 parseSurfaces 调用 parseTmuxAsset(record.tmuxAsset)，遇到 undefined 失败，0ef5defa 之前写的 intent 已经无法解析；maintenance-execution-intent.schema.json 把 currentHostProfile 和 sharedPreview 只类型化为 object，schema:check 看不出漂移；SKILL.md:148-153 遇到 recovery-required 只让 Controller 去 recover；验证者更正：recovery 用的是 intent 内嵌的预览和 profile（recovery.ts:199-220），单纯的资产变更不会破坏恢复
   - 建议：让恢复不依赖当前代码：持久化已执行步骤和预期字节或摘要，前滚或回滚时不再重新推导；或者在 intent 里记录产物摘要，不一致时返回带引导放弃流程的类型化阻塞 `recovery-requires-original-artifact`。补一个用其他构建写的 intent 做恢复的回归测试。
   - 2026-10-02 实施（§13.146）：v1 desiredConfig 的 intent 和 v1 terminal journal 明确要求原构建；保留 v1 表示，禁止新构建继续旧业务效果。协议升级自身沿现有 intent/journal 恢复。跨任意旧构建的解析兼容和可获得的原制品仍未解决，不能将此项整体关闭。
   - 2026-10-02 后续裁决（ADR-0018 / §13.147）：既有开发构建的跨格式事务升级不纳入首基线支持范围；当前格式的 intent/journal 中断恢复保留。
 
-- **B9** [中 / 缺口] 真实进程中断矩阵覆盖尚不完整（计划阶段 2；状态：部分，§13.141 已将两个真实 MCP SIGKILL、真实锁死亡、三类关闭信号及半写候选纳入持续测试；其余操作和位置未覆盖）（**2026-11-09 收敛：1.3.0 批 5**——真实进程中断矩阵补其余操作与位置）
+- **B9** [中 / 缺口] 真实进程中断矩阵覆盖尚不完整（计划阶段 2；状态：部分，§13.141 已将两个真实 MCP SIGKILL、真实锁死亡、三类关闭信号及半写候选纳入持续测试；其余操作和位置未覆盖）（**2026-11-09 收敛：1.3.0 批 5**——真实进程中断矩阵补其余操作与位置）（**已做 1.3.0 批 5，§13.242**：维护 apply 的真实进程中断矩阵——真实 MCP 在维护门与事务目录的每一个落盘点被 SIGKILL（reconfigure 18 个点，其中 3 个再补"暂存已写好、尚未链接"的一半；首次初始化协议根未建好的 4 个点），之后只用公共工具收场并断言回到 idle、配置非旧即新、原请求可重做。矩阵第一次跑就找出三条没有公共出口的死路并已修：journal 的暂存挡住 intent 的恢复（一个操作的两个目标改为同一个闭合恢复集合）；门锁已拿、intent 未发布时没有 operation ID 可恢复（`reconcile` 新增第一份计划 `WakeflowMaintenanceGateResiduePlan`）；门锁自己的创建暂存还链接着时锁退役必然失败（foundation 的锁退役改为认得它，所有锁使用者受益）。**余项**：Demand 的创建、完成与归档，任务规划，证据登记，窗口绑定这些多步操作还没有同样的逐点矩阵（它们各有同进程注入的中断测试与 §13.141 的两个追加点）；屏障挂在父目录同步上，同一次同步之内的更细位置扫不到；掉电（页缓存丢失）不在范围内）
   - 说明：§13.140 已用实际生成的 Codex MCP stdio server 复现四个 append 中断及两类子进程锁残留，证实公开恢复不可达。binding、ledger 证据、维护、pod 等操作及其他写入位置仍未覆盖，也未做断电试验。§13.141 已把关键目标行为纳入 tests，原诊断脚本和输出仍保留；下列“没有杀进程”的检索是早期基线证据。
   - 证据：tests 里没有 SIGKILL、子进程 .kill() 或 Worker 构造；锁残留测试用同线程伪造（rooted-exclusive-file-lock.test.ts:239-292）；gate-log §13.131 L3861 明确推迟了故障注入 seam；§13.130 唯一的现场故障注入是伪造 intent 文件；上面三类没有公开恢复路径的残留，正是杀进程矩阵能发现的问题
   - 建议：建一个崩溃矩阵 harness：以子进程启动真实 MCP server，在注入点（环境变量控制的暂停标记，或轮询 stage/candidate 文件）SIGKILL，断言 status 能指出问题，并且一次有文档的公开调用就能恢复到 idle。覆盖 append、board claim、projection、binding、ledger 证据、demand 发布、维护 apply、pod 事务。
@@ -172,7 +172,7 @@
   - 证据：withRootedExclusiveFileLock（:813-830）在 finally 里 release，没有 catch：release 抛错会丢掉成功结果，或者覆盖原本的操作错误；requirement-board.ts:132-137 把它映射成可重试的 concurrency-conflict
   - 建议：操作成功时照常返回结果，释放失败单独报告（警告加残留检查），或者至少标记为 committed-but-lock-residue，避免调用方盲目重试。
   - 2026-10-05 后续（§13.161）：pod 锁的失败映射改为只有 timeout / owner-active / residue-changed 可重试，不安全锁记录、父目录与根作用域问题和释放失败不再标成可重试；释放失败覆盖成功结果这一点本身仍开放。
-- **B11** [低 / 待决] 平台范围（Windows、网络文件系统）没有对用户声明，锁机制依赖 POSIX 的 pid、link 和权限语义（计划阶段 2；状态：声明部分关闭 2026-10-18（ADR-0021：仅 macOS 本地文件系统，`package.json` 的 `os: ["darwin"]`、两份 README、仓库 README、插件描述与需求总览 §4 写明）；非本地文件系统的预检阻塞仍开放）（**2026-11-09 收敛：1.3.0 批 5**——非本地文件系统的预检阻塞（平台声明已在 ADR-0021））
+- **B11** [低 / 待决] 平台范围（Windows、网络文件系统）没有对用户声明，锁机制依赖 POSIX 的 pid、link 和权限语义（计划阶段 2；状态：声明部分关闭 2026-10-18（ADR-0021：仅 macOS 本地文件系统，`package.json` 的 `os: ["darwin"]`、两份 README、仓库 README、插件描述与需求总览 §4 写明）；非本地文件系统的预检阻塞仍开放）（**2026-11-09 收敛：1.3.0 批 5**——非本地文件系统的预检阻塞（平台声明已在 ADR-0021））（**已做 1.3.0 批 5，§13.242**：维护预览对工作区根与账本根各读一次所在卷的类型（`df -P` 找挂载点、`mount` 读类型，路径还不存在时看最近的已存在祖先），不是 `apfs` / `hfs` 就以 `filesystem-unsupported:<类型>` / `ledger-filesystem-unsupported:<类型>` 阻塞，零写；Controller 参考写明让用户换本地路径。读不出类型不阻塞。**余项**：verify 自己不探测文件系统；只在维护预览时拦，已经在网络卷上运行的旧工作区要到下一次维护才被告知）
   - 说明：在 NFS/SMB 上，或者工作区跨机器、跨容器共享时，kill(pid,0) 查的是错误的 PID 命名空间，远端还活着的持锁者会被当作 inactive 退役，或者反过来。Windows 会被早早拒绝，但用户文档没有写。需求文档还声称已经声明过。
   - 证据：plugins/*/package.json 没有 "os" 字段；README 里没有平台说明；docs/requirements/README.md:37 声称“制品与 README 明确声明不支持 Windows”，但实际没有；验证者更正：至少十个 geteuid helper 在 win32 下以 unsupported-platform 失败，fresh-initialize 第一次写配置时就能早早拒绝 Windows；网络文件系统只在源码注释里排除（rooted-exclusive-file-lock.ts:79），没有 statfs 检查
   - 建议：确定并写明支持的平台（macOS/Linux、本地文件系统），在两份 README 和 package.json 的 os 字段里声明，并修正 requirements/README.md:37。fresh-initialize 预览在非本地文件系统上以明确的码阻塞。
@@ -180,13 +180,13 @@
   - 说明：助手 `close`（tmux kill-window）结束会话时，Claude Code 的 session-end hook 进程在原子创建的中途被杀，`observations/hooks/` 里留下一个暂存文件（内容是一条完整的 session-end 记录）。读取方把它算作无法识别的条目，`hooks.skipped=1`，verify 的 `host-hook-channel` 以 `claude-code:skipped-1` 失败，整体变 `degraded`；对账与观察者都不清理它，Controller 也无从知道原因。
   - 证据：§13.133 现场（刷新窗口时关掉的 AlembicCore）；`src/kernel/hook-observations.ts` 的 `listed.unrecognized` 计入 `skipped`。
   - 建议：把 `.wakeflow-atomic-*` 暂存文件从"无法识别"里分出来：超过一段时间的暂存残留由观察者或对账退役（它是 Wakeflow 自有私有目录里的中间文件），读取方不计入 skipped；另测一次"关窗时 hook 被杀"的回归。
-- **B13** [中 / 缺陷] hook 目录里任一形状不对的 `.wakeflow-atomic-*` 条目会让之后所有 hook 写入失败（计划阶段 2；状态：部分修复，§13.142 分片隔离及核心/Claude 助手的新旧布局读取已验证；§13.167 批次 2：写前恢复对目标摘要集合之外的保留前缀条目只计数（回执 `unrecognizedEntryCount`）不失败，一个畸形条目不再让该宿主所有 hook 写入失败；reconcile 把它列为可退役项与 verify 点名仍开放）（**2026-11-09 收敛：1.3.0 批 5**——畸形原子暂存条目：reconcile 列为可退役项、verify 点名）
+- **B13** [中 / 缺陷] hook 目录里任一形状不对的 `.wakeflow-atomic-*` 条目会让之后所有 hook 写入失败（计划阶段 2；状态：部分修复，§13.142 分片隔离及核心/Claude 助手的新旧布局读取已验证；§13.167 批次 2：写前恢复对目标摘要集合之外的保留前缀条目只计数（回执 `unrecognizedEntryCount`）不失败，一个畸形条目不再让该宿主所有 hook 写入失败；reconcile 把它列为可退役项与 verify 点名仍开放）（**2026-11-09 收敛：1.3.0 批 5**——畸形原子暂存条目：reconcile 列为可退役项、verify 点名）（**已做 1.3.0 批 5，§13.242**：hook 目录扫描把暂存前缀的条目单独计数（`stageResidue`），verify 的 hook 证据门以 `<宿主>:stage-residue-<n>` 点名；`reconcile` 在布局维护之前返回 `WakeflowHookStageResiduePlan`，按宿主列出可退役与保留的条数，apply 按列出时的节点精确删除名字畸形的、或形状不对且属主确实不在的普通文件。**余项**：暂存命名的目录与链接只计数不删，留给用户；属主说不清的暂存不动）
   - 说明：写入器每次写前由基础层检查目标目录里全部暂存前缀条目；只要有一个是目录、符号链接、格式不对、权限位不对或属于别的用户，就以 `stage-recovery-required` 拒绝，hook 写入以 `io-failure/observation-write-stage-recovery-required` 失败，这个宿主的 hook 通道从此断掉，直到有人删掉那个条目。读取方会把它计入 skipped，verify 看得见，但没有恢复出口。
   - 证据：`src/foundation/filesystem/durable-atomic-file-stage-recovery.ts` 的 `collectStages` / `assertStageNode`；§13.134 B12 修复只豁免并退役写入器自己能留下的 create / 0600 暂存。
   - 建议：由基础层决定：hook 目录的写前恢复只看同一目标的暂存（记录名唯一），或由对账把形状不对的暂存列为可退役项并在 verify 里点名。
   - 2026-10-02 复验（§13.140）：普通的 .wakeflow-atomic-invalid 文件使下一次 hook 写入报 observation-write-stage-recovery-required；原文件保留。修复应限定影响范围并提供诊断，不能以任意删除未知暂存文件作为通过条件。
   - 2026-10-05 后续（§13.161）：Demand 发布意图与生命周期日志目录里 foundation 自己的暂存文件不再作为残留阻断全部 pod——活写者按可重试的 pod-publication-in-flight / pod-lifecycle-in-flight 拒绝，死写者的暂存跳过且不删除，所有者未知仍按残留保守拒绝。hook 目录的形状不对的暂存仍计 skipped、仍无公共恢复出口。
-- **B14** [高 / 缺陷及验证缺口] 会话 hook 与运行身份混用：缺失启动证据的原因不明，新的启动记录也可能误报运行就绪（状态：部分修复，§13.146 去除 hook 对 MCP 就绪的错误推断；原生事件缺失与可信实例关联仍未解决）。（**2026-11-09 收敛：1.3.0 批 5**——先复核剩余反例是否仍成立，再定修法）
+- **B14** [高 / 缺陷及验证缺口] 会话 hook 与运行身份混用：缺失启动证据的原因不明，新的启动记录也可能误报运行就绪（状态：部分修复，§13.146 去除 hook 对 MCP 就绪的错误推断；原生事件缺失与可信实例关联仍未解决）。（**2026-11-09 收敛：1.3.0 批 5**——先复核剩余反例是否仍成立，再定修法）（**已做 1.3.0 批 5，§13.242**：复核后仍成立的反例是会话内的启动事件——`/clear` 与压缩都会触发 SessionStart，却发生在同一个进程里，不代表 MCP 与技能重新加载，此前会把一个陈旧窗口刷成"启动记录是新的"。hook 记录多一个可选的 `startSource`（宿主负载里的 `source`），判断窗口是否陈旧时跳过 `clear` 与 `compact` 的记录；没有来源的旧记录按原规则。**余项**：原生事件缺失（宿主根本没有触发 hook）的原因仍只能报 unverified；"启动记录新不等于已重载"不变，`current` 仍不被断言）
   - 实测：8 个既有测试聊天全部通过原生 status 确认新构建，均有真实 Stop；仅 6 个出现新 SessionStart。其余两个仍被 runtime-artifact 门判为 windows-stale，严格 verify 为 14/15。不能用新 Stop 的摘要冒充会话启动证据，也不能据工具调用成功将全工作区计作通过。
   - 同一安装制品的 8 个观察器子进程在独立工作区并发执行，合成 SessionStart 全部落盘，耗时 817–897ms，无超时或 stderr；该对照不能代替真实宿主触发，也未复现现场缺失。
   - 已检查当前日志与记录，尚不能区分宿主未触发、hook 超时或观察器写入失败；不将缺失原因归咎于未经复现的产品缺陷。保持原记录，后续需要带宿主 hook 结果的受控会话重载证据。
@@ -232,7 +232,7 @@
   - 建议：将运行身份与宿主安装目标或工作区升级计划选定的构建分开。由 host adapter 或版本化维护回执提供明确目标；读不到时为 unknown，不能由摘要猜测新旧，也不能按目录 mtime 选“最新”。维护 apply 对选定目标和兼容条件进行复验，分别指出 server 与窗口的偏差。加一个新旧两个版本目录并存或旧目录被删的场景测试。
   - 2026-10-02 复验（§13.140）：同级新版本目录不改变旧进程的 readCurrentManifestDigest；旧 manifest 缺失返回 null，runtimeArtifactGate 不将它列为 server-outdated。尚未执行真实安装器的跨版本切换。
   - 2026-10-05 后续（§13.161）：恢复了可靠的 stale 信号并把它和 unverified 分开：宿主画像新增 surfaces.runtimeStaleness，Claude 为 session-start-observer-digest（最近 session-start 的观察器摘要 ≠ 已安装 manifest ⇒ stale，windows-stale:<n> 使 runtime-artifact 门失败，next 为 window-artifact-stale），Codex 为 unverified；window-runtime-unverified:<n> 只作为通过门上的信息，verify.ok 重新可为 true。这覆盖了 ADR-0017 §3 "unverified 即 unavailable" 的后果，用户 2026-10-06 裁决同意。兄弟版本目标识别仍开放。
-- **C7** [中 / 风险] 配置 schema 的任何改动都让工作区无路可走：reconcile/reconfigure 被阻塞，fresh-initialize 也被阻塞（计划阶段 3；状态：按 ADR-0018 收窄——旧格式不迁移、新环境 fresh-initialize；当前格式内仍缺类型化的 `config-version-unsupported` 与保留 ledger 的引导流程，开放）（**2026-11-09 收敛：1.3.0 批 5**——类型化的 `config-version-unsupported` 与保留账本的引导）
+- **C7** [中 / 风险] 配置 schema 的任何改动都让工作区无路可走：reconcile/reconfigure 被阻塞，fresh-initialize 也被阻塞（计划阶段 3；状态：按 ADR-0018 收窄——旧格式不迁移、新环境 fresh-initialize；当前格式内仍缺类型化的 `config-version-unsupported` 与保留 ledger 的引导流程，开放）（**2026-11-09 收敛：1.3.0 批 5**——类型化的 `config-version-unsupported` 与保留账本的引导）（**已做 1.3.0 批 5，§13.242**：一份 Wakeflow 配置的 `schemaVersion` 是本构建不认识的整数时，读配置的公共工具以 `precondition-failed` / `config-version-unsupported` 拒绝，`details.found` / `details.supported` 带两个版本；维护预览在原有阻塞码之外列出 `config-version-unsupported:<found>`。Controller 参考写明两个出口：用写下它的那一版插件，或把那个根与账本留作历史、在别处以自己的账本根 fresh-initialize。**余项**：没有"保留旧账本的 fresh-initialize"——让新工作区接管别的格式写成的账本与 ADR-0018 决定 2 冲突，见该决定 2026-11-13 的补记）
   - 说明：官方给出的补救办法（重新初始化）被 fresh-initialize 自己的拒绝规则挡住，唯一的出路是手工删除配置、.wakeflow-active、.wakeflow-local 和 ledger 根（包括归档和需求），board、活动 Demand、绑定和 pod 回执都会丢失。没有任何文字引导这个过程，违背了“由插件引导用户”的原则。发布后，第一次配置改动就会影响每一个用户。
   - 证据：wakeflow-config.schema.json:32-34：schemaVersion const 1，additionalProperties false；static-materialization-preview.ts:1152：配置无法解析时报 current-config-unavailable（currentSnapshot 返回 null，158-172）；fresh 被 fresh-config-present、fresh-active-not-absent、fresh-local-not-bootstrap-prefix（1143-1149）和 fresh-ledger-root-present（409）阻塞；gate-log 3295“只能重新初始化”；3746 没有配置时报 precondition-failed/config-authority
   - 建议：给配置自己的演进路径：对已删除字段宽容的读取器，或者一个按当前版本模型重写配置的 upgrade 维护动作。最低限度也要加类型化的 `config-version-unsupported` 错误，并提供保留 ledger 和活动根的 Controller 流程。

@@ -16,6 +16,8 @@ import {
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
 import { type ByteCount, parseByteCount } from "../foundation/numeric/byte-count.js";
+import { WAKEFLOW_CONFIG_SCHEMA_VERSION } from "../contracts/vocabulary/wakeflow-config-identity.js";
+import { fail as failWakeflow } from "../kernel/error.js";
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
@@ -91,6 +93,7 @@ export type WakeflowConfigAuthoritySnapshotErrorReason =
   | "json"
   | "representation"
   | "config"
+  | "config-version"
   | "placement"
   | "aborted"
   | "load-failure";
@@ -105,6 +108,7 @@ const ERROR_MESSAGES = {
   json: "Wakeflow canonical config is not valid JSON.",
   representation: "Wakeflow canonical config does not use its deterministic domain representation.",
   config: "Wakeflow canonical config is not the strict public authority.",
+  "config-version": "Wakeflow canonical config uses a schema version this build does not read.",
   placement: "Wakeflow canonical config declares unsafe root placements.",
   aborted: "Wakeflow config authority snapshot loading was aborted.",
   "load-failure": "Wakeflow config authority snapshot failed closed.",
@@ -116,12 +120,40 @@ export class WakeflowConfigAuthoritySnapshotError extends Error {
   readonly code = "wakeflow-config-authority-snapshot" as const;
   readonly reason: WakeflowConfigAuthoritySnapshotErrorReason;
   readonly path: string;
+  /** `config-version` 时文件里写的 schemaVersion；其余原因为 null。 */
+  readonly schemaVersion: number | null;
 
-  constructor(reason: WakeflowConfigAuthoritySnapshotErrorReason, path: string) {
+  constructor(
+    reason: WakeflowConfigAuthoritySnapshotErrorReason,
+    path: string,
+    schemaVersion: number | null = null,
+  ) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
+    this.schemaVersion = schemaVersion;
   }
+}
+
+/**
+ * 配置读不成时给公共工具的回答（open-items C7）。文件是 Wakeflow 的配置、只是版本不是本制品读的那一版：
+ * `config-version-unsupported`，带文件里的版本与本制品读的版本——旧格式不迁移（ADR-0018），这个工作区要么用
+ * 写它的那一版制品，要么保留着另起一个工作区。其余读不成的情况仍是 `config-authority`。
+ */
+export function failWakeflowConfigAuthority(
+  error: Readonly<WakeflowConfigAuthoritySnapshotError>,
+  path = "$request.root",
+): never {
+  if (error.reason === "config-version" && error.schemaVersion !== null) {
+    failWakeflow("precondition-failed", "config-version-unsupported", "$config.schemaVersion", {
+      cause: error,
+      details: {
+        found: String(error.schemaVersion),
+        supported: String(WAKEFLOW_CONFIG_SCHEMA_VERSION),
+      },
+    });
+  }
+  failWakeflow("precondition-failed", "config-authority", path, { cause: error });
 }
 
 interface ParsedOptions {
@@ -271,7 +303,16 @@ function parseConfigModel(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) {
+      if (error.reason === "version") {
+        throw new WakeflowConfigAuthoritySnapshotError(
+          "config-version",
+          error.path,
+          error.schemaVersion,
+        );
+      }
+      fail("config", error.path);
+    }
     throw error;
   }
 }

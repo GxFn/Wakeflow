@@ -246,6 +246,8 @@ export interface ObservedHostHooks {
   readonly directory: "absent" | "private" | "mode";
   readonly records: number;
   readonly skipped: number;
+  /** `skipped` 里占着原子暂存前缀、却不是观察器自己会留下的暂存的条目数（open-items B13）。 */
+  readonly stageResidue: number;
   /** 该宿主观察器写不进工作区而留下的事故记录数（open-items G8，§13.166）；只读计数，不是门的权威。 */
   readonly writeFailures: number;
   /**
@@ -635,6 +637,13 @@ async function hookDirectoryState(
   }
 }
 
+/** 在同一个宿主进程里继续会话的 SessionStart 来源：不重新装载运行时。别的词（含今后的新词）与缺省都算启动。 */
+const IN_PROCESS_START_SOURCES: readonly string[] = Object.freeze(["clear", "compact"]);
+
+function sessionStartLoadsRuntime(startSource: string | null): boolean {
+  return startSource === null || !IN_PROCESS_START_SOURCES.includes(startSource);
+}
+
 /** 会话的一项事实取"最近一条带了它的记录"：记录没带这一项不动，键不早于已记下的才覆盖。 */
 function keepLatestFact(
   keys: Map<string, string>,
@@ -695,7 +704,13 @@ async function observeHostHooks(
         if (record.event === "user-prompt-submit") conversed.add(record.sessionId);
         if (record.event === "session-start") {
           const previousStart = startKeys.get(record.sessionId);
-          if (previousStart === undefined || previousStart <= key) {
+          // 运行时身份只取"进程启动"的那条 SessionStart（open-items B14）：`clear` 与 `compact` 是同一个宿主
+          // 进程里的会话继续，插件的 MCP 服务没有重新装载；拿它的观察器摘要当启动摘要，会把一个还跑着旧
+          // 制品的窗口判成已经换代。没有来源的记录（Codex、更早的记录）照旧算一次启动。
+          if (
+            sessionStartLoadsRuntime(record.startSource) &&
+            (previousStart === undefined || previousStart <= key)
+          ) {
             startKeys.set(record.sessionId, key);
             startDigests.set(record.sessionId, record.artifactManifestDigest);
             startVersions.set(record.sessionId, record.artifactVersion);
@@ -744,6 +759,7 @@ async function observeHostHooks(
       directory,
       records: inventory.records,
       skipped: inventory.skipped,
+      stageResidue: inventory.stageResidue,
       writeFailures,
       latestBySession,
     });
@@ -762,6 +778,7 @@ async function observeHostHooks(
       directory: "absent" as const,
       records: 0,
       skipped: 0,
+      stageResidue: 0,
       writeFailures: 0,
       latestBySession: new Map(),
     });

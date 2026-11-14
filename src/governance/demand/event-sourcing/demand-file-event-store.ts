@@ -27,7 +27,10 @@ import {
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { createUuidV4 } from "../../../foundation/identity/uuid-v4.js";
-import { readNodeSystemErrorCode } from "../../../foundation/node/node-system-error.js";
+import {
+  observePidOwnerSync,
+  type PidOwnedNodeEvidence,
+} from "../../../foundation/node/process-instance.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -169,19 +172,16 @@ function admitCommitPublication(commit: Readonly<DemandEventStreamCommit>): void
   }
 }
 
+/** 追加候选的所有者状态；别的进程留下的候选按节点事实判 pid 重用与别的用户（open-items B7）。 */
 function candidateOwnerState(
   address: ReturnType<typeof parseDemandEventAppendCandidateFileName>,
+  node: Readonly<PidOwnedNodeEvidence>,
 ): "active" | "inactive" | "unknown" {
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
     return ACTIVE_APPEND_CANDIDATE_TOKENS.has(address.token) ? "active" : "inactive";
   }
-  try {
-    process.kill(address.pid, 0);
-    return "active";
-  } catch (error: unknown) {
-    return readNodeSystemErrorCode(error) === "ESRCH" ? "inactive" : "unknown";
-  }
+  return observePidOwnerSync(address.pid, node);
 }
 
 /** 持有一个 Demand root 的 Event Store I/O 作用域。 */
@@ -452,7 +452,11 @@ export class DemandFileEventStore {
         throw error;
       }
       assertDemandFileEventStoreFile(entry.node, `$candidates/${index}`, [1n, 2n]);
-      return Object.freeze({ address, entry, ownerState: candidateOwnerState(address) });
+      return Object.freeze({
+        address,
+        entry,
+        ownerState: candidateOwnerState(address, entry.node),
+      });
     });
     return Object.freeze(candidates);
   }

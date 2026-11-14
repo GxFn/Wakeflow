@@ -1,12 +1,12 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { mkdir, open as openFileHandle } from "node:fs/promises";
-import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Filesystem：根作用域目录的持久化创建与逐级建立。
  *
@@ -63,23 +63,13 @@ export class DurableDirectoryMaterializationError extends Error {
 function fail(reason, path, cause) {
     throw new DurableDirectoryMaterializationError(reason, path, cause === undefined ? undefined : { cause });
 }
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
-}
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseMode(value) {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {

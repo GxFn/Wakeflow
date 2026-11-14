@@ -1,7 +1,7 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { GitIgnoreCandidateObservationError, observeGitIgnoreCandidate, } from "../../foundation/git/git-ignore-candidate-observation.js";
 import { GitIgnoreObservationError, observeGitIgnorePaths, } from "../../foundation/git/git-ignore-observation.js";
@@ -52,12 +52,8 @@ function fail(reason, path, cause) {
     throw new WakeflowGitignoreInspectionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseRequest(value) {
     let record;

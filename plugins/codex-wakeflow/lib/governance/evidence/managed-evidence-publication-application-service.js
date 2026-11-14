@@ -12,6 +12,7 @@ import { ManagedEvidencePublicationStageMaterializationError, materializeManaged
 import { computeManagedEvidencePublicationTransactionDigest, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
 import { appendManagedEvidencePublicationEvent, completeManagedEvidencePublicationTransaction, findManagedEvidencePublicationCommit, loadCurrentManagedEvidencePublicationTransaction, loadManagedEvidencePublicationHealthyAuthority, loadManagedEvidencePublicationTransactionAuthority, ManagedEvidencePublicationTransactionSettlementError, retireStaleManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-settlement.js";
 import { createManagedEvidencePublicationTransactionJournal, loadManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
+import { ownString } from "../../foundation/data/own-string.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence publication application input is invalid.",
     transaction: "Managed evidence publication transaction is invalid.",
@@ -42,16 +43,6 @@ export class ManagedEvidencePublicationApplicationServiceError extends Error {
         this.causeReason = causeReason;
         this.publicationAuthority = publicationAuthority;
     }
-}
-function ownString(value, key) {
-    if (typeof value !== "object" || value === null)
-        return null;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined &&
-        Object.hasOwn(descriptor, "value") &&
-        typeof descriptor.value === "string"
-        ? descriptor.value
-        : null;
 }
 function fail(reason, cause) {
     throw new ManagedEvidencePublicationApplicationServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"), "unknown", cause === undefined ? undefined : { cause });

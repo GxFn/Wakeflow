@@ -1,13 +1,13 @@
-import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, } from "./wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow config authority publication input is invalid.",
     "unsupported-platform": "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
@@ -37,18 +37,8 @@ function fail(reason, path, cause) {
     throw new WakeflowConfigAuthorityPublicationError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

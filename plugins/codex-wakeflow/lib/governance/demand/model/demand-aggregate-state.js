@@ -1,3 +1,4 @@
+import { wakeflowRearmablePhase, wakeflowTargetPhaseAdmission, } from "../../../contracts/vocabulary/wakeflow-target-phases.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
@@ -807,6 +808,13 @@ function replaceRejectedTestAttemptDelivery(current, target, attempt, replacemen
             : entry),
     });
 }
+/**
+ * 目标处在阶段表允许 rearm 的阶段（open-items L1）。运行时查表，类型上收窄到表里 `rearm: true` 的那些
+ * 阶段对应的状态——它们都带着一次已有结局的投递。
+ */
+function isRearmableTarget(target) {
+    return wakeflowRearmablePhase(target.phase);
+}
 export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValue) {
     const current = parseDemandAggregateState(currentValue);
     let envelope;
@@ -828,6 +836,12 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
         target.taskPackageDigest !== envelope.target.taskPackageDigest ||
         target.windowId !== envelope.route.windowId ||
         deliveryBearingTargets(current).some((entry) => entry.currentDelivery.deliveryId === envelope.deliveryId)) {
+        fail("transition", "$/targetTasks");
+    }
+    // 阶段表是"这个阶段能不能准备投递"的唯一来源（open-items L1）：表说不能的，下面按用途展开的分支
+    // 一个都不进；分支只负责各自用途的前提（返工依据、代际上限、尝试合同）。
+    if ((wakeflowTargetPhaseAdmission(target.workType ?? "implementation", target.phase)?.prepare ??
+        "no") === "no") {
         fail("transition", "$/targetTasks");
     }
     assertClaimUnused(current, envelope.fence.claimId);
@@ -1076,7 +1090,8 @@ export function rearmDeliveryInDemandAggregateState(currentValue, rearmValue) {
     if (target === undefined ||
         current.lifecycle !== "active" ||
         current.awaitingDecision !== undefined ||
-        (target.phase !== "host-effect-rejected" && target.phase !== "test-host-effect-rejected") ||
+        // 哪些阶段允许 rearm 由阶段表说了算（open-items L1）：与预览的判定是同一列。
+        !isRearmableTarget(target) ||
         target.currentDelivery.generation !== rearm.previousGeneration ||
         target.currentDelivery.fence.claimId !== rearm.previousFence.claimId ||
         target.currentDelivery.fence.claimDigest !== rearm.previousFence.claimDigest ||

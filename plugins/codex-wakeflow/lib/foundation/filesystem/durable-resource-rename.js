@@ -4,9 +4,10 @@ import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Durable resource rename input is invalid.",
     "root-scope": "Resource rename could not establish its rooted scope.",
@@ -59,23 +60,13 @@ function parseResourcePath(value, path) {
         throw error;
     }
 }
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
-}
 function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseExpectedNode(value) {
     if (typeof value !== "object" ||

@@ -7,7 +7,7 @@ import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesInDi
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
@@ -57,12 +57,8 @@ function fail(reason, path, cause) {
     throw new DemandFileEventSnapshotStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseOptions(value) {
     let record;

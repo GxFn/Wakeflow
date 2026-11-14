@@ -24,10 +24,8 @@ import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { admitTargetTaskPlanningResult, parseTargetTaskPlanningRequest, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveAnchorReferenceBlockers, deriveDependencyBlockers, deriveImplementationBaselines, deriveImplementationPlanningBlockers, deriveLineageBlockers, deriveLineageExpectation, derivePlanReview, deriveSectionAnchorBlockers, deriveTestContractCoverageBlockers, deriveTestPlanningBlockers, deriveTestStepReferenceBlockers, deriveTopologyBlockers, parseAcceptanceCriteria, } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {
         if (error.reason === "aborted")

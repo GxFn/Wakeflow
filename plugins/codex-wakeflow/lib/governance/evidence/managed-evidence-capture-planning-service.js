@@ -24,6 +24,7 @@ import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidence
 import { createManagedEvidenceManifest, MANAGED_EVIDENCE_PAYLOAD_LIMITS, MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import { assertManagedEvidenceKindMatchesSource, ManagedEvidenceSourceSelectionError, managedEvidenceSourceKey, parseManagedEvidenceSourceSelection, } from "./managed-evidence-source-selection.js";
+import { ownString } from "../../foundation/data/own-string.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence capture planning input is invalid.",
     config: "Managed evidence capture planning Config is invalid.",
@@ -57,16 +58,6 @@ const CONTENT_CLASSIFICATION_CONCURRENCY = 4;
 const MAXIMUM_FILE_BYTES = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes);
 const CAPTURED_FILE_REF = parsePortableResourcePath("content");
 const BLOCKER_LIMIT = 16;
-function ownString(value, key) {
-    if (typeof value !== "object" || value === null)
-        return null;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined &&
-        Object.hasOwn(descriptor, "value") &&
-        typeof descriptor.value === "string"
-        ? descriptor.value
-        : null;
-}
 function fail(reason, cause) {
     throw new ManagedEvidenceCapturePlanningServiceError(reason, ownString(cause, "code"), ownString(cause, "reason"), cause === undefined ? undefined : { cause });
 }

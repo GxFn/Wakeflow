@@ -10,6 +10,7 @@ import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const ARCHIVE_NAME_PATTERN = /^[0-9]{10}$/u;
 const COMMIT_NAME_PATTERN = /^[0-9]{16}$/u;
 const MAXIMUM_COMMITS = 8192;
@@ -22,9 +23,6 @@ const POD_ID_PATTERN = /^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]
 const MAXIMUM_ARCHIVES_PER_DEMAND = 4096;
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(16 * 1024 * 1024, "$manifest.maximumBytes");
 const EVENT_ID_PATTERN = /^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function record(value, path) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         fail("precondition-failed", "archive-manifest", path);

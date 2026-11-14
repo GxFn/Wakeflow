@@ -21,6 +21,7 @@ import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail, WakeflowError } from "./error.js";
 import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, requirementClaimStateRef, } from "./layout.js";
+import { signalOptions } from "../foundation/node/abort-signal.js";
 /**
  * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
  *
@@ -234,9 +235,6 @@ export function reclaimRequirementPackage(current, demandId, at) {
         archive: null,
         claim: { demandId, claimedAt: parseUtcInstant(at, "$at") },
     });
-}
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
 }
 async function readSource(root, ref, signal) {
     try {

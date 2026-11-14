@@ -27,6 +27,7 @@ import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspecti
 import { compileWakeflowWindowLaunchIntents, computeWakeflowWindowLaunchExecutionDigest, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { capStatusList, DETACHED_WORKSPACE_NEXT, deriveNextActions, deriveServerRuntime, deriveWindowRuntime, deriveWorkspaceGates, detachedWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 /** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
 const MAINTENANCE_RESIDUES_MAXIMUM = 64;
 const RESIDUE_NAME_MAXIMUM = 128;
@@ -67,9 +68,6 @@ const PRIORITY_ORDER = Object.freeze({
 });
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 const JOURNAL_FILE_PATTERN = /^(demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function reasonOf(error) {
     if (typeof error !== "object" || error === null)
         return null;

@@ -8,7 +8,8 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Stable directory read input is invalid.",
     "unsupported-platform": "Stable directory read requires Node no-follow directory handles.",
@@ -51,12 +52,6 @@ const openRawNameDirectory = opendir;
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 function fail(reason, path, cause) {
     throw new StableDirectoryReadError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseExpectedNode(value) {
     if (value === undefined)
@@ -110,12 +105,8 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)

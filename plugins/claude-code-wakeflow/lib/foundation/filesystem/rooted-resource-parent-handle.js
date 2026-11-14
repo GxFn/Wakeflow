@@ -1,11 +1,10 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { lstat, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
-import { types } from "node:util";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
 const ERROR_MESSAGES = {
     input: "Rooted resource parent handle input is invalid.",
     "root-scope": "Rooted resource parent could not establish its root scope.",
@@ -42,12 +41,8 @@ function fail(reason, path, cause) {
     throw new RootedResourceParentHandleError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseAddress(resourcePath, errorPath) {
     let segments;

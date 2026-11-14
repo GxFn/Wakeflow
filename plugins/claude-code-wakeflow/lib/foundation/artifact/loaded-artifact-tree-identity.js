@@ -1,13 +1,13 @@
 import { Buffer } from "node:buffer";
-import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { JsonValueError, parseJsonValue } from "../data/json-value.js";
 import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "../filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../filesystem/rooted-directory.js";
+import { isRootedDirectory } from "../filesystem/rooted-directory.js";
 import { readStableRootResourceTree, StableResourceTreeReadError, } from "../filesystem/stable-resource-tree-read.js";
 import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
  *
@@ -126,12 +126,6 @@ function parseLimits(value) {
         }
     }
     return Object.freeze(parsed);
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseIdentityOptions(value) {
     let record;
@@ -346,12 +340,8 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function mapStableTreeReadError(error) {
     if (error.reason === "entry-limit")

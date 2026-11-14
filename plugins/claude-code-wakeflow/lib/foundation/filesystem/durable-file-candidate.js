@@ -8,7 +8,7 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const ERROR_MESSAGES = {
     input: "Durable file candidate input is invalid.",
@@ -43,12 +43,8 @@ function fail(reason, path, cause) {
     throw new DurableFileCandidateError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseOptions(value) {
     let record;

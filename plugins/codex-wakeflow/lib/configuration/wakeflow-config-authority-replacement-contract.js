@@ -11,6 +11,7 @@ import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, 
 import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, WakeflowConfigAuthoritySnapshotError, } from "./wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
  *
@@ -62,12 +63,6 @@ export function assertWakeflowConfigAuthorityRoot(value) {
         !(value instanceof RootedDirectory)) {
         failWakeflowConfigAuthorityReplacement("input", "$root");
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function optionRecord(value) {
     try {

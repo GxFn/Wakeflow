@@ -6,6 +6,7 @@ import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStat
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Gitignore 重组与显式恢复共享的输入、错误和机械操作准入合同。
  *
@@ -144,12 +145,6 @@ export function parseWakeflowGitignoreRecompositionRequest(value) {
         failWakeflowGitignoreRecomposition("input", "$request.matrix");
     }
     return Object.freeze({ matrix, expectedMatrixDigest, hostProfiles });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function positiveMilliseconds(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {

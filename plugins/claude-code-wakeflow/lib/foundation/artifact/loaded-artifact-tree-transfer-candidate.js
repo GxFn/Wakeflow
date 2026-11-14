@@ -7,6 +7,7 @@ import { copyFileToCandidateDurably, DurableFileCopyCandidateError, } from "../f
 import { RootedDirectory } from "../filesystem/rooted-directory.js";
 import { inspectLoadedArtifactTree, LoadedArtifactTreeIdentityError, } from "./loaded-artifact-tree-identity.js";
 import { LoadedArtifactTreeTransferPlanError, parseLoadedArtifactTreeTransferPlan, } from "./loaded-artifact-tree-transfer-plan.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Loaded artifact tree transfer candidate input is invalid.",
     capacity: "Loaded artifact tree transfer exceeds its admitted capacity.",
@@ -40,12 +41,6 @@ function assertRoot(value, path) {
         !(value instanceof RootedDirectory)) {
         fail("input", path);
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

@@ -9,6 +9,7 @@ import { readStableFile, StableFileReadError, } from "../../foundation/filesyste
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { hostRuntimeRootRef } from "../../kernel/layout.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Claude host asset operation input is invalid.",
     operation: "Claude host asset operation payload is invalid.",
@@ -36,9 +37,6 @@ const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const ASSET_MODE = 0o600;
 const DIRECTORY_MODE = 0o700;
 const ASSETS_DIRECTORY_REF = parsePortableResourcePath(`${hostRuntimeRootRef("claude-code")}/operations/assets`, "$asset");
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function assertRoot(root) {
     if (typeof root !== "object" ||
         root === null ||

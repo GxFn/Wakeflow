@@ -5,6 +5,7 @@ import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Durable file copy candidate input is invalid.",
     capacity: "Durable file copy source exceeds its byte budget.",
@@ -132,12 +133,6 @@ export function parseDurableFileCopyExpectation(value) {
         failDurableFileCopyCandidate("input", "$expectation.expectedNode");
     }
     return Object.freeze({ byteCount, digest, expectedNode });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseMode(value) {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {

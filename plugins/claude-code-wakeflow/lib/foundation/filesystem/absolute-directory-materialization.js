@@ -1,11 +1,11 @@
 import nodePath from "node:path";
-import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { AbsoluteDirectoryPlacementError, inspectAbsoluteDirectoryPlacement, } from "./absolute-directory-placement.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "./durable-directory-materialization.js";
 import { sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Absolute directory materialization input is invalid.",
     scope: "Absolute directory materialization requires a non-root safe ancestor.",
@@ -32,12 +32,6 @@ export class AbsoluteDirectoryMaterializationError extends Error {
 }
 function fail(reason, path, cause) {
     throw new AbsoluteDirectoryMaterializationError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

@@ -1,13 +1,13 @@
-import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowExternalInstructionBodyAuthority, listWakeflowExternalInstructionTargets, parseWakeflowExternalInstructionTarget, WakeflowExternalInstructionBodyAuthorityError, wakeflowExternalInstructionTargetKey, } from "./wakeflow-external-instruction-body-authority.js";
 import { inspectWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "./wakeflow-managed-block-file.js";
 import { historicalWakeflowManagedTextTargets, WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
  *
@@ -66,12 +66,6 @@ function parseConfig(value, path) {
             fail("input", path, error);
         throw error;
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function hasTarget(config, target) {
     const key = wakeflowExternalInstructionTargetKey(target);
@@ -160,12 +154,8 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function createAuthority(config, request) {
     try {

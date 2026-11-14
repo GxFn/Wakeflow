@@ -1,11 +1,11 @@
-import { types } from "node:util";
 import pLimit from "p-limit";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { addByteCounts, ByteCountError, parseByteCount, } from "../numeric/byte-count.js";
 import { BoundedDirectoryTreeScanError, scanBoundedResourceDirectoryTree, scanBoundedRootDirectoryTree, } from "./bounded-directory-tree-scan.js";
 import { sameFileNodeSnapshot } from "./file-node-snapshot.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界资源树内容观察。
  *
@@ -53,12 +53,6 @@ export class StableResourceTreeReadError extends Error {
 }
 function fail(reason, path, cause) {
     throw new StableResourceTreeReadError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseCount(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
@@ -112,12 +106,8 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)

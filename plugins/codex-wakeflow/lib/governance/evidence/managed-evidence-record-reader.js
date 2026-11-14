@@ -5,7 +5,7 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { joinPortableResourcePath, PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
@@ -57,12 +57,8 @@ function fail(reason, path, cause) {
     throw new ManagedEvidenceRecordReaderError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseSignal(value, path) {
     if (value !== undefined &&

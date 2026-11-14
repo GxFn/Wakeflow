@@ -11,6 +11,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Support：单个受管 Support 根目录的机械物化 owner。
  *
@@ -50,12 +51,6 @@ export class WakeflowManagedSupportRootMaterializationError extends Error {
 }
 function fail(reason, path, cause) {
     throw new WakeflowManagedSupportRootMaterializationError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseDigest(value, path) {
     try {

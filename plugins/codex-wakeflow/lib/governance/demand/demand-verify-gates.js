@@ -12,6 +12,7 @@ import { managedEvidenceManifestRef, managedEvidencePayloadRootRef, } from "../e
 import { inspectLedgerAuthorityLayout } from "../ledger/ledger-authority-layout.js";
 import { readDemandAcceptanceCoverage } from "./demand-acceptance-coverage.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const MANIFEST_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$manifest.maximumBytes");
 function computeVerifyObservationDigest(gates) {
     return computeCanonicalJsonSha256Digest(parseJsonValue({ gates }, "$verify"));
@@ -55,9 +56,6 @@ async function guarded(name, probe) {
             throw error;
         return gate(name, "unavailable", reason);
     }
-}
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
 }
 async function configGate(input) {
     const current = await readWakeflowConfigAuthoritySnapshot(input.workspaceRoot, signalOptions(input.signal));

@@ -6,6 +6,7 @@ import { PortableResourcePathError, parsePortableResourcePath, } from "../filesy
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Git：根作用域 Git ignore 语义观察。
  *
@@ -57,12 +58,6 @@ function assertRoot(value, path) {
         !(value instanceof RootedDirectory)) {
         fail("input", path);
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

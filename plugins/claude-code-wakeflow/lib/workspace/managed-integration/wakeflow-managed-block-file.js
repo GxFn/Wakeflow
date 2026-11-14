@@ -3,11 +3,12 @@ import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomicall
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { ByteCountError, parseByteCount, } from "../../foundation/numeric/byte-count.js";
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
 import { inspectWakeflowManagedTextEnvelope, parseWakeflowManagedTextEnvelopeTarget, removeWakeflowManagedTextEnvelope, WakeflowManagedTextEnvelopeError, } from "./wakeflow-managed-text-envelope.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow managed block file input is invalid.",
     "unsupported-platform": "Wakeflow managed block file requires POSIX ownership facts.",
@@ -42,18 +43,8 @@ function fail(reason, path, cause) {
     throw new WakeflowManagedBlockFileError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseRequest(value) {
     if (typeof value !== "object" || value === null || types.isProxy(value)) {

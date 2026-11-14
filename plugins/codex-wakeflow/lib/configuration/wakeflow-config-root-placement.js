@@ -1,7 +1,6 @@
 import nodePath from "node:path";
-import { types } from "node:util";
 import { AbsoluteDirectoryPlacementError, inspectAbsoluteDirectoryPlacement, } from "../foundation/filesystem/absolute-directory-placement.js";
-import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
 import { WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT, } from "./wakeflow-config.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow config placement input is invalid.",
@@ -29,12 +28,8 @@ function fail(reason, path, cause) {
     throw new WakeflowConfigRootPlacementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function portableComparisonPath(value) {
     return nodePath.normalize(value).normalize("NFC").toLowerCase();

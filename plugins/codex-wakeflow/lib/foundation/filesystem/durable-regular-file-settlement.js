@@ -1,9 +1,10 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Durable regular file settlement input is invalid.",
     "root-scope": "Regular file settlement could not establish its rooted scope.",
@@ -38,18 +39,8 @@ function fail(reason, path, cause) {
     throw new DurableRegularFileSettlementError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)

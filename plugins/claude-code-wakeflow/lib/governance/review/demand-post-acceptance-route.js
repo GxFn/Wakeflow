@@ -1,3 +1,4 @@
+import { WAKEFLOW_TEST_TARGET_PHASE_RULES } from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -219,12 +220,17 @@ function reviewedTest(target) {
         decisionDigest: target.currentDelivery.reviewDecision.decisionDigest,
     });
 }
-/** 唯一未终结 test 目标按其阶段决定下一位 owner。 */
+/**
+ * 唯一未终结 test 目标按其阶段决定下一位 owner。阶段对应哪个 stage 写在 `WAKEFLOW_TEST_TARGET_PHASE_RULES`
+ * 一处（open-items L1）：这里每个分支的 `status` 都从那张表取，分支本身只负责按阶段收窄状态、拼出该 stage
+ * 要带的事实。表里改了某个阶段的 stage，这里的返回类型随之改变，对不上 `DemandPostAcceptanceNextStage`
+ * 的形状就编译不过。
+ */
 function openTestStage(testTarget) {
     switch (testTarget.phase) {
         case "planned":
             return Object.freeze({
-                status: "test-delivery-planning",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testTask: Object.freeze({
                     targetTaskId: testTarget.targetTaskId,
                     taskPackageId: testTarget.taskPackageId,
@@ -234,13 +240,13 @@ function openTestStage(testTarget) {
             });
         case "test-delivery-prepared":
             return Object.freeze({
-                status: "test-host-effect-execution",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testDelivery: testDelivery(testTarget),
             });
         case "test-host-effect-accepted":
         case "test-host-effect-indeterminate":
             return Object.freeze({
-                status: "test-result-planning",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testDelivery: Object.freeze({
                     ...testDelivery(testTarget),
                     outcomeDigest: testTarget.currentDelivery.outcome.outcomeDigest,
@@ -252,7 +258,7 @@ function openTestStage(testTarget) {
             });
         case "test-host-effect-rejected":
             return Object.freeze({
-                status: "test-delivery-rearm-planning",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 rejectedDelivery: Object.freeze({
                     ...testDelivery(testTarget),
                     outcomeDigest: testTarget.currentDelivery.outcome.outcomeDigest,
@@ -260,7 +266,7 @@ function openTestStage(testTarget) {
             });
         case "test-result-reported":
             return Object.freeze({
-                status: "test-result-review-planning",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testResult: Object.freeze({
                     targetTaskId: testTarget.targetTaskId,
                     taskPackageId: testTarget.taskPackageId,
@@ -274,7 +280,7 @@ function openTestStage(testTarget) {
             });
         case "test-accepted":
             return Object.freeze({
-                status: "completion-preflight",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testingClosure: Object.freeze({
                     mode: "real-environment",
                     testReview: reviewedTest(testTarget),
@@ -282,17 +288,17 @@ function openTestStage(testTarget) {
             });
         case "test-another-attempt-requested":
             return Object.freeze({
-                status: "test-another-attempt-planning",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testReview: reviewedTest(testTarget),
             });
         case "test-review-blocked":
             return Object.freeze({
-                status: "test-review-blocked",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testReview: reviewedTest(testTarget),
             });
         case "test-escalated":
             return Object.freeze({
-                status: "test-review-escalated",
+                status: WAKEFLOW_TEST_TARGET_PHASE_RULES[testTarget.phase].stage,
                 testReview: reviewedTest(testTarget),
             });
         case "test-product-defect":

@@ -6,7 +6,7 @@ import { DurableRegularFileSettlementError, settleRegularFileDurability, } from 
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "./stable-directory-read.js";
 import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 /**
@@ -48,12 +48,8 @@ function fail(reason, path, cause) {
     throw new DurableAtomicFileStageRecoveryError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseOptions(value) {
     let record;

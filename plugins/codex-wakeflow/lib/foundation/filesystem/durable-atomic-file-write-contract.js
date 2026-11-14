@@ -5,6 +5,7 @@ import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(64 * 1024 * 1024, "$durableAtomicFile.maximumBytes");
 const ERROR_MESSAGES = {
@@ -60,12 +61,6 @@ export function assertDurableAtomicFileRoot(value) {
         !(value instanceof RootedDirectory)) {
         failDurableAtomicFileWrite("input", "$root");
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseMode(value) {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {

@@ -47,6 +47,7 @@ import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runti
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { collectEvidenceReferences, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const REPORT_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
     allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
@@ -77,9 +78,6 @@ const HANDLER_ERROR_TABLE = Object.freeze({
     aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
 });
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {
         if (error.reason === "aborted")

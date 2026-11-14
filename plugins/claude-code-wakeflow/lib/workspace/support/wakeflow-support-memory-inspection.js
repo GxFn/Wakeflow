@@ -15,6 +15,7 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
 import { WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE } from "./wakeflow-managed-support-root-materialization.js";
 import { createWakeflowSupportMemoryAuthority, WakeflowSupportMemoryAuthorityError, } from "./wakeflow-support-memory-authority.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
  *
@@ -55,12 +56,6 @@ export class WakeflowSupportMemoryInspectionError extends Error {
 }
 function fail(reason, path, cause) {
     throw new WakeflowSupportMemoryInspectionError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseDigest(value, path) {
     try {

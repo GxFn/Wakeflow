@@ -1,6 +1,6 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { deriveWakeflowExternalInstructionAuthorities, parseWakeflowExternalInstructionInspectionRequest, WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE, WakeflowExternalInstructionInspectionError, wakeflowExternalInstructionInspectionOf, wakeflowExternalInstructionManagedBlockFileRequest, } from "./wakeflow-external-instruction-inspection.js";
 import { recomposeWakeflowManagedBlockFile, WakeflowManagedBlockFileError, } from "./wakeflow-managed-block-file.js";
 const ERROR_MESSAGES = {
@@ -32,12 +32,8 @@ function fail(reason, path, cause) {
     throw new WakeflowExternalInstructionRecompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseOptions(value) {
     if (value === undefined)

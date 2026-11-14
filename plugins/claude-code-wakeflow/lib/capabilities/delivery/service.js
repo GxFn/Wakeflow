@@ -44,6 +44,7 @@ import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runt
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveClaimBlocker, deriveDeliveryDisposition, derivePermissionModeBlocker, derivePrepareBlockers, deriveRearmBlockers, expectedLaunchPermissionMode, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
 import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
 }
@@ -73,9 +74,6 @@ const HANDLER_ERROR_TABLE = Object.freeze({
     aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
 });
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function mapContextError(error) {
     if (error instanceof DemandOperationAuthorityContextError) {
         if (error.reason === "aborted")

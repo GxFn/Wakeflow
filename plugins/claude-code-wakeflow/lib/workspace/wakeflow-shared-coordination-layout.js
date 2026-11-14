@@ -2,7 +2,7 @@ import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
 import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
@@ -61,12 +61,8 @@ function assertDirectory(node, path) {
     }
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parseOptions(value) {
     let record;

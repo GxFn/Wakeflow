@@ -17,9 +17,10 @@ import { createFileAtomically, DurableAtomicFileWriteError } from "./durable-ato
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
 import { StableFileReadError } from "./stable-file-read.js";
 import { StrictTextFileError } from "./strict-text-file.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的短生命周期独占文件锁。
  *
@@ -91,24 +92,14 @@ function fail(reason, path, cause) {
     throw new RootedExclusiveFileLockError(reason, path, cause === undefined ? undefined : { cause });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function parsePositiveMilliseconds(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
         fail("input", path);
     }
     return value;
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

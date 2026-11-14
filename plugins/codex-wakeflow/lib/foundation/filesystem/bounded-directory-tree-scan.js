@@ -1,7 +1,7 @@
-import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory } from "./rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "./stable-directory-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Bounded directory tree scan input is invalid.",
     "root-scope": "Directory tree scan could not establish its rooted scope.",
@@ -50,12 +50,6 @@ const LOWER_REASON_MAP = {
 function fail(reason, path, cause) {
     throw new BoundedDirectoryTreeScanError(reason, path, cause === undefined ? undefined : { cause });
 }
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
-}
 function parseLimit(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         fail("input", path);
@@ -91,12 +85,8 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function assertNotAborted(signal) {
     if (signal?.aborted === true)

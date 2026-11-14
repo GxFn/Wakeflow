@@ -3,7 +3,7 @@ import { threadId } from "node:worker_threads";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
@@ -127,12 +127,8 @@ function parseOptions(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function assertOperation(value) {
     if (typeof value !== "function" || types.isProxy(value)) {

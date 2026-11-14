@@ -5,9 +5,7 @@ import { fail, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
 import { observeWorkspace } from "./workspace-observation.js";
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 async function openLedgerRoot(root, snapshot) {
     const placement = snapshot.placements.roots.find((entry) => entry.key === "ledger.root");
     if (placement === undefined || placement.state !== "present" || placement.realPath === null) {

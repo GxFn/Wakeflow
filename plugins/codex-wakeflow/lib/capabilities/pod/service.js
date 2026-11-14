@@ -27,9 +27,7 @@ import { refreshWakeflowWindowRuntimeProjections, retireWakeflowWindowRuntimePro
 import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { admitPodResult, parsePodRequest, WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION, WAKEFLOW_POD_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, deriveRelativePathDependencyAdvisory, podMutationNext, podPreviewNext, } from "./decide.js";
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 // ---- 请求与上下文 ------------------------------------------------------------------
 function envelopeOf(request) {
     if (request.mode === "recover") {

@@ -8,6 +8,7 @@ import { isWakeflowDetachAction, WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS, } from
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../../workspace/workspace-host-resource-profile.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REF, ClaudeCodePortableSettingsPublicationError, inspectClaudeCodePortableSettings, } from "./claude-code-portable-settings-publication.js";
 import { ClaudeCodePortableSettingsTransitionError, claudeCodePortableSettingsPublicationOwnerOf, claudeCodePortableSettingsRemovedRulesFor, claudeCodePortableSettingsRetiredRulesFor, claudeCodePortableSettingsRulesFor, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Claude portable settings composition input is invalid.",
     config: "Claude portable settings composition Config is invalid.",
@@ -239,9 +240,6 @@ function supportPlacement(placements, root) {
     if (placement === undefined)
         fail("placement", "$supportRoot");
     return placement;
-}
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
 }
 /** 写入动作的一个根：程序根直接读；支撑面缺根时按动作决定计划 create 还是报 `support-root-missing`。 */
 async function planPublicationRoot(context, root) {

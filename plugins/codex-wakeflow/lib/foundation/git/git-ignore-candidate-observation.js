@@ -10,6 +10,7 @@ import { parsePortableResourcePath, } from "../filesystem/portable-resource-path
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import { GitIgnoreObservationError, observeGitIgnorePathsInWorkTree, } from "./git-ignore-observation.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Git：尚未发布的 Gitignore 文件候选语义观察。
  *
@@ -55,12 +56,6 @@ function assertRoot(value) {
         !(value instanceof RootedDirectory)) {
         fail("input", "$repositoryRoot");
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     let record;

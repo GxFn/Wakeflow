@@ -9,6 +9,7 @@ import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import { ManagedEvidencePublicationRecordPublisherError, publishManagedEvidencePublicationRecord, } from "./managed-evidence-publication-record-publisher.js";
 import { computeManagedEvidencePublicationTransactionDigest, deriveManagedEvidencePublicationEventSourcingCommand, deriveManagedEvidencePublicationRecordTreePlan, } from "./managed-evidence-publication-transaction.js";
 import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, retireManagedEvidencePublicationTransactionJournal, } from "./managed-evidence-publication-transaction-store.js";
+import { ownString } from "../../foundation/data/own-string.js";
 const ERROR_MESSAGES = {
     journal: "Managed evidence publication settlement journal is unavailable or conflicting.",
     "event-sourcing": "Managed evidence publication settlement Event is invalid or conflicting.",
@@ -30,16 +31,6 @@ export class ManagedEvidencePublicationTransactionSettlementError extends Error 
         this.causeCode = causeCode;
         this.causeReason = causeReason;
     }
-}
-function ownString(value, key) {
-    if (typeof value !== "object" || value === null)
-        return null;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined &&
-        Object.hasOwn(descriptor, "value") &&
-        typeof descriptor.value === "string"
-        ? descriptor.value
-        : null;
 }
 function fail(reason, cause) {
     throw new ManagedEvidencePublicationTransactionSettlementError(reason, ownString(cause, "code"), ownString(cause, "reason"));

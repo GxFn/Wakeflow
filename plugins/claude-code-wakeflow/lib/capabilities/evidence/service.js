@@ -19,9 +19,7 @@ import { runPublicationTransaction, } from "../../kernel/publication-transaction
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { admitRecordEvidenceResult, parseRecordEvidenceRequest, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_SCHEMA_VERSION, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveDemandCapacityBlockers, MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY, deriveEvidenceEventIdentity, deriveEvidencePlanDigest, evidencePlanSummary, evidencePreviewNext, } from "./decide.js";
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 function parseDemandId(value) {
     try {
         return parseWakeflowDurableIdOfKind(value, "demand", "$request.demandId");

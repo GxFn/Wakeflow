@@ -18,6 +18,7 @@ import { activateRequirementClaim, createRequirementClaimState, createRequiremen
 import { admitBoardInspectionResult, admitRequirementPublicationResult, parseBoardInspectionRequest, parseRequirementPublicationRequest, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { analyzePackageDocuments, deriveClaimTransitionBlockers, derivePublishAssessment, deriveRequirementId, privacyBlockers, } from "./decide.js";
 import { boardCounts, deriveRequirementNext, selectBoardEntries, toBoardEntry, } from "./projection.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 const MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 const MEDIA_TYPES = Object.freeze({
     md: "text/markdown",
@@ -28,9 +29,6 @@ const MEDIA_TYPES = Object.freeze({
     yml: "application/yaml",
     toml: "application/toml",
 });
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function mapStoreError(error) {
     if (error instanceof LedgerAuthorityStoreError) {
         switch (error.reason) {

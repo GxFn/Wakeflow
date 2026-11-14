@@ -5,6 +5,7 @@ import { DurableResourceRenameError, renameResourceDurably } from "./durable-res
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Directory tree publication input is invalid.",
     "source-changed": "Directory tree publication source changed before commit.",
@@ -50,12 +51,6 @@ function parsePath(value, path) {
             fail("input", path, error);
         throw error;
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseOptions(value) {
     const record = plainRecord(value, "$options");

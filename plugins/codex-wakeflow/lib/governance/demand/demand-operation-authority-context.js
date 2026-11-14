@@ -6,6 +6,7 @@ import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../ledger/ledg
 import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
 import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
+import { ownString } from "../../foundation/data/own-string.js";
 const ERROR_MESSAGES = {
     root: "Demand operation root could not be held safely.",
     config: "Demand operation Config authority is invalid.",
@@ -26,16 +27,6 @@ export class DemandOperationAuthorityContextError extends Error {
         this.causeCode = causeCode;
         this.causeReason = causeReason;
     }
-}
-function ownString(value, key) {
-    if (typeof value !== "object" || value === null)
-        return null;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined &&
-        Object.hasOwn(descriptor, "value") &&
-        typeof descriptor.value === "string"
-        ? descriptor.value
-        : null;
 }
 function fail(reason, cause) {
     throw new DemandOperationAuthorityContextError(reason, ownString(cause, "code"), ownString(cause, "reason"));

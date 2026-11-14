@@ -4,6 +4,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { wakeflowProgramInstructionRecompositionLockRef } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowProgramInstructionInspectionRequest, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
  *
@@ -75,12 +76,6 @@ export function parseWakeflowProgramInstructionRecompositionRequest(value) {
         }
         throw error;
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function positiveMilliseconds(value, path) {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {

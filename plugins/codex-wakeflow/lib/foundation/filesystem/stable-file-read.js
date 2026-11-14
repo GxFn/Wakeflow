@@ -7,7 +7,8 @@ import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-import { RootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
+import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Filesystem：根作用域内稳定、有界的普通文件读取。
  *
@@ -54,12 +55,6 @@ export class StableFileReadError extends Error {
 }
 function fail(reason, path, cause) {
     throw new StableFileReadError(reason, path, cause === undefined ? undefined : { cause });
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 function parseExpectedNode(value) {
     if (value === undefined)
@@ -122,12 +117,8 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 async function inspectInitialResource(root, resourcePath) {
     try {

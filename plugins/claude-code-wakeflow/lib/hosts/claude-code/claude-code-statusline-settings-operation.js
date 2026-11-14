@@ -18,6 +18,7 @@ import { claudeCodeMaintenanceMaterializesMissingSupportRoot } from "./claude-co
 import { CLAUDE_CODE_SETTINGS_DIRECTORY_REF } from "./claude-code-portable-settings-publication.js";
 import { CLAUDE_CODE_STATUSLINE_MARKER, claudeCodeStatuslineCommand, } from "./claude-code-statusline-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-host-resource-profile.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Host / Claude Code：状态栏命令写进本地设置的维护操作（gate-log §13.94 D6）。
  *
@@ -101,9 +102,6 @@ export class ClaudeCodeStatuslineSettingsOperationError extends Error {
 }
 function fail(reason, path, cause) {
     throw new ClaudeCodeStatuslineSettingsOperationError(reason, path, cause === undefined ? undefined : { cause });
-}
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
 }
 function assertRoot(root) {
     if (typeof root !== "object" ||

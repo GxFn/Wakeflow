@@ -831,23 +831,8 @@ function planFreshActiveWorkspaceProjection(request, desired, blockers, steps) {
         dependsOn: ["active:requirement-board"],
     }));
 }
-/** 构建当前已实现静态 owner 的零写入物化预览。 */
-export async function previewWakeflowStaticMaterialization(rootValue, requestValue, optionsValue = {}) {
-    if (typeof rootValue !== "object" ||
-        rootValue === null ||
-        types.isProxy(rootValue) ||
-        !(rootValue instanceof RootedDirectory)) {
-        fail("input", "$root");
-    }
-    const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
-    if (typeof optionsValue !== "object" ||
-        optionsValue === null ||
-        types.isProxy(optionsValue) ||
-        Object.keys(optionsValue).some((key) => key !== "gateContext")) {
-        fail("input", "$options");
-    }
-    assertNotAborted(request.signal);
-    const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
+/** 核心布局检查：没有门上下文时自己检视一次，有门上下文时取门在拿到锁之后重验过的那一份。 */
+async function previewCoreInspection(rootValue, request, optionsValue) {
     let core;
     if (optionsValue.gateContext === undefined) {
         try {
@@ -873,68 +858,63 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
             throw error;
         }
     }
-    const blockers = new Set();
-    const steps = [];
-    const current = await currentSnapshot(rootValue, request.signal, blockers);
-    assertNotAborted(request.signal);
-    let desired = request.desiredConfig;
-    if (isWakeflowDetachAction(request.action)) {
-        // 退出路径（ADR-0024）只删：托管块 → 窗口投影 → 宿主步（由宿主贡献给出）→ Config 收尾。
-        desired = await planDetach(rootValue, request, core, current, blockers, steps);
-        return assemblePreview(request, matrix, core, current, desired, blockers, steps);
+    return core;
+}
+/** fresh-initialize 的准入：根里还不能有配置、活动布局、维护协议之外的本地内容或旧插件的残留。 */
+async function admitFreshWorkspace(working) {
+    const { rootValue, core, current, blockers } = working;
+    if (current !== null || (await configResourceExists(rootValue))) {
+        addBlocker(blockers, "fresh-config-present");
     }
-    if (request.action === "fresh-initialize") {
-        if (current !== null || (await configResourceExists(rootValue))) {
-            addBlocker(blockers, "fresh-config-present");
-        }
-        if (core.active.status !== "absent") {
-            addBlocker(blockers, "fresh-active-not-absent");
-        }
-        if (!core.local.freshCompatible) {
-            addBlocker(blockers, "fresh-local-not-bootstrap-prefix");
-        }
-        // ADR-0008 决定 1 与 ADR-0020（F4）：工作区根里旧插件的标记只拒绝并列出（status 的 legacyResidue），由用户清理。
-        const residue = await scanWakeflowLegacyResidue([
-            { key: "workspace.root", absolutePath: rootValue.absolutePath },
-        ]);
-        if (residue.items.length > 0) {
-            addBlocker(blockers, "fresh-legacy-residue-present");
-            // 按种类点名（§13.181 F-L1-5）：Controller 不必读实现就知道是指令块、宽权限、根标记还是旁边的账本目录。
-            for (const kind of new Set(residue.items.map((item) => item.kind))) {
-                addBlocker(blockers, `fresh-legacy-residue-${kind}`);
-            }
+    if (core.active.status !== "absent") {
+        addBlocker(blockers, "fresh-active-not-absent");
+    }
+    if (!core.local.freshCompatible) {
+        addBlocker(blockers, "fresh-local-not-bootstrap-prefix");
+    }
+    // ADR-0008 决定 1 与 ADR-0020（F4）：工作区根里旧插件的标记只拒绝并列出（status 的 legacyResidue），由用户清理。
+    const residue = await scanWakeflowLegacyResidue([
+        { key: "workspace.root", absolutePath: rootValue.absolutePath },
+    ]);
+    if (residue.items.length > 0) {
+        addBlocker(blockers, "fresh-legacy-residue-present");
+        // 按种类点名（§13.181 F-L1-5）：Controller 不必读实现就知道是指令块、宽权限、根标记还是旁边的账本目录。
+        for (const kind of new Set(residue.items.map((item) => item.kind))) {
+            addBlocker(blockers, `fresh-legacy-residue-${kind}`);
         }
     }
-    else {
-        if (current === null)
-            addBlocker(blockers, "current-config-unavailable");
-        // 活动布局缺失或不完整由维护 ensure 补齐（能力卡 1 §1.4 自动修复）；节点政策冲突只报告。
-        if (core.active.status === "absent" || core.active.status === "incomplete") {
-            steps.push(step({
-                stepId: "core:active-layout",
-                kind: "materialize-active-layout",
-                ownerId: "active-layout",
-                targetKey: "active.layout",
-                sourceDigest: core.active.nodeDigest,
-                targetDigest: WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
-                dependsOn: [],
-            }));
-        }
-        else if (core.active.status !== "present") {
-            addBlocker(blockers, "active-layout-unavailable");
-        }
-        if (core.local.status === "absent" || core.local.status === "bootstrap-prefix") {
-            // 维护协议根缺失由对账重建（§13.114 D2）：gate 以 repair 模式引导，步骤只核对结果。
-            steps.push(localProtocolStep(core));
-        }
-        else if (core.local.status !== "idle") {
-            addBlocker(blockers, `maintenance-protocol-${core.local.status}`);
-        }
+}
+/** 已初始化工作区（reconcile、reconfigure）的准入与两项核心修复：活动布局与维护协议根。 */
+function admitExistingWorkspace(working) {
+    const { core, current, blockers, steps } = working;
+    if (current === null)
+        addBlocker(blockers, "current-config-unavailable");
+    // 活动布局缺失或不完整由维护 ensure 补齐（能力卡 1 §1.4 自动修复）；节点政策冲突只报告。
+    if (core.active.status === "absent" || core.active.status === "incomplete") {
+        steps.push(step({
+            stepId: "core:active-layout",
+            kind: "materialize-active-layout",
+            ownerId: "active-layout",
+            targetKey: "active.layout",
+            sourceDigest: core.active.nodeDigest,
+            targetDigest: WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
+            dependsOn: [],
+        }));
     }
-    if (request.action === "reconcile")
-        desired = current?.model ?? null;
-    if (desired === null)
-        addBlocker(blockers, "desired-config-unavailable");
+    else if (core.active.status !== "present") {
+        addBlocker(blockers, "active-layout-unavailable");
+    }
+    if (core.local.status === "absent" || core.local.status === "bootstrap-prefix") {
+        // 维护协议根缺失由对账重建（§13.114 D2）：gate 以 repair 模式引导，步骤只核对结果。
+        steps.push(localProtocolStep(core));
+    }
+    else if (core.local.status !== "idle") {
+        addBlocker(blockers, `maintenance-protocol-${core.local.status}`);
+    }
+}
+/** reconfigure 的差异准入：程序标识、拓扑与 pods；返回它允许新增的仓库（别的动作是空）。 */
+function admitReconfigure(working, desired) {
+    const { request, current, blockers } = working;
     let addedRepositories = Object.freeze([]);
     if (request.action === "reconfigure" && current !== null && desired !== null) {
         if (current.model.program.programId !== desired.program.programId) {
@@ -953,6 +933,11 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
             addBlocker(blockers, "reconfigure-pods-change-unsupported");
         }
     }
+    return addedRepositories;
+}
+/** 期望配置的各个根落在哪里；顺带计划 fresh 的活动工作区投影。配置不可用时为 null。 */
+async function planDesiredPlacements(working, desired, addedRepositories) {
+    const { rootValue, request, current, blockers, steps } = working;
     let placements = null;
     if (desired !== null) {
         placements = await desiredPlacements(rootValue, desired);
@@ -965,170 +950,215 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
         }
         planFreshActiveWorkspaceProjection(request, desired, blockers, steps);
     }
+    return placements;
+}
+/** fresh-initialize 的核心布局：维护协议根、共享协调布局、活动布局与看板。 */
+async function planFreshCoreLayout(working) {
+    const { rootValue, core, blockers, steps } = working;
+    if (core.local.status !== "idle")
+        steps.push(localProtocolStep(core));
+    try {
+        const shared = await inspectWakeflowSharedCoordinationLayout(rootValue);
+        if (shared.status !== "missing") {
+            addBlocker(blockers, "fresh-shared-coordination-present");
+        }
+        else {
+            steps.push(step({
+                stepId: "coordination:shared-layout",
+                kind: "materialize-shared-coordination-layout",
+                ownerId: "shared-runtime-layout",
+                targetKey: "coordination.shared-layout",
+                sourceDigest: shared.observationDigest,
+                targetDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+                dependsOn: steps.some((entry) => entry.stepId === "core:local-protocol")
+                    ? ["core:local-protocol"]
+                    : [],
+            }));
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowSharedCoordinationLayoutError) {
+            addBlocker(blockers, `shared-coordination-${error.reason}`);
+        }
+        else {
+            throw error;
+        }
+    }
+    steps.push(step({
+        stepId: "core:active-layout",
+        kind: "materialize-active-layout",
+        ownerId: "active-layout",
+        targetKey: "active.layout",
+        sourceDigest: null,
+        targetDigest: WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
+        dependsOn: [],
+    }));
+    steps.push(step({
+        stepId: "active:requirement-board",
+        kind: "initialize-requirement-board",
+        ownerId: "requirement-board",
+        targetKey: "active.board",
+        sourceDigest: null,
+        targetDigest: REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
+        dependsOn: ["core:active-layout"],
+    }));
+}
+/** 已初始化工作区的核心修复：共享协调布局、看板与宿主能力布局。 */
+async function planExistingCoreRepair(working, desired) {
+    const { rootValue, request, blockers, steps } = working;
+    try {
+        const shared = await inspectWakeflowSharedCoordinationLayout(rootValue);
+        if (shared.status !== "current") {
+            steps.push(step({
+                stepId: "coordination:shared-layout",
+                kind: "materialize-shared-coordination-layout",
+                ownerId: "shared-runtime-layout",
+                targetKey: "coordination.shared-layout",
+                sourceDigest: shared.observationDigest,
+                targetDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+                dependsOn: [],
+            }));
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowSharedCoordinationLayoutError) {
+            addBlocker(blockers, `shared-coordination-${error.reason}`);
+        }
+        else {
+            throw error;
+        }
+    }
+    await planRequirementBoardRepair(rootValue, request, blockers, steps);
+    await planHostCapabilityLayoutRepair(rootValue, request, desired, blockers, steps);
+}
+/** 按期望配置计划各类受管资源：账本、窗口运行投影、支撑面、托管文本与最后的配置一步。 */
+async function planDesiredResources(working, desired, placements) {
+    const { rootValue, request, matrix, current, blockers, steps } = working;
+    await inspectLedgerParticipant(request, placements, blockers, steps);
     if (request.action === "fresh-initialize") {
-        if (core.local.status !== "idle")
-            steps.push(localProtocolStep(core));
         try {
-            const shared = await inspectWakeflowSharedCoordinationLayout(rootValue);
-            if (shared.status !== "missing") {
-                addBlocker(blockers, "fresh-shared-coordination-present");
-            }
-            else {
+            const windowRuntime = compileWakeflowFreshWindowRuntimeAuthority(desired, request.currentHostProfile);
+            steps.push(step({
+                stepId: "host:window-runtime",
+                kind: "publish-unregistered-window-runtime",
+                ownerId: "window-runtime-projection",
+                targetKey: request.currentHostProfile.hostId,
+                sourceDigest: null,
+                targetDigest: windowRuntime.authorityDigest,
+                dependsOn: [],
+            }));
+            const hostCapability = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
+            if (hostCapability.declarations.length > 0) {
                 steps.push(step({
-                    stepId: "coordination:shared-layout",
-                    kind: "materialize-shared-coordination-layout",
-                    ownerId: "shared-runtime-layout",
-                    targetKey: "coordination.shared-layout",
-                    sourceDigest: shared.observationDigest,
-                    targetDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
-                    dependsOn: steps.some((entry) => entry.stepId === "core:local-protocol")
-                        ? ["core:local-protocol"]
-                        : [],
-                }));
-            }
-        }
-        catch (error) {
-            if (error instanceof WakeflowSharedCoordinationLayoutError) {
-                addBlocker(blockers, `shared-coordination-${error.reason}`);
-            }
-            else {
-                throw error;
-            }
-        }
-        steps.push(step({
-            stepId: "core:active-layout",
-            kind: "materialize-active-layout",
-            ownerId: "active-layout",
-            targetKey: "active.layout",
-            sourceDigest: null,
-            targetDigest: WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
-            dependsOn: [],
-        }));
-        steps.push(step({
-            stepId: "active:requirement-board",
-            kind: "initialize-requirement-board",
-            ownerId: "requirement-board",
-            targetKey: "active.board",
-            sourceDigest: null,
-            targetDigest: REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
-            dependsOn: ["core:active-layout"],
-        }));
-    }
-    if (request.action !== "fresh-initialize") {
-        try {
-            const shared = await inspectWakeflowSharedCoordinationLayout(rootValue);
-            if (shared.status !== "current") {
-                steps.push(step({
-                    stepId: "coordination:shared-layout",
-                    kind: "materialize-shared-coordination-layout",
-                    ownerId: "shared-runtime-layout",
-                    targetKey: "coordination.shared-layout",
-                    sourceDigest: shared.observationDigest,
-                    targetDigest: WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
-                    dependsOn: [],
-                }));
-            }
-        }
-        catch (error) {
-            if (error instanceof WakeflowSharedCoordinationLayoutError) {
-                addBlocker(blockers, `shared-coordination-${error.reason}`);
-            }
-            else {
-                throw error;
-            }
-        }
-        await planRequirementBoardRepair(rootValue, request, blockers, steps);
-        await planHostCapabilityLayoutRepair(rootValue, request, desired, blockers, steps);
-    }
-    if (desired !== null && placements !== null) {
-        await inspectLedgerParticipant(request, placements, blockers, steps);
-        if (request.action === "fresh-initialize") {
-            try {
-                const windowRuntime = compileWakeflowFreshWindowRuntimeAuthority(desired, request.currentHostProfile);
-                steps.push(step({
-                    stepId: "host:window-runtime",
-                    kind: "publish-unregistered-window-runtime",
-                    ownerId: "window-runtime-projection",
+                    stepId: "host:capability-layout",
+                    kind: "materialize-host-capability-layout",
+                    ownerId: "host-capability-layout",
                     targetKey: request.currentHostProfile.hostId,
                     sourceDigest: null,
-                    targetDigest: windowRuntime.authorityDigest,
-                    dependsOn: [],
-                }));
-                const hostCapability = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
-                if (hostCapability.declarations.length > 0) {
-                    steps.push(step({
-                        stepId: "host:capability-layout",
-                        kind: "materialize-host-capability-layout",
-                        ownerId: "host-capability-layout",
-                        targetKey: request.currentHostProfile.hostId,
-                        sourceDigest: null,
-                        targetDigest: hostCapability.authorityDigest,
-                        dependsOn: ["host:window-runtime"],
-                    }));
-                }
-            }
-            catch (error) {
-                if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
-                    addBlocker(blockers, `host-capability-layout-${error.reason}`);
-                }
-                else if (error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
-                    error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
-                    addBlocker(blockers, `window-runtime-${error.reason}`);
-                }
-                else {
-                    throw error;
-                }
-            }
-        }
-        await inspectSupportMemories(rootValue, request, current?.model ?? null, desired, placements, blockers, steps);
-        try {
-            const gitignore = await inspectWakeflowWorkspaceGitignore(rootValue, {
-                matrix,
-                expectedMatrixDigest: matrix.matrixDigest,
-                hostProfiles: request.hostProfiles,
-                ...(request.signal === undefined ? {} : { signal: request.signal }),
-            });
-            if (gitignore.status === "recompose-required") {
-                steps.push(step({
-                    stepId: "integration:gitignore",
-                    kind: "recompose-gitignore",
-                    ownerId: "workspace-ignore-integration",
-                    targetKey: "workspace.ignore-integration",
-                    sourceDigest: gitignore.source?.digest ?? null,
-                    targetDigest: gitignore.authority.authorityDigest,
-                    dependsOn: [],
+                    targetDigest: hostCapability.authorityDigest,
+                    dependsOn: ["host:window-runtime"],
                 }));
             }
         }
         catch (error) {
-            if (error instanceof WakeflowGitignoreInspectionError) {
-                if (error.reason === "aborted")
-                    fail("aborted", "$signal", error);
-                addBlocker(blockers, `gitignore-${error.reason}`);
+            if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
+                addBlocker(blockers, `host-capability-layout-${error.reason}`);
+            }
+            else if (error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
+                error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
+                addBlocker(blockers, `window-runtime-${error.reason}`);
             }
             else {
                 throw error;
             }
         }
+    }
+    await inspectSupportMemories(rootValue, request, current?.model ?? null, desired, placements, blockers, steps);
+    try {
+        const gitignore = await inspectWakeflowWorkspaceGitignore(rootValue, {
+            matrix,
+            expectedMatrixDigest: matrix.matrixDigest,
+            hostProfiles: request.hostProfiles,
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
+        if (gitignore.status === "recompose-required") {
+            steps.push(step({
+                stepId: "integration:gitignore",
+                kind: "recompose-gitignore",
+                ownerId: "workspace-ignore-integration",
+                targetKey: "workspace.ignore-integration",
+                sourceDigest: gitignore.source?.digest ?? null,
+                targetDigest: gitignore.authority.authorityDigest,
+                dependsOn: [],
+            }));
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowGitignoreInspectionError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal", error);
+            addBlocker(blockers, `gitignore-${error.reason}`);
+        }
+        else {
+            throw error;
+        }
+    }
+    try {
+        const program = await inspectWakeflowProgramInstruction(rootValue, {
+            matrix,
+            expectedMatrixDigest: matrix.matrixDigest,
+            profile: request.currentHostProfile,
+            currentConfig: current?.model ?? null,
+            expectedCurrentConfigDigest: current?.configDigest ?? null,
+            desiredConfig: desired,
+            expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
+        if (program.status === "recompose-required") {
+            steps.push(step({
+                stepId: "integration:program-instruction",
+                kind: "recompose-program-instruction",
+                ownerId: "host-instruction-integration",
+                targetKey: request.currentHostProfile.hostId,
+                sourceDigest: program.source?.digest ?? null,
+                targetDigest: program.desiredAuthority.authorityDigest,
+                dependsOn: [],
+            }));
+        }
+    }
+    catch (error) {
+        if (error instanceof WakeflowProgramInstructionInspectionError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal", error);
+            addBlocker(blockers, `program-instruction-${error.reason}`);
+        }
+        else {
+            throw error;
+        }
+    }
+    for (const peer of peerHostProfiles(request)) {
+        assertNotAborted(request.signal);
         try {
-            const program = await inspectWakeflowProgramInstruction(rootValue, {
-                matrix,
-                expectedMatrixDigest: matrix.matrixDigest,
-                profile: request.currentHostProfile,
+            const peerMatrix = createWakeflowWorkspaceStaticResourceMatrix(peer);
+            const peerProgram = await inspectWakeflowProgramInstruction(rootValue, {
+                matrix: peerMatrix,
+                expectedMatrixDigest: peerMatrix.matrixDigest,
+                profile: peer,
                 currentConfig: current?.model ?? null,
                 expectedCurrentConfigDigest: current?.configDigest ?? null,
                 desiredConfig: desired,
                 expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
                 ...(request.signal === undefined ? {} : { signal: request.signal }),
             });
-            if (program.status === "recompose-required") {
+            if (peerProgram.transition.sourceAuthority === "admitted-current" &&
+                peerProgram.status === "recompose-required") {
                 steps.push(step({
-                    stepId: "integration:program-instruction",
+                    stepId: `integration:program-instruction:${peer.hostId}`,
                     kind: "recompose-program-instruction",
                     ownerId: "host-instruction-integration",
-                    targetKey: request.currentHostProfile.hostId,
-                    sourceDigest: program.source?.digest ?? null,
-                    targetDigest: program.desiredAuthority.authorityDigest,
+                    targetKey: peer.hostId,
+                    sourceDigest: peerProgram.source?.digest ?? null,
+                    targetDigest: peerProgram.desiredAuthority.authorityDigest,
                     dependsOn: [],
                 }));
             }
@@ -1137,65 +1167,71 @@ export async function previewWakeflowStaticMaterialization(rootValue, requestVal
             if (error instanceof WakeflowProgramInstructionInspectionError) {
                 if (error.reason === "aborted")
                     fail("aborted", "$signal", error);
-                addBlocker(blockers, `program-instruction-${error.reason}`);
+                addBlocker(blockers, `peer-program-instruction-${error.reason}`);
             }
             else {
                 throw error;
             }
         }
-        for (const peer of peerHostProfiles(request)) {
-            assertNotAborted(request.signal);
-            try {
-                const peerMatrix = createWakeflowWorkspaceStaticResourceMatrix(peer);
-                const peerProgram = await inspectWakeflowProgramInstruction(rootValue, {
-                    matrix: peerMatrix,
-                    expectedMatrixDigest: peerMatrix.matrixDigest,
-                    profile: peer,
-                    currentConfig: current?.model ?? null,
-                    expectedCurrentConfigDigest: current?.configDigest ?? null,
-                    desiredConfig: desired,
-                    expectedDesiredConfigDigest: computeWakeflowConfigDigest(desired),
-                    ...(request.signal === undefined ? {} : { signal: request.signal }),
-                });
-                if (peerProgram.transition.sourceAuthority === "admitted-current" &&
-                    peerProgram.status === "recompose-required") {
-                    steps.push(step({
-                        stepId: `integration:program-instruction:${peer.hostId}`,
-                        kind: "recompose-program-instruction",
-                        ownerId: "host-instruction-integration",
-                        targetKey: peer.hostId,
-                        sourceDigest: peerProgram.source?.digest ?? null,
-                        targetDigest: peerProgram.desiredAuthority.authorityDigest,
-                        dependsOn: [],
-                    }));
-                }
-            }
-            catch (error) {
-                if (error instanceof WakeflowProgramInstructionInspectionError) {
-                    if (error.reason === "aborted")
-                        fail("aborted", "$signal", error);
-                    addBlocker(blockers, `peer-program-instruction-${error.reason}`);
-                }
-                else {
-                    throw error;
-                }
-            }
-        }
-        await inspectExternalInstructions(rootValue, request, current?.model ?? null, desired, placements, blockers, steps);
-        const desiredConfigDigest = computeWakeflowConfigDigest(desired);
-        const configChanged = current?.configDigest !== desiredConfigDigest;
-        if (request.action !== "reconcile" && configChanged) {
-            const prerequisiteSteps = steps.map((entry) => entry.stepId);
-            steps.push(step({
-                stepId: "authority:config",
-                kind: "publish-config",
-                ownerId: "config-authority",
-                targetKey: "workspace.config-authority",
-                sourceDigest: current?.configDigest ?? null,
-                targetDigest: desiredConfigDigest,
-                dependsOn: prerequisiteSteps,
-            }));
-        }
+    }
+    await inspectExternalInstructions(rootValue, request, current?.model ?? null, desired, placements, blockers, steps);
+    const desiredConfigDigest = computeWakeflowConfigDigest(desired);
+    const configChanged = current?.configDigest !== desiredConfigDigest;
+    if (request.action !== "reconcile" && configChanged) {
+        const prerequisiteSteps = steps.map((entry) => entry.stepId);
+        steps.push(step({
+            stepId: "authority:config",
+            kind: "publish-config",
+            ownerId: "config-authority",
+            targetKey: "workspace.config-authority",
+            sourceDigest: current?.configDigest ?? null,
+            targetDigest: desiredConfigDigest,
+            dependsOn: prerequisiteSteps,
+        }));
+    }
+}
+export async function previewWakeflowStaticMaterialization(rootValue, requestValue, optionsValue = {}) {
+    if (typeof rootValue !== "object" ||
+        rootValue === null ||
+        types.isProxy(rootValue) ||
+        !(rootValue instanceof RootedDirectory)) {
+        fail("input", "$root");
+    }
+    const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+    if (typeof optionsValue !== "object" ||
+        optionsValue === null ||
+        types.isProxy(optionsValue) ||
+        Object.keys(optionsValue).some((key) => key !== "gateContext")) {
+        fail("input", "$options");
+    }
+    assertNotAborted(request.signal);
+    const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
+    const core = await previewCoreInspection(rootValue, request, optionsValue);
+    const blockers = new Set();
+    const steps = [];
+    const current = await currentSnapshot(rootValue, request.signal, blockers);
+    assertNotAborted(request.signal);
+    if (isWakeflowDetachAction(request.action)) {
+        // 退出路径（ADR-0024）只删：托管块 → 窗口投影 → 宿主步（由宿主贡献给出）→ Config 收尾。
+        const retired = await planDetach(rootValue, request, core, current, blockers, steps);
+        return assemblePreview(request, matrix, core, current, retired, blockers, steps);
+    }
+    const working = { rootValue, request, matrix, core, current, blockers, steps };
+    if (request.action === "fresh-initialize")
+        await admitFreshWorkspace(working);
+    else
+        admitExistingWorkspace(working);
+    const desired = request.action === "reconcile" ? (current?.model ?? null) : request.desiredConfig;
+    if (desired === null)
+        addBlocker(blockers, "desired-config-unavailable");
+    const addedRepositories = admitReconfigure(working, desired);
+    const placements = await planDesiredPlacements(working, desired, addedRepositories);
+    if (request.action === "fresh-initialize")
+        await planFreshCoreLayout(working);
+    else
+        await planExistingCoreRepair(working, desired);
+    if (desired !== null && placements !== null) {
+        await planDesiredResources(working, desired, placements);
     }
     return assemblePreview(request, matrix, core, current, desired, blockers, steps);
 }

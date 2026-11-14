@@ -1,8 +1,7 @@
-import { types } from "node:util";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
@@ -11,6 +10,7 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
 import { historicalWakeflowManagedTextTargets, WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority, WakeflowProgramInstructionBodyAuthorityError, } from "./wakeflow-program-instruction-body-authority.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的只读文件检查。
  *
@@ -71,12 +71,6 @@ function parseConfig(value, path) {
             fail("input", path, error);
         throw error;
     }
-}
-function isAbortSignal(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        !types.isProxy(value) &&
-        value instanceof AbortSignal);
 }
 /** 快照并绑定 Matrix、Host Profile 与 current/desired Config 摘要。 */
 export function parseWakeflowProgramInstructionInspectionRequest(value) {
@@ -169,12 +163,8 @@ export function parseWakeflowProgramInstructionInspectionRequest(value) {
     });
 }
 function assertRoot(value) {
-    if (typeof value !== "object" ||
-        value === null ||
-        types.isProxy(value) ||
-        !(value instanceof RootedDirectory)) {
+    if (!isRootedDirectory(value))
         fail("input", "$root");
-    }
 }
 function currentUserId() {
     if (process.platform === "win32" || typeof process.geteuid !== "function") {

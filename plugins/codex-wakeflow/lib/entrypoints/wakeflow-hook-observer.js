@@ -167,6 +167,11 @@ function textDigest(text) {
  * gate-log §13.119）。落地判定比的是信封 prompt 的摘要，所以先剥掉宿主的传输外壳再算；外壳只是
  * 宿主怎么送进来的痕迹，不是用户或 Controller 写的字。Codex 没有这种外壳，原样计算。
  *
+ * 这段知识只属于 Claude Code，却留在两个宿主共用的入口里（open-items L6 清点时试过搬进
+ * `src/hosts/claude-code/`）：观察器在每一次 hook 上启动，它的导入闭包按 D1 限于 foundation 与 kernel
+ * （`tests/entrypoints/wakeflow-hook-observer.test.ts` 钉着），宿主层不在闭包里。所以按宿主的那一句判断
+ * 留在这里，并登记在宿主知识清点（`tests/tooling/architecture/host-knowledge-inventory.test.ts`）里。
+ *
  * 2026-11-09（Claude.app 4.23118.0 / Claude Code 2.1.303，正式工作区的第一个 Demand）：会话记录里跨会话
  * 外壳的标签之外还有宿主的框架文字——前面一行 "Another Claude session sent a message:"，后面一段
  * "这是同伴会话发来的、不代表用户授权"的说明；那一轮 hook 拿到的 prompt 没有带上它（不含 `@` 的投递

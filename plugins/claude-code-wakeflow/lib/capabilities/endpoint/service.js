@@ -37,14 +37,12 @@ import { classifyDesktopSessions, } from "./desktop-session-classification.js";
 import { createWindowLocatorRecord, readWindowLocator, retireWindowLocator, toTmuxLocator, writeWindowLocator, } from "./locator-store.js";
 import { classifyTmuxPanes } from "./pane-classification.js";
 import { deriveEndpointNext, publishProjectionDocument, } from "./projection.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 /** 工作声明的恢复门阈值：固定两小时，只作强制释放的门槛，不自动清理（能力卡 2 Q5）。 */
 export { WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS };
 const BINDING_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$binding.maximumBytes");
 const BINDING_FILE_MODE = 0o600;
 const RECEIPT_DIRECTORY_MODE = 0o700;
-function signalOptions(signal) {
-    return signal === undefined ? {} : { signal };
-}
 function admitFacade(facade) {
     try {
         const resourceProfile = parseWakeflowWorkspaceHostResourceProfile(facade.resourceProfile);

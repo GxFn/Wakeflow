@@ -115,6 +115,33 @@ test("Route 的实现前沿与 decide 的准备 / rearm 许可都从同一张表
   equal(wakeflowRearmablePhase("nonsense"), false);
 });
 
+test("聚合的 rearm 守卫与 Post-Acceptance 的 stage 也从这张表派生（L1，1.3.0 批 8）", () => {
+  // rearm 守卫用 `wakeflowRearmablePhase` 收窄目标状态：它认的阶段恰是表里 rearm 为 true 的那些。
+  const rearmable = [
+    ...WAKEFLOW_IMPLEMENTATION_TARGET_PHASES.filter(
+      (phase) => WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES[phase].rearm,
+    ),
+    ...WAKEFLOW_TEST_TARGET_PHASES.filter((phase) => WAKEFLOW_TEST_TARGET_PHASE_RULES[phase].rearm),
+  ];
+  deepEqual(rearmable, ["host-effect-rejected", "test-host-effect-rejected"]);
+  for (const phase of [...WAKEFLOW_IMPLEMENTATION_TARGET_PHASES, ...WAKEFLOW_TEST_TARGET_PHASES]) {
+    equal(wakeflowRearmablePhase(phase), (rearmable as readonly string[]).includes(phase), phase);
+  }
+  // 类型层面：表里某个阶段的 stage 是字面量，Post-Acceptance 的分支直接取它；这里钉住取到的就是那个值。
+  const stage: "test-delivery-planning" = WAKEFLOW_TEST_TARGET_PHASE_RULES.planned.stage;
+  equal(stage, "test-delivery-planning");
+  const rearmStage: "test-delivery-rearm-planning" =
+    WAKEFLOW_TEST_TARGET_PHASE_RULES["test-host-effect-rejected"].stage;
+  equal(rearmStage, "test-delivery-rearm-planning");
+  // 没有未终结 stage 的阶段只有缺陷代际一个。
+  deepEqual(
+    WAKEFLOW_TEST_TARGET_PHASES.filter(
+      (phase) => WAKEFLOW_TEST_TARGET_PHASE_RULES[phase].stage === null,
+    ),
+    ["test-product-defect"],
+  );
+});
+
 function checkAdmission(
   workType: "implementation" | "test",
   phase: string,

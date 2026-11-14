@@ -118,9 +118,7 @@ const RESULT_REVIEW = Object.freeze({
   owner: "controller-implementation-review" as const,
 });
 
-export const WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES: Readonly<
-  Record<WakeflowImplementationTargetPhase, Readonly<WakeflowImplementationTargetPhaseRule>>
-> = Object.freeze({
+export const WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES = Object.freeze({
   planned: Object.freeze({ prepare: "yes", rearm: false, frontier: DELIVERY_PLANNING }),
   "delivery-prepared": Object.freeze({
     prepare: "no",
@@ -164,11 +162,11 @@ export const WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES: Readonly<
     }),
   }),
   superseded: Object.freeze({ prepare: "no", rearm: false, frontier: null }),
-});
+}) satisfies Readonly<
+  Record<WakeflowImplementationTargetPhase, Readonly<WakeflowImplementationTargetPhaseRule>>
+>;
 
-export const WAKEFLOW_TEST_TARGET_PHASE_RULES: Readonly<
-  Record<WakeflowTestTargetPhase, Readonly<WakeflowTestTargetPhaseRule>>
-> = Object.freeze({
+export const WAKEFLOW_TEST_TARGET_PHASE_RULES = Object.freeze({
   planned: Object.freeze({ prepare: "yes", rearm: false, stage: "test-delivery-planning" }),
   "test-delivery-prepared": Object.freeze({
     prepare: "no",
@@ -208,7 +206,7 @@ export const WAKEFLOW_TEST_TARGET_PHASE_RULES: Readonly<
     stage: "test-review-blocked",
   }),
   "test-escalated": Object.freeze({ prepare: "no", rearm: false, stage: "test-review-escalated" }),
-});
+}) satisfies Readonly<Record<WakeflowTestTargetPhase, Readonly<WakeflowTestTargetPhaseRule>>>;
 
 /** 该工作类型下某个阶段字符串的许可；不是该工作类型的阶段（含原型键）为 null。 */
 export function wakeflowTargetPhaseAdmission(
@@ -222,8 +220,21 @@ export function wakeflowTargetPhaseAdmission(
   return Object.hasOwn(table, phase) ? (table[phase] ?? null) : null;
 }
 
+/** 表里 `rearm: true` 的那些键：从表的字面量类型算出来，不另写一份。 */
+type RearmablePhaseOf<Rules> = {
+  [Phase in keyof Rules]: Rules[Phase] extends { readonly rearm: true } ? Phase : never;
+}[keyof Rules];
+
+/**
+ * 两种工作类型里允许 rearm 的阶段（open-items L1）。聚合的 rearm 守卫用它收窄目标的状态：守卫认哪些阶段
+ * 与预览认哪些阶段是同一张表的同一列，改表即同时改两处。
+ */
+export type WakeflowRearmableTargetPhase =
+  | RearmablePhaseOf<typeof WAKEFLOW_IMPLEMENTATION_TARGET_PHASE_RULES>
+  | RearmablePhaseOf<typeof WAKEFLOW_TEST_TARGET_PHASE_RULES>;
+
 /** 两种工作类型里允许 rearm 的阶段名（rearm 请求不带工作类型，按信封自己的阶段判定）。 */
-export function wakeflowRearmablePhase(phase: string): boolean {
+export function wakeflowRearmablePhase(phase: string): phase is WakeflowRearmableTargetPhase {
   return (
     wakeflowTargetPhaseAdmission("implementation", phase)?.rearm === true ||
     wakeflowTargetPhaseAdmission("test", phase)?.rearm === true

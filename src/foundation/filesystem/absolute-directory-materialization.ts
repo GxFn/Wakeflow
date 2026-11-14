@@ -77,8 +77,12 @@ export class AbsoluteDirectoryMaterializationError extends Error {
   readonly reason: AbsoluteDirectoryMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: AbsoluteDirectoryMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: AbsoluteDirectoryMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -89,8 +93,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: AbsoluteDirectoryMaterializationErrorReason, path: string): never {
-  throw new AbsoluteDirectoryMaterializationError(reason, path);
+function fail(
+  reason: AbsoluteDirectoryMaterializationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new AbsoluteDirectoryMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -107,7 +119,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -136,10 +148,10 @@ async function inspect(value: unknown, path: string) {
     return await inspectAbsoluteDirectoryPlacement(value, path);
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryPlacementError) {
-      if (error.reason === "input") fail("input", path);
-      if (error.reason === "symlink") fail("symlink", path);
-      if (error.reason === "not-directory") fail("not-directory", path);
-      fail("path-changed", path);
+      if (error.reason === "input") fail("input", path, error);
+      if (error.reason === "symlink") fail("symlink", path, error);
+      if (error.reason === "not-directory") fail("not-directory", path, error);
+      fail("path-changed", path, error);
     }
     throw error;
   }
@@ -159,7 +171,7 @@ function relativeResourcePath(ancestor: string, target: string) {
     return parsePortableResourcePath(relative.split(nodePath.sep).join("/"), "$absolutePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$absolutePath");
+      fail("input", "$absolutePath", error);
     }
     throw error;
   }
@@ -224,7 +236,7 @@ export async function materializeAbsoluteDirectoryPlacement(
   try {
     root = await RootedDirectory.open(ancestor, "$ancestor");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor");
+    if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor", error);
     throw error;
   }
   let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>> | undefined;

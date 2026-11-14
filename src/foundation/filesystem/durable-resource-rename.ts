@@ -110,8 +110,8 @@ export class DurableResourceRenameError extends Error {
   readonly reason: DurableResourceRenameErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableResourceRenameErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DurableResourceRenameErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -124,15 +124,15 @@ interface ParsedOptions {
 
 type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
 
-function fail(reason: DurableResourceRenameErrorReason, path: string): never {
-  throw new DurableResourceRenameError(reason, path);
+function fail(reason: DurableResourceRenameErrorReason, path: string, cause?: unknown): never {
+  throw new DurableResourceRenameError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path);
+    if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
 }
@@ -176,7 +176,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedSourceNode");
+      fail("input", "$options.expectedSourceNode", error);
     }
     throw error;
   }
@@ -188,7 +188,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["expectedSourceNode", "signal"]);
@@ -270,7 +270,7 @@ async function assertParentCurrent(
     await parent.assertCurrent();
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
-      if (afterCommit) fail("commit-uncertain", errorPath);
+      if (afterCommit) fail("commit-uncertain", errorPath, error);
       mapParentHandleError(error, "current", errorPath);
     }
     throw error;
@@ -541,9 +541,9 @@ export async function renameResourceDurably(
       await rename(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "EXDEV") {
-        fail("cross-device", "$destinationResourcePath");
+        fail("cross-device", "$destinationResourcePath", error);
       }
-      fail("rename-failure", "$destinationResourcePath");
+      fail("rename-failure", "$destinationResourcePath", error);
     }
     await assertSourceAbsent(sourceParent);
     const movedNode = await inspectMovedDestination(destinationParent, source);

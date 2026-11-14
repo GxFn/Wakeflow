@@ -112,8 +112,12 @@ export class DemandEventSourcingSnapshotError extends Error {
   readonly reason: DemandEventSourcingSnapshotErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingSnapshotErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingSnapshotErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,15 +135,23 @@ const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
   ],
 );
 
-function fail(reason: DemandEventSourcingSnapshotErrorReason, path: string): never {
-  throw new DemandEventSourcingSnapshotError(reason, path);
+function fail(
+  reason: DemandEventSourcingSnapshotErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingSnapshotError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -151,7 +163,7 @@ export function parseDemandEventSourcingSnapshot(
   try {
     json = parseJsonValue(value, "$snapshot");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -164,7 +176,7 @@ export function parseDemandEventSourcingSnapshot(
     lastEventId = parseWakeflowDurableIdOfKind(wire.lastEventId, "demand-event", "$/lastEventId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", error.path);
+      fail("identifier", error.path, error);
     }
     throw error;
   }
@@ -172,7 +184,7 @@ export function parseDemandEventSourcingSnapshot(
   try {
     state = parseDemandAggregateState(wire.state);
   } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) fail("state", "$/state");
+    if (error instanceof DemandAggregateStateError) fail("state", "$/state", error);
     throw error;
   }
   const stateDigest = parseDigest(wire.stateDigest, "$/stateDigest");
@@ -187,7 +199,7 @@ export function parseDemandEventSourcingSnapshot(
     streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("position", error.path);
+      fail("position", error.path, error);
     }
     throw error;
   }
@@ -222,7 +234,7 @@ export function createDemandEventSourcingSnapshot(
     aggregate = parseDemandEventSourcingAggregate(aggregateValue);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingAggregateError) {
-      fail("aggregate", "$aggregate");
+      fail("aggregate", "$aggregate", error);
     }
     throw error;
   }
@@ -251,7 +263,7 @@ export function restoreDemandEventSourcingSnapshot(
   try {
     anchor = parseDemandEventStreamCommit(anchorCommitValue);
   } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("commit", "$commit");
+    if (error instanceof DemandEventStreamCommitError) fail("commit", "$commit", error);
     throw error;
   }
   const lastEvent = anchor.events.at(-1);
@@ -280,7 +292,7 @@ export function restoreDemandEventSourcingSnapshot(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingAggregateError) {
-      fail("mismatch", "$snapshot");
+      fail("mismatch", "$snapshot", error);
     }
     throw error;
   }
@@ -298,7 +310,7 @@ export function parseDemandEventSourcingSnapshotDocument(
     json = parseDeterministicJsonDocument(text, "$snapshot");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$snapshot");
+      fail("representation", "$snapshot", error);
     }
     throw error;
   }

@@ -478,3 +478,14 @@ Wakeflow 发布进 Claude Code 工作区的三段脚本（tmux 助手、桌面�
 改了 `assets/` 下任何文件之后先跑 `helpers:build`，再重建制品；`wf impact report` 会把这两条命令排在制品重建之前。装配器只接受收窄的写法——`node:` 内置模块与目录内片段的具名导入（不带 `as`）、片段只导出顶层声明、入口不导出——其余报错并点名文件。模板里的 `__WAKEFLOW_…__` 是构建期记号，由资产模块（`claude-code-<名字>-asset.ts`）在加载时用运行时常量填入：加一个记号要同时在资产模块给取值、在 `assets/build-values.d.ts` 声明类型；只改取值来源的常量不需要重新生成。
 
 生成模块随运行时进制品；生成器本身是开发支持，不进制品。
+
+## 27. 拒绝 reason 的参考表
+
+```bash
+npm run refusals:build
+npm run refusals:check
+```
+
+`assets/agent-text/skills/wakeflow-controller/references/refusals.md` 是生成的（open-items G5，gate-log §13.243）：`tooling/codegen/refusal-reference.ts` 扫 `src/` 里六个拒绝类 `code`（`concurrency-conflict`、`idempotency-mismatch`、`precondition-failed`、`not-found`、`capacity-exceeded`、`recovery-required`）后面紧跟的 reason 字面量与模板——`fail(...)`、判定函数的 `reject(...)`、映射元组三种写法都是这个形状——按 `code` 与切片列出。每个 `code` 的处理办法与个别 reason 的注记写在生成器里，不在源码里。
+
+新增、改名或删除一个拒绝 reason 之后先跑 `refusals:build`，再重建制品；`refusals:check` 在 `npm test` 里，漂移即失败。注记点名的 reason 从源码里消失时生成失败，要同时删掉或改名那条注记。`invalid-request` 的 reason、`io-failure` 与 `unexpected`、预览的 `blockerCodes` 不在表里。

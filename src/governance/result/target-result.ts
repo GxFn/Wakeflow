@@ -155,8 +155,8 @@ export class TargetResultError extends Error {
   readonly reason: TargetResultErrorReason;
   readonly path: string;
 
-  constructor(reason: TargetResultErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TargetResultErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -174,8 +174,8 @@ const validateWire = createRuntimeJsonSchemaValidator<ResultWire>(WAKEFLOW_TARGE
   WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
 ]);
 
-function fail(reason: TargetResultErrorReason, path: string): never {
-  throw new TargetResultError(reason, path);
+function fail(reason: TargetResultErrorReason, path: string, cause?: unknown): never {
+  throw new TargetResultError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function id<
@@ -194,7 +194,7 @@ function id<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -203,7 +203,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -212,7 +212,7 @@ function resourcePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }
@@ -221,7 +221,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -270,7 +270,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
   try {
     json = parseJsonValue(value, "$result");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -316,7 +316,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       report = parseImplementationTargetResultReport(wire.report);
     } catch (error: unknown) {
       if (error instanceof ImplementationTargetResultReportError) {
-        fail("report", "$/report");
+        fail("report", "$/report", error);
       }
       throw error;
     }
@@ -338,7 +338,7 @@ export function parseTargetResult(value: unknown): Readonly<TargetResult> {
       report = parseTestTargetResultReport(wire.report);
     } catch (error: unknown) {
       if (error instanceof TestTargetResultReportError) {
-        fail("report", "$/report");
+        fail("report", "$/report", error);
       }
       throw error;
     }
@@ -458,7 +458,7 @@ export function parseTargetResultDocument(textValue: unknown): Readonly<TargetRe
     json = parseDeterministicJsonDocument(textValue, "$result");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$result");
+      fail("representation", "$result", error);
     }
     throw error;
   }

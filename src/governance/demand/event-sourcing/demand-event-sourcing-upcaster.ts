@@ -40,15 +40,27 @@ export class DemandEventSourcingUpcasterError extends Error {
   readonly reason: DemandEventSourcingUpcasterErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingUpcasterErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingUpcasterErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: DemandEventSourcingUpcasterErrorReason, path: string): never {
-  throw new DemandEventSourcingUpcasterError(reason, path);
+function fail(
+  reason: DemandEventSourcingUpcasterErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingUpcasterError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 把任一受支持的持久化版本转换为当前归约器事件。 */
@@ -60,7 +72,7 @@ export function upcastDemandEventSourcingStoredEvent(
     envelope = parseDemandEventSourcingPersistedEventEnvelope(value);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingPersistedEventEnvelopeError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -69,16 +81,16 @@ export function upcastDemandEventSourcingStoredEvent(
   } catch (error: unknown) {
     if (error instanceof EventSourcingVersionEvolutionError) {
       if (error.path === "$/eventType") {
-        fail("unsupported-event-type", "$/eventType");
+        fail("unsupported-event-type", "$/eventType", error);
       }
       if (error.reason === "unsupported-version") {
-        fail("unsupported-version", "$/eventVersion");
+        fail("unsupported-version", "$/eventVersion", error);
       }
-      if (error.reason === "codec") fail("codec", "$/data");
-      fail("upcast", "$/data");
+      if (error.reason === "codec") fail("codec", "$/data", error);
+      fail("upcast", "$/data", error);
     }
     if (error instanceof DemandEventSourcingEventError) {
-      fail("event", "$event");
+      fail("event", "$event", error);
     }
     throw error;
   }

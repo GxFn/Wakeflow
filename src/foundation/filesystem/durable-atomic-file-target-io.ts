@@ -157,10 +157,10 @@ export async function assertExpectedDurableAtomicFileTarget(
     );
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "input") fail("input", "$resourcePath");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "input") fail("input", "$resourcePath", error);
       if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-        fail("root-scope", "$resourcePath");
+        fail("root-scope", "$resourcePath", error);
       }
       if (
         error.reason === "not-found" ||
@@ -169,9 +169,9 @@ export async function assertExpectedDurableAtomicFileTarget(
         error.reason === "expectation-changed" ||
         error.reason === "source-changed"
       ) {
-        fail("expectation-changed", "$resourcePath");
+        fail("expectation-changed", "$resourcePath", error);
       }
-      fail("expectation-read-failure", "$resourcePath");
+      fail("expectation-read-failure", "$resourcePath", error);
     }
     throw error;
   }

@@ -37,6 +37,8 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+import { fail as failWakeflow, isWakeflowError } from "../../../src/kernel/error.js";
+import { describeIncidentChain } from "../../../src/kernel/incident.js";
 import { durableAtomicFileStageRefForTest } from "./durable-atomic-file-test-support.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
@@ -686,6 +688,49 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       "input",
       "$options.expected.byteCount",
     );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("叶子失败把捕到的系统错误留作 cause（open-items G3）：写不进的目录给出 EACCES，公开细节沿链读到它", async (t) => {
+  if (typeof process.geteuid === "function" && process.geteuid() === 0) {
+    t.skip("root ignores directory permissions");
+    return;
+  }
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-cause-"));
+  const locked = path.join(rootPath, "locked");
+  mkdirSync(locked, { mode: 0o500 });
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    let caught: unknown;
+    try {
+      await createFileAtomically(
+        root,
+        parsePortableResourcePath("locked/record.json"),
+        new TextEncoder().encode("{}\n"),
+        { mode: 0o600 },
+      );
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof DurableAtomicFileWriteError, true);
+    // 此前这里是一个空的 catch：EACCES、ENOSPC、EROFS 看起来完全一样。
+    const chain = describeIncidentChain(caught);
+    equal(
+      chain.some((link) => link.errno === "EACCES"),
+      true,
+      JSON.stringify(chain),
+    );
+    let wrapped: unknown;
+    try {
+      failWakeflow("io-failure", "observation-write", "$observation", { cause: caught });
+    } catch (error: unknown) {
+      wrapped = error;
+    }
+    equal(isWakeflowError(wrapped) && wrapped.toPublicDetails().causeCode, "EACCES");
+    equal(existsSync(path.join(locked, "record.json")), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

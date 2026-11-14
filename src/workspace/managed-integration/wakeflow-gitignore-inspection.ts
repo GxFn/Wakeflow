@@ -128,8 +128,12 @@ export class WakeflowGitignoreInspectionError extends Error {
   readonly reason: WakeflowGitignoreInspectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowGitignoreInspectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowGitignoreInspectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -142,8 +146,16 @@ interface ParsedRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: WakeflowGitignoreInspectionErrorReason, path: string): never {
-  throw new WakeflowGitignoreInspectionError(reason, path);
+function fail(
+  reason: WakeflowGitignoreInspectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowGitignoreInspectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -162,7 +174,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request");
+    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -226,11 +238,11 @@ async function readSource(
     if (error instanceof WakeflowGitignoreInspectionError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("source-policy", "$source");
+        fail("source-policy", "$source", error);
       }
-      fail("source", "$source");
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -257,9 +269,9 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
-      fail("source", "$source");
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -288,7 +300,7 @@ function decodeOutside(
       ),
     });
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("envelope", "$source");
+    if (error instanceof Utf8Error) fail("envelope", "$source", error);
     throw error;
   }
 }
@@ -316,8 +328,8 @@ function decodeLiteralRule(rule: WakeflowGitignoreRule): Readonly<{
       resourcePath: parsePortableResourcePath(resourcePath),
       directory,
     });
-  } catch {
-    fail("authority", "$authority.rules");
+  } catch (cause: unknown) {
+    fail("authority", "$authority.rules", cause);
   }
 }
 
@@ -343,8 +355,8 @@ async function observeRules(
     );
   } catch (error: unknown) {
     if (error instanceof GitIgnoreObservationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("git", "$git");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("git", "$git", error);
     }
     throw error;
   }
@@ -409,9 +421,9 @@ async function observeTargetRules(
     );
   } catch (error: unknown) {
     if (error instanceof GitIgnoreCandidateObservationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "capacity") fail("target-capacity", "$target");
-      fail("git", "$git");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "capacity") fail("target-capacity", "$target", error);
+      fail("git", "$git", error);
     }
     throw error;
   }
@@ -433,7 +445,7 @@ function inspectEnvelope(bytes: Uint8Array) {
     return inspectWakeflowManagedTextEnvelope(bytes);
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextEnvelopeError) {
-      fail("envelope", "$source");
+      fail("envelope", "$source", error);
     }
     throw error;
   }
@@ -451,9 +463,9 @@ async function assertGitRepositoryRoot(root: RootedDirectory): Promise<void> {
     await root.inspectExistingResource(GIT_METADATA_RESOURCE_PATH, "$git");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      fail("git-repository", "$git");
+      fail("git-repository", "$git", error);
     }
-    if (error instanceof RootedDirectoryError) fail("source", "$git");
+    if (error instanceof RootedDirectoryError) fail("source", "$git", error);
     throw error;
   }
 }
@@ -476,7 +488,7 @@ export async function inspectWakeflowWorkspaceGitignore(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-      fail("context", "$context");
+      fail("context", "$context", error);
     }
     throw error;
   }
@@ -485,7 +497,7 @@ export async function inspectWakeflowWorkspaceGitignore(
     authority = createWakeflowGitignoreBodyAuthority(request.hostProfiles);
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreBodyAuthorityError) {
-      fail("authority", "$authority");
+      fail("authority", "$authority", error);
     }
     throw error;
   }

@@ -119,8 +119,12 @@ export class WakeflowConfigAuthorityReplacementError extends Error {
   readonly reason: WakeflowConfigAuthorityReplacementErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowConfigAuthorityReplacementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowConfigAuthorityReplacementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -149,8 +153,13 @@ export interface PreparedWakeflowConfigAuthorityDesired {
 export function failWakeflowConfigAuthorityReplacement(
   reason: WakeflowConfigAuthorityReplacementErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowConfigAuthorityReplacementError(reason, path);
+  throw new WakeflowConfigAuthorityReplacementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export function assertWakeflowConfigAuthorityRoot(
@@ -178,8 +187,8 @@ function isAbortSignal(value: unknown): value is AbortSignal {
 function optionRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$options");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("input", "$options", cause);
   }
 }
 
@@ -250,9 +259,9 @@ export async function assertCurrentUserWakeflowConfigAuthorityRoot(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityReplacementError) throw error;
     if (error instanceof RootedDirectoryError) {
-      failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+      failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
     }
-    failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+    failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
   }
 }
 
@@ -284,8 +293,8 @@ export function parseWakeflowConfigAuthorityExpectation(
         "$/expected/source",
       );
       return { projected, programProjected, sourceProjected };
-    } catch {
-      return failWakeflowConfigAuthorityReplacement("input", "$expected");
+    } catch (cause: unknown) {
+      return failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
     }
   })();
   if (
@@ -302,8 +311,8 @@ export function parseWakeflowConfigAuthorityExpectation(
   let configDigest: Sha256Digest;
   try {
     configDigest = parseSha256Digest(projected.configDigest, "$/expected/configDigest");
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest", cause);
   }
   let programId: WakeflowDurableId<"program">;
   try {
@@ -312,8 +321,8 @@ export function parseWakeflowConfigAuthorityExpectation(
       "program",
       "$/expected/model/program/programId",
     );
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId", cause);
   }
   let source: Readonly<StableFileSource>;
   try {
@@ -326,8 +335,8 @@ export function parseWakeflowConfigAuthorityExpectation(
         resourcePath: sourceProjected.resourcePath,
       },
     }).expected;
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$expected");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
   }
   if (
     source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
@@ -353,18 +362,18 @@ export function prepareWakeflowConfigAuthorityDesired(
     model = parseWakeflowConfig(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigError) {
-      failWakeflowConfigAuthorityReplacement("config", error.path);
+      failWakeflowConfigAuthorityReplacement("config", error.path, error);
     }
-    failWakeflowConfigAuthorityReplacement("config", "$config");
+    failWakeflowConfigAuthorityReplacement("config", "$config", error);
   }
   let bytes: Uint8Array;
   try {
     bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigError || error instanceof Utf8Error) {
-      failWakeflowConfigAuthorityReplacement("config", "$config");
+      failWakeflowConfigAuthorityReplacement("config", "$config", error);
     }
-    failWakeflowConfigAuthorityReplacement("config", "$config");
+    failWakeflowConfigAuthorityReplacement("config", "$config", error);
   }
   if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
     failWakeflowConfigAuthorityReplacement("capacity", "$config");
@@ -376,8 +385,8 @@ export function prepareWakeflowConfigAuthorityDesired(
       sourceDigest: computeSha256Digest(bytes, "$config"),
       configDigest: computeWakeflowConfigDigest(model),
     });
-  } catch {
-    failWakeflowConfigAuthorityReplacement("config", "$config");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("config", "$config", cause);
   }
 }
 
@@ -390,14 +399,14 @@ export async function assertWakeflowConfigAuthorityDesiredPlacements(
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
       if (error.reason === "root-scope") {
-        failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+        failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
       }
       if (error.reason === "input") {
-        failWakeflowConfigAuthorityReplacement("input", error.path);
+        failWakeflowConfigAuthorityReplacement("input", error.path, error);
       }
-      failWakeflowConfigAuthorityReplacement("placement", error.path);
+      failWakeflowConfigAuthorityReplacement("placement", error.path, error);
     }
-    failWakeflowConfigAuthorityReplacement("placement", "$placements");
+    failWakeflowConfigAuthorityReplacement("placement", "$placements", error);
   }
 }
 
@@ -413,21 +422,21 @@ export async function readCurrentWakeflowConfigAuthority(
     );
   } catch (error: unknown) {
     if (afterCommit) {
-      failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath");
+      failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath", error);
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       if (error.reason === "aborted") {
-        failWakeflowConfigAuthorityReplacement("aborted", "$signal");
+        failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
       }
       if (error.reason === "root-scope") {
-        failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+        failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
       }
       if (error.reason === "source-policy") {
-        failWakeflowConfigAuthorityReplacement("source-policy", "$source");
+        failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
       }
-      failWakeflowConfigAuthorityReplacement("source-invalid", "$source");
+      failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
     }
-    failWakeflowConfigAuthorityReplacement("source-invalid", "$source");
+    failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
   }
 }
 
@@ -457,8 +466,8 @@ export function sameWakeflowConfigAuthoritySource(
       left.digest === right.digest &&
       sameFileNodeSnapshot(left.node, right.node)
     );
-  } catch {
-    failWakeflowConfigAuthorityReplacement("input", "$expected");
+  } catch (cause: unknown) {
+    failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
   }
 }
 

@@ -1,6 +1,8 @@
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { test } from "node:test";
 
+import { isWakeflowError } from "../../../src/kernel/error.js";
+
 import type { TargetResultReviewInspectionResult } from "../../../src/capabilities/result-review/contract.js";
 import { executeImplementationReviewDecisionRequest } from "../../../src/capabilities/result-review/service.js";
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
@@ -244,6 +246,22 @@ test("rework 之后再投递、再导入形成新的评审单元并保留历史�
         idempotencyKey: "fixture-decision-rework-passed-only",
       }),
       rejectedWith("rework-checks"),
+    );
+    // rework 不带 blockingReasons（那是 blocked 的字段）：拒绝点名出错的字段，而不是只说 $request.decision
+    // （open-items G13——现场的 Controller 第一次被拒后只能猜是哪一项）。
+    await rejects(
+      decideFixtureImplementation(fixture, {
+        ...implementationReviewJudgmentWire("rework"),
+        blockingReasons: ["the environment is down"],
+        idempotencyKey: "fixture-decision-rework-with-blocking-reasons",
+      }),
+      (error: unknown) => {
+        if (!isWakeflowError(error)) return false;
+        equal(error.code, "precondition-failed");
+        equal(error.reason, "record-schema");
+        equal(error.path, "$request/decision/blockingReasons");
+        return true;
+      },
     );
     const rework = await decideFixtureImplementation(fixture, {
       ...implementationReviewJudgmentWire("rework"),

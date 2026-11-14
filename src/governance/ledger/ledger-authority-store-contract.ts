@@ -118,8 +118,8 @@ export class LedgerAuthorityStoreError extends Error {
   readonly reason: LedgerAuthorityStoreErrorReason;
   readonly path: string;
 
-  constructor(reason: LedgerAuthorityStoreErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: LedgerAuthorityStoreErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -132,8 +132,9 @@ interface ParsedLedgerAuthorityStoreOptions {
 export function throwLedgerAuthorityStoreError(
   reason: LedgerAuthorityStoreErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new LedgerAuthorityStoreError(reason, path);
+  throw new LedgerAuthorityStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 export function isLedgerAbortSignal(value: unknown): value is AbortSignal {
@@ -153,7 +154,7 @@ export function parseLedgerAuthorityStoreOptions(
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      throwLedgerAuthorityStoreError("input", "$options");
+      throwLedgerAuthorityStoreError("input", "$options", error);
     }
     throw error;
   }

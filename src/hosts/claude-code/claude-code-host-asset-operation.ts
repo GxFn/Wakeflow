@@ -93,15 +93,27 @@ export class ClaudeCodeHostAssetOperationError extends Error {
   readonly reason: ClaudeCodeHostAssetOperationErrorReason;
   readonly path: string;
 
-  constructor(reason: ClaudeCodeHostAssetOperationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ClaudeCodeHostAssetOperationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: ClaudeCodeHostAssetOperationErrorReason, path: string): never {
-  throw new ClaudeCodeHostAssetOperationError(reason, path);
+function fail(
+  reason: ClaudeCodeHostAssetOperationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ClaudeCodeHostAssetOperationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
@@ -147,8 +159,8 @@ async function currentAsset(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("read", "$asset");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("read", "$asset", error);
     }
     throw error;
   }
@@ -191,14 +203,14 @@ function parsePayload(
   try {
     record = parsePlainRecord(value, "$operation");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", error.path);
+    if (error instanceof PassiveOwnDataError) fail("operation", error.path, error);
     throw error;
   }
   let digest: Sha256Digest;
   try {
     digest = parseSha256Digest(record.digest, "$operation.digest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("operation", "$operation.digest");
+    if (error instanceof Sha256Error) fail("operation", "$operation.digest", error);
     throw error;
   }
   if (
@@ -222,8 +234,8 @@ async function ensureAssetsDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("write", "$asset.directory");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("write", "$asset.directory", error);
     }
     throw error;
   }
@@ -270,11 +282,11 @@ export async function executeClaudeCodeHostAssetOperation(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "expectation-changed" || error.reason === "target-exists") {
-        fail("source-stale", "$asset");
+        fail("source-stale", "$asset", error);
       }
-      fail("write", "$asset");
+      fail("write", "$asset", error);
     }
     throw error;
   }

@@ -108,8 +108,8 @@ export class RootedDirectoryError extends Error {
   readonly reason: RootedDirectoryErrorReason;
   readonly path: string;
 
-  constructor(reason: RootedDirectoryErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: RootedDirectoryErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -128,8 +128,8 @@ function normalizeErrorPath(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function fail(reason: RootedDirectoryErrorReason, path: string): never {
-  throw new RootedDirectoryError(reason, path);
+function fail(reason: RootedDirectoryErrorReason, path: string, cause?: unknown): never {
+  throw new RootedDirectoryError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function normalizeRootPath(value: unknown, errorPath: string): string {
@@ -158,7 +158,7 @@ function normalizeDurability(value: unknown, errorPath: string): RootedDirectory
   try {
     record = parsePlainRecord(value, errorPath);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("root-input", errorPath);
+    if (error instanceof PassiveOwnDataError) fail("root-input", errorPath, error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "durability")) {
@@ -186,7 +186,7 @@ function snapshotNode(value: BigIntStats, errorPath: string): Readonly<FileNodeS
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("inspection-failure", errorPath);
+      fail("inspection-failure", errorPath, error);
     }
     throw error;
   }
@@ -202,9 +202,9 @@ async function inspectPathNode(
     stats = await lstat(physicalPath, { bigint: true });
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") {
-      fail(missingReason, errorPath);
+      fail(missingReason, errorPath, error);
     }
-    fail("inspection-failure", errorPath);
+    fail("inspection-failure", errorPath, error);
   }
   return snapshotNode(stats, errorPath);
 }
@@ -220,9 +220,9 @@ async function inspectCanonicalPath(
     canonical = await realpath(physicalPath);
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") {
-      fail(changedReason, errorPath);
+      fail(changedReason, errorPath, error);
     }
-    fail("inspection-failure", errorPath);
+    fail("inspection-failure", errorPath, error);
   }
   if (canonical !== physicalPath) fail(aliasReason, errorPath);
 }
@@ -232,9 +232,9 @@ async function resolveCanonicalRootPath(physicalPath: string, errorPath: string)
     return await realpath(physicalPath);
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") {
-      fail("root-changed", errorPath);
+      fail("root-changed", errorPath, error);
     }
-    fail("inspection-failure", errorPath);
+    fail("inspection-failure", errorPath, error);
   }
 }
 
@@ -313,9 +313,9 @@ export class RootedDirectory {
       handle = await openFileHandle(canonicalRootPath, flags);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
-      if (code === "ELOOP") fail("root-symlink", path);
-      if (code === "ENOENT") fail("root-changed", path);
-      fail("root-open-failure", path);
+      if (code === "ELOOP") fail("root-symlink", path, error);
+      if (code === "ENOENT") fail("root-changed", path, error);
+      fail("root-open-failure", path, error);
     }
 
     try {
@@ -373,7 +373,7 @@ export class RootedDirectory {
       opened = snapshotNode(await this.#handle.stat({ bigint: true }), path);
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) throw error;
-      fail("root-changed", path);
+      fail("root-changed", path, error);
     }
     const current = await inspectPathNode(this.#absolutePath, path, "root-changed");
     if (current.kind === "symbolic-link") fail("root-changed", path);
@@ -409,7 +409,7 @@ export class RootedDirectory {
     try {
       segments = splitPortableResourcePath(resourcePath, path);
     } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) fail("resource-path", path);
+      if (error instanceof PortableResourcePathError) fail("resource-path", path, error);
       throw error;
     }
     await this.assertCurrent("$root");
@@ -478,8 +478,8 @@ export class RootedDirectory {
     this.#closed = true;
     try {
       await this.#handle.close();
-    } catch {
-      fail("close-failure", "$root");
+    } catch (cause: unknown) {
+      fail("close-failure", "$root", cause);
     }
   }
 

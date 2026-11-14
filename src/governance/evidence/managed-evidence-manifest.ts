@@ -207,8 +207,8 @@ export class ManagedEvidenceManifestError extends Error {
   readonly reason: ManagedEvidenceManifestErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceManifestErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: ManagedEvidenceManifestErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -239,8 +239,8 @@ const validateWire = createRuntimeJsonSchemaValidator<ManagedEvidenceManifestWir
   ],
 );
 
-function fail(reason: ManagedEvidenceManifestErrorReason, path: string): never {
-  throw new ManagedEvidenceManifestError(reason, path);
+function fail(reason: ManagedEvidenceManifestErrorReason, path: string, cause?: unknown): never {
+  throw new ManagedEvidenceManifestError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function compareText(left: string, right: string): number {
@@ -255,7 +255,7 @@ function parseId<K extends "demand" | "evidence" | "program" | "repository" | "s
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -264,7 +264,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -273,7 +273,7 @@ function parseTime(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -306,7 +306,8 @@ function parsePrivacyFindings(
       try {
         ref = parsePortableResourcePath(finding.ref, `${path}/ref`);
       } catch (error: unknown) {
-        if (error instanceof PortableResourcePathError) fail("content-review", `${path}/ref`);
+        if (error instanceof PortableResourcePathError)
+          fail("content-review", `${path}/ref`, error);
         throw error;
       }
       if (!payloadRefs.has(ref)) fail("content-review", `${path}/ref`);
@@ -337,9 +338,9 @@ function parsePayload(
         error.reason === "total-bytes" ||
         error.reason === "ref-bytes"
       ) {
-        fail("capacity", "$/payload/treeManifest");
+        fail("capacity", "$/payload/treeManifest", error);
       }
-      fail("payload", "$/payload/treeManifest");
+      fail("payload", "$/payload/treeManifest", error);
     }
     throw error;
   }
@@ -361,7 +362,7 @@ function parseContentReview(
       ref = parsePortableResourcePath(entry, `$/contentReview/opaqueFileRefs/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("content-review", `$/contentReview/opaqueFileRefs/${index}`);
+        fail("content-review", `$/contentReview/opaqueFileRefs/${index}`, error);
       }
       throw error;
     }
@@ -394,7 +395,7 @@ function manifestBasis(wire: Readonly<ManagedEvidenceManifestWire>): Readonly<Ma
     source = parseManagedEvidenceSourceDescriptor(wire.source);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceSourceSelectionError) {
-      fail("source", error.path);
+      fail("source", error.path, error);
     }
     throw error;
   }
@@ -402,7 +403,7 @@ function manifestBasis(wire: Readonly<ManagedEvidenceManifestWire>): Readonly<Ma
   try {
     assertManagedEvidenceKindMatchesSource(kind, source);
   } catch (error: unknown) {
-    if (error instanceof ManagedEvidenceSourceSelectionError) fail("kind", "$/kind");
+    if (error instanceof ManagedEvidenceSourceSelectionError) fail("kind", "$/kind", error);
     throw error;
   }
   // 目录树之外的来源（单文件与三种引用投影）都规范化为单一 `content` 成员。
@@ -438,7 +439,7 @@ export function parseManagedEvidenceManifest(value: unknown): Readonly<ManagedEv
   try {
     json = parseJsonValue(value, "$manifest");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   if (
@@ -463,7 +464,7 @@ function exactDraftRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     record = parsePlainRecord(value, "$draft");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft");
+    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
     throw error;
   }
   const keys = Object.keys(record).sort(compareText);
@@ -498,7 +499,7 @@ function candidateManifest(
   try {
     json = parseJsonValue(basis, "$draft");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   if (json === null || Array.isArray(json) || typeof json !== "object") {
@@ -515,7 +516,7 @@ function readCaptureTime(options: CreateManagedEvidenceManifestOptions): UtcInst
   try {
     record = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "clock")) {
@@ -524,7 +525,7 @@ function readCaptureTime(options: CreateManagedEvidenceManifestOptions): UtcInst
   try {
     return readUtcWallClock(record.clock as UtcWallClock | undefined);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$options/clock");
+    if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
   }
 }
@@ -553,7 +554,7 @@ export function parseManagedEvidenceManifestDocument(
     json = parseDeterministicJsonDocument(text, "$manifest");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$manifest");
+      fail("representation", "$manifest", error);
     }
     throw error;
   }

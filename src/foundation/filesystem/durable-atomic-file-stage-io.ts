@@ -63,8 +63,8 @@ export async function snapshotDurableAtomicFileHandle(
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
     return createFileNodeSnapshot(await handle.stat({ bigint: true }), path);
-  } catch {
-    fail(reason, path);
+  } catch (cause: unknown) {
+    fail(reason, path, cause);
   }
 }
 
@@ -75,8 +75,8 @@ function allocateVerificationBuffer(
 ): Buffer {
   try {
     return Buffer.allocUnsafe(byteLength);
-  } catch {
-    fail(reason, path);
+  } catch (cause: unknown) {
+    fail(reason, path, cause);
   }
 }
 
@@ -94,7 +94,7 @@ export async function createExclusiveDurableAtomicFileStage(
       address = issueDurableAtomicFileStageAddress(operation, resourcePath, inputDigest, mode);
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileStageAddressError) {
-        fail("stage-create-failure", "$stage");
+        fail("stage-create-failure", "$stage", error);
       }
       throw error;
     }
@@ -105,7 +105,7 @@ export async function createExclusiveDurableAtomicFileStage(
     } catch (error: unknown) {
       releaseDurableAtomicFileStageAddress(address);
       if (readNodeSystemErrorCode(error) === "EEXIST") continue;
-      fail("stage-create-failure", "$stage");
+      fail("stage-create-failure", "$stage", error);
     }
   }
   fail("stage-create-failure", "$stage");
@@ -128,12 +128,12 @@ export async function recoverDurableAtomicFileStagesBeforeWrite(
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "input") fail("input", "$resourcePath");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "input") fail("input", "$resourcePath", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
       // 并发写入活动暂存文件可能使稳定枚举暂时失败；不替换目标的提交点仍是安全边界。
       if (error.reason === "busy") return;
-      fail("stage-recovery-required", "$stage");
+      fail("stage-recovery-required", "$stage", error);
     }
     throw error;
   }
@@ -150,9 +150,9 @@ async function writeExactBytes(
     let bytesWritten: number;
     try {
       ({ bytesWritten } = await handle.write(bytes, offset, bytes.byteLength - offset, offset));
-    } catch {
+    } catch (cause: unknown) {
       assertDurableAtomicFileNotAborted(signal);
-      fail("stage-write-failure", "$stage");
+      fail("stage-write-failure", "$stage", cause);
     }
     if (bytesWritten <= 0 || bytesWritten > bytes.byteLength - offset) {
       fail("stage-write-failure", "$stage");
@@ -167,7 +167,7 @@ export async function verifyDurableAtomicFileHandleBytes(
   signal: AbortSignal | undefined,
   reason: "stage-changed" | "commit-uncertain",
 ): Promise<Readonly<FileNodeSnapshot>> {
-  const errorPath = reason === "stage-changed" ? "$stage" : "$resourcePath";
+  const errorPath = reason === "stage-changed" ? "$stage/bytes" : "$resourcePath";
   const before = await snapshotDurableAtomicFileHandle(handle, reason, errorPath);
   const scratch = allocateVerificationBuffer(
     Math.min(VERIFY_CHUNK_BYTES, input.byteCount || 1),
@@ -183,11 +183,11 @@ export async function verifyDurableAtomicFileHandleBytes(
     let bytesRead: number;
     try {
       ({ bytesRead } = await handle.read(scratch, 0, length, position));
-    } catch {
+    } catch (cause: unknown) {
       if (reason === "stage-changed") {
         assertDurableAtomicFileNotAborted(signal);
       }
-      fail(reason, errorPath);
+      fail(reason, errorPath, cause);
     }
     if (bytesRead <= 0 || bytesRead > length) fail(reason, errorPath);
     if (
@@ -206,7 +206,7 @@ export async function verifyDurableAtomicFileHandleBytes(
     if (reason === "stage-changed") {
       assertDurableAtomicFileNotAborted(signal);
     }
-    fail(reason, errorPath);
+    fail(reason, errorPath, error);
   }
   const after = await snapshotDurableAtomicFileHandle(handle, reason, errorPath);
   if (!sameFileNodeSnapshot(before, after)) fail(reason, errorPath);
@@ -224,8 +224,8 @@ export async function prepareDurableAtomicFileStage(
   assertDurableAtomicFileNotAborted(signal);
   try {
     await exclusive.handle.chmod(mode);
-  } catch {
-    fail("stage-write-failure", "$stage");
+  } catch (cause: unknown) {
+    fail("stage-write-failure", "$stage", cause);
   }
   const beforeSync = await snapshotDurableAtomicFileHandle(
     exclusive.handle,
@@ -243,41 +243,51 @@ export async function prepareDurableAtomicFileStage(
   if (durability === "fsync") {
     try {
       await exclusive.handle.sync();
-    } catch {
-      fail("stage-sync-failure", "$stage");
+    } catch (cause: unknown) {
+      fail("stage-sync-failure", "$stage", cause);
     }
   }
   const afterSync = await snapshotDurableAtomicFileHandle(
     exclusive.handle,
     "stage-changed",
-    "$stage",
+    "$stage/after-sync",
   );
   if (!sameFileNodeSnapshot(beforeSync, afterSync)) {
-    fail("stage-changed", "$stage");
+    fail("stage-changed", "$stage/after-sync");
   }
   return Object.freeze({ ...exclusive, node: afterSync });
 }
 
+/**
+ * 暂存在发布之前仍是它写下时的那个节点。`stage-changed` 有好几处会报，每一处带自己的位置记号
+ * （open-items G8）：现场 L21 留下的那条事故只有 reason，五处检查里是哪一处判不出来，也复现不了。
+ * 位置是错误的 `path`，事故记录把它记在 cause 链上；上层按 reason 映射，公开结果不变。
+ */
 export async function assertDurableAtomicFileStageCurrent(
   stage: Readonly<PreparedDurableAtomicFileStage>,
 ): Promise<void> {
-  const handleNode = await snapshotDurableAtomicFileHandle(stage.handle, "stage-changed", "$stage");
+  const handleNode = await snapshotDurableAtomicFileHandle(
+    stage.handle,
+    "stage-changed",
+    "$stage/handle",
+  );
   let pathNode: Readonly<FileNodeSnapshot>;
   try {
     pathNode = createFileNodeSnapshot(await lstat(stage.physicalPath, { bigint: true }), "$stage");
-  } catch {
-    fail("stage-changed", "$stage");
+  } catch (cause: unknown) {
+    // 暂存的名字不在了：被别的进程删掉或改名。
+    fail("stage-changed", "$stage/path-missing", cause);
   }
-  if (
-    handleNode.kind !== "file" ||
-    pathNode.kind !== "file" ||
-    handleNode.linkCount !== 1n ||
-    pathNode.linkCount !== 1n ||
-    !sameFileNodeSnapshot(stage.node, handleNode) ||
-    !sameFileNodeSnapshot(handleNode, pathNode)
-  ) {
-    fail("stage-changed", "$stage");
+  if (handleNode.kind !== "file" || pathNode.kind !== "file") {
+    fail("stage-changed", "$stage/kind");
   }
+  if (handleNode.linkCount !== 1n || pathNode.linkCount !== 1n) {
+    fail("stage-changed", "$stage/link-count");
+  }
+  // 句柄上的节点与写完时记下的不同：内容、权限或时间戳在这之后被动过。
+  if (!sameFileNodeSnapshot(stage.node, handleNode)) fail("stage-changed", "$stage/handle-node");
+  // 名字现在指向的不是句柄打开的那个节点：名字被换成了别的文件。
+  if (!sameFileNodeSnapshot(handleNode, pathNode)) fail("stage-changed", "$stage/path-node");
 }
 
 export async function unlinkOwnedDurableAtomicFileStage(
@@ -288,7 +298,7 @@ export async function unlinkOwnedDurableAtomicFileStage(
     pathNode = createFileNodeSnapshot(await lstat(stage.physicalPath, { bigint: true }), "$stage");
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") return;
-    fail("stage-cleanup-failure", "$stage");
+    fail("stage-cleanup-failure", "$stage", error);
   }
   const opened = await snapshotDurableAtomicFileHandle(
     stage.handle,
@@ -307,7 +317,7 @@ export async function unlinkOwnedDurableAtomicFileStage(
     await unlink(stage.physicalPath);
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") return;
-    fail("stage-cleanup-failure", "$stage");
+    fail("stage-cleanup-failure", "$stage", error);
   }
   const afterUnlink = await snapshotDurableAtomicFileHandle(
     stage.handle,

@@ -163,14 +163,14 @@ export class DemandResultReviewSnapshotError extends Error {
   readonly code = "wakeflow-demand-result-review-snapshot" as const;
   readonly reason: DemandResultReviewSnapshotErrorReason;
 
-  constructor(reason: DemandResultReviewSnapshotErrorReason) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandResultReviewSnapshotErrorReason, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
   }
 }
 
-function fail(reason: DemandResultReviewSnapshotErrorReason): never {
-  throw new DemandResultReviewSnapshotError(reason);
+function fail(reason: DemandResultReviewSnapshotErrorReason, cause?: unknown): never {
+  throw new DemandResultReviewSnapshotError(reason, cause === undefined ? undefined : { cause });
 }
 
 function parseSignal(value: unknown): AbortSignal | undefined {
@@ -532,7 +532,7 @@ export async function readDemandResultReviewSnapshot(
       if (error.reason === "stream" || error.reason === "not-found") {
         fail("stream");
       }
-      fail("operation-failure");
+      fail("operation-failure", error);
     }
     throw error;
   }
@@ -567,11 +567,11 @@ export async function readArchivedDemandResultReviewSnapshot(
       if (error.reason === "aborted") fail("aborted");
       if (error.reason === "input") fail("input");
       if (ARCHIVED_STREAM_FAILURES.has(error.reason)) fail("stream");
-      fail("operation-failure");
+      fail("operation-failure", error);
     }
     if (error instanceof DemandEventSourcingRepositoryError) {
       if (error.reason === "stream" || error.reason === "not-found") fail("stream");
-      fail("operation-failure");
+      fail("operation-failure", error);
     }
     throw error;
   }

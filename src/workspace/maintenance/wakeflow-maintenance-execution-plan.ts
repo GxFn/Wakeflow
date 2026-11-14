@@ -108,8 +108,12 @@ export class WakeflowMaintenanceExecutionPlanError extends Error {
   readonly reason: WakeflowMaintenanceExecutionPlanErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceExecutionPlanErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowMaintenanceExecutionPlanErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -118,8 +122,16 @@ export class WakeflowMaintenanceExecutionPlanError extends Error {
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const JOURNAL_MAXIMUM_STEPS = 256;
 
-function fail(reason: WakeflowMaintenanceExecutionPlanErrorReason, path: string): never {
-  throw new WakeflowMaintenanceExecutionPlanError(reason, path);
+function fail(
+  reason: WakeflowMaintenanceExecutionPlanErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowMaintenanceExecutionPlanError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseHostId(value: unknown, path: string): WakeflowWorkspaceHostId {
@@ -134,7 +146,7 @@ function parseSharedPreview(value: unknown): Readonly<WakeflowStaticMaterializat
     return parseWakeflowStaticMaterializationPreview(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("shared-preview", error.path);
+      fail("shared-preview", error.path, error);
     }
     throw error;
   }
@@ -146,7 +158,7 @@ function parseContribution(value: unknown): Readonly<WakeflowHostMaintenanceCont
     return parseWakeflowHostMaintenanceContribution(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowHostMaintenanceContributionError) {
-      fail("host-contribution", error.path);
+      fail("host-contribution", error.path, error);
     }
     throw error;
   }
@@ -294,7 +306,7 @@ export function createWakeflowMaintenanceExecutionPlan(
     profile = parseWakeflowWorkspaceHostResourceProfile(currentHostProfileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("host", error.path);
+      fail("host", error.path, error);
     }
     throw error;
   }
@@ -308,7 +320,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -318,7 +330,7 @@ function equivalentJson(left: unknown, right: unknown, path: string): boolean {
   try {
     leftJson = parseJsonValue(left, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   return computeCanonicalJsonSha256Digest(leftJson) === computeCanonicalJsonSha256Digest(right);
@@ -332,7 +344,7 @@ export function parseWakeflowMaintenanceExecutionPlan(
   try {
     record = parsePlainRecord(value, "$plan");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   if (

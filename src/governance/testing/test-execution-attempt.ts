@@ -122,8 +122,8 @@ export class TestExecutionAttemptError extends Error {
   readonly reason: TestExecutionAttemptErrorReason;
   readonly path: string;
 
-  constructor(reason: TestExecutionAttemptErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TestExecutionAttemptErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -134,8 +134,8 @@ const validateWire = createRuntimeJsonSchemaValidator<TestExecutionAttemptWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
 
-function fail(reason: TestExecutionAttemptErrorReason, path: string): never {
-  throw new TestExecutionAttemptError(reason, path);
+function fail(reason: TestExecutionAttemptErrorReason, path: string, cause?: unknown): never {
+  throw new TestExecutionAttemptError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function id<
@@ -149,7 +149,7 @@ function id<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -158,7 +158,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -177,7 +177,7 @@ function testPackage(value: unknown): Readonly<TestTaskPackage> {
   try {
     taskPackage = parseTaskPackage(value);
   } catch (error: unknown) {
-    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage");
+    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage", error);
     throw error;
   }
   if (taskPackage.workType !== "test") fail("task-package", "$taskPackage");
@@ -190,7 +190,7 @@ export function parseTestExecutionAttempt(value: unknown): Readonly<TestExecutio
   try {
     json = parseJsonValue(value, "$attempt");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);

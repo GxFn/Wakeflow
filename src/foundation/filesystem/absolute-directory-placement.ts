@@ -61,8 +61,8 @@ export class AbsoluteDirectoryPlacementError extends Error {
   readonly reason: AbsoluteDirectoryPlacementErrorReason;
   readonly path: string;
 
-  constructor(reason: AbsoluteDirectoryPlacementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: AbsoluteDirectoryPlacementErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -71,8 +71,12 @@ export class AbsoluteDirectoryPlacementError extends Error {
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 
-function fail(reason: AbsoluteDirectoryPlacementErrorReason, path: string): never {
-  throw new AbsoluteDirectoryPlacementError(reason, path);
+function fail(reason: AbsoluteDirectoryPlacementErrorReason, path: string, cause?: unknown): never {
+  throw new AbsoluteDirectoryPlacementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function normalizeErrorPath(value: unknown): string {
@@ -101,7 +105,7 @@ function snapshotDirectoryNode(stats: BigIntStats, path: string): Readonly<FileN
     node = createFileNodeSnapshot(stats, path);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("inspection-failure", path);
+      fail("inspection-failure", path, error);
     }
     throw error;
   }
@@ -119,7 +123,7 @@ async function inspectOnePath(
     stats = await lstat(physicalPath, { bigint: true });
   } catch (error: unknown) {
     if (readNodeSystemErrorCode(error) === "ENOENT") return null;
-    fail("inspection-failure", errorPath);
+    fail("inspection-failure", errorPath, error);
   }
   return snapshotDirectoryNode(stats, errorPath);
 }

@@ -157,7 +157,7 @@
               "type": "null"
             }
           ],
-          "description": "The zero-write plan a ready preview derived (or the private-mode convergence plan for a safe-drift reconcile); apply re-derives it and compares planDigest."
+          "description": "What a ready preview will do: a WakeflowMaintenancePlanSummary whose steps each appear once (boundary shared-static or host-capability, stepKind or operationKind, ownerId, targetKey, targetExists), or the view of a recovery plan reconcile returns first. Apply re-derives the full plan and compares planDigest."
         },
         "freshConfigCompilation": {
           "oneOf": [

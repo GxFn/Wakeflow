@@ -176,8 +176,12 @@ export class ControllerImplementationReviewDecisionError extends Error {
   readonly reason: ControllerImplementationReviewDecisionErrorReason;
   readonly path: string;
 
-  constructor(reason: ControllerImplementationReviewDecisionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ControllerImplementationReviewDecisionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -194,8 +198,16 @@ const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
   ],
 );
 
-function fail(reason: ControllerImplementationReviewDecisionErrorReason, path: string): never {
-  throw new ControllerImplementationReviewDecisionError(reason, path);
+function fail(
+  reason: ControllerImplementationReviewDecisionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ControllerImplementationReviewDecisionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function id<
@@ -212,7 +224,7 @@ function id<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -221,7 +233,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -231,7 +243,7 @@ function streamRevision(value: unknown, path: string): DemandEventStreamRevision
     return parseDemandEventStreamRevision(value, path);
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("position", path);
+      fail("position", path, error);
     }
     throw error;
   }
@@ -241,7 +253,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -381,7 +393,7 @@ export function parseControllerImplementationReviewDecision(
   try {
     json = parseJsonValue(value, "$decision");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -478,7 +490,7 @@ export function createControllerImplementationReviewDecision(
     );
   } catch (error: unknown) {
     if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$uuidFactory");
+      fail("identifier", "$uuidFactory", error);
     }
     throw error;
   }
@@ -486,7 +498,7 @@ export function createControllerImplementationReviewDecision(
   try {
     decidedAt = options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    if (error instanceof UtcWallClockError) fail("time", "$clock", error);
     throw error;
   }
   const basis = decisionBasis({
@@ -532,7 +544,7 @@ export function parseControllerImplementationReviewDecisionDocument(
     json = parseDeterministicJsonDocument(text, "$decision");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$decision");
+      fail("representation", "$decision", error);
     }
     throw error;
   }

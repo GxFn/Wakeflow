@@ -122,8 +122,12 @@ export class ManagedEvidencePublicationStageMaterializationError extends Error {
   readonly reason: ManagedEvidencePublicationStageMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidencePublicationStageMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidencePublicationStageMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -138,8 +142,13 @@ const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NA
 function fail(
   reason: ManagedEvidencePublicationStageMaterializationErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new ManagedEvidencePublicationStageMaterializationError(reason, path);
+  throw new ManagedEvidencePublicationStageMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(
@@ -161,7 +170,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -188,7 +197,7 @@ function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTr
     return parseManagedEvidencePublicationTransaction(value);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction");
+      fail("input", "$transaction", error);
     }
     throw error;
   }
@@ -244,7 +253,7 @@ function admitEvidenceRootMaterialization(
     admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation-failure", "$catalog");
+      fail("operation-failure", "$catalog", error);
     }
     throw error;
   }
@@ -274,7 +283,7 @@ function mapDirectoryError(
   ) {
     fail("recovery-required", path);
   }
-  fail("operation-failure", path);
+  fail("operation-failure", path, error);
 }
 
 async function ensureEvidenceRoot(
@@ -292,7 +301,7 @@ async function ensureEvidenceRoot(
     );
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("destination-root-scope", "$demandRoot");
+      fail("destination-root-scope", "$demandRoot", error);
     }
     throw error;
   }
@@ -331,7 +340,7 @@ function mapCandidateError(error: DurableDirectoryTreeCandidateError): never {
     fail("stage-conflict", "$stage");
   }
   if (error.reason === "input") fail("input", error.path);
-  fail("operation-failure", "$stage");
+  fail("operation-failure", "$stage", error);
 }
 
 async function inspectProgress(
@@ -391,11 +400,11 @@ async function recoverManifestAtomicStages(
     }
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") {
-        fail("destination-root-scope", "$demandRoot");
+        fail("destination-root-scope", "$demandRoot", error);
       }
-      fail("recovery-required", "$manifest/stage");
+      fail("recovery-required", "$manifest/stage", error);
     }
     throw error;
   }
@@ -427,7 +436,7 @@ function mapPayloadError(error: ManagedEvidencePublicationPayloadMaterialization
     fail("recovery-required", "$stage");
   }
   if (error.reason === "input") fail("input", "$payload");
-  fail("operation-failure", "$payload");
+  fail("operation-failure", "$payload", error);
 }
 
 function onlyManifestMissing(progress: Readonly<DirectoryTreeCandidateProgress>): boolean {
@@ -458,7 +467,7 @@ function mapManifestWriteError(error: DurableAtomicFileWriteError): never {
   ) {
     fail("recovery-required", "$manifest");
   }
-  fail("operation-failure", "$manifest");
+  fail("operation-failure", "$manifest", error);
 }
 
 async function publishManifest(
@@ -551,7 +560,7 @@ export async function materializeManagedEvidencePublicationStage(
     await loadExactJournal(demandRootValue, transaction, undefined, stored.source.node);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationStageMaterializationError) {
-      fail("recovery-required", "$stage");
+      fail("recovery-required", "$stage", error);
     }
     throw error;
   }

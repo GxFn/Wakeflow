@@ -103,8 +103,12 @@ export class DurableDirectoryTreeCandidateRetirementError extends Error {
   readonly reason: DurableDirectoryTreeCandidateRetirementErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableDirectoryTreeCandidateRetirementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableDirectoryTreeCandidateRetirementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -128,8 +132,16 @@ interface CapturedCandidateMembers {
   readonly missingFiles: readonly PortableResourcePath[];
 }
 
-function fail(reason: DurableDirectoryTreeCandidateRetirementErrorReason, path: string): never {
-  throw new DurableDirectoryTreeCandidateRetirementError(reason, path);
+function fail(
+  reason: DurableDirectoryTreeCandidateRetirementErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableDirectoryTreeCandidateRetirementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -157,7 +169,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -178,7 +190,7 @@ function parsePath(value: unknown): PortableResourcePath {
     return parsePortableResourcePath(value, "$candidateRootPath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$candidateRootPath");
+      fail("input", "$candidateRootPath", error);
     }
     throw error;
   }
@@ -199,7 +211,7 @@ function parseRootNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$candidate/rootNode");
+      fail("input", "$candidate/rootNode", error);
     }
     throw error;
   }
@@ -213,7 +225,7 @@ function parseCandidate(value: unknown): Readonly<ParsedCandidate> {
   try {
     record = parsePlainRecord(value, "$candidate");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$candidate");
+    if (error instanceof PassiveOwnDataError) fail("input", "$candidate", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -230,7 +242,7 @@ function parseCandidate(value: unknown): Readonly<ParsedCandidate> {
     plan = parseDirectoryTreeCandidatePlan(record.plan);
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$candidate/plan");
+      fail("input", "$candidate/plan", error);
     }
     throw error;
   }
@@ -251,7 +263,7 @@ function parseRecoveryInput(
     plan = parseDirectoryTreeCandidatePlan(planValue);
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$plan");
+      fail("input", "$plan", error);
     }
     throw error;
   }
@@ -277,11 +289,11 @@ async function candidateExists(
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return false;
-      if (error.reason === "resource-path") fail("input", "$candidate");
+      if (error.reason === "resource-path") fail("input", "$candidate", error);
       if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
-        fail("candidate-conflict", "$candidate");
+        fail("candidate-conflict", "$candidate", error);
       }
-      fail("root-scope", "$root");
+      fail("root-scope", "$root", error);
     }
     throw error;
   }
@@ -354,7 +366,7 @@ async function captureMembers(
       );
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
-        fail("source-changed", "$candidate/directory");
+        fail("source-changed", "$candidate/directory", error);
       }
       throw error;
     }
@@ -377,11 +389,11 @@ async function captureMembers(
       });
     } catch (error: unknown) {
       if (error instanceof StableFileReadError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
         if (error.reason === "source-changed") {
-          fail("source-changed", "$candidate/file");
+          fail("source-changed", "$candidate/file", error);
         }
-        fail("candidate-conflict", "$candidate/file");
+        fail("candidate-conflict", "$candidate/file", error);
       }
       throw error;
     }
@@ -507,7 +519,7 @@ export async function removeEmptyDirectoryExactly(
     current = await root.inspectExistingResource(resourcePath, "$directory");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("source-changed", "$candidate/directory");
+      fail("source-changed", "$candidate/directory", error);
     }
     throw error;
   }
@@ -552,10 +564,10 @@ export async function removeEmptyDirectoryExactly(
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ENOTEMPTY" || code === "EEXIST") {
-        fail("candidate-conflict", "$candidate/directory");
+        fail("candidate-conflict", "$candidate/directory", error);
       }
-      if (code === "ENOENT") fail("source-changed", "$candidate/directory");
-      fail("retirement-failure", "$candidate/directory");
+      if (code === "ENOENT") fail("source-changed", "$candidate/directory", error);
+      fail("retirement-failure", "$candidate/directory", error);
     }
     committed = true;
     if ((await parent.inspectTarget()) !== null) {

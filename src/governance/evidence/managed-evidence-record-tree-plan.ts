@@ -94,8 +94,12 @@ export class ManagedEvidenceRecordTreePlanError extends Error {
   readonly reason: ManagedEvidenceRecordTreePlanErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceRecordTreePlanErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidenceRecordTreePlanErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,8 +135,16 @@ const RECORD_CAPACITY = Object.freeze({
   maximumTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes,
 } as const);
 
-function fail(reason: ManagedEvidenceRecordTreePlanErrorReason, path: string): never {
-  throw new ManagedEvidenceRecordTreePlanError(reason, path);
+function fail(
+  reason: ManagedEvidenceRecordTreePlanErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidenceRecordTreePlanError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function exactRecord(value: unknown): Readonly<Record<string, unknown>> {
@@ -140,7 +152,7 @@ function exactRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     record = parsePlainRecord(value, "$plan");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$plan");
+    if (error instanceof PassiveOwnDataError) fail("input", "$plan", error);
     throw error;
   }
   const actual = Object.keys(record).sort();
@@ -156,8 +168,8 @@ function parseManifest(value: unknown): Readonly<ManagedEvidenceManifest> {
     return parseManagedEvidenceManifest(value);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceManifestError) {
-      if (error.reason === "capacity") fail("capacity", "$/manifest");
-      fail("manifest", "$/manifest");
+      if (error.reason === "capacity") fail("capacity", "$/manifest", error);
+      fail("manifest", "$/manifest", error);
     }
     throw error;
   }
@@ -168,7 +180,7 @@ function parseEvidenceId(value: unknown): WakeflowDurableId<"evidence"> {
     return parseWakeflowDurableIdOfKind(value, "evidence", "$/evidenceId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/evidenceId");
+      fail("identifier", "$/evidenceId", error);
     }
     throw error;
   }
@@ -178,7 +190,7 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }
@@ -187,7 +199,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("plan", path);
+    if (error instanceof Sha256Error) fail("plan", path, error);
     throw error;
   }
 }
@@ -197,8 +209,8 @@ function parseDirectoryPlan(value: unknown): Readonly<DirectoryTreeCandidatePlan
     return parseDirectoryTreeCandidatePlan(value, RECORD_CAPACITY);
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "capacity") fail("capacity", "$/directoryPlan");
-      fail("plan", "$/directoryPlan");
+      if (error.reason === "capacity") fail("capacity", "$/directoryPlan", error);
+      fail("plan", "$/directoryPlan", error);
     }
     throw error;
   }
@@ -247,8 +259,8 @@ function buildBasis(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "capacity") fail("capacity", "$/manifest/payload");
-      fail("plan", "$/manifest/payload");
+      if (error.reason === "capacity") fail("capacity", "$/manifest/payload", error);
+      fail("plan", "$/manifest/payload", error);
     }
     throw error;
   }

@@ -153,7 +153,7 @@ test("已死进程的门锁、没有任何操作：reconcile 的第一份计划�
   // 下一次预览回到平常的布局维护。
   const ordinary = await previewReconcile(root);
   equal(ordinary.status, "ready");
-  equal((ordinary.plan as { kind?: string } | null)?.kind, "WakeflowMaintenanceExecutionPlan");
+  equal((ordinary.plan as { kind?: string } | null)?.kind, "WakeflowMaintenancePlanSummary");
 });
 
 test("只剩孤儿暂存、没有门锁：计划是 lock absent；暂存的属主还活着时 apply 以 maintenance-gate-residue 拒绝并且不删", {

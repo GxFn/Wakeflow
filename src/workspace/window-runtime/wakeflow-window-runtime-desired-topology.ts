@@ -81,15 +81,27 @@ export class WakeflowWindowRuntimeDesiredTopologyError extends Error {
   readonly reason: WakeflowWindowRuntimeDesiredTopologyErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowRuntimeDesiredTopologyErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowWindowRuntimeDesiredTopologyErrorReason, path: string): never {
-  throw new WakeflowWindowRuntimeDesiredTopologyError(reason, path);
+function fail(
+  reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWindowRuntimeDesiredTopologyError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function compareWindowId(
@@ -157,7 +169,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
   try {
     model = parseWakeflowConfig(configValue);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
   let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
@@ -165,7 +177,7 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }

@@ -115,22 +115,26 @@ export class WakeflowWindowLaunchIntentError extends Error {
   readonly reason: WakeflowWindowLaunchIntentErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowLaunchIntentErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowWindowLaunchIntentErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowWindowLaunchIntentErrorReason, path: string): never {
-  throw new WakeflowWindowLaunchIntentError(reason, path);
+function fail(reason: WakeflowWindowLaunchIntentErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowWindowLaunchIntentError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
 }
@@ -140,7 +144,7 @@ function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourcePro
     return parseWakeflowWorkspaceHostResourceProfile(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }

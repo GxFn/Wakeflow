@@ -40,7 +40,7 @@ import {
   type HostHookEvent,
   scanHostHookObservations,
 } from "../../kernel/hook-observations.js";
-import { countIncidents } from "../../kernel/incident.js";
+import { summarizeIncidents } from "../../kernel/incident.js";
 import {
   hostHookObservationsRootRef,
   hostRuntimeRootRef,
@@ -248,8 +248,12 @@ export interface ObservedHostHooks {
   readonly skipped: number;
   /** `skipped` 里占着原子暂存前缀、却不是观察器自己会留下的暂存的条目数（open-items B13）。 */
   readonly stageResidue: number;
-  /** 该宿主观察器写不进工作区而留下的事故记录数（open-items G8，§13.166）；只读计数，不是门的权威。 */
+  /**
+   * 该宿主观察器近七天写不进工作区而留下的事故记录数（open-items G8，§13.166），以及其中最近一条的时间
+   * （没有则 null）；只读计数，不是门的权威。更早的事故不再计入：一条旧事故不该永远挂在门上。
+   */
   readonly writeFailures: number;
+  readonly latestWriteFailureAt: string | null;
   /**
    * 每个会话最近一条记录，另带该会话最近一条 session-start 记录的观察器摘要：会话在哪份制品下
    * 启动是一个健全的"过期"证据（启动摘要旧于本进程的制品 ⇒ 会话一定没有重启过），而新的
@@ -657,10 +661,14 @@ function keepLatestFact(
   values.set(sessionId, value);
 }
 
+/** hook 观察器的写失败计入门的时间窗：七天之内。 */
+const HOOK_WRITE_FAILURE_WINDOW_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
+
 async function observeHostHooks(
   root: RootedDirectory,
   hostId: WakeflowHostId,
   current: boolean,
+  observedAt: UtcInstant,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedHostHooks>> {
   try {
@@ -746,9 +754,15 @@ async function observeHostHooks(
         permissionMode: modes.get(sessionId) ?? null,
       });
     }
-    const writeFailures = await countIncidents(
+    const writeFailures = await summarizeIncidents(
       root,
-      { source: "hook-observer", hostId },
+      {
+        source: "hook-observer",
+        hostId,
+        since: new Date(
+          Date.parse(observedAt) - HOOK_WRITE_FAILURE_WINDOW_MILLISECONDS,
+        ).toISOString(),
+      },
       signalOptions(signal),
     );
     return Object.freeze({
@@ -760,7 +774,8 @@ async function observeHostHooks(
       records: inventory.records,
       skipped: inventory.skipped,
       stageResidue: inventory.stageResidue,
-      writeFailures,
+      writeFailures: writeFailures.count,
+      latestWriteFailureAt: writeFailures.latestRecordedAt,
       latestBySession,
     });
   } catch (error: unknown) {
@@ -780,6 +795,7 @@ async function observeHostHooks(
       skipped: 0,
       stageResidue: 0,
       writeFailures: 0,
+      latestWriteFailureAt: null,
       latestBySession: new Map(),
     });
   }
@@ -1237,7 +1253,13 @@ export async function observeWorkspace(
     for (const host of options.hosts) {
       bindings.push(await observeHostBindings(root, snapshot, host, signal));
       hooks.push(
-        await observeHostHooks(root, host.hostId, host.hostId === options.currentHostId, signal),
+        await observeHostHooks(
+          root,
+          host.hostId,
+          host.hostId === options.currentHostId,
+          observedAt,
+          signal,
+        ),
       );
       projections.push(
         await observeHostProjections(

@@ -203,8 +203,12 @@ export class WakeflowWorkspaceResourceDeclarationError extends Error {
   readonly reason: WakeflowWorkspaceResourceDeclarationErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWorkspaceResourceDeclarationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWorkspaceResourceDeclarationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -243,8 +247,16 @@ const DIRECTORY_NODE_POLICY_FIELDS = new Set([
 ]);
 const TREE_NODE_POLICY_FIELDS = new Set(["kind", "rootMode", "symlinkPolicy", "executablePolicy"]);
 
-function fail(reason: WakeflowWorkspaceResourceDeclarationErrorReason, path: string): never {
-  throw new WakeflowWorkspaceResourceDeclarationError(reason, path);
+function fail(
+  reason: WakeflowWorkspaceResourceDeclarationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWorkspaceResourceDeclarationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function propertyPath(base: string, key: string): string {
@@ -267,7 +279,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -344,7 +356,7 @@ function parseLogicalRoot(value: unknown): Readonly<WakeflowWorkspaceResourceLog
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) {
-        fail("placement", "$/placement/root/surfaceId");
+        fail("placement", "$/placement/root/surfaceId", error);
       }
       throw error;
     }
@@ -362,7 +374,7 @@ function parseLogicalRoot(value: unknown): Readonly<WakeflowWorkspaceResourceLog
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) {
-        fail("placement", "$/placement/root/repositoryId");
+        fail("placement", "$/placement/root/repositoryId", error);
       }
       throw error;
     }
@@ -384,7 +396,7 @@ function parseRelativePath(
     return parsePortableResourcePath(value, "$/placement/relativePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("placement", "$/placement/relativePath");
+      fail("placement", "$/placement/relativePath", error);
     }
     throw error;
   }
@@ -484,7 +496,7 @@ function parseProcessing(value: unknown): Readonly<WakeflowResourceProcessingCon
     return parseWakeflowResourceProcessingContract(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("processing", rebaseProcessingPath(error.path));
+      fail("processing", rebaseProcessingPath(error.path), error);
     }
     throw error;
   }

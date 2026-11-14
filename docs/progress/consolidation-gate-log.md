@@ -5923,3 +5923,21 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 2 级门：run-2NFmcH 1841/1841、`inputsUnchanged`（我的运行，开发工作树；本批改了 foundation 的进程、暂存与锁，内核的 hook 观察，按规则走完整门）。这是第二次运行：第一次（run-2sCKQt）1839/1841，失败的两条都是本批漏改的配套——`hook-observations.load.test.ts` 钉住的清点形状少了新增的 `stageResidue`，`legacy-error-families` 的错误类清单没有登记门残留模块的错误类（登记为 `precondition-failed`，与同目录的其余模块一致）；两处都只在完整门里跑到，聚焦运行按文件选的集合里没有它们。门内新增 17 条。之前的聚焦运行：中断矩阵两个用例（21 次真实进程死亡加 4 次，单文件约 100 秒，`loadSensitive`），门残留的三个边界用例，锁退役的新用例，维护事务、foundation 文件系统与制品文本的切片。`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 已按这份回执写回耗时表（357 个文件）：回执钉住的是写回之前的树，耗时表只决定派发顺序，下一批的门是第一道带着新表跑的。`wf handoff` 八项通过。远端：没有运行（见 §13.238）。
 
 **结论：通过（第 2 级，1841/1841，本地；无远端运行）。只凭 pid 留下的残留不再被 pid 重用卡住；维护 apply 无论死在哪个落盘点，都有一次公共调用能把工作区带回 idle——这句话现在由真实进程逐点验证，而不是由注入的失败推断。**
+
+### 13.243 1.3.0 批 6：失败带着它的原因——cause 贯通到系统错误码、事故记录带脱敏消息与栈帧、拒绝 reason 的生成参考、损坏输入扫描；预览与 status 的结果瘦身（G1、G3、G5、G8、G9、G13、K5、K8）（2026-11-14）
+
+收敛计划第六批：诊断与成本。
+
+- **cause 贯通（G3）。** 登记的是"137 处 `operation-failure` 映射不带 cause"。动手之后发现那只是表面：系统错误码在更下面就丢了——叶子上是空的 `catch { fail(...) }`，中间各层的 catch 里绝大多数 `fail` 也不传捕到的错误，所以只补 `operation-failure` 那一类，`causeCode` 仍然读不到 `EACCES`（先写的端到端测试在部分修补下是失败的）。改为一条规则：在处理一个捕到的错误时抛出的失败，把那个错误留作 cause。用一个按语法树定位的脚本改写（仓库的 TypeScript 7 没有 JS 编译器 API，用的是随 knip 装进来的 oxc 解析器）：约 1,600 处调用把捕到的错误传下去，84 处空 `catch` 补上绑定，152 个模块的 fail 辅助函数与错误类接受可选的 cause。纯追加的可选参数，控制流不变。
+- **不保留 cause 的地方。** 第一遍把规则铺满之后有七条测试失败，其中五条是同一种：foundation 的时钟、UUID 工厂、UTF-8 解码与任务包读时钟，各自有测试钉住 `"cause" in error === false`——它们捕到的是注入的回调或不可信输入抛出的东西，约定就是不保留。所以解析与净化类模块（foundation 的 data、text、time、identity、crypto、schema、event-sourcing，contracts 的身份解析）整体退回原样，任务包读时钟那一处单独退回。
+- **事故记录（G1）。** cause 链每层多两项：错误自己说出的位置（`path`，结构记号）与脱敏后的消息；记录多一项最里层错误的栈帧（函数名与相对制品的位置，至多 12 帧）。脱敏：双引号与反引号之间整段换掉（JSON 解析错误把带引号的文件片段再包一层引号，逐对替换会把片段漏在引号之间——测试先写、先失败，才改成整段），单引号里不像标识符的换掉，绝对路径、`file://`、邮箱与不带类型前缀的 UUID 换成占位，单行、240 码点。
+- **观察器写失败（G8）。** 门只数近七天的，并带最近一次的时间；一条旧事故不再永远挂着。L21 的 `observation-write-stage-changed` 没有查明：记录只有 reason，判不出是九处检查里的哪一处；在 `/private/tmp` 与 `~/Documents` 下各跑了一万多次"创建、写、fsync、比对"，单进程与三进程并发，节点从没变过（文件一创建就带着 `com.apple.provenance`，不是事后加的）。能做的是让下一次自带位置：九处检查各有位置记号，事故记录把它记在链上。
+- **拒绝的字段与参考（G13、G5）。** 记录类拒绝的 `path` 接上记录自己说出的位置（`$request/decision/blockingReasons`）。`refusals.md` 由 `tooling/codegen/refusal-reference.ts` 从源码生成：六个拒绝类 `code`、185 个 reason、每个 `code` 一段处理办法、十个"第一反应是错的"的 reason 各一条注记；`refusals:check` 进 `npm test`，注记点名的 reason 从源码消失时生成失败。第一版扫描把 `legacy-error-families` 表里一行接一行的 `"wakeflow-…": "precondition-failed"` 也当成了 reason（317 个），加了一条排除。
+- **损坏输入扫描（G9）。** 18 类状态文件 × 三种破坏 × status、verify、reconcile 预览，162 次调用：138 次照常返回，24 次类型化拒绝，零 `unexpected`。扫描没有找出问题；它的价值在于此后任何一类新状态文件的读取路径都在门里被这样问一遍。
+- **预览的步骤摘要（K8）。** 公共预览的 `plan` 是 `WakeflowMaintenancePlanSummary`：每一步一次，字段名与执行计划相同。首次初始化的预览 30,962 B → 约 11,300 B。完整计划不再出公共结果；需要它来摆出中断事务的三处测试改从宿主的预览直接取，并各自核对 `planDigest` 与公共预览的一致。
+- **status 的摘要档（K5）。** `detail: "summary"` 只列需要处理的窗口，其余计入 `windowsQuiet`。默认仍是 full，完整档逐字节不变；`/wakeflow:next` 让例行读取传 summary。
+- **预算。** `tools/list` 107,287 B（预算 105 KiB = 107,520 B；本批加了 status 的 `detail`，154 B）。Controller 技能源文件 200 行，Claude 渲染后 14,328 B（预算 14,336）：拒绝规则改写成指向 `refusals.md` 的一句，从错误码举例里省掉一个换回字节。`refusals.md` 96 行；`workspace-and-windows.md` 400 行；`delivery-and-review.md` 396 行。
+- **没有做的。** cause 规则没有静态检查守住；信封里没有机器可读的 remedy；写入类工具的损坏输入扫描；status 的默认档；启动意图在预览与 apply 里各带一遍；L21 的成因。
+- **验证。** 第 2 级门：run-18Jgmj 1849/1849、`inputsUnchanged`（我的运行，开发工作树；本批改了 foundation 与 kernel 的大量文件、knip 与 `npm test` 的检查链，按规则走完整门）。一次通过。门内新增 8 条。之前的聚焦运行：下层切片（foundation、kernel、configuration、workspace、governance、hosts）1,178 条里先失败 7 条（5 条是上面的"不保留"约定，2 条是读公共预览里完整计划的宿主测试）、修后通过；事故记录、观察、hook 观察器、原子写、评审与投递切片 343/343。`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 已按这份回执写回耗时表：回执钉住的是写回之前的树。`wf handoff` 八项通过。远端：没有运行（见 §13.238）。
+
+**结论：通过（第 2 级，1849/1849，本地；无远端运行）。一次失败现在带着它一路上的原因：公开细节读得到系统错误码，事故记录里有脱敏的消息、位置与栈帧；拒绝有一份从代码生成、随制品发布的参考；坏输入在三个读入口上被整类扫过一遍。**

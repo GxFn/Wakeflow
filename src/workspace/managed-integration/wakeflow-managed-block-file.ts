@@ -129,8 +129,8 @@ export class WakeflowManagedBlockFileError extends Error {
   readonly reason: WakeflowManagedBlockFileErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowManagedBlockFileErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowManagedBlockFileErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -150,8 +150,12 @@ interface ParsedRequest extends SourceReadRequest {
   readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
-function fail(reason: WakeflowManagedBlockFileErrorReason, path: string): never {
-  throw new WakeflowManagedBlockFileError(reason, path);
+function fail(reason: WakeflowManagedBlockFileErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowManagedBlockFileError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -182,7 +186,7 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
   try {
     resourcePath = parsePortableResourcePath(value.resourcePath, "$request.resourcePath");
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath");
+    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath", error);
     throw error;
   }
   if (value.signal !== undefined && !isAbortSignal(value.signal)) {
@@ -197,7 +201,7 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -206,7 +210,7 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
     try {
       maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
     } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes");
+      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes", error);
       throw error;
     }
   }
@@ -237,7 +241,7 @@ async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigi
   try {
     userId = (await root.assertCurrent("$root")).userId;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
   if (userId !== expectedUserId) fail("root-policy", "$root");
@@ -276,12 +280,12 @@ async function readSource(
     if (error instanceof WakeflowManagedBlockFileError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("source-policy", "$source");
+        fail("source-policy", "$source", error);
       }
-      if (error.reason === "too-large") fail("source-capacity", "$source");
-      fail("source", "$source");
+      if (error.reason === "too-large") fail("source-capacity", "$source", error);
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -308,9 +312,9 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedBlockFileError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
-      fail("source", "$source");
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -331,11 +335,11 @@ async function inspectParsed(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
-      if (error.reason === "unadmitted-source") fail("unknown-managed-body", "$source");
+      if (error.reason === "unadmitted-source") fail("unknown-managed-body", "$source", error);
       if (error.reason === "relation" || error.reason === "envelope") {
-        fail("envelope", "$source");
+        fail("envelope", "$source", error);
       }
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -413,7 +417,7 @@ async function publishTarget(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
-    fail("effect-failure", "$resourcePath");
+    fail("effect-failure", "$resourcePath", error);
   }
 }
 
@@ -511,8 +515,8 @@ export async function recomposeWakeflowManagedBlockFile(
       Object.freeze({ ...request, signal: undefined }),
       expectedUserId,
     );
-  } catch {
-    fail("commit-uncertain", "$resourcePath");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$resourcePath", cause);
   }
   assertReadback(request, before, effect, after, expectedUserId, createMode);
   return Object.freeze({
@@ -571,7 +575,7 @@ function parseRemovalRequest(
   try {
     resourcePath = parsePortableResourcePath(value.resourcePath, "$request.resourcePath");
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath");
+    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath", error);
     throw error;
   }
   if (value.signal !== undefined && !isAbortSignal(value.signal)) {
@@ -589,7 +593,7 @@ function parseRemovalRequest(
       return parseWakeflowManagedTextEnvelopeTarget(target);
     } catch (error: unknown) {
       if (error instanceof WakeflowManagedTextEnvelopeError) {
-        fail("input", `$request.admittedTargets/${index}`);
+        fail("input", `$request.admittedTargets/${index}`, error);
       }
       throw error;
     }
@@ -612,7 +616,7 @@ function parseRemovalRequest(
     try {
       maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
     } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes");
+      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes", error);
       throw error;
     }
   }
@@ -650,7 +654,7 @@ async function inspectRemovalParsed(
   try {
     envelope = inspectWakeflowManagedTextEnvelope(read.bytes);
   } catch (error: unknown) {
-    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source");
+    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source", error);
     throw error;
   }
   if (envelope.kind !== "managed") {
@@ -669,7 +673,7 @@ async function inspectRemovalParsed(
   try {
     removal = removeWakeflowManagedTextEnvelope(read.bytes, request.identity);
   } catch (error: unknown) {
-    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source");
+    if (error instanceof WakeflowManagedTextEnvelopeError) fail("envelope", "$source", error);
     throw error;
   }
   await revalidateSource(root, request, read);
@@ -735,7 +739,7 @@ async function publishRemoval(
       });
     } catch (error: unknown) {
       if (error instanceof ExactRegularFileUnlinkError) mapUnlinkError(error);
-      fail("effect-failure", "$resourcePath");
+      fail("effect-failure", "$resourcePath", error);
     }
     return;
   }
@@ -747,7 +751,7 @@ async function publishRemoval(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
-    fail("effect-failure", "$resourcePath");
+    fail("effect-failure", "$resourcePath", error);
   }
 }
 
@@ -778,8 +782,8 @@ export async function removeWakeflowManagedBlockFile(
       Object.freeze({ ...request, signal: undefined }),
       expectedUserId,
     );
-  } catch {
-    fail("commit-uncertain", "$resourcePath");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$resourcePath", cause);
   }
   const deleted = before.target.deletesFile;
   if (

@@ -132,8 +132,12 @@ export class DemandEventSourcingPublicationTransactionError extends Error {
   readonly reason: DemandEventSourcingPublicationTransactionErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingPublicationTransactionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingPublicationTransactionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -162,15 +166,23 @@ const CREATE_FIELDS = Object.freeze([
   "recordedAt",
 ] as const);
 
-function fail(reason: DemandEventSourcingPublicationTransactionErrorReason, path: string): never {
-  throw new DemandEventSourcingPublicationTransactionError(reason, path);
+function fail(
+  reason: DemandEventSourcingPublicationTransactionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingPublicationTransactionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -179,7 +191,7 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }
@@ -198,7 +210,7 @@ export function parseDemandEventSourcingPublicationTransaction(
   try {
     json = parseJsonValue(value, "$transaction");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -209,7 +221,7 @@ export function parseDemandEventSourcingPublicationTransaction(
     demandId = parseWakeflowDurableIdOfKind(wire.demandId, "demand", "$/demandId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/demandId");
+      fail("identifier", "$/demandId", error);
     }
     throw error;
   }
@@ -222,7 +234,7 @@ export function parseDemandEventSourcingPublicationTransaction(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/requirementId");
+      fail("identifier", "$/requirementId", error);
     }
     throw error;
   }
@@ -230,14 +242,14 @@ export function parseDemandEventSourcingPublicationTransaction(
   try {
     identity = parseDemandIdentity(wire.identity);
   } catch (error: unknown) {
-    if (error instanceof DemandIdentityError) fail("identity", "$/identity");
+    if (error instanceof DemandIdentityError) fail("identity", "$/identity", error);
     throw error;
   }
   let authority: Readonly<DemandAuthority>;
   try {
     authority = parseDemandAuthority(wire.authority, identity);
   } catch (error: unknown) {
-    if (error instanceof DemandAuthorityError) fail("authority", "$/authority");
+    if (error instanceof DemandAuthorityError) fail("authority", "$/authority", error);
     throw error;
   }
   let initialCommand: Readonly<PublishDemandCommand>;
@@ -249,7 +261,7 @@ export function parseDemandEventSourcingPublicationTransaction(
     initialCommand = command;
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingDecisionError) {
-      fail("command", "$/initialCommand");
+      fail("command", "$/initialCommand", error);
     }
     throw error;
   }
@@ -258,7 +270,7 @@ export function parseDemandEventSourcingPublicationTransaction(
     initialCommit = parseDemandEventStreamCommit(wire.initialCommit);
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamCommitError) {
-      fail("commit", "$/initialCommit");
+      fail("commit", "$/initialCommit", error);
     }
     throw error;
   }
@@ -284,7 +296,7 @@ export function parseDemandEventSourcingPublicationTransaction(
       error instanceof DemandEventSourcingDecisionError ||
       error instanceof DemandEventStreamCommitError
     ) {
-      fail("relation", "$transaction");
+      fail("relation", "$transaction", error);
     }
     throw error;
   }
@@ -335,7 +347,7 @@ export function createDemandEventSourcingPublicationTransaction(
   try {
     input = parsePlainRecord(value, "$input");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$input");
+    if (error instanceof PassiveOwnDataError) fail("input", "$input", error);
     throw error;
   }
   const keys = Object.keys(input).sort();
@@ -358,7 +370,7 @@ export function createDemandEventSourcingPublicationTransaction(
       error instanceof DemandAuthorityError ||
       error instanceof WakeflowDurableIdError
     ) {
-      fail("input", "$input");
+      fail("input", "$input", error);
     }
     throw error;
   }
@@ -385,7 +397,7 @@ export function createDemandEventSourcingPublicationTransaction(
     initialCommand = parsed;
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingDecisionError) {
-      fail("input", "$input");
+      fail("input", "$input", error);
     }
     throw error;
   }
@@ -402,7 +414,7 @@ export function createDemandEventSourcingPublicationTransaction(
       error instanceof DemandEventSourcingDecisionError ||
       error instanceof DemandEventStreamCommitError
     ) {
-      fail("commit", "$initialCommit");
+      fail("commit", "$initialCommit", error);
     }
     throw error;
   }
@@ -440,7 +452,7 @@ export function parseDemandEventSourcingPublicationTransactionDocument(
     json = parseDeterministicJsonDocument(text, "$transaction");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$transaction");
+      fail("representation", "$transaction", error);
     }
     throw error;
   }

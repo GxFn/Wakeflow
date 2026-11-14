@@ -59,8 +59,12 @@ export class DurableAtomicFileStageAddressError extends Error {
   readonly reason: DurableAtomicFileStageAddressErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableAtomicFileStageAddressErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableAtomicFileStageAddressErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -74,8 +78,16 @@ const STAGE_PATTERN =
 const ACTIVE_STAGE_TOKENS = new Set<string>();
 const ISSUED_STAGE_ADDRESSES = new WeakSet<object>();
 
-function fail(reason: DurableAtomicFileStageAddressErrorReason, path: string): never {
-  throw new DurableAtomicFileStageAddressError(reason, path);
+function fail(
+  reason: DurableAtomicFileStageAddressErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableAtomicFileStageAddressError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseOperation(value: unknown): DurableAtomicFileStageOperation {
@@ -97,7 +109,7 @@ function parseDigestHex(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(`sha256:${value}`, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -122,8 +134,8 @@ function readAddressFileName(value: unknown): string {
   let descriptor: PropertyDescriptor | undefined;
   try {
     descriptor = Object.getOwnPropertyDescriptor(value, "fileName");
-  } catch {
-    fail("input", "$address");
+  } catch (cause: unknown) {
+    fail("input", "$address", cause);
   }
   if (
     descriptor === undefined ||
@@ -142,7 +154,7 @@ export function computeDurableAtomicFileStageTargetDigest(value: unknown): Sha25
     resourcePath = parsePortableResourcePath(value, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$resourcePath");
+      fail("input", "$resourcePath", error);
     }
     throw error;
   }
@@ -175,7 +187,7 @@ export function parseDurableAtomicFileStageFileName(
   try {
     parseUuidV4(attempt, "$/attempt");
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("identifier", "$/attempt");
+    if (error instanceof UuidV4Error) fail("identifier", "$/attempt", error);
     throw error;
   }
   const token = `${pid}-${candidateThreadId}-${attempt}`;
@@ -204,7 +216,7 @@ export function issueDurableAtomicFileStageAddress(
   try {
     inputDigest = parseSha256Digest(inputDigestValue, "$inputDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$inputDigest");
+    if (error instanceof Sha256Error) fail("digest", "$inputDigest", error);
     throw error;
   }
   const mode = parseMode(modeValue);
@@ -212,7 +224,7 @@ export function issueDurableAtomicFileStageAddress(
   try {
     attempt = createUuidV4();
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("identifier", "$/attempt");
+    if (error instanceof UuidV4Error) fail("identifier", "$/attempt", error);
     throw error;
   }
   const token = `${process.pid}-${threadId}-${attempt}`;

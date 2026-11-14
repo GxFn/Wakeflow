@@ -66,19 +66,19 @@ async function inspectCurrent(
       wakeflowGitignoreInspectionRequest(request, afterCommit ? undefined : signal),
     );
   } catch (error: unknown) {
-    if (afterCommit) fail("commit-uncertain", "$resourcePath");
+    if (afterCommit) fail("commit-uncertain", "$resourcePath", error);
     if (error instanceof WakeflowGitignoreInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "target-capacity") fail("capacity", "$target");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "target-capacity") fail("capacity", "$target", error);
       if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-        fail("input", error.path);
+        fail("input", error.path, error);
       }
       if (error.reason === "git" || error.reason === "git-repository") {
-        fail("observation-failure", "$git");
+        fail("observation-failure", "$git", error);
       }
-      fail("source-invalid", "$source");
+      fail("source-invalid", "$source", error);
     }
-    fail("observation-failure", "$git");
+    fail("observation-failure", "$git", error);
   }
 }
 
@@ -138,7 +138,7 @@ async function publishTarget(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
-    fail("effect-failure", "$resourcePath");
+    fail("effect-failure", "$resourcePath", error);
   }
 }
 
@@ -256,7 +256,7 @@ export async function recomposeWakeflowWorkspaceGitignore(
     if (error instanceof RootedExclusiveFileLockError) {
       mapWakeflowGitignoreRecompositionLockError(error, committed);
     }
-    fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
+    fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);
   }
 }
 

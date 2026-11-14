@@ -207,8 +207,8 @@ export class DeliveryEnvelopeError extends Error {
   readonly reason: DeliveryEnvelopeErrorReason;
   readonly path: string;
 
-  constructor(reason: DeliveryEnvelopeErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DeliveryEnvelopeErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -240,8 +240,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
   ],
 );
 
-function fail(reason: DeliveryEnvelopeErrorReason, path: string): never {
-  throw new DeliveryEnvelopeError(reason, path);
+function fail(reason: DeliveryEnvelopeErrorReason, path: string, cause?: unknown): never {
+  throw new DeliveryEnvelopeError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseId<
@@ -260,7 +260,7 @@ function parseId<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -274,7 +274,7 @@ function exactRecord(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("rework", path);
+    if (error instanceof PassiveOwnDataError) fail("rework", path, error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -335,7 +335,7 @@ function parseTargetDeliveryReworkContext(
     );
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      fail("rework", `${path}/requiredCorrections`);
+      fail("rework", `${path}/requiredCorrections`, error);
     }
     throw error;
   }
@@ -448,7 +448,7 @@ function remediationRecord(
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      fail("product-defect-remediation", path);
+      fail("product-defect-remediation", path, error);
     }
     throw error;
   }
@@ -525,7 +525,7 @@ function parseTargetDeliveryProductDefectRemediationContext(
     );
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      fail("product-defect-remediation", `${path}/requiredCorrections`);
+      fail("product-defect-remediation", `${path}/requiredCorrections`, error);
     }
     throw error;
   }
@@ -642,7 +642,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -661,7 +661,7 @@ export function deliveryTaskPackageRef(
       error instanceof PortableResourcePathError ||
       error instanceof TaskPackageProjectionPathError
     ) {
-      fail("path", "$/target/taskPackageRef");
+      fail("path", "$/target/taskPackageRef", error);
     }
     throw error;
   }
@@ -783,7 +783,7 @@ function parseTime(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -794,7 +794,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
   try {
     json = parseJsonValue(value, "$envelope");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -806,7 +806,8 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
   try {
     bindingId = parseWakeflowWindowHostBindingId(wire.route.bindingId, "$/route/bindingId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingIdError) fail("identifier", "$/route/bindingId");
+    if (error instanceof WakeflowWindowHostBindingIdError)
+      fail("identifier", "$/route/bindingId", error);
     throw error;
   }
   let taskPackageRef: PortableResourcePath;
@@ -816,7 +817,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
       "$/target/taskPackageRef",
     );
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", "$/target/taskPackageRef");
+    if (error instanceof PortableResourcePathError) fail("path", "$/target/taskPackageRef", error);
     throw error;
   }
   const shared = {
@@ -857,7 +858,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
     try {
       attempt = parseTestExecutionAttempt(wire.attempt);
     } catch (error: unknown) {
-      if (error instanceof TestExecutionAttemptError) fail("attempt", "$/attempt");
+      if (error instanceof TestExecutionAttemptError) fail("attempt", "$/attempt", error);
       throw error;
     }
     if (
@@ -938,7 +939,7 @@ export function assertDeliveryEnvelopeMatchesTaskPackage(
   try {
     taskPackage = parseTaskPackage(taskPackageValue);
   } catch (error: unknown) {
-    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage");
+    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage", error);
     throw error;
   }
   if (

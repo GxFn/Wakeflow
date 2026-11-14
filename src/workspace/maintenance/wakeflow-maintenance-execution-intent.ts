@@ -119,8 +119,12 @@ export class WakeflowMaintenanceExecutionIntentError extends Error {
   readonly reason: WakeflowMaintenanceExecutionIntentErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceExecutionIntentErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowMaintenanceExecutionIntentErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,15 +135,23 @@ const validateWire = createRuntimeJsonSchemaValidator<WakeflowMaintenanceExecuti
   [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
 
-function fail(reason: WakeflowMaintenanceExecutionIntentErrorReason, path: string): never {
-  throw new WakeflowMaintenanceExecutionIntentError(reason, path);
+function fail(
+  reason: WakeflowMaintenanceExecutionIntentErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowMaintenanceExecutionIntentError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function normalizeConfig(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
 }
@@ -149,7 +161,7 @@ function normalizeOperationId(value: unknown): WakeflowMaintenanceOperationId {
     return parseWakeflowMaintenanceOperationId(value, "$/operationId");
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("operation", "$/operationId");
+      fail("operation", "$/operationId", error);
     }
     throw error;
   }
@@ -160,7 +172,7 @@ function normalizePreview(value: unknown): Readonly<WakeflowStaticMaterializatio
     return parseWakeflowStaticMaterializationPreview(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("plan", error.path);
+      fail("plan", error.path, error);
     }
     throw error;
   }
@@ -174,7 +186,7 @@ function normalizeWriter(
   try {
     return parseWakeflowMaintenanceWriter(value, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path);
+    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path, error);
     throw error;
   }
 }
@@ -187,7 +199,7 @@ function normalizeContribution(
     return parseWakeflowHostMaintenanceContribution(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowHostMaintenanceContributionError) {
-      fail("plan", "$/hostContribution");
+      fail("plan", "$/hostContribution", error);
     }
     throw error;
   }
@@ -211,7 +223,7 @@ function normalizedRequest(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("request", "$/hostProfiles");
+      fail("request", "$/hostProfiles", error);
     }
     throw error;
   }
@@ -263,7 +275,7 @@ function normalize(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-      fail("plan", error.path);
+      fail("plan", error.path, error);
     }
     throw error;
   }
@@ -315,7 +327,7 @@ function parseWakeflowMaintenanceExecutionIntentWithPlan(
   try {
     json = parseJsonValue(value, "$intent");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -346,7 +358,7 @@ export function createWakeflowMaintenanceExecutionIntent(
     plan = parseWakeflowMaintenanceExecutionPlan(planValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-      fail("plan", error.path);
+      fail("plan", error.path, error);
     }
     throw error;
   }
@@ -355,7 +367,7 @@ export function createWakeflowMaintenanceExecutionIntent(
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("request", "$request");
+      fail("request", "$request", error);
     }
     throw error;
   }
@@ -431,7 +443,7 @@ export function parseWakeflowMaintenanceExecutionIntentDocument(
     json = parseDeterministicJsonDocument(text, "$intent");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

@@ -86,8 +86,12 @@ export class WakeflowWindowRuntimeUnregisteredProjectionRecordError extends Erro
   readonly reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -164,8 +168,13 @@ const validateProjectionWire = createRuntimeJsonSchemaValidator<WindowRuntimePro
 function failRecord(
   reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(reason, path);
+  throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function typedId<Kind extends "program" | "window" | "surface" | "repository">(
@@ -176,7 +185,7 @@ function typedId<Kind extends "program" | "window" | "surface" | "repository">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) failRecord("identity", path);
+    if (error instanceof WakeflowDurableIdError) failRecord("identity", path, error);
     throw error;
   }
 }
@@ -185,7 +194,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) failRecord("digest", path);
+    if (error instanceof Sha256Error) failRecord("digest", path, error);
     throw error;
   }
 }
@@ -228,7 +237,7 @@ function configuredPlacement(value: string, role: WindowRuntimeProjectionWire["r
     return parseWakeflowConfigPlacement(value, "$/configuredPlacement");
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigError) {
-      failRecord("placement", "$/configuredPlacement");
+      failRecord("placement", "$/configuredPlacement", error);
     }
     throw error;
   }
@@ -290,7 +299,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
   try {
     json = parseJsonValue(value, "$projection");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) failRecord("input", error.path);
+    if (error instanceof JsonValueError) failRecord("input", error.path, error);
     throw error;
   }
   const validated = validateProjectionWire(json);
@@ -366,7 +375,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(
     value = parseDeterministicJsonDocument(text, "$windowRuntimeProjection");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      failRecord("representation", error.path);
+      failRecord("representation", error.path, error);
     }
     throw error;
   }

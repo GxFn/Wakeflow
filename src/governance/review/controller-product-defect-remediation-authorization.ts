@@ -185,8 +185,12 @@ export class ControllerProductDefectRemediationAuthorizationError extends Error 
   readonly reason: ControllerProductDefectRemediationAuthorizationErrorReason;
   readonly path: string;
 
-  constructor(reason: ControllerProductDefectRemediationAuthorizationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ControllerProductDefectRemediationAuthorizationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -200,8 +204,13 @@ const validateWire = createRuntimeJsonSchemaValidator<AuthorizationWire>(
 function fail(
   reason: ControllerProductDefectRemediationAuthorizationErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new ControllerProductDefectRemediationAuthorizationError(reason, path);
+  throw new ControllerProductDefectRemediationAuthorizationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function id<
@@ -220,7 +229,7 @@ function id<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -229,7 +238,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -238,7 +247,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -248,7 +257,7 @@ function streamRevision(value: unknown, path: string): DemandEventStreamRevision
     return parseDemandEventStreamRevision(value, path);
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("position", path);
+      fail("position", path, error);
     }
     throw error;
   }
@@ -473,7 +482,7 @@ export function parseControllerProductDefectRemediationAuthorization(
   try {
     json = parseJsonValue(value, "$authorization");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -588,7 +597,7 @@ export function createControllerProductDefectRemediationAuthorization(
     decision = parseControllerTestReviewDecision(input.decision);
   } catch (error: unknown) {
     if (error instanceof ControllerTestReviewDecisionError) {
-      fail("decision", "$input/decision");
+      fail("decision", "$input/decision", error);
     }
     throw error;
   }
@@ -648,7 +657,7 @@ export function createControllerProductDefectRemediationAuthorization(
     );
   } catch (error: unknown) {
     if (error instanceof UuidV4Error || error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$uuidFactory");
+      fail("identifier", "$uuidFactory", error);
     }
     throw error;
   }
@@ -657,7 +666,7 @@ export function createControllerProductDefectRemediationAuthorization(
     authorizedAt =
       options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    if (error instanceof UtcWallClockError) fail("time", "$clock", error);
     throw error;
   }
   const basis = authorizationBasis({
@@ -710,7 +719,7 @@ export function parseControllerProductDefectRemediationAuthorizationDocument(
     json = parseDeterministicJsonDocument(textValue, "$authorization");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$authorization");
+      fail("representation", "$authorization", error);
     }
     throw error;
   }

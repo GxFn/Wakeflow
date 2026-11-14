@@ -98,8 +98,12 @@ export class DemandEventSourcingCommandHandlerError extends Error {
   readonly reason: DemandEventSourcingCommandHandlerErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingCommandHandlerErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingCommandHandlerErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -114,8 +118,16 @@ const OPTION_FIELDS = new Set([
 ]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 
-function fail(reason: DemandEventSourcingCommandHandlerErrorReason, path: string): never {
-  throw new DemandEventSourcingCommandHandlerError(reason, path);
+function fail(
+  reason: DemandEventSourcingCommandHandlerErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingCommandHandlerError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRepository(value: unknown): asserts value is DemandEventSourcingRepository {
@@ -134,7 +146,7 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -148,7 +160,7 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
   try {
     commitId = parseWakeflowDurableIdOfKind(record.commitId, "demand-event-commit", "$/commitId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$/commitId");
+    if (error instanceof WakeflowDurableIdError) fail("input", "$/commitId", error);
     throw error;
   }
   const expected = record.expectedStreamRevision;
@@ -165,7 +177,7 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
     try {
       bound = parsePlainRecord(record.idempotency, "$/idempotency");
     } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", "$/idempotency");
+      if (error instanceof PassiveOwnDataError) fail("input", "$/idempotency", error);
       throw error;
     }
     if (
@@ -179,7 +191,7 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
     try {
       requestDigest = parseSha256Digest(bound.requestDigest, "$/idempotency/requestDigest");
     } catch (error: unknown) {
-      if (error instanceof Sha256Error) fail("input", "$/idempotency/requestDigest");
+      if (error instanceof Sha256Error) fail("input", "$/idempotency/requestDigest", error);
       throw error;
     }
     idempotency = Object.freeze({ key: bound.key, requestDigest });
@@ -188,7 +200,7 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
   try {
     writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
   } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("input", "$/writer");
+    if (error instanceof DemandEventStreamCommitError) fail("input", "$/writer", error);
     throw error;
   }
   return Object.freeze({
@@ -282,7 +294,7 @@ export async function executeDemandEventSourcingCommand(
     command = parseDemandEventSourcingCommand(commandValue);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingDecisionError) {
-      fail("input", "$command");
+      fail("input", "$command", error);
     }
     throw error;
   }
@@ -348,7 +360,7 @@ export async function executeDemandEventSourcingCommand(
     events = decideDemandEventSourcingCommand(current?.state ?? null, command);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingDecisionError) {
-      fail("decision-rejected", "$command");
+      fail("decision-rejected", "$command", error);
     }
     throw error;
   }
@@ -365,7 +377,7 @@ export async function executeDemandEventSourcingCommand(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamCommitError) {
-      fail("decision-rejected", "$command");
+      fail("decision-rejected", "$command", error);
     }
     throw error;
   }

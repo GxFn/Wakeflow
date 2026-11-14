@@ -239,7 +239,7 @@ async function withCurrentProjectionEntries<Result>(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreAuthorityError) {
-      failWindowRuntimeProjection("topology", error.path);
+      failWindowRuntimeProjection("topology", error.path, error);
     }
     throw error;
   }
@@ -252,7 +252,7 @@ async function withCurrentProjectionEntries<Result>(
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
         if (error.reason === "resource-not-found") return operation({ kind: "runtime-missing" });
-        failWindowRuntimeProjection("input", "$root");
+        failWindowRuntimeProjection("input", "$root", error);
       }
       throw error;
     }
@@ -280,7 +280,7 @@ async function withCurrentProjectionEntries<Result>(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal");
+      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal", error);
       return operation({ kind: "inventory-unavailable" });
     }
     throw error;
@@ -306,7 +306,11 @@ export async function refreshWakeflowWindowRuntimeProjections(
       );
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-        failWindowRuntimeProjection(error.reason === "aborted" ? "aborted" : "input", "$config");
+        failWindowRuntimeProjection(
+          error.reason === "aborted" ? "aborted" : "input",
+          "$config",
+          error,
+        );
       }
       throw error;
     }
@@ -350,6 +354,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
                 failWindowRuntimeProjection(
                   error.reason === "aborted" ? "aborted" : "effect",
                   "$projection",
+                  error,
                 );
               }
               throw error;
@@ -369,6 +374,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
             ? "input"
             : "effect",
         "$projection",
+        error,
       );
     throw error;
   }
@@ -400,7 +406,8 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
   try {
     config = parseWakeflowConfig(request.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) failWindowRuntimeProjection("input", error.path);
+    if (error instanceof WakeflowConfigError)
+      failWindowRuntimeProjection("input", error.path, error);
     throw error;
   }
   let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
@@ -408,7 +415,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWindowRuntimeProjection("profile", error.path);
+      failWindowRuntimeProjection("profile", error.path, error);
     }
     throw error;
   }
@@ -417,7 +424,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
-      failWindowRuntimeProjection("topology", error.path);
+      failWindowRuntimeProjection("topology", error.path, error);
     }
     throw error;
   }
@@ -437,7 +444,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     } catch (error: unknown) {
       if (!(error instanceof RootedDirectoryError)) throw error;
       if (error.reason !== "resource-not-found") {
-        failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`);
+        failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`, error);
       }
       present = false;
     }
@@ -451,6 +458,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
         failWindowRuntimeProjection(
           error.reason === "aborted" ? "aborted" : "effect",
           `$skeleton/${resourceRef}`,
+          error,
         );
       }
       throw error;
@@ -484,12 +492,14 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
         failWindowRuntimeProjection(
           error.reason === "aborted" ? "aborted" : "effect",
           "$projection",
+          error,
         );
       }
       if (isWakeflowError(error)) {
         failWindowRuntimeProjection(
           error.reason === "aborted" ? "aborted" : "effect",
           "$projection",
+          error,
         );
       }
       throw error;
@@ -530,7 +540,7 @@ export async function retireWakeflowWindowRuntimeProjections(
     resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWindowRuntimeProjection("profile", error.path);
+      failWindowRuntimeProjection("profile", error.path, error);
     }
     throw error;
   }
@@ -544,7 +554,7 @@ export async function retireWakeflowWindowRuntimeProjections(
     } catch (error: unknown) {
       if (!(error instanceof RootedDirectoryError)) throw error;
       if (error.reason !== "resource-not-found")
-        failWindowRuntimeProjection("effect", "$projection");
+        failWindowRuntimeProjection("effect", "$projection", error);
       absent += 1;
       continue;
     }
@@ -558,6 +568,7 @@ export async function retireWakeflowWindowRuntimeProjections(
         failWindowRuntimeProjection(
           error.reason === "aborted" ? "aborted" : "effect",
           "$projection",
+          error,
         );
       }
       throw error;
@@ -601,6 +612,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
         failWindowRuntimeProjection(
           error.reason === "aborted" ? "aborted" : "effect",
           "$projection",
+          error,
         );
       }
       throw error;

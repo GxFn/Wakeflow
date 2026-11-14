@@ -1487,7 +1487,39 @@ function materializationOf(plan: SlicePlan | null): Readonly<MaterializationPlan
   return plan?.kind === "materialization" ? plan : null;
 }
 
-/** preview 的 `plan`：物化计划公开执行计划，私有模式收敛公开它的视图（§13.130 D8）。 */
+/**
+ * 预览公开的计划摘要（open-items K8）：每一步出现一次，带它是共享步还是宿主步、种类、所有者、目标，以及目标
+ * 现在在不在。完整的执行计划——共享预览、宿主贡献（连同负载）、每一步的摘要与依赖——留在进程里，apply
+ * 重新推导并比较 `planDigest`。此前它整份进公共结果：同一批步骤在 `steps`、`sharedPreview.steps` 与
+ * `hostContribution.operations` 里各带一遍，首次初始化的预览因此有 31 KB。步骤的字段名与执行计划里的相同。
+ */
+function planSummaryOf(plan: Readonly<WakeflowMaintenanceExecutionPlan>) {
+  return Object.freeze({
+    kind: "WakeflowMaintenancePlanSummary" as const,
+    schemaVersion: 1 as const,
+    steps: Object.freeze(
+      plan.steps.map((step) =>
+        Object.freeze({
+          boundary: step.boundary,
+          stepId: step.stepId,
+          ...(step.boundary === "shared-static"
+            ? { stepKind: step.stepKind }
+            : { operationKind: step.operationKind }),
+          ownerId: step.ownerId,
+          targetKey: step.targetKey,
+          targetExists: step.sourceDigest !== null,
+        }),
+      ),
+    ),
+  });
+}
+
+function publicPlanOf(plan: SlicePlan | null) {
+  if (plan === null) return null;
+  return plan.kind === "materialization" ? planSummaryOf(plan.executionPlan) : plan.view;
+}
+
+/** preview 的 `plan`：物化计划公开它的步骤摘要，其余计划公开各自的视图（§13.130 D8）。 */
 function previewResultOf(
   base: Readonly<Record<string, unknown>>,
   action: WakeflowStaticMaterializationAction,
@@ -1503,9 +1535,7 @@ function previewResultOf(
     status: planned.status,
     blockerCodes: planned.blockers,
     planDigest: planned.digest,
-    plan:
-      materialization?.executionPlan ??
-      (planned.plan !== null && planned.plan.kind !== "materialization" ? planned.plan.view : null),
+    plan: publicPlanOf(planned.plan),
     freshConfigCompilation: freshCompilationView(materialization?.compilation ?? null),
     launchIntents: launchIntentSet?.intents ?? [],
     launchSetDigest: launchIntentSet?.launchSetDigest ?? null,

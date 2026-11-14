@@ -46,15 +46,19 @@ export class CodexMaintenanceCapabilityError extends Error {
   readonly reason: CodexMaintenanceCapabilityErrorReason;
   readonly path: string;
 
-  constructor(reason: CodexMaintenanceCapabilityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: CodexMaintenanceCapabilityErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: CodexMaintenanceCapabilityErrorReason, path: string): never {
-  throw new CodexMaintenanceCapabilityError(reason, path);
+function fail(reason: CodexMaintenanceCapabilityErrorReason, path: string, cause?: unknown): never {
+  throw new CodexMaintenanceCapabilityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** Codex 当前唯一、闭合的宿主维护端口实现。 */
@@ -88,7 +92,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
         });
       } catch (error: unknown) {
         if (error instanceof WakeflowWindowRuntimeProjectionError) {
-          fail("owner", error.path);
+          fail("owner", error.path, error);
         }
         throw error;
       }
@@ -108,7 +112,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
       try {
         assertWakeflowMaintenanceGateContext(context, root);
       } catch (error: unknown) {
-        if (error instanceof WakeflowMaintenanceGateError) fail("gate", "$context");
+        if (error instanceof WakeflowMaintenanceGateError) fail("gate", "$context", error);
         throw error;
       }
       if (
@@ -130,7 +134,7 @@ export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapabil
         });
       } catch (error: unknown) {
         if (error instanceof WakeflowWindowRuntimeProjectionError) {
-          fail("owner", error.path);
+          fail("owner", error.path, error);
         }
         throw error;
       }

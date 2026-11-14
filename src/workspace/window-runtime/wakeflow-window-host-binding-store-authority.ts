@@ -45,15 +45,27 @@ export class WakeflowWindowHostBindingStoreAuthorityError extends Error {
   readonly reason: WakeflowWindowHostBindingStoreAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowHostBindingStoreAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowWindowHostBindingStoreAuthorityErrorReason, path: string): never {
-  throw new WakeflowWindowHostBindingStoreAuthorityError(reason, path);
+function fail(
+  reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWindowHostBindingStoreAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 从当前Config与Host profiles编译完整、零I/O的Binding Store读取权威。 */
@@ -72,7 +84,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
       error instanceof WakeflowWorkspaceHostResourceProfileError ||
       error instanceof WakeflowWindowHostIdentityProfileError
     ) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -87,7 +99,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
     topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
-      fail("topology", error.path);
+      fail("topology", error.path, error);
     }
     throw error;
   }
@@ -112,7 +124,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
       error instanceof WakeflowResourceProcessingContractError ||
       error instanceof WakeflowWindowHostBindingStoreAuthorityError
     ) {
-      fail("resource", "$bindingCatalog");
+      fail("resource", "$bindingCatalog", error);
     }
     throw error;
   }

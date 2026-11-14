@@ -82,8 +82,12 @@ export class LoadedArtifactTreeTransferCandidateError extends Error {
   readonly reason: LoadedArtifactTreeTransferCandidateErrorReason;
   readonly path: string;
 
-  constructor(reason: LoadedArtifactTreeTransferCandidateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: LoadedArtifactTreeTransferCandidateErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -93,8 +97,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: LoadedArtifactTreeTransferCandidateErrorReason, path: string): never {
-  throw new LoadedArtifactTreeTransferCandidateError(reason, path);
+function fail(
+  reason: LoadedArtifactTreeTransferCandidateErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new LoadedArtifactTreeTransferCandidateError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(
@@ -125,7 +137,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -146,8 +158,8 @@ function parsePlan(value: unknown): Readonly<LoadedArtifactTreeTransferPlan> {
     return parseLoadedArtifactTreeTransferPlan(value);
   } catch (error: unknown) {
     if (error instanceof LoadedArtifactTreeTransferPlanError) {
-      if (error.reason === "capacity") fail("capacity", "$plan");
-      fail("input", "$plan");
+      if (error.reason === "capacity") fail("capacity", "$plan", error);
+      fail("input", "$plan", error);
     }
     throw error;
   }
@@ -206,7 +218,7 @@ function mapDirectoryError(
   ) {
     fail("candidate-conflict", "$candidate");
   }
-  fail("operation-failure", "$candidate");
+  fail("operation-failure", "$candidate", error);
 }
 
 async function ensureCandidateRoot(
@@ -234,7 +246,7 @@ function mapCandidateInspectionError(error: DurableDirectoryTreeCandidateError):
   if (error.reason === "tree-conflict" || error.reason === "source-changed") {
     fail("candidate-conflict", "$candidate");
   }
-  fail("operation-failure", "$candidate");
+  fail("operation-failure", "$candidate", error);
 }
 
 async function inspectProgress(

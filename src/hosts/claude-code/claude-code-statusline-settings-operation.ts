@@ -223,15 +223,27 @@ export class ClaudeCodeStatuslineSettingsOperationError extends Error {
   readonly reason: ClaudeCodeStatuslineSettingsOperationErrorReason;
   readonly path: string;
 
-  constructor(reason: ClaudeCodeStatuslineSettingsOperationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ClaudeCodeStatuslineSettingsOperationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: ClaudeCodeStatuslineSettingsOperationErrorReason, path: string): never {
-  throw new ClaudeCodeStatuslineSettingsOperationError(reason, path);
+function fail(
+  reason: ClaudeCodeStatuslineSettingsOperationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ClaudeCodeStatuslineSettingsOperationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
@@ -266,8 +278,8 @@ function parseSettingsDocument(bytes: Uint8Array): Readonly<Record<string, JsonV
   let decoded: unknown;
   try {
     decoded = JSON.parse(decodeUtf8(bytes, "$settings"));
-  } catch {
-    fail("settings-unreadable", "$settings");
+  } catch (cause: unknown) {
+    fail("settings-unreadable", "$settings", cause);
   }
   try {
     const record = parsePlainRecord(decoded, "$settings");
@@ -278,7 +290,7 @@ function parseSettingsDocument(bytes: Uint8Array): Readonly<Record<string, JsonV
     return Object.freeze(document);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError || error instanceof JsonValueError) {
-      fail("settings-unreadable", "$settings");
+      fail("settings-unreadable", "$settings", error);
     }
     throw error;
   }
@@ -298,8 +310,8 @@ async function currentSettings(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("settings-unreadable", "$settings");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("settings-unreadable", "$settings", error);
     }
     throw error;
   }
@@ -418,7 +430,7 @@ function parseModel(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("input", "$config");
+    if (error instanceof WakeflowConfigError) fail("input", "$config", error);
     throw error;
   }
 }
@@ -454,7 +466,7 @@ async function surfacePlacement(
   try {
     placements = await validateWakeflowConfigRootPlacements(workspaceRoot, model);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigRootPlacementError) fail("placement", error.path);
+    if (error instanceof WakeflowConfigRootPlacementError) fail("placement", error.path, error);
     throw error;
   }
   const placement = placements.roots.find(
@@ -476,7 +488,7 @@ async function withSurfaceRoot<T>(
   try {
     surfaceRoot = await RootedDirectory.open(absolutePath, "$supportRoot");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-open", "$supportRoot");
+    if (error instanceof RootedDirectoryError) fail("root-open", "$supportRoot", error);
     throw error;
   }
   let result: { readonly value: T } | undefined;
@@ -690,7 +702,7 @@ function parsePayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsOper
   try {
     record = parsePlainRecord(value, "$operation");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", error.path);
+    if (error instanceof PassiveOwnDataError) fail("operation", error.path, error);
     throw error;
   }
   const keys = Object.keys(record).sort().join(" ");
@@ -710,7 +722,7 @@ function parseSurface(value: unknown): Readonly<ClaudeCodeStatuslineSettingsSurf
   try {
     record = parsePlainRecord(value, "$operation.surface");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", "$operation.surface");
+    if (error instanceof PassiveOwnDataError) fail("operation", "$operation.surface", error);
     throw error;
   }
   if (Object.keys(record).sort().join(" ") !== "configuredPlacement surfaceId") {
@@ -730,7 +742,7 @@ function parseSurface(value: unknown): Readonly<ClaudeCodeStatuslineSettingsSurf
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError || error instanceof WakeflowConfigError) {
-      fail("operation", error.path);
+      fail("operation", error.path, error);
     }
     throw error;
   }
@@ -767,7 +779,7 @@ function parseDigests(request: Readonly<ExecuteClaudeCodeStatuslineSettingsOpera
       targetDigest: parseSha256Digest(request.targetDigest, "$operation.targetDigest"),
     };
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("operation", error.path);
+    if (error instanceof Sha256Error) fail("operation", error.path, error);
     throw error;
   }
 }
@@ -783,8 +795,8 @@ async function ensureSettingsDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("write", "$settings.directory");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("write", "$settings.directory", error);
     }
     throw error;
   }
@@ -813,11 +825,11 @@ async function writeTarget(
     return "updated";
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "expectation-changed" || error.reason === "target-exists") {
-        fail("source-stale", "$settings");
+        fail("source-stale", "$settings", error);
       }
-      fail("write", "$settings");
+      fail("write", "$settings", error);
     }
     throw error;
   }
@@ -884,7 +896,7 @@ function parseRemovalPayload(value: unknown): Readonly<ClaudeCodeStatuslineSetti
   try {
     record = parsePlainRecord(value, "$operation");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", error.path);
+    if (error instanceof PassiveOwnDataError) fail("operation", error.path, error);
     throw error;
   }
   const keys = Object.keys(record).sort().join(" ");

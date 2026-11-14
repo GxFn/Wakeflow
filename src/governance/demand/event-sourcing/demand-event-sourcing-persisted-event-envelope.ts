@@ -93,8 +93,12 @@ export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
   readonly reason: DemandEventSourcingPersistedEventEnvelopeErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingPersistedEventEnvelopeErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -105,8 +109,16 @@ const validateWire = createRuntimeJsonSchemaValidator<PersistedEventWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
 
-function fail(reason: DemandEventSourcingPersistedEventEnvelopeErrorReason, path: string): never {
-  throw new DemandEventSourcingPersistedEventEnvelopeError(reason, path);
+function fail(
+  reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingPersistedEventEnvelopeError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseId<Kind extends "demand" | "demand-event">(
@@ -117,7 +129,7 @@ function parseId<Kind extends "demand" | "demand-event">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -134,7 +146,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   try {
     json = parseJsonValue(value, "$event");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -144,14 +156,14 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   try {
     recordedAt = parseUtcInstant(wire.recordedAt, "$/recordedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/recordedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/recordedAt", error);
     throw error;
   }
   let data: JsonValue;
   try {
     data = parseJsonValue(wire.data, "$/data");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", "$/data");
+    if (error instanceof JsonValueError) fail("json", "$/data", error);
     throw error;
   }
   if (!isJsonObject(data)) {
@@ -161,7 +173,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   try {
     resultingStateDigest = parseSha256Digest(wire.resultingStateDigest, "$/resultingStateDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$/resultingStateDigest");
+    if (error instanceof Sha256Error) fail("digest", "$/resultingStateDigest", error);
     throw error;
   }
   let resultingStateModelVersion: DemandEventSourcingStateModelVersion;
@@ -172,7 +184,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
     );
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingStateVersionError) {
-      fail("state-version", "$/resultingStateModelVersion");
+      fail("state-version", "$/resultingStateModelVersion", error);
     }
     throw error;
   }
@@ -181,7 +193,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
     streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("revision", "$/streamRevision");
+      fail("revision", "$/streamRevision", error);
     }
     throw error;
   }
@@ -215,7 +227,7 @@ export function parseDemandEventSourcingPersistedEventEnvelopeDocument(
     json = parseDeterministicJsonDocument(text, "$event");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$event");
+      fail("representation", "$event", error);
     }
     throw error;
   }

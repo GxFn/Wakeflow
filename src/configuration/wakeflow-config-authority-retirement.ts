@@ -74,8 +74,12 @@ export class WakeflowConfigAuthorityRetirementError extends Error {
   readonly reason: WakeflowConfigAuthorityRetirementErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowConfigAuthorityRetirementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowConfigAuthorityRetirementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -89,8 +93,16 @@ export interface WakeflowConfigAuthorityRetirementReceipt {
 
 const REASONS = new Set<string>(Object.keys(ERROR_MESSAGES));
 
-function fail(reason: WakeflowConfigAuthorityRetirementErrorReason, path: string): never {
-  throw new WakeflowConfigAuthorityRetirementError(reason, path);
+function fail(
+  reason: WakeflowConfigAuthorityRetirementErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowConfigAuthorityRetirementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 替换合同的准入错误按同名原因过桥，其余归为 retirement-failure。 */
@@ -113,7 +125,7 @@ async function configResourceExists(root: RootedDirectory): Promise<boolean> {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -129,10 +141,10 @@ async function readCurrentOrNull(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (error.reason === "source" && !(await configResourceExists(root))) return null;
-      fail("source", "$config");
+      fail("source", "$config", error);
     }
     throw error;
   }
@@ -149,9 +161,9 @@ async function readDetached(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("source", "$detached");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("source", "$detached", error);
     }
     throw error;
   }
@@ -182,7 +194,7 @@ async function renameConfigToDetached(
     );
   } catch (error: unknown) {
     if (error instanceof DurableResourceRenameError) mapRenameError(error);
-    fail("retirement-failure", "$config");
+    fail("retirement-failure", "$config", error);
   }
 }
 
@@ -212,8 +224,8 @@ async function assertRetirementReadback(
   let after: Readonly<WakeflowDetachedConfigRecord> | null = null;
   try {
     after = await readDetached(root, undefined);
-  } catch {
-    fail("commit-uncertain", "$detached");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$detached", cause);
   }
   const matches = after !== null && retiredRecordMatches(after, expected, current, renamed);
   if (after === null || !matches || (await configResourceExists(root))) {
@@ -251,7 +263,7 @@ function parseExpectedDigest(value: unknown): Sha256Digest {
   try {
     return parseSha256Digest(value, "$expectedConfigDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", "$expectedConfigDigest");
+    if (error instanceof Sha256Error) fail("input", "$expectedConfigDigest", error);
     throw error;
   }
 }

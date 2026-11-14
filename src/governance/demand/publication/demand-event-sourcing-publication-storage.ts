@@ -75,7 +75,7 @@ function admitProcessing(
     admitWakeflowResourceOperation(processing, recipe);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation-failure", "$catalog");
+      fail("operation-failure", "$catalog", "unknown", error);
     }
     throw error;
   }
@@ -204,7 +204,7 @@ export async function ensureExactPublicationTextFile(
         ) {
           fail("recovery-required", "$write");
         }
-        fail("operation-failure", "$write");
+        fail("operation-failure", "$write", "unknown", error);
       } else {
         throw error;
       }
@@ -310,7 +310,7 @@ export async function initializePublicationStorage(
     }
     if (error instanceof DurableDirectoryMaterializationError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("operation-failure", "$initialize");
+      fail("operation-failure", "$initialize", "unknown", error);
     }
     throw error;
   }

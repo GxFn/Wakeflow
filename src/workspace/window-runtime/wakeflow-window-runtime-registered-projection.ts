@@ -99,8 +99,12 @@ export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
   readonly reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -111,8 +115,16 @@ const validateWire = createRuntimeJsonSchemaValidator<RegisteredProjectionWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA],
 );
 
-function fail(reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason, path: string): never {
-  throw new WakeflowWindowRuntimeRegisteredProjectionError(reason, path);
+function fail(
+  reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWindowRuntimeRegisteredProjectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function projectionBasis(
@@ -166,9 +178,9 @@ function compileWakeflowWindowRuntimeRegisteredProjection(
     binding = parseWakeflowWindowHostBinding(bindingValue, identityProfileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$profile");
+      fail("input", "$profile", error);
     }
-    fail("input", "$sources");
+    fail("input", "$sources", error);
   }
   assertSources(profile, source, binding);
   const reason = Object.freeze({

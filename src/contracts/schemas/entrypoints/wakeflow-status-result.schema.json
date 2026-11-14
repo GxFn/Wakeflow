@@ -178,6 +178,14 @@
         "$ref": "#/$defs/windowSummary"
       }
     },
+    "detail": {
+      "const": "summary",
+      "description": "Present only when the request asked for detail summary: windows then lists only the windows that need handling."
+    },
+    "windowsQuiet": {
+      "$ref": "#/$defs/count",
+      "description": "With detail summary: how many configured windows were left out of windows because nothing about them needs handling (registered, projection current, claim free, no attention needed, runtime not stale, launch parameters not drifted, permission mode not mismatched)."
+    },
     "claims": {
       "type": "array",
       "maxItems": 512,

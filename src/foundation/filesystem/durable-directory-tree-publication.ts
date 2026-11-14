@@ -76,8 +76,12 @@ export class DurableDirectoryTreePublicationError extends Error {
   readonly reason: DurableDirectoryTreePublicationErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableDirectoryTreePublicationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableDirectoryTreePublicationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -87,15 +91,23 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: DurableDirectoryTreePublicationErrorReason, path: string): never {
-  throw new DurableDirectoryTreePublicationError(reason, path);
+function fail(
+  reason: DurableDirectoryTreePublicationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableDirectoryTreePublicationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
 }
@@ -104,7 +116,7 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path);
+    if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
 }
@@ -144,7 +156,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$candidate/rootNode");
+      fail("input", "$candidate/rootNode", error);
     }
     throw error;
   }
@@ -170,7 +182,7 @@ function parseCandidate(value: unknown): Readonly<DirectoryTreeCandidateResult> 
     plan = parseDirectoryTreeCandidatePlan(record.plan);
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$candidate/plan");
+      fail("input", "$candidate/plan", error);
     }
     throw error;
   }
@@ -218,7 +230,7 @@ function mapRenameError(error: DurableResourceRenameError): never {
   ) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
-  fail("operation-failure", "$destinationResourcePath");
+  fail("operation-failure", "$destinationResourcePath", error);
 }
 
 /**

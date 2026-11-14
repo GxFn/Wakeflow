@@ -50,8 +50,8 @@ export class FileByteRangeError extends Error {
   readonly reason: FileByteRangeErrorReason;
   readonly path: string;
 
-  constructor(reason: FileByteRangeErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: FileByteRangeErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -65,8 +65,8 @@ function fieldPath(basePath: string, field: string): string {
   return `${basePath}.${field}`;
 }
 
-function fail(reason: FileByteRangeErrorReason, path: string): never {
-  throw new FileByteRangeError(reason, path);
+function fail(reason: FileByteRangeErrorReason, path: string, cause?: unknown): never {
+  throw new FileByteRangeError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseOffset(value: unknown, path: string): FileByteOffset {
@@ -80,7 +80,7 @@ function parseLength(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
   } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("length-range", path);
+    if (error instanceof ByteCountError) fail("length-range", path, error);
     throw error;
   }
 }

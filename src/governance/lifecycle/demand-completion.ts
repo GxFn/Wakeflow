@@ -134,8 +134,8 @@ export class DemandCompletionError extends Error {
   readonly reason: DemandCompletionErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandCompletionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandCompletionErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -150,8 +150,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandCompletionWire>(
   ],
 );
 
-function fail(reason: DemandCompletionErrorReason, path: string): never {
-  throw new DemandCompletionError(reason, path);
+function fail(reason: DemandCompletionErrorReason, path: string, cause?: unknown): never {
+  throw new DemandCompletionError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function id<Kind extends "program" | "demand" | "window" | "demand-event">(
@@ -162,7 +162,7 @@ function id<Kind extends "program" | "demand" | "window" | "demand-event">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -171,7 +171,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -201,7 +201,7 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
   try {
     json = parseJsonValue(value, "$completion");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -218,7 +218,11 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
     });
   } catch (error: unknown) {
     if (error instanceof RequirementLineageError) {
-      fail(error.reason === "path" ? "path" : "package", `$/packageSource${error.path.slice(1)}`);
+      fail(
+        error.reason === "path" ? "path" : "package",
+        `$/packageSource${error.path.slice(1)}`,
+        error,
+      );
     }
     throw error;
   }
@@ -234,7 +238,7 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
   try {
     completedAt = parseUtcInstant(wire.completedAt, "$/completedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/completedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/completedAt", error);
     throw error;
   }
   const basis = completionBasis({
@@ -295,7 +299,7 @@ export function createDemandCompletion(
     completedAt =
       options.clock === undefined ? readUtcWallClock() : readUtcWallClock(options.clock);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    if (error instanceof UtcWallClockError) fail("time", "$clock", error);
     throw error;
   }
   const basis = completionBasis({

@@ -112,8 +112,12 @@ export class WakeflowExternalInstructionInspectionError extends Error {
   readonly reason: WakeflowExternalInstructionInspectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowExternalInstructionInspectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowExternalInstructionInspectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -135,15 +139,23 @@ export interface WakeflowExternalInstructionAuthorities {
   readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
 }
 
-function fail(reason: WakeflowExternalInstructionInspectionErrorReason, path: string): never {
-  throw new WakeflowExternalInstructionInspectionError(reason, path);
+function fail(
+  reason: WakeflowExternalInstructionInspectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowExternalInstructionInspectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -152,7 +164,7 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("input", path);
+    if (error instanceof WakeflowConfigError) fail("input", path, error);
     throw error;
   }
 }
@@ -184,7 +196,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request");
+    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -209,7 +221,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(
     profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$request.profile");
+      fail("input", "$request.profile", error);
     }
     throw error;
   }
@@ -218,7 +230,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(
     target = parseWakeflowExternalInstructionTarget(record.target, "$request.target");
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -282,7 +294,7 @@ function createAuthority(
     return createWakeflowExternalInstructionBodyAuthority(config, request.profile, request.target);
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-      fail("authority", error.path);
+      fail("authority", error.path, error);
     }
     throw error;
   }

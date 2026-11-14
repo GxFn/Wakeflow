@@ -123,8 +123,8 @@ export class WakeflowWindowHostBindingError extends Error {
   readonly reason: WakeflowWindowHostBindingErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowHostBindingErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowWindowHostBindingErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -135,8 +135,12 @@ const validateWire = createRuntimeJsonSchemaValidator<WindowHostBindingWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
 
-function fail(reason: WakeflowWindowHostBindingErrorReason, path: string): never {
-  throw new WakeflowWindowHostBindingError(reason, path);
+function fail(reason: WakeflowWindowHostBindingErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowWindowHostBindingError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function typedId<Kind extends "program" | "window">(
@@ -147,7 +151,7 @@ function typedId<Kind extends "program" | "window">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("schema", path);
+    if (error instanceof WakeflowDurableIdError) fail("schema", path, error);
     throw error;
   }
 }
@@ -157,7 +161,7 @@ function bindingId(value: unknown): WakeflowWindowHostBindingId {
     return parseWakeflowWindowHostBindingId(value, "$/bindingId");
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingIdError) {
-      fail("schema", "$/bindingId");
+      fail("schema", "$/bindingId", error);
     }
     throw error;
   }
@@ -168,7 +172,7 @@ function digest(value: unknown, path = "$/source/launchIntentDigest"): Sha256Dig
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("schema", path);
+      fail("schema", path, error);
     }
     throw error;
   }
@@ -191,7 +195,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -201,7 +205,7 @@ function identityProfile(value: unknown): Readonly<WakeflowWindowHostIdentityPro
     return parseWakeflowWindowHostIdentityProfile(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostIdentityProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -215,7 +219,7 @@ function opaqueHandle(
     return parseWakeflowWindowHostHandle(profile, value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostIdentityProfileError) {
-      fail("handle", "$/handle");
+      fail("handle", "$/handle", error);
     }
     throw error;
   }
@@ -230,7 +234,7 @@ export function parseWakeflowWindowHostBinding(
   try {
     json = parseJsonValue(value, "$binding");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -306,7 +310,7 @@ export function parseWakeflowWindowHostBindingDocument(
     json = parseDeterministicJsonDocument(text, "$windowHostBinding");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

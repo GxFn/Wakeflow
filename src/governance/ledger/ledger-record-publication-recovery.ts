@@ -41,7 +41,7 @@ function parseRecordIdentity(recordIdValue: unknown): WakeflowDurableId<"require
   try {
     return parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$recordId");
+    if (error instanceof WakeflowDurableIdError) fail("input", "$recordId", error);
     throw error;
   }
 }
@@ -51,7 +51,7 @@ function parseExpectedIntent(value: unknown): Readonly<LedgerRecordPublicationIn
     return parseLedgerRecordPublicationIntent(value);
   } catch (error: unknown) {
     if (error instanceof LedgerRecordPublicationIntentError) {
-      fail("input", "$expectedIntent");
+      fail("input", "$expectedIntent", error);
     }
     throw error;
   }
@@ -107,8 +107,8 @@ async function recoverPublication(
       );
     } catch (error: unknown) {
       if (error instanceof DurableDirectoryTreeCandidateError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("conflict", "$stage");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("conflict", "$stage", error);
       }
       throw error;
     }

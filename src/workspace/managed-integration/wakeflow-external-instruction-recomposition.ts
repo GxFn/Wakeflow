@@ -84,15 +84,27 @@ export class WakeflowExternalInstructionRecompositionError extends Error {
   readonly reason: WakeflowExternalInstructionRecompositionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowExternalInstructionRecompositionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowExternalInstructionRecompositionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowExternalInstructionRecompositionErrorReason, path: string): never {
-  throw new WakeflowExternalInstructionRecompositionError(reason, path);
+function fail(
+  reason: WakeflowExternalInstructionRecompositionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowExternalInstructionRecompositionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -112,7 +124,7 @@ function parseOptions(value: unknown): AbortSignal | undefined {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "signal")) {
@@ -153,7 +165,7 @@ function parseRequest(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionInspectionError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -166,7 +178,7 @@ function deriveAuthorities(
     return deriveWakeflowExternalInstructionAuthorities(request);
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionInspectionError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }

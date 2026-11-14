@@ -103,8 +103,8 @@ export class BoundedDirectoryTreeScanError extends Error {
   readonly reason: BoundedDirectoryTreeScanErrorReason;
   readonly path: string;
 
-  constructor(reason: BoundedDirectoryTreeScanErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: BoundedDirectoryTreeScanErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -143,8 +143,12 @@ const LOWER_REASON_MAP = {
   >
 >;
 
-function fail(reason: BoundedDirectoryTreeScanErrorReason, path: string): never {
-  throw new BoundedDirectoryTreeScanError(reason, path);
+function fail(reason: BoundedDirectoryTreeScanErrorReason, path: string, cause?: unknown): never {
+  throw new BoundedDirectoryTreeScanError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -171,7 +175,7 @@ function parseOptions(value: unknown): Readonly<ParsedBoundedDirectoryTreeScanOp
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
 
@@ -258,7 +262,7 @@ async function readOneDirectory(
           error.reason === "symlink" ||
           error.reason === "not-directory")
       ) {
-        fail("source-changed", "$options.expectedNode");
+        fail("source-changed", "$options.expectedNode", error);
       }
       mapDirectoryReadError(error, limitReason);
     }

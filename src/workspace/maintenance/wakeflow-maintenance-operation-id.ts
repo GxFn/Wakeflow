@@ -40,15 +40,27 @@ export class WakeflowMaintenanceOperationIdError extends Error {
   readonly reason: WakeflowMaintenanceOperationIdErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceOperationIdErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowMaintenanceOperationIdErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowMaintenanceOperationIdErrorReason, path: string): never {
-  throw new WakeflowMaintenanceOperationIdError(reason, path);
+function fail(
+  reason: WakeflowMaintenanceOperationIdErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowMaintenanceOperationIdError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 严格解析一个 maintenance operation ID。 */
@@ -62,7 +74,7 @@ export function parseWakeflowMaintenanceOperationId(
   try {
     parseUuidV4(value.slice(WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX.length), errorPath);
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("format", errorPath);
+    if (error instanceof UuidV4Error) fail("format", errorPath, error);
     throw error;
   }
   return value as WakeflowMaintenanceOperationId;
@@ -88,7 +100,7 @@ export function createWakeflowMaintenanceOperationId(
     );
   } catch (error: unknown) {
     if (error instanceof UuidV4Error || error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("factory", "$uuidFactory");
+      fail("factory", "$uuidFactory", error);
     }
     throw error;
   }

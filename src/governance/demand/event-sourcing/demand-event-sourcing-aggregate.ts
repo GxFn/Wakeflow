@@ -85,8 +85,12 @@ export class DemandEventSourcingAggregateError extends Error {
   readonly reason: DemandEventSourcingAggregateErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingAggregateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingAggregateErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -103,15 +107,23 @@ const FIELDS = Object.freeze([
   "streamRevision",
 ] as const);
 
-function fail(reason: DemandEventSourcingAggregateErrorReason, path: string): never {
-  throw new DemandEventSourcingAggregateError(reason, path);
+function fail(
+  reason: DemandEventSourcingAggregateErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingAggregateError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -124,7 +136,7 @@ export function parseDemandEventSourcingAggregate(
   try {
     record = parsePlainRecord(value, "$aggregate");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$aggregate");
+    if (error instanceof PassiveOwnDataError) fail("input", "$aggregate", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -136,7 +148,7 @@ export function parseDemandEventSourcingAggregate(
     demandId = parseWakeflowDurableIdOfKind(record.demandId, "demand", "$/demandId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/demandId");
+      fail("identifier", "$/demandId", error);
     }
     throw error;
   }
@@ -145,7 +157,7 @@ export function parseDemandEventSourcingAggregate(
     lastEvent = parseDemandEventSourcingStoredEvent(record.lastEvent);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingStoredEventError) {
-      fail("event", "$/lastEvent");
+      fail("event", "$/lastEvent", error);
     }
     throw error;
   }
@@ -160,7 +172,7 @@ export function parseDemandEventSourcingAggregate(
       error instanceof DemandEventSourcingStateVersionError ||
       error instanceof DemandEventSourcingUpcasterError
     ) {
-      fail("version", "$/lastEvent");
+      fail("version", "$/lastEvent", error);
     }
     throw error;
   }
@@ -168,7 +180,7 @@ export function parseDemandEventSourcingAggregate(
   try {
     state = parseDemandAggregateState(record.state);
   } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) fail("state", "$/state");
+    if (error instanceof DemandAggregateStateError) fail("state", "$/state", error);
     throw error;
   }
   let streamRevision: DemandEventStreamRevision;
@@ -178,7 +190,7 @@ export function parseDemandEventSourcingAggregate(
     commitSequence = parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("position", error.path);
+      fail("position", error.path, error);
     }
     throw error;
   }

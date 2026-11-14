@@ -100,8 +100,8 @@ export class WakeflowMaintenanceGateError extends Error {
   readonly reason: WakeflowMaintenanceGateErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceGateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowMaintenanceGateErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -124,8 +124,8 @@ const CONTEXT_CORE_INSPECTIONS = new WeakMap<
   Readonly<WakeflowWorkspaceCoreLayoutInspection>
 >();
 
-function fail(reason: WakeflowMaintenanceGateErrorReason, path: string): never {
-  throw new WakeflowMaintenanceGateError(reason, path);
+function fail(reason: WakeflowMaintenanceGateErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowMaintenanceGateError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function admittedOperationId(value: unknown, path: string): WakeflowMaintenanceOperationId {
@@ -133,7 +133,7 @@ function admittedOperationId(value: unknown, path: string): WakeflowMaintenanceO
     return parseWakeflowMaintenanceOperationId(value, path);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", path);
+      fail("input", path, error);
     }
     throw error;
   }
@@ -146,7 +146,7 @@ function createOperationId(factory: UuidV4Factory | undefined): WakeflowMaintena
       : createWakeflowMaintenanceOperationId(factory);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", "$options.uuidFactory");
+      fail("input", "$options.uuidFactory", error);
     }
     throw error;
   }
@@ -165,7 +165,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set([
@@ -206,7 +206,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     );
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("input", "$options.expectedCoreLayoutInspectionDigest");
+      fail("input", "$options.expectedCoreLayoutInspectionDigest", error);
     }
     throw error;
   }
@@ -263,8 +263,8 @@ async function materialize(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("effect-failure", "$bootstrap");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("effect-failure", "$bootstrap", error);
     }
     throw error;
   }
@@ -398,7 +398,7 @@ function parseWakeflowExistingMaintenanceGateOptions(
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -483,8 +483,8 @@ async function admitLockedCoreInspection(
     after = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("bootstrap-conflict", "$bootstrap");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("bootstrap-conflict", "$bootstrap", error);
     }
     throw error;
   }
@@ -531,8 +531,8 @@ export async function withWakeflowMaintenanceGate<Result>(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("bootstrap-conflict", "$bootstrap");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("bootstrap-conflict", "$bootstrap", error);
     }
     throw error;
   }

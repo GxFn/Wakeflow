@@ -345,8 +345,12 @@ export class DemandEventSourcingDecisionError extends Error {
   readonly reason: DemandEventSourcingDecisionErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingDecisionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingDecisionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -463,8 +467,16 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
-function fail(reason: DemandEventSourcingDecisionErrorReason, path: string): never {
-  throw new DemandEventSourcingDecisionError(reason, path);
+function fail(
+  reason: DemandEventSourcingDecisionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingDecisionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 生命周期命令的数据借事件解析器按 Schema 准入，不另写一份编解码。 */
@@ -482,7 +494,7 @@ function lifecycleEvent(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingEventError) {
-      fail("lifecycle-data", "$/data");
+      fail("lifecycle-data", "$/data", error);
     }
     throw error;
   }
@@ -541,7 +553,7 @@ function parseId<Kind extends "demand" | "demand-event">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -550,7 +562,7 @@ function parseTime(value: unknown): UtcInstant {
   try {
     return parseUtcInstant(value, "$/recordedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/recordedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/recordedAt", error);
     throw error;
   }
 }
@@ -559,7 +571,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -586,7 +598,7 @@ export function parseDemandEventSourcingCommand(
   try {
     base = parsePlainRecord(value, "$command");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$command");
+    if (error instanceof PassiveOwnDataError) fail("input", "$command", error);
     throw error;
   }
   if (base.commandVersion !== 1) fail("input", "$/commandVersion");
@@ -624,7 +636,7 @@ export function parseDemandEventSourcingCommand(
       authority = parseDemandAuthority(command.authority);
     } catch (error: unknown) {
       if (error instanceof DemandAuthorityError) {
-        fail("demand-authority", "$/authority");
+        fail("demand-authority", "$/authority", error);
       }
       throw error;
     }
@@ -632,7 +644,7 @@ export function parseDemandEventSourcingCommand(
       completion = parseDemandCompletion(command.completion);
     } catch (error: unknown) {
       if (error instanceof DemandCompletionError) {
-        fail("demand-completion", "$/completion");
+        fail("demand-completion", "$/completion", error);
       }
       throw error;
     }
@@ -695,7 +707,7 @@ export function parseDemandEventSourcingCommand(
       taskPackage = parseTaskPackage(command.taskPackage);
     } catch (error: unknown) {
       if (error instanceof TaskPackageError) {
-        fail("task-package", "$/taskPackage");
+        fail("task-package", "$/taskPackage", error);
       }
       throw error;
     }
@@ -714,7 +726,7 @@ export function parseDemandEventSourcingCommand(
       manifest = parseManagedEvidenceManifest(command.manifest);
     } catch (error: unknown) {
       if (error instanceof ManagedEvidenceManifestError) {
-        fail("managed-evidence-manifest", "$/manifest");
+        fail("managed-evidence-manifest", "$/manifest", error);
       }
       throw error;
     }
@@ -746,7 +758,7 @@ export function parseDemandEventSourcingCommand(
       envelope = parseDeliveryEnvelope(command.envelope);
     } catch (error: unknown) {
       if (error instanceof DeliveryEnvelopeError) {
-        fail("delivery-envelope", "$/envelope");
+        fail("delivery-envelope", "$/envelope", error);
       }
       throw error;
     }
@@ -755,10 +767,10 @@ export function parseDemandEventSourcingCommand(
       assertDeliveryEnvelopeMatchesTaskPackage(envelope, taskPackage);
     } catch (error: unknown) {
       if (error instanceof TaskPackageError) {
-        fail("task-package", "$/taskPackage");
+        fail("task-package", "$/taskPackage", error);
       }
       if (error instanceof DeliveryEnvelopeError) {
-        fail("delivery-envelope", "$/envelope");
+        fail("delivery-envelope", "$/envelope", error);
       }
       throw error;
     }
@@ -767,7 +779,7 @@ export function parseDemandEventSourcingCommand(
         assertTestExecutionAttemptMatchesPackage(envelope.attempt, taskPackage);
       } catch (error: unknown) {
         if (error instanceof TestExecutionAttemptError) {
-          fail("delivery-envelope", "$/envelope/attempt");
+          fail("delivery-envelope", "$/envelope/attempt", error);
         }
         throw error;
       }
@@ -783,7 +795,7 @@ export function parseDemandEventSourcingCommand(
         source = parsePlainRecord(command.reworkSource, "$/reworkSource");
       } catch (error: unknown) {
         if (error instanceof PassiveOwnDataError) {
-          fail("target-delivery-rework-context", "$/reworkSource");
+          fail("target-delivery-rework-context", "$/reworkSource", error);
         }
         throw error;
       }
@@ -801,7 +813,7 @@ export function parseDemandEventSourcingCommand(
         decision = parseControllerImplementationReviewDecision(source.decision);
       } catch (error: unknown) {
         if (error instanceof ControllerImplementationReviewDecisionError) {
-          fail("controller-implementation-review-decision", "$/reworkSource/decision");
+          fail("controller-implementation-review-decision", "$/reworkSource/decision", error);
         }
         throw error;
       }
@@ -809,7 +821,7 @@ export function parseDemandEventSourcingCommand(
         previousResult = parseTargetResult(source.previousResult);
       } catch (error: unknown) {
         if (error instanceof TargetResultError) {
-          fail("target-result", "$/reworkSource/previousResult");
+          fail("target-result", "$/reworkSource/previousResult", error);
         }
         throw error;
       }
@@ -828,7 +840,7 @@ export function parseDemandEventSourcingCommand(
       } catch (error: unknown) {
         if (error instanceof DemandEventSourcingDecisionError) throw error;
         if (error instanceof TargetDeliveryReworkContextError) {
-          fail("target-delivery-rework-context", "$/reworkSource");
+          fail("target-delivery-rework-context", "$/reworkSource", error);
         }
         throw error;
       }
@@ -848,6 +860,7 @@ export function parseDemandEventSourcingCommand(
           fail(
             "target-delivery-product-defect-remediation-context",
             "$/productDefectRemediationSource",
+            error,
           );
         }
         throw error;
@@ -872,6 +885,7 @@ export function parseDemandEventSourcingCommand(
           fail(
             "controller-product-defect-remediation-authorization",
             "$/productDefectRemediationSource/authorization",
+            error,
           );
         }
         throw error;
@@ -880,7 +894,7 @@ export function parseDemandEventSourcingCommand(
         previousResult = parseTargetResult(source.previousResult);
       } catch (error: unknown) {
         if (error instanceof TargetResultError) {
-          fail("target-result", "$/productDefectRemediationSource/previousResult");
+          fail("target-result", "$/productDefectRemediationSource/previousResult", error);
         }
         throw error;
       }
@@ -905,6 +919,7 @@ export function parseDemandEventSourcingCommand(
           fail(
             "target-delivery-product-defect-remediation-context",
             "$/productDefectRemediationSource",
+            error,
           );
         }
         throw error;
@@ -937,7 +952,7 @@ export function parseDemandEventSourcingCommand(
       outcome = parseDeliveryOutcome(command.outcome);
     } catch (error: unknown) {
       if (error instanceof DeliveryOutcomeError) {
-        fail("delivery-outcome", "$/outcome");
+        fail("delivery-outcome", "$/outcome", error);
       }
       throw error;
     }
@@ -955,7 +970,7 @@ export function parseDemandEventSourcingCommand(
     try {
       rearm = parseDeliveryRearm(command.rearm);
     } catch (error: unknown) {
-      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/rearm");
+      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/rearm", error);
       throw error;
     }
     return Object.freeze({
@@ -973,7 +988,7 @@ export function parseDemandEventSourcingCommand(
       result = parseTargetResult(command.result);
     } catch (error: unknown) {
       if (error instanceof TargetResultError) {
-        fail("target-result", "$/result");
+        fail("target-result", "$/result", error);
       }
       throw error;
     }
@@ -987,7 +1002,7 @@ export function parseDemandEventSourcingCommand(
       );
     } catch (error: unknown) {
       if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path);
+        fail("target-result-callback", error.path, error);
       }
       throw error;
     }
@@ -1007,7 +1022,7 @@ export function parseDemandEventSourcingCommand(
       reissue = parseTargetResultCallbackReissue(command.reissue, "$/reissue");
     } catch (error: unknown) {
       if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path);
+        fail("target-result-callback", error.path, error);
       }
       throw error;
     }
@@ -1032,7 +1047,7 @@ export function parseDemandEventSourcingCommand(
       decision = parseControllerReviewDecision(command.decision);
     } catch (error: unknown) {
       if (error instanceof ControllerReviewDecisionError) {
-        fail("controller-review-decision", "$/decision");
+        fail("controller-review-decision", "$/decision", error);
       }
       throw error;
     }
@@ -1052,7 +1067,7 @@ export function parseDemandEventSourcingCommand(
       authorization = parseControllerProductDefectRemediationAuthorization(command.authorization);
     } catch (error: unknown) {
       if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-        fail("controller-product-defect-remediation-authorization", "$/authorization");
+        fail("controller-product-defect-remediation-authorization", "$/authorization", error);
       }
       throw error;
     }
@@ -1095,7 +1110,7 @@ function parseState(value: unknown): Readonly<DemandAggregateState> | null {
   try {
     return parseDemandAggregateState(value);
   } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) fail("state", "$state");
+    if (error instanceof DemandAggregateStateError) fail("state", "$state", error);
     throw error;
   }
 }
@@ -1135,7 +1150,7 @@ export function decideDemandEventSourcingCommand(
       recordManagedEvidenceInDemandAggregateState(state, command.manifest);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/managedEvidence");
+        fail("transition", "$state/managedEvidence", error);
       }
       throw error;
     }
@@ -1157,7 +1172,7 @@ export function decideDemandEventSourcingCommand(
       completeDemandAggregateState(state, command.completion);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state");
+        fail("transition", "$state", error);
       }
       throw error;
     }
@@ -1179,7 +1194,7 @@ export function decideDemandEventSourcingCommand(
       recordTargetResultInDemandAggregateState(state, command.result, command.callback);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1202,7 +1217,7 @@ export function decideDemandEventSourcingCommand(
       reissueCallbackInDemandAggregateState(state, command.reissue);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1221,7 +1236,7 @@ export function decideDemandEventSourcingCommand(
       rearmDeliveryInDemandAggregateState(state, command.rearm);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1240,7 +1255,7 @@ export function decideDemandEventSourcingCommand(
       recordDeliveryOutcomeInDemandAggregateState(state, command.outcome);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1262,7 +1277,7 @@ export function decideDemandEventSourcingCommand(
       prepareDeliveryInDemandAggregateState(state, command.envelope);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1284,7 +1299,7 @@ export function decideDemandEventSourcingCommand(
       planTargetTaskInDemandAggregateState(state, command.taskPackage);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1304,7 +1319,7 @@ export function decideDemandEventSourcingCommand(
       escalateDemandAggregateState(state, command.escalation, command.eventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision");
+        fail("transition", "$state/awaitingDecision", error);
       }
       throw error;
     }
@@ -1323,7 +1338,7 @@ export function decideDemandEventSourcingCommand(
       recordDecisionInDemandAggregateState(state, command.decision.escalationEventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision");
+        fail("transition", "$state/awaitingDecision", error);
       }
       throw error;
     }
@@ -1350,7 +1365,7 @@ export function decideDemandEventSourcingCommand(
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle");
+        fail("transition", "$state/lifecycle", error);
       }
       throw error;
     }
@@ -1392,7 +1407,7 @@ function decideReview(
     decided = decideTargetResultReviewInDemandAggregateState(state, command.decision);
   } catch (error: unknown) {
     if (error instanceof DemandAggregateStateError) {
-      fail("transition", "$state/targetTasks");
+      fail("transition", "$state/targetTasks", error);
     }
     throw error;
   }
@@ -1410,7 +1425,7 @@ function decideReview(
       authorizeProductDefectRemediationInDemandAggregateState(decided, authorization);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1506,7 +1521,7 @@ function reviewEscalation(
     escalateDemandAggregateState(decided, escalationEvent.data.escalation, escalationEvent.eventId);
   } catch (error: unknown) {
     if (error instanceof DemandAggregateStateError) {
-      fail("transition", "$state/awaitingDecision");
+      fail("transition", "$state/awaitingDecision", error);
     }
     throw error;
   }
@@ -1533,7 +1548,7 @@ export function evolveDemandEventSourcingState(
   try {
     event = parseDemandUncommittedEvent(eventValue);
   } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingEventError) fail("event", "$event");
+    if (error instanceof DemandEventSourcingEventError) fail("event", "$event", error);
     throw error;
   }
 
@@ -1548,7 +1563,7 @@ export function evolveDemandEventSourcingState(
       return recordManagedEvidenceInDemandAggregateState(state, event.data.manifest);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/managedEvidence");
+        fail("transition", "$state/managedEvidence", error);
       }
       throw error;
     }
@@ -1558,7 +1573,7 @@ export function evolveDemandEventSourcingState(
       return planTargetTaskInDemandAggregateState(state, event.data.taskPackage);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1568,7 +1583,7 @@ export function evolveDemandEventSourcingState(
       return prepareDeliveryInDemandAggregateState(state, event.data.envelope);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1578,7 +1593,7 @@ export function evolveDemandEventSourcingState(
       return recordDeliveryOutcomeInDemandAggregateState(state, event.data.outcome);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1588,7 +1603,7 @@ export function evolveDemandEventSourcingState(
       return rearmDeliveryInDemandAggregateState(state, event.data.rearm);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1602,7 +1617,7 @@ export function evolveDemandEventSourcingState(
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1612,7 +1627,7 @@ export function evolveDemandEventSourcingState(
       return reissueCallbackInDemandAggregateState(state, event.data.reissue);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1622,7 +1637,7 @@ export function evolveDemandEventSourcingState(
       return decideTargetResultReviewInDemandAggregateState(state, event.data.decision);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1635,7 +1650,7 @@ export function evolveDemandEventSourcingState(
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks");
+        fail("transition", "$state/targetTasks", error);
       }
       throw error;
     }
@@ -1645,7 +1660,7 @@ export function evolveDemandEventSourcingState(
       return escalateDemandAggregateState(state, event.data.escalation, event.eventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision");
+        fail("transition", "$state/awaitingDecision", error);
       }
       throw error;
     }
@@ -1655,7 +1670,7 @@ export function evolveDemandEventSourcingState(
       return recordDecisionInDemandAggregateState(state, event.data.decision.escalationEventId);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision");
+        fail("transition", "$state/awaitingDecision", error);
       }
       throw error;
     }
@@ -1671,7 +1686,7 @@ export function evolveDemandEventSourcingState(
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle");
+        fail("transition", "$state/lifecycle", error);
       }
       throw error;
     }
@@ -1681,7 +1696,7 @@ export function evolveDemandEventSourcingState(
       return completeDemandAggregateState(state, event.data.completion);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle");
+        fail("transition", "$state/lifecycle", error);
       }
       throw error;
     }
@@ -1691,7 +1706,7 @@ export function evolveDemandEventSourcingState(
       return cancelDemandAggregateState(state);
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle");
+        fail("transition", "$state/lifecycle", error);
       }
       throw error;
     }

@@ -131,8 +131,12 @@ export class DurableDirectoryTreeCandidateError extends Error {
   readonly reason: DurableDirectoryTreeCandidateErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableDirectoryTreeCandidateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableDirectoryTreeCandidateErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -189,12 +193,21 @@ const INPUT_FILE_FIELDS = Object.freeze(["bytes", "mode", "path"] as const);
 export function throwDirectoryTreeCandidateError(
   reason: DurableDirectoryTreeCandidateErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  return fail(reason, path);
+  return fail(reason, path, cause);
 }
 
-function fail(reason: DurableDirectoryTreeCandidateErrorReason, path: string): never {
-  throw new DurableDirectoryTreeCandidateError(reason, path);
+function fail(
+  reason: DurableDirectoryTreeCandidateErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableDirectoryTreeCandidateError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function compareText(left: string, right: string): number {
@@ -217,7 +230,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
 }
@@ -227,8 +240,8 @@ function denseArray(value: unknown, maximumLength: number, path: string): readon
     return parseDenseArray(value, maximumLength, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      if (error.reason === "array-length") fail("capacity", path);
-      fail("input", path);
+      if (error.reason === "array-length") fail("capacity", path, error);
+      fail("input", path, error);
     }
     throw error;
   }
@@ -264,7 +277,7 @@ function byteCount(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
   } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("input", path);
+    if (error instanceof ByteCountError) fail("input", path, error);
     throw error;
   }
 }
@@ -351,7 +364,7 @@ export function parseDirectoryTreeCandidatePath(
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path);
+    if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
 }
@@ -360,7 +373,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -479,7 +492,7 @@ function planDigestValue(
       ),
     );
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", "$plan");
+    if (error instanceof JsonValueError) fail("input", "$plan", error);
     throw error;
   }
 }
@@ -495,7 +508,7 @@ function buildPlan(
     try {
       totalBytes = addByteCounts(totalBytes, file.byteCount, "$plan/totalBytes");
     } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("capacity", "$/files");
+      if (error instanceof ByteCountError) fail("capacity", "$/files", error);
       throw error;
     }
   }
@@ -570,8 +583,8 @@ export function prepareDirectoryTreeCandidate(
     let bytes: Uint8Array;
     try {
       bytes = new Uint8Array(inputBytes);
-    } catch {
-      fail("capacity", `$files/${index}/bytes`);
+    } catch (cause: unknown) {
+      fail("capacity", `$files/${index}/bytes`, cause);
     }
     return Object.freeze({
       path: parsePlanPath(input.path, `$files/${index}/path`),

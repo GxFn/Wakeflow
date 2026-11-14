@@ -162,15 +162,19 @@ export class TaskPackageProjectionStoreError extends Error {
   readonly reason: TaskPackageProjectionStoreErrorReason;
   readonly path: string;
 
-  constructor(reason: TaskPackageProjectionStoreErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TaskPackageProjectionStoreErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: TaskPackageProjectionStoreErrorReason, path: string): never {
-  throw new TaskPackageProjectionStoreError(reason, path);
+function fail(reason: TaskPackageProjectionStoreErrorReason, path: string, cause?: unknown): never {
+  throw new TaskPackageProjectionStoreError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
@@ -178,7 +182,7 @@ function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
     return parseWakeflowDurableIdOfKind(value, "task-package", "$taskPackageId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$taskPackageId");
+      fail("input", "$taskPackageId", error);
     }
     throw error;
   }
@@ -195,7 +199,7 @@ function parseSignal(
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -230,7 +234,7 @@ function parseLoadOptions(value: unknown): Readonly<{
     );
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("input", "$options/expectedTaskPackageDigest");
+      fail("input", "$options/expectedTaskPackageDigest", error);
     }
     throw error;
   }
@@ -296,13 +300,13 @@ async function projectionNodeOrNull(
         error.reason === "ancestor-type" ||
         error.reason === "resource-alias"
       ) {
-        fail("node-policy", "$projection");
+        fail("node-policy", "$projection", error);
       }
       // 并发发布者退休 stage 时目标的链接数在观察中途变化；这是要重试的瞬态，不是根失效。
       if (error.reason === "resource-changed") {
-        fail("recovery-required", "$projection");
+        fail("recovery-required", "$projection", error);
       }
-      fail("root-scope", "$root");
+      fail("root-scope", "$root", error);
     }
     throw error;
   }
@@ -324,7 +328,7 @@ function mapProjectionReadError(error: unknown): never {
     if (error.reason === "symlink" || error.reason === "not-file") {
       fail("node-policy", "$projection");
     }
-    fail("operation-failure", "$projection");
+    fail("operation-failure", "$projection", error);
   }
   if (
     error instanceof StrictTextFileError ||
@@ -396,7 +400,7 @@ function admitProjectionOperations(taskPackage: Readonly<TaskPackage>): void {
   } catch (error: unknown) {
     if (error instanceof TaskPackageProjectionStoreError) throw error;
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation-failure", "$catalog");
+      fail("operation-failure", "$catalog", error);
     }
     throw error;
   }
@@ -421,7 +425,7 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
   ) {
     fail("commit-uncertain", "$projectionRoot");
   }
-  fail("operation-failure", "$projectionRoot");
+  fail("operation-failure", "$projectionRoot", error);
 }
 
 function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
@@ -441,7 +445,7 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
   ) {
     fail("commit-uncertain", "$projection");
   }
-  fail("operation-failure", "$projection");
+  fail("operation-failure", "$projection", error);
 }
 
 export class TaskPackageProjectionStore {
@@ -550,7 +554,7 @@ export class TaskPackageProjectionStore {
       );
     } catch (error: unknown) {
       if (disposition === "created" && error instanceof TaskPackageProjectionStoreError) {
-        fail("commit-uncertain", "$projection");
+        fail("commit-uncertain", "$projection", error);
       }
       throw error;
     }

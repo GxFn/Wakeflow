@@ -67,8 +67,8 @@ export class DemandEventSourcingPathError extends Error {
   readonly reason: DemandEventSourcingPathErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingPathErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandEventSourcingPathErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -81,8 +81,8 @@ interface AppendOwnerToken {
   readonly token: string;
 }
 
-function fail(reason: DemandEventSourcingPathErrorReason, path: string): never {
-  throw new DemandEventSourcingPathError(reason, path);
+function fail(reason: DemandEventSourcingPathErrorReason, path: string, cause?: unknown): never {
+  throw new DemandEventSourcingPathError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseAppendOwnerToken(value: unknown): Readonly<AppendOwnerToken> {
@@ -105,7 +105,7 @@ function parseAppendOwnerToken(value: unknown): Readonly<AppendOwnerToken> {
     parseUuidV4(uuid, "$ownerToken");
   } catch (error: unknown) {
     if (error instanceof UuidV4Error) {
-      fail("append-owner-token", "$ownerToken");
+      fail("append-owner-token", "$ownerToken", error);
     }
     throw error;
   }
@@ -140,7 +140,7 @@ export function parseDemandEventStreamCommitFileName(value: unknown): Readonly<{
     commitSequence = parseDemandEventCommitSequence(Number(sequenceText), "$fileName");
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("commit-file-name", "$fileName");
+      fail("commit-file-name", "$fileName", error);
     }
     throw error;
   }
@@ -171,7 +171,7 @@ export function demandEventAppendCandidateRef(
     admittedCommitId = parseWakeflowDurableIdOfKind(commitId, "demand-event-commit", "$commitId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("commit-identity", "$commitId");
+      fail("commit-identity", "$commitId", error);
     }
     throw error;
   }
@@ -218,7 +218,7 @@ export function parseDemandEventAppendCandidateFileName(
       error instanceof DemandEventStreamPositionError ||
       error instanceof DemandEventSourcingPathError
     ) {
-      fail("append-candidate-file-name", "$fileName");
+      fail("append-candidate-file-name", "$fileName", error);
     }
     throw error;
   }

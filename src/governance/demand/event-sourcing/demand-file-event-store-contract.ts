@@ -109,8 +109,8 @@ export class DemandFileEventStoreError extends Error {
   readonly reason: DemandFileEventStoreErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandFileEventStoreErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandFileEventStoreErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -127,8 +127,9 @@ function currentUserId(): bigint | null {
 export function failDemandFileEventStore(
   reason: DemandFileEventStoreErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new DemandFileEventStoreError(reason, path);
+  throw new DemandFileEventStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 export function parseDemandFileEventStoreOptions(
@@ -139,7 +140,7 @@ export function parseDemandFileEventStoreOptions(
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failDemandFileEventStore("input", "$options");
+      failDemandFileEventStore("input", "$options", error);
     }
     throw error;
   }

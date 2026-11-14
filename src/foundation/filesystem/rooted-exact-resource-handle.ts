@@ -73,8 +73,8 @@ export class RootedExactResourceHandleError extends Error {
   readonly reason: RootedExactResourceHandleErrorReason;
   readonly path: string;
 
-  constructor(reason: RootedExactResourceHandleErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: RootedExactResourceHandleErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -86,8 +86,12 @@ function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(reason: RootedExactResourceHandleErrorReason, path: string): never {
-  throw new RootedExactResourceHandleError(reason, path);
+function fail(reason: RootedExactResourceHandleErrorReason, path: string, cause?: unknown): never {
+  throw new RootedExactResourceHandleError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -116,7 +120,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$expectedNode");
+      fail("input", "$expectedNode", error);
     }
     throw error;
   }
@@ -160,7 +164,7 @@ function snapshotOpenedHandle(value: unknown, errorPath: string): Readonly<FileN
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("resource-changed", errorPath);
+      fail("resource-changed", errorPath, error);
     }
     throw error;
   }
@@ -183,17 +187,17 @@ async function inspectInitialResource(
     resource = await root.inspectExistingResource(resourcePath, errorPath);
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      if (error.reason === "resource-path") fail("input", errorPath);
+      if (error.reason === "resource-path") fail("input", errorPath, error);
       if (error.reason === "resource-not-found") {
-        fail("resource-not-found", errorPath);
+        fail("resource-not-found", errorPath, error);
       }
       if (error.reason === "resource-changed") {
-        fail("resource-changed", errorPath);
+        fail("resource-changed", errorPath, error);
       }
       if (error.reason === "resource-alias") {
-        fail("resource-changed", errorPath);
+        fail("resource-changed", errorPath, error);
       }
-      fail("root-scope", errorPath);
+      fail("root-scope", errorPath, error);
     }
     throw error;
   }
@@ -293,9 +297,9 @@ export class RootedExactResourceHandle {
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-        fail("resource-changed", errorPath);
+        fail("resource-changed", errorPath, error);
       }
-      fail("resource-open-failure", errorPath);
+      fail("resource-open-failure", errorPath, error);
     }
 
     try {
@@ -352,7 +356,7 @@ export class RootedExactResourceHandle {
       opened = snapshotOpenedHandle(await this.#handle.stat({ bigint: true }), this.#errorPath);
     } catch (error: unknown) {
       if (error instanceof RootedExactResourceHandleError) throw error;
-      fail("resource-changed", this.#errorPath);
+      fail("resource-changed", this.#errorPath, error);
     }
     if (opened.kind !== this.#kind || !sameFileNodeIdentity(this.#initialNodeSnapshot, opened)) {
       fail("resource-changed", this.#errorPath);
@@ -369,7 +373,7 @@ export class RootedExactResourceHandle {
       pathResource = await this.#root.inspectExistingResource(this.#resourcePath, this.#errorPath);
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
-        fail("resource-changed", this.#errorPath);
+        fail("resource-changed", this.#errorPath, error);
       }
       throw error;
     }
@@ -395,8 +399,8 @@ export class RootedExactResourceHandle {
     if (this.#root.durability === "fsync") {
       try {
         await this.#handle.sync();
-      } catch {
-        fail("sync-failure", this.#errorPath);
+      } catch (cause: unknown) {
+        fail("sync-failure", this.#errorPath, cause);
       }
     }
     return this.inspectOpenedNode();
@@ -408,8 +412,8 @@ export class RootedExactResourceHandle {
     this.#closed = true;
     try {
       await this.#handle.close();
-    } catch {
-      fail("close-failure", this.#errorPath);
+    } catch (cause: unknown) {
+      fail("close-failure", this.#errorPath, cause);
     }
   }
 

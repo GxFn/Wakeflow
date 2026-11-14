@@ -121,15 +121,27 @@ class ClaudeCodeMaintenanceCapabilityError extends Error {
   readonly reason: ClaudeCodeMaintenanceCapabilityErrorReason;
   readonly path: string;
 
-  constructor(reason: ClaudeCodeMaintenanceCapabilityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ClaudeCodeMaintenanceCapabilityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: ClaudeCodeMaintenanceCapabilityErrorReason, path: string): never {
-  throw new ClaudeCodeMaintenanceCapabilityError(reason, path);
+function fail(
+  reason: ClaudeCodeMaintenanceCapabilityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ClaudeCodeMaintenanceCapabilityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
@@ -222,7 +234,7 @@ async function planHostAsset(
   } catch (error: unknown) {
     if (error instanceof ClaudeCodeHostAssetOperationError) {
       if (error.reason === "read") return { operation: null, blocker };
-      fail("owner", error.path);
+      fail("owner", error.path, error);
     }
     throw error;
   }
@@ -250,7 +262,7 @@ async function planStatuslineSettings(
       if (error.reason === "settings-unreadable") {
         return { operations: [], blockerCodes: [CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER] };
       }
-      fail("owner", error.path);
+      fail("owner", error.path, error);
     }
     throw error;
   }
@@ -268,7 +280,8 @@ async function planStatuslineRemoval(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeStatuslineSettingsOperationError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeStatuslineSettingsOperationError)
+      fail("owner", error.path, error);
     throw error;
   }
 }
@@ -332,7 +345,7 @@ async function planWindowTransportRetirement(
   try {
     return await planClaudeCodeWindowTransportRetirement(root, request);
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeWindowTransportRetirementError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeWindowTransportRetirementError) fail("owner", error.path, error);
     throw error;
   }
 }
@@ -420,7 +433,7 @@ async function planProjections(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeProjectionError) {
-      fail("owner", error.path);
+      fail("owner", error.path, error);
     }
     throw error;
   }
@@ -442,7 +455,7 @@ async function executeProjectionOperation(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeProjectionError) {
-      fail("owner", error.path);
+      fail("owner", error.path, error);
     }
     throw error;
   }
@@ -471,7 +484,7 @@ async function executeHostAssetOperation(
       observationDigest: executed.targetDigest,
     });
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeHostAssetOperationError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeHostAssetOperationError) fail("owner", error.path, error);
     throw error;
   }
 }
@@ -498,7 +511,8 @@ async function executeStatuslineSettingsOperation(
       observationDigest: executed.targetDigest,
     });
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeStatuslineSettingsOperationError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeStatuslineSettingsOperationError)
+      fail("owner", error.path, error);
     throw error;
   }
 }
@@ -510,7 +524,7 @@ async function executeWindowTransportRetirement(
   try {
     return await executeClaudeCodeWindowTransportRetirement(root, request);
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodeWindowTransportRetirementError) fail("owner", error.path);
+    if (error instanceof ClaudeCodeWindowTransportRetirementError) fail("owner", error.path, error);
     throw error;
   }
 }
@@ -530,7 +544,7 @@ async function executeOperation(
     assertWakeflowMaintenanceGateContext(context, root);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$context");
+      fail("gate", "$context", error);
     }
     throw error;
   }
@@ -603,7 +617,7 @@ async function executeOperation(
     });
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsOperationExecutionError) {
-      fail("owner", error.path);
+      fail("owner", error.path, error);
     }
     throw error;
   }

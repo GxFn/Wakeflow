@@ -56,15 +56,15 @@ export class PrivateModeConvergenceError extends Error {
   readonly reason: PrivateModeConvergenceErrorReason;
   readonly path: string;
 
-  constructor(reason: PrivateModeConvergenceErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: PrivateModeConvergenceErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: PrivateModeConvergenceErrorReason, path: string): never {
-  throw new PrivateModeConvergenceError(reason, path);
+function fail(reason: PrivateModeConvergenceErrorReason, path: string, cause?: unknown): never {
+  throw new PrivateModeConvergenceError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function currentUserId(): bigint | null {
@@ -96,7 +96,7 @@ function snapshotOf(value: unknown, errorPath: string): Readonly<FileNodeSnapsho
   try {
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail("resource-changed", errorPath);
+    if (error instanceof FileNodeSnapshotError) fail("resource-changed", errorPath, error);
     throw error;
   }
 }
@@ -108,8 +108,8 @@ async function statHandle(
   let value: unknown;
   try {
     value = await handle.stat({ bigint: true });
-  } catch {
-    fail("resource-changed", errorPath);
+  } catch (cause: unknown) {
+    fail("resource-changed", errorPath, cause);
   }
   return snapshotOf(value, errorPath);
 }
@@ -137,15 +137,15 @@ async function inspectPath(
     return await root.inspectExistingResource(resourcePath, errorPath);
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      if (error.reason === "resource-path") fail("input", errorPath);
+      if (error.reason === "resource-path") fail("input", errorPath, error);
       if (
         error.reason === "resource-not-found" ||
         error.reason === "resource-changed" ||
         error.reason === "resource-alias"
       ) {
-        fail("resource-changed", errorPath);
+        fail("resource-changed", errorPath, error);
       }
-      fail("root-scope", errorPath);
+      fail("root-scope", errorPath, error);
     }
     throw error;
   }
@@ -184,9 +184,9 @@ export async function convergePrivateNodeMode(
     if (error instanceof PrivateModeConvergenceError) throw error;
     const code = readNodeSystemErrorCode(error);
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-      fail("resource-changed", errorPath);
+      fail("resource-changed", errorPath, error);
     }
-    fail("chmod-failure", errorPath);
+    fail("chmod-failure", errorPath, error);
   }
   try {
     const opened = await statHandle(handle, errorPath);
@@ -199,8 +199,8 @@ export async function convergePrivateNodeMode(
     }
     try {
       await handle.chmod(target);
-    } catch {
-      fail("chmod-failure", errorPath);
+    } catch (cause: unknown) {
+      fail("chmod-failure", errorPath, cause);
     }
     const hardened = await statHandle(handle, errorPath);
     if (!sameFileNodeIdentity(hardened, observed.node) || hardened.permissionBits !== target) {
@@ -209,8 +209,8 @@ export async function convergePrivateNodeMode(
     if (root.durability === "fsync") {
       try {
         await handle.sync();
-      } catch {
-        fail("chmod-failure", errorPath);
+      } catch (cause: unknown) {
+        fail("chmod-failure", errorPath, cause);
       }
     }
   } finally {

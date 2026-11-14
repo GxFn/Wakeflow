@@ -99,8 +99,12 @@ export class WakeflowFreshConfigSelectionError extends Error {
   readonly reason: WakeflowFreshConfigSelectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowFreshConfigSelectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowFreshConfigSelectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -120,15 +124,23 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "topology",
 ]);
 
-function fail(reason: WakeflowFreshConfigSelectionErrorReason, path: string): never {
-  throw new WakeflowFreshConfigSelectionError(reason, path);
+function fail(
+  reason: WakeflowFreshConfigSelectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowFreshConfigSelectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -137,7 +149,7 @@ function snapshotSelection(value: unknown): unknown {
   try {
     return parseJsonValue(value, "$selection");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -147,8 +159,8 @@ function array(value: unknown, path: string): readonly unknown[] {
     return parseDenseArray(value, WAKEFLOW_FRESH_SELECTION_MAXIMUM_ENTITIES, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      if (error.reason === "array-length") fail("capacity", path);
-      fail("input", error.path);
+      if (error.reason === "array-length") fail("capacity", path, error);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -227,7 +239,7 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
         ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
         : createUuidV4(options.uuidFactory);
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("id-source", "$options.uuidFactory");
+    if (error instanceof UuidV4Error) fail("id-source", "$options.uuidFactory", error);
     throw error;
   }
   if (seenUuid.has(uuid)) fail("id-collision", "$options.uuidFactory");
@@ -462,7 +474,7 @@ export function compileWakeflowFreshConfigSelection(
       hosts,
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
   return Object.freeze({

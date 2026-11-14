@@ -113,8 +113,8 @@ export class DeliveryOutcomeError extends Error {
   readonly reason: DeliveryOutcomeErrorReason;
   readonly path: string;
 
-  constructor(reason: DeliveryOutcomeErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DeliveryOutcomeErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,8 +131,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryOutcomeWire>(
   ],
 );
 
-function fail(reason: DeliveryOutcomeErrorReason, path: string): never {
-  throw new DeliveryOutcomeError(reason, path);
+function fail(reason: DeliveryOutcomeErrorReason, path: string, cause?: unknown): never {
+  throw new DeliveryOutcomeError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function id<Kind extends "target-delivery" | "work-claim">(
@@ -143,7 +143,7 @@ function id<Kind extends "target-delivery" | "work-claim">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -152,7 +152,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -165,7 +165,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -217,7 +217,7 @@ export function parseDeliveryOutcome(value: unknown): Readonly<DeliveryOutcome> 
   try {
     json = parseJsonValue(value, "$outcome");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);

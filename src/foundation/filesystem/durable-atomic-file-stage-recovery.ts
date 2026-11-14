@@ -109,8 +109,12 @@ export class DurableAtomicFileStageRecoveryError extends Error {
   readonly reason: DurableAtomicFileStageRecoveryErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableAtomicFileStageRecoveryErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableAtomicFileStageRecoveryErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -130,8 +134,16 @@ interface TargetScope {
   readonly targetDigests: ReadonlySet<Sha256Digest>;
 }
 
-function fail(reason: DurableAtomicFileStageRecoveryErrorReason, path: string): never {
-  throw new DurableAtomicFileStageRecoveryError(reason, path);
+function fail(
+  reason: DurableAtomicFileStageRecoveryErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableAtomicFileStageRecoveryError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -150,7 +162,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -192,7 +204,7 @@ function parseDirectoryRef(value: unknown): PortableResourcePath | null {
     return parsePortableResourcePath(value, "$directoryResourcePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$directoryResourcePath");
+      fail("input", "$directoryResourcePath", error);
     }
     throw error;
   }
@@ -213,7 +225,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
     );
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      fail("input", "$targetResourcePaths");
+      fail("input", "$targetResourcePaths", error);
     }
     throw error;
   }
@@ -227,7 +239,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
       resourcePath = parsePortableResourcePath(value, `$targetResourcePaths/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("input", `$targetResourcePaths/${index}`);
+        fail("input", `$targetResourcePaths/${index}`, error);
       }
       throw error;
     }
@@ -240,7 +252,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
       targetDigests.add(computeDurableAtomicFileStageTargetDigest(resourcePath));
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileStageAddressError) {
-        fail("input", `$targetResourcePaths/${index}`);
+        fail("input", `$targetResourcePaths/${index}`, error);
       }
       throw error;
     }
@@ -270,18 +282,18 @@ async function readDirectory(
       : await readStableResourceDirectory(root, directoryResourcePath, options);
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "too-many-entries") fail("capacity", "$directory");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      if (error.reason === "source-changed") fail("busy", "$directory");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "too-many-entries") fail("capacity", "$directory", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      if (error.reason === "source-changed") fail("busy", "$directory", error);
       if (
         error.reason === "not-found" ||
         error.reason === "symlink" ||
         error.reason === "not-directory"
       ) {
-        fail("directory", "$directory");
+        fail("directory", "$directory", error);
       }
-      fail("operation-failure", "$directory");
+      fail("operation-failure", "$directory", error);
     }
     throw error;
   }
@@ -309,7 +321,7 @@ function collectStages(
           unrecognizedEntryCount += 1;
           continue;
         }
-        fail("inventory", `$stages/${index}`);
+        fail("inventory", `$stages/${index}`, error);
       }
       throw error;
     }
@@ -379,8 +391,8 @@ async function assertPublishedTarget(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("target-conflict", "$target");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("target-conflict", "$target", error);
     }
     throw error;
   }
@@ -394,8 +406,8 @@ async function assertPublishedTarget(
     });
   } catch (error: unknown) {
     if (error instanceof DurableRegularFileSettlementError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("target-conflict", "$target");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("target-conflict", "$target", error);
     }
     throw error;
   }
@@ -413,8 +425,8 @@ async function retireStage(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("cleanup-required", "$stage");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("cleanup-required", "$stage", error);
     }
     throw error;
   }

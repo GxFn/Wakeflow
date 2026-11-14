@@ -41,22 +41,26 @@ export class TaskPackageProjectionPathError extends Error {
   readonly reason: TaskPackageProjectionPathErrorReason;
   readonly path: string;
 
-  constructor(reason: TaskPackageProjectionPathErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TaskPackageProjectionPathErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: TaskPackageProjectionPathErrorReason, path: string): never {
-  throw new TaskPackageProjectionPathError(reason, path);
+function fail(reason: TaskPackageProjectionPathErrorReason, path: string, cause?: unknown): never {
+  throw new TaskPackageProjectionPathError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseTaskPackageId(value: unknown, path: string): WakeflowDurableId<"task-package"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "task-package", path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -79,7 +83,7 @@ export function parseTaskPackageProjectionFileName(
     taskPackageId = parseTaskPackageId(taskPackageIdText, "$fileName");
   } catch (error: unknown) {
     if (error instanceof TaskPackageProjectionPathError) {
-      fail("file-name", "$fileName");
+      fail("file-name", "$fileName", error);
     }
     throw error;
   }

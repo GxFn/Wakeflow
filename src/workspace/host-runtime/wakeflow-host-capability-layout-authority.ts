@@ -41,15 +41,27 @@ export class WakeflowHostCapabilityLayoutAuthorityError extends Error {
   readonly reason: WakeflowHostCapabilityLayoutAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowHostCapabilityLayoutAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowHostCapabilityLayoutAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowHostCapabilityLayoutAuthorityErrorReason, path: string): never {
-  throw new WakeflowHostCapabilityLayoutAuthorityError(reason, path);
+function fail(
+  reason: WakeflowHostCapabilityLayoutAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowHostCapabilityLayoutAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
@@ -61,7 +73,7 @@ export function compileWakeflowHostCapabilityLayoutAuthority(
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }

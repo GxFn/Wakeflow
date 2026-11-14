@@ -28,8 +28,8 @@ export class GitObjectIdError extends Error {
   readonly reason: GitObjectIdErrorReason;
   readonly path: string;
 
-  constructor(reason: GitObjectIdErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: GitObjectIdErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -39,8 +39,8 @@ const validateWire = createRuntimeJsonSchemaValidator<GitObjectIdWire>(
   WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
 );
 
-function fail(reason: GitObjectIdErrorReason, path: string): never {
-  throw new GitObjectIdError(reason, path);
+function fail(reason: GitObjectIdErrorReason, path: string, cause?: unknown): never {
+  throw new GitObjectIdError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 /** 严格解析一个带算法标签的完整Git object ID。 */
@@ -49,7 +49,7 @@ export function parseGitObjectId(value: unknown, path = "$gitObjectId"): Readonl
   try {
     json = parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const validated = validateWire(json);

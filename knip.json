@@ -22,6 +22,7 @@
         "tooling/architecture/check-dependencies.ts",
         "tooling/codegen/schema-types.ts",
         "tooling/codegen/helper-assets.ts",
+        "tooling/codegen/refusal-reference.ts",
         "tooling/testing/run-typescript-tests.ts",
         "tooling/cli.ts",
         "tooling/artifacts/build-plugin-artifacts.ts",

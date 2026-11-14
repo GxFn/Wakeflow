@@ -67,15 +67,27 @@ export class DemandEventSourcingStoredEventError extends Error {
   readonly reason: DemandEventSourcingStoredEventErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingStoredEventErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingStoredEventErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: DemandEventSourcingStoredEventErrorReason, path: string): never {
-  throw new DemandEventSourcingStoredEventError(reason, path);
+function fail(
+  reason: DemandEventSourcingStoredEventErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingStoredEventError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function mapEnvelopeError(error: DemandEventSourcingPersistedEventEnvelopeError): never {
@@ -111,14 +123,14 @@ export function createDemandEventSourcingStoredEvent(
   try {
     event = parseDemandUncommittedEvent(eventValue);
   } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingEventError) fail("event", "$event");
+    if (error instanceof DemandEventSourcingEventError) fail("event", "$event", error);
     throw error;
   }
   let state: Readonly<DemandAggregateState>;
   try {
     state = parseDemandAggregateState(resultingStateValue);
   } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) fail("state", "$state");
+    if (error instanceof DemandAggregateStateError) fail("state", "$state", error);
     throw error;
   }
   if (state.demandId !== event.demandId) fail("state", "$state/demandId");
@@ -128,7 +140,7 @@ export function createDemandEventSourcingStoredEvent(
     streamRevision = parseDemandEventStreamRevision(streamRevisionValue);
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("revision", "$streamRevision");
+      fail("revision", "$streamRevision", error);
     }
     throw error;
   }

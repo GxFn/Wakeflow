@@ -43,7 +43,7 @@ function mapDirectoryError(
   ) {
     fail("tree-conflict", "$candidateRootPath");
   }
-  fail("operation-failure", "$candidateRootPath");
+  fail("operation-failure", "$candidateRootPath", error);
 }
 
 function mapFileError(error: DurableFileCandidateError): never {
@@ -51,7 +51,7 @@ function mapFileError(error: DurableFileCandidateError): never {
   if (error.reason === "target-exists") {
     fail("tree-conflict", "$candidateRootPath");
   }
-  fail("operation-failure", "$candidateRootPath");
+  fail("operation-failure", "$candidateRootPath", error);
 }
 
 /** 在尚不存在的候选路径创建目录树，并验证其清单闭合且已采用最终权限位。 */

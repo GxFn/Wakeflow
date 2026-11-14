@@ -135,8 +135,12 @@ export class ManagedEvidenceRecordReaderError extends Error {
   readonly reason: ManagedEvidenceRecordReaderErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceRecordReaderErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidenceRecordReaderErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -154,8 +158,16 @@ interface ParsedMemberOptions {
 
 const ISSUED_RECORDS = new WeakSet<object>();
 
-function fail(reason: ManagedEvidenceRecordReaderErrorReason, path: string): never {
-  throw new ManagedEvidenceRecordReaderError(reason, path);
+function fail(
+  reason: ManagedEvidenceRecordReaderErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidenceRecordReaderError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -196,7 +208,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefin
     sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$/expectedRootNode");
+      fail("input", "$/expectedRootNode", error);
     }
     throw error;
   }
@@ -208,7 +220,7 @@ function parseLoadOptions(value: unknown): Readonly<ParsedLoadOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "signal")) {
@@ -225,7 +237,7 @@ function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -238,7 +250,7 @@ function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
   try {
     maximumBytes = parseByteCount(record.maximumBytes, "$/maximumBytes");
   } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("input", "$/maximumBytes");
+    if (error instanceof ByteCountError) fail("input", "$/maximumBytes", error);
     throw error;
   }
   return Object.freeze({
@@ -251,7 +263,7 @@ function parseEvidenceId(value: unknown): WakeflowDurableId<"evidence"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "evidence", "$evidenceId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$evidenceId");
+    if (error instanceof WakeflowDurableIdError) fail("input", "$evidenceId", error);
     throw error;
   }
 }
@@ -261,7 +273,7 @@ function parseMemberRef(value: unknown): PortableResourcePath {
     return parsePortableResourcePath(value, "$memberRef");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$memberRef");
+      fail("input", "$memberRef", error);
     }
     throw error;
   }
@@ -271,8 +283,8 @@ function currentUserId(): bigint | null {
   if (typeof process.geteuid !== "function") return null;
   try {
     return BigInt(process.geteuid());
-  } catch {
-    fail("operation-failure", "$user");
+  } catch (cause: unknown) {
+    fail("operation-failure", "$user", cause);
   }
 }
 
@@ -313,7 +325,7 @@ function mapDirectoryError(error: StableDirectoryReadError): never {
   ) {
     fail("record", "$record");
   }
-  fail("operation-failure", "$record");
+  fail("operation-failure", "$record", error);
 }
 
 async function readRecordRoot(
@@ -439,7 +451,7 @@ export async function loadManagedEvidenceRecord(
     address = managedEvidenceRecordAddress(evidenceId);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceResourcePathError) {
-      fail("input", "$evidenceId");
+      fail("input", "$evidenceId", error);
     }
     throw error;
   }
@@ -465,7 +477,7 @@ export async function loadManagedEvidenceRecord(
     manifest = parseManagedEvidenceManifestDocument(read.text);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceManifestError) {
-      fail("manifest", "$record/manifest");
+      fail("manifest", "$record/manifest", error);
     }
     throw error;
   }
@@ -477,7 +489,7 @@ export async function loadManagedEvidenceRecord(
     recordTreePlan = planManagedEvidenceRecordTree(manifest);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceRecordTreePlanError) {
-      fail("record", "$record/manifest");
+      fail("record", "$record/manifest", error);
     }
     throw error;
   }
@@ -537,7 +549,7 @@ function mapMemberReadError(error: StableFileReadError): never {
   if (error.reason === "not-found" || error.reason === "symlink" || error.reason === "not-file") {
     fail("content-mismatch", "$member");
   }
-  fail("operation-failure", "$member");
+  fail("operation-failure", "$member", error);
 }
 
 /** 按Manifest descriptor读取并验证一个完整payload member。 */

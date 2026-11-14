@@ -869,7 +869,7 @@ test("写失败：观察目录被普通文件顶替的工作区报 write-failed�
   equal(other.skipped, 0);
   equal(other.records.length, 1);
   ok(statSync(observationsDirectory(fixture.workspace, "codex")).isFile());
-  // §13.166 G8：写失败在该工作区留一条事故记录（0600，无消息），verify 据此数 write-failures。
+  // §13.166 G8：写失败在该工作区留一条事故记录（0600，消息脱敏），verify 据此数近七天的 write-failures。
   const incidentsDirectory = path.join(
     fixture.workspace,
     ".wakeflow-local",
@@ -885,7 +885,9 @@ test("写失败：观察目录被普通文件顶替的工作区报 write-failed�
   equal(incident.source, "hook-observer");
   equal(incident.hostId, "codex");
   equal(incident.event, "session-start");
-  equal(JSON.stringify(incident).includes("message"), false);
+  // 消息是脱敏后的（open-items G1）：工作区的绝对路径不在记录里。
+  equal(JSON.stringify(incident).includes(fixture.workspace), false);
+  equal(JSON.stringify(incident).includes(os.homedir()), false);
   equal(statSync(path.join(incidentsDirectory, incidents[0] ?? "")).mode & 0o777, 0o600);
 });
 

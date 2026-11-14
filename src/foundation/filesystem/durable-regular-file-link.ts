@@ -112,8 +112,8 @@ export class DurableRegularFileLinkError extends Error {
   readonly reason: DurableRegularFileLinkErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableRegularFileLinkErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DurableRegularFileLinkErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -126,15 +126,15 @@ interface ParsedOptions {
 
 type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
 
-function fail(reason: DurableRegularFileLinkErrorReason, path: string): never {
-  throw new DurableRegularFileLinkError(reason, path);
+function fail(reason: DurableRegularFileLinkErrorReason, path: string, cause?: unknown): never {
+  throw new DurableRegularFileLinkError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path);
+    if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
 }
@@ -178,7 +178,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedSourceNode");
+      fail("input", "$options.expectedSourceNode", error);
     }
     throw error;
   }
@@ -190,7 +190,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["expectedSourceNode", "signal"]);
@@ -272,7 +272,7 @@ async function assertParentCurrent(
     await parent.assertCurrent();
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
-      if (afterCommit) fail("commit-uncertain", errorPath);
+      if (afterCommit) fail("commit-uncertain", errorPath, error);
       mapParentHandleError(error, "current", errorPath);
     }
     throw error;
@@ -548,9 +548,9 @@ export async function linkRegularFileWithoutReplacement(
       await link(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
-      if (code === "EEXIST") fail("destination-exists", "$destinationResourcePath");
-      if (code === "EXDEV") fail("cross-device", "$destinationResourcePath");
-      fail("link-failure", "$destinationResourcePath");
+      if (code === "EEXIST") fail("destination-exists", "$destinationResourcePath", error);
+      if (code === "EXDEV") fail("cross-device", "$destinationResourcePath", error);
+      fail("link-failure", "$destinationResourcePath", error);
     }
     const nodeBefore = source.initialNodeSnapshot;
     const linkedPairLinkCount = nodeBefore.linkCount + 1n;

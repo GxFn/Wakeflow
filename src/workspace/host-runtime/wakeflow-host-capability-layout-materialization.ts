@@ -88,8 +88,12 @@ export class WakeflowHostCapabilityLayoutMaterializationError extends Error {
   readonly reason: WakeflowHostCapabilityLayoutMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowHostCapabilityLayoutMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -108,8 +112,16 @@ interface DirectoryEffect {
 
 type ExpectedChildren = ReadonlyMap<PortableResourcePath, ReadonlySet<string>>;
 
-function fail(reason: WakeflowHostCapabilityLayoutMaterializationErrorReason, path: string): never {
-  throw new WakeflowHostCapabilityLayoutMaterializationError(reason, path);
+function fail(
+  reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowHostCapabilityLayoutMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
@@ -117,7 +129,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -195,7 +207,7 @@ async function optionalDirectory(
     if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
       throw error;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -218,9 +230,9 @@ async function readDirectory(
       throw error;
     }
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("prefix-conflict", `$layout/${resourcePath}`);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("prefix-conflict", `$layout/${resourcePath}`, error);
     }
     throw error;
   }
@@ -297,8 +309,8 @@ async function ensureDirectory(
       throw error;
     }
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("operation-failure", `$layout/${resourcePath}`);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("operation-failure", `$layout/${resourcePath}`, error);
     }
     throw error;
   }
@@ -330,7 +342,7 @@ function parseProfileAndAuthority(profileValue: unknown) {
       error instanceof WakeflowWorkspaceHostResourceProfileError ||
       error instanceof WakeflowHostCapabilityLayoutAuthorityError
     ) {
-      fail("authority", error.path);
+      fail("authority", error.path, error);
     }
     throw error;
   }
@@ -469,8 +481,8 @@ export async function ensureWakeflowHostCapabilityLayout(
       });
     } catch (error: unknown) {
       if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("operation-failure", `$layout/${resourcePath}`);
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("operation-failure", `$layout/${resourcePath}`, error);
       }
       throw error;
     }

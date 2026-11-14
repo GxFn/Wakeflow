@@ -90,8 +90,8 @@ export class GitIgnoreObservationError extends Error {
   readonly reason: GitIgnoreObservationErrorReason;
   readonly path: string;
 
-  constructor(reason: GitIgnoreObservationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: GitIgnoreObservationErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -106,8 +106,8 @@ interface GitCheckIgnoreResult {
   readonly stdout: Buffer;
 }
 
-function fail(reason: GitIgnoreObservationErrorReason, path: string): never {
-  throw new GitIgnoreObservationError(reason, path);
+function fail(reason: GitIgnoreObservationErrorReason, path: string, cause?: unknown): never {
+  throw new GitIgnoreObservationError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
@@ -135,7 +135,7 @@ function parseOptions(value: unknown): Readonly<ParsedGitIgnoreObservationOption
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const keys = Object.keys(record);
@@ -159,7 +159,7 @@ function parseProbePaths(value: unknown): readonly PortableResourcePath[] {
       "$probePaths",
     );
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$probePaths");
+    if (error instanceof PassiveOwnDataError) fail("input", "$probePaths", error);
     throw error;
   }
   if (members.length === 0) fail("input", "$probePaths");
@@ -173,7 +173,7 @@ function parseProbePaths(value: unknown): readonly PortableResourcePath[] {
       path = parsePortableResourcePath(member, `$probePaths/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("input", `$probePaths/${index}`);
+        fail("input", `$probePaths/${index}`, error);
       }
       throw error;
     }
@@ -196,7 +196,7 @@ async function assertRootCurrent(root: RootedDirectory, path: string): Promise<v
   try {
     await root.assertCurrent(path);
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", path);
+    if (error instanceof RootedDirectoryError) fail("root-scope", path, error);
     throw error;
   }
 }
@@ -400,7 +400,7 @@ function parseOutput(
   try {
     output = decodeUtf8(result.stdout, "$git.stdout");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("protocol", "$git.stdout");
+    if (error instanceof Utf8Error) fail("protocol", "$git.stdout", error);
     throw error;
   }
   const fields = output.split("\u0000");

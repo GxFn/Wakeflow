@@ -96,8 +96,8 @@ export class StableFileReadError extends Error {
   readonly reason: StableFileReadErrorReason;
   readonly path: string;
 
-  constructor(reason: StableFileReadErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: StableFileReadErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -115,8 +115,8 @@ interface InternalStableFileReadResult extends StableFileSource {
   readonly bytes: Uint8Array | null;
 }
 
-function fail(reason: StableFileReadErrorReason, path: string): never {
-  throw new StableFileReadError(reason, path);
+function fail(reason: StableFileReadErrorReason, path: string, cause?: unknown): never {
+  throw new StableFileReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -144,7 +144,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefin
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode");
+      fail("input", "$options.expectedNode", error);
     }
     throw error;
   }
@@ -156,7 +156,7 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
@@ -172,7 +172,7 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
     maximumBytes = parseByteCount(record.maximumBytes, "$options.maximumBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      fail("input", "$options.maximumBytes");
+      fail("input", "$options.maximumBytes", error);
     }
     throw error;
   }
@@ -210,18 +210,18 @@ async function inspectInitialResource(
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") {
-        fail("not-found", "$resourcePath");
+        fail("not-found", "$resourcePath", error);
       }
       if (error.reason === "resource-path") {
-        fail("input", "$resourcePath");
+        fail("input", "$resourcePath", error);
       }
       if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-        fail("source-changed", "$resourcePath");
+        fail("source-changed", "$resourcePath", error);
       }
       if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$resourcePath");
+        fail("unsupported-platform", "$resourcePath", error);
       }
-      fail("root-scope", "$resourcePath");
+      fail("root-scope", "$resourcePath", error);
     }
     throw error;
   }
@@ -235,7 +235,7 @@ async function inspectFinalResource(
     return await root.inspectExistingResource(resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("source-changed", "$resourcePath");
+      fail("source-changed", "$resourcePath", error);
     }
     throw error;
   }
@@ -263,14 +263,14 @@ async function snapshotOpenedFile(handle: FileHandle): Promise<Readonly<FileNode
   let stats: Awaited<ReturnType<FileHandle["stat"]>>;
   try {
     stats = await handle.stat({ bigint: true });
-  } catch {
-    fail("source-changed", "$resourcePath");
+  } catch (cause: unknown) {
+    fail("source-changed", "$resourcePath", cause);
   }
   try {
     return createFileNodeSnapshot(stats, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("source-changed", "$resourcePath");
+      fail("source-changed", "$resourcePath", error);
     }
     throw error;
   }
@@ -292,9 +292,9 @@ async function openStableFile(initial: Readonly<RootedResourceSnapshot>): Promis
   } catch (error: unknown) {
     const code = readNodeSystemErrorCode(error);
     if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR") {
-      fail("source-changed", "$resourcePath");
+      fail("source-changed", "$resourcePath", error);
     }
-    fail("io-failure", "$resourcePath");
+    fail("io-failure", "$resourcePath", error);
   }
 }
 
@@ -302,8 +302,8 @@ async function openStableFile(initial: Readonly<RootedResourceSnapshot>): Promis
 function allocateReadBuffer(byteLength: number): Buffer {
   try {
     return Buffer.allocUnsafe(byteLength);
-  } catch {
-    fail("too-large", "$resourcePath");
+  } catch (cause: unknown) {
+    fail("too-large", "$resourcePath", cause);
   }
 }
 
@@ -344,9 +344,9 @@ async function readExactFile(
     let bytesRead: number;
     try {
       ({ bytesRead } = await handle.read(target, offset, length, position));
-    } catch {
+    } catch (cause: unknown) {
       assertNotAborted(signal);
-      fail("io-failure", "$resourcePath");
+      fail("io-failure", "$resourcePath", cause);
     }
     if (bytesRead <= 0 || bytesRead > length) {
       fail("source-changed", "$resourcePath");
@@ -355,7 +355,7 @@ async function readExactFile(
       hasher.update(target.subarray(offset, offset + bytesRead));
     } catch (error: unknown) {
       if (error instanceof Sha256HasherError) {
-        fail("io-failure", "$resourcePath");
+        fail("io-failure", "$resourcePath", error);
       }
       throw error;
     }
@@ -370,7 +370,7 @@ async function readExactFile(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) throw error;
     assertNotAborted(signal);
-    fail("io-failure", "$resourcePath");
+    fail("io-failure", "$resourcePath", error);
   }
 
   try {
@@ -379,7 +379,7 @@ async function readExactFile(
     return Object.freeze({ digest: result.digest, bytes: capture });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) throw error;
-    if (error instanceof Sha256HasherError) fail("io-failure", "$resourcePath");
+    if (error instanceof Sha256HasherError) fail("io-failure", "$resourcePath", error);
     throw error;
   }
 }
@@ -438,8 +438,8 @@ async function readStableFileVersion(
 
   try {
     await handle.close();
-  } catch {
-    if (primaryError === undefined) fail("close-failure", "$resourcePath");
+  } catch (cause: unknown) {
+    if (primaryError === undefined) fail("close-failure", "$resourcePath", cause);
   }
   if (primaryError !== undefined) throw primaryError;
   if (result === undefined) fail("io-failure", "$resourcePath");

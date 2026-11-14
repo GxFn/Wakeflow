@@ -78,8 +78,8 @@ export class RootedResourceParentHandleError extends Error {
   readonly reason: RootedResourceParentHandleErrorReason;
   readonly path: string;
 
-  constructor(reason: RootedResourceParentHandleErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: RootedResourceParentHandleErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -99,8 +99,12 @@ function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(reason: RootedResourceParentHandleErrorReason, path: string): never {
-  throw new RootedResourceParentHandleError(reason, path);
+function fail(reason: RootedResourceParentHandleErrorReason, path: string, cause?: unknown): never {
+  throw new RootedResourceParentHandleError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -122,7 +126,7 @@ function parseAddress(
   try {
     segments = splitPortableResourcePath(resourcePath, errorPath);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", errorPath);
+    if (error instanceof PortableResourcePathError) fail("input", errorPath, error);
     throw error;
   }
   const resourceName = segments.at(-1);
@@ -132,7 +136,7 @@ function parseAddress(
     try {
       parentResourcePath = parsePortableResourcePath(segments.slice(0, -1).join("/"), errorPath);
     } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) fail("input", errorPath);
+      if (error instanceof PortableResourcePathError) fail("input", errorPath, error);
       throw error;
     }
   }
@@ -156,7 +160,7 @@ function snapshotNode(
   try {
     return createFileNodeSnapshot(value, errorPath);
   } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail(reason, errorPath);
+    if (error instanceof FileNodeSnapshotError) fail(reason, errorPath, error);
     throw error;
   }
 }
@@ -173,7 +177,7 @@ async function inspectInitialParent(
         node: await root.assertCurrent("$root"),
       });
     } catch (error: unknown) {
-      if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+      if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
       throw error;
     }
   }
@@ -184,19 +188,19 @@ async function inspectInitialParent(
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") {
-        fail("parent-not-found", errorPath);
+        fail("parent-not-found", errorPath, error);
       }
       if (error.reason === "ancestor-symlink") {
-        fail("parent-symlink", errorPath);
+        fail("parent-symlink", errorPath, error);
       }
       if (error.reason === "ancestor-type") {
-        fail("parent-not-directory", errorPath);
+        fail("parent-not-directory", errorPath, error);
       }
       if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-        fail("parent-changed", errorPath);
+        fail("parent-changed", errorPath, error);
       }
-      if (error.reason === "resource-path") fail("input", errorPath);
-      fail("root-scope", errorPath);
+      if (error.reason === "resource-path") fail("input", errorPath, error);
+      fail("root-scope", errorPath, error);
     }
     throw error;
   }
@@ -259,9 +263,9 @@ export class RootedResourceParentHandle {
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-        fail("parent-changed", path);
+        fail("parent-changed", path, error);
       }
-      fail("parent-open-failure", path);
+      fail("parent-open-failure", path, error);
     }
 
     try {
@@ -315,7 +319,7 @@ export class RootedResourceParentHandle {
         .node;
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
-        fail("parent-changed", this.#errorPath);
+        fail("parent-changed", this.#errorPath, error);
       }
       throw error;
     }
@@ -334,7 +338,7 @@ export class RootedResourceParentHandle {
       );
     } catch (error: unknown) {
       if (error instanceof RootedResourceParentHandleError) throw error;
-      fail("parent-changed", this.#errorPath);
+      fail("parent-changed", this.#errorPath, error);
     }
     if (
       pathNode.kind !== "directory" ||
@@ -365,7 +369,7 @@ export class RootedResourceParentHandle {
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "ENOENT") target = null;
       else if (error instanceof RootedResourceParentHandleError) throw error;
-      else fail("target-inspection-failure", this.#errorPath);
+      else fail("target-inspection-failure", this.#errorPath, error);
     }
     await this.assertCurrent();
     return target;
@@ -383,8 +387,8 @@ export class RootedResourceParentHandle {
     if (this.#root.durability === "fsync") {
       try {
         await this.#handle.sync();
-      } catch {
-        fail("sync-failure", this.#errorPath);
+      } catch (cause: unknown) {
+        fail("sync-failure", this.#errorPath, cause);
       }
     }
     return this.assertCurrent();
@@ -396,8 +400,8 @@ export class RootedResourceParentHandle {
     this.#closed = true;
     try {
       await this.#handle.close();
-    } catch {
-      fail("close-failure", this.#errorPath);
+    } catch (cause: unknown) {
+      fail("close-failure", this.#errorPath, cause);
     }
   }
 

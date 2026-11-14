@@ -93,8 +93,8 @@ export class DurableFileCopyCandidateError extends Error {
   readonly reason: DurableFileCopyCandidateErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableFileCopyCandidateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DurableFileCopyCandidateErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -115,8 +115,13 @@ interface ParsedDurableFileCopyOptions {
 export function failDurableFileCopyCandidate(
   reason: DurableFileCopyCandidateErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new DurableFileCopyCandidateError(reason, path);
+  throw new DurableFileCopyCandidateError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export function assertDurableFileCopyRoot(
@@ -138,7 +143,7 @@ export function parseDurableFileCopyPath(value: unknown, path: string): Portable
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      failDurableFileCopyCandidate("input", path);
+      failDurableFileCopyCandidate("input", path, error);
     }
     throw error;
   }
@@ -149,7 +154,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failDurableFileCopyCandidate("input", path);
+      failDurableFileCopyCandidate("input", path, error);
     }
     throw error;
   }
@@ -171,7 +176,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefin
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      failDurableFileCopyCandidate("input", "$expectation.expectedNode");
+      failDurableFileCopyCandidate("input", "$expectation.expectedNode", error);
     }
     throw error;
   }
@@ -201,7 +206,7 @@ export function parseDurableFileCopyExpectation(
     byteCount = parseByteCount(record.byteCount, "$expectation.byteCount");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      failDurableFileCopyCandidate("input", "$expectation.byteCount");
+      failDurableFileCopyCandidate("input", "$expectation.byteCount", error);
     }
     throw error;
   }
@@ -209,7 +214,7 @@ export function parseDurableFileCopyExpectation(
     digest = parseSha256Digest(record.digest, "$expectation.digest");
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      failDurableFileCopyCandidate("input", "$expectation.digest");
+      failDurableFileCopyCandidate("input", "$expectation.digest", error);
     }
     throw error;
   }
@@ -254,7 +259,7 @@ export function parseDurableFileCopyOptions(
     maximumBytes = parseByteCount(record.maximumBytes, "$options.maximumBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      failDurableFileCopyCandidate("input", "$options.maximumBytes");
+      failDurableFileCopyCandidate("input", "$options.maximumBytes", error);
     }
     throw error;
   }
@@ -281,7 +286,7 @@ export function snapshotDurableFileCopyNode(
 ): Readonly<FileNodeSnapshot> {
   try {
     return createFileNodeSnapshot(value, path);
-  } catch {
-    failDurableFileCopyCandidate(reason, path);
+  } catch (cause: unknown) {
+    failDurableFileCopyCandidate(reason, path, cause);
   }
 }

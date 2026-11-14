@@ -87,7 +87,7 @@ function parseMembers(
   try {
     entries = parseDenseArray(value, LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, "$members");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$members");
+    if (error instanceof PassiveOwnDataError) fail("input", "$members", error);
     throw error;
   }
   if (entries.length !== record.documents.length) fail("member", "$members");
@@ -96,7 +96,7 @@ function parseMembers(
     try {
       input = parsePlainRecord(entry, `$members/${index}`);
     } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", `$members/${index}`);
+      if (error instanceof PassiveOwnDataError) fail("input", `$members/${index}`, error);
       throw error;
     }
     const keys = Object.keys(input).sort();
@@ -147,7 +147,7 @@ function preparePublication(
   try {
     record = parseLedgerAuthorityRecord(recordValue);
   } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityRecordError) fail("input", "$record");
+    if (error instanceof LedgerAuthorityRecordError) fail("input", "$record", error);
     throw error;
   }
   const members = parseMembers(membersValue, record);
@@ -193,12 +193,12 @@ function preparePublication(
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       // 规划候选树先核对取消信号：已取消的调用是 aborted，不是成员输入问题（镜像测试 §13.169 发现）。
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "capacity") fail("capacity", "$members");
-      fail("member", "$members");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "capacity") fail("capacity", "$members", error);
+      fail("member", "$members", error);
     }
     if (error instanceof LedgerRecordPublicationIntentError) {
-      fail("operation-failure", "$intent");
+      fail("operation-failure", "$intent", error);
     }
     throw error;
   }
@@ -226,9 +226,9 @@ async function createOrSettleStage(
         );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "capacity") fail("capacity", "$stage");
-      fail("conflict", "$stage");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "capacity") fail("capacity", "$stage", error);
+      fail("conflict", "$stage", error);
     }
     throw error;
   }

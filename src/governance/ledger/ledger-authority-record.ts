@@ -181,8 +181,8 @@ export class LedgerAuthorityRecordError extends Error {
   readonly reason: LedgerAuthorityRecordErrorReason;
   readonly path: string;
 
-  constructor(reason: LedgerAuthorityRecordErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: LedgerAuthorityRecordErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -220,8 +220,8 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "$draftValidationInstant",
 );
 
-function fail(reason: LedgerAuthorityRecordErrorReason, path: string): never {
-  throw new LedgerAuthorityRecordError(reason, path);
+function fail(reason: LedgerAuthorityRecordErrorReason, path: string, cause?: unknown): never {
+  throw new LedgerAuthorityRecordError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseCanonicalText(value: string, path: string): string {
@@ -243,7 +243,7 @@ function parseId<Kind extends "requirement" | "program" | "window">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -252,7 +252,7 @@ function parseInstant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -265,7 +265,7 @@ function parseDigest(
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail(reason, path);
+    if (error instanceof Sha256Error) fail(reason, path, error);
     throw error;
   }
 }
@@ -279,7 +279,7 @@ function parseMemberPath(
   try {
     memberPath = parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail(reason, path);
+    if (error instanceof PortableResourcePathError) fail(reason, path, error);
     throw error;
   }
   if (
@@ -458,14 +458,14 @@ export function parseLedgerAuthorityRecord(value: unknown): Readonly<LedgerAutho
   try {
     json = parseJsonValue(value, "$record");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(json, "$record");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("schema", "$record");
+    if (error instanceof PassiveOwnDataError) fail("schema", "$record", error);
     throw error;
   }
   if (record.artifactKind !== REQUIREMENT_RECORD_ARTIFACT_KIND) {
@@ -481,7 +481,7 @@ function exactDraft(value: unknown): Readonly<Record<string, unknown>> {
   try {
     record = parsePlainRecord(value, "$draft");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft");
+    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
     throw error;
   }
   // `supplements` 是唯一可缺省的草稿字段：只有 supplement 包带它。
@@ -502,7 +502,7 @@ function recordTime(options: CreateLedgerAuthorityRecordOptions): UtcInstant {
   try {
     record = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "clock")) {
@@ -511,7 +511,7 @@ function recordTime(options: CreateLedgerAuthorityRecordOptions): UtcInstant {
   try {
     return readUtcWallClock(record.clock as UtcWallClock | undefined);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$options/clock");
+    if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
   }
 }
@@ -560,7 +560,7 @@ export function parseLedgerAuthorityRecordDocument(text: unknown): Readonly<Ledg
     json = parseDeterministicJsonDocument(text, "$record");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

@@ -62,8 +62,12 @@ export class WakeflowManagedTextAuthorityTransitionError extends Error {
   readonly reason: WakeflowManagedTextAuthorityTransitionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowManagedTextAuthorityTransitionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowManagedTextAuthorityTransitionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -79,8 +83,16 @@ interface ParsedRequest {
   readonly desiredTarget: Readonly<ParsedTarget>;
 }
 
-function fail(reason: WakeflowManagedTextAuthorityTransitionErrorReason, path: string): never {
-  throw new WakeflowManagedTextAuthorityTransitionError(reason, path);
+function fail(
+  reason: WakeflowManagedTextAuthorityTransitionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowManagedTextAuthorityTransitionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {
@@ -89,7 +101,7 @@ function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {
     target = parseWakeflowManagedTextEnvelopeTarget(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextEnvelopeError) {
-      fail("target", path);
+      fail("target", path, error);
     }
     throw error;
   }
@@ -97,7 +109,7 @@ function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {
   try {
     bodyDigest = computeSha256Digest(encodeUtf8(target.body, path), path);
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("target", path);
+    if (error instanceof Utf8Error) fail("target", path, error);
     throw error;
   }
   return Object.freeze({ target, bodyDigest });
@@ -110,7 +122,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     record = parsePlainRecord(value, "$request");
     currentValues = parseDenseArray(record.currentTargets, 8, "$request.currentTargets");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   if (Object.keys(record).sort().join("\u0000") !== "currentTargets\u0000desiredTarget") {
@@ -141,7 +153,7 @@ function inspectSource(value: unknown): Readonly<WakeflowManagedTextEnvelopeInsp
     return inspectWakeflowManagedTextEnvelope(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextEnvelopeError) {
-      fail("envelope", "$source");
+      fail("envelope", "$source", error);
     }
     throw error;
   }
@@ -193,7 +205,7 @@ export function planWakeflowManagedTextAuthorityTransition(
     target = recomposeWakeflowManagedTextEnvelope(sourceValue, desired.target);
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedTextEnvelopeError) {
-      fail("envelope", "$source");
+      fail("envelope", "$source", error);
     }
     throw error;
   }

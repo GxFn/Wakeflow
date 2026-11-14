@@ -87,7 +87,7 @@ async function replaceCurrentBytes(
     if (error instanceof DurableAtomicFileWriteError) {
       mapAtomicReplaceError(error);
     }
-    fail("replacement-failure", "$resourcePath");
+    fail("replacement-failure", "$resourcePath", error);
   }
 }
 
@@ -201,7 +201,7 @@ export async function replaceWakeflowConfigAuthority(
     if (error instanceof RootedExclusiveFileLockError) {
       mapWakeflowConfigAuthorityLockError(error, committed);
     }
-    fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath");
+    fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath", error);
   }
 }
 

@@ -71,10 +71,12 @@ function reconcile(root: string, planDigest?: string) {
   });
 }
 
+/** 公共预览的步骤摘要（open-items K8）里，宿主步的 `stepId` 是 `host-effect:<operationId>`。 */
 function hostOperationIds(plan: unknown): readonly string[] {
-  const contribution = (plan as { hostContribution?: { operations: { operationId: string }[] } })
-    .hostContribution;
-  return (contribution?.operations ?? []).map((entry) => entry.operationId);
+  const steps = (plan as { steps?: readonly { boundary: string; stepId: string }[] } | null)?.steps;
+  return (steps ?? [])
+    .filter((step) => step.boundary === "host-capability")
+    .map((step) => step.stepId.replace(/^host-effect:/u, ""));
 }
 
 test("an outdated tmux helper copy and a stale board index are both rewritten by one reconcile preview and apply", async (t) => {

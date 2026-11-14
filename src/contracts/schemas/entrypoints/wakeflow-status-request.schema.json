@@ -16,6 +16,10 @@
     },
     "demandId": {
       "$ref": "#/$defs/demandId"
+    },
+    "detail": {
+      "enum": ["full", "summary"],
+      "description": "summary lists only the windows that need handling and counts the rest in windowsQuiet. Default full."
     }
   },
   "$defs": {

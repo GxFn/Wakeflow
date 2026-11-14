@@ -110,15 +110,27 @@ export class ClaudeCodeWindowTransportRetirementError extends Error {
   readonly reason: ClaudeCodeWindowTransportRetirementErrorReason;
   readonly path: string;
 
-  constructor(reason: ClaudeCodeWindowTransportRetirementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ClaudeCodeWindowTransportRetirementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: ClaudeCodeWindowTransportRetirementErrorReason, path: string): never {
-  throw new ClaudeCodeWindowTransportRetirementError(reason, path);
+function fail(
+  reason: ClaudeCodeWindowTransportRetirementErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ClaudeCodeWindowTransportRetirementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export interface ClaudeCodeWindowTransportRetirementPlan {
@@ -152,7 +164,7 @@ async function existingNode(root: RootedDirectory, ref: PortableResourcePath, pa
     return (await root.inspectExistingResource(ref, path)).node;
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
-    if (error instanceof RootedDirectoryError) fail("effect", path);
+    if (error instanceof RootedDirectoryError) fail("effect", path, error);
     throw error;
   }
 }
@@ -199,7 +211,7 @@ function unregisteredTargets(
       ),
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowRuntimeProjectionError) fail("plan", error.path);
+    if (error instanceof WakeflowWindowRuntimeProjectionError) fail("plan", error.path, error);
     throw error;
   }
 }
@@ -215,7 +227,8 @@ function bindingStoreAuthority(
       claudeCodeWindowHostIdentityProfile,
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingStoreAuthorityError) fail("plan", error.path);
+    if (error instanceof WakeflowWindowHostBindingStoreAuthorityError)
+      fail("plan", error.path, error);
     throw error;
   }
 }
@@ -236,7 +249,7 @@ async function transportSwitching(
     ).model;
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       return false;
     }
     throw error;
@@ -266,7 +279,7 @@ async function inspectBindings(
     ).bindings;
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       return null;
     }
     throw error;
@@ -324,7 +337,7 @@ function parsePayload(value: JsonValue): Readonly<{ readonly windowId: string }>
   try {
     record = parsePlainRecord(value, "$operation.payload");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", error.path);
+    if (error instanceof PassiveOwnDataError) fail("operation", error.path, error);
     throw error;
   }
   if (
@@ -352,7 +365,7 @@ async function unlinkExactly(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      fail(error.reason === "aborted" ? "aborted" : "effect", path);
+      fail(error.reason === "aborted" ? "aborted" : "effect", path, error);
     }
     throw error;
   }

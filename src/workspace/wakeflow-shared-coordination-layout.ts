@@ -96,15 +96,27 @@ export class WakeflowSharedCoordinationLayoutError extends Error {
   readonly reason: WakeflowSharedCoordinationLayoutErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowSharedCoordinationLayoutErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowSharedCoordinationLayoutErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowSharedCoordinationLayoutErrorReason, path: string): never {
-  throw new WakeflowSharedCoordinationLayoutError(reason, path);
+function fail(
+  reason: WakeflowSharedCoordinationLayoutErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowSharedCoordinationLayoutError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function currentUserId(): bigint | null {
@@ -139,7 +151,7 @@ function parseOptions(
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -178,7 +190,7 @@ async function optionalDirectory(
       return false;
     }
     if (error instanceof WakeflowSharedCoordinationLayoutError) throw error;
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -237,12 +249,12 @@ export async function materializeWakeflowSharedCoordinationLayout(
       if (target?.disposition === "created") createdDirectoryCount += 1;
     } catch (error: unknown) {
       if (error instanceof WakeflowResourceProcessingContractError) {
-        fail("authority", "$declarations");
+        fail("authority", "$declarations", error);
       }
       if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        if (error.reason === "root-scope") fail("root-scope", "$root");
-        fail("operation-failure", `$layout/${ref}`);
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        if (error.reason === "root-scope") fail("root-scope", "$root", error);
+        fail("operation-failure", `$layout/${ref}`, error);
       }
       throw error;
     }

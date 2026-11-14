@@ -132,8 +132,8 @@ export class DemandAuthorityError extends Error {
   readonly reason: DemandAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandAuthorityErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -165,8 +165,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandAuthorityWire>(
   ],
 );
 
-function fail(reason: DemandAuthorityErrorReason, path: string): never {
-  throw new DemandAuthorityError(reason, path);
+function fail(reason: DemandAuthorityErrorReason, path: string, cause?: unknown): never {
+  throw new DemandAuthorityError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function referenceLocationKey(reference: Readonly<LedgerAuthorityMemberReference>): string {
@@ -187,7 +187,7 @@ function parseReferences(
       return parseLedgerAuthorityMemberReference(value);
     } catch (error: unknown) {
       if (error instanceof LedgerAuthorityStoreError) {
-        fail("reference", `$/authorityRefs/${index}`);
+        fail("reference", `$/authorityRefs/${index}`, error);
       }
       throw error;
     }
@@ -237,7 +237,7 @@ function parseTestingDecision(
       );
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("testing", "$/testingDecision/environmentMemberRef");
+        fail("testing", "$/testingDecision/environmentMemberRef", error);
       }
       throw error;
     }
@@ -299,7 +299,7 @@ export function parseDemandAuthority(
   try {
     json = parseJsonValue(value, "$authority");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -308,14 +308,14 @@ export function parseDemandAuthority(
   try {
     demandId = parseWakeflowDurableIdOfKind(result.value.demandId, "demand", "$/demandId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", "$/demandId");
+    if (error instanceof WakeflowDurableIdError) fail("identifier", "$/demandId", error);
     throw error;
   }
   let identityDigest: Sha256Digest;
   try {
     identityDigest = parseSha256Digest(result.value.identityDigest, "$/identityDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$/identityDigest");
+    if (error instanceof Sha256Error) fail("digest", "$/identityDigest", error);
     throw error;
   }
   const authority = Object.freeze({
@@ -343,7 +343,7 @@ export function createDemandAuthority(
   try {
     record = parsePlainRecord(draft, "$draft");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft");
+    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -357,7 +357,7 @@ export function createDemandAuthority(
   try {
     draftRefs = parseDenseArray(record.authorityRefs, 32, "$/authorityRefs");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$/authorityRefs");
+    if (error instanceof PassiveOwnDataError) fail("input", "$/authorityRefs", error);
     throw error;
   }
   const parsedDraftRefs = draftRefs.map((value, index) => {
@@ -365,7 +365,7 @@ export function createDemandAuthority(
       return parseLedgerAuthorityMemberReference(value);
     } catch (error: unknown) {
       if (error instanceof LedgerAuthorityStoreError) {
-        fail("reference", `$/authorityRefs/${index}`);
+        fail("reference", `$/authorityRefs/${index}`, error);
       }
       throw error;
     }
@@ -412,7 +412,7 @@ export async function admitDemandAuthority(
   try {
     optionRecord = parsePlainRecord(options === undefined ? {} : options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -436,8 +436,8 @@ export async function admitDemandAuthority(
     );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("resolution", "$/authorityRefs");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("resolution", "$/authorityRefs", error);
     }
     throw error;
   }
@@ -473,7 +473,7 @@ export function parseDemandAuthorityDocument(
     json = parseDeterministicJsonDocument(text, "$authority");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

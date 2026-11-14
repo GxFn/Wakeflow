@@ -584,8 +584,8 @@ export class DemandAggregateStateError extends Error {
   readonly reason: DemandAggregateStateErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandAggregateStateErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandAggregateStateErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -601,8 +601,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandAggregateStateWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-function fail(reason: DemandAggregateStateErrorReason, path: string): never {
-  throw new DemandAggregateStateError(reason, path);
+function fail(reason: DemandAggregateStateErrorReason, path: string, cause?: unknown): never {
+  throw new DemandAggregateStateError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 /** 一个测试目标的尝试上限，对应 test-execution-attempt Schema 的序号最大值。 */
@@ -628,7 +628,7 @@ function parseId<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -647,7 +647,7 @@ function parseCurrentDeliveryBase(
     bindingId = parseWakeflowWindowHostBindingId(value.bindingId, `${path}/bindingId`);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingIdError) {
-      fail("identifier", `${path}/bindingId`);
+      fail("identifier", `${path}/bindingId`, error);
     }
     throw error;
   }
@@ -686,7 +686,7 @@ function parseDeliveryOutcomeSummary(
   try {
     observedAt = parseUtcInstant(value.observedAt, `${path}/observedAt`);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("relation", `${path}/observedAt`);
+    if (error instanceof UtcInstantError) fail("relation", `${path}/observedAt`, error);
     throw error;
   }
   // observedAt 只保留来源时钟的审计事实；因果顺序由事件流修订、当前状态摘要与
@@ -715,7 +715,7 @@ function parseTargetResultSummary(
   try {
     reportedAt = parseUtcInstant(value.reportedAt, `${path}/reportedAt`);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("relation", `${path}/reportedAt`);
+    if (error instanceof UtcInstantError) fail("relation", `${path}/reportedAt`, error);
     throw error;
   }
   // reportedAt只保留Report来源时钟的审计事实；Event流修订、当前状态摘要和
@@ -740,7 +740,7 @@ function parseCallbackSummary(
   try {
     issuedAt = parseUtcInstant(value.issuedAt, `${path}/issuedAt`);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("relation", `${path}/issuedAt`);
+    if (error instanceof UtcInstantError) fail("relation", `${path}/issuedAt`, error);
     throw error;
   }
   let bindingId: WakeflowWindowHostBindingId;
@@ -748,7 +748,7 @@ function parseCallbackSummary(
     bindingId = parseWakeflowWindowHostBindingId(value.bindingId, `${path}/bindingId`);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingIdError) {
-      fail("identifier", `${path}/bindingId`);
+      fail("identifier", `${path}/bindingId`, error);
     }
     throw error;
   }
@@ -792,7 +792,7 @@ function parseReviewDecisionSummary<Decision extends string>(
   try {
     decidedAt = parseUtcInstant(value.decidedAt, `${path}/decidedAt`);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("relation", `${path}/decidedAt`);
+    if (error instanceof UtcInstantError) fail("relation", `${path}/decidedAt`, error);
     throw error;
   }
   return Object.freeze({
@@ -907,7 +907,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -1022,7 +1022,7 @@ function parseProductDefectRemediationSummary(
     authorizedAt = parseUtcInstant(value.authorizedAt, `${path}/authorizedAt`);
   } catch (error: unknown) {
     if (error instanceof UtcInstantError) {
-      fail("relation", `${path}/authorizedAt`);
+      fail("relation", `${path}/authorizedAt`, error);
     }
     throw error;
   }
@@ -1081,7 +1081,7 @@ function parseTestAttemptState(
     attempt = parseTestExecutionAttempt(value.attempt);
   } catch (error: unknown) {
     if (error instanceof TestExecutionAttemptError) {
-      fail("relation", `${path}/attempt`);
+      fail("relation", `${path}/attempt`, error);
     }
     throw error;
   }
@@ -1090,7 +1090,7 @@ function parseTestAttemptState(
     preparedAt = parseUtcInstant(value.delivery.preparedAt, `${path}/delivery/preparedAt`);
   } catch (error: unknown) {
     if (error instanceof UtcInstantError) {
-      fail("relation", `${path}/delivery/preparedAt`);
+      fail("relation", `${path}/delivery/preparedAt`, error);
     }
     throw error;
   }
@@ -1143,7 +1143,7 @@ function parseTestAttemptLineage(
         assertRerunTestExecutionAttemptFollows(attempt, previous.attempt);
       } catch (error: unknown) {
         if (error instanceof TestExecutionAttemptError) {
-          fail("relation", `${path}/${index}/attempt`);
+          fail("relation", `${path}/${index}/attempt`, error);
         }
         throw error;
       }
@@ -1621,7 +1621,7 @@ export function prepareDeliveryInDemandAggregateState(
     envelope = parseDeliveryEnvelope(envelopeValue);
   } catch (error: unknown) {
     if (error instanceof DeliveryEnvelopeError) {
-      fail("delivery-envelope", "$envelope");
+      fail("delivery-envelope", "$envelope", error);
     }
     throw error;
   }
@@ -1692,7 +1692,7 @@ export function prepareDeliveryInDemandAggregateState(
       assertRerunTestExecutionAttemptFollows(envelope.attempt, previousAttempt.attempt);
     } catch (error: unknown) {
       if (error instanceof TestExecutionAttemptError) {
-        fail("transition", "$/targetTasks");
+        fail("transition", "$/targetTasks", error);
       }
       throw error;
     }
@@ -1844,7 +1844,7 @@ export function recordDeliveryOutcomeInDemandAggregateState(
     outcome = parseDeliveryOutcome(outcomeValue);
   } catch (error: unknown) {
     if (error instanceof DeliveryOutcomeError) {
-      fail("delivery-outcome", "$outcome");
+      fail("delivery-outcome", "$outcome", error);
     }
     throw error;
   }
@@ -1906,7 +1906,7 @@ export function rearmDeliveryInDemandAggregateState(
   try {
     rearm = parseDeliveryRearm(rearmValue);
   } catch (error: unknown) {
-    if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$rearm");
+    if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$rearm", error);
     throw error;
   }
   const candidates = deliveryBearingTargets(current).filter(
@@ -2052,7 +2052,7 @@ export function recordTargetResultInDemandAggregateState(
   try {
     result = parseTargetResult(resultValue);
   } catch (error: unknown) {
-    if (error instanceof TargetResultError) fail("target-result", "$result");
+    if (error instanceof TargetResultError) fail("target-result", "$result", error);
     throw error;
   }
   let callbackRecord: Readonly<TargetResultCallbackRecord>;
@@ -2060,7 +2060,7 @@ export function recordTargetResultInDemandAggregateState(
     callbackRecord = parseTargetResultCallbackRecord(callbackValue);
   } catch (error: unknown) {
     if (error instanceof TargetResultCallbackError) {
-      fail("target-result-callback", "$callback");
+      fail("target-result-callback", "$callback", error);
     }
     throw error;
   }
@@ -2195,7 +2195,7 @@ export function reissueCallbackInDemandAggregateState(
     reissue = parseTargetResultCallbackReissue(reissueValue);
   } catch (error: unknown) {
     if (error instanceof TargetResultCallbackError) {
-      fail("target-result-callback", "$reissue");
+      fail("target-result-callback", "$reissue", error);
     }
     throw error;
   }
@@ -2284,7 +2284,7 @@ export function decideTargetResultReviewInDemandAggregateState(
     decision = parseControllerReviewDecision(decisionValue);
   } catch (error: unknown) {
     if (error instanceof ControllerReviewDecisionError) {
-      fail("controller-review-decision", "$decision");
+      fail("controller-review-decision", "$decision", error);
     }
     throw error;
   }
@@ -2400,7 +2400,7 @@ export function authorizeProductDefectRemediationInDemandAggregateState(
     authorization = parseControllerProductDefectRemediationAuthorization(authorizationValue);
   } catch (error: unknown) {
     if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-      fail("controller-product-defect-remediation-authorization", "$authorization");
+      fail("controller-product-defect-remediation-authorization", "$authorization", error);
     }
     throw error;
   }
@@ -2598,7 +2598,8 @@ function parseSupplementPackages(
         recordDigest: lineage.recordDigest,
       });
     } catch (error: unknown) {
-      if (error instanceof RequirementLineageError) fail("relation", `$/supplements/${index}`);
+      if (error instanceof RequirementLineageError)
+        fail("relation", `$/supplements/${index}`, error);
       throw error;
     }
   });
@@ -2788,7 +2789,7 @@ export function recordManagedEvidenceInDemandAggregateState(
     manifest = parseManagedEvidenceManifest(manifestValue);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceManifestError) {
-      fail("managed-evidence-manifest", "$manifest");
+      fail("managed-evidence-manifest", "$manifest", error);
     }
     throw error;
   }
@@ -2820,7 +2821,7 @@ export function parseDemandAggregateState(value: unknown): Readonly<DemandAggreg
   try {
     json = parseJsonValue(value, "$state");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -2930,7 +2931,7 @@ export function planTargetTaskInDemandAggregateState(
   try {
     taskPackage = parseTaskPackage(taskPackageValue);
   } catch (error: unknown) {
-    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage");
+    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage", error);
     throw error;
   }
   if (
@@ -3061,7 +3062,7 @@ export function completeDemandAggregateState(
     completion = parseDemandCompletion(completionValue);
   } catch (error: unknown) {
     if (error instanceof DemandCompletionError) {
-      fail("transition", "$completion");
+      fail("transition", "$completion", error);
     }
     throw error;
   }

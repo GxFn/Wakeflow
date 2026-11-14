@@ -51,8 +51,8 @@ export class WholeFileContentTransitionError extends Error {
   readonly reason: WholeFileContentTransitionErrorReason;
   readonly path: string;
 
-  constructor(reason: WholeFileContentTransitionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WholeFileContentTransitionErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -66,8 +66,12 @@ interface ContentSnapshot {
 
 const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
 
-function fail(reason: WholeFileContentTransitionErrorReason, path: string): never {
-  throw new WholeFileContentTransitionError(reason, path);
+function fail(reason: WholeFileContentTransitionErrorReason, path: string, cause?: unknown): never {
+  throw new WholeFileContentTransitionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function snapshotBytes(value: unknown, path: string): Readonly<ContentSnapshot> {
@@ -105,7 +109,7 @@ function parseRequest(value: unknown): Readonly<{
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -120,7 +124,7 @@ function parseRequest(value: unknown): Readonly<{
       "$request.currentContents",
     );
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");

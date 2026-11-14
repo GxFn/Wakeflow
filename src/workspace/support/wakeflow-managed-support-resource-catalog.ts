@@ -65,22 +65,34 @@ export class WakeflowManagedSupportResourceCatalogError extends Error {
   readonly reason: WakeflowManagedSupportResourceCatalogErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowManagedSupportResourceCatalogErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowManagedSupportResourceCatalogErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowManagedSupportResourceCatalogErrorReason, path: string): never {
-  throw new WakeflowManagedSupportResourceCatalogError(reason, path);
+function fail(
+  reason: WakeflowManagedSupportResourceCatalogErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowManagedSupportResourceCatalogError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
 }
@@ -90,7 +102,7 @@ function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourcePro
     return parseWakeflowWorkspaceHostResourceProfile(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -101,7 +113,7 @@ function declaration(value: unknown): Readonly<WakeflowWorkspaceResourceDeclarat
     return parseWakeflowWorkspaceResourceDeclaration(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceResourceDeclarationError) {
-      fail("declaration", error.path);
+      fail("declaration", error.path, error);
     }
     throw error;
   }

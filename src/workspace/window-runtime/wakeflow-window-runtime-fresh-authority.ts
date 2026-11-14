@@ -45,15 +45,27 @@ export class WakeflowFreshWindowRuntimeAuthorityError extends Error {
   readonly reason: WakeflowFreshWindowRuntimeAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowFreshWindowRuntimeAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowFreshWindowRuntimeAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowFreshWindowRuntimeAuthorityErrorReason, path: string): never {
-  throw new WakeflowFreshWindowRuntimeAuthorityError(reason, path);
+function fail(
+  reason: WakeflowFreshWindowRuntimeAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowFreshWindowRuntimeAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 为同一 strict Config/Host 编译 Fresh Window Runtime 的完整纯目标。 */
@@ -66,7 +78,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
     profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -98,7 +110,7 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
-      fail("projection", error.path);
+      fail("projection", error.path, error);
     }
     throw error;
   }

@@ -138,8 +138,12 @@ export class WakeflowManagedSupportRootMaterializationError extends Error {
   readonly reason: WakeflowManagedSupportRootMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowManagedSupportRootMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowManagedSupportRootMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -155,8 +159,16 @@ interface ParsedRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: WakeflowManagedSupportRootMaterializationErrorReason, path: string): never {
-  throw new WakeflowManagedSupportRootMaterializationError(reason, path);
+function fail(
+  reason: WakeflowManagedSupportRootMaterializationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowManagedSupportRootMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -172,7 +184,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -182,7 +194,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request");
+    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
     throw error;
   }
   const required = [
@@ -205,7 +217,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     config = parseWakeflowConfig(record.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
   const configDigest = parseDigest(record.expectedConfigDigest, "$request.expectedConfigDigest");
@@ -217,7 +229,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -226,7 +238,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     surfaceId = parseWakeflowDurableIdOfKind(record.surfaceId, "surface", "$request.surfaceId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$request.surfaceId");
+      fail("input", "$request.surfaceId", error);
     }
     throw error;
   }
@@ -243,7 +255,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     admitWakeflowResourceOperation(rootDeclaration.processing, "materialize-directory");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("catalog", "$request.expectedCatalogDigest");
+      fail("catalog", "$request.expectedCatalogDigest", error);
     }
     throw error;
   }
@@ -298,7 +310,7 @@ async function placementFor(workspaceRoot: RootedDirectory, request: Readonly<Pa
     report = await validateWakeflowConfigRootPlacements(workspaceRoot, request.config);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("placement", error.path);
+      fail("placement", error.path, error);
     }
     throw error;
   }
@@ -327,7 +339,7 @@ async function openSupportRoot(
       durability: workspaceRoot.durability,
     });
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("placement", "$root");
+    if (error instanceof RootedDirectoryError) fail("placement", "$root", error);
     throw error;
   }
 }
@@ -397,8 +409,8 @@ async function ensureScaffold(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("effect", `$supportRoot/${relativePath}`);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("effect", `$supportRoot/${relativePath}`, error);
     }
     throw error;
   }
@@ -442,7 +454,7 @@ export async function inspectWakeflowManagedSupportRoot(
         try {
           rootNode = await supportRoot.assertCurrent("$supportRoot");
         } catch (error: unknown) {
-          if (error instanceof RootedDirectoryError) fail("placement", "$root");
+          if (error instanceof RootedDirectoryError) fail("placement", "$root", error);
           throw error;
         }
         const entries = [];
@@ -498,7 +510,7 @@ export async function materializeWakeflowManagedSupportRoot(
     });
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (
         error.reason === "symlink" ||
         error.reason === "not-directory" ||
@@ -506,9 +518,9 @@ export async function materializeWakeflowManagedSupportRoot(
         error.reason === "scope" ||
         error.reason === "path-changed"
       ) {
-        fail("placement", "$root");
+        fail("placement", "$root", error);
       }
-      fail("effect", "$root");
+      fail("effect", "$root", error);
     }
     throw error;
   }
@@ -534,7 +546,7 @@ export async function materializeWakeflowManagedSupportRoot(
     after = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.config);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("placement", error.path);
+      fail("placement", error.path, error);
     }
     throw error;
   }

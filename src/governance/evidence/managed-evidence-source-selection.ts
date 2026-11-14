@@ -143,8 +143,12 @@ export class ManagedEvidenceSourceSelectionError extends Error {
   readonly reason: ManagedEvidenceSourceSelectionErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceSourceSelectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidenceSourceSelectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -186,8 +190,16 @@ const KINDS_BY_SOURCE: Readonly<Record<ManagedEvidenceSource["kind"], readonly E
     commit: Object.freeze(["commit"] as const),
   });
 
-function fail(reason: ManagedEvidenceSourceSelectionErrorReason, path: string): never {
-  throw new ManagedEvidenceSourceSelectionError(reason, path);
+function fail(
+  reason: ManagedEvidenceSourceSelectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidenceSourceSelectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function compareText(left: string, right: string): number {
@@ -204,7 +216,7 @@ function exactRecord(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail(reason, path);
+    if (error instanceof PassiveOwnDataError) fail(reason, path, error);
     throw error;
   }
   const keys = Object.keys(record).sort(compareText);
@@ -222,7 +234,7 @@ function parseId<K extends "repository" | "surface" | "pod">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -231,7 +243,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -245,7 +257,7 @@ function parseSourceRoot(value: unknown, path: string): ManagedEvidenceSourceRoo
   try {
     base = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("source", path);
+    if (error instanceof PassiveOwnDataError) fail("source", path, error);
     throw error;
   }
   if (base.kind === "repository") {
@@ -282,7 +294,7 @@ function parseManagedPath(
   try {
     resourcePath = parsePortableResourcePath(record.path, `${path}/path`);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", `${path}/path`);
+    if (error instanceof PortableResourcePathError) fail("path", `${path}/path`, error);
     throw error;
   }
   const firstSegment = resourcePath.split("/", 1)[0]?.toLowerCase();
@@ -338,7 +350,7 @@ function parseObservationSource(
   try {
     recordedAt = parseUtcInstant(record.recordedAt, `${path}/recordedAt`);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", `${path}/recordedAt`);
+    if (error instanceof UtcInstantError) fail("time", `${path}/recordedAt`, error);
     throw error;
   }
   if (
@@ -380,8 +392,8 @@ export function parseManagedEvidenceLinkUrl(value: unknown, path = "$/source/url
   let url: URL;
   try {
     url = new URL(value);
-  } catch {
-    fail("url", path);
+  } catch (cause: unknown) {
+    fail("url", path, cause);
   }
   if (
     url.protocol !== "https:" ||
@@ -426,7 +438,7 @@ function sourceKindOf(value: unknown, path: string): string {
   try {
     base = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("source", path);
+    if (error instanceof PassiveOwnDataError) fail("source", path, error);
     throw error;
   }
   if (typeof base.kind !== "string") fail("source", `${path}/kind`);

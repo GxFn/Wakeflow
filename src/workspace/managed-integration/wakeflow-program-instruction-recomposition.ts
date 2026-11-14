@@ -61,20 +61,20 @@ async function inspectCurrent(
       wakeflowProgramInstructionInspectionRequest(request, afterCommit ? undefined : signal),
     );
   } catch (error: unknown) {
-    if (afterCommit) fail("commit-uncertain", "$resourcePath");
+    if (afterCommit) fail("commit-uncertain", "$resourcePath", error);
     if (error instanceof WakeflowProgramInstructionInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$root");
+        fail("unsupported-platform", "$root", error);
       }
-      if (error.reason === "target-capacity") fail("capacity", "$target");
-      if (error.reason === "source-capacity") fail("capacity", "$source");
+      if (error.reason === "target-capacity") fail("capacity", "$target", error);
+      if (error.reason === "source-capacity") fail("capacity", "$source", error);
       if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-        fail("input", error.path);
+        fail("input", error.path, error);
       }
-      fail("source-invalid", "$source");
+      fail("source-invalid", "$source", error);
     }
-    fail("source-invalid", "$source");
+    fail("source-invalid", "$source", error);
   }
 }
 
@@ -131,7 +131,7 @@ async function publishTarget(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
-    fail("effect-failure", "$resourcePath");
+    fail("effect-failure", "$resourcePath", error);
   }
 }
 
@@ -250,7 +250,7 @@ export async function recomposeWakeflowProgramInstruction(
     if (error instanceof RootedExclusiveFileLockError) {
       mapWakeflowProgramInstructionLockError(error, committed);
     }
-    fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath");
+    fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);
   }
 }
 

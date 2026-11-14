@@ -94,7 +94,7 @@ function admitLedgerResourceOperation(
     admitWakeflowResourceOperation(declaration.processing, recipe);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation-failure", "$catalog");
+      fail("operation-failure", "$catalog", error);
     }
     throw error;
   }
@@ -110,7 +110,7 @@ export async function ledgerPublicationResourceNodeOrNull(
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -154,12 +154,12 @@ async function readStoredIntent(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "too-large") fail("capacity", "$intent");
-      fail("conflict", "$intent");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "too-large") fail("capacity", "$intent", error);
+      fail("conflict", "$intent", error);
     }
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail("conflict", "$intent");
+      fail("conflict", "$intent", error);
     }
     throw error;
   }
@@ -168,7 +168,7 @@ async function readStoredIntent(
     intent = parseLedgerRecordPublicationIntentDocument(read.text);
   } catch (error: unknown) {
     if (error instanceof LedgerRecordPublicationIntentError) {
-      fail("conflict", "$intent");
+      fail("conflict", "$intent", error);
     }
     throw error;
   }
@@ -212,9 +212,9 @@ export async function ensureLedgerRecordPublicationIntent(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "capacity") fail("capacity", "$intent");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "capacity") fail("capacity", "$intent", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (
         error.reason === "commit-uncertain" ||
         error.reason === "durability-failure" ||
@@ -222,10 +222,10 @@ export async function ensureLedgerRecordPublicationIntent(
         error.reason === "stage-recovery-required" ||
         error.reason === "close-failure"
       ) {
-        fail("recovery-required", "$intent");
+        fail("recovery-required", "$intent", error);
       }
       if (error.reason !== "target-exists") {
-        fail("operation-failure", "$intent");
+        fail("operation-failure", "$intent", error);
       }
     } else {
       throw error;
@@ -255,8 +255,8 @@ export async function retireLedgerRecordPublicationIntent(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("recovery-required", "$intent");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("recovery-required", "$intent", error);
     }
     throw error;
   }
@@ -290,8 +290,8 @@ export async function recoverLedgerIntentAtomicStages(
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("recovery-required", "$intent/stage");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("recovery-required", "$intent/stage", error);
     }
     throw error;
   }
@@ -306,7 +306,7 @@ export async function prepareLedgerRecordPublicationLockRecovery(
     observation = await inspectRootedExclusiveFileLock(root, lockRef);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
-      fail("lock-unsafe", "$lock");
+      fail("lock-unsafe", "$lock", error);
     }
     throw error;
   }
@@ -317,7 +317,7 @@ export async function prepareLedgerRecordPublicationLockRecovery(
     await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {
-      fail("recovery-required", "$lock");
+      fail("recovery-required", "$lock", error);
     }
     throw error;
   }
@@ -369,8 +369,8 @@ export async function loadExactPublishedLedgerRecord(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("conflict", "$record");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("conflict", "$record", error);
     }
     throw error;
   }
@@ -403,12 +403,12 @@ export async function publishLedgerRecordStage(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreePublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "cross-device") fail("root-scope", "$stage");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "cross-device") fail("root-scope", "$stage", error);
       if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
-        fail("recovery-required", "$stage");
+        fail("recovery-required", "$stage", error);
       }
-      fail("conflict", "$stage");
+      fail("conflict", "$stage", error);
     }
     throw error;
   }

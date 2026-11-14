@@ -104,8 +104,8 @@ export class ExactRegularFileUnlinkError extends Error {
   readonly reason: ExactRegularFileUnlinkErrorReason;
   readonly path: string;
 
-  constructor(reason: ExactRegularFileUnlinkErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: ExactRegularFileUnlinkErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -118,8 +118,8 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: ExactRegularFileUnlinkErrorReason, path: string): never {
-  throw new ExactRegularFileUnlinkError(reason, path);
+function fail(reason: ExactRegularFileUnlinkErrorReason, path: string, cause?: unknown): never {
+  throw new ExactRegularFileUnlinkError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -161,7 +161,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode");
+      fail("input", "$options.expectedNode", error);
     }
     throw error;
   }
@@ -173,7 +173,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["expectedNode", "settlement", "durability", "signal"]);
@@ -466,9 +466,9 @@ export async function unlinkRegularFileExactly(
       await unlink(parent.resourceAbsolutePath);
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "ENOENT") {
-        fail("source-changed", "$resourcePath");
+        fail("source-changed", "$resourcePath", error);
       }
-      fail("unlink-failure", "$resourcePath");
+      fail("unlink-failure", "$resourcePath", error);
     }
 
     const nodeBefore = source.initialNodeSnapshot;

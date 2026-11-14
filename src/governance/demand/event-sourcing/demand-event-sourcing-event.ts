@@ -331,8 +331,8 @@ export class DemandEventSourcingEventError extends Error {
   readonly reason: DemandEventSourcingEventErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingEventErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandEventSourcingEventErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -389,7 +389,7 @@ function lifecycleData<Data>(
   try {
     json = parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("lifecycle-data", path);
+    if (error instanceof JsonValueError) fail("lifecycle-data", path, error);
     throw error;
   }
   const result = validate(json);
@@ -412,8 +412,12 @@ const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze(["author
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
-function fail(reason: DemandEventSourcingEventErrorReason, path: string): never {
-  throw new DemandEventSourcingEventError(reason, path);
+function fail(reason: DemandEventSourcingEventErrorReason, path: string, cause?: unknown): never {
+  throw new DemandEventSourcingEventError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function exactRecord(
@@ -425,7 +429,7 @@ function exactRecord(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -443,7 +447,7 @@ function parseId<Kind extends "demand" | "demand-event" | "target-task">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -452,7 +456,7 @@ function parseTime(value: unknown): UtcInstant {
   try {
     return parseUtcInstant(value, "$/recordedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/recordedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/recordedAt", error);
     throw error;
   }
 }
@@ -461,7 +465,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -525,7 +529,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       completion = parseDemandCompletion(data.completion);
     } catch (error: unknown) {
       if (error instanceof DemandCompletionError) {
-        fail("demand-completion", "$/data/completion");
+        fail("demand-completion", "$/data/completion", error);
       }
       throw error;
     }
@@ -604,7 +608,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       manifest = parseManagedEvidenceManifest(data.manifest);
     } catch (error: unknown) {
       if (error instanceof ManagedEvidenceManifestError) {
-        fail("managed-evidence-manifest", "$/data/manifest");
+        fail("managed-evidence-manifest", "$/data/manifest", error);
       }
       throw error;
     }
@@ -627,7 +631,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       taskPackage = parseTaskPackage(data.taskPackage);
     } catch (error: unknown) {
       if (error instanceof TaskPackageError) {
-        fail("task-package", "$/data/taskPackage");
+        fail("task-package", "$/data/taskPackage", error);
       }
       throw error;
     }
@@ -650,7 +654,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       envelope = parseDeliveryEnvelope(data.envelope);
     } catch (error: unknown) {
       if (error instanceof DeliveryEnvelopeError) {
-        fail("delivery-envelope", "$/data/envelope");
+        fail("delivery-envelope", "$/data/envelope", error);
       }
       throw error;
     }
@@ -673,7 +677,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       outcome = parseDeliveryOutcome(data.outcome);
     } catch (error: unknown) {
       if (error instanceof DeliveryOutcomeError) {
-        fail("delivery-outcome", "$/data/outcome");
+        fail("delivery-outcome", "$/data/outcome", error);
       }
       throw error;
     }
@@ -693,7 +697,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
     try {
       rearm = parseDeliveryRearm(data.rearm);
     } catch (error: unknown) {
-      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/data/rearm");
+      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/data/rearm", error);
       throw error;
     }
     if (rearm.rearmedAt !== recordedAt) fail("relation", "$event");
@@ -713,7 +717,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       result = parseTargetResult(data.result);
     } catch (error: unknown) {
       if (error instanceof TargetResultError) {
-        fail("target-result", "$/data/result");
+        fail("target-result", "$/data/result", error);
       }
       throw error;
     }
@@ -727,7 +731,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       );
     } catch (error: unknown) {
       if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path);
+        fail("target-result-callback", error.path, error);
       }
       throw error;
     }
@@ -755,7 +759,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       reissue = parseTargetResultCallbackReissue(data.reissue, "$/data/reissue");
     } catch (error: unknown) {
       if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path);
+        fail("target-result-callback", error.path, error);
       }
       throw error;
     }
@@ -781,7 +785,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       decision = parseControllerReviewDecision(data.decision);
     } catch (error: unknown) {
       if (error instanceof ControllerReviewDecisionError) {
-        fail("controller-review-decision", "$/data/decision");
+        fail("controller-review-decision", "$/data/decision", error);
       }
       throw error;
     }
@@ -812,7 +816,7 @@ export function parseDemandUncommittedEvent(value: unknown): Readonly<DemandUnco
       authorization = parseControllerProductDefectRemediationAuthorization(data.authorization);
     } catch (error: unknown) {
       if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-        fail("controller-product-defect-remediation-authorization", "$/data/authorization");
+        fail("controller-product-defect-remediation-authorization", "$/data/authorization", error);
       }
       throw error;
     }

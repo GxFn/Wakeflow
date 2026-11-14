@@ -139,8 +139,12 @@ export class ImplementationTargetResultReportError extends Error {
   readonly reason: ImplementationTargetResultReportErrorReason;
   readonly path: string;
 
-  constructor(reason: ImplementationTargetResultReportErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ImplementationTargetResultReportErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -156,8 +160,16 @@ const validateWire = createRuntimeJsonSchemaValidator<ReportWire>(
   ],
 );
 
-function fail(reason: ImplementationTargetResultReportErrorReason, path: string): never {
-  throw new ImplementationTargetResultReportError(reason, path);
+function fail(
+  reason: ImplementationTargetResultReportErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ImplementationTargetResultReportError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function jsonRecord(value: unknown, fields: readonly string[], path: string): Readonly<JsonObject> {
@@ -165,7 +177,7 @@ function jsonRecord(value: unknown, fields: readonly string[], path: string): Re
   try {
     json = parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   if (json === null || Array.isArray(json) || typeof json !== "object") {
@@ -205,7 +217,7 @@ function repositoryId(value: unknown, path: string): WakeflowDurableId<"reposito
   try {
     return parseWakeflowDurableIdOfKind(value, "repository", path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -214,7 +226,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -223,7 +235,7 @@ function resourcePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }
@@ -232,7 +244,7 @@ function gitObjectId(value: unknown, path: string): Readonly<GitObjectId> {
   try {
     return parseGitObjectId(value, path);
   } catch (error: unknown) {
-    if (error instanceof GitObjectIdError) fail("git-object-id", path);
+    if (error instanceof GitObjectIdError) fail("git-object-id", path, error);
     throw error;
   }
 }
@@ -241,7 +253,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -406,7 +418,7 @@ export function parseImplementationTargetResultReport(
   try {
     json = parseJsonValue(value, "$report");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -443,7 +455,7 @@ export function createImplementationTargetResultReport(
   try {
     reportedAt = readUtcWallClock(options.clock);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    if (error instanceof UtcWallClockError) fail("time", "$clock", error);
     throw error;
   }
   const basis = reportBasis({
@@ -474,7 +486,7 @@ export function parseImplementationTargetResultReportDocument(
     json = parseDeterministicJsonDocument(textValue, "$report");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$report");
+      fail("representation", "$report", error);
     }
     throw error;
   }

@@ -82,8 +82,12 @@ export class LoadedArtifactTreeTransferPlanError extends Error {
   readonly reason: LoadedArtifactTreeTransferPlanErrorReason;
   readonly path: string;
 
-  constructor(reason: LoadedArtifactTreeTransferPlanErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: LoadedArtifactTreeTransferPlanErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -95,8 +99,16 @@ interface ParsedModes {
   readonly regularFileMode: number;
 }
 
-function fail(reason: LoadedArtifactTreeTransferPlanErrorReason, path: string): never {
-  throw new LoadedArtifactTreeTransferPlanError(reason, path);
+function fail(
+  reason: LoadedArtifactTreeTransferPlanErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new LoadedArtifactTreeTransferPlanError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseMode(value: unknown, path: string): number {
@@ -111,7 +123,7 @@ function parseModes(value: unknown): Readonly<ParsedModes> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -144,7 +156,7 @@ function parseCandidateRootPath(value: unknown): PortableResourcePath {
     return parsePortableResourcePath(value, "$candidateRootPath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$candidateRootPath");
+      fail("input", "$candidateRootPath", error);
     }
     throw error;
   }
@@ -163,9 +175,9 @@ function parseManifest(value: unknown): Readonly<LoadedArtifactTreeManifest> {
         error.reason === "total-bytes" ||
         error.reason === "ref-bytes"
       ) {
-        fail("capacity", "$manifest");
+        fail("capacity", "$manifest", error);
       }
-      fail("manifest", "$manifest");
+      fail("manifest", "$manifest", error);
     }
     throw error;
   }
@@ -202,8 +214,8 @@ function createDirectoryPlan(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "capacity") fail("capacity", "$manifest");
-      fail("plan", "$manifest");
+      if (error.reason === "capacity") fail("capacity", "$manifest", error);
+      fail("plan", "$manifest", error);
     }
     throw error;
   }
@@ -229,7 +241,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -245,8 +257,8 @@ function parseDirectoryPlan(value: unknown): Readonly<DirectoryTreeCandidatePlan
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "capacity") fail("capacity", "$plan.directoryPlan");
-      fail("plan", "$plan.directoryPlan");
+      if (error.reason === "capacity") fail("capacity", "$plan.directoryPlan", error);
+      fail("plan", "$plan.directoryPlan", error);
     }
     throw error;
   }
@@ -256,7 +268,7 @@ function parseCopyPath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("plan", path);
+    if (error instanceof PortableResourcePathError) fail("plan", path, error);
     throw error;
   }
 }
@@ -269,7 +281,7 @@ function parseCopies(
   try {
     values = parseDenseArray(value, maximumLength, "$plan.copies");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("plan", "$plan.copies");
+    if (error instanceof PassiveOwnDataError) fail("plan", "$plan.copies", error);
     throw error;
   }
   return Object.freeze(
@@ -279,7 +291,7 @@ function parseCopies(
         record = parsePlainRecord(entry, `$plan.copies.${index}`);
       } catch (error: unknown) {
         if (error instanceof PassiveOwnDataError) {
-          fail("plan", `$plan.copies.${index}`);
+          fail("plan", `$plan.copies.${index}`, error);
         }
         throw error;
       }
@@ -313,7 +325,7 @@ export function parseLoadedArtifactTreeTransferPlan(
   try {
     record = parsePlainRecord(value, "$plan");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$plan");
+    if (error instanceof PassiveOwnDataError) fail("input", "$plan", error);
     throw error;
   }
   const keys = Object.keys(record).sort();

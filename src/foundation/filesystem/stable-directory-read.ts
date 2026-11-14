@@ -108,8 +108,8 @@ export class StableDirectoryReadError extends Error {
   readonly reason: StableDirectoryReadErrorReason;
   readonly path: string;
 
-  constructor(reason: StableDirectoryReadErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: StableDirectoryReadErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -151,8 +151,8 @@ const openRawNameDirectory = opendir as unknown as (
 /** 单次目录项 `lstat` 使用的内部固定并发上限，不属于公开 API。 */
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
-function fail(reason: StableDirectoryReadErrorReason, path: string): never {
-  throw new StableDirectoryReadError(reason, path);
+function fail(reason: StableDirectoryReadErrorReason, path: string, cause?: unknown): never {
+  throw new StableDirectoryReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -180,7 +180,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefin
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode");
+      fail("input", "$options.expectedNode", error);
     }
     throw error;
   }
@@ -192,7 +192,7 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
 
@@ -268,9 +268,9 @@ async function inspectInitialRoot(root: RootedDirectory): Promise<Readonly<Direc
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$root");
+        fail("unsupported-platform", "$root", error);
       }
-      fail("root-scope", "$root");
+      fail("root-scope", "$root", error);
     }
     throw error;
   }
@@ -293,16 +293,16 @@ async function inspectInitialResource(
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") {
-        fail("not-found", "$resourcePath");
+        fail("not-found", "$resourcePath", error);
       }
-      if (error.reason === "resource-path") fail("input", "$resourcePath");
+      if (error.reason === "resource-path") fail("input", "$resourcePath", error);
       if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-        fail("source-changed", "$resourcePath");
+        fail("source-changed", "$resourcePath", error);
       }
       if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$resourcePath");
+        fail("unsupported-platform", "$resourcePath", error);
       }
-      fail("root-scope", "$resourcePath");
+      fail("root-scope", "$resourcePath", error);
     }
     throw error;
   }
@@ -335,7 +335,7 @@ async function inspectFinalTarget<DirectoryResourcePath extends PortableResource
     return resource.node;
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("source-changed", target.errorPath);
+      fail("source-changed", target.errorPath, error);
     }
     throw error;
   }
@@ -350,9 +350,9 @@ async function openStableDirectory<DirectoryResourcePath extends PortableResourc
   } catch (error: unknown) {
     const code = readNodeSystemErrorCode(error);
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-      fail("source-changed", target.errorPath);
+      fail("source-changed", target.errorPath, error);
     }
-    fail("io-failure", target.errorPath);
+    fail("io-failure", target.errorPath, error);
   }
 }
 
@@ -362,8 +362,8 @@ async function snapshotOpenedDirectory(
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
     return createFileNodeSnapshot(await handle.stat({ bigint: true }), errorPath);
-  } catch {
-    fail("source-changed", errorPath);
+  } catch (cause: unknown) {
+    fail("source-changed", errorPath, cause);
   }
 }
 
@@ -371,7 +371,7 @@ function decodeDirectoryEntryName(value: Buffer): string {
   try {
     return decodeUtf8(value, "$entries");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("entry-path", "$entries");
+    if (error instanceof Utf8Error) fail("entry-path", "$entries", error);
     throw error;
   }
 }
@@ -391,9 +391,9 @@ async function enumerateNames(
   } catch (error: unknown) {
     const code = readNodeSystemErrorCode(error);
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-      fail("source-changed", "$entries");
+      fail("source-changed", "$entries", error);
     }
-    fail("io-failure", "$entries");
+    fail("io-failure", "$entries", error);
   }
 
   const names: string[] = [];
@@ -408,9 +408,9 @@ async function enumerateNames(
         assertNotAborted(signal);
         const code = readNodeSystemErrorCode(error);
         if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-          fail("source-changed", "$entries");
+          fail("source-changed", "$entries", error);
         }
-        fail("io-failure", "$entries");
+        fail("io-failure", "$entries", error);
       }
       if (entry === null) break;
       const rawName: unknown = entry.name;
@@ -441,8 +441,8 @@ async function enumerateNames(
 
   try {
     await directory.close();
-  } catch {
-    if (primaryError === undefined) fail("close-failure", "$entries");
+  } catch (cause: unknown) {
+    if (primaryError === undefined) fail("close-failure", "$entries", cause);
   }
   if (primaryError !== undefined) throw primaryError;
   assertNotAborted(signal);
@@ -464,7 +464,7 @@ function entryResourcePath(
     return parsePortableResourcePath(candidate, `$entries/${index}`);
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("entry-path", `$entries/${index}`);
+      fail("entry-path", `$entries/${index}`, error);
     }
     throw error;
   }
@@ -484,11 +484,11 @@ async function inspectEntry(
     const stats = await lstat(nodePath.join(target.physicalPath, name), { bigint: true });
     node = createFileNodeSnapshot(stats, `$entries/${index}.node`);
   } catch (error: unknown) {
-    if (verification) fail("source-changed", `$entries/${index}`);
+    if (verification) fail("source-changed", `$entries/${index}`, error);
     if (readNodeSystemErrorCode(error) === "ENOENT") {
-      fail("source-changed", `$entries/${index}`);
+      fail("source-changed", `$entries/${index}`, error);
     }
-    fail("io-failure", `$entries/${index}`);
+    fail("io-failure", `$entries/${index}`, error);
   }
   return Object.freeze({ name, resourcePath, node });
 }
@@ -586,8 +586,8 @@ async function readStableDirectory<DirectoryResourcePath extends PortableResourc
 
   try {
     await handle.close();
-  } catch {
-    if (primaryError === undefined) fail("close-failure", target.errorPath);
+  } catch (cause: unknown) {
+    if (primaryError === undefined) fail("close-failure", target.errorPath, cause);
   }
   if (primaryError !== undefined) throw primaryError;
   if (result === undefined) fail("io-failure", target.errorPath);
@@ -641,7 +641,7 @@ function parsePageOptions(
   try {
     record = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const { afterName, ...readOptions } = record;
@@ -654,8 +654,8 @@ function parsePageOptions(
       fail("input", "$options.afterName");
     try {
       parsePortableResourcePath(afterName, "$options.afterName");
-    } catch {
-      fail("input", "$options.afterName");
+    } catch (cause: unknown) {
+      fail("input", "$options.afterName", cause);
     }
   }
   return {

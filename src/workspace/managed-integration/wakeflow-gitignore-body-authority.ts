@@ -87,8 +87,12 @@ export class WakeflowGitignoreBodyAuthorityError extends Error {
   readonly reason: WakeflowGitignoreBodyAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowGitignoreBodyAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowGitignoreBodyAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -99,8 +103,16 @@ const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
 const GITIGNORE_MAGIC_CHARACTERS = new Set(["\\", "*", "?", "[", "]", "#", "!"]);
 
-function fail(reason: WakeflowGitignoreBodyAuthorityErrorReason, path: string): never {
-  throw new WakeflowGitignoreBodyAuthorityError(reason, path);
+function fail(
+  reason: WakeflowGitignoreBodyAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowGitignoreBodyAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function lexicalCompare(left: string, right: string): number {
@@ -175,7 +187,7 @@ function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostR
   try {
     values = parseDenseArray(value, WAKEFLOW_WORKSPACE_HOST_IDS.length, "$profiles");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$profiles");
+    if (error instanceof PassiveOwnDataError) fail("input", "$profiles", error);
     throw error;
   }
   if (values.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length) {
@@ -191,7 +203,7 @@ function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostR
       profile = parseWakeflowWorkspaceHostResourceProfile(value);
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-        fail("input", `$/profiles/${index}`);
+        fail("input", `$/profiles/${index}`, error);
       }
       throw error;
     }
@@ -268,7 +280,7 @@ function authorityRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, "$authority");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority");
+    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
     throw error;
   }
 }
@@ -306,7 +318,7 @@ export function parseWakeflowGitignoreBodyAuthority(
     );
     ruleValues = parseDenseArray(record.rules, 256, "$authority.rules");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority");
+    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
     throw error;
   }
   if (
@@ -340,7 +352,7 @@ export function parseWakeflowGitignoreBodyAuthority(
       "$authority.authorityDigest",
     );
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("authority", error.path);
+    if (error instanceof Sha256Error) fail("authority", error.path, error);
     throw error;
   }
   const hostIds = Object.freeze(hostIdValues as readonly WakeflowWorkspaceHostId[]);
@@ -359,7 +371,7 @@ export function parseWakeflowGitignoreBodyAuthority(
   try {
     target = parsePlainRecord(record.envelopeTarget, "$authority.envelopeTarget");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority");
+    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
     throw error;
   }
   if (
@@ -393,7 +405,7 @@ function outsideSegments(
   try {
     record = parsePlainRecord(value, "$outside");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("outside", "$outside");
+    if (error instanceof PassiveOwnDataError) fail("outside", "$outside", error);
     throw error;
   }
   const keys = Object.keys(record).sort();

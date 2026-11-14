@@ -60,15 +60,27 @@ export class WakeflowMaintenanceExecutionPreviewError extends Error {
   readonly reason: WakeflowMaintenanceExecutionPreviewErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceExecutionPreviewErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowMaintenanceExecutionPreviewErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowMaintenanceExecutionPreviewErrorReason, path: string): never {
-  throw new WakeflowMaintenanceExecutionPreviewError(reason, path);
+function fail(
+  reason: WakeflowMaintenanceExecutionPreviewErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowMaintenanceExecutionPreviewError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
@@ -109,8 +121,8 @@ async function resolveSnapshotConfig(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (expectedDigest !== null) fail("source-config", "$config");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (expectedDigest !== null) fail("source-config", "$config", error);
       return null;
     }
     throw error;
@@ -142,7 +154,7 @@ export async function previewWakeflowMaintenanceExecution(
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -154,7 +166,7 @@ export async function previewWakeflowMaintenanceExecution(
       capability = capabilityValue;
     } catch (error: unknown) {
       if (error instanceof WakeflowHostMaintenanceCapabilityError) {
-        fail("capability", error.path);
+        fail("capability", error.path, error);
       }
       throw error;
     }
@@ -168,8 +180,8 @@ export async function previewWakeflowMaintenanceExecution(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("shared-preview", error.path);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("shared-preview", error.path, error);
     }
     throw error;
   }
@@ -197,7 +209,7 @@ export async function previewWakeflowMaintenanceExecution(
         error instanceof WakeflowHostMaintenanceContributionError ||
         error instanceof WakeflowHostMaintenanceCapabilityError
       ) {
-        fail("contribution", error.path);
+        fail("contribution", error.path, error);
       }
       throw error;
     }

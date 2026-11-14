@@ -119,10 +119,11 @@ function allowOf(root: string): readonly string[] {
 }
 
 function operationKindsOf(plan: unknown): readonly string[] {
-  const contribution = (
-    plan as { hostContribution: { operations: readonly { operationKind: string }[] } | null }
-  ).hostContribution;
-  return (contribution?.operations ?? []).map((entry) => entry.operationKind).sort();
+  // 公共预览的步骤摘要里，宿主步带 `operationKind`（open-items K8）。
+  const steps = (plan as { steps: readonly { operationKind?: string }[] } | null)?.steps ?? [];
+  return steps
+    .flatMap((step) => (step.operationKind === undefined ? [] : [step.operationKind]))
+    .sort();
 }
 
 test("desktop transport through the public maintenance request: fresh publishes the desktop helper set, reconcile re-selects the same transport as a no-op, a transport-switching reconfigure previews the tmux set, and status/verify read the desktop expectation", async (t) => {

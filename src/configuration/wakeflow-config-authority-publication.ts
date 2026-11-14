@@ -86,8 +86,12 @@ export class WakeflowConfigAuthorityPublicationError extends Error {
   readonly reason: WakeflowConfigAuthorityPublicationErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowConfigAuthorityPublicationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowConfigAuthorityPublicationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -97,8 +101,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: WakeflowConfigAuthorityPublicationErrorReason, path: string): never {
-  throw new WakeflowConfigAuthorityPublicationError(reason, path);
+function fail(
+  reason: WakeflowConfigAuthorityPublicationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowConfigAuthorityPublicationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -126,7 +138,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -157,7 +169,7 @@ async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigi
     if (node.userId !== expectedUserId) fail("root-policy", "$root");
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityPublicationError) throw error;
-    fail("root-scope", "$root");
+    fail("root-scope", "$root", error);
   }
 }
 
@@ -165,8 +177,8 @@ function parseModel(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
-    fail("config", "$config");
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
+    fail("config", "$config", error);
   }
 }
 
@@ -174,8 +186,8 @@ function renderModelBytes(model: WakeflowConfigModel): Uint8Array {
   let bytes: Uint8Array;
   try {
     bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
-  } catch {
-    fail("config", "$config");
+  } catch (cause: unknown) {
+    fail("config", "$config", cause);
   }
   if (bytes.byteLength > WAKEFLOW_CONFIG_MAXIMUM_BYTES) {
     fail("capacity", "$config");
@@ -188,19 +200,19 @@ async function assertPlacements(root: RootedDirectory, model: WakeflowConfigMode
     await validateWakeflowConfigRootPlacements(root, model);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      if (error.reason === "input") fail("input", error.path);
-      fail("placement", error.path);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      if (error.reason === "input") fail("input", error.path, error);
+      fail("placement", error.path, error);
     }
-    fail("placement", "$placements");
+    fail("placement", "$placements", error);
   }
 }
 
 function computeModelDigest(model: WakeflowConfigModel): Sha256Digest {
   try {
     return computeWakeflowConfigDigest(model);
-  } catch {
-    fail("config", "$config");
+  } catch (cause: unknown) {
+    fail("config", "$config", cause);
   }
 }
 
@@ -239,7 +251,7 @@ async function publishBytes(
     if (error instanceof DurableAtomicFileWriteError) {
       mapAtomicWriteError(error);
     }
-    fail("publication-failure", "$resourcePath");
+    fail("publication-failure", "$resourcePath", error);
   }
 }
 
@@ -248,8 +260,8 @@ async function readBackCommittedAuthority(
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
     return await readWakeflowConfigAuthoritySnapshot(root);
-  } catch {
-    fail("commit-uncertain", "$resourcePath");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$resourcePath", cause);
   }
 }
 

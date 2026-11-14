@@ -662,6 +662,27 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     ),
     ["pass", "codex:write-failures-2"],
   );
+  // open-items G8：带最近一次的时间（分钟精度，UTC，压成门记号允许的字符）。
+  deepEqual(
+    verdictOf(
+      healthyFacts({
+        hooks: [
+          {
+            hostId: "codex",
+            current: true,
+            status: "observed",
+            directory: "private",
+            records: 3,
+            skipped: 0,
+            writeFailures: 2,
+            latestWriteFailureAt: "2026-10-28T02:00:27.568Z",
+          },
+        ],
+      }),
+      "host-hook-channel",
+    ),
+    ["pass", "codex:write-failures-2:last-20261028T0200Z"],
+  );
 
   // §13.97 D10：当前宿主的目录缺席或零记录不是损坏（pass），但 code 报出，让"hook 从未触发"
   // 在 verify 里可见；同伴宿主的缺席与零记录保持沉默（它的记录由另一份制品写）。

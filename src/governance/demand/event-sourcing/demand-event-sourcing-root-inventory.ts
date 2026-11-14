@@ -125,8 +125,12 @@ export class DemandEventSourcingRootInventoryError extends Error {
   readonly reason: DemandEventSourcingRootInventoryErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingRootInventoryErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingRootInventoryErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -147,8 +151,16 @@ const EVENT_SOURCING_NAMES = Object.freeze([
 ] as const);
 const ARTIFACT_NAMES = new Set(["managed-evidence", "permits", "task-packages"]);
 
-function fail(reason: DemandEventSourcingRootInventoryErrorReason, path: string): never {
-  throw new DemandEventSourcingRootInventoryError(reason, path);
+function fail(
+  reason: DemandEventSourcingRootInventoryErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingRootInventoryError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function exactNames(
@@ -208,7 +220,7 @@ function mapReadError(error: StableDirectoryReadError, path: string): never {
   ) {
     fail("tree-shape", path);
   }
-  fail("operation-failure", path);
+  fail("operation-failure", path, error);
 }
 
 function mapManagedEvidenceError(error: ManagedEvidenceRecordSetInventoryError): never {
@@ -228,7 +240,7 @@ function mapManagedEvidenceError(error: ManagedEvidenceRecordSetInventoryError):
   ) {
     fail("tree-shape", "$managed-evidence");
   }
-  fail("operation-failure", "$managed-evidence");
+  fail("operation-failure", "$managed-evidence", error);
 }
 
 async function readResource(
@@ -258,7 +270,7 @@ function parseOptions(value: unknown): Readonly<{
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -313,7 +325,7 @@ function permitPromptKind(name: string, path: string): DemandPermitPromptKind {
   try {
     return parseDemandPermitPromptKind(name);
   } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingPathError) fail("tree-shape", path);
+    if (error instanceof DemandEventSourcingPathError) fail("tree-shape", path, error);
     throw error;
   }
 }
@@ -352,7 +364,7 @@ async function inspectPermitPrompts(
         parseDemandPermitPromptFileName(prompt.name);
       } catch (error: unknown) {
         if (error instanceof DemandEventSourcingPathError) {
-          fail("tree-shape", `$permits/${kind}/${index}`);
+          fail("tree-shape", `$permits/${kind}/${index}`, error);
         }
         throw error;
       }
@@ -377,7 +389,7 @@ function isToleratedSnapshotStageResidue(
   try {
     stage = parseDurableAtomicFileStageFileName(name);
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileStageAddressError) fail("tree-shape", path);
+    if (error instanceof DurableAtomicFileStageAddressError) fail("tree-shape", path, error);
     throw error;
   }
   const owner = readDurableAtomicFileStageOwnerState(stage, node);
@@ -498,7 +510,7 @@ export async function inspectDemandEventSourcingRootInventory(
       parseTaskPackageProjectionFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof TaskPackageProjectionPathError) {
-        fail("tree-shape", `$task-packages/${index}`);
+        fail("tree-shape", `$task-packages/${index}`, error);
       }
       throw error;
     }
@@ -550,7 +562,7 @@ export async function inspectDemandEventSourcingRootInventory(
       parsed = parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingPathError) {
-        fail("tree-shape", `$commits/${index}`);
+        fail("tree-shape", `$commits/${index}`, error);
       }
       throw error;
     }
@@ -566,7 +578,7 @@ export async function inspectDemandEventSourcingRootInventory(
       parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingPathError) {
-        fail("tree-shape", `$snapshots/${index}`);
+        fail("tree-shape", `$snapshots/${index}`, error);
       }
       throw error;
     }
@@ -579,7 +591,7 @@ export async function inspectDemandEventSourcingRootInventory(
       parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingPathError) {
-        fail("tree-shape", `$index/${index}`);
+        fail("tree-shape", `$index/${index}`, error);
       }
       throw error;
     }

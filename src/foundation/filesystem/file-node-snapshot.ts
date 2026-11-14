@@ -78,8 +78,8 @@ export class FileNodeSnapshotError extends Error {
   readonly reason: FileNodeSnapshotErrorReason;
   readonly path: string;
 
-  constructor(reason: FileNodeSnapshotErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: FileNodeSnapshotErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -145,8 +145,8 @@ function fieldPath(basePath: string, field: string): string {
   return `${basePath}.${field}`;
 }
 
-function fail(reason: FileNodeSnapshotErrorReason, path: string): never {
-  throw new FileNodeSnapshotError(reason, path);
+function fail(reason: FileNodeSnapshotErrorReason, path: string, cause?: unknown): never {
+  throw new FileNodeSnapshotError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function readBigIntField(
@@ -185,7 +185,7 @@ export function createFileNodeSnapshot(
   try {
     record = pickOwnDataProperties(value, STAT_FIELDS, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("stat-shape", path);
+    if (error instanceof PassiveOwnDataError) fail("stat-shape", path, error);
     throw error;
   }
 
@@ -205,7 +205,7 @@ export function createFileNodeSnapshot(
     byteCount = byteCountFromBigInt(size, fieldPath(path, "size"));
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      fail("stat-size", fieldPath(path, "size"));
+      fail("stat-size", fieldPath(path, "size"), error);
     }
     throw error;
   }
@@ -244,7 +244,7 @@ function parseFileNodeSnapshot(value: unknown, path: string): FileNodeSnapshot {
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("snapshot-shape", path);
+    if (error instanceof PassiveOwnDataError) fail("snapshot-shape", path, error);
     throw error;
   }
 
@@ -276,7 +276,7 @@ function parseFileNodeSnapshot(value: unknown, path: string): FileNodeSnapshot {
     admittedByteCount = parseByteCount(record.byteCount, fieldPath(path, "byteCount"));
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      fail("snapshot-field", fieldPath(path, "byteCount"));
+      fail("snapshot-field", fieldPath(path, "byteCount"), error);
     }
     throw error;
   }

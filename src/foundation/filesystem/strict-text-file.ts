@@ -48,22 +48,22 @@ export class StrictTextFileError extends Error {
   readonly reason: StrictTextFileErrorReason;
   readonly path: string;
 
-  constructor(reason: StrictTextFileErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: StrictTextFileErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: StrictTextFileErrorReason, path: string): never {
-  throw new StrictTextFileError(reason, path);
+function fail(reason: StrictTextFileErrorReason, path: string, cause?: unknown): never {
+  throw new StrictTextFileError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function decodeStrictUtf8(bytes: Uint8Array): string {
   try {
     return decodeUtf8(bytes, "$text");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("utf8", "$text");
+    if (error instanceof Utf8Error) fail("utf8", "$text", error);
     throw error;
   }
 }

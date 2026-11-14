@@ -69,8 +69,12 @@ export class WakeflowManagedTextEnvelopeError extends Error {
   readonly reason: WakeflowManagedTextEnvelopeErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowManagedTextEnvelopeErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowManagedTextEnvelopeErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -141,15 +145,23 @@ interface ParsedMarker {
   readonly lineEnd: number;
 }
 
-function fail(reason: WakeflowManagedTextEnvelopeErrorReason, path: string): never {
-  throw new WakeflowManagedTextEnvelopeError(reason, path);
+function fail(
+  reason: WakeflowManagedTextEnvelopeErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowManagedTextEnvelopeError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function digestBytes(bytes: Uint8Array, path: string): Sha256Digest {
   try {
     return computeSha256Digest(bytes, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("hash-failure", path);
+    if (error instanceof Sha256Error) fail("hash-failure", path, error);
     throw error;
   }
 }
@@ -161,7 +173,7 @@ function digestParts(parts: readonly Uint8Array[], path: string): Sha256Digest {
     for (const part of parts) hasher.update(part, path);
     return hasher.digest().digest;
   } catch (error: unknown) {
-    if (error instanceof Sha256HasherError) fail("hash-failure", path);
+    if (error instanceof Sha256HasherError) fail("hash-failure", path, error);
     throw error;
   }
 }
@@ -169,8 +181,8 @@ function digestParts(parts: readonly Uint8Array[], path: string): Sha256Digest {
 function concatenate(parts: readonly Uint8Array[], path: string): Buffer {
   try {
     return Buffer.concat(parts);
-  } catch {
-    fail("capacity", path);
+  } catch (cause: unknown) {
+    fail("capacity", path, cause);
   }
 }
 
@@ -187,8 +199,8 @@ function snapshotBytes(value: unknown): Buffer {
   }
   try {
     return Buffer.from(value);
-  } catch {
-    fail("capacity", "$source");
+  } catch (cause: unknown) {
+    fail("capacity", "$source", cause);
   }
 }
 
@@ -196,7 +208,7 @@ function decodeSource(bytes: Uint8Array): void {
   try {
     decodeUtf8(bytes, "$source");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("utf8", "$source");
+    if (error instanceof Utf8Error) fail("utf8", "$source", error);
     throw error;
   }
 }
@@ -275,7 +287,7 @@ function inputRecord(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -410,7 +422,7 @@ function renderOwnedBlock(
   try {
     bodyBytes = encodeUtf8(target.body, "$target.body");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("body-profile", "$target.body");
+    if (error instanceof Utf8Error) fail("body-profile", "$target.body", error);
     throw error;
   }
   const digest = digestBytes(bodyBytes, "$target.body");
@@ -422,8 +434,8 @@ function renderOwnedBlock(
       `${ownsSeparator ? "\n" : ""}${marker("begin")}\n${target.body}${marker("end")}\n`,
       "utf8",
     );
-  } catch {
-    fail("capacity", "$target.body");
+  } catch (cause: unknown) {
+    fail("capacity", "$target.body", cause);
   }
 }
 

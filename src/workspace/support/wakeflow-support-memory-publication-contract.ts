@@ -62,8 +62,12 @@ export class WakeflowSupportMemoryPublicationError extends Error {
   readonly reason: WakeflowSupportMemoryPublicationErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowSupportMemoryPublicationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowSupportMemoryPublicationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -72,8 +76,13 @@ export class WakeflowSupportMemoryPublicationError extends Error {
 export function failWakeflowSupportMemoryPublication(
   reason: WakeflowSupportMemoryPublicationErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowSupportMemoryPublicationError(reason, path);
+  throw new WakeflowSupportMemoryPublicationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export function parseWakeflowSupportMemoryPublicationRequest(
@@ -87,7 +96,7 @@ export function parseWakeflowSupportMemoryPublicationRequest(
     return parsed;
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryInspectionError) {
-      failWakeflowSupportMemoryPublication("input", error.path);
+      failWakeflowSupportMemoryPublication("input", error.path, error);
     }
     throw error;
   }
@@ -101,7 +110,7 @@ export function parseWakeflowSupportMemoryPublicationOptions(
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failWakeflowSupportMemoryPublication("input", "$options");
+      failWakeflowSupportMemoryPublication("input", "$options", error);
     }
     throw error;
   }

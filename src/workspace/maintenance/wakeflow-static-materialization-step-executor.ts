@@ -217,15 +217,27 @@ export class WakeflowStaticMaterializationStepExecutionError extends Error {
   readonly reason: WakeflowStaticMaterializationStepExecutionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowStaticMaterializationStepExecutionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowStaticMaterializationStepExecutionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowStaticMaterializationStepExecutionErrorReason, path: string): never {
-  throw new WakeflowStaticMaterializationStepExecutionError(reason, path);
+function fail(
+  reason: WakeflowStaticMaterializationStepExecutionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowStaticMaterializationStepExecutionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 interface ParsedStepExecutionOptions {
@@ -239,7 +251,7 @@ function parseExecutionOptions(value: unknown): Readonly<ParsedStepExecutionOpti
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -265,7 +277,7 @@ function parseExecutionOptions(value: unknown): Readonly<ParsedStepExecutionOpti
       sourceConfig = parseWakeflowConfig(record.sourceConfig);
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigError) {
-        fail("source-config", "$options.sourceConfig");
+        fail("source-config", "$options.sourceConfig", error);
       }
       throw error;
     }
@@ -330,8 +342,8 @@ async function optionalConfigSnapshot(
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("owner", "$config");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("owner", "$config", error);
     }
     throw error;
   }
@@ -356,9 +368,9 @@ async function executeLocalProtocol(
     core = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$coreLayout.local");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$coreLayout.local", error);
     }
     throw error;
   }
@@ -395,11 +407,11 @@ async function executeActiveLayout(
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
       if (error.reason === "active-layout-exists") {
-        fail("strict-absent", "$activeLayout");
+        fail("strict-absent", "$activeLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
-      fail("owner", "$activeLayout");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$activeLayout", error);
     }
     throw error;
   }
@@ -426,11 +438,11 @@ async function executeSharedCoordinationLayout(
   } catch (error: unknown) {
     if (error instanceof WakeflowSharedCoordinationLayoutError) {
       if (error.reason === "strict-absent") {
-        fail("strict-absent", "$sharedCoordinationLayout");
+        fail("strict-absent", "$sharedCoordinationLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$sharedCoordinationLayout");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$sharedCoordinationLayout", error);
     }
     throw error;
   }
@@ -444,7 +456,7 @@ async function requirementBoardRootExists(root: RootedDirectory): Promise<boolea
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return false;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -482,9 +494,9 @@ async function executeRequirementBoardInitialization(
       throw error;
     }
     if (isWakeflowError(error)) {
-      if (error.reason.endsWith("-aborted")) fail("aborted", "$signal");
-      if (error.reason.endsWith("-root-scope")) fail("root-scope", "$root");
-      fail("owner", "$board");
+      if (error.reason.endsWith("-aborted")) fail("aborted", "$signal", error);
+      if (error.reason.endsWith("-root-scope")) fail("root-scope", "$root", error);
+      fail("owner", "$board", error);
     }
     throw error;
   }
@@ -516,9 +528,9 @@ async function executeActiveWorkspaceProjection(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "projection-root-scope") fail("root-scope", "$root");
-      fail("owner", "$projection");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "projection-root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$projection", error);
     }
     throw error;
   }
@@ -541,7 +553,7 @@ async function executeLedgerLayout(
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("root-scope", "$ledgerRoot");
+      fail("root-scope", "$ledgerRoot", error);
     }
     throw error;
   }
@@ -556,8 +568,8 @@ async function executeLedgerLayout(
     });
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("owner", "$ledgerRoot");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("owner", "$ledgerRoot", error);
     }
     throw error;
   }
@@ -577,7 +589,7 @@ async function executeLedgerLayout(
   try {
     ledgerRoot = await RootedDirectory.open(materialized.absolutePath, "$ledgerRoot");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$ledgerRoot");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$ledgerRoot", error);
     throw error;
   }
   let inspection: Awaited<ReturnType<LedgerAuthorityStore["inspectLayout"]>> | undefined;
@@ -642,8 +654,8 @@ async function executeUnregisteredWindowRuntime(
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowWindowRuntimeProjectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("owner", "$windowRuntime");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("owner", "$windowRuntime", error);
       }
       throw error;
     }
@@ -666,11 +678,11 @@ async function executeUnregisteredWindowRuntime(
   } catch (error: unknown) {
     if (error instanceof WakeflowFreshWindowRuntimePublicationError) {
       if (error.reason === "strict-absent") {
-        fail("strict-absent", "$windowRuntime");
+        fail("strict-absent", "$windowRuntime", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$windowRuntime");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$windowRuntime", error);
     }
     throw error;
   }
@@ -710,11 +722,11 @@ async function executeHostCapabilityLayout(
   } catch (error: unknown) {
     if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
       if (error.reason === "strict-absent") {
-        fail("strict-absent", "$hostCapabilityLayout");
+        fail("strict-absent", "$hostCapabilityLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$hostCapabilityLayout");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$hostCapabilityLayout", error);
     }
     throw error;
   }
@@ -761,8 +773,8 @@ async function executeSupportRoot(
       throw error;
     }
     if (error instanceof WakeflowManagedSupportRootMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("owner", "$supportRoot");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("owner", "$supportRoot", error);
     }
     throw error;
   }
@@ -793,7 +805,7 @@ async function executeGitignore(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreRecompositionError) {
-      fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore");
+      fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore", error);
     }
     throw error;
   }
@@ -842,7 +854,7 @@ async function executeProgramInstruction(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionRecompositionError) {
-      fail(error.reason === "aborted" ? "aborted" : "owner", "$program");
+      fail(error.reason === "aborted" ? "aborted" : "owner", "$program", error);
     }
     throw error;
   }
@@ -881,7 +893,7 @@ async function executeExternalInstruction(
     ).authorityDigest;
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-      fail("owner", "$externalInstruction");
+      fail("owner", "$externalInstruction", error);
     }
     throw error;
   }
@@ -891,7 +903,7 @@ async function executeExternalInstruction(
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("root-scope", "$externalRoot");
+      fail("root-scope", "$externalRoot", error);
     }
     throw error;
   }
@@ -906,7 +918,7 @@ async function executeExternalInstruction(
     });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("root-scope", "$externalRoot");
+      fail("root-scope", "$externalRoot", error);
     }
     throw error;
   }
@@ -969,7 +981,7 @@ async function executeSupportGitignore(
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("root-scope", "$supportRoot");
+      fail("root-scope", "$supportRoot", error);
     }
     throw error;
   }
@@ -984,7 +996,7 @@ async function executeSupportGitignore(
     });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("root-scope", "$supportRoot");
+      fail("root-scope", "$supportRoot", error);
     }
     throw error;
   }
@@ -1051,7 +1063,7 @@ async function executeSupportMemory(
     placements = await validateWakeflowConfigRootPlacements(root, desired);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("root-scope", "$supportRoot");
+      fail("root-scope", "$supportRoot", error);
     }
     throw error;
   }
@@ -1064,7 +1076,7 @@ async function executeSupportMemory(
     });
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
-      fail("root-scope", "$supportRoot");
+      fail("root-scope", "$supportRoot", error);
     }
     throw error;
   }
@@ -1161,9 +1173,9 @@ async function executeConfig(
       error instanceof WakeflowConfigAuthorityPublicationError ||
       error instanceof WakeflowConfigAuthorityReplacementError
     ) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$config");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$config", error);
     }
     throw error;
   }
@@ -1182,7 +1194,7 @@ export async function executeWakeflowStaticMaterializationStep(
     assertWakeflowMaintenanceGateContext(gateContext, root);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$gateContext");
+      fail("gate", "$gateContext", error);
     }
     throw error;
   }
@@ -1192,7 +1204,7 @@ export async function executeWakeflowStaticMaterializationStep(
     preview = parseWakeflowStaticMaterializationPreview(previewValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("plan", error.path);
+      fail("plan", error.path, error);
     }
     throw error;
   }
@@ -1201,7 +1213,7 @@ export async function executeWakeflowStaticMaterializationStep(
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -1345,7 +1357,8 @@ async function externalRootPathOrNull(
   try {
     placements = await validateWakeflowConfigRootPlacements(root, config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigRootPlacementError) fail("root-scope", "$externalRoot");
+    if (error instanceof WakeflowConfigRootPlacementError)
+      fail("root-scope", "$externalRoot", error);
     throw error;
   }
   const placement = placements.roots.find(
@@ -1441,7 +1454,7 @@ function resolveManagedBlockRemovalSpec(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationStepExecutionError) throw error;
-    if (error instanceof Error && "reason" in error) fail("owner", "$managedBlock");
+    if (error instanceof Error && "reason" in error) fail("owner", "$managedBlock", error);
     throw error;
   }
 }
@@ -1472,7 +1485,7 @@ async function executeRemoveManagedBlock(
         durability: root.durability,
       });
     } catch (error: unknown) {
-      if (error instanceof RootedDirectoryError) fail("root-scope", "$externalRoot");
+      if (error instanceof RootedDirectoryError) fail("root-scope", "$externalRoot", error);
       throw error;
     }
   }
@@ -1541,8 +1554,8 @@ async function executeRetireWindowProjections(
       absent += result.absent;
     } catch (error: unknown) {
       if (error instanceof WakeflowWindowRuntimeProjectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("owner", "$windowProjections");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("owner", "$windowProjections", error);
       }
       throw error;
     }
@@ -1576,9 +1589,9 @@ async function executeRetireConfig(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityRetirementError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("owner", "$config");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("owner", "$config", error);
     }
     throw error;
   }

@@ -213,15 +213,27 @@ export class DemandEventSourcingRepositoryError extends Error {
   readonly reason: DemandEventSourcingRepositoryErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingRepositoryErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingRepositoryErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: DemandEventSourcingRepositoryErrorReason, path: string): never {
-  throw new DemandEventSourcingRepositoryError(reason, path);
+function fail(
+  reason: DemandEventSourcingRepositoryErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingRepositoryError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseSignal(value: unknown): AbortSignal | undefined {
@@ -229,7 +241,7 @@ function parseSignal(value: unknown): AbortSignal | undefined {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -255,7 +267,7 @@ function replayCommits(
       aggregate = applyDemandEventStreamCommit(aggregate, commit);
     } catch (error: unknown) {
       if (error instanceof DemandEventStreamCommitError) {
-        fail("stream", `$commits/${index}`);
+        fail("stream", `$commits/${index}`, error);
       }
       throw error;
     }
@@ -285,11 +297,11 @@ function mapStoreError(error: unknown): never {
     ) {
       fail("stream", "$commits");
     }
-    fail("operation-failure", "$eventStore");
+    fail("operation-failure", "$eventStore", error);
   }
   if (error instanceof DemandFileEventSnapshotStoreError) {
     if (error.reason === "aborted") fail("aborted", "$signal");
-    fail("operation-failure", "$snapshotStore");
+    fail("operation-failure", "$snapshotStore", error);
   }
   throw error;
 }
@@ -500,7 +512,7 @@ export class DemandEventSourcingRepository {
           event = upcastDemandEventSourcingStoredEvent(storedEvent);
         } catch (error: unknown) {
           if (error instanceof DemandEventSourcingUpcasterError) {
-            fail("stream", "$events");
+            fail("stream", "$events", error);
           }
           throw error;
         }
@@ -997,7 +1009,7 @@ export class DemandEventSourcingRepository {
       );
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) {
-        fail("input", "$taskPackageId");
+        fail("input", "$taskPackageId", error);
       }
       throw error;
     }
@@ -1040,7 +1052,7 @@ export class DemandEventSourcingRepository {
     try {
       deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId", error);
       throw error;
     }
     const found = await this.#findUniqueEvent(
@@ -1085,7 +1097,7 @@ export class DemandEventSourcingRepository {
     try {
       deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId", error);
       throw error;
     }
     const aggregate = await this.#currentAggregate(signal);
@@ -1100,7 +1112,7 @@ export class DemandEventSourcingRepository {
       try {
         event = upcastDemandEventSourcingStoredEvent(storedEvent);
       } catch (error: unknown) {
-        if (error instanceof DemandEventSourcingUpcasterError) fail("stream", "$events");
+        if (error instanceof DemandEventSourcingUpcasterError) fail("stream", "$events", error);
         throw error;
       }
       if (
@@ -1128,7 +1140,7 @@ export class DemandEventSourcingRepository {
     try {
       claimId = parseWakeflowDurableIdOfKind(claimIdValue, "work-claim", "$claimId");
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$claimId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$claimId", error);
       throw error;
     }
     const found = await this.#findUniqueEvent(
@@ -1248,7 +1260,7 @@ export class DemandEventSourcingRepository {
         event = upcastDemandEventSourcingStoredEvent(storedEvent);
       } catch (error: unknown) {
         if (error instanceof DemandEventSourcingUpcasterError) {
-          fail("stream", "$events");
+          fail("stream", "$events", error);
         }
         throw error;
       }
@@ -1270,7 +1282,7 @@ export class DemandEventSourcingRepository {
     try {
       commitId = parseWakeflowDurableIdOfKind(commitIdValue, "demand-event-commit", "$commitId");
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$commitId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$commitId", error);
       throw error;
     }
     const located = await this.#eventStore.readIndex(
@@ -1362,7 +1374,7 @@ export class DemandEventSourcingRepository {
       snapshot = createDemandEventSourcingSnapshot(aggregateValue);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingSnapshotError) {
-        fail("input", "$aggregate");
+        fail("input", "$aggregate", error);
       }
       throw error;
     }
@@ -1373,8 +1385,8 @@ export class DemandEventSourcingRepository {
       );
     } catch (error: unknown) {
       if (error instanceof DemandFileEventSnapshotStoreError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("snapshot", "$snapshot");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("snapshot", "$snapshot", error);
       }
       throw error;
     }
@@ -1419,7 +1431,7 @@ export class DemandEventSourcingRepository {
     } catch (error: unknown) {
       if (!(error instanceof DemandFileEventSnapshotStoreError)) throw error;
       // 退休失败只计数，但中止不是失败：照常上抛。
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
     }
     return Object.freeze({ snapshot: receipt.disposition, retiredSnapshots });
   }

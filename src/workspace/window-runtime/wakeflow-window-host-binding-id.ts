@@ -34,15 +34,27 @@ export class WakeflowWindowHostBindingIdError extends Error {
   readonly reason: WakeflowWindowHostBindingIdErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowHostBindingIdErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowHostBindingIdErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowWindowHostBindingIdErrorReason, path: string): never {
-  throw new WakeflowWindowHostBindingIdError(reason, path);
+function fail(
+  reason: WakeflowWindowHostBindingIdErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWindowHostBindingIdError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 严格解析一个 Window Host Binding 代际 ID。 */
@@ -56,7 +68,7 @@ export function parseWakeflowWindowHostBindingId(
   try {
     parseUuidV4(value.slice(WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX.length), path);
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("format", path);
+    if (error instanceof UuidV4Error) fail("format", path, error);
     throw error;
   }
   return value as WakeflowWindowHostBindingId;
@@ -71,7 +83,7 @@ export function createWakeflowWindowHostBindingId(
     return parseWakeflowWindowHostBindingId(`${WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX}${uuid}`);
   } catch (error: unknown) {
     if (error instanceof UuidV4Error || error instanceof WakeflowWindowHostBindingIdError) {
-      fail("factory", "$uuidFactory");
+      fail("factory", "$uuidFactory", error);
     }
     throw error;
   }

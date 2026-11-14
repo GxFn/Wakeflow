@@ -100,8 +100,12 @@ export class WakeflowProgramInstructionRecompositionError extends Error {
   readonly reason: WakeflowProgramInstructionRecompositionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowProgramInstructionRecompositionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowProgramInstructionRecompositionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -116,8 +120,13 @@ export interface ParsedWakeflowProgramInstructionRecompositionOptions {
 export function failWakeflowProgramInstructionRecomposition(
   reason: WakeflowProgramInstructionRecompositionErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowProgramInstructionRecompositionError(reason, path);
+  throw new WakeflowProgramInstructionRecompositionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export function assertWakeflowProgramInstructionRecompositionRoot(
@@ -138,7 +147,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failWakeflowProgramInstructionRecomposition("input", path);
+      failWakeflowProgramInstructionRecomposition("input", path, error);
     }
     throw error;
   }
@@ -155,7 +164,7 @@ export function parseWakeflowProgramInstructionRecompositionRequest(
     return parsed;
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionInspectionError) {
-      failWakeflowProgramInstructionRecomposition("input", error.path);
+      failWakeflowProgramInstructionRecomposition("input", error.path, error);
     }
     throw error;
   }
@@ -233,7 +242,7 @@ export async function assertCurrentUserWakeflowProgramInstructionRoot(
       throw error;
     }
     if (error instanceof RootedDirectoryError) {
-      failWakeflowProgramInstructionRecomposition("root-scope", "$root");
+      failWakeflowProgramInstructionRecomposition("root-scope", "$root", error);
     }
     throw error;
   }
@@ -251,7 +260,7 @@ export function admitWakeflowProgramInstructionLockOperations(
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-        failWakeflowProgramInstructionRecomposition("input", "$request.matrix");
+        failWakeflowProgramInstructionRecomposition("input", "$request.matrix", error);
       }
       throw error;
     }

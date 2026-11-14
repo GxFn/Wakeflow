@@ -93,8 +93,12 @@ export class ManagedEvidencePublicationPayloadMaterializationError extends Error
   readonly reason: ManagedEvidencePublicationPayloadMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidencePublicationPayloadMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidencePublicationPayloadMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -113,8 +117,13 @@ const PAYLOAD_CONTENT_REF = parsePortableResourcePath(
 function fail(
   reason: ManagedEvidencePublicationPayloadMaterializationErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new ManagedEvidencePublicationPayloadMaterializationError(reason, path);
+  throw new ManagedEvidencePublicationPayloadMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(
@@ -136,7 +145,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -157,7 +166,7 @@ function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTr
     return parseManagedEvidencePublicationTransaction(value);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction");
+      fail("input", "$transaction", error);
     }
     throw error;
   }
@@ -168,7 +177,7 @@ function parseRecordPlan(value: unknown): Readonly<ManagedEvidenceRecordTreePlan
     return parseManagedEvidenceRecordTreePlan(value);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceRecordTreePlanError) {
-      fail(error.reason === "capacity" ? "capacity" : "input", "$plan");
+      fail(error.reason === "capacity" ? "capacity" : "input", "$plan", error);
     }
     throw error;
   }
@@ -238,7 +247,7 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
   ) {
     fail("recovery-required", "$payload");
   }
-  fail("operation-failure", "$payload");
+  fail("operation-failure", "$payload", error);
 }
 
 async function ensurePayloadRoot(
@@ -289,7 +298,7 @@ function mapCopyError(error: DurableFileCopyCandidateError): never {
   ) {
     fail("stage-conflict", "$payload");
   }
-  fail("operation-failure", "$payload");
+  fail("operation-failure", "$payload", error);
 }
 
 async function materializeFilePayload(
@@ -353,7 +362,7 @@ function mapProjectionWriteError(error: DurableAtomicFileWriteError): never {
   ) {
     fail("recovery-required", "$payload");
   }
-  fail("operation-failure", "$payload");
+  fail("operation-failure", "$payload", error);
 }
 
 /** 引用类来源：从 Manifest 来源重建投影字节，核对清单里的 content 身份后原子写入。 */
@@ -415,9 +424,9 @@ async function openTreeSource(
         error.reason === "ancestor-symlink" ||
         error.reason === "ancestor-type"
       ) {
-        fail("source-changed", "$source");
+        fail("source-changed", "$source", error);
       }
-      fail("source-root-scope", "$sourceRoot");
+      fail("source-root-scope", "$sourceRoot", error);
     }
     throw error;
   }
@@ -444,7 +453,7 @@ async function openTreeSource(
       throw error;
     }
     if (error instanceof RootedDirectoryError) {
-      fail("source-root-scope", "$sourceRoot");
+      fail("source-root-scope", "$sourceRoot", error);
     }
     throw error;
   }
@@ -463,7 +472,7 @@ function mapTransferError(error: LoadedArtifactTreeTransferCandidateError): neve
   if (error.reason === "candidate-conflict") {
     fail("stage-conflict", "$payload");
   }
-  fail("operation-failure", "$payload");
+  fail("operation-failure", "$payload", error);
 }
 
 async function materializeTreePayload(
@@ -490,7 +499,7 @@ async function materializeTreePayload(
       );
     } catch (error: unknown) {
       if (error instanceof LoadedArtifactTreeTransferPlanError) {
-        fail(error.reason === "capacity" ? "capacity" : "input", "$plan");
+        fail(error.reason === "capacity" ? "capacity" : "input", "$plan", error);
       }
       throw error;
     }

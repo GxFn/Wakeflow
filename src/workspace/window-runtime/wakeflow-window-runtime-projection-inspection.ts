@@ -77,8 +77,12 @@ export class WakeflowWindowRuntimeProjectionError extends Error {
   readonly reason: WakeflowWindowRuntimeProjectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowRuntimeProjectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowRuntimeProjectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -87,8 +91,13 @@ export class WakeflowWindowRuntimeProjectionError extends Error {
 export function failWindowRuntimeProjection(
   reason: WakeflowWindowRuntimeProjectionErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowWindowRuntimeProjectionError(reason, path);
+  throw new WakeflowWindowRuntimeProjectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 export interface WakeflowWindowRuntimeProjectionInputs {
@@ -165,7 +174,8 @@ export function admitWakeflowWindowRuntimeProjectionInputs(
   try {
     config = parseWakeflowConfig(configValue);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) failWindowRuntimeProjection("input", error.path);
+    if (error instanceof WakeflowConfigError)
+      failWindowRuntimeProjection("input", error.path, error);
     throw error;
   }
   try {
@@ -180,7 +190,7 @@ export function admitWakeflowWindowRuntimeProjectionInputs(
       error instanceof WakeflowWorkspaceHostResourceProfileError ||
       error instanceof WakeflowWindowHostIdentityProfileError
     ) {
-      failWindowRuntimeProjection("profile", error.path);
+      failWindowRuntimeProjection("profile", error.path, error);
     }
     throw error;
   }
@@ -197,7 +207,7 @@ async function resourcePresent(
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return false;
-      failWindowRuntimeProjection("input", "$root");
+      failWindowRuntimeProjection("input", "$root", error);
     }
     throw error;
   }
@@ -231,7 +241,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
       error instanceof WakeflowWindowRuntimeUnregisteredProjectionError ||
       error instanceof WakeflowWindowHostBindingStoreAuthorityError
     ) {
-      failWindowRuntimeProjection("topology", error.path);
+      failWindowRuntimeProjection("topology", error.path, error);
     }
     throw error;
   }
@@ -256,7 +266,7 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
       : Object.freeze({ bindings: Object.freeze([]) });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal");
+      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal", error);
       return Object.freeze({ kind: "inventory-unavailable" as const });
     }
     throw error;
@@ -278,7 +288,7 @@ export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
-      failWindowRuntimeProjection("topology", error.path);
+      failWindowRuntimeProjection("topology", error.path, error);
     }
     throw error;
   }
@@ -321,7 +331,7 @@ export async function inspectWakeflowWindowRuntimeProjectionEntries(
       inspection = await inspectWakeflowWindowRuntimeProjectionDocument(root, entry.target, signal);
     } catch (error: unknown) {
       if (isWakeflowError(error) && error.reason === "aborted") {
-        failWindowRuntimeProjection("aborted", "$signal");
+        failWindowRuntimeProjection("aborted", "$signal", error);
       }
       throw error;
     }

@@ -83,8 +83,8 @@ export class DeliveryRearmError extends Error {
   readonly reason: DeliveryRearmErrorReason;
   readonly path: string;
 
-  constructor(reason: DeliveryRearmErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DeliveryRearmErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -101,8 +101,8 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryRearmWire>(
   ],
 );
 
-function fail(reason: DeliveryRearmErrorReason, path: string): never {
-  throw new DeliveryRearmError(reason, path);
+function fail(reason: DeliveryRearmErrorReason, path: string, cause?: unknown): never {
+  throw new DeliveryRearmError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function id<Kind extends "target-delivery" | "work-claim">(
@@ -113,7 +113,7 @@ function id<Kind extends "target-delivery" | "work-claim">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -122,7 +122,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -153,7 +153,7 @@ export function parseDeliveryRearm(value: unknown): Readonly<DeliveryRearm> {
   try {
     json = parseJsonValue(value, "$rearm");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -163,7 +163,7 @@ export function parseDeliveryRearm(value: unknown): Readonly<DeliveryRearm> {
   try {
     rearmedAt = parseUtcInstant(wire.rearmedAt, "$/rearmedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/rearmedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/rearmedAt", error);
     throw error;
   }
   const basis = rearmBasis({

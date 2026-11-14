@@ -122,8 +122,12 @@ export class DurableDirectoryMaterializationError extends Error {
   readonly reason: DurableDirectoryMaterializationErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableDirectoryMaterializationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableDirectoryMaterializationErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -134,8 +138,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: DurableDirectoryMaterializationErrorReason, path: string): never {
-  throw new DurableDirectoryMaterializationError(reason, path);
+function fail(
+  reason: DurableDirectoryMaterializationErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableDirectoryMaterializationError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -174,7 +186,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["mode", "signal"]);
@@ -204,8 +216,8 @@ async function snapshotHandle(
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
     return createFileNodeSnapshot(await handle.stat({ bigint: true }), path);
-  } catch {
-    fail(reason, path);
+  } catch (cause: unknown) {
+    fail(reason, path, cause);
   }
 }
 
@@ -357,19 +369,19 @@ async function performAtomicCreate(
       });
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
-      if (code === "EEXIST") fail("target-exists", "$resourcePath");
+      if (code === "EEXIST") fail("target-exists", "$resourcePath", error);
       if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-        fail("parent-changed", "$resourcePath");
+        fail("parent-changed", "$resourcePath", error);
       }
-      fail("create-failure", "$resourcePath");
+      fail("create-failure", "$resourcePath", error);
     }
     try {
       targetHandle = await openFileHandle(
         parent.resourceAbsolutePath,
         requiredDirectoryOpenFlags(),
       );
-    } catch {
-      fail("commit-uncertain", "$resourcePath");
+    } catch (cause: unknown) {
+      fail("commit-uncertain", "$resourcePath", cause);
     }
     const opened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
     const pathBefore = await inspectParentTarget(parent, "commit-uncertain");
@@ -383,8 +395,8 @@ async function performAtomicCreate(
     }
     try {
       await targetHandle.chmod(options.mode);
-    } catch {
-      fail("commit-uncertain", "$resourcePath");
+    } catch (cause: unknown) {
+      fail("commit-uncertain", "$resourcePath", cause);
     }
     const hardened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
     if (
@@ -399,8 +411,8 @@ async function performAtomicCreate(
     if (root.durability === "fsync") {
       try {
         await targetHandle.sync();
-      } catch {
-        fail("durability-failure", "$resourcePath");
+      } catch (cause: unknown) {
+        fail("durability-failure", "$resourcePath", cause);
       }
     }
     await syncParent(parent);
@@ -455,13 +467,13 @@ async function inspectExistingDirectoryOrNull(
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return null;
       if (error.reason === "ancestor-symlink") {
-        fail("parent-symlink", "$resourcePath");
+        fail("parent-symlink", "$resourcePath", error);
       }
       if (error.reason === "ancestor-type") {
-        fail("parent-not-directory", "$resourcePath");
+        fail("parent-not-directory", "$resourcePath", error);
       }
-      if (error.reason === "resource-path") fail("input", "$resourcePath");
-      fail("root-scope", "$resourcePath");
+      if (error.reason === "resource-path") fail("input", "$resourcePath", error);
+      fail("root-scope", "$resourcePath", error);
     }
     throw error;
   }
@@ -480,7 +492,7 @@ function prefixPaths(resourcePath: PortableResourcePath): readonly PortableResou
     segments = splitPortableResourcePath(resourcePath, "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("input", "$resourcePath");
+      fail("input", "$resourcePath", error);
     }
     throw error;
   }
@@ -494,7 +506,7 @@ function prefixPaths(resourcePath: PortableResourcePath): readonly PortableResou
       prefixes.push(parsePortableResourcePath(current, "$resourcePath"));
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("input", "$resourcePath");
+        fail("input", "$resourcePath", error);
       }
       throw error;
     }
@@ -565,7 +577,7 @@ export async function materializeDirectoryPath(
         error.reason === "target-exists"
       ) {
         const concurrent = await inspectExistingDirectoryOrNull(root, prefix);
-        if (concurrent === null) fail("path-changed", "$resourcePath");
+        if (concurrent === null) fail("path-changed", "$resourcePath", error);
         observations.push(
           Object.freeze({
             resourcePath: prefix,

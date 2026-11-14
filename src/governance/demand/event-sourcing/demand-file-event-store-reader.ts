@@ -138,11 +138,11 @@ export async function readDemandFileEventDirectory(
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) throw error;
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "not-found") fail("not-initialized", `$${ref}`);
-      if (error.reason === "too-many-entries") fail("capacity", `$${ref}`);
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      fail("stream-changed", `$${ref}`);
+      if (error.reason === "not-found") fail("not-initialized", `$${ref}`, error);
+      if (error.reason === "too-many-entries") fail("capacity", `$${ref}`, error);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("stream-changed", `$${ref}`, error);
     }
     throw error;
   }
@@ -168,25 +168,25 @@ export async function readDemandFileEventCommit(
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-        fail("root-scope", "$root");
+        fail("root-scope", "$root", error);
       }
       if (
         error.reason === "not-found" ||
         error.reason === "expectation-changed" ||
         error.reason === "source-changed"
       ) {
-        fail("stream-changed", path);
+        fail("stream-changed", path, error);
       }
-      if (error.reason === "too-large") fail("capacity", path);
+      if (error.reason === "too-large") fail("capacity", path, error);
       if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("stream-invalid", path);
+        fail("stream-invalid", path, error);
       }
-      fail("operation-failure", path);
+      fail("operation-failure", path, error);
     }
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail("stream-invalid", path);
+      fail("stream-invalid", path, error);
     }
     throw error;
   }
@@ -198,7 +198,7 @@ export async function readDemandFileEventCommit(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamCommitError) {
-      fail("stream-invalid", path);
+      fail("stream-invalid", path, error);
     }
     throw error;
   }
@@ -248,7 +248,7 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
   try {
     record = parsePlainRecord(value, "$cursor");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$cursor");
+    if (error instanceof PassiveOwnDataError) fail("input", "$cursor", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -264,7 +264,7 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
   try {
     lastCommitDigest = parseSha256Digest(record.lastCommitDigest, "$/lastCommitDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", "$/lastCommitDigest");
+    if (error instanceof Sha256Error) fail("input", "$/lastCommitDigest", error);
     throw error;
   }
   try {
@@ -275,7 +275,7 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("input", error.path);
+      fail("input", error.path, error);
     }
     throw error;
   }
@@ -323,7 +323,7 @@ function assertInventoryNames(
       parsed = parseDemandEventStreamCommitFileName(entry.name);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingPathError) {
-        fail("stream-invalid", `$commits/${index}`);
+        fail("stream-invalid", `$commits/${index}`, error);
       }
       throw error;
     }
@@ -438,7 +438,7 @@ export async function readDemandFileEventCommitOrNull(
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
   return readDemandFileEventCommit(root, ref, resource.node, signal, "$commit", admittedLinkCounts);
@@ -454,7 +454,7 @@ export async function readDemandFileEventCommitAt(
     sequence = parseDemandEventCommitSequence(sequenceValue);
   } catch (error: unknown) {
     if (error instanceof DemandEventStreamPositionError) {
-      fail("input", "$sequence");
+      fail("input", "$sequence", error);
     }
     throw error;
   }

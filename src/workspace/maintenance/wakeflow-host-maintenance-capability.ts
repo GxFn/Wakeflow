@@ -78,8 +78,12 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
   readonly reason: WakeflowHostMaintenanceCapabilityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowHostMaintenanceCapabilityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowHostMaintenanceCapabilityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -88,8 +92,16 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
 
-function fail(reason: WakeflowHostMaintenanceCapabilityErrorReason, path: string): never {
-  throw new WakeflowHostMaintenanceCapabilityError(reason, path);
+function fail(
+  reason: WakeflowHostMaintenanceCapabilityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowHostMaintenanceCapabilityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 验证一次执行所提供的唯一 capability 与当前宿主精确对应。 */
@@ -101,7 +113,7 @@ export function assertWakeflowHostMaintenanceCapability(
   try {
     record = parsePlainRecord(value, "$capability");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   if (

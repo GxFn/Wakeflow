@@ -112,8 +112,12 @@ export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
   readonly reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -121,8 +125,16 @@ export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
 
 const MAXIMUM_PROTOCOL_ENTRIES = 4_096;
 
-function fail(reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason, path: string): never {
-  throw new WakeflowWorkspaceCoreLayoutInspectionError(reason, path);
+function fail(
+  reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWorkspaceCoreLayoutInspectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseSignal(value: unknown): AbortSignal | undefined {
@@ -203,7 +215,7 @@ async function optionalResource(
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -220,15 +232,15 @@ async function readDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "too-many-entries") fail("capacity", "$entries");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "too-many-entries") fail("capacity", "$entries", error);
       if (error.reason === "source-changed") {
-        fail("source-changed", "$resourcePath");
+        fail("source-changed", "$resourcePath", error);
       }
       if (error.reason === "root-scope" || error.reason === "expectation-changed") {
-        fail("root-scope", "$root");
+        fail("root-scope", "$root", error);
       }
-      fail("inspection", "$resourcePath");
+      fail("inspection", "$resourcePath", error);
     }
     throw error;
   }
@@ -258,9 +270,9 @@ async function inspectActive(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
-      fail("inspection", "$activeLayout");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "active-layout-root-scope") fail("root-scope", "$root", error);
+      fail("inspection", "$activeLayout", error);
     }
     throw error;
   }
@@ -394,8 +406,8 @@ async function inspectLocal(
     }
   } catch (error: unknown) {
     if (!(error instanceof RootedExclusiveFileLockError)) throw error;
-    if (error.reason === "aborted") fail("aborted", "$signal");
-    if (error.reason === "root-scope") fail("root-scope", "$root");
+    if (error.reason === "aborted") fail("aborted", "$signal", error);
+    if (error.reason === "root-scope") fail("root-scope", "$root", error);
     if (error.reason === "unsafe-lock") {
       lockState = "unsafe";
       freshCompatible = false;
@@ -403,7 +415,7 @@ async function inspectLocal(
       lockState = "inactive-or-unknown";
       freshCompatible = false;
     } else {
-      fail("inspection", "$gate");
+      fail("inspection", "$gate", error);
     }
   }
   if (lockState === "unsafe") issueCodes.push("maintenance-gate-unsafe");

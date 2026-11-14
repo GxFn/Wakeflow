@@ -149,13 +149,13 @@ async function readRecordDocument(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      if (error.reason === "too-large") fail("capacity", "$record");
-      fail("conflict", "$record");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      if (error.reason === "too-large") fail("capacity", "$record", error);
+      fail("conflict", "$record", error);
     }
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail("record", "$record");
+      fail("record", "$record", error);
     }
     throw error;
   }
@@ -192,7 +192,7 @@ export async function loadLedgerAuthorityRecord(
   try {
     record = parseLedgerAuthorityRecordDocument(read.text);
   } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityRecordError) fail("record", "$record");
+    if (error instanceof LedgerAuthorityRecordError) fail("record", "$record", error);
     throw error;
   }
   if (record.requirementId !== requirementId) fail("conflict", "$record");
@@ -242,7 +242,7 @@ function parseReferencePath(value: unknown, path: string): PortableResourcePath 
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path);
+    if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
 }
@@ -251,7 +251,7 @@ function parseReferenceDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -264,7 +264,7 @@ export function parseLedgerAuthorityMemberReference(
   try {
     json = parseJsonValue(value, "$reference");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const result = validateMemberReference(json);
@@ -284,7 +284,7 @@ export function parseLedgerAuthorityMemberReference(
   try {
     recordId = parseWakeflowDurableIdOfKind(result.value.recordId, "requirement", "$/recordId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$/recordId");
+    if (error instanceof WakeflowDurableIdError) fail("input", "$/recordId", error);
     throw error;
   }
   const expectedRoot = requirementRootRef(recordId);
@@ -360,10 +360,10 @@ export async function resolveLoadedLedgerAuthorityMemberReference(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      if (error.reason === "too-large") fail("capacity", "$reference");
-      fail("conflict", "$reference");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      if (error.reason === "too-large") fail("capacity", "$reference", error);
+      fail("conflict", "$reference", error);
     }
     throw error;
   }

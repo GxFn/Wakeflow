@@ -124,8 +124,9 @@ export class ClaudeCodePortableSettingsPublicationError extends Error {
     reason: ClaudeCodePortableSettingsPublicationErrorReason,
     path: string,
     transitionReason: ClaudeCodePortableSettingsTransitionReason | null = null,
+    options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason]);
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
     this.transitionReason = transitionReason;
@@ -164,8 +165,14 @@ function fail(
   reason: ClaudeCodePortableSettingsPublicationErrorReason,
   path: string,
   transitionReason: ClaudeCodePortableSettingsTransitionReason | null = null,
+  cause?: unknown,
 ): never {
-  throw new ClaudeCodePortableSettingsPublicationError(reason, path, transitionReason);
+  throw new ClaudeCodePortableSettingsPublicationError(
+    reason,
+    path,
+    transitionReason,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseExpectedSourceDigest(value: unknown): Sha256Digest | null | undefined {
@@ -367,7 +374,7 @@ async function ensureSettingsDirectory(
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
     if (error instanceof DurableDirectoryMaterializationError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("operation-failure", "$settingsDirectory");
+      fail("operation-failure", "$settingsDirectory", null, error);
     }
     throw error;
   }
@@ -442,7 +449,7 @@ async function publishTransition(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$settingsStage");
       }
-      fail("operation-failure", "$settings");
+      fail("operation-failure", "$settings", null, error);
     }
     throw error;
   }

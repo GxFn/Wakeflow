@@ -76,15 +76,19 @@ export class WakeflowPrivateModeCensusError extends Error {
   readonly reason: WakeflowPrivateModeCensusErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowPrivateModeCensusErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowPrivateModeCensusErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowPrivateModeCensusErrorReason, path: string): never {
-  throw new WakeflowPrivateModeCensusError(reason, path);
+function fail(reason: WakeflowPrivateModeCensusErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowPrivateModeCensusError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function compareCodeUnits(left: string, right: string): number {
@@ -200,7 +204,7 @@ export async function inspectWakeflowPrivateModes(
         unsafe.push(treeRef);
         continue;
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       return freezeCensus("unavailable", [], [], error.reason);
     }
   }
@@ -244,8 +248,8 @@ export async function convergeWakeflowPrivateModes(
         changed += 1;
         continue;
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("convergence", `$${entry.resourcePath}`);
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("convergence", `$${entry.resourcePath}`, error);
     }
   }
   return Object.freeze({ converged, current, changed });

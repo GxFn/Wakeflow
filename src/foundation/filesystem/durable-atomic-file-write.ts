@@ -114,7 +114,7 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
       "stage-changed",
     );
     if (!sameFileNodeSnapshot(stage.node, verifiedStageNode)) {
-      fail("stage-changed", "$stage");
+      fail("stage-changed", "$stage/verified-node");
     }
     assertDurableAtomicFileNotAborted(signal);
 
@@ -124,9 +124,9 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
         await link(stage.physicalPath, parent.resourceAbsolutePath);
       } catch (error: unknown) {
         if (readNodeSystemErrorCode(error) === "EEXIST") {
-          fail("target-exists", "$resourcePath");
+          fail("target-exists", "$resourcePath", error);
         }
-        fail("publish-failure", "$resourcePath");
+        fail("publish-failure", "$resourcePath", error);
       }
       committed = true;
       const linkedNode = await inspectCommittedDurableAtomicFileTarget(
@@ -139,8 +139,8 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
       if (durability === "fsync") {
         try {
           await stage.handle.sync();
-        } catch {
-          fail("durability-failure", "$resourcePath");
+        } catch (cause: unknown) {
+          fail("durability-failure", "$resourcePath", cause);
         }
       }
       const verifiedLinkedNode = await verifyDurableAtomicFileHandleBytes(
@@ -170,8 +170,8 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
       if (durability === "fsync") {
         try {
           await stage.handle.sync();
-        } catch {
-          fail("durability-failure", "$resourcePath");
+        } catch (cause: unknown) {
+          fail("durability-failure", "$resourcePath", cause);
         }
       }
       if (durability === "fsync") await syncDurableAtomicFileTargetParent(parent);
@@ -189,16 +189,16 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
     } else {
       try {
         await rename(stage.physicalPath, parent.resourceAbsolutePath);
-      } catch {
-        fail("publish-failure", "$resourcePath");
+      } catch (cause: unknown) {
+        fail("publish-failure", "$resourcePath", cause);
       }
       committed = true;
       stagePathOwned = false;
       if (durability === "fsync") {
         try {
           await stage.handle.sync();
-        } catch {
-          fail("durability-failure", "$resourcePath");
+        } catch (cause: unknown) {
+          fail("durability-failure", "$resourcePath", cause);
         }
       }
       const verifiedCommittedNode = await verifyDurableAtomicFileHandleBytes(

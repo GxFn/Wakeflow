@@ -137,7 +137,7 @@ async function inspectEntry(
         inodeId: null,
       });
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }
@@ -152,7 +152,7 @@ export async function inspectLedgerAuthorityLayout(
   try {
     await rootValue.assertCurrent("$root");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
   const entries = Object.freeze(
@@ -164,7 +164,7 @@ export async function inspectLedgerAuthorityLayout(
   try {
     await rootValue.assertCurrent("$root");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
   const status = entries.some((entry) => entry.status === "conflict")
@@ -200,8 +200,8 @@ export async function materializeLedgerAuthorityLayout(
     }
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("operation-failure", "$initialize");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("operation-failure", "$initialize", error);
     }
     throw error;
   }

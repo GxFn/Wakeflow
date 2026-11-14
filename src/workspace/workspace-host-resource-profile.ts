@@ -189,8 +189,12 @@ export class WakeflowWorkspaceHostResourceProfileError extends Error {
   readonly reason: WakeflowWorkspaceHostResourceProfileErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWorkspaceHostResourceProfileErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWorkspaceHostResourceProfileErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -229,8 +233,16 @@ const ATTACHED_DIRECTORY_MODE_SET = new Set<string>(
 );
 const STATUSLINE_ASSET_FIELDS = new Set(["fileName"]);
 
-function fail(reason: WakeflowWorkspaceHostResourceProfileErrorReason, path: string): never {
-  throw new WakeflowWorkspaceHostResourceProfileError(reason, path);
+function fail(
+  reason: WakeflowWorkspaceHostResourceProfileErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWorkspaceHostResourceProfileError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function propertyPath(base: string, key: string): string {
@@ -253,7 +265,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -273,7 +285,7 @@ function parseComponent(value: unknown, path: string): WakeflowWorkspaceHostReso
     }
     return resourcePath as WakeflowWorkspaceHostResourceComponent;
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("component", path);
+    if (error instanceof PortableResourcePathError) fail("component", path, error);
     throw error;
   }
 }
@@ -282,7 +294,7 @@ function parseResourcePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }

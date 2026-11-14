@@ -149,8 +149,12 @@ export class WakeflowStaticMaterializationPreviewError extends Error {
   readonly reason: WakeflowStaticMaterializationPreviewErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowStaticMaterializationPreviewErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowStaticMaterializationPreviewErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -167,8 +171,13 @@ export interface ParsedWakeflowStaticMaterializationPreviewRequest {
 export function failWakeflowStaticMaterializationPreview(
   reason: WakeflowStaticMaterializationPreviewErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowStaticMaterializationPreviewError(reason, path);
+  throw new WakeflowStaticMaterializationPreviewError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** 验证 action-specific desired Config 与完整 Host Profile 集合。 */
@@ -186,7 +195,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     );
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failWakeflowStaticMaterializationPreview("input", error.path);
+      failWakeflowStaticMaterializationPreview("input", error.path, error);
     }
     throw error;
   }
@@ -225,7 +234,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
       desiredConfig = parseWakeflowConfig(record.desiredConfig);
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigError) {
-        failWakeflowStaticMaterializationPreview("config", error.path);
+        failWakeflowStaticMaterializationPreview("config", error.path, error);
       }
       throw error;
     }
@@ -235,7 +244,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(record.currentHostProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
+      failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile", error);
     }
     throw error;
   }
@@ -244,7 +253,11 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
       return parseWakeflowWorkspaceHostResourceProfile(profile);
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-        failWakeflowStaticMaterializationPreview("profile", `$request.hostProfiles/${index}`);
+        failWakeflowStaticMaterializationPreview(
+          "profile",
+          `$request.hostProfiles/${index}`,
+          error,
+        );
       }
       throw error;
     }
@@ -256,7 +269,7 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
       error instanceof WakeflowGitignoreBodyAuthorityError ||
       error instanceof WakeflowWorkspaceStaticResourceMatrixError
     ) {
-      failWakeflowStaticMaterializationPreview("profile", "$request.hostProfiles");
+      failWakeflowStaticMaterializationPreview("profile", "$request.hostProfiles", error);
     }
     throw error;
   }
@@ -307,7 +320,7 @@ function digest(value: unknown, path: string): Sha256Digest {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      failWakeflowStaticMaterializationPreview("input", path);
+      failWakeflowStaticMaterializationPreview("input", path, error);
     }
     throw error;
   }
@@ -340,7 +353,7 @@ function parseStep(value: unknown, index: number): Readonly<WakeflowStaticMateri
     dependencies = parseDenseArray(record.dependsOn, MAXIMUM_STEPS, `${path}.dependsOn`);
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failWakeflowStaticMaterializationPreview("input", error.path);
+      failWakeflowStaticMaterializationPreview("input", error.path, error);
     }
     throw error;
   }
@@ -395,7 +408,7 @@ export function parseWakeflowStaticMaterializationPreview(
     stepValues = parseDenseArray(record.steps, MAXIMUM_STEPS, "$preview.steps");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      failWakeflowStaticMaterializationPreview("input", error.path);
+      failWakeflowStaticMaterializationPreview("input", error.path, error);
     }
     throw error;
   }

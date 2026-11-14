@@ -97,8 +97,12 @@ export class WakeflowSupportMemoryAuthorityError extends Error {
   readonly reason: WakeflowSupportMemoryAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowSupportMemoryAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowSupportMemoryAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -109,15 +113,23 @@ const LANGUAGE_SET = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
 const ROLE_SET = new Set<string>(["design", "test"]);
 const MANAGED_MARKER_PREFIX = "<!-- wakeflow:managed-content:";
 
-function fail(reason: WakeflowSupportMemoryAuthorityErrorReason, path: string): never {
-  throw new WakeflowSupportMemoryAuthorityError(reason, path);
+function fail(
+  reason: WakeflowSupportMemoryAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowSupportMemoryAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
 }
@@ -127,7 +139,7 @@ function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourcePro
     return parseWakeflowWorkspaceHostResourceProfile(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -138,7 +150,7 @@ function dataLiteral(value: string, path: string): string {
     return renderMarkdownJsonStringLiteral(value, path);
   } catch (error: unknown) {
     if (error instanceof MarkdownJsonStringLiteralError) {
-      fail("text", error.path);
+      fail("text", error.path, error);
     }
     throw error;
   }
@@ -316,7 +328,7 @@ function parseSurfaceId(value: unknown): WakeflowDurableId<"surface"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "surface", "$surfaceId");
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$surfaceId");
+    if (error instanceof WakeflowDurableIdError) fail("input", "$surfaceId", error);
     throw error;
   }
 }
@@ -349,7 +361,7 @@ export function createWakeflowSupportMemoryAuthority(
   try {
     bodyDigest = computeSha256Digest(encodeUtf8(body, "$body"), "$body");
   } catch (error: unknown) {
-    if (error instanceof Utf8Error) fail("text", error.path);
+    if (error instanceof Utf8Error) fail("text", error.path, error);
     throw error;
   }
   const configDigest = computeWakeflowConfigDigest(config);
@@ -389,7 +401,7 @@ function authorityRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, "$authority");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority");
+    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
     throw error;
   }
 }
@@ -402,7 +414,7 @@ function authorityId<K extends "program" | "surface" | "window">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("authority", path);
+    if (error instanceof WakeflowDurableIdError) fail("authority", path, error);
     throw error;
   }
 }
@@ -416,7 +428,7 @@ function instructionFileName(value: unknown): WakeflowWorkspaceHostResourceCompo
     return path as WakeflowWorkspaceHostResourceComponent;
   } catch (error: unknown) {
     if (error instanceof PortableResourcePathError) {
-      fail("authority", "$authority.instructionFileName");
+      fail("authority", "$authority.instructionFileName", error);
     }
     throw error;
   }
@@ -479,7 +491,7 @@ export function parseWakeflowSupportMemoryAuthority(
     bodyDigest = parseSha256Digest(record.bodyDigest, "$authority.bodyDigest");
     authorityDigest = parseSha256Digest(record.authorityDigest, "$authority.authorityDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("authority", error.path);
+    if (error instanceof Sha256Error) fail("authority", error.path, error);
     throw error;
   }
   if (

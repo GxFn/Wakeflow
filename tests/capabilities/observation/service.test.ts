@@ -568,6 +568,52 @@ test("status 不带 demandId：overall、看板计数、Demand、窗口身份、
   assertPrivate(status, healthy.root, [CONTROLLER_HANDLE]);
 });
 
+test("status 的摘要档（open-items K5）：detail summary 只列需要处理的窗口、其余计入 windowsQuiet，别的字段与完整档逐项相同；完整档不带这两个键", {
+  timeout: 120_000,
+}, async () => {
+  const read = async (detail?: "full" | "summary") =>
+    plain(
+      await executeStatusRequest(
+        CODEX_OBSERVATION_FACADE,
+        { root: healthy.root, ...(detail === undefined ? {} : { detail }) },
+        CLOCK,
+      ),
+    ) as unknown as Record<string, unknown> & {
+      windows: readonly {
+        identity: string;
+        projection: string;
+        claim: { status: string };
+        attention: { status: string } | null;
+        runtime: { status: string };
+        launchIntent: { status: string } | null;
+        session: { permissionMode: { status: string } } | null;
+      }[];
+    };
+  const full = await read();
+  deepEqual(await read("full"), full);
+  equal("detail" in full || "windowsQuiet" in full, false, "the full tier is unchanged");
+
+  const summary = await read("summary");
+  equal(summary.detail, "summary");
+  const needsHandling = (window: (typeof full.windows)[number]) =>
+    window.identity !== "registered" ||
+    window.projection !== "current" ||
+    window.claim.status === "held" ||
+    window.attention?.status === "needed" ||
+    window.runtime.status === "stale" ||
+    window.launchIntent?.status === "drifted" ||
+    window.session?.permissionMode.status === "mismatch";
+  deepEqual(summary.windows, full.windows.filter(needsHandling));
+  equal(summary.windowsQuiet, full.windows.length - summary.windows.length);
+  // 夹具里两类窗口都有：安静的被数进去，要处理的照原样列出。
+  equal(Number(summary.windowsQuiet) > 0, true, "the fixture has quiet windows");
+  equal(summary.windows.length > 0, true, "the fixture has windows that need handling");
+  const { windows: _listed, detail: _detail, windowsQuiet: _quiet, ...summaryRest } = summary;
+  const { windows: _all, ...fullRest } = full;
+  deepEqual(summaryRest, fullRest);
+  equal(Buffer.byteLength(JSON.stringify(summary)) < Buffer.byteLength(JSON.stringify(full)), true);
+});
+
 test("status 的窗口 attention：绑定会话最近一条记录是 Notification 时为 needed 并带类型，之后任何记录把它清成 none，未绑定窗口为 null（A7，§13.167）", {
   timeout: 120_000,
 }, async () => {
@@ -2694,5 +2740,125 @@ test("非本地文件系统在维护预览里阻塞（open-items B11，ADR-0021�
   equal(
     live.blockerCodes.some((code) => code.includes("filesystem-unsupported")),
     false,
+  );
+});
+
+/**
+ * 损坏输入扫描（open-items G9）：工作区的每一类状态文件各取一个，逐一写坏（清空、截成半份、换成形状不对的
+ * 合法 JSON），每次都调用读得最广的三个公共入口。要求只有一条——要么照常返回，要么是类型化的拒绝；
+ * `unexpected` 或一个不是 WakeflowError 的异常说明某处把坏输入当成了程序自己的不变量。§13.131 的两次
+ * 逃逸都是偶然撞见的，这里把它变成门里的一次全量扫描。写坏之后按原字节写回，一份副本扫完所有文件。
+ */
+function stateFilesByClass(root: string): readonly string[] {
+  const chosen: string[] = [path.join(root, "wakeflow.config.json")];
+  const walk = (directory: string): void => {
+    const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    // 同一个目录里名字形状相同的文件是同一类（同一种记录的多份）：每种形状取第一个。
+    const shapes = new Set<string>();
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const shape = entry.name
+        .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gu, "<id>")
+        .replace(/\d+/gu, "<n>");
+      if (shapes.has(shape)) continue;
+      shapes.add(shape);
+      chosen.push(path.join(directory, entry.name));
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== ".git") walk(path.join(directory, entry.name));
+    }
+  };
+  for (const area of [".wakeflow-local", ".wakeflow-active", "Ledger"]) walk(path.join(root, area));
+  return chosen;
+}
+
+test("损坏输入扫描（open-items G9）：每一类状态文件被清空、截断或换成形状不对的 JSON 之后，status、verify 与 reconcile 预览要么成功、要么是类型化的拒绝，从不是 unexpected", {
+  timeout: 600_000,
+}, async (t) => {
+  const root = copyHealthyWorkspace(t);
+  const files = stateFilesByClass(root);
+  equal(files.length >= 10, true, `the scan covers the state classes (${files.length})`);
+  const corruptions: readonly (readonly [string, (original: Buffer) => Buffer])[] = [
+    ["empty", () => Buffer.alloc(0)],
+    ["truncated", (original) => original.subarray(0, Math.floor(original.length / 2))],
+    ["wrong-shape", () => Buffer.from('{"kind":"SomethingElse","schemaVersion":1}\n')],
+  ];
+  const calls: readonly (readonly [string, () => Promise<unknown>])[] = [
+    [
+      "status",
+      () =>
+        executeStatusRequest(CODEX_OBSERVATION_FACADE, { root, demandId: healthy.demandId }, CLOCK),
+    ],
+    [
+      "verify",
+      () =>
+        executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root, demandId: healthy.demandId }, CLOCK),
+    ],
+    [
+      "reconcile-preview",
+      () =>
+        executeCodexWakeflowMaintenance({
+          root,
+          action: "reconcile",
+          mode: "preview",
+          request: {},
+        }),
+    ],
+  ];
+  const violations: string[] = [];
+  const outcomes = new Map<string, number>();
+  for (const file of files) {
+    const original = readFileSync(file);
+    const mode = lstatSync(file).mode & 0o777;
+    const relative = path.relative(root, file).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gu, "<id>");
+    for (const [kind, corrupt] of corruptions) {
+      writeFileSync(file, corrupt(original), { mode });
+      for (const [tool, call] of calls) {
+        let outcome: string;
+        try {
+          await call();
+          outcome = "ok";
+        } catch (error: unknown) {
+          outcome =
+            error instanceof WakeflowError
+              ? `${error.code}/${error.reason}`
+              : `untyped:${error instanceof Error ? error.name : typeof error}`;
+        }
+        outcomes.set(
+          outcome.split("/")[0] ?? outcome,
+          (outcomes.get(outcome.split("/")[0] ?? outcome) ?? 0) + 1,
+        );
+        if (outcome.startsWith("unexpected/") || outcome.startsWith("untyped:")) {
+          violations.push(`${relative} ${kind} ${tool} -> ${outcome}`);
+        }
+      }
+      writeFileSync(file, original, { mode });
+    }
+  }
+  t.diagnostic(
+    `corrupted-input scan files: ${files
+      .map((file) => path.relative(root, file).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gu, "<id>"))
+      .join(" | ")}`,
+  );
+  t.diagnostic(
+    `corrupted-input scan: ${files.length} files x ${corruptions.length} x ${calls.length}; ${[
+      ...outcomes,
+    ]
+      .map(([code, count]) => `${code}=${count}`)
+      .join(" ")}`,
+  );
+  deepEqual(violations, []);
+  // 写回之后工作区和扫描之前一样健康。
+  const restored = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root }, CLOCK);
+  const original = await executeVerifyRequest(
+    CODEX_OBSERVATION_FACADE,
+    { root: healthy.root },
+    CLOCK,
+  );
+  deepEqual(
+    restored.gates.map((gate) => [gate.name, gate.status]),
+    original.gates.map((gate) => [gate.name, gate.status]),
   );
 });

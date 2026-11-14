@@ -95,8 +95,12 @@ export class LedgerRecordPublicationIntentError extends Error {
   readonly reason: LedgerRecordPublicationIntentErrorReason;
   readonly path: string;
 
-  constructor(reason: LedgerRecordPublicationIntentErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: LedgerRecordPublicationIntentErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -113,15 +117,23 @@ const validateWire = createRuntimeJsonSchemaValidator<LedgerRecordPublicationInt
   ],
 );
 
-function fail(reason: LedgerRecordPublicationIntentErrorReason, path: string): never {
-  throw new LedgerRecordPublicationIntentError(reason, path);
+function fail(
+  reason: LedgerRecordPublicationIntentErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new LedgerRecordPublicationIntentError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function normalizeRecord(value: unknown): Readonly<RequirementRecord> {
   try {
     return parseLedgerAuthorityRecord(value);
   } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityRecordError) fail("record", "$/record");
+    if (error instanceof LedgerAuthorityRecordError) fail("record", "$/record", error);
     throw error;
   }
 }
@@ -137,7 +149,7 @@ function normalizeTreePlan(value: unknown): Readonly<DirectoryTreeCandidatePlan>
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("tree-plan", "$/treePlan");
+      fail("tree-plan", "$/treePlan", error);
     }
     throw error;
   }
@@ -226,7 +238,7 @@ export function parseLedgerRecordPublicationIntent(
   try {
     json = parseJsonValue(value, "$intent");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -267,7 +279,7 @@ export function parseLedgerRecordPublicationIntentDocument(
     json = parseDeterministicJsonDocument(text, "$intent");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

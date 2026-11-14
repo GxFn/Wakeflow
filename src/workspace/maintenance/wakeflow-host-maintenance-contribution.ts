@@ -93,8 +93,12 @@ export class WakeflowHostMaintenanceContributionError extends Error {
   readonly reason: WakeflowHostMaintenanceContributionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowHostMaintenanceContributionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowHostMaintenanceContributionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -109,15 +113,23 @@ const MAXIMUM_OPERATIONS = 128;
 const MAXIMUM_BLOCKERS = 128;
 const MAXIMUM_IDENTITY_LENGTH = 256;
 
-function fail(reason: WakeflowHostMaintenanceContributionErrorReason, path: string): never {
-  throw new WakeflowHostMaintenanceContributionError(reason, path);
+function fail(
+  reason: WakeflowHostMaintenanceContributionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowHostMaintenanceContributionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -150,7 +162,7 @@ function parsePayload(value: unknown, path: string): JsonValue {
   try {
     return parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("payload", error.path);
+    if (error instanceof JsonValueError) fail("payload", error.path, error);
     throw error;
   }
 }
@@ -166,7 +178,7 @@ function parseOperation(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   const expectedFields = requirePayloadDigest
@@ -280,7 +292,7 @@ export function createWakeflowHostMaintenanceContribution(
     blockerValues = parseDenseArray(record.blockerCodes, MAXIMUM_BLOCKERS, "$request.blockerCodes");
     operationValues = parseDenseArray(record.operations, MAXIMUM_OPERATIONS, "$request.operations");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   if (
@@ -344,7 +356,7 @@ export function parseWakeflowHostMaintenanceContribution(
       "$contribution.operations",
     );
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
   if (

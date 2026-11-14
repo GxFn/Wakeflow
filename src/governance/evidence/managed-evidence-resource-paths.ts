@@ -66,22 +66,34 @@ export class ManagedEvidenceResourcePathError extends Error {
   readonly reason: ManagedEvidenceResourcePathErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceResourcePathErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidenceResourcePathErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: ManagedEvidenceResourcePathErrorReason, path: string): never {
-  throw new ManagedEvidenceResourcePathError(reason, path);
+function fail(
+  reason: ManagedEvidenceResourcePathErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidenceResourcePathError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function evidenceId(value: unknown, path: string): WakeflowDurableId<"evidence"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "evidence", path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -142,7 +154,7 @@ export function parseManagedEvidenceRecordDirectoryName(
     id = evidenceId(text, "$directoryName");
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceResourcePathError) {
-      fail("record-directory-name", "$directoryName");
+      fail("record-directory-name", "$directoryName", error);
     }
     throw error;
   }
@@ -169,7 +181,7 @@ export function parseManagedEvidenceStageDirectoryName(
     id = evidenceId(text, "$directoryName");
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceResourcePathError) {
-      fail("stage-directory-name", "$directoryName");
+      fail("stage-directory-name", "$directoryName", error);
     }
     throw error;
   }

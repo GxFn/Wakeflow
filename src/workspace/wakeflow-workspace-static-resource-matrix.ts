@@ -78,8 +78,12 @@ export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
   readonly reason: WakeflowWorkspaceStaticResourceMatrixErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWorkspaceStaticResourceMatrixErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -118,8 +122,16 @@ function sortedDeclarations(
   return Object.freeze([...declarations].sort(compareDeclarationIds));
 }
 
-function fail(reason: WakeflowWorkspaceStaticResourceMatrixErrorReason, path: string): never {
-  throw new WakeflowWorkspaceStaticResourceMatrixError(reason, path);
+function fail(
+  reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWorkspaceStaticResourceMatrixError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function logicalRootKey(placement: Readonly<WakeflowWorkspaceResourcePlacement>): string {
@@ -299,7 +311,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
     record = parsePlainRecord(value, "$matrix");
     declarationValues = parseDenseArray(record.declarations, 10_000, "$matrix.declarations");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$matrix");
+    if (error instanceof PassiveOwnDataError) fail("input", "$matrix", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -322,7 +334,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
     suppliedSharedDigest = parseSha256Digest(record.sharedDigest, "$matrix.sharedDigest");
     suppliedMatrixDigest = parseSha256Digest(record.matrixDigest, "$matrix.matrixDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", error.path);
+    if (error instanceof Sha256Error) fail("input", error.path, error);
     throw error;
   }
   const parsedDeclarations = declarationValues.map((declaration, index) => {
@@ -330,7 +342,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
       return parseWakeflowWorkspaceResourceDeclaration(declaration);
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceResourceDeclarationError) {
-        fail("input", `$/declarations/${index}`);
+        fail("input", `$/declarations/${index}`, error);
       }
       throw error;
     }

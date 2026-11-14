@@ -135,8 +135,8 @@ export class TestTargetResultReportError extends Error {
   readonly reason: TestTargetResultReportErrorReason;
   readonly path: string;
 
-  constructor(reason: TestTargetResultReportErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TestTargetResultReportErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -151,8 +151,8 @@ const validateWire = createRuntimeJsonSchemaValidator<ReportWire>(
   ],
 );
 
-function fail(reason: TestTargetResultReportErrorReason, path: string): never {
-  throw new TestTargetResultReportError(reason, path);
+function fail(reason: TestTargetResultReportErrorReason, path: string, cause?: unknown): never {
+  throw new TestTargetResultReportError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function exactRecord(
@@ -164,7 +164,7 @@ function exactRecord(
   try {
     json = parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   if (json === null || Array.isArray(json) || typeof json !== "object") {
@@ -197,7 +197,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -206,7 +206,7 @@ function resourcePath(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", path);
+    if (error instanceof PortableResourcePathError) fail("path", path, error);
     throw error;
   }
 }
@@ -215,7 +215,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -376,7 +376,7 @@ export function parseTestTargetResultReport(value: unknown): Readonly<TestTarget
   try {
     json = parseJsonValue(value, "$report");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const validated = validateWire(json);
@@ -415,7 +415,7 @@ export function createTestTargetResultReport(
   try {
     reportedAt = readUtcWallClock(options.clock);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    if (error instanceof UtcWallClockError) fail("time", "$clock", error);
     throw error;
   }
   const basis = reportBasis({
@@ -447,7 +447,7 @@ export function parseTestTargetResultReportDocument(
     json = parseDeterministicJsonDocument(textValue, "$report");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$report");
+      fail("representation", "$report", error);
     }
     throw error;
   }

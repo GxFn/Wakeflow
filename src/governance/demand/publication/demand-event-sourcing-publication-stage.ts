@@ -76,7 +76,7 @@ function mapStageError(error: unknown): never {
   }
   if (error instanceof DurableDirectoryMaterializationError) {
     if (error.reason === "aborted") fail("aborted", "$signal");
-    fail("operation-failure", "$stage/directories");
+    fail("operation-failure", "$stage/directories", "unknown", error);
   }
   throw error;
 }
@@ -168,7 +168,7 @@ export async function materializeDemandPublicationStage(
     closeError = error;
   }
   if (operationError !== undefined) mapStageError(operationError);
-  if (closeError !== undefined) fail("operation-failure", "$stage/close");
+  if (closeError !== undefined) fail("operation-failure", "$stage/close", "unknown", closeError);
 }
 
 export async function publishDemandStage(
@@ -254,7 +254,9 @@ export async function loadFinalDemandPublication(
     }
     throw operationError;
   }
-  if (closeError !== undefined) fail("operation-failure", "$demandRoot/close");
+  if (closeError !== undefined) {
+    fail("operation-failure", "$demandRoot/close", "unknown", closeError);
+  }
   if (loaded === undefined) fail("operation-failure", "$demandRoot");
   return loaded;
 }

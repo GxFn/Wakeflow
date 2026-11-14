@@ -143,8 +143,8 @@ export class LoadedArtifactTreeIdentityError extends Error {
   readonly reason: LoadedArtifactTreeIdentityErrorReason;
   readonly path: string;
 
-  constructor(reason: LoadedArtifactTreeIdentityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: LoadedArtifactTreeIdentityErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -174,8 +174,12 @@ const MANIFEST_FIELDS = Object.freeze([
 
 const FILE_FIELDS = Object.freeze(["bytes", "digest", "executable", "ref"] as const);
 
-function fail(reason: LoadedArtifactTreeIdentityErrorReason, path: string): never {
-  throw new LoadedArtifactTreeIdentityError(reason, path);
+function fail(reason: LoadedArtifactTreeIdentityErrorReason, path: string, cause?: unknown): never {
+  throw new LoadedArtifactTreeIdentityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function compareText(left: string, right: string): number {
@@ -218,7 +222,7 @@ function parseLimits(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits>
   try {
     record = parsePlainRecord(value, "$options.limits");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options.limits");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options.limits", error);
     throw error;
   }
   assertExactFields(record, LIMIT_FIELDS, "$options.limits", "input");
@@ -250,7 +254,7 @@ function parseIdentityOptions(value: unknown): Readonly<ParsedIdentityOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set(["limits", "signal"]);
@@ -271,7 +275,7 @@ function parseValidationOptions(value: unknown): Readonly<LoadedArtifactTreeIden
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "limits")) {
@@ -284,7 +288,7 @@ function parseManifestByteCount(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
   } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("manifest-shape", path);
+    if (error instanceof ByteCountError) fail("manifest-shape", path, error);
     throw error;
   }
 }
@@ -293,7 +297,7 @@ function parseManifestRef(value: unknown, path: string): PortableResourcePath {
   try {
     return parsePortableResourcePath(value, path);
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("manifest-shape", path);
+    if (error instanceof PortableResourcePathError) fail("manifest-shape", path, error);
     throw error;
   }
 }
@@ -302,7 +306,7 @@ function parseManifestDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("manifest-shape", path);
+    if (error instanceof Sha256Error) fail("manifest-shape", path, error);
     throw error;
   }
 }
@@ -325,7 +329,7 @@ function parseManifestFile(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("manifest-shape", path);
+    if (error instanceof PassiveOwnDataError) fail("manifest-shape", path, error);
     throw error;
   }
   assertExactFields(record, FILE_FIELDS, path, "manifest-shape");
@@ -397,7 +401,7 @@ function parseManifest(
   try {
     record = parsePlainRecord(value, "$manifest");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("manifest-shape", "$manifest");
+    if (error instanceof PassiveOwnDataError) fail("manifest-shape", "$manifest", error);
     throw error;
   }
   assertExactFields(record, MANIFEST_FIELDS, "$manifest", "manifest-shape");
@@ -413,9 +417,9 @@ function parseManifest(
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
       if (error.reason === "array-length") {
-        fail("file-count", "$manifest.files");
+        fail("file-count", "$manifest.files", error);
       }
-      fail("manifest-shape", "$manifest.files");
+      fail("manifest-shape", "$manifest.files", error);
     }
     throw error;
   }
@@ -433,7 +437,7 @@ function parseManifest(
     try {
       totalBytes = addByteCounts(totalBytes, file.bytes, "$manifest.totalBytes");
     } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("manifest-totals", "$manifest.totalBytes");
+      if (error instanceof ByteCountError) fail("manifest-totals", "$manifest.totalBytes", error);
       throw error;
     }
     if (totalBytes > limits.maxTotalBytes) {
@@ -558,7 +562,7 @@ function manifestJsonValue(manifest: LoadedArtifactTreeManifest): JsonValue {
   try {
     return parseJsonValue(manifest, "$manifest");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("manifest-shape", error.path);
+    if (error instanceof JsonValueError) fail("manifest-shape", error.path, error);
     throw error;
   }
 }

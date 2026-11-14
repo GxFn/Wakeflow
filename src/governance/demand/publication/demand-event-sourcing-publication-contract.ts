@@ -85,8 +85,9 @@ export class DemandEventSourcingPublicationServiceError extends Error {
     reason: DemandEventSourcingPublicationServiceErrorReason,
     path: string,
     publicationAuthority: DemandEventSourcingPublicationEffectAuthority = "unknown",
+    options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason]);
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
     this.publicationAuthority = publicationAuthority;
@@ -97,6 +98,12 @@ export function failDemandEventSourcingPublication(
   reason: DemandEventSourcingPublicationServiceErrorReason,
   path: string,
   publicationAuthority: DemandEventSourcingPublicationEffectAuthority = "unknown",
+  cause?: unknown,
 ): never {
-  throw new DemandEventSourcingPublicationServiceError(reason, path, publicationAuthority);
+  throw new DemandEventSourcingPublicationServiceError(
+    reason,
+    path,
+    publicationAuthority,
+    cause === undefined ? undefined : { cause },
+  );
 }

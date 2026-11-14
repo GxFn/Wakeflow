@@ -122,8 +122,12 @@ export class WakeflowMaintenanceJournalStoreError extends Error {
   readonly reason: WakeflowMaintenanceJournalStoreErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceJournalStoreErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowMaintenanceJournalStoreErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,8 +135,16 @@ export class WakeflowMaintenanceJournalStoreError extends Error {
 
 const ISSUED_SOURCES = new WeakSet<object>();
 
-function fail(reason: WakeflowMaintenanceJournalStoreErrorReason, path: string): never {
-  throw new WakeflowMaintenanceJournalStoreError(reason, path);
+function fail(
+  reason: WakeflowMaintenanceJournalStoreErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowMaintenanceJournalStoreError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
@@ -140,7 +152,7 @@ function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
     return parseWakeflowMaintenanceOperationId(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", "$operationId");
+      fail("input", "$operationId", error);
     }
     throw error;
   }
@@ -165,7 +177,7 @@ export function assertWakeflowPreparedMaintenanceJournalCapacity(
     journal = createPreparedWakeflowMaintenanceJournal(operationId, intentDigest, plan, writer);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {
-      fail("input", "$journal");
+      fail("input", "$journal", error);
     }
     throw error;
   }
@@ -187,7 +199,7 @@ function assertGate(
     assertWakeflowMaintenanceGateContext(context, root);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$context");
+      fail("gate", "$context", error);
     }
     throw error;
   }
@@ -202,7 +214,7 @@ function admitOperation(
     admitWakeflowResourceOperation(declaration.processing, recipe);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("input", "$journal");
+      fail("input", "$journal", error);
     }
     throw error;
   }
@@ -216,9 +228,9 @@ async function assertTransactionsEmpty(root: RootedDirectory): Promise<void> {
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "too-many-entries") {
-        fail("transactions-shape", "$transactions");
+        fail("transactions-shape", "$transactions", error);
       }
-      fail("source", "$transactions");
+      fail("source", "$transactions", error);
     }
     throw error;
   }
@@ -240,9 +252,9 @@ export async function assertWakeflowMaintenanceJournalIsOnlyTransaction(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "too-many-entries") {
-        fail("transactions-shape", "$transactions");
+        fail("transactions-shape", "$transactions", error);
       }
-      fail("source", "$transactions");
+      fail("source", "$transactions", error);
     }
     throw error;
   }
@@ -265,15 +277,15 @@ export async function readWakeflowMaintenanceJournal(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "too-large") fail("capacity", "$journal");
-      if (error.reason === "not-found") fail("source", "$journal");
+      if (error.reason === "too-large") fail("capacity", "$journal", error);
+      if (error.reason === "not-found") fail("source", "$journal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("source-policy", "$journal");
+        fail("source-policy", "$journal", error);
       }
-      fail("source", "$journal");
+      fail("source", "$journal", error);
     }
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail("journal", "$journal");
+      fail("journal", "$journal", error);
     }
     throw error;
   }
@@ -290,7 +302,7 @@ export async function readWakeflowMaintenanceJournal(
     journal = parseWakeflowMaintenanceJournal(read.value);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {
-      fail("journal", error.path);
+      fail("journal", error.path, error);
     }
     throw error;
   }
@@ -325,7 +337,7 @@ export async function readWakeflowMaintenanceJournalOrNull(
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
-    if (error instanceof RootedDirectoryError) fail("source", "$journal");
+    if (error instanceof RootedDirectoryError) fail("source", "$journal", error);
     throw error;
   }
   return readWakeflowMaintenanceJournal(root, operationId);
@@ -350,7 +362,7 @@ export async function publishPreparedWakeflowMaintenanceJournal(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {
-      fail("input", "$plan");
+      fail("input", "$plan", error);
     }
     throw error;
   }
@@ -366,9 +378,9 @@ export async function publishPreparedWakeflowMaintenanceJournal(
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
       if (error.reason === "transactions-shape") {
-        fail("transactions-shape", "$transactions");
+        fail("transactions-shape", "$transactions", error);
       }
-      fail("conflict", "$intent");
+      fail("conflict", "$intent", error);
     }
     throw error;
   }
@@ -385,9 +397,9 @@ export async function publishPreparedWakeflowMaintenanceJournal(
     );
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "target-exists") fail("conflict", "$journal");
+      if (error.reason === "target-exists") fail("conflict", "$journal", error);
       if (error.reason === "stage-recovery-required") {
-        fail("recovery-required", "$journal");
+        fail("recovery-required", "$journal", error);
       }
       if (
         error.reason === "commit-uncertain" ||
@@ -395,17 +407,17 @@ export async function publishPreparedWakeflowMaintenanceJournal(
         error.reason === "stage-cleanup-failure" ||
         error.reason === "close-failure"
       ) {
-        fail("commit-uncertain", "$journal");
+        fail("commit-uncertain", "$journal", error);
       }
-      fail("effect-failure", "$journal");
+      fail("effect-failure", "$journal", error);
     }
     throw error;
   }
   let source: Readonly<WakeflowMaintenanceJournalSource>;
   try {
     source = await readWakeflowMaintenanceJournal(root, context.operationId);
-  } catch {
-    fail("commit-uncertain", "$journal");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$journal", cause);
   }
   if (
     publication.resourcePath !== source.resourcePath ||
@@ -444,7 +456,7 @@ export async function checkpointWakeflowMaintenanceJournal(
     proposed = parseWakeflowMaintenanceJournal(proposedValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceJournalError) {
-      fail("journal", "$proposed");
+      fail("journal", "$proposed", error);
     }
     throw error;
   }
@@ -456,7 +468,7 @@ export async function checkpointWakeflowMaintenanceJournal(
     admitWakeflowResourceOperation(declaration.processing, "exact-source-replace");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("input", "$journal");
+      fail("input", "$journal", error);
     }
     throw error;
   }
@@ -471,9 +483,9 @@ export async function checkpointWakeflowMaintenanceJournal(
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
       if (error.reason === "transactions-shape") {
-        fail("transactions-shape", "$transactions");
+        fail("transactions-shape", "$transactions", error);
       }
-      fail("conflict", "$intent");
+      fail("conflict", "$intent", error);
     }
     throw error;
   }
@@ -502,16 +514,16 @@ export async function checkpointWakeflowMaintenanceJournal(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "input") fail("input", error.path);
+      if (error.reason === "input") fail("input", error.path, error);
       if (
         error.reason === "expectation-changed" ||
         error.reason === "expectation-read-failure" ||
         error.reason === "target-exists"
       ) {
-        fail("conflict", "$journal");
+        fail("conflict", "$journal", error);
       }
       if (error.reason === "stage-recovery-required") {
-        fail("recovery-required", "$journal");
+        fail("recovery-required", "$journal", error);
       }
       if (
         error.reason === "commit-uncertain" ||
@@ -519,17 +531,17 @@ export async function checkpointWakeflowMaintenanceJournal(
         error.reason === "stage-cleanup-failure" ||
         error.reason === "close-failure"
       ) {
-        fail("commit-uncertain", "$journal");
+        fail("commit-uncertain", "$journal", error);
       }
-      fail("effect-failure", "$journal");
+      fail("effect-failure", "$journal", error);
     }
     throw error;
   }
   let source: Readonly<WakeflowMaintenanceJournalSource>;
   try {
     source = await readWakeflowMaintenanceJournal(root, context.operationId);
-  } catch {
-    fail("commit-uncertain", "$journal");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$journal", cause);
   }
   if (
     replacement.digest !== source.digest ||
@@ -568,23 +580,23 @@ async function retireExactWakeflowMaintenanceJournal(
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
       if (error.reason === "source-changed" || error.reason === "source-not-found") {
-        fail("conflict", "$journal");
+        fail("conflict", "$journal", error);
       }
       if (
         error.reason === "commit-uncertain" ||
         error.reason === "durability-failure" ||
         error.reason === "close-failure"
       ) {
-        fail("commit-uncertain", "$journal");
+        fail("commit-uncertain", "$journal", error);
       }
-      fail("effect-failure", "$journal");
+      fail("effect-failure", "$journal", error);
     }
     throw error;
   }
   try {
     await assertTransactionsEmpty(root);
-  } catch {
-    fail("commit-uncertain", "$journal");
+  } catch (cause: unknown) {
+    fail("commit-uncertain", "$journal", cause);
   }
   return retirement;
 }

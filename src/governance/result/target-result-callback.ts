@@ -100,8 +100,8 @@ export class TargetResultCallbackError extends Error {
   readonly reason: TargetResultCallbackErrorReason;
   readonly path: string;
 
-  constructor(reason: TargetResultCallbackErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TargetResultCallbackErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -131,8 +131,8 @@ const REISSUE_FIELDS = Object.freeze([
 const RESOLUTION_FIELDS = Object.freeze(["bytes", "digest", "evidenceId", "ref"] as const);
 const MAXIMUM_EVIDENCE_RESOLUTIONS = 64;
 
-function fail(reason: TargetResultCallbackErrorReason, path: string): never {
-  throw new TargetResultCallbackError(reason, path);
+function fail(reason: TargetResultCallbackErrorReason, path: string, cause?: unknown): never {
+  throw new TargetResultCallbackError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function exactRecord(
@@ -144,7 +144,7 @@ function exactRecord(
   try {
     record = parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -162,7 +162,7 @@ function id<Kind extends "target-delivery" | "target-result" | "window" | "evide
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -171,7 +171,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -180,7 +180,7 @@ function instant(value: unknown, path: string): UtcInstant {
   try {
     return parseUtcInstant(value, path);
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", path);
+    if (error instanceof UtcInstantError) fail("time", path, error);
     throw error;
   }
 }
@@ -189,7 +189,7 @@ function bindingId(value: unknown, path: string): WakeflowWindowHostBindingId {
   try {
     return parseWakeflowWindowHostBindingId(value, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingIdError) fail("identifier", path);
+    if (error instanceof WakeflowWindowHostBindingIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -214,7 +214,7 @@ export function computeTargetResultCallbackPromptDigest(
   try {
     return computeDeliveryPromptDigest(prompt);
   } catch (error: unknown) {
-    if (error instanceof DeliveryEnvelopeError) fail("text", path);
+    if (error instanceof DeliveryEnvelopeError) fail("text", path, error);
     throw error;
   }
 }
@@ -286,7 +286,7 @@ export function parseTargetResultEvidenceResolutions(
     try {
       ref = parsePortableResourcePath(record.ref, `${entryPath}/ref`);
     } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) fail("path", `${entryPath}/ref`);
+      if (error instanceof PortableResourcePathError) fail("path", `${entryPath}/ref`, error);
       throw error;
     }
     if (refs.has(ref)) fail("relation", `${entryPath}/ref`);

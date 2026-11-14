@@ -107,15 +107,27 @@ export class DemandEventSourcingRootAuthorityError extends Error {
   readonly reason: DemandEventSourcingRootAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingRootAuthorityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DemandEventSourcingRootAuthorityErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: DemandEventSourcingRootAuthorityErrorReason, path: string): never {
-  throw new DemandEventSourcingRootAuthorityError(reason, path);
+function fail(
+  reason: DemandEventSourcingRootAuthorityErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DemandEventSourcingRootAuthorityError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function sameOptionalNode(
@@ -319,18 +331,18 @@ async function readRecord(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (
         error.reason === "root-scope" ||
         error.reason === "source-changed" ||
         error.reason === "expectation-changed"
       ) {
-        fail("inventory", "$root");
+        fail("inventory", "$root", error);
       }
-      fail(owner, `$${owner}`);
+      fail(owner, `$${owner}`, error);
     }
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail(owner, `$${owner}`);
+      fail(owner, `$${owner}`, error);
     }
     throw error;
   }
@@ -344,7 +356,7 @@ function parseOptions(value: unknown): Readonly<{
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -396,8 +408,8 @@ async function loadRootAuthority(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("inventory", "$root");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("inventory", "$root", error);
     }
     throw error;
   }
@@ -423,13 +435,13 @@ async function loadRootAuthority(
   try {
     identity = parseDemandIdentityDocument(identityRead.text);
   } catch (error: unknown) {
-    if (error instanceof DemandIdentityError) fail("identity", "$identity");
+    if (error instanceof DemandIdentityError) fail("identity", "$identity", error);
     throw error;
   }
   try {
     authority = parseDemandAuthorityDocument(authorityRead.text, identity);
   } catch (error: unknown) {
-    if (error instanceof DemandAuthorityError) fail("authority", "$authority");
+    if (error instanceof DemandAuthorityError) fail("authority", "$authority", error);
     throw error;
   }
   let admittedAuthority: Readonly<AdmittedDemandAuthority>;
@@ -446,9 +458,9 @@ async function loadRootAuthority(
         (error instanceof DemandAuthorityError && error.reason === "aborted") ||
         (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
       ) {
-        fail("aborted", "$signal");
+        fail("aborted", "$signal", error);
       }
-      fail("ledger", "$authority");
+      fail("ledger", "$authority", error);
     }
     throw error;
   }
@@ -477,8 +489,8 @@ async function loadRootAuthority(
       error instanceof DemandEventSourcingRepositoryError ||
       error instanceof DemandFileEventStoreError
     ) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("stream", "$commits");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("stream", "$commits", error);
     }
     throw error;
   }
@@ -487,8 +499,8 @@ async function loadRootAuthority(
     firstCommit = await eventStore.readCommitAt(1, signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("stream", "$commits/0");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("stream", "$commits/0", error);
     }
     throw error;
   }
@@ -501,7 +513,7 @@ async function loadRootAuthority(
         : upcastDemandEventSourcingStoredEvent(firstPersistedEvent);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingUpcasterError) {
-      fail("stream", "$commits/0/events/0");
+      fail("stream", "$commits/0/events/0", error);
     }
     throw error;
   }
@@ -531,8 +543,8 @@ async function loadRootAuthority(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("inventory", "$root");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("inventory", "$root", error);
     }
     throw error;
   }

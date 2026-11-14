@@ -57,8 +57,12 @@ export class WakeflowWorkspaceStaticResourceOperationContextError extends Error 
   readonly reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -73,15 +77,20 @@ interface ParsedRequest {
 function fail(
   reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new WakeflowWorkspaceStaticResourceOperationContextError(reason, path);
+  throw new WakeflowWorkspaceStaticResourceOperationContextError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) fail("input", path, error);
     throw error;
   }
 }
@@ -107,7 +116,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     );
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("input", "$request.expectedMatrixDigest");
+      fail("input", "$request.expectedMatrixDigest", error);
     }
     throw error;
   }
@@ -128,7 +137,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(
     matrix = parseWakeflowWorkspaceStaticResourceMatrix(matrixValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-      fail("matrix", "$matrix");
+      fail("matrix", "$matrix", error);
     }
     throw error;
   }
@@ -148,7 +157,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(
     operation = admitWakeflowResourceOperation(selected.processing, request.recipe);
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation", "$request.recipe");
+      fail("operation", "$request.recipe", error);
     }
     throw error;
   }

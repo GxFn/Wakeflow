@@ -60,8 +60,8 @@ export class RequirementLineageError extends Error {
   readonly reason: RequirementLineageErrorReason;
   readonly path: string;
 
-  constructor(reason: RequirementLineageErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: RequirementLineageErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -72,8 +72,8 @@ const validateWire = createRuntimeJsonSchemaValidator<RequirementLineageWire>(
   [WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
 
-function fail(reason: RequirementLineageErrorReason, path: string): never {
-  throw new RequirementLineageError(reason, path);
+function fail(reason: RequirementLineageErrorReason, path: string, cause?: unknown): never {
+  throw new RequirementLineageError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 /** 需求包记录在 Ledger 根内的固定引用：`requirements/<requirementId>/record.json`。 */
@@ -94,7 +94,7 @@ export function parseRequirementLineageReference(
   try {
     json = parseJsonValue(value, "$lineage");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -108,7 +108,7 @@ export function parseRequirementLineageReference(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/requirementId");
+      fail("identifier", "$/requirementId", error);
     }
     throw error;
   }
@@ -116,7 +116,7 @@ export function parseRequirementLineageReference(
   try {
     recordRef = parsePortableResourcePath(result.value.recordRef, "$/recordRef");
   } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("path", "$/recordRef");
+    if (error instanceof PortableResourcePathError) fail("path", "$/recordRef", error);
     throw error;
   }
   if (recordRef !== requirementLineageRecordRef(requirementId)) {
@@ -126,7 +126,7 @@ export function parseRequirementLineageReference(
   try {
     recordDigest = parseSha256Digest(result.value.recordDigest, "$/recordDigest");
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$/recordDigest");
+    if (error instanceof Sha256Error) fail("digest", "$/recordDigest", error);
     throw error;
   }
   return Object.freeze({

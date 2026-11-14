@@ -489,8 +489,10 @@ export interface WorkspaceGateFacts {
     readonly skipped: number;
     /** `skipped` 里占着原子暂存前缀的非记录条目数（B13）；省略即 0。 */
     readonly stageResidue?: number;
-    /** 观察器写失败留下的事故记录数（G8）：只作信息报出，不改变 verdict。 */
+    /** 观察器近七天写失败留下的事故记录数（G8）：只作信息报出，不改变 verdict。 */
     readonly writeFailures: number;
+    /** 其中最近一条的时间（ISO）；省略或 null 即不带时间。 */
+    readonly latestWriteFailureAt?: string | null;
   }>[];
   readonly windows: readonly Readonly<{
     readonly windowId: string;
@@ -785,6 +787,18 @@ function hookHostCode(host: HookGateFacts): string | null {
   return host.records === 0 ? "records-0" : null;
 }
 
+/**
+ * 写失败的记号带上最近一次的时间（open-items G8）：`write-failures-2:last-20261028T0200Z`。时间压成门记号
+ * 允许的字符（分钟精度，UTC）；读不出时间时只有计数。
+ */
+function writeFailureCode(host: WorkspaceGateFacts["hooks"][number]): string {
+  const compact = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/u.exec(host.latestWriteFailureAt ?? "");
+  const count = `write-failures-${host.writeFailures}`;
+  return compact === null
+    ? count
+    : `${count}:last-${compact.slice(1, 4).join("")}T${compact[4]}${compact[5]}Z`;
+}
+
 function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
   const statuses = facts.hooks.map((host) =>
     verdict(host.directory !== "mode" && host.skipped === 0, host.status !== "observed"),
@@ -797,7 +811,7 @@ function hooksGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
       ...(hostCode === null ? [] : [`${host.hostId}:${hostCode}`]),
       // 被跳过的条目里有多少占着原子暂存前缀（B13）：它们由 reconcile 列为可退役项，不必用户自己去找。
       ...(stageResidue > 0 ? [`${host.hostId}:stage-residue-${stageResidue}`] : []),
-      ...(host.writeFailures > 0 ? [`${host.hostId}:write-failures-${host.writeFailures}`] : []),
+      ...(host.writeFailures > 0 ? [`${host.hostId}:${writeFailureCode(host)}`] : []),
     ];
   });
   return gate("host-hook-channel", "host-hooks", status, joinCodes(code));

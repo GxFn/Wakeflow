@@ -142,8 +142,12 @@ export class WakeflowSupportMemoryInspectionError extends Error {
   readonly reason: WakeflowSupportMemoryInspectionErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowSupportMemoryInspectionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowSupportMemoryInspectionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -160,8 +164,16 @@ export interface ParsedWakeflowSupportMemoryInspectionRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: WakeflowSupportMemoryInspectionErrorReason, path: string): never {
-  throw new WakeflowSupportMemoryInspectionError(reason, path);
+function fail(
+  reason: WakeflowSupportMemoryInspectionErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowSupportMemoryInspectionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -177,7 +189,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path);
+    if (error instanceof Sha256Error) fail("input", path, error);
     throw error;
   }
 }
@@ -186,7 +198,7 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   try {
     return parseWakeflowConfig(value);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", path);
+    if (error instanceof WakeflowConfigError) fail("config", path, error);
     throw error;
   }
 }
@@ -199,7 +211,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request");
+    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
     throw error;
   }
   const required = [
@@ -254,7 +266,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(
     profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", "$request.profile");
+      fail("profile", "$request.profile", error);
     }
     throw error;
   }
@@ -263,7 +275,7 @@ export function parseWakeflowSupportMemoryInspectionRequest(
     surfaceId = parseWakeflowDurableIdOfKind(record.surfaceId, "surface", "$request.surfaceId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$request.surfaceId");
+      fail("input", "$request.surfaceId", error);
     }
     throw error;
   }
@@ -318,7 +330,7 @@ async function admitRoots(
     report = await validateWakeflowConfigRootPlacements(workspaceRoot, request.desiredConfig);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigRootPlacementError) {
-      fail("placement", error.path);
+      fail("placement", error.path, error);
     }
     throw error;
   }
@@ -330,7 +342,7 @@ async function admitRoots(
   try {
     node = await supportRoot.assertCurrent("$supportRoot");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("placement", "$supportRoot");
+    if (error instanceof RootedDirectoryError) fail("placement", "$supportRoot", error);
     throw error;
   }
   if (
@@ -357,7 +369,7 @@ function currentAuthority(
       return null;
     }
     if (error instanceof WakeflowSupportMemoryAuthorityError) {
-      fail("authority", error.path);
+      fail("authority", error.path, error);
     }
     throw error;
   }
@@ -374,7 +386,7 @@ function desiredAuthority(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryAuthorityError) {
-      fail(error.reason === "surface" ? "surface" : "authority", error.path);
+      fail(error.reason === "surface" ? "surface" : "authority", error.path, error);
     }
     throw error;
   }
@@ -413,12 +425,12 @@ async function readSource(
     if (error instanceof WakeflowSupportMemoryInspectionError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "too-large") fail("capacity", "$source");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "too-large") fail("capacity", "$source", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
-        fail("source-policy", "$source");
+        fail("source-policy", "$source", error);
       }
-      fail("source", "$source");
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -445,9 +457,9 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
-      fail("source", "$source");
+      fail("source", "$source", error);
     }
     throw error;
   }
@@ -474,7 +486,7 @@ export async function inspectWakeflowSupportMemory(
     operation = admitWakeflowResourceOperation(declaration.processing, "deterministic-rewrite");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("catalog", "$request.expectedCatalogDigest");
+      fail("catalog", "$request.expectedCatalogDigest", error);
     }
     throw error;
   }
@@ -503,9 +515,9 @@ export async function inspectWakeflowSupportMemory(
   } catch (error: unknown) {
     if (error instanceof WholeFileContentTransitionError) {
       if (error.reason === "unadmitted-source") {
-        fail("unadmitted-source", "$source");
+        fail("unadmitted-source", "$source", error);
       }
-      fail("authority", error.path);
+      fail("authority", error.path, error);
     }
     throw error;
   }

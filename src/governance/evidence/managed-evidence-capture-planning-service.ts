@@ -179,8 +179,9 @@ export class ManagedEvidenceCapturePlanningServiceError extends Error {
     reason: ManagedEvidenceCapturePlanningServiceErrorReason,
     causeCode: string | null = null,
     causeReason: string | null = null,
+    options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason]);
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.causeCode = causeCode;
     this.causeReason = causeReason;
@@ -218,6 +219,7 @@ function fail(reason: ManagedEvidenceCapturePlanningServiceErrorReason, cause?: 
     reason,
     ownString(cause, "code"),
     ownString(cause, "reason"),
+    cause === undefined ? undefined : { cause },
   );
 }
 

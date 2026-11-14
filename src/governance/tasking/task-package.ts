@@ -242,8 +242,8 @@ export class TaskPackageError extends Error {
   readonly reason: TaskPackageErrorReason;
   readonly path: string;
 
-  constructor(reason: TaskPackageErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: TaskPackageErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -306,8 +306,8 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "$draftValidationInstant",
 );
 
-function fail(reason: TaskPackageErrorReason, path: string): never {
-  throw new TaskPackageError(reason, path);
+function fail(reason: TaskPackageErrorReason, path: string, cause?: unknown): never {
+  throw new TaskPackageError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseCanonicalText(value: string, path: string): string {
@@ -336,7 +336,7 @@ function parseId<
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -345,7 +345,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -354,7 +354,7 @@ function parseCreationTime(value: unknown): UtcInstant {
   try {
     return parseUtcInstant(value, "$/createdAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/createdAt");
+    if (error instanceof UtcInstantError) fail("time", "$/createdAt", error);
     throw error;
   }
 }
@@ -392,7 +392,7 @@ function parseSelectedAuthorityRefs(
       reference = parseLedgerAuthorityMemberReference(values[index]);
     } catch (error: unknown) {
       if (error instanceof LedgerAuthorityStoreError) {
-        fail("reference", `$/selectedAuthorityRefs/${index}`);
+        fail("reference", `$/selectedAuthorityRefs/${index}`, error);
       }
       throw error;
     }
@@ -464,7 +464,7 @@ function parsePlanReview(value: TaskPackageWire["planReview"]): TaskPackagePlanR
   try {
     confirmedAt = parseUtcInstant(value.confirmedAt, "$/planReview/confirmedAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/planReview/confirmedAt");
+    if (error instanceof UtcInstantError) fail("time", "$/planReview/confirmedAt", error);
     throw error;
   }
   return Object.freeze({ reviewer: "user" as const, confirmedAt });
@@ -529,7 +529,8 @@ function parseTestContract(value: TaskPackageWire["testContract"]): Readonly<Tes
   try {
     environment = parseLedgerAuthorityMemberReference(value.environment);
   } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityStoreError) fail("reference", "$/testContract/environment");
+    if (error instanceof LedgerAuthorityStoreError)
+      fail("reference", "$/testContract/environment", error);
     throw error;
   }
   const stopConditions = parseNonEmptyTextList(
@@ -714,7 +715,7 @@ export function parseTaskPackage(value: unknown): Readonly<TaskPackage> {
   try {
     json = parseJsonValue(value, "$taskPackage");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -727,7 +728,7 @@ function readCreationTime(options: CreateTaskPackageOptions): UtcInstant {
   try {
     record = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "clock")) {
@@ -736,6 +737,7 @@ function readCreationTime(options: CreateTaskPackageOptions): UtcInstant {
   try {
     return readUtcWallClock(record.clock as UtcWallClock | undefined);
   } catch (error: unknown) {
+    // 时钟是注入的回调：它抛出的东西不留作 cause（测试钉住的净化约定），只说读时间失败。
     if (error instanceof UtcWallClockError) fail("time", "$options/clock");
     throw error;
   }
@@ -750,7 +752,7 @@ export function createTaskPackage(
   try {
     record = parsePlainRecord(draft, "$draft");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft");
+    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -818,7 +820,7 @@ export function parseTaskPackageDocument(text: unknown): Readonly<TaskPackage> {
     json = parseDeterministicJsonDocument(text, "$taskPackage");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

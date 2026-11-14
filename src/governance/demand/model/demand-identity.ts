@@ -101,8 +101,8 @@ export class DemandIdentityError extends Error {
   readonly reason: DemandIdentityErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandIdentityErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: DemandIdentityErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -135,8 +135,8 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "$draftValidationInstant",
 );
 
-function fail(reason: DemandIdentityErrorReason, path: string): never {
-  throw new DemandIdentityError(reason, path);
+function fail(reason: DemandIdentityErrorReason, path: string, cause?: unknown): never {
+  throw new DemandIdentityError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseCanonicalText(value: string, path: string): string {
@@ -158,7 +158,7 @@ function parseId<Kind extends "program" | "demand" | "pod">(
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("identifier", path);
+    if (error instanceof WakeflowDurableIdError) fail("identifier", path, error);
     throw error;
   }
 }
@@ -168,14 +168,14 @@ function normalizeWire(wire: Readonly<DemandIdentityWire>): Readonly<DemandIdent
   try {
     source = parseRequirementLineageReference(wire.source);
   } catch (error: unknown) {
-    if (error instanceof RequirementLineageError) fail("source", "$/source");
+    if (error instanceof RequirementLineageError) fail("source", "$/source", error);
     throw error;
   }
   let createdAt: UtcInstant;
   try {
     createdAt = parseUtcInstant(wire.createdAt, "$/createdAt");
   } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/createdAt");
+    if (error instanceof UtcInstantError) fail("time", "$/createdAt", error);
     throw error;
   }
   return Object.freeze({
@@ -199,7 +199,7 @@ export function parseDemandIdentity(value: unknown): Readonly<DemandIdentity> {
   try {
     json = parseJsonValue(value, "$identity");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof JsonValueError) fail("json", error.path, error);
     throw error;
   }
   const result = validateWire(json);
@@ -212,7 +212,7 @@ function readCreationTime(options: CreateDemandIdentityOptions): UtcInstant {
   try {
     record = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (Object.keys(record).some((key) => key !== "clock")) {
@@ -221,7 +221,7 @@ function readCreationTime(options: CreateDemandIdentityOptions): UtcInstant {
   try {
     return readUtcWallClock(record.clock as UtcWallClock | undefined);
   } catch (error: unknown) {
-    if (error instanceof UtcWallClockError) fail("time", "$options/clock");
+    if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
   }
 }
@@ -235,7 +235,7 @@ export function createDemandIdentity(
   try {
     record = parsePlainRecord(draft, "$draft");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft");
+    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -274,7 +274,7 @@ export function parseDemandIdentityDocument(text: unknown): Readonly<DemandIdent
     json = parseDeterministicJsonDocument(text, "$identity");
   } catch (error: unknown) {
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
+      fail("representation", error.path, error);
     }
     throw error;
   }

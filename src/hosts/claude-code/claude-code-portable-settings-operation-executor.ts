@@ -116,8 +116,12 @@ export class ClaudeCodePortableSettingsOperationExecutionError extends Error {
   readonly reason: ClaudeCodePortableSettingsOperationExecutionErrorReason;
   readonly path: string;
 
-  constructor(reason: ClaudeCodePortableSettingsOperationExecutionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ClaudeCodePortableSettingsOperationExecutionErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -134,15 +138,20 @@ interface ParsedRequest {
 function fail(
   reason: ClaudeCodePortableSettingsOperationExecutionErrorReason,
   path: string,
+  cause?: unknown,
 ): never {
-  throw new ClaudeCodePortableSettingsOperationExecutionError(reason, path);
+  throw new ClaudeCodePortableSettingsOperationExecutionError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("operation", path);
+    if (error instanceof Sha256Error) fail("operation", path, error);
     throw error;
   }
 }
@@ -152,7 +161,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
   try {
     record = parsePlainRecord(value, "$operation.root");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", "$operation.root");
+    if (error instanceof PassiveOwnDataError) fail("operation", "$operation.root", error);
     throw error;
   }
   const keys = Object.keys(record).sort().join("\u0000");
@@ -176,7 +185,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowDurableIdError) {
-        fail("operation", "$operation.root.rootId");
+        fail("operation", "$operation.root.rootId", error);
       }
       throw error;
     }
@@ -189,7 +198,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
     rootId = parseWakeflowDurableIdOfKind(record.rootId, "surface", "$operation.root.rootId");
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("operation", "$operation.root.rootId");
+      fail("operation", "$operation.root.rootId", error);
     }
     throw error;
   }
@@ -201,7 +210,7 @@ function operationRoot(value: unknown): Readonly<ClaudeCodePortableSettingsRoot>
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigError) {
-      fail("operation", "$operation.root.configuredPlacement");
+      fail("operation", "$operation.root.configuredPlacement", error);
     }
     throw error;
   }
@@ -222,7 +231,7 @@ function parseOperation(value: unknown): Readonly<ClaudeCodePortableSettingsOper
   try {
     record = parsePlainRecord(value, "$operation");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("operation", "$operation");
+    if (error instanceof PassiveOwnDataError) fail("operation", "$operation", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -270,7 +279,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     record = parsePlainRecord(value, "$request");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request");
+    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
     throw error;
   }
   if (
@@ -299,7 +308,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     model = parseWakeflowConfig(record.config);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path);
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
     throw error;
   }
   let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
@@ -307,7 +316,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
     profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path);
+      fail("profile", error.path, error);
     }
     throw error;
   }
@@ -321,7 +330,8 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   try {
     claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
   } catch (error: unknown) {
-    if (error instanceof ClaudeCodePortableSettingsTransitionError) fail("profile", "$/profile");
+    if (error instanceof ClaudeCodePortableSettingsTransitionError)
+      fail("profile", "$/profile", error);
     throw error;
   }
   return Object.freeze({
@@ -375,8 +385,8 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
       );
     } catch (error: unknown) {
       if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("owner", "$stageRecovery");
+        if (error.reason === "aborted") fail("aborted", "$signal", error);
+        fail("owner", "$stageRecovery", error);
       }
       throw error;
     }
@@ -390,8 +400,8 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
     });
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("owner", "$inspection");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("owner", "$inspection", error);
     }
     throw error;
   }
@@ -435,14 +445,14 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
     });
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "transition-blocked") {
-        fail("transition-blocked", "$transition");
+        fail("transition-blocked", "$transition", error);
       }
       if (error.reason === "source-changed") {
-        fail("source-stale", "$operation.sourceDigest");
+        fail("source-stale", "$operation.sourceDigest", error);
       }
-      fail("owner", "$publication");
+      fail("owner", "$publication", error);
     }
     throw error;
   }
@@ -491,7 +501,7 @@ export async function executeClaudeCodePortableSettingsOperation(
       placements = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.model);
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigRootPlacementError) {
-        fail("placement", error.path);
+        fail("placement", error.path, error);
       }
       throw error;
     }
@@ -503,7 +513,7 @@ export async function executeClaudeCodePortableSettingsOperation(
       targetRoot = await RootedDirectory.open(placement.absolutePath);
       closeTarget = true;
     } catch (error: unknown) {
-      if (error instanceof RootedDirectoryError) fail("root-open", "$supportRoot");
+      if (error instanceof RootedDirectoryError) fail("root-open", "$supportRoot", error);
       throw error;
     }
   }

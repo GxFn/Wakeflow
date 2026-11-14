@@ -86,15 +86,19 @@ export class WakeflowMaintenanceJournalError extends Error {
   readonly reason: WakeflowMaintenanceJournalErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowMaintenanceJournalErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: WakeflowMaintenanceJournalErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
 }
 
-function fail(reason: WakeflowMaintenanceJournalErrorReason, path: string): never {
-  throw new WakeflowMaintenanceJournalError(reason, path);
+function fail(reason: WakeflowMaintenanceJournalErrorReason, path: string, cause?: unknown): never {
+  throw new WakeflowMaintenanceJournalError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 const validateWireJournal = createRuntimeJsonSchemaValidator<WakeflowMaintenanceJournalWire>(
@@ -106,7 +110,7 @@ function digest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
   } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path);
+    if (error instanceof Sha256Error) fail("digest", path, error);
     throw error;
   }
 }
@@ -125,7 +129,7 @@ function optionalWriterStamp(
   try {
     writer = parseWakeflowMaintenanceWriter(value, path);
   } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path);
+    if (error instanceof WakeflowMaintenanceWriterError) fail(reason, error.path, error);
     throw error;
   }
   return writer === null ? {} : { writer };
@@ -144,7 +148,7 @@ export function createPreparedWakeflowMaintenanceJournal(
     operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("operation", "$operationId");
+      fail("operation", "$operationId", error);
     }
     throw error;
   }
@@ -153,7 +157,7 @@ export function createPreparedWakeflowMaintenanceJournal(
     plan = parseWakeflowMaintenanceExecutionPlan(planValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-      fail("plan", "$plan");
+      fail("plan", "$plan", error);
     }
     throw error;
   }
@@ -194,7 +198,7 @@ export function parseWakeflowMaintenanceJournal(
   try {
     json = parseJsonValue(value, "$journal");
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path);
+    if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
   const validated = validateWireJournal(json);
@@ -207,7 +211,7 @@ export function parseWakeflowMaintenanceJournal(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("operation", "$journal.operationId");
+      fail("operation", "$journal.operationId", error);
     }
     throw error;
   }

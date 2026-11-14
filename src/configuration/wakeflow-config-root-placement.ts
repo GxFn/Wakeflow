@@ -73,8 +73,12 @@ export class WakeflowConfigRootPlacementError extends Error {
   readonly reason: WakeflowConfigRootPlacementErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowConfigRootPlacementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowConfigRootPlacementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -86,8 +90,16 @@ interface PlannedRoot {
   readonly absolutePath: string;
 }
 
-function fail(reason: WakeflowConfigRootPlacementErrorReason, path: string): never {
-  throw new WakeflowConfigRootPlacementError(reason, path);
+function fail(
+  reason: WakeflowConfigRootPlacementErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowConfigRootPlacementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -196,7 +208,7 @@ async function assertCurrentRoot(root: RootedDirectory): Promise<void> {
   try {
     await root.assertCurrent("$root");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
 }

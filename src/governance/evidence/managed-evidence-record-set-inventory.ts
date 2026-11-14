@@ -134,8 +134,12 @@ export class ManagedEvidenceRecordSetInventoryError extends Error {
   readonly reason: ManagedEvidenceRecordSetInventoryErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidenceRecordSetInventoryErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidenceRecordSetInventoryErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -149,8 +153,16 @@ interface ParsedOptions {
 
 const RECORD_INSPECTION_CONCURRENCY = 4;
 
-function fail(reason: ManagedEvidenceRecordSetInventoryErrorReason, path: string): never {
-  throw new ManagedEvidenceRecordSetInventoryError(reason, path);
+function fail(
+  reason: ManagedEvidenceRecordSetInventoryErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidenceRecordSetInventoryError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function parseExpectedNode(value: unknown, path: string): Readonly<FileNodeSnapshot> | undefined {
@@ -166,7 +178,7 @@ function parseExpectedNode(value: unknown, path: string): Readonly<FileNodeSnaps
   try {
     sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
   } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail("input", path);
+    if (error instanceof FileNodeSnapshotError) fail("input", path, error);
     throw error;
   }
   return value as Readonly<FileNodeSnapshot>;
@@ -177,7 +189,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -228,7 +240,7 @@ function mapDirectoryError(error: StableDirectoryReadError): never {
   ) {
     fail("tree-shape", "$managedEvidence");
   }
-  fail("operation-failure", "$managedEvidence");
+  fail("operation-failure", "$managedEvidence", error);
 }
 
 function mapCandidateError(
@@ -264,7 +276,7 @@ function mapTransactionStoreError(error: ManagedEvidencePublicationTransactionSt
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$transaction");
   if (error.reason === "conflict") fail("transaction", "$transaction");
-  fail("operation-failure", "$transaction");
+  fail("operation-failure", "$transaction", error);
 }
 
 async function readTransaction(
@@ -327,7 +339,7 @@ async function inspectRecord(
     address = parseManagedEvidenceRecordDirectoryName(entry.name);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceResourcePathError) {
-      fail("tree-shape", "$managedEvidence");
+      fail("tree-shape", "$managedEvidence", error);
     }
     throw error;
   }
@@ -339,14 +351,14 @@ async function inspectRecord(
     });
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceRecordReaderError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason === "root-scope") fail("root-scope", "$root");
-      if (error.reason === "capacity") fail("capacity", "$record");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      if (error.reason === "capacity") fail("capacity", "$record", error);
       if (error.reason === "source-changed") {
-        fail("source-changed", "$record");
+        fail("source-changed", "$record", error);
       }
-      if (error.reason === "node-policy") fail("node-policy", "$record");
-      fail("record", "$record");
+      if (error.reason === "node-policy") fail("node-policy", "$record", error);
+      fail("record", "$record", error);
     }
     throw error;
   }
@@ -412,7 +424,7 @@ async function inspectStage(
     address = parseManagedEvidenceStageDirectoryName(entry.name);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceResourcePathError) {
-      fail("tree-shape", "$managedEvidence");
+      fail("tree-shape", "$managedEvidence", error);
     }
     throw error;
   }
@@ -514,7 +526,7 @@ export async function inspectManagedEvidenceRecordSetInventory(
       parseManagedEvidenceStageDirectoryName(entry.name);
     } catch (error: unknown) {
       if (error instanceof ManagedEvidenceResourcePathError) {
-        fail("tree-shape", "$managedEvidence");
+        fail("tree-shape", "$managedEvidence", error);
       }
       throw error;
     }

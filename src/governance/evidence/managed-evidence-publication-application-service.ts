@@ -167,8 +167,9 @@ export class ManagedEvidencePublicationApplicationServiceError extends Error {
     causeCode: string | null = null,
     causeReason: string | null = null,
     publicationAuthority: ManagedEvidencePublicationEffectAuthority = "unknown",
+    options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason]);
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.causeCode = causeCode;
     this.causeReason = causeReason;
@@ -205,6 +206,8 @@ function fail(
     reason,
     ownString(cause, "code"),
     ownString(cause, "reason"),
+    "unknown",
+    cause === undefined ? undefined : { cause },
   );
 }
 

@@ -141,8 +141,8 @@ export class RootedExclusiveFileLockError extends Error {
   readonly reason: RootedExclusiveFileLockErrorReason;
   readonly path: string;
 
-  constructor(reason: RootedExclusiveFileLockErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: RootedExclusiveFileLockErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -210,8 +210,8 @@ const LOCK_TOKEN_PATTERN =
   /^([1-9][0-9]*)-(0|[1-9][0-9]*)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u;
 const MAXIMUM_NODE_TIMER_DELAY_MILLISECONDS = 2_147_483_647;
 
-function fail(reason: RootedExclusiveFileLockErrorReason, path: string): never {
-  throw new RootedExclusiveFileLockError(reason, path);
+function fail(reason: RootedExclusiveFileLockErrorReason, path: string, cause?: unknown): never {
+  throw new RootedExclusiveFileLockError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -246,7 +246,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const allowed = new Set([
@@ -302,7 +302,7 @@ function parseRetirementTargets(
       "$options.relatedTargetResourcePaths",
     );
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   const targets: PortableResourcePath[] = [lockPath];
@@ -312,7 +312,7 @@ function parseRetirementTargets(
       target = parsePortableResourcePath(value, `$options.relatedTargetResourcePaths/${index}`);
     } catch (error: unknown) {
       if (error instanceof PortableResourcePathError) {
-        fail("input", `$options.relatedTargetResourcePaths/${index}`);
+        fail("input", `$options.relatedTargetResourcePaths/${index}`, error);
       }
       throw error;
     }
@@ -345,8 +345,8 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 function readLockMonotonicClock(): MonotonicMoment {
   try {
     return readMonotonicClock();
-  } catch {
-    fail("acquire-failure", "$lock");
+  } catch (cause: unknown) {
+    fail("acquire-failure", "$lock", cause);
   }
 }
 
@@ -358,7 +358,7 @@ function lockDeadline(timeoutMilliseconds: number): MonotonicDeadline {
     );
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) throw error;
-    fail("acquire-failure", "$lock");
+    fail("acquire-failure", "$lock", error);
   }
 }
 
@@ -368,8 +368,8 @@ async function createLockCandidate(
   let tokenUuid: string;
   try {
     tokenUuid = tokenUuidFactory === undefined ? createUuidV4() : createUuidV4(tokenUuidFactory);
-  } catch {
-    fail("acquire-failure", "$lock");
+  } catch (cause: unknown) {
+    fail("acquire-failure", "$lock", cause);
   }
   const record: Readonly<RootedExclusiveFileLockRecord> = Object.freeze({
     kind: "WakeflowExclusiveFileLock" as const,
@@ -383,8 +383,8 @@ async function createLockCandidate(
   let bytes: Uint8Array;
   try {
     bytes = encodeUtf8(renderDeterministicJsonDocument(record, "$lockRecord"), "$lockRecord");
-  } catch {
-    fail("acquire-failure", "$lock");
+  } catch (cause: unknown) {
+    fail("acquire-failure", "$lock", cause);
   }
   if (bytes.byteLength > ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES) {
     fail("acquire-failure", "$lock");
@@ -411,7 +411,7 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
   try {
     record = parsePlainRecord(value, "$lock");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("unsafe-lock", "$lock");
+    if (error instanceof PassiveOwnDataError) fail("unsafe-lock", "$lock", error);
     throw error;
   }
   const keys = Object.keys(record).sort();
@@ -438,7 +438,7 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
   try {
     parseUuidV4(token[3], "$lock/token");
   } catch (error: unknown) {
-    if (error instanceof UuidV4Error) fail("unsafe-lock", "$lock");
+    if (error instanceof UuidV4Error) fail("unsafe-lock", "$lock", error);
     throw error;
   }
   try {
@@ -454,8 +454,8 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
       token: record.token,
       version: 2,
     });
-  } catch {
-    fail("unsafe-lock", "$lock");
+  } catch (cause: unknown) {
+    fail("unsafe-lock", "$lock", cause);
   }
 }
 
@@ -476,7 +476,7 @@ export async function inspectRootedExclusiveFileLock(
       return absent;
     }
     if (error instanceof StableFileReadError && error.reason === "source-changed") {
-      fail("residue-changed", "$lock");
+      fail("residue-changed", "$lock", error);
     }
     if (error instanceof StableFileReadError) {
       if (
@@ -484,22 +484,22 @@ export async function inspectRootedExclusiveFileLock(
         error.reason === "not-file" ||
         error.reason === "too-large"
       ) {
-        fail("unsafe-lock", "$lock");
+        fail("unsafe-lock", "$lock", error);
       }
-      if (error.reason === "input") fail("input", error.path);
+      if (error.reason === "input") fail("input", error.path, error);
       if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
-        fail("root-scope", "$root");
+        fail("root-scope", "$root", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
       // 打开、读取、关闭或摘要计算失败可能发生在旧持有者释放、新持有者获取的短窗口；
       // 锁竞争方只重试并受获取截止时间限制，绝不据此删除路径名。
-      fail("residue-changed", "$lock");
+      fail("residue-changed", "$lock", error);
     }
     if (error instanceof StrictTextFileError) {
-      fail("unsafe-lock", "$lock");
+      fail("unsafe-lock", "$lock", error);
     }
     if (error instanceof DeterministicJsonDocumentError) {
-      fail("unsafe-lock", "$lock");
+      fail("unsafe-lock", "$lock", error);
     }
     throw error;
   }
@@ -568,7 +568,7 @@ export async function retireRootedExclusiveFileLockResidue(
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      fail("residue-changed", "$lock");
+      fail("residue-changed", "$lock", error);
     }
     throw error;
   }
@@ -590,7 +590,7 @@ export async function retireRootedExclusiveFileLockResidue(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      fail("residue-changed", "$lock");
+      fail("residue-changed", "$lock", error);
     }
     throw error;
   }
@@ -627,11 +627,11 @@ async function lockTargetExists(
       // 首次 lstat 后锁文件被并发删除时，真实路径检查只能报告观察失败；
       // 返回 contended 后 assertSafeExistingLock 会立即重新执行完整安全检查。
       if (error.reason === "inspection-failure") return true;
-      if (error.reason === "resource-path") fail("input", "$lockPath");
+      if (error.reason === "resource-path") fail("input", "$lockPath", error);
       if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
-        fail("parent", "$lock");
+        fail("parent", "$lock", error);
       }
-      fail("root-scope", "$root");
+      fail("root-scope", "$root", error);
     }
     throw error;
   }
@@ -687,9 +687,9 @@ async function assertSafeExistingLock(
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found" || error.reason === "resource-changed") return;
       if (error.reason === "ancestor-symlink" || error.reason === "ancestor-type") {
-        fail("parent", "$lock");
+        fail("parent", "$lock", error);
       }
-      fail("root-scope", "$root");
+      fail("root-scope", "$root", error);
     }
     throw error;
   }
@@ -698,11 +698,11 @@ async function assertSafeExistingLock(
 async function waitForRetry(milliseconds: number, signal: AbortSignal | undefined): Promise<void> {
   try {
     await delay(milliseconds, undefined, signal === undefined ? {} : { signal });
-  } catch {
+  } catch (cause: unknown) {
     if (signal?.aborted === true) {
-      fail("aborted", "$signal");
+      fail("aborted", "$signal", cause);
     }
-    fail("acquire-failure", "$lock");
+    fail("acquire-failure", "$lock", cause);
   }
 }
 
@@ -719,8 +719,8 @@ function remainingRetryDelayMilliseconds(
   try {
     retry = monotonicDurationFromMilliseconds(retryDelayMilliseconds);
     maximumTimer = monotonicDurationFromMilliseconds(MAXIMUM_NODE_TIMER_DELAY_MILLISECONDS);
-  } catch {
-    fail("input", "$options.retryDelayMilliseconds");
+  } catch (cause: unknown) {
+    fail("input", "$options.retryDelayMilliseconds", cause);
   }
   const bounded = remaining < retry ? remaining : retry;
   const timerBounded = bounded < maximumTimer ? bounded : maximumTimer;
@@ -760,7 +760,7 @@ async function release(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      fail("release-failure", `$lock/${error.reason}`);
+      fail("release-failure", `$lock/${error.reason}`, error);
     }
     throw error;
   }

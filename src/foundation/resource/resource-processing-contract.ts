@@ -207,8 +207,12 @@ export class WakeflowResourceProcessingContractError extends Error {
   readonly reason: WakeflowResourceProcessingContractErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowResourceProcessingContractErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowResourceProcessingContractErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -282,8 +286,16 @@ const DIRECTORY_CONTAINER_FIELDS = new Set([
   "recoveryStrategy",
 ]);
 
-function fail(reason: WakeflowResourceProcessingContractErrorReason, path: string): never {
-  throw new WakeflowResourceProcessingContractError(reason, path);
+function fail(
+  reason: WakeflowResourceProcessingContractErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowResourceProcessingContractError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function propertyPath(key: string): string {
@@ -304,7 +316,7 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -313,7 +325,7 @@ function denseArray(value: unknown, path: string): readonly unknown[] {
   try {
     return parseDenseArray(value, WAKEFLOW_RESOURCE_MUTATION_RECIPES.length, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }

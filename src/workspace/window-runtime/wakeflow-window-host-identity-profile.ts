@@ -70,8 +70,12 @@ export class WakeflowWindowHostIdentityProfileError extends Error {
   readonly reason: WakeflowWindowHostIdentityProfileErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowWindowHostIdentityProfileErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: WakeflowWindowHostIdentityProfileErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -90,15 +94,23 @@ const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 
-function fail(reason: WakeflowWindowHostIdentityProfileErrorReason, path: string): never {
-  throw new WakeflowWindowHostIdentityProfileError(reason, path);
+function fail(
+  reason: WakeflowWindowHostIdentityProfileErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new WakeflowWindowHostIdentityProfileError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
     throw error;
   }
 }
@@ -155,7 +167,7 @@ export function parseWakeflowWindowHostIdentityProfile(
       "$profile.reservedHandleValues",
     );
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("reserved", error.path);
+    if (error instanceof PassiveOwnDataError) fail("reserved", error.path, error);
     throw error;
   }
   const seen = new Set<string>();

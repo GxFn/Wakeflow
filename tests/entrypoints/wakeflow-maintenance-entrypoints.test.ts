@@ -19,13 +19,13 @@ import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/clau
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { previewCodexMaintenanceExecution } from "../../src/hosts/codex/codex-maintenance-execution.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import { publishWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import { parseWakeflowMaintenanceExecutionPlan } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import { withWakeflowMaintenanceGate } from "../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId } from "../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
@@ -52,6 +52,35 @@ function selection() {
   const value = createMinimalWakeflowFreshConfigSelection();
   (value.storage as Record<string, unknown>).ledgerRoot = "Ledger";
   return value;
+}
+
+/**
+ * 公共预览只公开步骤摘要（open-items K8）；要摆出一份被中断的事务，完整的执行计划从宿主的预览直接取——
+ * 同一个根、同一份选择，推导出的就是公共预览背后的那一份（两处用例各自核对 `planDigest`）。
+ */
+async function codexFreshExecutionPlan(
+  absoluteRoot: string,
+  selected: ReturnType<typeof selection>,
+) {
+  const rooted = await RootedDirectory.open(absoluteRoot);
+  try {
+    return await previewCodexMaintenanceExecution(
+      rooted,
+      Object.freeze({
+        action: "fresh-initialize" as const,
+        desiredConfig: compileWakeflowFreshConfigSelection(selected, {
+          workspaceRoot: rooted.absolutePath,
+        }).config,
+        currentHostProfile: codexWorkspaceHostResourceProfile,
+        hostProfiles: Object.freeze([
+          codexWorkspaceHostResourceProfile,
+          claudeCodeWorkspaceHostResourceProfile,
+        ]),
+      }),
+    );
+  } finally {
+    await rooted.close();
+  }
 }
 
 const RECOVERY_OPERATION_ID = parseWakeflowMaintenanceOperationId(
@@ -143,9 +172,21 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
   if (preview.planDigest === null || preview.plan === null) {
     throw new Error("Expected a ready Claude plan.");
   }
-  const plan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
+  // 公共预览给的是步骤摘要（open-items K8）：每一步一次，宿主步以 `boundary: host-capability` 标出。
+  const summary = preview.plan as {
+    readonly kind: string;
+    readonly steps: readonly { readonly boundary: string }[];
+  };
+  equal(summary.kind, "WakeflowMaintenancePlanSummary");
+  deepEqual(
+    Object.keys(summary).sort(),
+    ["kind", "schemaVersion", "steps"],
+    "the full execution plan stays in the process",
+  );
   // 三条 portable settings、状态栏资产、三条本地设置条目（根与 Design、Test 面，复审 M2）、tmux 助手资产。
-  equal(plan.hostContribution?.operations.length, 8);
+  equal(summary.steps.filter((step) => step.boundary === "host-capability").length, 8);
+  // 首次初始化的预览此前是 31 KB（同一批步骤带了三遍）；摘要之后约 11 KB，其中三分之一是启动意图。
+  equal(Buffer.byteLength(JSON.stringify(preview)) < 16_000, true, "preview result size");
 
   let caught: unknown;
   try {
@@ -180,7 +221,8 @@ test("Public recovery consumes only an operation ID and its private intent", asy
   if (preview.mode !== "preview" || preview.plan === null) {
     throw new Error("Expected a ready recovery fixture plan.");
   }
-  const executionPlan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
+  const executionPlan = await codexFreshExecutionPlan(absoluteRoot, selected);
+  equal(executionPlan.planDigest, preview.planDigest);
   const rooted = await RootedDirectory.open(absoluteRoot);
   // 维护以工作区根（realpath）作 id 种子（裁决 R2）：手工编译同一 selection 时要传同一根，意图才与计划一致。
   const desiredConfig = compileWakeflowFreshConfigSelection(selected, {
@@ -251,7 +293,8 @@ test("被中断的维护事务是另一版制品写的（open-items B8）：本�
   if (preview.mode !== "preview" || preview.plan === null) {
     throw new Error("Expected a ready recovery fixture plan.");
   }
-  const executionPlan = parseWakeflowMaintenanceExecutionPlan(preview.plan);
+  const executionPlan = await codexFreshExecutionPlan(absoluteRoot, selected);
+  equal(executionPlan.planDigest, preview.planDigest);
   const olderBuild = {
     version: "1.2.9",
     manifestDigest: parseSha256Digest(`sha256:${"a".repeat(64)}`),

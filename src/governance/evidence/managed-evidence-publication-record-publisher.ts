@@ -104,8 +104,12 @@ export class ManagedEvidencePublicationRecordPublisherError extends Error {
   readonly reason: ManagedEvidencePublicationRecordPublisherErrorReason;
   readonly path: string;
 
-  constructor(reason: ManagedEvidencePublicationRecordPublisherErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: ManagedEvidencePublicationRecordPublisherErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -120,8 +124,16 @@ interface PhysicalState {
   readonly finalNode: Readonly<FileNodeSnapshot> | null;
 }
 
-function fail(reason: ManagedEvidencePublicationRecordPublisherErrorReason, path: string): never {
-  throw new ManagedEvidencePublicationRecordPublisherError(reason, path);
+function fail(
+  reason: ManagedEvidencePublicationRecordPublisherErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new ManagedEvidencePublicationRecordPublisherError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -140,7 +152,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value === undefined ? {} : value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -165,7 +177,7 @@ function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTr
     return parseManagedEvidencePublicationTransaction(value);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction");
+      fail("input", "$transaction", error);
     }
     throw error;
   }
@@ -208,7 +220,7 @@ async function nodeOrNull(
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
       return null;
     }
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$demandRoot");
+    if (error instanceof RootedDirectoryError) fail("root-scope", "$demandRoot", error);
     throw error;
   }
 }
@@ -272,7 +284,8 @@ async function syncFinalParent(
   try {
     parent = await RootedResourceParentHandle.open(root, plan.destinationRootPath, "$final");
   } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) fail("durability-failure", "$final");
+    if (error instanceof RootedResourceParentHandleError)
+      fail("durability-failure", "$final", error);
     throw error;
   }
   let failure: unknown;
@@ -300,7 +313,7 @@ function admitFinalPublish(transaction: Readonly<ManagedEvidencePublicationTrans
     admitWakeflowResourceOperation(declaration.processing, "tree-publish-or-move");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
-      fail("operation-failure", "$catalog");
+      fail("operation-failure", "$catalog", error);
     }
     throw error;
   }
@@ -322,7 +335,7 @@ function mapPublicationError(error: DurableDirectoryTreePublicationError): never
   if (error.reason === "source-changed" || error.reason === "source-conflict") {
     fail("stage-conflict", "$stage");
   }
-  fail("operation-failure", "$final");
+  fail("operation-failure", "$final", error);
 }
 
 async function currentFinalOrNull(
@@ -449,7 +462,7 @@ export async function publishManagedEvidencePublicationRecord(
     await requireJournal(demandRootValue, transaction, undefined, stored.source.node);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
-      fail("commit-uncertain", "$final");
+      fail("commit-uncertain", "$final", error);
     }
     throw error;
   }

@@ -78,8 +78,12 @@ export class DurableRegularFileSettlementError extends Error {
   readonly reason: DurableRegularFileSettlementErrorReason;
   readonly path: string;
 
-  constructor(reason: DurableRegularFileSettlementErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(
+    reason: DurableRegularFileSettlementErrorReason,
+    path: string,
+    options?: ErrorOptions,
+  ) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -90,8 +94,16 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: DurableRegularFileSettlementErrorReason, path: string): never {
-  throw new DurableRegularFileSettlementError(reason, path);
+function fail(
+  reason: DurableRegularFileSettlementErrorReason,
+  path: string,
+  cause?: unknown,
+): never {
+  throw new DurableRegularFileSettlementError(
+    reason,
+    path,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -133,7 +145,7 @@ function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
     }
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode");
+      fail("input", "$options.expectedNode", error);
     }
     throw error;
   }
@@ -149,7 +161,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (

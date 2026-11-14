@@ -124,8 +124,8 @@ export class StableResourceTreeReadError extends Error {
   readonly reason: StableResourceTreeReadErrorReason;
   readonly path: string;
 
-  constructor(reason: StableResourceTreeReadErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
+  constructor(reason: StableResourceTreeReadErrorReason, path: string, options?: ErrorOptions) {
+    super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
   }
@@ -143,8 +143,8 @@ interface ParsedStableResourceTreeReadOptions {
 
 type TreeRootResourcePath = PortableResourcePath | null;
 
-function fail(reason: StableResourceTreeReadErrorReason, path: string): never {
-  throw new StableResourceTreeReadError(reason, path);
+function fail(reason: StableResourceTreeReadErrorReason, path: string, cause?: unknown): never {
+  throw new StableResourceTreeReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -167,7 +167,7 @@ function parseBytes(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
   } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("input", path);
+    if (error instanceof ByteCountError) fail("input", path, error);
     throw error;
   }
 }
@@ -177,7 +177,7 @@ function parseOptions(value: unknown): Readonly<ParsedStableResourceTreeReadOpti
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
 
@@ -307,7 +307,7 @@ function addTreeBytes(current: ByteCount, next: ByteCount): ByteCount {
     return addByteCounts(current, next, "$tree.totalFileBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      fail("total-bytes", "$tree.totalFileBytes");
+      fail("total-bytes", "$tree.totalFileBytes", error);
     }
     throw error;
   }

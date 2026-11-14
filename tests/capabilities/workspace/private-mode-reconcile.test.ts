@@ -225,10 +225,7 @@ test("reconcile 把 chmod -R go+rX 之后的私有树收回 0700 / 0600（§13.1
   // 收回之后 reconcile 回到普通预览：就绪、零步骤；verify 的 local-layout 门通过。
   const after = await previewReconcile(root);
   equal(after.status, "ready");
-  equal(
-    (after.plan as { readonly kind?: string } | null)?.kind,
-    "WakeflowMaintenanceExecutionPlan",
-  );
+  equal((after.plan as { readonly kind?: string } | null)?.kind, "WakeflowMaintenancePlanSummary");
   equal((after.plan as { readonly steps?: readonly unknown[] } | null)?.steps?.length ?? 0, 0);
   equal(await localLayoutCode(root), null);
 });

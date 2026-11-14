@@ -61,7 +61,7 @@ function parseInitializeOptions(
   try {
     record = parsePlainRecord(value, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
   if (
@@ -114,7 +114,7 @@ export class LedgerAuthorityStore {
         "$requirementId",
       );
     } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$requirementId");
+      if (error instanceof WakeflowDurableIdError) fail("input", "$requirementId", error);
       throw error;
     }
     return loadLedgerAuthorityRecord(this.#root, requirementId, signal);
@@ -174,7 +174,7 @@ export class LedgerAuthorityStore {
         "$references",
       );
     } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", "$references");
+      if (error instanceof PassiveOwnDataError) fail("input", "$references", error);
       throw error;
     }
     if (values.length === 0) fail("input", "$references");
@@ -183,7 +183,7 @@ export class LedgerAuthorityStore {
         return parseLedgerAuthorityMemberReference(value);
       } catch (error: unknown) {
         if (error instanceof LedgerAuthorityStoreError) {
-          fail("input", `$/references/${index}`);
+          fail("input", `$/references/${index}`, error);
         }
         throw error;
       }

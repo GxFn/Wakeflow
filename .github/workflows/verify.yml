@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+    # A v* tag runs only the release job below: its commit already ran the gate when main was pushed.
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +19,7 @@ concurrency:
 jobs:
   verify:
     name: ${{ matrix.profile }} / ${{ matrix.os }}
+    if: github.ref_type != 'tag'
     runs-on: ${{ matrix.os }}
     # The gate profile runs the whole `npm test` under a 90-minute verifier budget at two workers.
     timeout-minutes: 120
@@ -61,6 +64,7 @@ jobs:
           retention-days: 14
   handoff:
     name: handoff / ubuntu
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-24.04
     # The read-only handoff checklist (whitespace, private content, build:check, docs pointers,
     # duration-table coverage, CLAUDE.md/AGENTS.md parity, Git state) ran only locally before
@@ -79,3 +83,36 @@ jobs:
       - run: npm ci
       - name: Run the handoff checklist
         run: npm run --silent wf -- handoff
+  release:
+    name: release check / ubuntu
+    # open-items C12: six tags (v1.1.0 - v1.2.2) were cut on commits whose remote gate was red and
+    # nothing said so. A v* tag now runs the strict release consistency check remotely: the version
+    # sources agree, the tag points at this commit, the tree is clean, the artifacts are release
+    # eligible, and the gate run that main's push started for this commit is green. `--require-main`
+    # and `--require-remote` are local-checkout questions (a tag checkout has no branch); the job
+    # proves the remote side of them instead: the tagged commit is on origin/main.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0
+          package-manager-cache: false
+      - run: npm install --global npm@11.17.0
+      - run: npm ci
+      - name: The tagged commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Release consistency, with a green remote gate for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npx tsc -b tooling/tsconfig.json --pretty false
+          node .build/tooling/release/check-release-consistency.js --require-clean --require-tag --require-remote-gate

@@ -185,8 +185,11 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   hold that lock themselves. Never start another build, scan or test run while
   a tier 2 gate is running: its load-sensitive tests fail under contention.
 - `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
-  private content, `build:check`, version-bytes, docs pointers, Git state); run
-  it before reporting completion and fix what it names.
+  private content, `build:check`, version-bytes, docs pointers, Git state, and
+  the remote gate's latest result for the current branch); run it before
+  reporting completion and fix what it names. A red remote gate fails it:
+  read that run before pushing anything else. When `gh` cannot read the
+  result the item says "not checked" and does not block.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
   end-to-end scenario chain (30 scenarios, run once per host), the Schema
@@ -221,8 +224,15 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   release bump --version X --apply` performs only the first of them.
 - `npm run release:check` is a strict post-commit release consistency gate. It
   expects `main`, a clean tree, the matching tag at `HEAD`, local
-  `origin/main` at the same commit, release-eligible artifact manifests and a
-  Node 24 runtime; do not weaken it to make an incomplete release appear valid.
+  `origin/main` at the same commit, a green remote gate for that commit (read
+  through `gh`; unreadable is a failure), release-eligible artifact manifests
+  and a Node 24 runtime; do not weaken it to make an incomplete release appear
+  valid. A `v*` tag push runs the same check remotely (`verify.yml`, job
+  `release`).
+- `tooling/git-hooks/pre-push` is an optional guard: it runs the handoff
+  checklist before a push to `main` or of a `v*` tag and refuses on a failure.
+  Installing it (`git config core.hooksPath tooling/git-hooks`) is the user's
+  decision; never install or bypass it on their behalf.
 - Never claim a release or cache refresh succeeded without verifying the exact
   artifact version and commit that the host will load.
 

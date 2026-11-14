@@ -5,11 +5,16 @@ import path from "node:path";
 import { BUILD_LOCK_TOKEN_VARIABLE, withBuildLock } from "../build-lock.js";
 import { privateDirectory, writeReport } from "../verification/files.js";
 import { npmCommand, runLoggedCommand } from "../verification/process.js";
+import {
+  judgeRemoteGate,
+  type RemoteGateReader,
+  readRemoteGateRuns,
+} from "../release/remote-gate.js";
 
 /**
  * Wakeflow Tooling / Handoff：交接前的只读检查单，把 CLAUDE.md 的交接规则变成一条命令。
  *
- * 八项检查各自给出 passed / failed / unavailable：空白错误（`git diff --check`）、私有内容
+ * 九项检查各自给出 passed / failed / unavailable（第九项是当前分支在远端的门最近一次的结果，见下）：空白错误（`git diff --check`）、私有内容
  * （本机家目录与临时目录路径、凭证样式）、制品新鲜度（`npm run build:check`）、版本字节
  * （ADR-0021：当前版本的 `v<version>` tag 存在时两份制品清单的文件摘要必须与 tag 一致，
  * 字节变了先 bump；tag 不存在只记录未比较）、文档指针
@@ -21,7 +26,8 @@ import { npmCommand, runLoggedCommand } from "../verification/process.js";
  * 仍是证据与归档的权威，这里只是提交前的维护者便利检查。
  *
  * 整体状态：任一项 failed 即 failed（退出码 1）；任一项 unavailable 即 unavailable（退出码 2），
- * 唯一的例外是用户以 `--no-artifacts` 显式跳过的 build:check。拿不到构建锁、等锁时被取消或
+ * 例外是用户以 `--no-artifacts` 显式跳过的 build:check，以及读不到的远端门状态（那一项是信息：`gh`
+ * 不可用或分支没有远端运行时标为未核对，不拦交接；读到了并且是红的才失败）。拿不到构建锁、等锁时被取消或
  * 没能派生 npm 时该项同样 unavailable，但那是必需检查没有执行，不能当作通过（open-items W26）。
  */
 
@@ -34,7 +40,8 @@ export interface HandoffCheck {
     | "docs-pointers"
     | "test-durations"
     | "instructions-parity"
-    | "git";
+    | "git"
+    | "remote-gate";
   readonly status: "passed" | "failed" | "unavailable";
   readonly details: readonly string[];
 }
@@ -51,6 +58,8 @@ export interface HandoffOptions {
   /** 运行 `npm run build:check`；缺省运行。显式关闭时该项报告 unavailable 且不计入整体状态。 */
   readonly artifacts?: boolean;
   readonly signal?: AbortSignal;
+  /** 读当前分支在远端的门运行；缺省经 `gh`，测试注入替身。 */
+  readonly readRemoteGate?: RemoteGateReader;
 }
 
 const MAXIMUM_SCANNED_BYTES = 2 * 1024 * 1024;
@@ -569,6 +578,54 @@ function gitCheck(root: string): HandoffCheck {
   return { name: "git", status: "passed", details };
 }
 
+/**
+ * 当前分支在远端的门最近一次说了什么（open-items C12）。远端曾连续 29 次失败而没有人看见：这里让每一次
+ * 交接都读一眼。红的是失败——先去看那次运行，再往上推别的；读不到（`gh` 不在、没登录、离线、分支没有
+ * 远端运行）是未核对，不拦交接，但写明没有核对。只读，不触发任何运行。
+ */
+function remoteGateCheck(root: string, read: RemoteGateReader): HandoffCheck {
+  const name = "remote-gate";
+  const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const branchName = branch.status === 0 ? branch.stdout.trim() : "";
+  if (branchName === "" || branchName === "HEAD") {
+    return { name, status: "unavailable", details: ["not checked: no branch is checked out"] };
+  }
+  const verdict = judgeRemoteGate(read(root, { branch: branchName }));
+  const at = verdict.headSha === null ? "" : ` at ${verdict.headSha.slice(0, 8)}`;
+  if (verdict.state === "unchecked") {
+    return {
+      name,
+      status: "unavailable",
+      details: ["not checked: gh is unavailable, not signed in, or offline"],
+    };
+  }
+  if (verdict.state === "none") {
+    return {
+      name,
+      status: "unavailable",
+      details: [`not checked: no remote gate run for branch ${branchName}`],
+    };
+  }
+  if (verdict.state === "red") {
+    return {
+      name,
+      status: "failed",
+      details: [
+        `the remote gate for ${branchName} is ${verdict.conclusion ?? "not successful"}${at}; read that run before pushing more`,
+      ],
+    };
+  }
+  return {
+    name,
+    status: "passed",
+    details: [
+      verdict.state === "green"
+        ? `the remote gate for ${branchName} is green${at}`
+        : `a remote gate run for ${branchName} is in progress${at}`,
+    ],
+  };
+}
+
 export async function checkHandoff(
   rootInput: string,
   options: HandoffOptions = {},
@@ -582,10 +639,11 @@ export async function checkHandoff(
     testDurationsCheck(root),
     instructionsParityCheck(root),
     gitCheck(root),
+    remoteGateCheck(root, options.readRemoteGate ?? readRemoteGateRuns),
   );
-  // 只有用户显式跳过的 build:check 不计入整体；必需检查没能执行的 unavailable 照常阻止。
+  // 用户显式跳过的 build:check 与读不到的远端门状态不计入整体；其余必需检查没能执行的 unavailable 照常阻止。
   const skippedOnRequest = (check: HandoffCheck) =>
-    check.name === "artifacts" && options.artifacts === false;
+    (check.name === "artifacts" && options.artifacts === false) || check.name === "remote-gate";
   const status = checks.some((check) => check.status === "failed")
     ? "failed"
     : checks.some((check) => check.status === "unavailable" && !skippedOnRequest(check))

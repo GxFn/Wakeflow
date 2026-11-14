@@ -1,0 +1,29 @@
+#!/bin/sh
+# Wakeflow pre-push guard (open-items C12). Optional: nothing installs it for you.
+#   install:   git config core.hooksPath tooling/git-hooks
+#   uninstall: git config --unset core.hooksPath
+#
+# A push to main, or of a v* tag, first runs the read-only handoff checklist
+# (whitespace, private content, build:check, version bytes, docs pointers, Git
+# state and the remote gate's latest result). A failed or unavailable checklist
+# refuses the push. Other branches pass through untouched. It writes nothing and
+# never runs the full gate: the tier 2 receipt is yours to produce before pushing.
+
+guarded=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main | refs/tags/v*) guarded=1 ;;
+  esac
+done
+
+if [ "$guarded" -eq 0 ]; then
+  exit 0
+fi
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+if npm run --silent wf -- handoff >/dev/null; then
+  exit 0
+fi
+echo "wakeflow pre-push: the handoff checklist did not pass; run 'npm run wf -- handoff' and fix what it names." >&2
+exit 1

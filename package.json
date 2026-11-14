@@ -24,7 +24,7 @@
     "refusals:build": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/refusal-reference.js build --repo-root .",
     "refusals:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/refusal-reference.js check --repo-root .",
     "check:typescript": "npm run typecheck && npm run check:architecture && npm run lint && npm run format:check && npm run check:unused && npm run test:typescript && npm run schema:check && npm run helpers:check && npm run refusals:check && npm run build:check",
-    "release:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/release/check-release-consistency.js --require-main --require-clean --require-tag --require-remote",
+    "release:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/release/check-release-consistency.js --require-main --require-clean --require-tag --require-remote --require-remote-gate",
     "test": "npm run check:typescript",
     "scenario:acceptance": "npm run test:typescript:focused -- tests/scenarios",
     "lint": "biome lint src tests tooling",

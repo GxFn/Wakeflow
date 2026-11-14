@@ -1,6 +1,7 @@
 # Wakeflow 功能与场景总览
 
 > 状态：`draft`，待用户确认理解一致后转 `active`
+> 修订：2026-11-14（open-items M3，gate-log §13.244）改正三处与 ADR、能力卡及实现不符的描述——评审决定没有 redesign；替换包由升级的回答触发；Wakeflow 不删除 worktree 检出。状态行不动：转 `active` 仍等用户确认。
 > 建立日期：2026-09-04
 > 来源：能力卡 [01](./capabilities/01-workspace-and-configuration.md) 到 [10](./capabilities/10-automation-and-operations.md) 的确认记录、[ADR-0001](../decisions/0001-documentation-system.md) 到 [ADR-0010](../decisions/0010-worktree-isolated-execution-and-converged-flow.md)、旧 JavaScript 实现的场景证据
 > 用途：在架构思考、垂直切片划分与基础能力设计之前，用一份自顶向下的功能清单核对"Wakeflow 是什么、做什么、在什么场景下被谁使用"。本文不描述实现，不引入新决定；与能力卡冲突时以能力卡为准并修正本文。
@@ -45,7 +46,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | 投递 | group、packet、envelope、run 四层记录加一次性发送许可 | Controller 准备与声明 | Demand 事件流 | 只创建；run 追加不分叉 |
 | 工作声明 | 对端点注意力与仓库工作树的互斥声明，带围栏令牌 | 投递准备 apply 获取 | 共享协调根 | 过期只开恢复门 |
 | 结果记录 | 目标或 Test 窗口交回的不可变记录：结论、分支与提交、证据定位符、锚点映射 | 目标窗口导入 | Demand 根 | 只创建；current 或 historical |
-| 评审决定 | Controller 的验收事件：accept、rework、redesign、blocked；Test 另有 verdict 与尝试决定 | Controller | Demand 事件流 | 事件 |
+| 评审决定 | Controller 的验收事件：实现决定 accept、rework、blocked、escalate；测试决定 accept、request-another-attempt、escalate | Controller | Demand 事件流 | 事件 |
 | 证据 | 从 worktree、支撑面、链接、提交或 hook 观察固化的记录，带隐私扫描 | Controller | Demand 根 | 不可变 |
 | 归档包 | Demand 全部权威、事件、工件、证据、传输摘要、TODO 谱系、worktree 来源 | Controller 归档 | ledger `workspace/archive/` | 不可变；活动根删除 |
 | 投影 | `index.md`、`workspace-current-status.md`、每 Demand 进度页、需求看板索引、Claude 状态栏 | Wakeflow | 各根 | 确定性重写；手写即不覆盖；ledger 记录不带 Markdown 索引（能力卡 3 §3.5） |
@@ -88,7 +89,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 分支：
 
 - 返工：评审 rework 后，同一任务同一包的新投递（步 7 到 11 重复）。
-- 重设计：评审 redesign 后，同仓库用替换包（旧任务与包 superseded）。
+- 替换：没有名为 redesign 的评审决定。升级（escalate）的回答改变了目标要做的事之后，同仓库用替换包（旧任务与包 superseded）；只有没有在途工作的目标可以被替换。
 - 继续：已完成的 Demand 上用 continuation 谱系新增任务，状态回到规划。
 - 补充需求：类型 supplement 的需求包，声明它补充的需求，由 requirement-supplement 续接并入完成了那个需求的 Demand（1.3.0 起，ADR-0011 补记；此前是一个新 Demand）。
 - 取消：任何非终态；结果与证据保留；需求包 withdrawn。
@@ -190,7 +191,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 | --- | --- | --- |
 | F9.1 记录证据 | Controller 固化评审输入 | 来源：托管路径（仓库、支撑面、pod worktree）、https、git-commit、hook 观察；kind 闭集；隐私扫描只拒凭证类；transcript 按定位符引用 |
 | F9.2 归档 | 完成或取消的一部分 | 与完成同一事务；封包含权威、事件、工件、证据、传输摘要、需求包谱系、worktree 来源、verify 报告；活动根删除；需求包 archived |
-| F9.3 清理 | pod 关闭或维护对账时 | 删传输残留与已关闭 pod 的 worktree 检出；门：已归档、摘要匹配、无活动声明、hook 证明会话结束；永不动 ledger、证据、需求包、journal |
+| F9.3 清理 | pod 关闭或维护对账时 | 退役传输残留与已关闭 pod 的窗口投影；worktree 检出与分支由用户自己处理（F3.5：worktree 从不由 Wakeflow 删除，能力卡 08 §8.4），关闭前先记下各分支的去向；门：已归档、无活动声明、hook 证明会话结束；永不动 ledger、证据、需求包、journal |
 
 ### F10 观察与校验（能力卡 9）
 

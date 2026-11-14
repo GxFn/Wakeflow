@@ -7,7 +7,7 @@ import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
 
 /**
- * `wf handoff`（第 4 级，维护者工具）：只读交接检查单的八项判定与整体状态，夹具是一次性 Git
+ * `wf handoff`（第 4 级，维护者工具）：只读交接检查单的九项判定与整体状态，夹具是一次性 Git
  * 检出，`build:check` 由夹具脚本充当。整体状态的规则——显式 `--no-artifacts` 跳过的 build:check
  * 不计入，必需检查没能执行即 unavailable（退出码 2）——见 open-items W26。
  */
@@ -49,7 +49,7 @@ function check(report: Awaited<ReturnType<typeof checkHandoff>>, name: string) {
   return found;
 }
 
-test("干净的检出：八项检查通过，不运行 build:check 时该项为 unavailable 但整体仍通过", async (t) => {
+test("干净的检出：各项检查通过，不运行 build:check 时该项为 unavailable、远端门读不到时标为未核对，整体仍通过", async (t) => {
   const root = fixture(t);
   const report = await checkHandoff(root, { artifacts: false });
   equal(report.status, "passed");
@@ -65,8 +65,13 @@ test("干净的检出：八项检查通过，不运行 build:check 时该项为 
       ["test-durations", "passed"],
       ["instructions-parity", "passed"],
       ["git", "passed"],
+      // 夹具仓库没有 GitHub 远端：不起 gh，标为未核对，不计入整体。
+      ["remote-gate", "unavailable"],
     ],
   );
+  deepEqual(check(report, "remote-gate").details, [
+    "not checked: gh is unavailable, not signed in, or offline",
+  ]);
   deepEqual(check(report, "version-bytes").details, [
     "no assets/release/version.json; nothing to compare",
   ]);
@@ -308,4 +313,59 @@ test("version-bytes（ADR-0021）：当前版本的 tag 存在时比较两份制
   // bump 之后当前版本没有 tag：回到"未比较"，新字节可以继续提交。
   write(root, "assets/release/version.json", versionInput("1.2.4"));
   equal(check(await checkHandoff(root, { artifacts: false }), "version-bytes").status, "passed");
+});
+
+test("remote-gate（open-items C12）：当前分支在远端的门是红的即失败并点名提交，绿的与进行中通过，没有运行或读不到是未核对且不拦交接", async (t) => {
+  const root = fixture(t);
+  const branch = "main";
+  git(root, ["branch", "-M", branch]);
+  const run = (
+    conclusion: string | null,
+    status = "completed",
+    createdAt = "2026-11-14T02:00:00Z",
+  ) => ({
+    headSha: "a".repeat(40),
+    headBranch: branch,
+    event: "push",
+    status,
+    conclusion,
+    createdAt,
+  });
+  const asked: unknown[] = [];
+  const withRuns = async (runs: readonly ReturnType<typeof run>[] | null) =>
+    checkHandoff(root, {
+      artifacts: false,
+      readRemoteGate: (_root, query) => {
+        asked.push(query);
+        return runs;
+      },
+    });
+
+  const red = await withRuns([run("failure")]);
+  equal(red.status, "failed");
+  equal(red.exitCode, 1);
+  deepEqual(check(red, "remote-gate").details, [
+    "the remote gate for main is failure at aaaaaaaa; read that run before pushing more",
+  ]);
+  deepEqual(asked, [{ branch }]);
+
+  // 最近的一次说了算：更早的绿不遮住后来的红，更早的红也不拖住后来的绿。
+  const laterGreen = await withRuns([
+    run("failure", "completed", "2026-11-13T02:00:00Z"),
+    run("success", "completed", "2026-11-14T02:00:00Z"),
+  ]);
+  equal(laterGreen.status, "passed");
+  deepEqual(check(laterGreen, "remote-gate").details, [
+    "the remote gate for main is green at aaaaaaaa",
+  ]);
+  const pending = await withRuns([run(null, "in_progress")]);
+  equal(check(pending, "remote-gate").status, "passed");
+  match(check(pending, "remote-gate").details.join(""), /in progress/u);
+
+  for (const runs of [[], null] as const) {
+    const unchecked = await withRuns(runs);
+    equal(unchecked.status, "passed");
+    equal(check(unchecked, "remote-gate").status, "unavailable");
+    match(check(unchecked, "remote-gate").details.join(""), /^not checked: /u);
+  }
 });

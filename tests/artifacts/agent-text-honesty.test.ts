@@ -209,6 +209,61 @@ test("Codex 渲染出的全部出厂文本与取值表都不含 `/wakeflow:`（R
 });
 
 /**
+ * M3：评审决定的名字是封闭的——实现决定 accept、rework、blocked、escalate，测试决定 accept、
+ * request-another-attempt、escalate。需求总览与发货的参考曾经写过一个不存在的 `redesign` 决定，
+ * 真实的 Controller 照着去找，工具当然拒绝。发货文本里不得再出现它（或别的像决定名的旧词）。
+ */
+const RETIRED_DECISION_NAMES: readonly string[] = Object.freeze(["redesign", "re-design"]);
+
+test("发货文本与宿主取值里没有不存在的评审决定名（open-items M3）", () => {
+  for (const source of SOURCES) {
+    for (const name of RETIRED_DECISION_NAMES) {
+      equal(
+        source.text.toLowerCase().includes(name),
+        false,
+        `${source.path} names the decision ${name}, which no review schema admits`,
+      );
+    }
+  }
+});
+
+/**
+ * E4：Codex 制品里的 Claude 专属词汇。两个宿主共用同一份源文本，Claude Code 才有的东西——tmux 会话与 pane、
+ * 助手脚本、`.claude/` 下的设置与 worktree、状态栏、`/login`、`claude --…` 命令行——只要出现在 Codex 渲染
+ * 出的文本里，所在的那一段就必须点名 Claude Code：读的人（Codex 的 Controller，或 Codex 的用户）要能看出
+ * 这一段说的不是自己的宿主。登记时 README 里有一句不带限定的 "attach to tmux" 原样进了 Codex 制品；
+ * 那之后逐处补了限定，这里把它变成门，新写的段落漏了限定就失败。段落按空行分。
+ */
+const CLAUDE_ONLY_VOCABULARY =
+  /tmux|\bpanes?\b|\/login\b|status-?line|desktop\.mjs|\.claude\/|claude --|--resume\b/iu;
+const NAMES_CLAUDE_CODE = /Claude\s+Code|claude-code/u;
+
+test("Codex 渲染出的文本里，带 Claude 专属词汇的每一段都点名 Claude Code（open-items E4）", () => {
+  let paragraphsWithVocabulary = 0;
+  const unqualified: string[] = [];
+  for (const source of SOURCES) {
+    if (!CODEX_AGENT_TEXT_COMMANDS_INCLUDED && source.path.startsWith(COMMANDS_PREFIX)) continue;
+    // 第一行标了只随别的宿主发出的文件（桌面传输的参考）不进 Codex 制品。
+    const hosts = /^<!-- wakeflow-hosts: ([^>]*?) -->/u.exec(source.text)?.[1];
+    if (hosts !== undefined && !hosts.split(", ").includes("codex")) continue;
+    const language = source.path.endsWith(".zh-CN.md") ? "zh" : "en";
+    for (const paragraph of renderCodexAgentText(source.text, language).split(/\n[ \t]*\n/u)) {
+      if (!CLAUDE_ONLY_VOCABULARY.test(paragraph)) continue;
+      paragraphsWithVocabulary += 1;
+      if (NAMES_CLAUDE_CODE.test(paragraph)) continue;
+      const line = paragraph.split("\n").find((entry) => CLAUDE_ONLY_VOCABULARY.test(entry)) ?? "";
+      unqualified.push(`${source.path}: ${line.trim().slice(0, 120)}`);
+    }
+  }
+  // 扫描确实看到了这些段落（源文本改了写法、正则不再命中时这里会先失败）。
+  ok(
+    paragraphsWithVocabulary >= 10,
+    `paragraphs with Claude-only vocabulary: ${paragraphsWithVocabulary}`,
+  );
+  deepEqual(unqualified, []);
+});
+
+/**
  * 项目专有词（复审 M5，旧 validate.mjs 的 project-token 扫描）：发货文本是通用产品文本，不能带测试程序、
  * 测试工作区或本机目录的名字。只收已经在现场出现过的词。
  */

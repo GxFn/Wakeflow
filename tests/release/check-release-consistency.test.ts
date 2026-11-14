@@ -274,3 +274,45 @@ test("Git 门各自独立：非 main 分支、脏树、标签不在 HEAD、本�
   git(behind, "tag", "--force", `v${VERSION}`, "HEAD");
   checkWakeflowReleaseConsistency(behind, ALL_GATES);
 });
+
+test("远端门（open-items C12）：要求 HEAD 在远端的门为绿——只认对 main 的 push 触发的那次运行，红、未结束、没有运行与读不到各以同一个错误码拒绝", (t) => {
+  const root = repositoryFixture(t);
+  const head = git(root, "rev-parse", "HEAD").trim();
+  const run = (overrides: Readonly<Record<string, string | null>> = {}) => ({
+    headSha: head,
+    headBranch: "main",
+    event: "push",
+    status: "completed",
+    conclusion: "success",
+    createdAt: "2026-11-14T02:00:00Z",
+    ...overrides,
+  });
+  const asked: unknown[] = [];
+  const check = (runs: readonly ReturnType<typeof run>[] | null) =>
+    checkWakeflowReleaseConsistency(root, {
+      ...ALL_GATES,
+      requireRemoteGate: true,
+      readRemoteGate: (_root, query) => {
+        asked.push(query);
+        return runs as never;
+      },
+    });
+  equal(check([run()]).git.remoteGate, "green");
+  deepEqual(asked, [{ commit: head }]);
+  // 没有要求时不读网络，结果里是 null。
+  equal(checkWakeflowReleaseConsistency(root, ALL_GATES).git.remoteGate, null);
+  for (const runs of [
+    [run({ conclusion: "failure" })],
+    [run({ status: "in_progress", conclusion: null })],
+    // tag 自己触发的运行、PR 与别的提交的运行都不算数。
+    [
+      run({ headBranch: "v1.0.0" }),
+      run({ event: "pull_request" }),
+      run({ headSha: "b".repeat(40) }),
+    ],
+    [],
+    null,
+  ]) {
+    throws(() => check(runs), expectReleaseErrorCode("wakeflow-release-remote-gate"));
+  }
+});

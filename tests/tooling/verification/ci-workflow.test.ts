@@ -63,6 +63,32 @@ test("CI retains separate platform/profile results, pins actions and uploads onl
     /(?:live attempt|create_thread|release:check|npm publish|install:check)/u.test(handoffRun),
     false,
   );
+
+  // v* tag 只跑发布检查（open-items C12）：门与交接作业在 tag 上不重跑，发布作业只在 tag 上跑，
+  // 只多一项读运行状态的权限，核对 tag 所在提交在 main 上、发布一致性成立、该提交的远端门是绿的。
+  deepEqual(object(object(workflow.on).push).tags, ["v*"]);
+  equal(job.if, "github.ref_type != 'tag'");
+  equal(handoff.if, "github.ref_type != 'tag'");
+  const release = object(object(workflow.jobs).release);
+  equal(release.if, "github.ref_type == 'tag'");
+  deepEqual(release.permissions, { contents: "read", actions: "read" });
+  ok(Array.isArray(release.steps));
+  const releaseSteps = release.steps.map(object);
+  for (const step of releaseSteps.filter((step) => step.uses !== undefined))
+    ok(/^actions\/[a-z-]+@[a-f0-9]{40}$/u.test(String(step.uses)));
+  const releaseCheckout = releaseSteps.find((step) =>
+    String(step.uses).startsWith("actions/checkout@"),
+  );
+  equal(object(releaseCheckout?.with)["persist-credentials"], false);
+  equal(object(releaseCheckout?.with)["fetch-depth"], 0);
+  const releaseRun = releaseSteps.map((step) => step.run ?? "").join("\n");
+  ok(releaseRun.includes('git merge-base --is-ancestor "$GITHUB_SHA" origin/main'));
+  ok(
+    releaseRun.includes(
+      "check-release-consistency.js --require-clean --require-tag --require-remote-gate",
+    ),
+  );
+  equal(/(?:npm publish|git push|git tag|gh release)/u.test(releaseRun), false);
 });
 
 test("model options are bounded, reproducible and reject malformed replay requests", () => {

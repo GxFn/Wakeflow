@@ -5941,3 +5941,20 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 2 级门：run-18Jgmj 1849/1849、`inputsUnchanged`（我的运行，开发工作树；本批改了 foundation 与 kernel 的大量文件、knip 与 `npm test` 的检查链，按规则走完整门）。一次通过。门内新增 8 条。之前的聚焦运行：下层切片（foundation、kernel、configuration、workspace、governance、hosts）1,178 条里先失败 7 条（5 条是上面的"不保留"约定，2 条是读公共预览里完整计划的宿主测试）、修后通过；事故记录、观察、hook 观察器、原子写、评审与投递切片 343/343。`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 已按这份回执写回耗时表：回执钉住的是写回之前的树。`wf handoff` 八项通过。远端：没有运行（见 §13.238）。
 
 **结论：通过（第 2 级，1849/1849，本地；无远端运行）。一次失败现在带着它一路上的原因：公开细节读得到系统错误码，事故记录里有脱敏的消息、位置与栈帧；拒绝有一份从代码生成、随制品发布的参考；坏输入在三个读入口上被整类扫过一遍。**
+
+### 13.244 1.3.0 批 7：远端门的结果有人读了——发布检查要求它为绿、交接清单读它、tag 触发远端的发布检查；Codex 文本的词汇门；三份权威文档的更正（C12、E4、I9、Y8、J4、M2、M3、M4）（2026-11-14）
+
+收敛计划第七批：发布、Codex 文本与文档。
+
+- **远端门（C12）。** §13.237 的事故是远端连续 29 次失败而本地没有任何一步去读它。新模块 `tooling/release/remote-gate.ts` 是读取端：经 `gh run list` 读 verify 工作流的运行，最近的一次说了算；检出没有指向 GitHub 的 origin、`gh` 不在、没登录、离线或输出读不懂，一律是"未核对"，由调用方决定未核对算什么。两个调用方的回答不同：
+  - `wf handoff` 的第九项 `remote-gate` 读当前分支：红的是失败（先去看那次运行），绿的与进行中通过，读不到或该分支没有远端运行标为 "not checked"，不计入整体。在本分支上的实测：`not checked: no remote gate run for branch dev/1.3`——工作流只对 main 的 push 与 PR 触发，这与"回到 main 之前没有远端运行"的约定一致。
+  - `release:check --require-remote-gate` 读 HEAD 这个提交、且只认 main 的 push 触发的那次运行：不是绿的一律 `wakeflow-release-remote-gate`，读不到也是失败。`npm run release:check` 带上了它。
+- **tag 触发的远端发布检查。** `verify.yml` 的 push 触发加 `tags: ["v*"]`，新作业 `release` 只在 tag 上跑、门与交接作业在 tag 上不重跑：先核对 tag 所在提交在 `origin/main` 上，再跑 `--require-clean --require-tag --require-remote-gate`（`--require-main` 与 `--require-remote` 问的是本地检出，tag 检出没有分支，所以用前一步代替）。这个作业多一项只读权限 `actions: read`，不发布、不打 tag、不推送。它没有在真实的 tag 上跑过：第一次验证是 `v1.3.0`。
+- **pre-push 守卫。** `tooling/git-hooks/pre-push`：推 main 或 `v*` tag 之前跑交接清单，失败或未能执行就拒绝，别的分支不管。它不自己安装（`git config core.hooksPath tooling/git-hooks` 由用户决定），也不跑完整门。
+- **Codex 文本的词汇门（E4）。** 按 Codex 渲染的每份文本，带 Claude 专属词汇的段落必须点名 Claude Code。25 段里扫出两段没有限定的（README 中英各一处 0.9.x 残留说明），补上。
+- **复核后关闭的（I9、Y8、J4 的一问）。** 长寿会话按旧技能文字行事：命令、投递 prompt 与"陈旧窗口重启"三条通道都从磁盘拿到当前文字，剩下的是宿主的性质。detach 之后 settings 里不留 Wakeflow 的规则：两种传输下都有测试钉住。J4 的退役规则清单仍开着。
+- **文档更正（M2、M3）。** 计划 §14、对齐台账 §1、场景参考的 reconfigure 行各加带日期的更正；需求总览改正三处不存在的行为（redesign 决定、替换包的触发、Wakeflow 删除 worktree）。制品测试多一条：发货文本里不得出现不存在的评审决定名。需求总览的状态行没有动——转 active 等用户确认。
+- **图谱（M4）没有做。** 批 8 还要改架构，图谱的来源指纹现在刷新、批 8 之后又全部过期；刷新排在批 8 的门之后、回到 main 之前。开发工作树里没有装图谱子项目的依赖，它的 `check:current` 本批没有运行，漂移有多少条是未知的。
+- **验证。** 第 2 级门：run-dLiRp2 1856/1856、`inputsUnchanged`（我的运行，开发工作树；本批改了 `package.json` 的发布脚本、CI 工作流与交接清单，没有碰 foundation 与 kernel，按"每批一道完整门"的约定仍走完整门）。一次通过。门内新增 7 条：远端门模块 3、交接清单 1、发布检查 1、制品文本 2。之前的聚焦运行：制品、交接、发布、工作流与代码生成切片 103/103。`smoke:artifacts` 4/4。`wf timings apply` 已按这份回执写回耗时表：回执钉住的是写回之前的树。`wf handoff` 九项里八项通过、远端门一项未核对（本分支没有远端运行）。远端：没有运行（见 §13.238）。
+
+**结论：通过（第 2 级，1856/1856，本地；无远端运行）。从 1.3.0 起，一个 tag 要打得上去，它的提交在远端必须是绿的，而且这件事在本地的发布检查、远端的 tag 作业与每一次交接里各被读一遍。**

@@ -13,6 +13,7 @@ import {
   readReleaseVersion,
 } from "../artifacts/plugin-metadata.js";
 import { isMainModule } from "../main-module.js";
+import { judgeRemoteGate, type RemoteGateReader, readRemoteGateRuns } from "./remote-gate.js";
 
 /**
  * Wakeflow Tooling / Release：发布一致性门，`npm run release:check`（能力卡 10 Q5–Q7，场景
@@ -24,8 +25,9 @@ import { isMainModule } from "../main-module.js";
  * 的 Node 就在该范围内——没有门只靠文本核对引擎。两份 committed 清单必须 `releaseEligible` 且版本
  * 一致。Claude marketplace 自己的 `metadata.version` 是目录版本而不是发布版本源，只要求是合法
  * semver（§13.165 C13）。Git 门按标志逐项开启：分支是 main、工作树干净、标签 `v<version>` 指向 HEAD、本地
- * `origin/main` 与 HEAD 同一提交——不取网络，本地远端引用过期则由推送流程负责刷新。这是提交后
- * 的严格门，不为让一次不完整的发布看起来合法而放宽。
+ * `origin/main` 与 HEAD 同一提交——不取网络，本地远端引用过期则由推送流程负责刷新；`--require-remote-gate`
+ * 另要求这个提交在远端的门是绿的（open-items C12：`v1.1.0` 到 `v1.2.2` 六个 tag 都打在远端为红的提交上），
+ * 这一项经 `gh` 读网络，读不到就是失败而不是跳过。这是提交后的严格门，不为让一次不完整的发布看起来合法而放宽。
  */
 
 const CLAUDE_MARKETPLACE_PATH = ".claude-plugin/marketplace.json";
@@ -37,6 +39,10 @@ export interface ReleaseCheckOptions {
   readonly requireClean?: boolean;
   readonly requireTag?: boolean;
   readonly requireRemote?: boolean;
+  /** HEAD 这个提交在远端的门（对 main 的 push 触发的 verify 运行）必须是绿的。 */
+  readonly requireRemoteGate?: boolean;
+  /** 读远端运行；缺省经 `gh`，测试注入替身。 */
+  readonly readRemoteGate?: RemoteGateReader;
   /** committed 制品根；缺省 `plugins`。 */
   readonly committedRoot?: string;
   /** 本次运行的 Node 版本；缺省 `process.versions.node`，测试注入。 */
@@ -60,6 +66,8 @@ export interface ReleaseCheckResult {
     readonly clean: boolean | null;
     readonly tag: string | null;
     readonly remote: string | null;
+    /** `--require-remote-gate` 时为 `green`；没有要求时为 null。 */
+    readonly remoteGate: string | null;
   }>;
 }
 
@@ -282,6 +290,33 @@ function git(repositoryRoot: string, args: readonly string[]): string | null {
   return result.stdout;
 }
 
+/**
+ * HEAD 这个提交在远端的门必须是绿的（open-items C12）。只认对 main 的 push 触发的运行：tag 自己触发的这次
+ * 运行、PR 与手动运行都不算。读不到、没有运行、没跑完与失败是同一个错误码，说明各不相同。
+ */
+function requireGreenRemoteGate(
+  repositoryRoot: string,
+  head: string | null,
+  options: Readonly<ReleaseCheckOptions>,
+): string {
+  if (head === null) fail("wakeflow-release-git", "HEAD is unreadable");
+  const verdict = judgeRemoteGate(
+    (options.readRemoteGate ?? readRemoteGateRuns)(repositoryRoot, { commit: head }),
+    (run) => run.headSha === head && run.event === "push" && run.headBranch === "main",
+  );
+  if (verdict.state === "green") return verdict.state;
+  const said: Readonly<Record<string, string>> = {
+    unchecked: "could not be read (gh unavailable, not signed in, or offline)",
+    none: "has no run for this commit (push main first and wait for it)",
+    pending: "is still running",
+    red: `is ${verdict.conclusion ?? "not successful"}`,
+  };
+  fail(
+    "wakeflow-release-remote-gate",
+    `the remote gate for ${head.slice(0, 8)} ${said[verdict.state] ?? "is not green"}`,
+  );
+}
+
 function checkGit(
   repositoryRoot: string,
   version: string,
@@ -319,7 +354,11 @@ function checkGit(
     if (remote !== head)
       fail("wakeflow-release-remote", "local origin/main is not at HEAD; push or fetch first");
   }
-  return Object.freeze({ branch, clean, tag, remote });
+  const remoteGate =
+    options.requireRemoteGate === true
+      ? requireGreenRemoteGate(repositoryRoot, head, options)
+      : null;
+  return Object.freeze({ branch, clean, tag, remote, remoteGate });
 }
 
 export function checkWakeflowReleaseConsistency(
@@ -361,12 +400,14 @@ function parseCommandLine(values: readonly string[]): Readonly<ReleaseCheckOptio
     requireClean: false,
     requireTag: false,
     requireRemote: false,
+    requireRemoteGate: false,
   };
   for (const value of values) {
     if (value === "--require-main") options.requireMain = true;
     else if (value === "--require-clean") options.requireClean = true;
     else if (value === "--require-tag") options.requireTag = true;
     else if (value === "--require-remote") options.requireRemote = true;
+    else if (value === "--require-remote-gate") options.requireRemoteGate = true;
     else fail("wakeflow-release-argv", `unknown option ${value}`);
   }
   return Object.freeze(options);

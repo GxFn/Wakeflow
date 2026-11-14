@@ -20,6 +20,8 @@
 
 第二轮（导出函数级，§3）B 组核出并修完三处首轮漏判的 gap：G2 支撑面 scaffold 目录、G3 支撑面 `.gitignore` 托管块、G4 对账自动修复范围（gate-log §13.107）。C 组核出 G5（reconcile 重建缺失或过期的窗口运行投影，已修，gate-log §13.108）与 G6（`wakeflow_status`/`wakeflow_verify` 不报窗口运行投影新鲜度；观察域归 F 组，留到 F 组一并处置）。模块级判定不变；G6 已在 F 组修完（gate-log §13.111）。D 组（Demand、结果、评审与证据，gate-log §13.109）逐函数核对无 gap：Pod Design 制品与 dispatch group 按 ADR-0010 / ADR-0012 放弃，完成时的 lease 删除改为 `work-claims-released` 门加 Controller 显式释放，其余分支都有 owner。E 组（投递、窗口、租约与宿主激活，gate-log §13.110）逐函数核对无 gap：投递五阶段压成 prepare / outcome / rearm 加回调重发，transport 四类记录变成事件流事件，修剪并入归档事务，租约变成工作声明，keep-live 与宿主激活按能力卡 10 继续 dropped。F 组（Pod、观察与公共运行时，gate-log §13.111）修完 G6：`wakeflow_status` 逐窗口报运行投影新鲜度、`wakeflow_verify` 补回 window-runtime-projection 门，函数级 gap 归零；pod 的物化事件链、Design 交接、Test access 与 preservation 按 ADR-0010 / 矩阵行 29 / 能力卡 8 Q6 继续 dropped。A、G、H、I、J、K 组（gate-log §13.112）逐函数核对无 gap：基础原语按根作用域句柄与异步锁重切，迁移整组 dropped（ADR-0008），公共 MCP 层的输出脱敏与工具 annotations 都有 owner、六个 git spawn 按能力卡 9 Q1 放弃，宿主专属模块的宿主效果按 TSD-12 交给 Agent、观察与证据留在端点与 hook 记录，技能文本按 §13.99 D1 压缩。**第二轮到此完成：117 行、约 420 个导出函数全部核对，函数级 gap 为零（G1–G6 六处已修在代码里）。**
 
+**2026-11-14 说明（open-items M2，gate-log §13.244）。** 上面的统计停在 2026-09-21 的两轮核对。那之后还有一轮按模块的行为对照（gate-log §13.122 – §13.129 的八轮，§13.130 汇总残留并逐项实现，§13.131 逐文件审查），它移植了若干旧行为并改判了两处，本台账的逐行判定没有回填：读到 `gap: 0` 时，以那几节为准。与本台账直接冲突的一处是 reconfigure——§2 与 §3 里写的"拓扑任一变化即被拒"自 D9（§13.130）起不再成立：新增一个产品仓库连同它在 primary pod 的窗口由 reconfigure 完成，删除仓库与停用工作区走 detach（ADR-0024），仍被拒的是存储根、pods、程序标识与对已有仓库、窗口的删改。
+
 ## 2. 逐模块台账
 
 ### A 基础原语与锁
@@ -223,7 +225,7 @@
 | 同上 | `planWakeflowFreshInitializeBackbone` | fresh 主干 | 预览 fresh 分支（17 步） | recut |  |
 | 同上 | `planWakeflowMigrationMaterializationBackbone` | 迁移 | 无 | dropped | ADR-0008 |
 | `wakeflow-reconcile.mjs` | `planWakeflowReconcileBackbone` | 自动修复：local 静态目录、支撑面目录、ledger 目录与索引、`.gitignore` 与记忆托管块、active 布局与 TODO 板、投影、窗口投影、Claude settings；只报告：窗口投影 unsafe/unavailable、配置非 current、托管块手改 | 本轮 **G4** 后：活动布局与看板、ledger 根与容器、宿主 capability 目录、支撑面根与 scaffold、支撑面与工作区 `.gitignore`、程序/外部指令、支撑面记忆、共享协调布局；Claude settings/statusline 由宿主 contribution；只报告：`*-conflict`、`*-envelope`、维护协议根 busy / recovery-required / conflict；宿主运行时根、维护协议根乃至整个 `.wakeflow-local` 缺失自 §13.114 起也重建 | recut | 窗口投影 stale/missing 由 G5（§13.108）重建、G6（§13.111）报告 |
-| `wakeflow-reconfigure.mjs` | `diffWakeflowConfigV3Topology` | 拓扑差异 | 预览 `sameSemanticSection`：topology/storage 任一变化即 `reconfigure-layout-change-unsupported`，pods 变化即 `reconfigure-pods-change-unsupported`；hosts 启动偏好可改 | recut | 旧版允许支撑面移动等；新版按能力卡 1 拒绝布局改动。hosts 曾被误并入布局检查，§13.116 D1 按能力卡 1 §1.3 改回可改 |
+| `wakeflow-reconfigure.mjs` | `diffWakeflowConfigV3Topology` | 拓扑差异 | 预览 `sameSemanticSection`：topology/storage 任一变化即 `reconfigure-layout-change-unsupported`，pods 变化即 `reconfigure-pods-change-unsupported`；hosts 启动偏好可改 | recut | 旧版允许支撑面移动等；新版按能力卡 1 拒绝布局改动。hosts 曾被误并入布局检查，§13.116 D1 按能力卡 1 §1.3 改回可改；新增产品仓库自 D9（§13.130）起可由 reconfigure 完成，见 §1 的 2026-11-14 说明 |
 | 同上 | `planWakeflowReconfigureBackbone` | reconfigure 主干 | 预览 reconfigure 分支 + 权威替换 | recut | `ledger-root-requires-explicit-migration` 放弃 |
 | `wakeflow-maintenance-action-composition.mjs` | `validate/createWakeflowConfirmedActionPlan`、`assertWakeflowMaintenanceLocalTransitionScope`、participant | 确认计划摘要、锁内范围复验、组合 participant | 执行 intent `planDigest`、gate 重验、执行事务 | recut |  |
 | `wakeflow-maintenance-action-runtime.mjs` | `create/loadWakeflowMaintenanceActionHandlers` | 动态 handler 装载、bundle/language | 步骤执行器闭合分派 + 宿主 capability | recut | 模板 bundle 放弃（§13.101 D1） |

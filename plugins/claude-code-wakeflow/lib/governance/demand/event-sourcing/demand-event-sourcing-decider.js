@@ -981,7 +981,7 @@ export function decideDemandEventSourcingCommand(stateValue, commandValue) {
         // 续接边界是决策事实：续接前已有的 test 目标随事件持久化，归约器只照抄事件携带的边界。
         const historicalTestTargetIds = historicalTestTargetIdsAtContinuation(state);
         try {
-            continueDemandAggregateState(state, command.continuation.kind, command.eventId, historicalTestTargetIds);
+            continueDemandAggregateState(state, command.continuation.kind, command.eventId, historicalTestTargetIds, command.continuation.supplement);
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {
@@ -1276,7 +1276,7 @@ export function evolveDemandEventSourcingState(stateValue, eventValue) {
     }
     if (event.eventType === "lifecycle.demand-continued") {
         try {
-            return continueDemandAggregateState(state, event.data.continuation.kind, event.eventId, event.data.historicalTestTargetIds);
+            return continueDemandAggregateState(state, event.data.continuation.kind, event.eventId, event.data.historicalTestTargetIds, event.data.continuation.supplement);
         }
         catch (error) {
             if (error instanceof DemandAggregateStateError) {

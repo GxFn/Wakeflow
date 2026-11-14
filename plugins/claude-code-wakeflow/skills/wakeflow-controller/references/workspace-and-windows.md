@@ -313,7 +313,7 @@ main checkout; every other pod works in a worktree.
 
 `wakeflow_pod` create:
 
-1. Preview to derive the plan; it writes nothing.
+1. Preview to derive the plan; it writes nothing. Its `advisories` name each repository whose root `package.json` reaches outside the repository by relative path (`relative-path-dependency`, with the dependency names): tell the user before applying.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
 3. Create each worktree by host means: a worktree pod's windows open as their own set: under the tmux transport in a tmux session named `<configured session>-<pod name>` (the launch intents carry it as `execution.tmux.sessionName`; the first `launch` into that session creates it and prints the `attach` command to give the user, and retiring the pod's last window removes the session), under desktop sessions as further sessions in the app's sidebar, titled with the display name the intent carries. The helper's `launch` prepares the worktree from a `local-head` worktree intent before it starts the product window: it creates `<repository>/.claude/worktrees/<name>` from the repository's local HEAD on branch `worktree-<name>`, reuses the checkout only when this repository's worktree list has it, and adds `.claude/worktrees/` to the repository's `.git/info/exclude`; its result says `worktreePrepared: created` or `reused`. Under the tmux transport the window then starts with `claude --worktree <name>`, which only locks that existing checkout; under desktop sessions it starts with the checkout as its working directory and never with `--worktree` - the app would claim such a checkout as its own worktree, and archiving the session or `claude rm` would delete it. The helper refuses without writing when the placement is not the repository top level (`worktree-root-not-toplevel`), when `worktree-<name>` exists without its checkout (`worktree-branch-exists`: ask the user whether to delete or rename it) or when another directory holds the path (`worktree-path-occupied`). A launch that fails after the checkout was prepared still reports `worktreePrepared` and `worktreeBranch`, so tell the user that checkout was left behind. Once the session has started, `launch` compares its hook-recorded working directory with the prepared checkout and refuses `worktree-cwd-mismatch` when the session is not working in it; have the user close that window, then launch again. Do not start such a window with a bare `claude --worktree`: without an existing checkout Claude Code creates it from the remote default branch, not from the local HEAD. Then launch that
@@ -326,7 +326,7 @@ main checkout; every other pod works in a worktree.
    launch intent lists the worktrees as attached directories, and that list is
    read from the receipts the product registrations wrote. A repository that
    depends on a sibling checkout by relative path (`file:../Name`) cannot
-   resolve it inside a worktree; say so in that pod's task packages. The product windows
+   resolve it inside a worktree, so its own install and tests may not run there; say so in that pod's task packages. The product windows
    need not start one by one: launch them all without waiting (`--wait 0` on
    the Claude Code tmux helper; the desktop helper returns once the session
    has started), keep each printed observation, and register them once their

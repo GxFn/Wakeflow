@@ -127,6 +127,29 @@ export function analyzePackageDocuments(demandType, title, documents) {
         blockers: Object.freeze(blockers),
     });
 }
+/**
+ * supplement 包与父需求的关系（Q7 裁决，1.3.0）。supplement 包必须说出它补充哪个需求；父需求是 Demand 的
+ * 源需求，所以不能是另一个 supplement，也不能是没有实现的 research；测试模式随父需求——并入的 Demand 的测试
+ * 决策在创建时已经冻结，补充包换不了它。
+ */
+export function deriveSupplementBlockers(input) {
+    if (input.demandType !== "supplement") {
+        return input.supplements === null ? [] : ["supplements-demand-type"];
+    }
+    if (input.supplements === null)
+        return ["supplements-required"];
+    if (input.supplements === "unknown")
+        return ["supplements-unknown"];
+    const blockers = [];
+    if (input.supplements.demandType === "supplement" ||
+        input.supplements.demandType === "research") {
+        blockers.push(`supplements-parent-type:${input.supplements.demandType}`);
+    }
+    if (input.supplements.testingDecisionMode !== input.testingDecisionMode) {
+        blockers.push(`supplements-testing-mode:${input.supplements.testingDecisionMode}`);
+    }
+    return blockers;
+}
 const BLOCKER_TEXT_MAXIMUM = 256;
 /** 阻塞项带文档路径，路径可到 1024 码点；按结果 Schema 的 256 码点上限截断并加省略号。 */
 function boundedBlocker(blocker) {
@@ -148,6 +171,7 @@ export function derivePublishAssessment(input) {
     }
     if (input.supersedes === "unknown")
         blockers.push("supersedes-unknown");
+    blockers.push(...deriveSupplementBlockers(input));
     return Object.freeze({
         privacyHit: input.analysis.privacyHit || headerPrivacy.length > 0,
         blockers: Object.freeze([...new Set(blockers.map(boundedBlocker))].slice(0, BLOCKERS_MAXIMUM)),
@@ -165,6 +189,7 @@ export function deriveRequirementId(input) {
         testingDecision: input.testingDecision,
         taskPlanReview: input.taskPlanReview,
         supersedes: input.supersedes,
+        ...(input.supplements === null ? {} : { supplements: input.supplements }),
         parkedTrigger: input.parkedTrigger,
         confirmedAt: input.confirmedAt,
         documents: [...input.documents]

@@ -11,7 +11,7 @@ import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/ev
 import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
-import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
+import { createLedgerAuthorityMemberReference, LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { DemandPostAcceptanceRouteError, resolveDemandTestEnvironmentAuthority, } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
@@ -67,8 +67,7 @@ function mapHandlerError(error) {
     }
     throw error;
 }
-async function loadRequirementPackage(context) {
-    const lineage = context.authority.loaded.identity.source;
+async function loadRequirementPackage(context, lineage = context.authority.loaded.identity.source) {
     let loaded;
     try {
         loaded = await new LedgerAuthorityStore(context.authority.ledgerRoot).loadRequirement(lineage.requirementId, signalOptions(context.options.signal));
@@ -105,9 +104,36 @@ async function readRequirementText(context, loaded) {
         fail("io-failure", "requirement-member-read", "$ledger", { cause: error });
     }
 }
-function resolveAuthorityReferences(context, memberRefs) {
+/**
+ * 并入 Demand 的 supplement 需求包（Q7 裁决）：按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝。它们的
+ * 验收标准、章节与成员文档从并入的那次续接起与源需求的一起可用。
+ */
+async function loadSupplementPackages(context) {
+    const loaded = [];
+    for (const lineage of context.authority.loaded.aggregate.state.supplements ?? []) {
+        loaded.push(await loadRequirementPackage(context, lineage));
+    }
+    return Object.freeze(loaded);
+}
+async function supplementCriteriaOf(context, supplements) {
+    const criteria = [];
+    for (const loaded of supplements) {
+        criteria.push(Object.freeze({
+            requirementId: loaded.record.requirementId,
+            recordDigest: loaded.recordDigest,
+            criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+        }));
+    }
+    return Object.freeze(criteria);
+}
+function resolveAuthorityReferences(context, memberRefs, supplements) {
+    // Demand 的权威关系在创建时冻结，只含源需求的成员；并入的 supplement 包的成员按同一种引用另算。
+    const candidates = [
+        ...context.authority.loaded.authority.authorityRefs,
+        ...supplements.flatMap((loaded) => loaded.documents.map((document) => createLedgerAuthorityMemberReference(loaded, document.path))),
+    ];
     const resolved = memberRefs.map((memberRef) => {
-        const reference = context.authority.loaded.authority.authorityRefs.find((candidate) => candidate.memberRef === memberRef);
+        const reference = candidates.find((candidate) => candidate.memberRef === memberRef);
         if (reference === undefined) {
             fail("precondition-failed", "authority-reference-unknown", "$request.taskPackage.selectedAuthorityMemberRefs");
         }
@@ -127,8 +153,12 @@ async function buildImplementationPackage(context, input, requested, binding) {
         fail("precondition-failed", "research-demand-has-no-implementation", "$request.taskPackage");
     }
     const loaded = await loadRequirementPackage(context);
+    const supplements = await loadSupplementPackages(context);
     const review = derivePlanReview({
-        taskPlanReview: loaded.record.taskPlanReview,
+        // 源需求或任何一个并入的 supplement 包要求用户过目，就要用户过目。
+        taskPlanReview: [loaded, ...supplements].some((entry) => entry.record.taskPlanReview === "user")
+            ? "user"
+            : "controller",
         confirmedAt: input.planReviewConfirmedAt,
     });
     if (review.blocker !== null || review.planReview === null) {
@@ -142,12 +172,12 @@ async function buildImplementationPackage(context, input, requested, binding) {
             windowId: requested.assignment.windowId,
             podId: identity.podId,
         }),
-        ...deriveSectionAnchorBlockers(requested.sectionAnchors, loaded.record.sections.map((section) => section.anchor)),
+        ...deriveSectionAnchorBlockers(requested.sectionAnchors, [loaded, ...supplements].flatMap((entry) => entry.record.sections.map((section) => section.anchor))),
         ...deriveDependencyBlockers(authority.loaded.aggregate.state, requested.dependsOn),
     ];
     if (blockers.length > 0)
         rejectWith(blockers, "$request.taskPackage");
-    const selectedAuthorityRefs = resolveAuthorityReferences(context, requested.selectedAuthorityMemberRefs);
+    const selectedAuthorityRefs = resolveAuthorityReferences(context, requested.selectedAuthorityMemberRefs, supplements);
     const taskPackageId = deriveDurableId("task-package", "plan-target-task", identity.demandId, binding.idempotencyKey);
     const targetTaskId = deriveDurableId("target-task", "plan-target-task", identity.demandId, binding.idempotencyKey);
     let taskPackage;
@@ -186,6 +216,7 @@ async function buildImplementationPackage(context, input, requested, binding) {
         anchors: taskPackage.acceptanceAnchors,
         recordDigest: identity.source.recordDigest,
         criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+        supplements: await supplementCriteriaOf(context, supplements),
     });
     if (anchorBlockers.length > 0)
         rejectWith(anchorBlockers, "$request.taskPackage.acceptanceAnchors");
@@ -249,10 +280,13 @@ async function buildTestPackage(context, input, requested, binding) {
         requirementRef: step.requirementRef,
     }));
     const criteria = parseAcceptanceCriteria(await readRequirementText(context, loaded));
+    const supplements = await loadSupplementPackages(context);
+    const supplementCriteria = await supplementCriteriaOf(context, supplements);
     const stepBlockers = deriveTestStepReferenceBlockers({
         steps,
         recordDigest: identity.source.recordDigest,
         criteria,
+        supplements: supplementCriteria,
     });
     if (stepBlockers.length > 0)
         rejectWith(stepBlockers, "$request.taskPackage.testContract.steps");
@@ -260,11 +294,12 @@ async function buildTestPackage(context, input, requested, binding) {
         steps,
         recordDigest: identity.source.recordDigest,
         criteria,
+        supplements: supplementCriteria,
     });
     if (coverageBlockers.length > 0) {
         rejectWith(coverageBlockers, "$request.taskPackage.testContract.steps");
     }
-    const selectedAuthorityRefs = resolveAuthorityReferences(context, requested.selectedAuthorityMemberRefs);
+    const selectedAuthorityRefs = resolveAuthorityReferences(context, requested.selectedAuthorityMemberRefs, supplements);
     let taskPackage;
     try {
         taskPackage = createTaskPackage({

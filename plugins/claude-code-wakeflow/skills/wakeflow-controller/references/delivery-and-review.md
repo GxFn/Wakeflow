@@ -32,8 +32,8 @@ change another repository to get it.
 Lineage rules that decide which call you make:
 
 - First package for a repository in this Demand: no lineage.
-- After an escalation answered by a supplement package: a replacement package.
-  The old target and package become superseded. Only a target with nothing in
+- After an escalation whose recorded answer changes what the target must do: a
+  replacement package. The old target and package become superseded. Only a target with nothing in
   flight can be replaced - planned, rework-requested, escalated, review-blocked,
   or rejected before send with its outcome recorded. A prepared delivery that
   was never sent is recorded as `failed-before-send` first, so the window's
@@ -354,9 +354,43 @@ A research Demand can be cancelled before it has a document result; successful
 completion evidence and acceptance coverage are not cancellation requirements.
 Archive integrity, privacy and package ownership checks still apply.
 
-`wakeflow_continue_demand` reopens a completed Demand from its archive for
-optimization, a requirement supplement or a verified bug. The active root is
-restored and the route asks for a new task package before anything else.
+A research Demand has no target and no test. Nothing is planned or delivered
+(`research-demand-has-no-implementation`); its route waits at
+`research-completion-required` until the answer exists. Answer the research
+question yourself, inside the package's boundaries and method: read, change
+nothing, and ask the user or the Design window for what you cannot see. Write
+the answer as one document under the Test surface at
+`controller-checks/<demandId>/`, record it as `document` evidence, read the
+conclusion to the user, then complete. It cannot be continued
+(`demand-type:research`): work that follows starts from a new requirement package.
+
+`wakeflow_continue_demand` reopens a completed Demand from its archive. The
+active root is restored and the route asks for a new task package before
+anything else. The continuation's kind decides where the criteria come from:
+
+- `optimization` and `verified-bug` continue under the acceptance criteria the
+  Demand already has.
+- `requirement-supplement` brings new criteria, and they come only from a
+  published supplement package: pass it as `continuation.requirementId`. Design
+  publishes that package with `supplements` naming this Demand's requirement.
+  It is never claimed with `wakeflow_create_demand` (`supplement-of:<id>`):
+  status lists it as `supplement-attach`, and its board entry's `attachTo` is
+  the completed Demand to continue - null while that requirement's Demand is
+  still running, so finish that first. A requirement-supplement continuation
+  without a package is refused (`supplement-package-required`); when the user
+  wants more than the Demand's criteria cover, send them to the Design window
+  for a supplement package rather than restating the requirement yourself.
+- From then on the package belongs to the Demand. Anchor the new task packages
+  on its `recordDigest` and its own `ac-N` (each package numbers its criteria
+  from `ac-1`), select its documents under `requirements/<its id>/` as
+  authority members so the target reads the supplemented requirement, and expect
+  `requirement-coverage` and a test contract to count its criteria too, written
+  `<requirementId>/ac-N`. Completing archives both packages, cancelling
+  withdraws both, and a later continue brings both back.
+
+A requirement that changes while its Demand is still running does not go this
+way: record the user's answer with record-decision, or cancel and claim a
+corrected package.
 
 All three take preview, apply and recover, and all three delete or restore an
 active root. Read the preview to the user before you apply any of them.

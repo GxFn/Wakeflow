@@ -23,6 +23,7 @@ import { ControllerProductDefectRemediationAuthorizationError, parseControllerPr
 import { ControllerReviewDecisionError, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
 import { computeTaskPackageDigest, parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
 import { assertRerunTestExecutionAttemptFollows, parseTestExecutionAttempt, TestExecutionAttemptError, } from "../../testing/test-execution-attempt.js";
+import { parseRequirementLineageReference, RequirementLineageError, } from "./requirement-lineage.js";
 /**
  * Wakeflow Governance / Demand Model：领域事件归约器生成的纯聚合状态。
  *
@@ -1559,6 +1560,7 @@ function normalizeState(wire) {
     const continuation = wire.continuation === undefined
         ? undefined
         : parseContinuationState(wire.continuation, targetTasks);
+    const supplements = wire.supplements === undefined ? undefined : parseSupplementPackages(wire.supplements);
     const testTargets = currentTestTargetsOf({ targetTasks, continuation });
     // 同一时间只有一个未终结的 test 目标（能力卡 5 Q4）；历史代际只能停在 test-product-defect。
     const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
@@ -1601,7 +1603,35 @@ function normalizeState(wire) {
         ...(pendingTestRetest === undefined ? {} : { pendingTestRetest }),
         ...(awaitingDecision === undefined ? {} : { awaitingDecision }),
         ...(continuation === undefined ? {} : { continuation }),
+        ...(supplements === undefined ? {} : { supplements }),
     });
+}
+/** 并入的 supplement 包不重复：同一个包、同一份记录只并入一次。 */
+function parseSupplementPackages(value) {
+    const parsed = value.map((entry, index) => {
+        try {
+            const lineage = parseRequirementLineageReference({
+                artifactKind: "wakeflow-requirement-lineage",
+                schemaVersion: 1,
+                ...entry,
+            });
+            return Object.freeze({
+                requirementId: lineage.requirementId,
+                recordRef: lineage.recordRef,
+                recordDigest: lineage.recordDigest,
+            });
+        }
+        catch (error) {
+            if (error instanceof RequirementLineageError)
+                fail("relation", `$/supplements/${index}`);
+            throw error;
+        }
+    });
+    if (new Set(parsed.map((entry) => entry.requirementId)).size !== parsed.length ||
+        new Set(parsed.map((entry) => entry.recordDigest)).size !== parsed.length) {
+        fail("relation", "$/supplements");
+    }
+    return Object.freeze(parsed);
 }
 /** 升级只在活动 Demand 上等待回答；终态不能携带未回答的升级。 */
 function parseAwaitingDecision(value, lifecycle) {
@@ -1676,7 +1706,7 @@ export function historicalTestTargetIdsAtContinuation(currentValue) {
  * `lifecycle.demand-continued.v1`：已完成的 Demand 回到 active，并要求先规划新的任务包。
  * 历史 test 目标只取自事件携带的边界；早期事件没有该字段，重放得到与当时完全相同的状态。
  */
-export function continueDemandAggregateState(currentValue, kindValue, eventIdValue, historicalTestTargetIdsValue) {
+export function continueDemandAggregateState(currentValue, kindValue, eventIdValue, historicalTestTargetIdsValue, supplementValue) {
     const current = parseDemandAggregateState(currentValue);
     const eventId = parseId(eventIdValue, "demand-event", "$eventId");
     if (current.lifecycle !== "completed" ||
@@ -1695,6 +1725,11 @@ export function continueDemandAggregateState(currentValue, kindValue, eventIdVal
             fail("relation", "$/continuation/historicalTestTargetIds");
         }
     }
+    // supplement 包只随 requirement-supplement 续接并入；重复并入由状态解析拒绝。事件没有带包的续接（1.3.0
+    // 之前的 requirement-supplement 也是如此）重放时不改这张表。
+    if (supplementValue !== undefined && kindValue !== "requirement-supplement") {
+        fail("relation", "$/continuation/supplement");
+    }
     return parseDemandAggregateState({
         ...current,
         lifecycle: "active",
@@ -1704,6 +1739,9 @@ export function continueDemandAggregateState(currentValue, kindValue, eventIdVal
             planningRequired: true,
             ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
         },
+        ...(supplementValue === undefined
+            ? {}
+            : { supplements: [...(current.supplements ?? []), supplementValue] }),
     });
 }
 /** `evidence.managed-evidence-recorded.v1`使用的纯状态转换。 */

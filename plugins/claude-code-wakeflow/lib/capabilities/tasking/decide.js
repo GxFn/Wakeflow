@@ -1,4 +1,5 @@
 import { currentTestTargetsOf, REPLACEABLE_PHASES, } from "../../governance/demand/model/demand-aggregate-state.js";
+import { acceptanceCriterionLabel, } from "../../kernel/requirement-acceptance.js";
 export { parseAcceptanceCriteria, } from "../../kernel/requirement-acceptance.js";
 /**
  * Wakeflow Capabilities / Tasking：纯决定。
@@ -8,28 +9,51 @@ export { parseAcceptanceCriteria, } from "../../kernel/requirement-acceptance.js
  * 聚合在追加时再次执行谱系与基线规则；这里先把拒绝理由说清楚，让 Controller 不必猜。
  */
 const ACCEPTANCE_CRITERIA_ANCHOR = "acceptance-criteria";
+function criteriaPackages(input) {
+    return [
+        { requirementId: null, recordDigest: input.recordDigest, criteria: input.criteria },
+        ...(input.supplements ?? []),
+    ];
+}
+/** 一条引用命中的包；记录摘要哪个包都对不上为 null。 */
+function packageOf(packages, recordDigest) {
+    return packages.find((entry) => entry.recordDigest === recordDigest) ?? null;
+}
+function hasItem(entry, itemId) {
+    return entry?.criteria.some((criterion) => criterion.itemId === itemId) ?? false;
+}
 /** 锚点引用的阻塞：记录摘要、节锚点与条目都必须命中（ADR-0012 D5）。 */
 export function deriveAnchorReferenceBlockers(input) {
-    const itemIds = new Set(input.criteria.map((criterion) => criterion.itemId));
+    const packages = criteriaPackages(input);
     const blockers = [];
     for (const anchor of input.anchors) {
         const reference = anchor.requirementRef;
-        if (reference.recordDigest !== input.recordDigest) {
+        const referenced = packageOf(packages, reference.recordDigest);
+        if (referenced === null) {
             blockers.push(`anchor-record-drift:${anchor.anchorId}`);
         }
         if (reference.sectionAnchor !== ACCEPTANCE_CRITERIA_ANCHOR) {
             blockers.push(`anchor-section:${anchor.anchorId}:${reference.sectionAnchor}`);
         }
-        if (!itemIds.has(reference.itemId)) {
+        // 摘要对不上时按源需求的条目判：与只有一个包时的回答一致。
+        if (!hasItem(referenced ?? packages[0] ?? null, reference.itemId)) {
             blockers.push(`anchor-item-unknown:${anchor.anchorId}:${reference.itemId}`);
         }
     }
-    return Object.freeze(withKnownItems(blockers, input.criteria));
+    return Object.freeze(withKnownItems(blockers, packages));
 }
-/** 条目引用不存在时附上需求包实际有几条（ac-1 … ac-N 按顶层列表位置编号），Controller 不必再数。 */
-function withKnownItems(blockers, criteria) {
+/**
+ * 条目引用不存在时附上需求包实际有几条（ac-1 … ac-N 按顶层列表位置编号），Controller 不必再数。并入了
+ * supplement 包时每个包各报一条，带它的 requirementId。
+ */
+function withKnownItems(blockers, packages) {
     return blockers.some((blocker) => blocker.includes("-item-unknown:"))
-        ? [...blockers, `acceptance-items:${criteria.length}`]
+        ? [
+            ...blockers,
+            ...packages.map((entry) => entry.requirementId === null
+                ? `acceptance-items:${entry.criteria.length}`
+                : `acceptance-items:${entry.requirementId}:${entry.criteria.length}`),
+        ]
         : blockers;
 }
 /** 章节锚点必须在需求包记录的 sections 里。 */
@@ -123,32 +147,37 @@ export function deriveTopologyBlockers(input) {
 }
 /** 测试合同每一步的 requirementRef 都必须命中需求包验收标准的一条，规则同验收锚点。 */
 export function deriveTestStepReferenceBlockers(input) {
-    const itemIds = new Set(input.criteria.map((criterion) => criterion.itemId));
+    const packages = criteriaPackages(input);
     const blockers = [];
     for (const step of input.steps) {
         const reference = step.requirementRef;
-        if (reference.recordDigest !== input.recordDigest) {
+        const referenced = packageOf(packages, reference.recordDigest);
+        if (referenced === null) {
             blockers.push(`step-record-drift:${step.stepId}`);
         }
         if (reference.sectionAnchor !== ACCEPTANCE_CRITERIA_ANCHOR) {
             blockers.push(`step-section:${step.stepId}:${reference.sectionAnchor}`);
         }
-        if (!itemIds.has(reference.itemId)) {
+        if (!hasItem(referenced ?? packages[0] ?? null, reference.itemId)) {
             blockers.push(`step-item-unknown:${step.stepId}:${reference.itemId}`);
         }
     }
-    return Object.freeze(withKnownItems(blockers, input.criteria));
+    return Object.freeze(withKnownItems(blockers, packages));
 }
 /**
  * 测试合同必须覆盖需求包验收标准的全部条目（§13.161 B4-1）：一个 Demand 当前代际只有一份测试
  * 合同，完成门又要求当前代际已接受的测试覆盖全集，漏掉的条目在规划时就拒绝，而不是归档时才发现
- * 无路可走。复测合同同样列全——上一代际已通过的步骤可以不跑，按基线计。
+ * 无路可走。复测合同同样列全——上一代际已通过的步骤可以不跑，按基线计。并入了 supplement 包时全集是源需求
+ * 与各包验收标准之和，包里的条目写作 `<requirementId>/ac-N`。
  */
 export function deriveTestContractCoverageBlockers(input) {
-    const covered = new Set(input.steps.map((step) => step.requirementRef.itemId));
-    return Object.freeze(input.criteria
-        .filter((criterion) => !covered.has(criterion.itemId))
-        .map((criterion) => `test-contract-uncovered:${criterion.itemId}`));
+    const packages = criteriaPackages(input);
+    // 源需求的条目照旧只按条目号计（摘要对不上另有 step-record-drift）；supplement 包的条目按包认。
+    const covered = new Set(input.steps.map(({ requirementRef }) => acceptanceCriterionLabel(packageOf(packages, requirementRef.recordDigest)?.requirementId ?? null, requirementRef.itemId)));
+    return Object.freeze(packages.flatMap((entry) => entry.criteria
+        .map((criterion) => acceptanceCriterionLabel(entry.requirementId, criterion.itemId))
+        .filter((label) => !covered.has(label))
+        .map((label) => `test-contract-uncovered:${label}`)));
 }
 /** 实现侧准入：现存实现目标至少一个且全部已接受。 */
 function implementationReadinessBlockers(state) {

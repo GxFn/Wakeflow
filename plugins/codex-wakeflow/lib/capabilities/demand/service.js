@@ -25,7 +25,7 @@ import { admitDemandCreationResult, parseDemandCreationRequest, WAKEFLOW_DEMAND_
 import { deriveCreationBlockers, deriveDemandCreationIds } from "./decide.js";
 /** 预演身份与权威关系用的固定时间；不发布。 */
 const DRAFT_INSTANT = parseUtcInstant("2000-01-01T00:00:00.000Z");
-async function loadPackage(context, requirementId) {
+export async function loadPackage(context, requirementId) {
     try {
         return await context.store.loadRequirement(requirementId, signalOptions(context.signal));
     }
@@ -122,6 +122,7 @@ async function planCreate(context, input, facts) {
                 claim !== null &&
                 loaded.recordDigest === claim.state.recordDigest &&
                 loaded.record.programId === claim.state.programId,
+            supplements: loaded?.record.supplements ?? null,
             pod: pod === null
                 ? null
                 : {

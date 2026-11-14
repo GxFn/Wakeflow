@@ -135,7 +135,14 @@ function packageBlockers(input) {
     if (input.claim.status !== "claimed" || input.claim.claim?.demandId !== input.demandId) {
         return [`package-claim:${input.claim.status}`];
     }
-    return [];
+    // 并入的 supplement 包与源需求包一起结算：终态之前它们都必须仍由本 Demand 认领。
+    return (input.supplementClaims ?? []).flatMap(({ requirementId, claim }) => {
+        if (claim === null)
+            return [`supplement-package-unknown:${requirementId}`];
+        return claim.status === "claimed" && claim.claim?.demandId === input.demandId
+            ? []
+            : [`supplement-package-claim:${requirementId}:${claim.status}`];
+    });
 }
 function gateBlockers(input) {
     const blockers = [];
@@ -166,6 +173,45 @@ export function deriveTerminalBlockers(input) {
     return Object.freeze([...new Set(blockers)].slice(0, BLOCKERS_MAXIMUM));
 }
 /**
+ * requirement-supplement 续接必须引用一个 supplement 包，别的谱系不能带（Q7 裁决）：新的验收标准只从冻结的包
+ * 进入 Demand。包必须还在 pending、记录与看板一致、属于本程序，并且声明补充的正是本 Demand 的源需求。
+ */
+export function deriveSupplementAttachBlockers(input) {
+    if (input.requirementId === null) {
+        return input.kind === "requirement-supplement" ? ["supplement-package-required"] : [];
+    }
+    if (input.kind !== "requirement-supplement")
+        return [`supplement-package-kind:${input.kind}`];
+    if (input.claim === null || input.record === null)
+        return ["supplement-package-unknown"];
+    const blockers = [];
+    if (input.claim.status !== "pending") {
+        blockers.push(`supplement-package-claim:${input.claim.status}`);
+    }
+    if (!input.record.programMatches)
+        blockers.push("supplement-package-program");
+    if (input.record.recordDigest !== input.claim.recordDigest) {
+        blockers.push("supplement-package-record-drift");
+    }
+    if (input.record.demandType !== "supplement") {
+        blockers.push(`supplement-package-type:${input.record.demandType}`);
+    }
+    else if (input.record.supplements !== input.sourceRequirementId) {
+        blockers.push(`supplement-package-parent:${input.record.supplements ?? "none"}`);
+    }
+    return blockers;
+}
+/** 此前并入的 supplement 包必须仍由本 Demand 归档：续接把它们与源需求包一起带回 claimed。 */
+function attachedSupplementBlockers(demandId, attached) {
+    return attached.flatMap(({ requirementId, claim }) => {
+        if (claim === null)
+            return [`supplement-package-unknown:${requirementId}`];
+        return claim.status === "archived" && claim.archive?.demandId === demandId
+            ? []
+            : [`supplement-package-claim:${requirementId}:${claim.status}`];
+    });
+}
+/**
  * continue 只对已归档的完成 Demand 开放，且需求包仍由它归档、所在 pod 仍存在、未在关闭且没有别的活动 Demand。
  * research Demand 不可继续：继续后的路线要求规划实现任务包，而 research 没有实现目标。
  */
@@ -190,6 +236,10 @@ export function deriveContinueBlockers(input) {
         blockers.push(`pod-closing:${input.pod.podId}`);
     if (input.otherActiveDemandId !== null)
         blockers.push(`pod-busy:${input.otherActiveDemandId}`);
+    if (input.supplement !== undefined) {
+        blockers.push(...deriveSupplementAttachBlockers(input.supplement));
+    }
+    blockers.push(...attachedSupplementBlockers(input.demandId, input.attachedSupplements ?? []));
     blockers.push(...(input.textBlockers ?? []));
     return Object.freeze(blockers);
 }
@@ -206,7 +256,8 @@ export function deriveDecisionBlockers(input) {
 }
 /**
  * 认领前置：包 pending、记录属于本程序且与看板绑定同一记录、目标 pod 存在且未在关闭、
- * 该 pod 没有别的活动 Demand（ADR-0010 D3：一 pod 一 Demand）。
+ * 该 pod 没有别的活动 Demand（ADR-0010 D3：一 pod 一 Demand）。声明了父需求的 supplement 包不单独认领
+ * （Q7 裁决）：它由 requirement-supplement 续接并入完成了父需求的 Demand，阻塞项带上父需求的标识。
  */
 export function deriveCreationBlockers(input) {
     const blockers = [];
@@ -218,6 +269,8 @@ export function deriveCreationBlockers(input) {
         blockers.push("package-program");
     if (input.claim !== null && !input.recordMatches)
         blockers.push("package-record-drift");
+    if (typeof input.supplements === "string")
+        blockers.push(`supplement-of:${input.supplements}`);
     if (input.pod === null)
         blockers.push(`pod-unknown:${input.requestedPodId}`);
     else {

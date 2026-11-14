@@ -164,6 +164,9 @@ export function createRequirementClaimState(input) {
         testingMode: input.testingMode,
         publishedAt: input.publishedAt,
         supersedes: input.supersedes,
+        ...(input.supplements === undefined || input.supplements === null
+            ? {}
+            : { supplements: input.supplements }),
         revision: 1,
         previousStateDigest: null,
         status: input.parkedTrigger === null ? "pending" : "parked",

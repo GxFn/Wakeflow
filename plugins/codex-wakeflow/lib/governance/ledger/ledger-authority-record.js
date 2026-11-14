@@ -76,6 +76,7 @@ const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
     "testingDecision",
     "title",
 ]);
+const OPTIONAL_DRAFT_FIELD = "supplements";
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z", "$draftValidationInstant");
 function fail(reason, path) {
     throw new LedgerAuthorityRecordError(reason, path);
@@ -225,6 +226,14 @@ function normalizeRequirement(wire) {
     const supersedes = wire.supersedes === null ? null : parseId(wire.supersedes, "requirement", "$/supersedes");
     if (supersedes === requirementId)
         fail("relation", "$/supersedes");
+    const supplements = wire.supplements === undefined
+        ? undefined
+        : parseId(wire.supplements, "requirement", "$/supplements");
+    // 父需求只属于 supplement 包，也不能是它自己。
+    if (supplements !== undefined &&
+        (wire.demandType !== "supplement" || supplements === requirementId)) {
+        fail("relation", "$/supplements");
+    }
     if ((wire.demandType === "research") !== (wire.testingDecision.mode === "not-applicable")) {
         fail("relation", "$/testingDecision/mode");
     }
@@ -248,6 +257,7 @@ function normalizeRequirement(wire) {
         }),
         taskPlanReview: wire.taskPlanReview,
         supersedes,
+        ...(supplements === undefined ? {} : { supplements }),
         parked: wire.parked === null
             ? null
             : Object.freeze({
@@ -299,7 +309,10 @@ function exactDraft(value) {
             fail("input", "$draft");
         throw error;
     }
-    const keys = Object.keys(record).sort();
+    // `supplements` 是唯一可缺省的草稿字段：只有 supplement 包带它。
+    const keys = Object.keys(record)
+        .filter((key) => key !== OPTIONAL_DRAFT_FIELD)
+        .sort();
     if (keys.length !== REQUIREMENT_DRAFT_FIELDS.length ||
         keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])) {
         fail("input", "$draft");
@@ -348,6 +361,7 @@ export function createRequirementRecord(input, options = {}) {
         testingDecision: draft.testingDecision,
         taskPlanReview: draft.taskPlanReview,
         supersedes: draft.supersedes,
+        ...(draft.supplements === undefined ? {} : { supplements: draft.supplements }),
         parked: draft.parked,
         confirmation: draft.confirmation,
         documents: draft.documents,

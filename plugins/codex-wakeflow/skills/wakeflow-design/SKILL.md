@@ -101,6 +101,11 @@ needs. A `claim-state-drift` blocker means the board moved; inspect again.
   and is not superseded from here. When an escalation brought the user here,
   the correction records what the target observed beside what was expected,
   and why the original package said otherwise.
+- **Adding to finished work**: a `supplement` package sets `supplements` to
+  the requirement it adds to (`supplements-required` otherwise). It is not
+  claimed as a new Demand: the Controller attaches it to the Demand that
+  completed that requirement, so the history stays in one place. The reference
+  has the rules.
 - **Parking**: a package that must wait for something is published with
   `parked.trigger` - the condition that must become true. It lands `parked`
   and the Controller does not claim it. When the trigger holds, run

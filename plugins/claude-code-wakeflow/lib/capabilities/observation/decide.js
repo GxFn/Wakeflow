@@ -64,6 +64,9 @@ const WORKSPACE_MAINTENANCE_FRONTIER = "workspace-maintenance";
 const MAINTENANCE_TOOL = "wakeflow_maintain_workspace";
 const REGISTRATION_TOOL = "wakeflow_register_window_binding";
 const CREATE_DEMAND_TOOL = "wakeflow_create_demand";
+const CONTINUE_DEMAND_TOOL = "wakeflow_continue_demand";
+/** pending 的 supplement 包并入完成了它父需求的 Demand（Q7 裁决）：requirement-supplement 续接。 */
+const SUPPLEMENT_ATTACH = "supplement-attach";
 /**
  * 过期窗口的逐窗口路线（open-items W41）：从未有过对话的会话宿主不能 --resume，直接重开
  * （close → launch → replace → mark，登记工具是其中的 Wakeflow 一步）；有过对话的就地 resume。
@@ -74,6 +77,27 @@ export const STALE_WINDOW_RESUME = "stale-window-resume";
 const PERMISSION_MODE_MISMATCH = "permission-mode-mismatch";
 /** 空闲工作区的下一步：用户在 Design 窗口起草需求（§13.188 I1）。 */
 export const IDLE_REQUIREMENT_AUTHORING = "requirement-authoring";
+/**
+ * 看板上 pending 的需求包：普通的包去认领；supplement 包并入完成了它父需求的 Demand（subject 是这个包，要续接的
+ * Demand 在看板视图同一条目的 `attachTo` 里），父需求还没有完成的 Demand 时没有可做的一步。
+ */
+function pendingPackageActions(pendingPackages) {
+    return [...pendingPackages]
+        .sort((left, right) => left.requirementId.localeCompare(right.requirementId))
+        .flatMap((entry) => {
+        if (entry.attachToDemandId === null)
+            return [];
+        const attach = entry.attachToDemandId !== undefined;
+        return [
+            {
+                owner: "controller",
+                tool: attach ? CONTINUE_DEMAND_TOOL : CREATE_DEMAND_TOOL,
+                reason: attach ? SUPPLEMENT_ATTACH : "requirement-claim",
+                subject: entry.requirementId,
+            },
+        ];
+    });
+}
 /**
  * 过期窗口：一项汇总（next 的前沿），再按 windowId 逐窗口给路线（W41）。整批路线按数据给出，不让
  * Controller 逐窗口 inspect 再试 resume（§13.218 L13：4 次注定 resume-exited）。
@@ -157,14 +181,7 @@ export function deriveNextActions(input) {
             subject: demand.demandId,
         });
     }
-    for (const entry of [...input.pendingPackages].sort((left, right) => left.requirementId.localeCompare(right.requirementId))) {
-        actions.push({
-            owner: "controller",
-            tool: CREATE_DEMAND_TOOL,
-            reason: "requirement-claim",
-            subject: entry.requirementId,
-        });
-    }
+    actions.push(...pendingPackageActions(input.pendingPackages));
     // 空闲工作区（没有维护、没有待登记窗口、没有 Demand、没有待认领包）：下一步是用户去 Design 窗口写需求
     // （§13.188 I1）；status 的 next 从此不再为空。
     if (actions.length === 0) {

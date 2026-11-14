@@ -77,7 +77,7 @@ needs a real `session-start` at the host startup root; a refusal names the missi
 
 Call `wakeflow_inspect_board` to list what Design has published. With exactly
 one pending package, claim it and say which; with several, choose with the
-user. Then call `wakeflow_create_demand` on it. The Demand type, testing
+user. Then call `wakeflow_create_demand` on it (one with `supplements` joins its completed Demand instead - reference). The Demand type, testing
 decision and authority members come from the package; you do not restate them.
 
 ### Step 6 - Plan the target task

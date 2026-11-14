@@ -8,7 +8,10 @@ import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue, } from "../../foundation/data/json-value.js";
-import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { readStableFile } from "../../foundation/filesystem/stable-file-read.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
@@ -23,7 +26,7 @@ import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-run
 import { refreshWakeflowWindowRuntimeProjections, retireWakeflowWindowRuntimeProjections, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { admitPodResult, parsePodRequest, WAKEFLOW_POD_PUBLIC_SCHEMA_VERSION, WAKEFLOW_POD_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, podMutationNext, podPreviewNext, } from "./decide.js";
+import { deriveCloseCompleteBlockers, deriveCloseRequestBlockers, deriveCreateBlockers, derivePodId, derivePodState, derivePodWindows, derivePodWorktrees, deriveRelativePathDependencyAdvisory, podMutationNext, podPreviewNext, } from "./decide.js";
 function signalOptions(signal) {
     return signal === undefined ? {} : { signal };
 }
@@ -613,6 +616,54 @@ async function previewViews(context, planned) {
         fail("unexpected", "pod-vanished", "$request.intent.podId");
     return { kind: plan.kind, pod: views.pod, windows: views.windows, worktrees: views.worktrees };
 }
+const REPOSITORY_MANIFEST_REF = parsePortableResourcePath("package.json", "$manifest");
+const REPOSITORY_MANIFEST_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
+/** 一个仓库根的 `package.json`；没有、读不出或不是 JSON 都是 null——提醒是尽力而为，从不让预览失败。 */
+async function readRepositoryManifest(context, repositoryId) {
+    const placement = context.snapshot.placements.roots.find((entry) => entry.key === `repository.${repositoryId}.root`);
+    if (placement === undefined || placement.state !== "present")
+        return null;
+    let repositoryRoot = null;
+    try {
+        repositoryRoot = await RootedDirectory.open(placement.absolutePath, "$repositoryRoot");
+        // 用户的文件：不要求 Wakeflow 自己的文本规范（换行、末尾换行），只要求是 UTF-8 的 JSON。
+        const read = await readStableFile(repositoryRoot, REPOSITORY_MANIFEST_REF, {
+            maximumBytes: REPOSITORY_MANIFEST_MAXIMUM_BYTES,
+            ...signalOptions(context.options.signal),
+        });
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(read.bytes);
+        return JSON.parse(text.startsWith("\ufeff") ? text.slice(1) : text);
+    }
+    catch {
+        return null;
+    }
+    finally {
+        await repositoryRoot?.close().catch(() => undefined);
+    }
+}
+/**
+ * 创建 pod 的预览提醒（open-items D12）：哪些仓库的根清单用相对路径够到仓库之外。那样的依赖在 worktree 检出里
+ * 解析不到，仓库自带的安装与测试可能跑不起来；这是 1.3.0 写明的限制，pod 布局的重新设计在 1.4。只读、不拦。
+ */
+async function createAdvisories(context) {
+    const advisories = [];
+    for (const repository of context.snapshot.model.topology.repositories) {
+        const advisory = deriveRelativePathDependencyAdvisory(await readRepositoryManifest(context, repository.repositoryId));
+        if (advisory === null)
+            continue;
+        advisories.push({
+            code: "relative-path-dependency",
+            repositoryId: repository.repositoryId,
+            count: advisory.count,
+            dependencies: [...advisory.dependencies],
+        });
+    }
+    return advisories;
+}
+async function advisoriesMember(context) {
+    const advisories = await createAdvisories(context);
+    return advisories.length === 0 ? {} : { advisories };
+}
 /** 组装结果与它的 next；变更结果只读一次当前事实，next 与视图出自同一份观察。 */
 async function assembleResult(context, phase) {
     const base = {
@@ -630,6 +681,7 @@ async function assembleResult(context, phase) {
             blockers: phase.planned.blockers,
             planDigest: phase.planned.digest,
             plan: await previewViews(context, phase.planned),
+            ...(phase.planned.plan?.kind === "create" ? await advisoriesMember(context) : {}),
             next,
         });
         return { result, next };

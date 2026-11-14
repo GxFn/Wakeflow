@@ -177,3 +177,44 @@ export function podMutationNext(input) {
         blockers: Object.freeze([]),
     });
 }
+// ---- 相对路径依赖的提醒（open-items D12） -------------------------------------------------
+const MANIFEST_DEPENDENCY_FIELDS = Object.freeze([
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+]);
+// 指向仓库之外的相对路径：`file:../X`、`link:../X`、`portal:../X`，或不带协议的 `../X`。仓库之内的
+// （`file:./packages/x`）在 worktree 检出里照常解析，不算。
+const OUTSIDE_RELATIVE_SPEC = /^(?:(?:file|link|portal):)?\.\.(?:[\\/]|$)/u;
+const PACKAGE_NAME = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/u;
+const ADVISORY_NAMES_MAXIMUM = 8;
+const ADVISORY_COUNT_MAXIMUM = 4096;
+/**
+ * 一份 `package.json` 里指向仓库之外的相对路径依赖。worktree pod 的检出在 `<仓库>/.claude/worktrees/<名字>`
+ * 之类的位置，`../X` 在那里指向的不是主检出旁边的那个仓库，仓库自带的安装与测试因此可能跑不起来。只看
+ * 清单的四个依赖表；读不懂的清单返回 null（不提醒，也不拦）。
+ */
+export function deriveRelativePathDependencyAdvisory(manifest) {
+    if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest))
+        return null;
+    const names = new Set();
+    for (const field of MANIFEST_DEPENDENCY_FIELDS) {
+        const table = manifest[field];
+        if (typeof table !== "object" || table === null || Array.isArray(table))
+            continue;
+        for (const [name, spec] of Object.entries(table)) {
+            if (typeof spec === "string" && OUTSIDE_RELATIVE_SPEC.test(spec))
+                names.add(name);
+        }
+    }
+    if (names.size === 0)
+        return null;
+    return Object.freeze({
+        count: Math.min(names.size, ADVISORY_COUNT_MAXIMUM),
+        dependencies: Object.freeze([...names]
+            .filter((name) => name.length <= 214 && PACKAGE_NAME.test(name))
+            .sort()
+            .slice(0, ADVISORY_NAMES_MAXIMUM)),
+    });
+}

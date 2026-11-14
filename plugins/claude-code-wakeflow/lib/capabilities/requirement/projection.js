@@ -19,6 +19,7 @@ export function toBoardEntry(state, digest) {
         stateDigest: digest ?? computeRequirementClaimStateDigest(state),
         recordDigest: state.recordDigest,
         supersedes: state.supersedes,
+        ...(state.supplements === undefined ? {} : { supplements: state.supplements }),
         claim: state.claim === null ? null : Object.freeze({ demandId: state.claim.demandId }),
         parked: state.parked === null ? null : Object.freeze({ trigger: state.parked.trigger }),
         withdrawal: state.withdrawal === null

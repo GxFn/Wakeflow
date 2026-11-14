@@ -100,6 +100,7 @@ import {
   podMutationNext,
   podPreviewNext,
 } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Pod：`wakeflow_pod` 的效果型外壳（ADR-0010 D6，gate-log §13.91 D3）。
@@ -195,10 +196,6 @@ interface PodOutcome {
     | "retired";
   readonly podId: WakeflowDurableId<"pod">;
   readonly retiredReceipts: number;
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 // ---- 请求与上下文 ------------------------------------------------------------------

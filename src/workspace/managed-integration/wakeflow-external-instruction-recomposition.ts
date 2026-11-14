@@ -1,7 +1,10 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  type RootedDirectory,
+  isRootedDirectory,
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   deriveWakeflowExternalInstructionAuthorities,
   type ParsedWakeflowExternalInstructionInspectionRequest,
@@ -108,14 +111,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(value: unknown): AbortSignal | undefined {

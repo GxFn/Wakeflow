@@ -30,7 +30,11 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import {
+  type RootedDirectory,
+  RootedDirectoryError,
+  isRootedDirectory,
+} from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -44,6 +48,7 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "./stable-file-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：已关闭目录树candidate的精确、可续接退休。
@@ -145,23 +150,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

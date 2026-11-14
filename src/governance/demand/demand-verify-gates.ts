@@ -28,6 +28,7 @@ import { readDemandAcceptanceCoverage } from "./demand-acceptance-coverage.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandAggregateState } from "./model/demand-aggregate-state.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Governance / Demand：一个 Demand 的 verify 门（ADR-0012 D3，能力卡 9 Q4）。
@@ -114,10 +115,6 @@ async function guarded<Outcome extends VerifyGateOutcome | null>(
     if (reason === "aborted") throw error;
     return gate(name, "unavailable", reason);
   }
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 async function configGate(input: VerifyInput): Promise<VerifyGateOutcome> {

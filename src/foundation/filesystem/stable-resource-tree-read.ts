@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import pLimit from "p-limit";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
@@ -18,12 +17,13 @@ import {
 } from "./bounded-directory-tree-scan.js";
 import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   readStableFileDigest,
   StableFileReadError,
   type StableFileSource,
 } from "./stable-file-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界资源树内容观察。
@@ -147,15 +147,6 @@ function fail(reason: StableResourceTreeReadErrorReason, path: string, cause?: u
   throw new StableResourceTreeReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function parseCount(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail("input", path);
@@ -210,14 +201,7 @@ function parseOptions(value: unknown): Readonly<ParsedStableResourceTreeReadOpti
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

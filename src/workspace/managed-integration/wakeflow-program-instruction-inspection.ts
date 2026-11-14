@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
@@ -12,7 +10,10 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  type RootedDirectory,
+  isRootedDirectory,
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
@@ -49,6 +50,7 @@ import {
   type WakeflowProgramInstructionBodyAuthority,
   WakeflowProgramInstructionBodyAuthorityError,
 } from "./wakeflow-program-instruction-body-authority.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的只读文件检查。
@@ -178,15 +180,6 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   }
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 /** 快照并绑定 Matrix、Host Profile 与 current/desired Config 摘要。 */
 export function parseWakeflowProgramInstructionInspectionRequest(
   value: unknown,
@@ -290,14 +283,7 @@ export function parseWakeflowProgramInstructionInspectionRequest(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function currentUserId(): bigint {

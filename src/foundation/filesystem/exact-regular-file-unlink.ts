@@ -10,7 +10,7 @@ import {
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -19,6 +19,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：指定普通文件路径名的耐久删除。
@@ -122,28 +123,12 @@ function fail(reason: ExactRegularFileUnlinkErrorReason, path: string, cause?: u
   throw new ExactRegularFileUnlinkError(reason, path, cause === undefined ? undefined : { cause });
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {

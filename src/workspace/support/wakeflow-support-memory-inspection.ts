@@ -62,6 +62,7 @@ import {
   type WakeflowSupportMemoryAuthority,
   WakeflowSupportMemoryAuthorityError,
 } from "./wakeflow-support-memory-authority.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
@@ -173,15 +174,6 @@ function fail(
     reason,
     path,
     cause === undefined ? undefined : { cause },
-  );
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
   );
 }
 

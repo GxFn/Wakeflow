@@ -43,6 +43,7 @@ import {
   WakeflowGitignoreBodyAuthorityError,
 } from "./wakeflow-gitignore-body-authority.js";
 import type { WakeflowGitignoreInspection } from "./wakeflow-gitignore-inspection.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Gitignore 重组与显式恢复共享的输入、错误和机械操作准入合同。
@@ -264,15 +265,6 @@ export function parseWakeflowGitignoreRecompositionRequest(
     failWakeflowGitignoreRecomposition("input", "$request.matrix");
   }
   return Object.freeze({ matrix, expectedMatrixDigest, hostProfiles });
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function positiveMilliseconds(value: unknown, path: string): number {

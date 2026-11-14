@@ -199,6 +199,7 @@ import {
   deliveryPromptRequirementPackage,
   renderDeliveryPortablePrompt,
 } from "./prompt.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Delivery：三个追加型执行器（能力卡 6，ADR-0009，ADR-0012 D1 D2）。
@@ -380,10 +381,6 @@ const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, 
     aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
   });
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {

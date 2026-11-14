@@ -14,7 +14,7 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -23,6 +23,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：普通文件的不替换目标持久化硬链接。
@@ -139,28 +140,12 @@ function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableRes
   }
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {

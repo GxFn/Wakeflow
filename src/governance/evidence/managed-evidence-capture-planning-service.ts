@@ -91,6 +91,7 @@ import {
   managedEvidenceSourceKey,
   parseManagedEvidenceSourceSelection,
 } from "./managed-evidence-source-selection.js";
+import { ownString } from "../../foundation/data/own-string.js";
 
 /**
  * Wakeflow Governance / Evidence：证据来源的零写捕获规划（切片 8 D1 到 D3）。
@@ -203,16 +204,6 @@ const CONTENT_CLASSIFICATION_CONCURRENCY = 4;
 const MAXIMUM_FILE_BYTES = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes);
 const CAPTURED_FILE_REF = parsePortableResourcePath("content");
 const BLOCKER_LIMIT = 16;
-
-function ownString(value: unknown, key: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined &&
-    Object.hasOwn(descriptor, "value") &&
-    typeof descriptor.value === "string"
-    ? descriptor.value
-    : null;
-}
 
 function fail(reason: ManagedEvidenceCapturePlanningServiceErrorReason, cause?: unknown): never {
   throw new ManagedEvidenceCapturePlanningServiceError(

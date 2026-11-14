@@ -66,6 +66,7 @@ import {
   claudeCodeStatuslineCommand,
 } from "./claude-code-statusline-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-host-resource-profile.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Host / Claude Code：状态栏命令写进本地设置的维护操作（gate-log §13.94 D6）。
@@ -244,10 +245,6 @@ function fail(
     path,
     cause === undefined ? undefined : { cause },
   );
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 function assertRoot(root: unknown): asserts root is RootedDirectory {

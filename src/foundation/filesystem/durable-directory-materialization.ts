@@ -1,6 +1,5 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, mkdir, open as openFileHandle } from "node:fs/promises";
-import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
@@ -16,14 +15,16 @@ import {
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
+  isRootedDirectory,
 } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域目录的持久化创建与逐级建立。
@@ -150,28 +151,12 @@ function fail(
   );
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseMode(value: unknown): number {

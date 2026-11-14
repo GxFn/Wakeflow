@@ -1,5 +1,4 @@
 import nodePath from "node:path";
-import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
@@ -14,6 +13,7 @@ import {
 import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的持久化逐级物化。
@@ -102,15 +102,6 @@ function fail(
     reason,
     path,
     cause === undefined ? undefined : { cause },
-  );
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
   );
 }
 

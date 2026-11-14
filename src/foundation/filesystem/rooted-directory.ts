@@ -1,3 +1,4 @@
+import { types } from "node:util";
 import { type BigIntStats, constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, lstat, open as openFileHandle, realpath } from "node:fs/promises";
 import nodePath from "node:path";
@@ -486,4 +487,17 @@ export class RootedDirectory {
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
   }
+}
+
+/**
+ * 一个真的 RootedDirectory：对象、不是 Proxy、是本类的实例（open-items L4）。三十一个模块的 `assertRoot`
+ * 此前各自内联这四项判断；它们现在各留一行，判断在这里。
+ */
+export function isRootedDirectory(value: unknown): value is RootedDirectory {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !types.isProxy(value) &&
+    value instanceof RootedDirectory
+  );
 }

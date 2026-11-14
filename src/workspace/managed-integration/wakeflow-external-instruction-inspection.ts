@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
@@ -12,7 +10,10 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  type RootedDirectory,
+  isRootedDirectory,
+} from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -40,6 +41,7 @@ import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
 } from "./wakeflow-managed-text-history.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
@@ -169,15 +171,6 @@ function parseConfig(value: unknown, path: string): WakeflowConfigModel {
   }
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function hasTarget(
   config: WakeflowConfigModel,
   target: Readonly<WakeflowExternalInstructionTarget>,
@@ -276,14 +269,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function createAuthority(

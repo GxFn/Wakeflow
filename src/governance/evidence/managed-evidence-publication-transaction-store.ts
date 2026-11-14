@@ -21,8 +21,9 @@ import {
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
+  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
@@ -137,14 +138,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

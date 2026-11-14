@@ -34,7 +34,7 @@ import {
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -147,14 +147,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

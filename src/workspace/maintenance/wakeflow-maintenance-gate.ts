@@ -10,7 +10,10 @@ import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  type RootedDirectory,
+  isRootedDirectory,
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
@@ -231,14 +234,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertOperation<Result>(

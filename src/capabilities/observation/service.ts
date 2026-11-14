@@ -124,6 +124,7 @@ import {
   type WindowRuntimeView,
   type WorkspaceGateFacts,
 } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Observation：两个读工具的执行器（gate-log §13.94 D1、D3、D4）。
@@ -239,10 +240,6 @@ const PRIORITY_ORDER: Readonly<Record<string, number>> = Object.freeze({
 const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 const JOURNAL_FILE_PATTERN =
   /^(demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function reasonOf(error: unknown): string | null {
   if (typeof error !== "object" || error === null) return null;

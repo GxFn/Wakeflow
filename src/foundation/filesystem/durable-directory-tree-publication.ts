@@ -20,6 +20,7 @@ import {
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：清单已闭合的目录树候选整体发布。
@@ -119,15 +120,6 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
     if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

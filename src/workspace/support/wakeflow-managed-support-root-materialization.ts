@@ -49,6 +49,7 @@ import {
   createWakeflowManagedSupportResourceCatalog,
   type WakeflowManagedSupportResourceCatalog,
 } from "./wakeflow-managed-support-resource-catalog.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Support：单个受管 Support 根目录的机械物化 owner。
@@ -168,15 +169,6 @@ function fail(
     reason,
     path,
     cause === undefined ? undefined : { cause },
-  );
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
   );
 }
 

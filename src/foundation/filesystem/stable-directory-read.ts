@@ -19,10 +19,12 @@ import {
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
+  isRootedDirectory,
 } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的一层稳定目录读取。
@@ -155,15 +157,6 @@ function fail(reason: StableDirectoryReadErrorReason, path: string, cause?: unkn
   throw new StableDirectoryReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
@@ -221,14 +214,7 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

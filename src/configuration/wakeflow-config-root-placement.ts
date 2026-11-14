@@ -1,5 +1,4 @@
 import nodePath from "node:path";
-import { types } from "node:util";
 
 import {
   AbsoluteDirectoryPlacementError,
@@ -7,8 +6,9 @@ import {
   inspectAbsoluteDirectoryPlacement,
 } from "../foundation/filesystem/absolute-directory-placement.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
+  isRootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   WAKEFLOW_ACTIVE_ROOT,
@@ -103,14 +103,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function portableComparisonPath(value: string): string {

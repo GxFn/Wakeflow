@@ -7,7 +7,7 @@ import {
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -16,6 +16,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：指定已有普通文件的持久性结算。
@@ -107,23 +108,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

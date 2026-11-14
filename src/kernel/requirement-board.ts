@@ -58,6 +58,7 @@ import {
   REQUIREMENT_BOARD_ROOT_REF,
   requirementClaimStateRef,
 } from "./layout.js";
+import { signalOptions } from "../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
@@ -375,10 +376,6 @@ export function reclaimRequirementPackage(
     archive: null,
     claim: { demandId, claimedAt: parseUtcInstant(at, "$at") },
   });
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 async function readSource(

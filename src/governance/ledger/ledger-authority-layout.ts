@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
@@ -7,8 +5,9 @@ import {
   materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
+  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   LEDGER_ARCHIVES_ROOT_REF,
@@ -88,14 +87,7 @@ export const LEDGER_AUTHORITY_LAYOUT_DIGEST = computeCanonicalJsonSha256Digest({
 });
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

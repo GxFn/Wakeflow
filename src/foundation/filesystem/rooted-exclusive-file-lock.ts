@@ -49,9 +49,14 @@ import {
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import {
+  type RootedDirectory,
+  RootedDirectoryError,
+  isRootedDirectory,
+} from "./rooted-directory.js";
 import { StableFileReadError } from "./stable-file-read.js";
 import { StrictTextFileError } from "./strict-text-file.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的短生命周期独占文件锁。
@@ -215,14 +220,7 @@ function fail(reason: RootedExclusiveFileLockErrorReason, path: string, cause?: 
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parsePositiveMilliseconds(value: unknown, path: string): number {
@@ -230,15 +228,6 @@ function parsePositiveMilliseconds(value: unknown, path: string): number {
     fail("input", path);
   }
   return value;
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

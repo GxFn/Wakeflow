@@ -1,5 +1,4 @@
 import { Buffer } from "node:buffer";
-import { types } from "node:util";
 
 import type {
   LoadedArtifactTreeFile as LoadedArtifactTreeFileWire,
@@ -18,7 +17,7 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../filesystem/rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "../filesystem/rooted-directory.js";
 import {
   readStableRootResourceTree,
   StableResourceTreeReadError,
@@ -29,6 +28,7 @@ import {
   ByteCountError,
   parseByteCount,
 } from "../numeric/byte-count.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
@@ -238,15 +238,6 @@ function parseLimits(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits>
     }
   }
   return Object.freeze(parsed);
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseIdentityOptions(value: unknown): Readonly<ParsedIdentityOptions> {
@@ -480,14 +471,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function mapStableTreeReadError(error: StableResourceTreeReadError): never {

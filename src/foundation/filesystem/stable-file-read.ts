@@ -15,10 +15,12 @@ import {
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
+  isRootedDirectory,
 } from "./rooted-directory.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内稳定、有界的普通文件读取。
@@ -119,15 +121,6 @@ function fail(reason: StableFileReadErrorReason, path: string, cause?: unknown):
   throw new StableFileReadError(reason, path, cause === undefined ? undefined : { cause });
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
@@ -191,14 +184,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 async function inspectInitialResource(

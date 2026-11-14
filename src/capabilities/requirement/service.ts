@@ -97,6 +97,7 @@ import {
   selectBoardEntries,
   toBoardEntry,
 } from "./projection.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Requirement：`wakeflow_publish_requirement` 与
@@ -184,10 +185,6 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
   yml: "application/yaml",
   toml: "application/toml",
 });
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function mapStoreError(error: unknown): never {
   if (error instanceof LedgerAuthorityStoreError) {

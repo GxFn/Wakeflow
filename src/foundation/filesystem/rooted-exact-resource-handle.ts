@@ -12,9 +12,10 @@ import {
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
+  isRootedDirectory,
 } from "./rooted-directory.js";
 
 /**
@@ -95,14 +96,7 @@ function fail(reason: RootedExactResourceHandleErrorReason, path: string, cause?
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {

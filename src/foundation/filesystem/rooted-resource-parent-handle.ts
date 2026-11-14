@@ -1,7 +1,6 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, lstat, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
-import { types } from "node:util";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
@@ -17,9 +16,10 @@ import {
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
+  isRootedDirectory,
 } from "./rooted-directory.js";
 
 /**
@@ -108,14 +108,7 @@ function fail(reason: RootedResourceParentHandleErrorReason, path: string, cause
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseAddress(

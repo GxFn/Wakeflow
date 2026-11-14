@@ -42,6 +42,7 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
 
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
@@ -173,15 +174,6 @@ export function assertWakeflowConfigAuthorityRoot(
   ) {
     failWakeflowConfigAuthorityReplacement("input", "$root");
   }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function optionRecord(value: unknown): Readonly<Record<string, unknown>> {

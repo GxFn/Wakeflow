@@ -51,6 +51,7 @@ import {
   retireManagedEvidencePublicationTransactionJournal,
   type StoredManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-store.js";
+import { ownString } from "../../foundation/data/own-string.js";
 
 /**
  * Wakeflow Governance / Evidence：已耐久Publication Transaction的不可逆边界结算。
@@ -109,16 +110,6 @@ export class ManagedEvidencePublicationTransactionSettlementError extends Error 
     this.causeCode = causeCode;
     this.causeReason = causeReason;
   }
-}
-
-function ownString(value: unknown, key: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined &&
-    Object.hasOwn(descriptor, "value") &&
-    typeof descriptor.value === "string"
-    ? descriptor.value
-    : null;
 }
 
 function fail(

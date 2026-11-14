@@ -1,9 +1,7 @@
-import { types } from "node:util";
-
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -12,6 +10,7 @@ import {
   type StableDirectoryReadOptions,
   type StableDirectoryReadResult,
 } from "./stable-directory-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的有界、确定性目录树遍历。
@@ -151,15 +150,6 @@ function fail(reason: BoundedDirectoryTreeScanErrorReason, path: string, cause?:
   );
 }
 
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
 function parseLimit(
   value: unknown,
   path: "$options.maximumEntries" | "$options.maximumDepth",
@@ -201,14 +191,7 @@ function parseOptions(value: unknown): Readonly<ParsedBoundedDirectoryTreeScanOp
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {

@@ -29,6 +29,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { hostRuntimeRootRef } from "../../kernel/layout.js";
 import type { WakeflowHostMaintenanceOperationInput } from "../../workspace/maintenance/wakeflow-host-maintenance-contribution.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Host / Claude Code：宿主资产的通用维护操作（gate-log §13.94 D6 的状态栏资产机制，
@@ -123,10 +124,6 @@ const ASSETS_DIRECTORY_REF = parsePortableResourcePath(
   `${hostRuntimeRootRef("claude-code")}/operations/assets`,
   "$asset",
 );
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function assertRoot(root: unknown): asserts root is RootedDirectory {
   if (

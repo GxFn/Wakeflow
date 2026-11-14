@@ -90,6 +90,7 @@ import {
   evidencePlanSummary,
   evidencePreviewNext,
 } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Evidence：`wakeflow_record_evidence` 的效果型服务（gate-log §13.89）。
@@ -140,10 +141,6 @@ interface EvidenceOutcome {
   readonly disposition: "recorded" | "already-recorded" | "recovered" | "retired" | "healthy";
   readonly demandId: WakeflowDurableId<"demand">;
   readonly publication: Readonly<EvidencePublication> | null;
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {

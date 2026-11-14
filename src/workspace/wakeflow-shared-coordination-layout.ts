@@ -8,8 +8,9 @@ import {
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
+  isRootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   admitWakeflowResourceOperation,
@@ -134,14 +135,7 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(

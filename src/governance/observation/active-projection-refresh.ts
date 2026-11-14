@@ -17,6 +17,7 @@ import { fail, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
 import { observeWorkspace } from "./workspace-observation.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Governance / Observation：变更之后重算并重写活动投影（gate-log §13.94 D5）。
@@ -34,10 +35,6 @@ export interface RefreshActiveProjectionOptions {
   readonly signal?: AbortSignal;
   /** 取投影锁的预算，透传给内核；缺省是内核的 10 秒。测试用它把争用变成快速可观察的失败。 */
   readonly acquireTimeoutMilliseconds?: number;
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 async function openLedgerRoot(

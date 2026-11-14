@@ -20,6 +20,7 @@ import {
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 
@@ -186,15 +187,6 @@ export function assertDurableAtomicFileRoot(value: unknown): asserts value is Ro
   ) {
     failDurableAtomicFileWrite("input", "$root");
   }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseMode(value: unknown): number {

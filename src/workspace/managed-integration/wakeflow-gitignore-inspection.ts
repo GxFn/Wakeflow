@@ -7,8 +7,9 @@ import {
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
+  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
@@ -159,14 +160,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseRequest(value: unknown): Readonly<ParsedRequest> {

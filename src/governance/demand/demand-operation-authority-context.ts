@@ -24,6 +24,7 @@ import {
 } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
 import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
+import { ownString } from "../../foundation/data/own-string.js";
 
 /**
  * Wakeflow Governance / Demand：一次业务操作共享的只读组合权威上下文。
@@ -74,16 +75,6 @@ export class DemandOperationAuthorityContextError extends Error {
     this.causeCode = causeCode;
     this.causeReason = causeReason;
   }
-}
-
-function ownString(value: unknown, key: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined &&
-    Object.hasOwn(descriptor, "value") &&
-    typeof descriptor.value === "string"
-    ? descriptor.value
-    : null;
 }
 
 function fail(reason: DemandOperationAuthorityContextErrorReason, cause?: unknown): never {

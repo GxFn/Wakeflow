@@ -68,6 +68,7 @@ import {
   ManagedEvidencePublicationTransactionStoreError,
   type StoredManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-store.js";
+import { ownString } from "../../foundation/data/own-string.js";
 
 /**
  * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的Application/Recovery。
@@ -186,16 +187,6 @@ interface RecoveryRoots {
   readonly config: Readonly<WakeflowConfigAuthoritySnapshot>;
   readonly demandRoot: RootedDirectory;
   readonly ledgerRoot: RootedDirectory;
-}
-
-function ownString(value: unknown, key: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined &&
-    Object.hasOwn(descriptor, "value") &&
-    typeof descriptor.value === "string"
-    ? descriptor.value
-    : null;
 }
 
 function fail(

@@ -47,6 +47,7 @@ import {
   claudeCodePortableSettingsRulesFor,
   planClaudeCodePortableSettingsTransition,
 } from "./claude-code-portable-settings-transition.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Host / Claude Code：portable settings 的多根只读 composition。
@@ -451,10 +452,6 @@ function supportPlacement(
   const placement = placements.roots.find((entry) => entry.key === `support.${root.rootId}.root`);
   if (placement === undefined) fail("placement", "$supportRoot");
   return placement;
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 /** 写入动作的一个根：程序根直接读；支撑面缺根时按动作决定计划 create 还是报 `support-root-missing`。 */

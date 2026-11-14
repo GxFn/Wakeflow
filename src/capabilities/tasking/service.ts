@@ -96,6 +96,7 @@ import {
   parseAcceptanceCriteria,
   type SupplementCriteria,
 } from "./decide.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Tasking：`wakeflow_plan_target_task` 的效果。
@@ -142,10 +143,6 @@ interface SliceOutcome {
 }
 
 const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {

@@ -165,6 +165,7 @@ import {
   type ProjectionReceipt,
   publishProjectionDocument,
 } from "./projection.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Endpoint：`wakeflow_register_window_binding` 的薄壳。
@@ -331,10 +332,6 @@ interface AppliedBinding {
   readonly disposition: MutationDisposition;
   readonly binding: Readonly<WakeflowWindowHostBinding> | null;
   readonly worktree: Readonly<WorktreeSummary> | null;
-}
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
 }
 
 function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade {

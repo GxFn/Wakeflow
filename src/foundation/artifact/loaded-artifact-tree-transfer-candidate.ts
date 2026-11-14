@@ -28,6 +28,7 @@ import {
   LoadedArtifactTreeTransferPlanError,
   parseLoadedArtifactTreeTransferPlan,
 } from "./loaded-artifact-tree-transfer-plan.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：Loaded Artifact Tree 的目标根内候选物化。
@@ -121,15 +122,6 @@ function assertRoot(
   ) {
     fail("input", path);
   }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

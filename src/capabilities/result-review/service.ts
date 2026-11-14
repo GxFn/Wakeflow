@@ -221,6 +221,7 @@ import {
   testPhaseForDecision,
 } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Result Review：四个执行器（能力卡 7 修订，ADR-0012 D1 D4 D5，§13.87）。
@@ -315,10 +316,6 @@ const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, 
     aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
   });
-
-function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
-  return signal === undefined ? {} : { signal };
-}
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {

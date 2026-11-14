@@ -16,6 +16,7 @@ import {
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * 跨根流式文件候选的公共数据、容量、错误与被动准入合同。
@@ -223,15 +224,6 @@ export function parseDurableFileCopyExpectation(
     failDurableFileCopyCandidate("input", "$expectation.expectedNode");
   }
   return Object.freeze({ byteCount, digest, expectedNode });
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function parseMode(value: unknown): number {

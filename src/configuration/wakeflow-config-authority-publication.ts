@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
@@ -8,7 +6,10 @@ import {
   type DurableAtomicFileWriteResult,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import {
+  type RootedDirectory,
+  isRootedDirectory,
+} from "../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
   computeWakeflowConfigDigest,
@@ -28,6 +29,7 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Configuration：严格 Config 权威记录的仅限首次创建持久发布。
@@ -114,23 +116,7 @@ function fail(
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
+  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {

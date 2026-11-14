@@ -26,6 +26,7 @@ import {
   WakeflowProgramInstructionInspectionError,
   type WakeflowProgramInstructionInspectionRequest,
 } from "./wakeflow-program-instruction-inspection.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
@@ -168,15 +169,6 @@ export function parseWakeflowProgramInstructionRecompositionRequest(
     }
     throw error;
   }
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
 }
 
 function positiveMilliseconds(value: unknown, path: string): number {

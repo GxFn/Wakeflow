@@ -13,8 +13,6 @@ export type Sha256Digest = string
 export type ResultOutcome = ("completed" | "blocked" | "needs-review")
 export type HumanText = string
 export type RepositoryChange = ({
-[k: string]: unknown | undefined
-} & {
 repositoryId: RepositoryId
 disposition: ("committed" | "left-uncommitted" | "no-changes")
 /**
@@ -38,8 +36,6 @@ export type EvidenceLocators = EvidenceLocator[]
 export type HumanTextList = HumanText[]
 export type Token = string
 export type TestReportContent = ({
-[k: string]: unknown | undefined
-} & {
 outcome: ResultOutcome
 summary: HumanText
 evidenceLocators: EvidenceLocators
@@ -51,8 +47,6 @@ risks: HumanTextList
 steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]|[Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step, Step]
 })
 export type Step = ({
-[k: string]: unknown | undefined
-} & {
 stepId: StepId
 observed: HumanText
 evidence: EvidenceRef

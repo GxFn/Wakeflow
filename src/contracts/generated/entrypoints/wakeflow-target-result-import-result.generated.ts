@@ -4,8 +4,6 @@
  */
 
 export type TargetResult = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTargetResult"
 schemaVersion: 1
 workType: ("implementation" | "test")
@@ -37,8 +35,6 @@ export type UtcInstant = string
 export type ResultOutcome = ("completed" | "blocked" | "needs-review")
 export type HumanText = string
 export type RepositoryChange = ({
-[k: string]: unknown | undefined
-} & {
 repositoryId: RepositoryId
 disposition: ("committed" | "left-uncommitted" | "no-changes")
 /**
@@ -60,8 +56,6 @@ export type EvidenceLocators = EvidenceLocator[]
 export type HumanTextList = HumanText[]
 export type Token = string
 export type TestReport = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestTargetResultReport"
 schemaVersion: 1
 outcome: ResultOutcome
@@ -78,8 +72,6 @@ steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step,
 verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
 })
 export type Step = ({
-[k: string]: unknown | undefined
-} & {
 stepId: StepId
 observed: HumanText
 evidence: EvidenceRef

@@ -7,8 +7,6 @@
  * Controller为一次真实环境Test执行授权的逻辑attempt。
  */
 export type WakeflowTestExecutionAttempt = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestExecutionAttempt"
 schemaVersion: 1
 testAttemptId: TestAttemptId

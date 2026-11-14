@@ -19,8 +19,6 @@ export type WakeflowPortableResourcePathText = string
  * Controller 显式确认过的内容：含控制字符的 opaque 成员与非凭证类隐私命中；凭证类命中永远不能进入记录。
  */
 export type ContentReview = ({
-[k: string]: unknown | undefined
-} & {
 disposition: ("controller-confirmed" | "not-required")
 /**
  * @maxItems 4095

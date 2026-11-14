@@ -5,8 +5,6 @@
 
 export type HumanText = string
 export type RepositoryChange = ({
-[k: string]: unknown | undefined
-} & {
 repositoryId: RepositoryId
 disposition: ("committed" | "left-uncommitted" | "no-changes")
 /**

@@ -317,3 +317,28 @@ test("Schema check cannot use the committed generated directory as scratch", asy
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
+
+test("生成的合同类型里没有条件成员留下的开放操作数，索引签名只减不增（open-items L8）", () => {
+  // 对象 Schema 带 allOf 或 if/then 时，生成器曾把那个只加约束的成员译成 `{ [k: string]: unknown }` 再与
+  // 真正的对象相交：封闭的对象因此接受任何多余的键。后处理去掉这个操作数；这里钉住它不再出现，并把
+  // 余下的索引签名（确实开放的对象、数组元素里的嵌套形状）数出来——新增一处要先说明为什么是开放的。
+  const root = path.join(process.cwd(), "src/contracts/generated");
+  const files: string[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.name.endsWith(".ts")) files.push(absolute);
+    }
+  };
+  walk(root);
+  let conditionalOperands = 0;
+  let indexSignatures = 0;
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    conditionalOperands += text.split("({\n[k: string]: unknown | undefined\n} & {").length - 1;
+    indexSignatures += text.split("[k: string]: unknown").length - 1;
+  }
+  equal(conditionalOperands, 0);
+  equal(indexSignatures, 17);
+});

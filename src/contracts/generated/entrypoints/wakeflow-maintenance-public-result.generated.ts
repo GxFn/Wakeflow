@@ -8,8 +8,6 @@
  */
 export type WakeflowMaintenancePublicResultV1 = (PreviewResult | MutationResult)
 export type PreviewResult = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowMaintenancePublicPreviewResult"
 schemaVersion: 1
 tool: "wakeflow_maintain_workspace"
@@ -34,8 +32,6 @@ export type NullableSha256Digest = (Sha256Digest | null)
 export type Sha256Digest = string
 export type LaunchIntents = DomainObject[]
 export type MutationResult = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowMaintenancePublicMutationResult"
 schemaVersion: 1
 tool: "wakeflow_maintain_workspace"

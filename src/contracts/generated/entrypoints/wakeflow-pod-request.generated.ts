@@ -8,8 +8,6 @@
  */
 export type WakeflowPodRequestV1 = (EffectRequest | RecoverRequest)
 export type EffectRequest = ({
-[k: string]: unknown | undefined
-} & {
 root: WorkspaceRoot
 mode: ("preview" | "apply")
 planDigest?: Sha256Digest

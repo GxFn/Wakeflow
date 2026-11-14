@@ -765,16 +765,33 @@ async function generateSchemaModule(
       },
     },
   );
-  const normalizedGenerated = generated
-    .split(/\r?\n/u)
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .trimEnd();
+  const normalizedGenerated = closeConditionalIntersections(
+    generated
+      .split(/\r?\n/u)
+      .map((line) => line.trimEnd())
+      .join("\n")
+      .trimEnd(),
+  );
   const runtimeLines = runtimeSchemaModuleLines(record);
   if (runtimeLines.length > 0) {
     return `${[normalizedGenerated, ...runtimeLines].join("\n").trimEnd()}\n`;
   }
   return `${normalizedGenerated}\n`;
+}
+
+/**
+ * 条件成员留下的开放操作数（open-items L8）。一个对象 Schema 在 `properties` 之外带 `allOf` 或 `if` / `then`
+ * 时，生成器把那个只加约束、不加属性的成员译成 `{ [k: string]: unknown }`，再与真正的对象相交：
+ * `({ [k: string]: unknown } & { …字段… })`。交叉类型因此接受任何多余的键，哪怕 Schema 写着
+ * `additionalProperties: false`——字段拼错也能编译通过，只剩运行时的校验兜着。那个操作数不描述任何
+ * 属性，去掉它：对象自己是封闭的就封闭，自己是开放的（索引签名在它的花括号里面）就照旧开放。
+ */
+function closeConditionalIntersections(generated: string): string {
+  const operand = "({\n[k: string]: unknown | undefined\n} & {";
+  let text = generated;
+  // 几个条件成员连着出现时是一串操作数：去掉第一个之后，下一个又成了开头，所以反复去到没有为止。
+  while (text.includes(operand)) text = text.replaceAll(operand, "({");
+  return text;
 }
 
 /**

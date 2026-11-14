@@ -7,8 +7,6 @@
  * Record one test TargetResult review decision (accept, request-another-attempt with stepIds, blocked, escalate with a classification) against an inspected snapshot; the same key and body replays.
  */
 export type WakeflowTestReviewDecisionRequestV1 = ({
-[k: string]: unknown | undefined
-} & {
 root: WorkspaceRoot
 demandId: DemandId
 /**
@@ -59,8 +57,6 @@ export type TargetReviewDecisionId = string
 export type DemandEventId = string
 export type StepId = string
 export type TestEscalation = ({
-[k: string]: unknown | undefined
-} & {
 classification: ("product-defect" | "needs-decision")
 remediation?: Remediation
 userDecision?: Escalation

@@ -7,8 +7,6 @@
  * 一次投递代际的宿主效果处置：由 Wakeflow 按证据派生，记录证据种类、宿主记录标识与声明处置。
  */
 export type WakeflowDeliveryOutcome = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowDeliveryOutcome"
 schemaVersion: 1
 deliveryId: string

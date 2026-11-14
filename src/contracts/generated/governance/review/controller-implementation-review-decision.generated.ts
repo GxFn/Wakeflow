@@ -7,8 +7,6 @@
  * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定：accept、rework、blocked 或 escalate（ADR-0012 D5）。
  */
 export type WakeflowControllerImplementationReviewDecision = ({
-[k: string]: unknown | undefined
-} & {
 anchorEvidence?: (null | [AnchorEvidence, ...(AnchorEvidence)[]])
 kind: "WakeflowControllerImplementationReviewDecision"
 schemaVersion: 1

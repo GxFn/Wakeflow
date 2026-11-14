@@ -102,7 +102,7 @@ test("an outdated tmux helper copy and a stale board index are both rewritten by
   equal(readFileSync(index, "utf8"), before.index);
 
   const again = await reconcile(root);
-  deepEqual(hostOperationIds(again.plan), []);
+  deepEqual(hostOperationIds("plan" in again ? again.plan : null), []);
 });
 
 test("with private modes drifted as well, the first reconcile converges only the modes and points back to a fresh preview; the second rewrites the helper and the index (W38)", async (t) => {
@@ -139,5 +139,6 @@ test("with private modes drifted as well, the first reconcile converges only the
   equal(applied.status, "completed");
   equal(computeSha256Digest(readFileSync(asset)), CLAUDE_CODE_TMUX_ASSET_DIGEST);
   equal(readFileSync(index, "utf8"), before.index);
-  deepEqual(hostOperationIds((await reconcile(root)).plan), []);
+  const settled = await reconcile(root);
+  deepEqual(hostOperationIds("plan" in settled ? settled.plan : null), []);
 });

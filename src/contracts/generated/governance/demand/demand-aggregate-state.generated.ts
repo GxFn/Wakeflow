@@ -7,8 +7,6 @@
  * 由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。
  */
 export type WakeflowDemandAggregateState = ({
-[k: string]: unknown | undefined
-} & {
 artifactKind: "wakeflow-demand-aggregate-state"
 schemaVersion: 1
 demandId: DemandId
@@ -70,8 +68,6 @@ export type DemandId = string
  */
 export type WakeflowSha256DigestText = string
 export type TargetTask = ({
-[k: string]: unknown | undefined
-} & {
 targetTaskId: TargetTaskId
 taskPackageId: TaskPackageId
 taskPackageDigest: WakeflowSha256DigestText
@@ -116,14 +112,6 @@ export type TargetReviewDecisionId = string
  * Controller为一次真实环境Test执行授权的逻辑attempt。
  */
 export type WakeflowTestExecutionAttempt = ({
-[k: string]: unknown | undefined
-} & {
-[k: string]: unknown | undefined
-} & {
-[k: string]: unknown | undefined
-} & {
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestExecutionAttempt"
 schemaVersion: 1
 testAttemptId: string

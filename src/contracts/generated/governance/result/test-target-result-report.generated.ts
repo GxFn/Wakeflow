@@ -7,8 +7,6 @@
  * Test Agent 按测试合同逐步记录的执行结果陈述：每步 observed、证据、verdict 与失败分类；整体 verdict 由 Wakeflow 从步骤派生。
  */
 export type WakeflowTestTargetResultReport = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestTargetResultReport"
 schemaVersion: 1
 outcome: ("completed" | "blocked" | "needs-review")
@@ -48,8 +46,6 @@ export type WakeflowSha256DigestText = string
  */
 export type WakeflowUtcInstantText = string
 export type Step = ({
-[k: string]: unknown | undefined
-} & {
 stepId: StepId
 observed: HumanText
 evidence: EvidenceRef

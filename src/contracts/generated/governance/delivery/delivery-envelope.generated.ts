@@ -7,8 +7,6 @@
  * 一次投递的不可变信封：任务包入口、当前绑定代际、可移植 prompt 及其摘要、围栏令牌；实现与 test 两类任务共用。
  */
 export type WakeflowDeliveryEnvelope = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowDeliveryEnvelope"
 schemaVersion: 1
 deliveryId: DeliveryId
@@ -59,8 +57,6 @@ export type RemediationSummary = string
  * Controller为一次真实环境Test执行授权的逻辑attempt。
  */
 export type WakeflowTestExecutionAttempt = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestExecutionAttempt"
 schemaVersion: 1
 testAttemptId: string

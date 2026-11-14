@@ -7,8 +7,6 @@
  * Wakeflow 从当前任务包与投递处置事件权威补齐的不可变 implementation 或 Test TargetResult。
  */
 export type WakeflowTargetResult = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTargetResult"
 schemaVersion: 1
 workType: ("implementation" | "test")
@@ -41,8 +39,6 @@ export type WakeflowSha256DigestText = string
  */
 export type WakeflowUtcInstantText = string
 export type RepositoryChange = ({
-[k: string]: unknown | undefined
-} & {
 repositoryId: string
 disposition: ("committed" | "left-uncommitted" | "no-changes")
 /**
@@ -59,8 +55,6 @@ export type WakeflowGitObjectId = (Sha1 | Sha256)
  * Test Agent 按测试合同逐步记录的执行结果陈述：每步 observed、证据、verdict 与失败分类；整体 verdict 由 Wakeflow 从步骤派生。
  */
 export type WakeflowTestTargetResultReport = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestTargetResultReport"
 schemaVersion: 1
 outcome: ("completed" | "blocked" | "needs-review")
@@ -86,8 +80,6 @@ steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step,
 verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
 })
 export type Step = ({
-[k: string]: unknown | undefined
-} & {
 stepId: string
 observed: string
 evidence: EvidenceRef1

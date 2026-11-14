@@ -7,8 +7,6 @@
  * Controller基于精确Result Review Snapshot作出的单implementation Target审查决定：accept、rework、blocked 或 escalate（ADR-0012 D5）。
  */
 export type WakeflowControllerImplementationReviewDecision = ({
-[k: string]: unknown | undefined
-} & {
 anchorEvidence?: (null | [AnchorEvidence, ...(AnchorEvidence)[]])
 kind: "WakeflowControllerImplementationReviewDecision"
 schemaVersion: 1
@@ -58,8 +56,6 @@ export type TextList = string[]
  * Controller基于精确Result Review Snapshot作出的单test Target审查决定：accept、request-another-attempt（附 stepIds）、blocked 或 escalate（附分类；product-defect 走授权返工，needs-decision 走用户决策）。
  */
 export type WakeflowControllerTestReviewDecision = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowControllerTestReviewDecision"
 schemaVersion: 1
 targetReviewDecisionId: string
@@ -99,8 +95,6 @@ observedAt: WakeflowUtcInstantText
  */
 export type TextList1 = string[]
 export type TestEscalation = ({
-[k: string]: unknown | undefined
-} & {
 classification: ("product-defect" | "needs-decision")
 remediation?: Remediation
 userDecision?: Escalation1

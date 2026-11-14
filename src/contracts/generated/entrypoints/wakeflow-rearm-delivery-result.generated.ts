@@ -7,8 +7,6 @@
  * Result of one rearm: the new generation with its permit, the appended event and next; a callback rearm re-issues the wake-controller permit without a work claim (kind callback).
  */
 export type WakeflowRearmDeliveryResultV1 = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowRearmDeliveryResult"
 schemaVersion: 1
 tool: "wakeflow_rearm_delivery"

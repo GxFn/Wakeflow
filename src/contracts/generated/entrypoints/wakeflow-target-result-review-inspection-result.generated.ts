@@ -7,8 +7,6 @@
  * Read-only review context for one reported, review-blocked or escalated TargetResult: task package, result, prior decisions, callback and completion status, allowed decisions and, for tests, the per-step record.
  */
 export type WakeflowTargetResultReviewInspectionResultV1 = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTargetResultReviewInspectionResult"
 schemaVersion: 1
 tool: "wakeflow_inspect_target_result_review"
@@ -29,8 +27,6 @@ export type DemandId = string
 export type Sha256Digest = string
 export type EventId = string
 export type ReviewUnit = ({
-[k: string]: unknown | undefined
-} & {
 status: ("reported" | "review-blocked" | "escalated")
 workType: ("implementation" | "test")
 targetTaskId: TargetTaskId
@@ -67,8 +63,6 @@ supersededResults?: TargetResultId[]
 export type TargetTaskId = string
 export type ResultOutcome = ("completed" | "blocked" | "needs-review")
 export type ReviewTaskPackage = ({
-[k: string]: unknown | undefined
-} & {
 artifactKind: "wakeflow-task-package"
 schemaVersion: 1
 programId: ReviewTaskPackageProgramId
@@ -163,8 +157,6 @@ export type ReviewTaskPackageTargetResultId = string
 export type ReviewTaskPackageTargetReviewDecisionId = string
 export type EvidenceKind = ("hook-observation" | "transcript" | "test-output" | "diff" | "document" | "link" | "commit")
 export type TargetResult = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTargetResult"
 schemaVersion: 1
 workType: ("implementation" | "test")
@@ -190,8 +182,6 @@ export type WindowId = string
 export type ClaimId = string
 export type HumanText = string
 export type RepositoryChange = ({
-[k: string]: unknown | undefined
-} & {
 repositoryId: RepositoryId
 disposition: ("committed" | "left-uncommitted" | "no-changes")
 /**
@@ -212,8 +202,6 @@ export type EvidenceLocators = EvidenceLocator[]
 export type HumanTextList = HumanText[]
 export type Token = string
 export type TestReport = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowTestTargetResultReport"
 schemaVersion: 1
 outcome: ResultOutcome
@@ -230,8 +218,6 @@ steps: []|[Step]|[Step, Step]|[Step, Step, Step]|[Step, Step, Step, Step]|[Step,
 verdict: ("pass" | "fail" | "blocked" | "cannot-conclude")
 })
 export type Step = ({
-[k: string]: unknown | undefined
-} & {
 stepId: StepId
 observed: HumanText
 evidence: EvidenceRef
@@ -367,8 +353,6 @@ event: ("stop" | "turn-complete")
 observedAt: UtcInstant
 })
 export type TestEscalation = ({
-[k: string]: unknown | undefined
-} & {
 classification: ("product-defect" | "needs-decision")
 remediation?: Remediation
 userDecision?: Escalation

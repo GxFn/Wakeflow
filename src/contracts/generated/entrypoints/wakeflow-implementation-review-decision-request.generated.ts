@@ -7,8 +7,6 @@
  * Single-call Controller command recording one implementation TargetResult review decision (accept, rework, blocked, escalate) against an inspected Snapshot baseline; the same idempotency key and body replays the first result.
  */
 export type WakeflowImplementationReviewDecisionRequestV1 = ({
-[k: string]: unknown | undefined
-} & {
 /**
  * @minItems 1
  * @maxItems 64

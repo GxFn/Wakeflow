@@ -8,8 +8,6 @@
  */
 export type WakeflowRequirementPublicationRequestV1 = (PublishRequest | ActivateRequest | WithdrawRequest | RecoverRequest)
 export type PublishRequest = ({
-[k: string]: unknown | undefined
-} & {
 root: WorkspaceRoot
 mode: ("preview" | "apply")
 planDigest?: Sha256Digest
@@ -30,8 +28,6 @@ export type PortableResourcePath = string
 export type TextPath = (PortableResourcePath & string)
 export type UtcInstant = string
 export type ActivateRequest = ({
-[k: string]: unknown | undefined
-} & {
 root: WorkspaceRoot
 mode: ("preview" | "apply")
 planDigest?: Sha256Digest
@@ -40,8 +36,6 @@ requirementId: RequirementId
 expectedStateDigest: Sha256Digest
 })
 export type WithdrawRequest = ({
-[k: string]: unknown | undefined
-} & {
 root: WorkspaceRoot
 mode: ("preview" | "apply")
 planDigest?: Sha256Digest

@@ -7,8 +7,6 @@
  * Regenerable host-local Fresh projection for one durable window before any real host binding exists.
  */
 export type WakeflowWindowRuntimeUnregisteredProjection = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowWindowRuntimeProjection"
 schemaVersion: 1
 programId: string

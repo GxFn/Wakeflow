@@ -7,8 +7,6 @@
  * Controller 为一个目标窗口规划的不可变 Target Task 执行合同。
  */
 export type WakeflowTaskPackage = ({
-[k: string]: unknown | undefined
-} & {
 artifactKind: "wakeflow-task-package"
 schemaVersion: 1
 programId: ProgramId

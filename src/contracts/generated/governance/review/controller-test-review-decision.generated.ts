@@ -7,8 +7,6 @@
  * Controller基于精确Result Review Snapshot作出的单test Target审查决定：accept、request-another-attempt（附 stepIds）、blocked 或 escalate（附分类；product-defect 走授权返工，needs-decision 走用户决策）。
  */
 export type WakeflowControllerTestReviewDecision = ({
-[k: string]: unknown | undefined
-} & {
 kind: "WakeflowControllerTestReviewDecision"
 schemaVersion: 1
 targetReviewDecisionId: TargetReviewDecisionId
@@ -63,8 +61,6 @@ export type HumanText = string
 export type TextList = HumanText[]
 export type StepId = string
 export type TestEscalation = ({
-[k: string]: unknown | undefined
-} & {
 classification: ("product-defect" | "needs-decision")
 remediation?: Remediation
 userDecision?: Escalation

@@ -313,7 +313,7 @@ main checkout; every other pod works in a worktree.
 
 `wakeflow_pod` create:
 
-1. Preview to derive the plan; it writes nothing.
+1. Preview to derive the plan; it writes nothing. Its `advisories` name each repository whose root `package.json` reaches outside the repository by relative path (`relative-path-dependency`, with the dependency names): tell the user before applying.
 2. Apply with exactly what preview returned. One config transaction registers
    the pod, its window set, and one worktree intent per repository.
 3. Create each worktree by host means: {{worktreeLaunch}} Then launch that
@@ -326,7 +326,7 @@ main checkout; every other pod works in a worktree.
    launch intent lists the worktrees as attached directories, and that list is
    read from the receipts the product registrations wrote. A repository that
    depends on a sibling checkout by relative path (`file:../Name`) cannot
-   resolve it inside a worktree; say so in that pod's task packages. The product windows
+   resolve it inside a worktree, so its own install and tests may not run there; say so in that pod's task packages. The product windows
    need not start one by one: launch them all without waiting (`--wait 0` on
    the Claude Code tmux helper; the desktop helper returns once the session
    has started), keep each printed observation, and register them once their

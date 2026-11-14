@@ -109,6 +109,28 @@
         }
       }
     },
+    "supplements": {
+      "description": "历次 requirement-supplement 续接并入的 supplement 需求包，按并入顺序；它们的验收标准与源需求的一起构成本 Demand 的验收全集。没有并入过时省略，既有状态摘要不变。",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirementId", "recordRef", "recordDigest"],
+        "properties": {
+          "requirementId": {
+            "type": "string",
+            "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "recordRef": {
+            "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+          },
+          "recordDigest": {
+            "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+          }
+        }
+      }
+    },
     "continuation": {
       "type": "object",
       "additionalProperties": false,

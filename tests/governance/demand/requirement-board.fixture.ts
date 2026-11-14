@@ -43,6 +43,7 @@ export async function placePendingClaimState(
     testingMode: loaded.record.testingDecision.mode,
     publishedAt: parseUtcInstant(loaded.record.recordedAt),
     supersedes: loaded.record.supersedes,
+    supplements: loaded.record.supplements ?? null,
     parkedTrigger: null,
   });
   await createRequirementClaimStateFile(workspaceRoot, state);

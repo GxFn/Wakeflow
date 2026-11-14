@@ -61,6 +61,7 @@ import {
 } from "../../kernel/publication-transaction.js";
 import {
   archiveRequirementClaim,
+  claimRequirementPackage,
   readRequirementClaimState,
   reclaimRequirementPackage,
   refreshRequirementBoardIndex,
@@ -82,6 +83,7 @@ import {
   retireDemandRoot,
   sealDemandArchive,
   payloadTexts,
+  type ArchiveManifestBasis,
   type DemandArchiveManifest,
   type LocatedArchive,
   type PayloadFile,
@@ -132,7 +134,7 @@ import {
   pendingReviewTargets,
   textPrivacyBlockers,
 } from "./decide.js";
-import { activeDemandOnPod } from "./service.js";
+import { activeDemandOnPod, loadPackage } from "./service.js";
 import { evaluateVerifyGates, type VerifyReport } from "./verify.js";
 
 /**
@@ -170,6 +172,18 @@ interface ArchiveReceipt {
   readonly manifestDigest: Sha256Digest;
 }
 
+/** 计划里的一个需求包：看板状态的 CAS 预期与 Ledger 记录的谱系。 */
+interface PlannedPackage {
+  readonly requirementId: string;
+  readonly expectedClaimStateDigest: Sha256Digest;
+  readonly recordRef: PortableResourcePath;
+  readonly recordDigest: Sha256Digest;
+}
+
+interface PlannedTerminalPackage extends PlannedPackage {
+  readonly claimStateRevision: number;
+}
+
 interface TerminalPlan {
   readonly action: "complete" | "cancel";
   readonly demandId: string;
@@ -183,13 +197,9 @@ interface TerminalPlan {
     readonly reviewSnapshotDigest: Sha256Digest;
     readonly testingMode: "controller-only" | "real-environment" | "not-applicable";
   }> | null;
-  readonly package: Readonly<{
-    readonly requirementId: string;
-    readonly expectedClaimStateDigest: Sha256Digest;
-    readonly claimStateRevision: number;
-    readonly recordRef: PortableResourcePath;
-    readonly recordDigest: Sha256Digest;
-  }>;
+  readonly package: Readonly<PlannedTerminalPackage>;
+  /** 并入本 Demand 的 supplement 包（Q7），与 `package` 一起结算；没有并入过时不写这一项。 */
+  readonly supplements?: readonly Readonly<PlannedTerminalPackage>[];
   readonly verify: Readonly<{ readonly observationDigest: string }>;
   readonly archive: Readonly<{
     readonly archiveRef: PortableResourcePath;
@@ -492,6 +502,11 @@ async function planTerminal(
   const state = loaded.aggregate.state;
   const route = await postAcceptanceStage(handle, context.signal);
   const claim = await readClaim(context, loaded.identity.source.requirementId);
+  const supplements = await Promise.all(
+    (state.supplements ?? []).map(async (lineage) =>
+      Object.freeze({ lineage, claim: await readClaim(context, lineage.requirementId) }),
+    ),
+  );
   const rootSnapshot = await readDemandRootSnapshot(handle.demandRoot, context.signal);
   const payload = await readPayloadFiles(handle.demandRoot, rootSnapshot.payload, context.signal);
   const payloadBlockers = payloadPrivacyBlockers(payloadTexts(payload));
@@ -533,6 +548,10 @@ async function planTerminal(
             ...cancellationReasonBlockers(demandId, input.reason),
           ],
     archiveConflict: existingArchive !== null && existingArchive.archiveRef === archiveRef,
+    supplementClaims: supplements.map(({ lineage, claim: attached }) => ({
+      requirementId: lineage.requirementId,
+      claim: attached?.state ?? null,
+    })),
   });
   // 只有 complete 依赖接受后路由；cancel 在路由不可用时照常进行（路由不可用对 complete 已是阻塞项）。
   if (blockers.length > 0 || claim === null || (input.action === "complete" && route === null)) {
@@ -556,6 +575,26 @@ async function planTerminal(
         recordRef: loaded.identity.source.recordRef,
         recordDigest: loaded.identity.source.recordDigest,
       }),
+      ...(supplements.length === 0
+        ? {}
+        : {
+            // 看板上没有它的包上面已经是阻塞项，走不到这里。
+            supplements: Object.freeze(
+              supplements.flatMap(({ lineage, claim: attached }) =>
+                attached === null
+                  ? []
+                  : [
+                      Object.freeze({
+                        requirementId: lineage.requirementId,
+                        expectedClaimStateDigest: attached.digest,
+                        claimStateRevision: attached.state.revision,
+                        recordRef: lineage.recordRef,
+                        recordDigest: lineage.recordDigest,
+                      }),
+                    ],
+              ),
+            ),
+          }),
       verify: Object.freeze({ observationDigest: verify.observationDigest }),
       archive: Object.freeze({
         archiveRef,
@@ -732,12 +771,8 @@ async function sealArchive(
           archivedAt,
           controllerWindowId: podScope.controllerWindow.windowId,
           podId: handle.loaded.identity.podId,
-          package: {
-            requirementId: plan.package.requirementId,
-            recordRef: plan.package.recordRef,
-            recordDigest: plan.package.recordDigest,
-            claimStateRevision: plan.package.claimStateRevision,
-          },
+          package: manifestPackage(plan.package),
+          ...manifestSupplements(plan),
           verify: {
             observationDigest: verify.observationDigest,
             reportDigest,
@@ -766,6 +801,23 @@ function archiveReceipt(
   });
 }
 
+function manifestPackage(member: Readonly<PlannedTerminalPackage>) {
+  return {
+    requirementId: member.requirementId,
+    recordRef: member.recordRef,
+    recordDigest: member.recordDigest,
+    claimStateRevision: member.claimStateRevision,
+  };
+}
+
+/** 清单的 `supplements`：非空才写这一项。 */
+function manifestSupplements(plan: TerminalPlan) {
+  const [first, ...rest] = (plan.supplements ?? []).map(manifestPackage);
+  const supplements: NonNullable<ArchiveManifestBasis["supplements"]> | null =
+    first === undefined ? null : [first, ...rest];
+  return supplements === null ? {} : { supplements };
+}
+
 function manifestLineage(manifest: DemandArchiveManifest) {
   return Object.freeze({
     recordRef: manifestPath(manifest.package.recordRef, "$manifest.package.recordRef"),
@@ -773,16 +825,17 @@ function manifestLineage(manifest: DemandArchiveManifest) {
   });
 }
 
-/** 步骤 3：需求包 claimed → archived（完成）或 withdrawn（取消）；已到位即 current。 */
+/**
+ * 步骤 3：需求包 claimed → archived（完成）或 withdrawn（取消）；已到位即 current。源需求包与并入的
+ * supplement 包走同一条规则，逐个结算。
+ */
 async function settlePackage(
   context: DemandSliceContext,
   plan: TerminalPlan,
-  lineage: Readonly<{
-    readonly recordRef: PortableResourcePath;
-    readonly recordDigest: Sha256Digest;
-  }>,
+  member: Readonly<Pick<PlannedPackage, "requirementId" | "recordRef" | "recordDigest">>,
 ): Promise<PackageReceipt> {
-  const source = await readClaim(context, plan.package.requirementId);
+  const lineage = { recordRef: member.recordRef, recordDigest: member.recordDigest };
+  const source = await readClaim(context, member.requirementId);
   if (source === null) fail("recovery-required", "claim-state-vanished", "$board");
   const state = source.state;
   const settled =
@@ -803,7 +856,7 @@ async function settlePackage(
           at,
         );
   await replaceRequirementClaimStateFile(context.root, source, next, context.signal);
-  const reread = await readClaim(context, plan.package.requirementId);
+  const reread = await readClaim(context, member.requirementId);
   if (reread === null) fail("recovery-required", "claim-state-vanished", "$board");
   return packageReceipt(reread, lineage);
 }
@@ -859,9 +912,11 @@ async function applyTerminalLocked(
     planDigest: planDigest(plan),
     verify,
   });
-  const lineage = { recordRef: plan.package.recordRef, recordDigest: plan.package.recordDigest };
   const settled = await settleTerminalAndArchive(context, plan, verify);
-  const packageState = await settlePackage(context, plan, lineage);
+  const packageState = await settlePackage(context, plan, plan.package);
+  for (const supplement of plan.supplements ?? []) {
+    await settlePackage(context, plan, supplement);
+  }
   const releasedClaims = await releaseClaims(context, plan);
   await releaseDemandHandle(context);
   await retireDemandRoot(
@@ -1155,12 +1210,11 @@ interface ContinuePlan {
     readonly kind: "optimization" | "requirement-supplement" | "verified-bug";
     readonly summary: string;
   }>;
-  readonly package: Readonly<{
-    readonly requirementId: string;
-    readonly expectedClaimStateDigest: Sha256Digest;
-    readonly recordRef: PortableResourcePath;
-    readonly recordDigest: Sha256Digest;
-  }>;
+  readonly package: Readonly<PlannedPackage>;
+  /** requirement-supplement 续接并入的 supplement 包（Q7）：pending → 由本 Demand 认领。别的谱系没有这一项。 */
+  readonly supplement?: Readonly<PlannedPackage>;
+  /** 归档清单里此前并入的 supplement 包：与源需求包一起 archived → claimed。没有时不写这一项。 */
+  readonly attached?: readonly Readonly<PlannedPackage>[];
   readonly configDigest: Sha256Digest;
 }
 
@@ -1183,6 +1237,8 @@ interface ContinuationOutcome {
   readonly demandId: WakeflowDurableId<"demand">;
   readonly event: EventReceipt;
   readonly package: PackageReceipt | null;
+  /** 这次续接并入的 supplement 包的回执；没有并入时不给。 */
+  readonly supplement?: PackageReceipt;
 }
 
 /** 配置里的 pod（只取 continue 需要的 id 与 lifecycle）；已不存在即 null。 */
@@ -1201,11 +1257,29 @@ async function planContinue(
   const handle = await openDemandHandle(context, demandId);
   const archive = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
   const claim = archive === null ? null : await readClaim(context, archive.manifest.requirementId);
+  const requested = input.continuation.requirementId ?? null;
+  const supplement = requested === null ? null : await supplementCandidate(context, requested);
+  const attached = await Promise.all(
+    (archive?.manifest.supplements ?? []).map(async (member) =>
+      Object.freeze({ member, claim: await readClaim(context, member.requirementId) }),
+    ),
+  );
   const blockers = deriveContinueBlockers({
     rootPresent: handle !== null,
     archiveOutcome: archive?.manifest.outcome ?? null,
     demandId,
     claim: claim?.state ?? null,
+    supplement: {
+      kind: input.continuation.kind,
+      requirementId: requested,
+      claim: supplement?.claim?.state ?? null,
+      record: supplement?.record ?? null,
+      sourceRequirementId: archive?.manifest.requirementId ?? null,
+    },
+    attachedSupplements: attached.map(({ member, claim: state }) => ({
+      requirementId: member.requirementId,
+      claim: state?.state ?? null,
+    })),
     otherActiveDemandId:
       archive === null ? null : await activeDemandOnPod(context, archive.manifest.podId, demandId),
     archivedPodId: archive?.manifest.podId ?? null,
@@ -1243,9 +1317,79 @@ async function planContinue(
         expectedClaimStateDigest: claim.digest,
         ...manifestLineage(archive.manifest),
       }),
+      ...plannedSupplement(requested, supplement),
+      ...plannedAttached(attached),
       configDigest: context.snapshot.configDigest,
     }),
   );
+}
+
+interface SupplementCandidate {
+  readonly claim: RequirementClaimStateSource | null;
+  readonly record: Readonly<{
+    readonly recordRef: PortableResourcePath;
+    readonly recordDigest: Sha256Digest;
+    readonly programMatches: boolean;
+    readonly demandType: RequirementClaimState["demandType"];
+    readonly supplements: string | null;
+  }> | null;
+}
+
+/** 续接要并入的 supplement 包：看板状态与 Ledger 记录里决定它能不能并入的事实。 */
+async function supplementCandidate(
+  context: DemandSliceContext,
+  requirementId: string,
+): Promise<SupplementCandidate> {
+  const claim = await readClaim(context, requirementId);
+  const loaded = claim === null ? null : await loadPackage(context, requirementId);
+  return Object.freeze({
+    claim,
+    record:
+      loaded === null
+        ? null
+        : Object.freeze({
+            recordRef: loaded.recordRef,
+            recordDigest: loaded.recordDigest,
+            programMatches: loaded.record.programId === context.snapshot.model.program.programId,
+            demandType: loaded.record.demandType,
+            supplements: loaded.record.supplements ?? null,
+          }),
+  });
+}
+
+/** 计划的 `supplement`：请求里给了包才有这一项；走到这里时阻塞项已经保证它 pending 且记录与看板一致。 */
+function plannedSupplement(requirementId: string | null, candidate: SupplementCandidate | null) {
+  if (requirementId === null || candidate?.claim == null || candidate.record === null) return {};
+  return {
+    supplement: Object.freeze({
+      requirementId,
+      expectedClaimStateDigest: candidate.claim.digest,
+      recordRef: candidate.record.recordRef,
+      recordDigest: candidate.record.recordDigest,
+    }),
+  };
+}
+
+/** 计划的 `attached`：归档清单里此前并入的 supplement 包；没有时不写这一项。 */
+function plannedAttached(
+  attached: readonly Readonly<{
+    readonly member: NonNullable<DemandArchiveManifest["supplements"]>[number];
+    readonly claim: RequirementClaimStateSource | null;
+  }>[],
+) {
+  const planned = attached.flatMap(({ member, claim }) =>
+    claim === null
+      ? []
+      : [
+          Object.freeze({
+            requirementId: member.requirementId,
+            expectedClaimStateDigest: claim.digest,
+            recordRef: manifestPath(member.recordRef, "$manifest.supplements.recordRef"),
+            recordDigest: manifestDigest(member.recordDigest, "$manifest.supplements.recordDigest"),
+          }),
+        ],
+  );
+  return planned.length === 0 ? {} : { attached: Object.freeze(planned) };
 }
 
 async function planDecision(
@@ -1302,20 +1446,28 @@ async function restoredPayload(
   return payload;
 }
 
-/** 步骤 3（续接）：需求包 archived → claimed；已 claimed 即 current。 */
-async function reclaimPackage(
+/**
+ * 步骤 3（续接）：需求包回到由本 Demand 认领；已 claimed 即 current。源需求包与此前并入的 supplement 包是
+ * archived → claimed（`reclaim`），这次并入的 supplement 包是 pending → claimed（`claim`）。
+ */
+async function claimPackageForDemand(
   context: DemandSliceContext,
   plan: ContinuePlan,
+  member: Readonly<PlannedPackage>,
+  transition: "reclaim" | "claim",
 ): Promise<PackageReceipt> {
-  const source = await readClaim(context, plan.package.requirementId);
+  const source = await readClaim(context, member.requirementId);
   if (source === null) fail("recovery-required", "claim-state-vanished", "$board");
-  const lineage = { recordRef: plan.package.recordRef, recordDigest: plan.package.recordDigest };
+  const lineage = { recordRef: member.recordRef, recordDigest: member.recordDigest };
   if (source.state.status === "claimed" && source.state.claim?.demandId === plan.demandId) {
     return packageReceipt(source, lineage);
   }
-  const next = reclaimRequirementPackage(source.state, plan.demandId, now(context));
+  const next =
+    transition === "reclaim"
+      ? reclaimRequirementPackage(source.state, plan.demandId, now(context))
+      : claimRequirementPackage(source.state, plan.demandId, now(context));
   await replaceRequirementClaimStateFile(context.root, source, next, context.signal);
-  const reread = await readClaim(context, plan.package.requirementId);
+  const reread = await readClaim(context, member.requirementId);
   if (reread === null) fail("recovery-required", "claim-state-vanished", "$board");
   return packageReceipt(reread, lineage);
 }
@@ -1383,6 +1535,15 @@ async function applyContinueLocked(
           archiveRef: plan.archiveRef,
           archiveManifestDigest: plan.archiveManifestDigest,
           previousStreamRevision: plan.expectedStreamRevision,
+          ...(plan.supplement === undefined
+            ? {}
+            : {
+                supplement: Object.freeze({
+                  requirementId: plan.supplement.requirementId,
+                  recordRef: plan.supplement.recordRef,
+                  recordDigest: plan.supplement.recordDigest,
+                }),
+              }),
         }),
       }),
       plan.commitId,
@@ -1393,7 +1554,14 @@ async function applyContinueLocked(
   } else {
     event = await findEventReceipt(context, handle, plan.commitId);
   }
-  const packageState = await reclaimPackage(context, plan);
+  const packageState = await claimPackageForDemand(context, plan, plan.package, "reclaim");
+  for (const member of plan.attached ?? []) {
+    await claimPackageForDemand(context, plan, member, "reclaim");
+  }
+  const supplementState =
+    plan.supplement === undefined
+      ? null
+      : await claimPackageForDemand(context, plan, plan.supplement, "claim");
   await deleteJournal(context, plan.demandId);
   await refreshBoardIndexQuietly(context);
   return Object.freeze({
@@ -1402,6 +1570,7 @@ async function applyContinueLocked(
     demandId,
     event,
     package: packageState,
+    ...(supplementState === null ? {} : { supplement: supplementState }),
   });
 }
 
@@ -1484,6 +1653,7 @@ function assembleContinuationResult(
     demandId: phase.outcome.demandId,
     event: phase.outcome.event,
     package: phase.outcome.package,
+    ...(phase.outcome.supplement === undefined ? {} : { supplement: phase.outcome.supplement }),
   });
 }
 

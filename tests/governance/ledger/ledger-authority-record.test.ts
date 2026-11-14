@@ -223,6 +223,46 @@ test("record codec relates demand type, testing decision and supersedes", () => 
   equal(superseding.supersedes, OTHER_REQUIREMENT_ID);
 });
 
+test("record codec carries a supplement's parent requirement only on supplement packages, and leaves every other record's bytes alone", () => {
+  // 没有父需求的记录：键不存在，文档里也没有（1.3.0 之前的记录字节不变）。
+  const plain = createRequirementRecord(requirementRecordDraft(), CLOCK);
+  equal(Object.hasOwn(plain, "supplements"), false);
+  equal(renderLedgerAuthorityRecord(plain).includes("supplements"), false);
+
+  const supplement = createRequirementRecord(
+    requirementRecordDraft({ demandType: "supplement", supplements: OTHER_REQUIREMENT_ID }),
+    CLOCK,
+  );
+  equal(supplement.supplements, OTHER_REQUIREMENT_ID);
+  deepEqual(
+    parseLedgerAuthorityRecordDocument(renderLedgerAuthorityRecord(supplement)),
+    supplement,
+  );
+  // 旧的 supplement 记录没有父需求：照常读入。
+  equal(
+    createRequirementRecord(requirementRecordDraft({ demandType: "supplement" }), CLOCK)
+      .supplements,
+    undefined,
+  );
+  // 别的类型不能带父需求；也不能补充自己。
+  expectRecordError(
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({ demandType: "requirement", supplements: OTHER_REQUIREMENT_ID }),
+        CLOCK,
+      ),
+    "relation",
+  );
+  expectRecordError(
+    () =>
+      createRequirementRecord(
+        requirementRecordDraft({ demandType: "supplement", supplements: FIXTURE_REQUIREMENT_ID }),
+        CLOCK,
+      ),
+    "relation",
+  );
+});
+
 test("record codec keeps sections bound to members without judging the required table", () => {
   const draft = requirementRecordDraft();
   const [first] = draft.sections;

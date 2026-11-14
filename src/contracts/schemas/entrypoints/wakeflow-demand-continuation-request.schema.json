@@ -50,6 +50,11 @@
               "minLength": 1,
               "maxLength": 4096,
               "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+            },
+            "requirementId": {
+              "description": "requirement-supplement only, and required for it: the pending supplement package whose acceptance criteria join this Demand.",
+              "type": "string",
+              "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
             }
           }
         }

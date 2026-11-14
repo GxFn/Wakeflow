@@ -158,3 +158,11 @@
 | --- | --- |
 | 4.4 pod 关闭看全部宿主（W7） | 此前 `wakeflow_pod` 只按调用方宿主的 profile 读绑定登记表与 worktree 回执：Claude 登记了 pod 的 Controller 之后从 Codex 关闭，close-complete 看不到那份绑定，`window-bound` 不阻塞，pod 连同窗口被删出配置，绑定成为无工具可退的孤儿（decommission 对不在配置的窗口报 `window-unknown`）。现在 pod facade 带 `hosts`——两份 entrypoints 各供两个宿主的 resource/identity profile（本宿主在首位），共享代码不判断宿主名：事实加载按每个宿主读绑定（宿主根缺席即空集，读失败仍 `precondition-failed/binding-store`），同一窗口多宿主绑定时取首个（与观察同一规则）；close-complete 的 `window-bound:<windowId>` 因此也列出对端的绑定，变更结果的 `next` 指向 `pod-window-decommission`；关闭完成退役每个宿主的投影文件并清两个宿主的回执目录；recover 对配置里没有的 pod 清全部宿主的孤儿目录，按回执自带的 hostId 退休过期回执。配置事务后的投影刷新仍只刷本宿主（对端由它自己的 reconcile 收敛，既有规则）。退役对端的绑定仍要在那个宿主的窗口里调用 `wakeflow_register_window_binding`。 |
 | worktree 回执跨宿主合并（W9） | `listPodWorktreeReceiptsAnyHost` 此前按宿主顺序取第一个非空目录即返回，另一宿主登记的仓库回执被漏掉；现在合并全部宿主的回执、按仓库唯一并排序，同一仓库在两个宿主都有回执即 `io-failure/receipt-conflict` 显式失败而不是任取其一。pod 切片的事实加载、归档的 worktree 成员、证据来源根、捕获白名单与观察读到的是同一个集合（细节见[能力卡 8 的同批修订](./08-evidence-and-archive.md)）。`prepare_delivery` 与 `register_window_binding` 的同宿主回执读取语义正确，不动。 |
+
+## 修订（2026-11-10，1.3.0 批 4：补充需求挂在原 Demand 上，[ADR-0011 补记](../../decisions/0011-requirement-package-as-single-handoff.md)，gate-log §13.241）
+
+- 4.3 的 continue：`requirement-supplement` 续接必须以 `continuation.requirementId` 引用一个 pending 的 supplement 需求包，别的谱系不能带；该包声明的父需求必须是本 Demand 的源需求。续接后它由本 Demand 认领，聚合状态的 `supplements` 记下它的谱系。
+- 4.3 的 create：声明了父需求的 supplement 包不单独认领（`supplement-of:<父需求>`）；status 把它指向完成了父需求的 Demand（`supplement-attach`）。
+- 4.3 的 complete 与 cancel：并入的包与源需求包一起结算——完成一起归档，取消一起撤回；归档清单的 `supplements` 列出它们；再续接一起回到 claimed。
+- 完成门 `requirement-coverage` 的验收全集是源需求与各 supplement 包的条目之和，包里的条目写作 `<requirementId>/ac-N`。
+- 没有做的：补充包不并入还在进行的 Demand；Q3 确认表里"supplement 走新 Demand"一行由本修订取代。

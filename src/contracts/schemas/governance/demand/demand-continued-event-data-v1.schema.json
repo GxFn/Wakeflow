@@ -38,6 +38,24 @@
           "type": "integer",
           "minimum": 2,
           "maximum": 9007199254740991
+        },
+        "supplement": {
+          "description": "requirement-supplement 续接并入的 supplement 需求包（Q7 裁决，1.3.0）：它的验收标准从这次续接起属于本 Demand。只在 kind 为 requirement-supplement 时出现；更早的续接事件没有它，重放保持当时的状态。",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requirementId", "recordRef", "recordDigest"],
+          "properties": {
+            "requirementId": {
+              "type": "string",
+              "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "recordRef": {
+              "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+            },
+            "recordDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
         }
       }
     },

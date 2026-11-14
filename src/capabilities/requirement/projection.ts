@@ -41,6 +41,8 @@ export interface BoardEntry {
   readonly stateDigest: Sha256Digest;
   readonly recordDigest: string;
   readonly supersedes: string | null;
+  /** supplement 包补充的父需求；其他包没有这一项。 */
+  readonly supplements?: string;
   readonly claim: Readonly<{ readonly demandId: string }> | null;
   readonly parked: Readonly<{ readonly trigger: string }> | null;
   /** 撤回原因与时间：`superseded-by:<requirementId>` 或撤回请求里的原因；未撤回为 null。 */
@@ -60,6 +62,7 @@ export function toBoardEntry(state: RequirementClaimState, digest?: Sha256Digest
     stateDigest: digest ?? computeRequirementClaimStateDigest(state),
     recordDigest: state.recordDigest,
     supersedes: state.supersedes,
+    ...(state.supplements === undefined ? {} : { supplements: state.supplements }),
     claim: state.claim === null ? null : Object.freeze({ demandId: state.claim.demandId }),
     parked: state.parked === null ? null : Object.freeze({ trigger: state.parked.trigger }),
     withdrawal:

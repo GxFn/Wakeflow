@@ -113,6 +113,11 @@ import {
   type TestExecutionAttempt,
   TestExecutionAttemptError,
 } from "../../testing/test-execution-attempt.js";
+import {
+  parseRequirementLineageReference,
+  RequirementLineageError,
+  type RequirementLineageReference,
+} from "./requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Demand Model：领域事件归约器生成的纯聚合状态。
@@ -468,7 +473,18 @@ export interface DemandAggregateState {
   readonly awaitingDecision?: Readonly<DemandAwaitingDecision>;
   /** 最近一次从归档重开的续接谱系；`planningRequired` 直到新任务包规划完成。 */
   readonly continuation?: Readonly<DemandContinuationState>;
+  /**
+   * 历次 requirement-supplement 续接并入的 supplement 需求包（Q7 裁决），按并入顺序。它们的验收标准与源需求的
+   * 一起构成验收全集；没有并入过时不写入，既有 state digest 不变。
+   */
+  readonly supplements?: readonly Readonly<DemandSupplementPackage>[];
 }
+
+/** 并入 Demand 的一个 supplement 需求包：标识、Ledger 记录引用与记录摘要（与源需求的谱系引用同形）。 */
+export type DemandSupplementPackage = Pick<
+  RequirementLineageReference,
+  "requirementId" | "recordRef" | "recordDigest"
+>;
 
 export interface DemandAwaitingDecision {
   readonly escalationEventId: WakeflowDurableId<"demand-event">;
@@ -2508,6 +2524,8 @@ function normalizeState(wire: Readonly<DemandAggregateStateWire>): Readonly<Dema
     wire.continuation === undefined
       ? undefined
       : parseContinuationState(wire.continuation, targetTasks);
+  const supplements =
+    wire.supplements === undefined ? undefined : parseSupplementPackages(wire.supplements);
   const testTargets = currentTestTargetsOf({ targetTasks, continuation });
   // 同一时间只有一个未终结的 test 目标（能力卡 5 Q4）；历史代际只能停在 test-product-defect。
   const openTestTargets = testTargets.filter((target) => target.phase !== "test-product-defect");
@@ -2559,7 +2577,38 @@ function normalizeState(wire: Readonly<DemandAggregateStateWire>): Readonly<Dema
     ...(pendingTestRetest === undefined ? {} : { pendingTestRetest }),
     ...(awaitingDecision === undefined ? {} : { awaitingDecision }),
     ...(continuation === undefined ? {} : { continuation }),
+    ...(supplements === undefined ? {} : { supplements }),
   });
+}
+
+/** 并入的 supplement 包不重复：同一个包、同一份记录只并入一次。 */
+function parseSupplementPackages(
+  value: NonNullable<DemandAggregateStateWire["supplements"]>,
+): readonly Readonly<DemandSupplementPackage>[] {
+  const parsed = value.map((entry, index) => {
+    try {
+      const lineage = parseRequirementLineageReference({
+        artifactKind: "wakeflow-requirement-lineage",
+        schemaVersion: 1,
+        ...entry,
+      });
+      return Object.freeze({
+        requirementId: lineage.requirementId,
+        recordRef: lineage.recordRef,
+        recordDigest: lineage.recordDigest,
+      });
+    } catch (error: unknown) {
+      if (error instanceof RequirementLineageError) fail("relation", `$/supplements/${index}`);
+      throw error;
+    }
+  });
+  if (
+    new Set(parsed.map((entry) => entry.requirementId)).size !== parsed.length ||
+    new Set(parsed.map((entry) => entry.recordDigest)).size !== parsed.length
+  ) {
+    fail("relation", "$/supplements");
+  }
+  return Object.freeze(parsed);
 }
 
 /** 升级只在活动 Demand 上等待回答；终态不能携带未回答的升级。 */
@@ -2684,6 +2733,7 @@ export function continueDemandAggregateState(
   kindValue: unknown,
   eventIdValue: unknown,
   historicalTestTargetIdsValue?: readonly unknown[],
+  supplementValue?: unknown,
 ): Readonly<DemandAggregateState> {
   const current = parseDemandAggregateState(currentValue);
   const eventId = parseId(eventIdValue, "demand-event", "$eventId");
@@ -2707,6 +2757,11 @@ export function continueDemandAggregateState(
       fail("relation", "$/continuation/historicalTestTargetIds");
     }
   }
+  // supplement 包只随 requirement-supplement 续接并入；重复并入由状态解析拒绝。事件没有带包的续接（1.3.0
+  // 之前的 requirement-supplement 也是如此）重放时不改这张表。
+  if (supplementValue !== undefined && kindValue !== "requirement-supplement") {
+    fail("relation", "$/continuation/supplement");
+  }
   return parseDemandAggregateState({
     ...current,
     lifecycle: "active",
@@ -2716,6 +2771,9 @@ export function continueDemandAggregateState(
       planningRequired: true,
       ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
     },
+    ...(supplementValue === undefined
+      ? {}
+      : { supplements: [...(current.supplements ?? []), supplementValue] }),
   });
 }
 

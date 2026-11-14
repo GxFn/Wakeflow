@@ -66,6 +66,15 @@ ledger 的 confirmation family 删除；`publish_confirmation` 与 `intake_todo`
 - 场景验收：`card-04/create-demand` 在 L1 按需求包重塑；现有骨架按当前 TS 代码运行到重塑为止。
 - 功能与场景总览 §2、§3、§4 F4、§7 同步。
 
+## 2026-11-10 补记：supplement 包声明父需求并并入原 Demand（Q7 裁决，1.3.0 批 4，gate-log §13.241）
+
+D7 的"一个需求包认领成一个 Demand"对 supplement 类型有一处修订。此前后续工作有两个各缺一半的出口：`wakeflow_continue_demand` 保留历史却带不进新的验收标准，supplement 包能带新标准却被认领成一个与原工作无关的新 Demand（open-items H2、H10）。用户裁决（2026-11-09）：补充需求挂在原 Demand 上。
+
+- **包声明父需求。** supplement 包的头部多一项 `supplements`（父需求的 `requirementId`），发布时必填，进记录与标识。父需求必须是 Demand 的源需求——不能是另一个 supplement，也不能是没有实现的 research；测试模式随父需求，因为并入的 Demand 的测试决策在创建时已经冻结。
+- **不单独认领，由续接并入。** 带父需求的包被 `wakeflow_create_demand` 拒绝；`wakeflow_continue_demand` 的 requirement-supplement 续接引用它，续接事件记下它的谱系，包由原 Demand 认领。requirement-supplement 续接必须带包：新的验收标准只从冻结的、用户确认过的包进入 Demand，不从一句续接摘要进入。
+- **一个 Demand 可以有多份需求包。** Demand 的身份与权威关系（`identity.source`、`authority.json`）不变，仍只指源需求；并入的包记在聚合状态的 `supplements` 里，按并入顺序。任务包的验收锚点、测试合同步骤与权威成员按记录摘要认包，条目在各自的包里从 `ac-1` 编号；完成门的验收全集是各包条目之和。终态时各包一起归档或撤回，归档清单列出它们；再续接一起带回。
+- **没有做的。** 补充包不并入还在进行的 Demand：那里改需求仍是记录用户的回答，或取消后认领修正的包。1.3.0 之前发布的没有父需求的 supplement 包照旧可以单独认领；更早的 requirement-supplement 续接事件没有包，重放保持当时的状态。带 `supplements` 的记录、看板状态与续接事件，更早的制品读不了（与 ADR-0027 的可选键同一处理：不支持降级）。
+
 ## 来源
 
 - GitHub Spec Kit. https://github.com/github/spec-kit

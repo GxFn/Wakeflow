@@ -48,6 +48,10 @@ summary: string
 }
 taskPlanReview: ("controller" | "user")
 supersedes: (null | string)
+/**
+ * supplement 包补充的那个需求（Q7 裁决，1.3.0）：只在 demandType 为 supplement 时出现，指向父需求的记录；这样的包不单独认领，由 wakeflow_continue_demand 的 requirement-supplement 续接并入完成了父需求的 Demand。1.3.0 之前的记录没有它。
+ */
+supplements?: string
 parked: (null | {
 trigger: string
 })

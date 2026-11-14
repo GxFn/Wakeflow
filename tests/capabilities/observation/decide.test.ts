@@ -370,6 +370,47 @@ test("deriveNextActions：空闲工作区的下一步是用户在 Design 窗口�
   equal(busy[0]?.reason, "requirement-claim");
 });
 
+test("deriveNextActions：pending 的 supplement 包不认领（Q7 裁决）——父需求已由某个 Demand 完成时指向续接，还没有时没有可做的一步；普通的包照常认领", () => {
+  const plain = "requirement_00000000-0000-4000-8000-000000000001";
+  const attachable = "requirement_00000000-0000-4000-8000-000000000002";
+  const waiting = "requirement_00000000-0000-4000-8000-000000000003";
+  deepEqual(
+    deriveNextActions(
+      nextInput({
+        pendingPackages: [
+          { requirementId: waiting, attachToDemandId: null },
+          {
+            requirementId: attachable,
+            attachToDemandId: "demand_00000000-0000-4000-8000-000000000009",
+          },
+          { requirementId: plain },
+        ],
+      }),
+    ),
+    [
+      {
+        owner: "controller",
+        tool: "wakeflow_create_demand",
+        reason: "requirement-claim",
+        subject: plain,
+      },
+      {
+        owner: "controller",
+        tool: "wakeflow_continue_demand",
+        reason: "supplement-attach",
+        subject: attachable,
+      },
+    ],
+  );
+  // 只有一个还在等父需求完成的 supplement 包：工作区仍算空闲，下一步是用户去写需求。
+  deepEqual(
+    deriveNextActions(
+      nextInput({ pendingPackages: [{ requirementId: waiting, attachToDemandId: null }] }),
+    ),
+    [{ owner: "user", tool: null, reason: IDLE_REQUIREMENT_AUTHORING, subject: null }],
+  );
+});
+
 test("deriveNextActions：同一动作去重，总数上限 64", () => {
   const duplicated = deriveNextActions(
     nextInput({

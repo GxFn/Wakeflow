@@ -90,7 +90,7 @@ Wakeflow 自己不运行模型，不执行任何宿主动作，不写产品仓�
 - 返工：评审 rework 后，同一任务同一包的新投递（步 7 到 11 重复）。
 - 重设计：评审 redesign 后，同仓库用替换包（旧任务与包 superseded）。
 - 继续：已完成的 Demand 上用 continuation 谱系新增任务，状态回到规划。
-- 补充需求：新 Demand，类型 supplement。
+- 补充需求：类型 supplement 的需求包，声明它补充的需求，由 requirement-supplement 续接并入完成了那个需求的 Demand（1.3.0 起，ADR-0011 补记；此前是一个新 Demand）。
 - 取消：任何非终态；结果与证据保留；需求包 withdrawn。
 - 并发：一个总控一次只推进一个 Demand；用户要求"开启 pod"时，main 的 Controller 创建一套完整的并行开发环境，其 Controller 从共享板认领自己的需求。
 

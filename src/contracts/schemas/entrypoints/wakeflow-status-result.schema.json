@@ -140,6 +140,21 @@
               },
               "priority": {
                 "enum": ["P0", "P1", "P2", "P3"]
+              },
+              "supplements": {
+                "description": "Present on a supplement package: the requirement it adds to. It is not claimed with wakeflow_create_demand; it joins the Demand that completed that requirement.",
+                "$ref": "#/$defs/requirementId"
+              },
+              "attachTo": {
+                "description": "With supplements: the completed Demand to continue (wakeflow_continue_demand, continuation kind requirement-supplement, continuation.requirementId this package), or null while that requirement has no completed Demand yet.",
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/demandId"
+                  }
+                ]
               }
             }
           }

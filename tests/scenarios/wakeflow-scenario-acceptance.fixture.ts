@@ -179,6 +179,30 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
       "product-defect 失败步骤只允许 escalate；escalate{product-defect} 同一提交追加修复授权并把实现目标送回返工，修复投递 prompt 带修复依据；接受后复测合同必须带 retest 谱系；复测通过接受，Demand 完成归档",
   },
   {
+    scenarioId: "card-04/supplement-continuation",
+    card: "04-demand-lifecycle",
+    title:
+      "supplement 包发布时必须说出父需求，不单独认领，status 指向完成了父需求的 Demand；requirement-supplement 续接引用它，任务包的验收锚点与权威成员来自这份包，完成门把它的条目算进验收全集；完成时两份包一起归档、清单列出它，再续接一起带回，取消一起撤回",
+  },
+  {
+    scenarioId: "card-04/research-demand",
+    card: "04-demand-lifecycle",
+    title:
+      "research Demand 没有实现任务也没有测试：认领后路由停在等完成物，规划实现被拒，完成预检被 research-evidence 挡住；回答研究问题的文档登记为 document 证据后完成并归档，之后不能续接",
+  },
+  {
+    scenarioId: "card-06/indeterminate-resolution",
+    card: "06-delivery-and-callback",
+    title:
+      "没有落地证据的投递的两个出口：prompt 没到时以 resolution rejected-before-send 结案、声明释放、只能 rearm（同 prompt 新围栏）；prompt 到了但记录对不上时引用目标会话的 hook 记录以 resolution accepted 结案；没有记录可引用的 accepted 被拒，再次空记被拒",
+  },
+  {
+    scenarioId: "card-07/bug-attempt-capacity",
+    card: "07-results-and-review",
+    title:
+      "bug 类型的需求包走完实现与测试投递；测试合同只给一次尝试，flaky 失败步骤的重跑被 attempt-capacity 拒绝，升级给用户后 Demand 等待回答，用户决定取消，需求包撤回",
+  },
+  {
     scenarioId: "card-11/detach-workspace",
     card: "ADR-0024",
     title:

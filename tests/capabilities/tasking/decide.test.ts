@@ -10,6 +10,7 @@ import {
   deriveLineageExpectation,
   derivePlanReview,
   deriveSectionAnchorBlockers,
+  deriveTestContractCoverageBlockers,
   deriveTestPlanningBlockers,
   deriveTestStepReferenceBlockers,
   deriveTopologyBlockers,
@@ -236,6 +237,69 @@ test("测试合同步骤引用：记录摘要、节锚点、条目三处各自�
       "step-section:ts-3:goal",
       "acceptance-items:2",
     ],
+  );
+});
+
+test("并入 supplement 包（Q7 裁决）：引用按记录摘要认包，条目在各自的包里编号；测试合同要覆盖源需求与各包的全部条目，包里的条目写作 <requirementId>/ac-N", () => {
+  const criteria = parseAcceptanceCriteria(FIXTURE_REQUIREMENT_MARKDOWN);
+  const SUPPLEMENT = "requirement_22222222-2222-4222-8222-222222222222";
+  const supplements = [
+    {
+      requirementId: SUPPLEMENT,
+      recordDigest: OTHER,
+      criteria: parseAcceptanceCriteria("## 验收标准\n\n- AC-1 补充的行为。\n"),
+    },
+  ];
+  const packages = { recordDigest: RECORD, criteria, supplements };
+  // 同一个 ac-1 在两个包里各是一条：摘要决定它指的是哪一条。
+  deepEqual(
+    deriveAnchorReferenceBlockers({
+      anchors: [anchor("a", "ac-1"), anchor("b", "ac-2"), anchor("c", "ac-1", OTHER)],
+      ...packages,
+    }),
+    [],
+  );
+  // supplement 包只有一条：它的 ac-2 不存在，并且每个包各报有几条。
+  deepEqual(deriveAnchorReferenceBlockers({ anchors: [anchor("a", "ac-2", OTHER)], ...packages }), [
+    "anchor-item-unknown:a:ac-2",
+    "acceptance-items:2",
+    `acceptance-items:${SUPPLEMENT}:1`,
+  ]);
+  // 哪个包都对不上的摘要仍是 drift。
+  const UNKNOWN = parseSha256Digest(`sha256:${"3".repeat(64)}`);
+  deepEqual(
+    deriveAnchorReferenceBlockers({ anchors: [anchor("a", "ac-1", UNKNOWN)], ...packages }),
+    ["anchor-record-drift:a"],
+  );
+  // 没有并入时，别的摘要照旧是 drift（与只有一个包时的回答一致）。
+  deepEqual(
+    deriveAnchorReferenceBlockers({
+      anchors: [anchor("a", "ac-1", OTHER)],
+      recordDigest: RECORD,
+      criteria,
+    }),
+    ["anchor-record-drift:a"],
+  );
+
+  const step = (stepId: string, itemId: string, recordDigest = RECORD) => ({
+    stepId,
+    requirementRef: { recordDigest, sectionAnchor: "acceptance-criteria", itemId },
+  });
+  const full = [step("ts-1", "ac-1"), step("ts-2", "ac-2"), step("ts-3", "ac-1", OTHER)];
+  deepEqual(deriveTestStepReferenceBlockers({ steps: full, ...packages }), []);
+  deepEqual(deriveTestContractCoverageBlockers({ steps: full, ...packages }), []);
+  // 只覆盖了源需求：supplement 包的条目带着它的 requirementId 报出来。
+  deepEqual(deriveTestContractCoverageBlockers({ steps: full.slice(0, 2), ...packages }), [
+    `test-contract-uncovered:${SUPPLEMENT}/ac-1`,
+  ]);
+  // 只覆盖了 supplement 包的 ac-1：源需求的两条都没覆盖，同名条目不互相顶替。
+  deepEqual(deriveTestContractCoverageBlockers({ steps: full.slice(2), ...packages }), [
+    "test-contract-uncovered:ac-1",
+    "test-contract-uncovered:ac-2",
+  ]);
+  deepEqual(
+    deriveTestStepReferenceBlockers({ steps: [step("ts-1", "ac-3", OTHER)], ...packages }),
+    ["step-item-unknown:ts-1:ac-3", "acceptance-items:2", `acceptance-items:${SUPPLEMENT}:1`],
   );
 });
 

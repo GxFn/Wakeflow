@@ -75,6 +75,23 @@ export function demandWindowIds(state: Readonly<DemandAggregateState>): readonly
   return Object.freeze([...new Set(state.targetTasks.map((target) => target.windowId))].sort());
 }
 
+const UNCOVERED_SHOWN_MAXIMUM = 20;
+const GATE_DETAIL_MAXIMUM = 256;
+
+/**
+ * `uncovered:<总数>:<条目,…>`：最多列 20 条，并且不超过门明细的 256 字符——并入 supplement 包之后条目带着
+ * requirementId，按条数截会超长。总数始终是全部未覆盖的条数。
+ */
+function uncoveredDetail(uncovered: readonly string[]): string {
+  let detail = `uncovered:${uncovered.length}:`;
+  for (const [index, label] of uncovered.slice(0, UNCOVERED_SHOWN_MAXIMUM).entries()) {
+    const next = `${detail}${index === 0 ? "" : ","}${label}`;
+    if (next.length > GATE_DETAIL_MAXIMUM) break;
+    detail = next;
+  }
+  return detail;
+}
+
 function gate(name: string, status: VerifyGateOutcome["status"], detail: string | null = null) {
   return Object.freeze({ gate: name, status, detail });
 }
@@ -302,12 +319,7 @@ export async function evaluateVerifyGates(input: VerifyInput): Promise<VerifyRep
             if (coverage.total === 0)
               return gate("requirement-coverage", "fail", "acceptance-criteria-empty");
             if (coverage.uncovered.length === 0) return gate("requirement-coverage", "pass");
-            const shown = coverage.uncovered.slice(0, 20).join(",");
-            return gate(
-              "requirement-coverage",
-              "fail",
-              `uncovered:${coverage.uncovered.length}:${shown}`,
-            );
+            return gate("requirement-coverage", "fail", uncoveredDetail(coverage.uncovered));
           }),
         ]),
   ];

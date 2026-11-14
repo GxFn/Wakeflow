@@ -137,7 +137,7 @@ const DRAFT_INSTANT = parseUtcInstant("2000-01-01T00:00:00.000Z");
 
 type LoadedPackage = Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>;
 
-async function loadPackage(
+export async function loadPackage(
   context: DemandSliceContext,
   requirementId: string,
 ): Promise<LoadedPackage | null> {
@@ -259,6 +259,7 @@ async function planCreate(
         claim !== null &&
         loaded.recordDigest === claim.state.recordDigest &&
         loaded.record.programId === claim.state.programId,
+      supplements: loaded?.record.supplements ?? null,
       pod:
         pod === null
           ? null

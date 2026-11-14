@@ -1346,6 +1346,7 @@ export function decideDemandEventSourcingCommand(
         command.continuation.kind,
         command.eventId,
         historicalTestTargetIds,
+        command.continuation.supplement,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {
@@ -1666,6 +1667,7 @@ export function evolveDemandEventSourcingState(
         event.data.continuation.kind,
         event.eventId,
         event.data.historicalTestTargetIds,
+        event.data.continuation.supplement,
       );
     } catch (error: unknown) {
       if (error instanceof DemandAggregateStateError) {

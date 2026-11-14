@@ -61,7 +61,10 @@ import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import type { WorktreeCheckoutObservation } from "../../kernel/pod-worktree-receipts.js";
-import { readRequirementClaimState } from "../../kernel/requirement-board.js";
+import {
+  type RequirementClaimState,
+  readRequirementClaimState,
+} from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import {
   configuredWakeflowWorkspaceHostTransport,
@@ -452,20 +455,41 @@ function privateValues(context: SliceContext): Iterable<string> {
 
 // ---- status ----------------------------------------------------------------------
 
+/**
+ * 一个 pending 的 supplement 包该并入哪个 Demand（Q7 裁决）：它声明的父需求已由某个 Demand 归档时是那个
+ * Demand；父需求还在进行、未认领或看板上没有时为 null（等它完成）。不是 supplement 包（没有父需求）返回
+ * undefined。
+ */
+function supplementAttachTarget(
+  states: readonly Readonly<RequirementClaimState>[],
+  state: Readonly<RequirementClaimState>,
+): string | null | undefined {
+  if (state.supplements === undefined) return undefined;
+  const parent = states.find((entry) => entry.requirementId === state.supplements);
+  return parent?.status === "archived" && parent.archive !== null ? parent.archive.demandId : null;
+}
+
 function boardView(observation: Readonly<WorkspaceObservation>) {
   const board = observation.board.value;
-  const pending = (board?.states ?? [])
+  const states = board?.states ?? [];
+  const pending = states
     .filter((state) => state.status === "pending")
     .sort((left, right) => {
       const priority = (PRIORITY_ORDER[left.priority] ?? 9) - (PRIORITY_ORDER[right.priority] ?? 9);
       return priority !== 0 ? priority : left.publishedAt.localeCompare(right.publishedAt);
     })
     .slice(0, PENDING_PACKAGES_MAXIMUM)
-    .map((state) => ({
-      requirementId: state.requirementId,
-      title: state.title,
-      priority: state.priority,
-    }));
+    .map((state) => {
+      const attachTo = supplementAttachTarget(states, state);
+      return {
+        requirementId: state.requirementId,
+        title: state.title,
+        priority: state.priority,
+        ...(state.supplements === undefined || attachTo === undefined
+          ? {}
+          : { supplements: state.supplements, attachTo }),
+      };
+    });
   return {
     status: observation.board.status,
     issue: observation.board.issue,
@@ -1111,7 +1135,13 @@ function nextActionInput(
     demands,
     pendingPackages: (observation.board.value?.states ?? [])
       .filter((state) => state.status === "pending")
-      .map((state) => ({ requirementId: state.requirementId })),
+      .map((state) => {
+        const attachTo = supplementAttachTarget(observation.board.value?.states ?? [], state);
+        return {
+          requirementId: state.requirementId,
+          ...(attachTo === undefined ? {} : { attachToDemandId: attachTo }),
+        };
+      }),
   });
 }
 
@@ -1147,9 +1177,10 @@ async function routeSection(
   // W34：归档的 next 读需求包的认领类型。完成、需求包仍以本 Demand 归档且不是 research 才指向 continue，
   // 与 demand 切片 `deriveContinueBlockers` 的包级规则一致（切片不互引，这里从同一轮观察的看板取认领状态；
   // 看板读不出即认领未知，和 continue 预览的 package-unknown 一样不给前沿）。pod 占用与关闭留给 continue 预览。
+  // 并入的 supplement 包也以本 Demand 归档；续接看的是源需求包（它没有 `supplements`）。
   const claim =
     (context.observation.board.value?.states ?? []).find(
-      (state) => state.archive?.demandId === demandId,
+      (state) => state.archive?.demandId === demandId && state.supplements === undefined,
     ) ?? null;
   const continuable =
     archive.outcome === "completed" && claim !== null && claim.demandType !== "research";

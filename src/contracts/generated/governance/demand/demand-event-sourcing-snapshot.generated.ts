@@ -44,6 +44,20 @@ targetReviewDecisionId: string
 decisionDigest: WakeflowSha256DigestText
 })
 }
+/**
+ * 历次 requirement-supplement 续接并入的 supplement 需求包，按并入顺序；它们的验收标准与源需求的一起构成本 Demand 的验收全集。没有并入过时省略，既有状态摘要不变。
+ *
+ * @minItems 1
+ */
+supplements?: [{
+requirementId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+}, ...({
+requirementId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+})[]]
 continuation?: {
 eventId: string
 kind: ("optimization" | "requirement-supplement" | "verified-bug")
@@ -112,6 +126,10 @@ environmentSetup: EnvironmentSetup
 rerunSource?: RerunSource
 contract: Contract
 })
+/**
+ * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
+ */
+export type WakeflowPortableResourcePathText = string
 
 /**
  * Demand Event Stream 某一 immutable commit boundary 的可删除 Aggregate checkpoint。

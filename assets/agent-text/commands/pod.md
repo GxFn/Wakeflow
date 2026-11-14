@@ -16,6 +16,11 @@ it with exactly what preview returned.
 On create: one config transaction registers the pod's window set and one
 worktree intent per repository. Creating the worktrees and launching the
 windows are your host actions, and each window must then be registered.
+A known limit: a dependency a repository reaches by relative path outside
+itself (`file:../Name`) does not resolve inside a worktree checkout. The
+preview's `advisories` list the repositories this applies to - read them to
+the user before applying, because that repository's own tests may not run
+in the pod.
 
 On close: the pod's Demand must already be archived and the user must have
 merged or abandoned its branch. Record the branch dispositions truthfully -

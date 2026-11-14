@@ -82,6 +82,7 @@ import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
   derivePublishAssessment,
+  type SupplementParentFacts,
   deriveRequirementId,
   type PackageAnalysis,
   type PackageDocumentText,
@@ -422,6 +423,9 @@ function recordDraft(
     testingDecision: { mode: input.testingDecision.mode, summary: input.testingDecision.summary },
     taskPlanReview: input.taskPlanReview ?? "controller",
     supersedes: (input.supersedes ?? null) as WakeflowDurableId<"requirement"> | null,
+    ...(input.supplements === undefined
+      ? {}
+      : { supplements: input.supplements as WakeflowDurableId<"requirement"> }),
     parked: input.parked === undefined ? null : { trigger: input.parked.trigger },
     confirmation: {
       confirmedAt,
@@ -447,6 +451,21 @@ async function loadExistingRecord(
     if (error instanceof LedgerAuthorityStoreError && error.reason === "not-found") return null;
     mapStoreError(error);
   }
+}
+
+/** supplement 包的父需求记录里的事实；未请求为 `null`，Ledger 里没有那条记录为 `"unknown"`。 */
+async function supplementParentFacts(
+  context: RequirementContext,
+  requirementId: string | undefined,
+): Promise<SupplementParentFacts | null | "unknown"> {
+  if (requirementId === undefined) return null;
+  const parent = await loadExistingRecord(context, requirementId);
+  return parent === null
+    ? "unknown"
+    : Object.freeze({
+        demandType: parent.record.demandType,
+        testingDecisionMode: parent.record.testingDecision.mode,
+      });
 }
 
 /** 请求了 supersedes 但看板上没有该包时为 `"unknown"`；未请求为 `null`。 */
@@ -483,6 +502,7 @@ async function planPublish(
   const documents = await readPackageDocuments(context, input);
   const analysis = analyzePackageDocuments(input.demandType, input.title, documents);
   const supersedes = await supersededState(context, input.supersedes);
+  const supplements = await supplementParentFacts(context, input.supplements);
   const confirmedAt = input.confirmation?.confirmedAt ?? null;
   const { blockers, privacyHit } = derivePublishAssessment({
     analysis,
@@ -490,6 +510,7 @@ async function planPublish(
     testingDecisionMode: input.testingDecision.mode,
     confirmedAt,
     supersedes,
+    supplements,
     headerTexts: [
       { label: "testingDecision.summary", text: input.testingDecision.summary },
       ...(input.parked === undefined
@@ -528,6 +549,7 @@ async function planPublish(
     testingDecision: input.testingDecision,
     taskPlanReview: input.taskPlanReview ?? "controller",
     supersedes: input.supersedes ?? null,
+    supplements: input.supplements ?? null,
     parkedTrigger: input.parked?.trigger ?? null,
     documents,
     confirmedAt,
@@ -705,6 +727,7 @@ async function ensureClaimState(
     testingMode: record.testingDecision.mode,
     publishedAt: readUtcWallClock(context.clock),
     supersedes: record.supersedes,
+    supplements: record.supplements ?? null,
     parkedTrigger: record.parked?.trigger ?? null,
   });
   const existing = await readRequirementClaimState(

@@ -1153,6 +1153,8 @@ function archivedDemandCandidates(
 function terminalCandidateOf(
   state: RequirementClaimState,
 ): Readonly<ArchivedDemandCandidate> | null {
+  // 并入 Demand 的 supplement 包（Q7）随它一起归档或撤回：候选只从源需求包算，一个 Demand 一个。
+  if (state.supplements !== undefined) return null;
   if (state.status === "archived" && state.archive !== null) {
     return Object.freeze({
       demandId: state.archive.demandId,

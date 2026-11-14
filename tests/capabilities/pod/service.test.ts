@@ -8,6 +8,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -371,6 +372,43 @@ test("create：preview 零写、apply 一次配置事务派生四个窗口与一
   equal(previewed.next.frontier, "pod-create-apply");
   equal(readFileSync(path.join(fx.root, "wakeflow.config.json"), "utf8"), before, "preview wrote");
   equal(JSON.stringify(previewed).includes(fx.base), false);
+  // 仓库没有 package.json：没有可提醒的，结果里没有这一项。
+  equal(Object.hasOwn(previewed, "advisories"), false);
+
+  // open-items D12：仓库的根清单用相对路径够到仓库之外时，创建预览点名这个仓库与依赖；计划与摘要不变，不拦。
+  writeFileSync(
+    path.join(fx.product, "package.json"),
+    JSON.stringify({
+      name: "product-a",
+      dependencies: { "@scope/core": "file:../Core", local: "file:./packages/local" },
+      devDependencies: { sibling: "link:../Sibling" },
+    }),
+  );
+  const advised = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "create", name: "feature-x", idempotencyKey: "pod-1" },
+  });
+  if (advised.kind !== "WakeflowPodPreview") throw new Error("Expected a preview.");
+  equal(advised.status, "ready");
+  equal(advised.planDigest, previewed.planDigest);
+  deepEqual(JSON.parse(JSON.stringify(advised.advisories)), [
+    {
+      code: "relative-path-dependency",
+      repositoryId: readConfig(fx).topology.repositories[0]?.repositoryId,
+      count: 2,
+      dependencies: ["@scope/core", "sibling"],
+    },
+  ]);
+  equal(JSON.stringify(advised).includes(fx.base), false);
+  // 读不懂的清单不提醒，也不让预览失败。
+  writeFileSync(path.join(fx.product, "package.json"), "{ not json");
+  const unreadable = await pod(fx, {
+    mode: "preview",
+    intent: { kind: "create", name: "feature-x", idempotencyKey: "pod-1" },
+  });
+  equal(unreadable.kind === "WakeflowPodPreview" && unreadable.status, "ready");
+  equal(Object.hasOwn(unreadable, "advisories"), false);
+  rmSync(path.join(fx.product, "package.json"));
 
   const created = await pod(fx, {
     mode: "apply",

@@ -154,6 +154,10 @@
             }
           ]
         },
+        "supplements": {
+          "description": "The requirement this supplement package adds to. Such a package is not claimed on its own: continue the Demand that completed that requirement with a requirement-supplement continuation naming this package. Absent on every other package.",
+          "$ref": "#/$defs/requirementId"
+        },
         "claim": {
           "oneOf": [
             {

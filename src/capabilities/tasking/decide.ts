@@ -12,7 +12,10 @@ import type {
   TaskPackagePlanReview,
   TestImplementationBaseline,
 } from "../../governance/tasking/task-package.js";
-import type { AcceptanceCriterion } from "../../kernel/requirement-acceptance.js";
+import {
+  type AcceptanceCriterion,
+  acceptanceCriterionLabel,
+} from "../../kernel/requirement-acceptance.js";
 
 export {
   type AcceptanceCriterion,
@@ -28,41 +31,91 @@ export {
  */
 
 const ACCEPTANCE_CRITERIA_ANCHOR = "acceptance-criteria";
+
+/** 并入 Demand 的一个 supplement 需求包的验收标准（Q7 裁决）：引用按记录摘要认包，条目在各自的包里编号。 */
+export interface SupplementCriteria {
+  readonly requirementId: string;
+  readonly recordDigest: string;
+  readonly criteria: readonly AcceptanceCriterion[];
+}
+
 export interface AnchorReferenceInput {
   readonly anchors: readonly Readonly<TaskPackageAcceptanceAnchor>[];
   /** Demand 谱系里的需求包记录摘要。 */
   readonly recordDigest: string;
   readonly criteria: readonly AcceptanceCriterion[];
+  /** 并入的 supplement 包；省略即没有。 */
+  readonly supplements?: readonly Readonly<SupplementCriteria>[];
+}
+
+interface CriteriaPackage {
+  /** 源需求为 null，supplement 包为它的 requirementId。 */
+  readonly requirementId: string | null;
+  readonly recordDigest: string;
+  readonly criteria: readonly AcceptanceCriterion[];
+}
+
+function criteriaPackages(
+  input: Pick<AnchorReferenceInput, "recordDigest" | "criteria" | "supplements">,
+): readonly CriteriaPackage[] {
+  return [
+    { requirementId: null, recordDigest: input.recordDigest, criteria: input.criteria },
+    ...(input.supplements ?? []),
+  ];
+}
+
+/** 一条引用命中的包；记录摘要哪个包都对不上为 null。 */
+function packageOf(
+  packages: readonly CriteriaPackage[],
+  recordDigest: string,
+): CriteriaPackage | null {
+  return packages.find((entry) => entry.recordDigest === recordDigest) ?? null;
+}
+
+function hasItem(entry: CriteriaPackage | null, itemId: string): boolean {
+  return entry?.criteria.some((criterion) => criterion.itemId === itemId) ?? false;
 }
 
 /** 锚点引用的阻塞：记录摘要、节锚点与条目都必须命中（ADR-0012 D5）。 */
 export function deriveAnchorReferenceBlockers(
   input: Readonly<AnchorReferenceInput>,
 ): readonly string[] {
-  const itemIds = new Set(input.criteria.map((criterion) => criterion.itemId));
+  const packages = criteriaPackages(input);
   const blockers: string[] = [];
   for (const anchor of input.anchors) {
     const reference = anchor.requirementRef;
-    if (reference.recordDigest !== input.recordDigest) {
+    const referenced = packageOf(packages, reference.recordDigest);
+    if (referenced === null) {
       blockers.push(`anchor-record-drift:${anchor.anchorId}`);
     }
     if (reference.sectionAnchor !== ACCEPTANCE_CRITERIA_ANCHOR) {
       blockers.push(`anchor-section:${anchor.anchorId}:${reference.sectionAnchor}`);
     }
-    if (!itemIds.has(reference.itemId)) {
+    // 摘要对不上时按源需求的条目判：与只有一个包时的回答一致。
+    if (!hasItem(referenced ?? packages[0] ?? null, reference.itemId)) {
       blockers.push(`anchor-item-unknown:${anchor.anchorId}:${reference.itemId}`);
     }
   }
-  return Object.freeze(withKnownItems(blockers, input.criteria));
+  return Object.freeze(withKnownItems(blockers, packages));
 }
 
-/** 条目引用不存在时附上需求包实际有几条（ac-1 … ac-N 按顶层列表位置编号），Controller 不必再数。 */
+/**
+ * 条目引用不存在时附上需求包实际有几条（ac-1 … ac-N 按顶层列表位置编号），Controller 不必再数。并入了
+ * supplement 包时每个包各报一条，带它的 requirementId。
+ */
 function withKnownItems(
   blockers: readonly string[],
-  criteria: readonly AcceptanceCriterion[],
+  packages: readonly CriteriaPackage[],
 ): readonly string[] {
   return blockers.some((blocker) => blocker.includes("-item-unknown:"))
-    ? [...blockers, `acceptance-items:${criteria.length}`]
+    ? [
+        ...blockers,
+        ...packages.map((entry) =>
+          entry.requirementId === null
+            ? `acceptance-items:${entry.criteria.length}`
+            : `acceptance-items:${entry.requirementId}:${entry.criteria.length}`,
+        ),
+      ]
     : blockers;
 }
 
@@ -210,42 +263,58 @@ export interface TestStepReferenceInput {
   }>[];
   readonly recordDigest: string;
   readonly criteria: readonly AcceptanceCriterion[];
+  /** 并入的 supplement 包；省略即没有。 */
+  readonly supplements?: readonly Readonly<SupplementCriteria>[];
 }
 
 /** 测试合同每一步的 requirementRef 都必须命中需求包验收标准的一条，规则同验收锚点。 */
 export function deriveTestStepReferenceBlockers(
   input: Readonly<TestStepReferenceInput>,
 ): readonly string[] {
-  const itemIds = new Set(input.criteria.map((criterion) => criterion.itemId));
+  const packages = criteriaPackages(input);
   const blockers: string[] = [];
   for (const step of input.steps) {
     const reference = step.requirementRef;
-    if (reference.recordDigest !== input.recordDigest) {
+    const referenced = packageOf(packages, reference.recordDigest);
+    if (referenced === null) {
       blockers.push(`step-record-drift:${step.stepId}`);
     }
     if (reference.sectionAnchor !== ACCEPTANCE_CRITERIA_ANCHOR) {
       blockers.push(`step-section:${step.stepId}:${reference.sectionAnchor}`);
     }
-    if (!itemIds.has(reference.itemId)) {
+    if (!hasItem(referenced ?? packages[0] ?? null, reference.itemId)) {
       blockers.push(`step-item-unknown:${step.stepId}:${reference.itemId}`);
     }
   }
-  return Object.freeze(withKnownItems(blockers, input.criteria));
+  return Object.freeze(withKnownItems(blockers, packages));
 }
 
 /**
  * 测试合同必须覆盖需求包验收标准的全部条目（§13.161 B4-1）：一个 Demand 当前代际只有一份测试
  * 合同，完成门又要求当前代际已接受的测试覆盖全集，漏掉的条目在规划时就拒绝，而不是归档时才发现
- * 无路可走。复测合同同样列全——上一代际已通过的步骤可以不跑，按基线计。
+ * 无路可走。复测合同同样列全——上一代际已通过的步骤可以不跑，按基线计。并入了 supplement 包时全集是源需求
+ * 与各包验收标准之和，包里的条目写作 `<requirementId>/ac-N`。
  */
 export function deriveTestContractCoverageBlockers(
   input: Readonly<TestStepReferenceInput>,
 ): readonly string[] {
-  const covered = new Set(input.steps.map((step) => step.requirementRef.itemId));
+  const packages = criteriaPackages(input);
+  // 源需求的条目照旧只按条目号计（摘要对不上另有 step-record-drift）；supplement 包的条目按包认。
+  const covered = new Set(
+    input.steps.map(({ requirementRef }) =>
+      acceptanceCriterionLabel(
+        packageOf(packages, requirementRef.recordDigest)?.requirementId ?? null,
+        requirementRef.itemId,
+      ),
+    ),
+  );
   return Object.freeze(
-    input.criteria
-      .filter((criterion) => !covered.has(criterion.itemId))
-      .map((criterion) => `test-contract-uncovered:${criterion.itemId}`),
+    packages.flatMap((entry) =>
+      entry.criteria
+        .map((criterion) => acceptanceCriterionLabel(entry.requirementId, criterion.itemId))
+        .filter((label) => !covered.has(label))
+        .map((label) => `test-contract-uncovered:${label}`),
+    ),
   );
 }
 

@@ -9,6 +9,7 @@ import {
   derivePodState,
   derivePodWindows,
   derivePodWorktrees,
+  deriveRelativePathDependencyAdvisory,
   podMutationNext,
   podPreviewNext,
 } from "../../../src/capabilities/pod/decide.js";
@@ -95,6 +96,48 @@ test("创建阻塞项：main 保留、存活重名、无仓库；同键重放跳
     deriveCreateBlockers({ name: "x", liveNames: ["main", "x"], repositoryCount: 1, replay: true }),
     [],
   );
+});
+
+test("相对路径依赖的提醒（open-items D12）：四个依赖表里指向仓库之外的 file:/link:/portal: 与裸 ../ 才算，仓库之内的与版本号不算；至多列八个名字，读不懂的清单不提醒", () => {
+  equal(deriveRelativePathDependencyAdvisory(null), null);
+  equal(deriveRelativePathDependencyAdvisory("{}"), null);
+  equal(deriveRelativePathDependencyAdvisory([]), null);
+  equal(
+    deriveRelativePathDependencyAdvisory({
+      dependencies: { "left-pad": "^1.3.0", local: "file:./packages/local", git: "git+https://x" },
+      devDependencies: "nonsense",
+    }),
+    null,
+  );
+  deepEqual(
+    deriveRelativePathDependencyAdvisory({
+      dependencies: { "@scope/core": "file:../Core", local: "file:./packages/local" },
+      devDependencies: { sibling: "link:../Sibling", "left-pad": "^1.3.0" },
+      optionalDependencies: { bare: "../Bare", win: "file:..\\Win" },
+      peerDependencies: { portal: "portal:../Portal", "@scope/core": "file:../Core" },
+      // 不是依赖表：不看。
+      scripts: { build: "file:../not-a-dependency" },
+    }),
+    { count: 5, dependencies: ["@scope/core", "bare", "portal", "sibling", "win"] },
+  );
+  // 名字多于八个时只列前八个，总数照实；不像包名的键只计数。
+  const many = Object.fromEntries(
+    Array.from({ length: 10 }, (_, index) => [`dep-${index}`, "file:../X"]),
+  );
+  const advisory = deriveRelativePathDependencyAdvisory({
+    dependencies: { ...many, "Not A Package Name": "file:../Y" },
+  });
+  equal(advisory?.count, 11);
+  deepEqual(advisory?.dependencies, [
+    "dep-0",
+    "dep-1",
+    "dep-2",
+    "dep-3",
+    "dep-4",
+    "dep-5",
+    "dep-6",
+    "dep-7",
+  ]);
 });
 
 test("状态派生：open 下全部绑定且回执同代检出仍在才 ready；closing 下无绑定无检出即 closed", () => {

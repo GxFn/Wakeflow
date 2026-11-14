@@ -6,6 +6,7 @@ import {
   demandWindowIds,
   deriveContinueBlockers,
   deriveCreationBlockers,
+  deriveSupplementAttachBlockers,
   deriveDecisionBlockers,
   deriveDemandCreationIds,
   deriveLifecycleIds,
@@ -280,6 +281,137 @@ test("阻塞项派生：完成看路由与门，取消看待评审，continue �
     }),
     ["pod-unknown:pod_00000000-0000-4000-8000-000000000000"],
   );
+});
+
+test("supplement 包并入 Demand（Q7 裁决）：requirement-supplement 续接必须带包、别的谱系不能带；包要 pending、记录与看板一致、补充的正是本 Demand 的源需求；它不单独认领，终态与续接都把它和源需求包一起结算", () => {
+  const demandId = "demand_00000000-0000-4000-8000-000000000000";
+  const source = "requirement_11111111-1111-4111-8111-111111111111";
+  const supplementId = "requirement_22222222-2222-4222-8222-222222222222";
+  type Claim = NonNullable<Parameters<typeof deriveContinueBlockers>[0]["claim"]>;
+  const claim = (fields: Record<string, unknown>) => fields as unknown as Claim;
+  const record = {
+    recordDigest: "sha256:aa",
+    programMatches: true,
+    demandType: "supplement",
+    supplements: source,
+  } as const;
+  const attach = {
+    kind: "requirement-supplement",
+    requirementId: supplementId,
+    claim: claim({ status: "pending", recordDigest: "sha256:aa" }),
+    record,
+    sourceRequirementId: source,
+  } as const;
+  deepEqual(deriveSupplementAttachBlockers(attach), []);
+  // 谱系与包必须相配。
+  deepEqual(deriveSupplementAttachBlockers({ ...attach, requirementId: null }), [
+    "supplement-package-required",
+  ]);
+  for (const kind of ["optimization", "verified-bug"] as const) {
+    deepEqual(deriveSupplementAttachBlockers({ ...attach, kind, requirementId: null }), []);
+    deepEqual(deriveSupplementAttachBlockers({ ...attach, kind }), [
+      `supplement-package-kind:${kind}`,
+    ]);
+  }
+  // 包本身：看板或 Ledger 上没有、已被认领、不属于本程序、记录与看板不一致、不是 supplement、补充的是别的需求。
+  deepEqual(deriveSupplementAttachBlockers({ ...attach, claim: null }), [
+    "supplement-package-unknown",
+  ]);
+  deepEqual(deriveSupplementAttachBlockers({ ...attach, record: null }), [
+    "supplement-package-unknown",
+  ]);
+  deepEqual(
+    deriveSupplementAttachBlockers({
+      ...attach,
+      claim: claim({ status: "claimed", recordDigest: "sha256:bb" }),
+      record: { ...record, programMatches: false },
+    }),
+    [
+      "supplement-package-claim:claimed",
+      "supplement-package-program",
+      "supplement-package-record-drift",
+    ],
+  );
+  deepEqual(
+    deriveSupplementAttachBlockers({
+      ...attach,
+      record: { ...record, demandType: "requirement", supplements: null },
+    }),
+    ["supplement-package-type:requirement"],
+  );
+  deepEqual(
+    deriveSupplementAttachBlockers({
+      ...attach,
+      record: { ...record, supplements: "requirement_33333333-3333-4333-8333-333333333333" },
+    }),
+    ["supplement-package-parent:requirement_33333333-3333-4333-8333-333333333333"],
+  );
+  deepEqual(
+    deriveSupplementAttachBlockers({ ...attach, record: { ...record, supplements: null } }),
+    ["supplement-package-parent:none"],
+  );
+
+  // 续接：此前并入的包必须仍由本 Demand 归档；续接的阻塞项里排在包级检查之后。
+  const archived = claim({ status: "archived", archive: { demandId } });
+  const continued = {
+    rootPresent: false,
+    archiveOutcome: "completed",
+    demandId,
+    claim: archived,
+    otherActiveDemandId: null,
+  } as const;
+  deepEqual(
+    deriveContinueBlockers({
+      ...continued,
+      supplement: attach,
+      attachedSupplements: [{ requirementId: supplementId, claim: archived }],
+    }),
+    [],
+  );
+  deepEqual(
+    deriveContinueBlockers({
+      ...continued,
+      supplement: { ...attach, requirementId: null },
+      attachedSupplements: [
+        { requirementId: supplementId, claim: null },
+        {
+          requirementId: "requirement_44444444-4444-4444-8444-444444444444",
+          claim: claim({ status: "withdrawn", archive: null }),
+        },
+        {
+          requirementId: "requirement_55555555-5555-4555-8555-555555555555",
+          claim: claim({
+            status: "archived",
+            archive: { demandId: "demand_99999999-9999-4999-8999-999999999999" },
+          }),
+        },
+      ],
+    }),
+    [
+      "supplement-package-required",
+      `supplement-package-unknown:${supplementId}`,
+      "supplement-package-claim:requirement_44444444-4444-4444-8444-444444444444:withdrawn",
+      "supplement-package-claim:requirement_55555555-5555-4555-8555-555555555555:archived",
+    ],
+  );
+
+  // 认领：声明了父需求的包不单独认领，阻塞项带父需求的标识。
+  const creation = {
+    claim: claim({ status: "pending" }),
+    programMatches: true,
+    recordMatches: true,
+    pod: {
+      podId: "pod_99999999-9999-4999-8999-999999999999",
+      lifecycle: "open",
+      activeDemandId: null,
+    },
+    requestedPodId: "pod_99999999-9999-4999-8999-999999999999",
+  } as const;
+  deepEqual(deriveCreationBlockers(creation), []);
+  deepEqual(deriveCreationBlockers({ ...creation, supplements: null }), []);
+  deepEqual(deriveCreationBlockers({ ...creation, supplements: source }), [
+    `supplement-of:${source}`,
+  ]);
 });
 
 /** 纯链：发布 → 规划 → 投递 → 认领 → 观察 → 结果，得到一个 result-reported 的实现目标。 */

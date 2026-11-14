@@ -506,8 +506,11 @@ function parseTestContract(value: TaskPackageWire["testContract"]): Readonly<Tes
     // 步骤序号由 Wakeflow 按顺序编为 ts-1…ts-n，一步只引用一条验收标准项。
     if (step.stepId !== `${STEP_ID_PREFIX}${index + 1}`) fail("relation", `${path}/stepId`);
     const requirementRef = parseRequirementRef(step.requirementRef, `${path}/requirementRef`);
-    if (itemIds.has(requirementRef.itemId)) fail("relation", `${path}/requirementRef/itemId`);
-    itemIds.add(requirementRef.itemId);
+    // 一条验收标准只对应一步；条目在各自的需求包里编号，所以按记录摘要加条目号判重（并入 supplement 包的
+    // Demand 里，两个包各有自己的 ac-1）。
+    const itemKey = `${requirementRef.recordDigest}\u0000${requirementRef.itemId}`;
+    if (itemIds.has(itemKey)) fail("relation", `${path}/requirementRef/itemId`);
+    itemIds.add(itemKey);
     steps.push(
       Object.freeze({
         stepId: step.stepId,

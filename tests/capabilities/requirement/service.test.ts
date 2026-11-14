@@ -814,3 +814,113 @@ test("段落、表格或缺失的验收条目在发布前阻止，旧 v1 章节�
     equal(result.planDigest, null);
   }
 });
+
+const SUPPLEMENT_MARKDOWN = `# 补充需求
+
+## 需求增量
+
+在已有切片上再加一条行为。
+
+## 完成定义
+
+补充的行为已实现并通过聚焦检查。
+
+## 验收标准
+
+- AC-1 补充的行为可见。
+
+## 用户确认
+
+用户于 2026-09-04T10:00:00Z 确认了需求增量与完成定义。
+`;
+
+test("supplement 包发布时说出父需求（Q7 裁决）：没说、父需求不存在、测试模式不同于父需求都阻塞；发布后记录、看板与 inspect 都带着它，别的类型带了被拒", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const publish = async (overrides: Record<string, unknown>) => {
+    const request = {
+      root,
+      mode: "preview",
+      action: "publish",
+      package: packageInput(workspace, {
+        confirmation: { confirmedAt: CONFIRMED_AT },
+        ...overrides,
+      }),
+    };
+    const preview = await executeRequirementPublicationRequest(request, { clock });
+    if (preview.kind !== "WakeflowRequirementPublicationPreview")
+      throw new Error("Expected a preview.");
+    if (preview.planDigest === null) return { blockers: preview.blockers, requirementId: null };
+    const applied = await executeRequirementPublicationRequest(
+      { ...request, mode: "apply", planDigest: preview.planDigest },
+      { clock },
+    );
+    if (applied.kind !== "WakeflowRequirementPublicationMutation")
+      throw new Error("Expected a mutation.");
+    return { blockers: preview.blockers, requirementId: applied.package.requirementId };
+  };
+  const parent = await publish({});
+  if (parent.requirementId === null) throw new Error(parent.blockers.join(","));
+  // 别的类型不能带父需求。
+  deepEqual((await publish({ title: "另一个需求", supplements: parent.requirementId })).blockers, [
+    "supplements-demand-type",
+  ]);
+
+  writeFileSync(path.join(workspace.designPath, "drafts", "supplement.md"), SUPPLEMENT_MARKDOWN, {
+    mode: 0o644,
+  });
+  const supplement = {
+    title: "补充需求",
+    demandType: "supplement",
+    requirementPath: "drafts/supplement.md",
+  };
+  deepEqual((await publish(supplement)).blockers, ["supplements-required"]);
+  deepEqual(
+    (
+      await publish({
+        ...supplement,
+        supplements: "requirement_99999999-9999-4999-8999-999999999999",
+      })
+    ).blockers,
+    ["supplements-unknown"],
+  );
+  deepEqual(
+    (
+      await publish({
+        ...supplement,
+        supplements: parent.requirementId,
+        testingDecision: { mode: "real-environment", summary: "测试窗口跑合同。" },
+      })
+    ).blockers,
+    ["supplements-testing-mode:controller-only"],
+  );
+  const published = await publish({ ...supplement, supplements: parent.requirementId });
+  if (published.requirementId === null) throw new Error(published.blockers.join(","));
+
+  // supplement 的 supplement 不行：父需求必须是 Demand 的源需求。
+  deepEqual(
+    (await publish({ ...supplement, title: "再补充", supplements: published.requirementId }))
+      .blockers,
+    ["supplements-parent-type:supplement"],
+  );
+
+  const view = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: published.requirementId,
+  });
+  if (view.view !== "package") throw new Error("Expected a package view.");
+  equal(view.package.supplements, parent.requirementId);
+  equal(view.package.status, "pending");
+  // 父需求自己的看板状态与视图里没有这一项。
+  const parentView = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: parent.requirementId,
+  });
+  if (parentView.view !== "package") throw new Error("Expected a package view.");
+  equal(Object.hasOwn(parentView.package, "supplements"), false);
+});

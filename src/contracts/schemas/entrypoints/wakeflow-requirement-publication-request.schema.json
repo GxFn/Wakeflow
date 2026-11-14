@@ -218,6 +218,10 @@
         "supersedes": {
           "$ref": "#/$defs/requirementId"
         },
+        "supplements": {
+          "description": "supplement 包必填：它补充的需求。",
+          "$ref": "#/$defs/requirementId"
+        },
         "parked": {
           "type": "object",
           "additionalProperties": false,

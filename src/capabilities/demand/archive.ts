@@ -246,6 +246,8 @@ export interface ArchiveManifestBasis {
   readonly controllerWindowId: string;
   readonly podId: string;
   readonly package: DemandArchiveManifest["package"];
+  /** 并入本 Demand 的 supplement 需求包（Q7）；没有并入过时不给，清单里不写这一项。 */
+  readonly supplements?: NonNullable<DemandArchiveManifest["supplements"]>;
   readonly verify: DemandArchiveManifest["verify"];
   readonly payload: DemandArchiveManifest["payload"];
   /** worktree 来源成员（ADR-0010 D7）：primary pod 为 null，只含标识、建议名称、分支与 HEAD。 */

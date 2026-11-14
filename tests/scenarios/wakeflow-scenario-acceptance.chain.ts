@@ -3002,7 +3002,12 @@ async function acceptContinuationImplementation(
 /** 经公共工具 preview 再 apply 续接一个已完成的 Demand；续接后路由回到实现规划。 */
 async function continueDemand(
   context: ScenarioContext,
-  continuation: Readonly<{ readonly kind: string; readonly summary: string }>,
+  continuation: Readonly<{
+    readonly kind: string;
+    readonly summary: string;
+    /** requirement-supplement 续接并入的 supplement 包。 */
+    readonly requirementId?: string;
+  }>,
 ): Promise<string> {
   const root = context.workspace.workspacePath;
   const preview = await call(context, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, {
@@ -3182,6 +3187,861 @@ async function scenarioCompleteAndContinue(context: ScenarioContext): Promise<st
   return `continue=${continued.disposition}; route=${reopened.route?.disposition}; replan=${replanned}; cancel=${cancellation.disposition}; package=${cancellation.package.status}; continue-after-cancel=blocked`;
 }
 
+// ---- card-04/supplement-continuation（Q7 裁决，open-items H2 / H3 / H10） -----------------------
+
+const SUPPLEMENT_REQUIREMENT_MARKDOWN = `# 补充需求
+
+## 需求增量
+
+在已完成的切片之上再加一条可以核对的行为。
+
+## 完成定义
+
+补充的行为已实现，聚焦检查通过。
+
+## 验收标准
+
+- AC-1 补充的行为在聚焦检查里可见。
+
+## 用户确认
+
+用户于 2026-11-10T02:00:00Z 确认了需求增量与完成定义。
+`;
+
+interface BoardPackageView {
+  readonly package: {
+    readonly status: string;
+    readonly recordDigest: string;
+    readonly supplements?: string;
+    readonly claim: { readonly demandId: string } | null;
+  };
+}
+
+async function boardPackage(
+  context: ScenarioContext,
+  requirementId: string,
+): Promise<BoardPackageView["package"]> {
+  const board = await call(context, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    view: "package",
+    requirementId,
+  });
+  return (board.structuredContent as BoardPackageView).package;
+}
+
+async function previewContinuation(
+  context: ScenarioContext,
+  continuation: Readonly<Record<string, unknown>>,
+): Promise<{ readonly status: string; readonly blockers: readonly string[] }> {
+  const preview = await call(context, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, {
+    root: context.workspace.workspacePath,
+    mode: "preview",
+    demandId: context.demandId,
+    action: "continue",
+    continuation,
+  });
+  return preview.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+  };
+}
+
+/**
+ * 补充需求挂在原 Demand 上（Q7 裁决）：supplement 包发布时说出它补充的需求；它不单独认领，status 指向
+ * 完成了父需求的那个 Demand；requirement-supplement 续接引用它，新任务包的验收锚点与权威成员来自这份冻结的
+ * 包；完成时两份包一起归档、清单带上它；再续接两份一起带回，取消两份一起撤回。
+ */
+async function scenarioSupplementContinuation(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.designPath || !context.repositoryId || !context.productWindowId) {
+    throw new Error("scenario ordering: requirement-package must run first");
+  }
+  const parent = await createPrimaryDemand(context, {
+    title: "Supplement parent requirement",
+    keyPrefix: "scenario-supplement",
+    objective: "实现之后要被补充的最小切片",
+    anchorId: "supplement-parent",
+  });
+  await acceptImplementation(context, parent, "scenario-supplement");
+  await completeDemand(context);
+
+  // 发布：supplement 包必须说出父需求；说了才上板，看板与 status 都带着它。
+  writeFileSync(
+    path.join(context.designPath, "drafts", "supplement.md"),
+    SUPPLEMENT_REQUIREMENT_MARKDOWN,
+    { mode: 0o644 },
+  );
+  const supplementInput = {
+    demandType: "supplement",
+    requirementPath: "drafts/supplement.md",
+  };
+  const orphan = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: {
+      designSurfaceId: context.designSurfaceId,
+      title: "Supplement requirement",
+      priority: "P2",
+      originWindowId: context.designWindowId,
+      testingDecision: CONTROLLER_ONLY_TESTING,
+      landingPath: "drafts/landing.md",
+      confirmation: { confirmedAt: new Date().toISOString() },
+      ...supplementInput,
+    },
+  });
+  const orphanPreview = orphan.structuredContent as PublicationPreview;
+  equal(orphanPreview.status, "blocked");
+  ok(orphanPreview.blockers.includes("supplements-required"), orphanPreview.blockers.join(","));
+  const supplement = await publishScenarioPackage(
+    context,
+    "Supplement requirement",
+    CONTROLLER_ONLY_TESTING,
+    { ...supplementInput, supplements: parent.requirementId },
+  );
+  const pendingView = await boardPackage(context, supplement.requirementId);
+  equal(pendingView.status, "pending");
+  equal(pendingView.supplements, parent.requirementId);
+  const overview = (await call(context, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, { root }))
+    .structuredContent as {
+    readonly board: {
+      readonly pending: readonly {
+        readonly requirementId: string;
+        readonly supplements?: string;
+        readonly attachTo?: string | null;
+      }[];
+    };
+    readonly nextActions: readonly {
+      readonly tool: string | null;
+      readonly reason: string;
+      readonly subject: string | null;
+    }[];
+  };
+  deepEqual(
+    overview.board.pending
+      .filter((entry) => entry.requirementId === supplement.requirementId)
+      .map((entry) => [entry.supplements, entry.attachTo]),
+    [[parent.requirementId, parent.demandId]],
+  );
+  deepEqual(
+    overview.nextActions
+      .filter((action) => action.subject === supplement.requirementId)
+      .map((action) => [action.tool, action.reason]),
+    [[WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, "supplement-attach"]],
+  );
+
+  // 它不单独认领；续接的谱系与包必须相配。
+  const claimAlone = await previewDemandOn(context, supplement.requirementId);
+  equal(claimAlone.status, "blocked");
+  ok(
+    claimAlone.blockers.includes(`supplement-of:${parent.requirementId}`),
+    claimAlone.blockers.join(","),
+  );
+  const summary = "Add the supplemented behaviour.";
+  const withoutPackage = await previewContinuation(context, {
+    kind: "requirement-supplement",
+    summary,
+  });
+  ok(
+    withoutPackage.blockers.includes("supplement-package-required"),
+    withoutPackage.blockers.join(","),
+  );
+  const wrongKind = await previewContinuation(context, {
+    kind: "optimization",
+    summary,
+    requirementId: supplement.requirementId,
+  });
+  ok(
+    wrongKind.blockers.includes("supplement-package-kind:optimization"),
+    wrongKind.blockers.join(","),
+  );
+  const notASupplement = await previewContinuation(context, {
+    kind: "requirement-supplement",
+    summary,
+    requirementId: parent.requirementId,
+  });
+  ok(
+    notASupplement.blockers.some((blocker) => blocker.startsWith("supplement-package-")),
+    notASupplement.blockers.join(","),
+  );
+
+  // 续接：原 Demand 重开，两份包都由它认领。
+  await continueDemand(context, {
+    kind: "requirement-supplement",
+    summary,
+    requirementId: supplement.requirementId,
+  });
+  const claimedView = await boardPackage(context, supplement.requirementId);
+  equal(claimedView.status, "claimed");
+  equal(claimedView.claim?.demandId, parent.demandId);
+  equal((await boardPackage(context, parent.requirementId)).status, "claimed");
+
+  // 规划：锚点指向 supplement 包自己的 ac-1，权威成员是它的文档；它没有的条目被拒，并报出每份包各有几条。
+  const supplementPlan = (itemId: string, idempotencyKey: string) => ({
+    root,
+    demandId: parent.demandId,
+    idempotencyKey,
+    taskPackage: {
+      assignment: { repositoryId: context.repositoryId, windowId: context.productWindowId },
+      workType: "implementation",
+      objective: "实现补充的行为",
+      confirmedContext: ["原需求已完成并归档", "补充需求包已并入本 Demand"],
+      selectedAuthorityMemberRefs: supplement.memberRefs,
+      boundaries: { inScope: ["补充的行为"], outOfScope: ["投递"], forbidden: ["越界改动"] },
+      completionExpectations: ["聚焦检查通过"],
+      commitExpectation: "leave-uncommitted",
+      acceptanceAnchors: [
+        {
+          anchorId: "supplement-behaviour",
+          claim: "补充的行为可见",
+          probe: "运行聚焦检查",
+          expected: "检查通过",
+          requirementRef: {
+            recordDigest: supplement.recordDigest,
+            sectionAnchor: "acceptance-criteria",
+            itemId,
+          },
+        },
+      ],
+      lineage: { kind: "continuation", continuesTargetTaskId: parent.targetTaskId },
+      sectionAnchors: ["requirement-delta"],
+    },
+  });
+  const invented = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...supplementPlan("ac-2", "scenario-supplement-plan-invented"),
+      expectedStreamRevision: await currentStreamRevision(context),
+    },
+  });
+  equal(invented.isError, true, "the supplement package has one criterion only");
+  const inventedText = scenarioToolText(invented);
+  ok(inventedText.includes("anchor-item-unknown"), inventedText);
+  ok(inventedText.includes(`acceptance-items:${supplement.requirementId}:1`), inventedText);
+  const planned = await call(context, WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME, {
+    ...supplementPlan("ac-1", "scenario-supplement-plan-2"),
+    expectedStreamRevision: await currentStreamRevision(context),
+  });
+  assertNoPrivatePath(context, planned);
+  const target = (
+    planned.structuredContent as {
+      readonly status: string;
+      readonly targetTask: { readonly targetTaskId: string; readonly taskPackageId: string };
+    }
+  ).targetTask;
+
+  // 完成门的验收全集含 supplement 包的条目：接受之前它还没被覆盖。
+  const early = await call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: parent.demandId,
+  });
+  const earlyPreview = early.structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly verify: {
+      readonly gates: readonly { readonly gate: string; readonly detail: string | null }[];
+    } | null;
+  };
+  equal(earlyPreview.status, "blocked");
+  ok(
+    earlyPreview.blockers.includes("verify:requirement-coverage:fail"),
+    earlyPreview.blockers.join(","),
+  );
+  equal(
+    earlyPreview.verify?.gates.find((gate) => gate.gate === "requirement-coverage")?.detail,
+    `uncovered:1:${supplement.requirementId}/ac-1`,
+  );
+  await acceptImplementation(
+    context,
+    { ...parent, targetTaskId: target.targetTaskId, taskPackageId: target.taskPackageId },
+    "scenario-supplement-2",
+    // 投递的 prompt 指向任务包；任务包带着 supplement 包的成员引用，目标读到的就是补充后的需求。
+    (prompt) => ok(prompt.length > 0),
+  );
+  await completeDemand(context);
+
+  // 归档：两份包都以本 Demand 归档，清单列出并入的 supplement 包。
+  equal((await boardPackage(context, parent.requirementId)).status, "archived");
+  equal((await boardPackage(context, supplement.requirementId)).status, "archived");
+  // 场景工作区的账本根是工作区内的 Ledger（fresh-initialize 的选择）。
+  const archives = path.join(root, "Ledger", "archives", parent.demandId);
+  const latest = readdirSync(archives).sort().at(-1) ?? "";
+  const manifest = JSON.parse(
+    readFileSync(path.join(archives, latest, "manifest.json"), "utf8"),
+  ) as {
+    readonly requirementId: string;
+    readonly supplements?: readonly {
+      readonly requirementId: string;
+      readonly recordDigest: string;
+    }[];
+  };
+  equal(manifest.requirementId, parent.requirementId);
+  deepEqual(
+    manifest.supplements?.map((entry) => [entry.requirementId, entry.recordDigest]),
+    [[supplement.requirementId, supplement.recordDigest]],
+  );
+  // 一个 Demand 一条归档候选：并入的包不让它在 status 里出现两次。
+  const archived = (
+    await call(context, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, { root, demandId: parent.demandId })
+  ).structuredContent as RouteInspection;
+  equal(archived.archive?.outcome, "completed");
+  equal(archived.next.frontier, "demand-continuation");
+
+  // 再续接（不带新包）：此前并入的包与源需求包一起回到 claimed；取消时一起撤回。
+  await continueDemand(context, { kind: "optimization", summary: "Tighten the focused checks." });
+  equal((await boardPackage(context, supplement.requirementId)).status, "claimed");
+  const reason = "Scenario acceptance cancels the supplemented Demand.";
+  const cancelPreview = (
+    await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+      root,
+      mode: "preview",
+      demandId: parent.demandId,
+      reason,
+    })
+  ).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(cancelPreview.status, "ready", cancelPreview.blockers.join(","));
+  await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: parent.demandId,
+    reason,
+    planDigest: cancelPreview.planDigest,
+  });
+  equal((await boardPackage(context, parent.requirementId)).status, "withdrawn");
+  equal((await boardPackage(context, supplement.requirementId)).status, "withdrawn");
+  return "publish=supplements-required without a parent, pending with supplements; status=supplement-attach to the completed Demand; claim-alone=supplement-of; continue=required/kind/parent blockers then continued with both packages claimed; plan=anchor on the supplement's ac-1, invented item rejected with per-package counts; completion=uncovered until accepted; archive=both archived, manifest lists the supplement; re-continue=both claimed; cancel=both withdrawn";
+}
+
+// ---- card-04/research-demand（open-items H5，§13.94 D8） --------------------------------------
+
+const RESEARCH_REQUIREMENT_MARKDOWN = `# 调研
+
+## 研究问题
+
+聚焦检查的失败输出里，哪一类信息对定位问题最有用？
+
+## 边界
+
+只读现有检查的输出，不改代码，不引入新的检查。
+
+## 用户确认
+
+用户于 2026-11-10T03:00:00Z 确认了研究问题与边界。
+`;
+
+const RESEARCH_LANDING_MARKDOWN = `# 调研方法
+
+## 已知事实
+
+现有聚焦检查只输出通过或失败。
+
+## 方法
+
+读三次失败的输出，归纳缺的是哪一类信息。
+`;
+
+/**
+ * research Demand 从发布到归档：它没有实现任务，也没有测试；完成物是一份回答研究问题的文档，登记为 document
+ * 类受管证据后直接完成。完成后不能续接——后续工作要一个新的需求包。
+ */
+async function scenarioResearchDemand(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.designPath || !context.repositoryId || !context.productWindowId) {
+    throw new Error("scenario ordering: requirement-package must run first");
+  }
+  writeFileSync(
+    path.join(context.designPath, "drafts", "research.md"),
+    RESEARCH_REQUIREMENT_MARKDOWN,
+    { mode: 0o644 },
+  );
+  writeFileSync(
+    path.join(context.designPath, "drafts", "research-landing.md"),
+    RESEARCH_LANDING_MARKDOWN,
+    { mode: 0o644 },
+  );
+  const requirement = await publishScenarioPackage(
+    context,
+    "Research requirement",
+    { mode: "not-applicable", summary: "Research has nothing to test." },
+    {
+      demandType: "research",
+      requirementPath: "drafts/research.md",
+      landingPath: "drafts/research-landing.md",
+    },
+  );
+  const demandRequest = {
+    root,
+    requirementId: requirement.requirementId,
+    demand: {
+      title: "Research demand",
+      goal: "Answer the research question with one document.",
+      completionDefinition: "The answer is recorded as document evidence.",
+    },
+  };
+  const preview = (
+    await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
+      ...demandRequest,
+      mode: "preview",
+    })
+  ).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(preview.status, "ready", preview.blockers.join(","));
+  const created = await call(context, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, {
+    ...demandRequest,
+    mode: "apply",
+    planDigest: preview.planDigest,
+  });
+  const demandId = (
+    created.structuredContent as { readonly publication: { readonly demandId: string } }
+  ).publication.demandId;
+  context.demandId = demandId;
+
+  // 没有可规划的任务：路由直接停在"等完成物"，完成预检被同一个原因挡住。
+  const waiting = await inspectRoute(context);
+  equal(waiting.route?.frontiers[0]?.kind, "research-completion-required");
+  equal(waiting.route?.disposition, "blocked");
+  const refused = await context.connection.client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root,
+      demandId,
+      idempotencyKey: "scenario-research-plan-1",
+      expectedStreamRevision: 1,
+      taskPackage: {
+        assignment: { repositoryId: context.repositoryId, windowId: context.productWindowId },
+        workType: "implementation",
+        objective: "调研不该有实现任务",
+        confirmedContext: ["research Demand"],
+        selectedAuthorityMemberRefs: requirement.memberRefs,
+        boundaries: { inScope: ["无"], outOfScope: ["无"], forbidden: ["无"] },
+        completionExpectations: ["无"],
+        commitExpectation: "leave-uncommitted",
+        acceptanceAnchors: [
+          {
+            anchorId: "research-none",
+            claim: "无",
+            probe: "无",
+            expected: "无",
+            requirementRef: {
+              recordDigest: requirement.recordDigest,
+              sectionAnchor: "acceptance-criteria",
+              itemId: "ac-1",
+            },
+          },
+        ],
+        lineage: null,
+        sectionAnchors: [],
+      },
+    },
+  });
+  equal(refused.isError, true, "a research Demand plans no implementation task");
+  ok(
+    scenarioToolText(refused).includes("research-demand-has-no-implementation"),
+    scenarioToolText(refused),
+  );
+  const completion = (mode: "preview" | "apply", planDigest?: string | null) =>
+    call(context, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, {
+      root,
+      mode,
+      demandId,
+      ...(planDigest == null ? {} : { planDigest }),
+    });
+  const early = (await completion("preview")).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+  };
+  equal(early.status, "blocked");
+  ok(
+    early.blockers.some((blocker) => blocker.includes("research-evidence")),
+    early.blockers.join(","),
+  );
+
+  // 完成物：一份回答研究问题的文档，放在配置认识的支撑面里，登记为 document 类受管证据。
+  mkdirSync(path.join(context.designPath, "research"), { recursive: true });
+  writeFileSync(
+    path.join(context.designPath, "research", "answer.md"),
+    "# 结论\n\n失败输出里缺的是出错的输入；三次失败都要靠重跑才能知道是哪一条。\n",
+    { mode: 0o644 },
+  );
+  const answer = await recordEvidenceSelection(context, {
+    kind: "document",
+    source: {
+      kind: "managed-path",
+      root: { kind: "support-surface", surfaceId: context.designSurfaceId },
+      path: "research/answer.md",
+      resourceType: "file",
+    },
+    contentReview: "reject",
+  });
+  equal(answer.disposition, "recorded");
+  const ready = await inspectRoute(context);
+  equal(ready.route?.disposition, "work-available");
+  equal(ready.next.suggestedTool, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME);
+
+  const planned = (await completion("preview")).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(planned.status, "ready", planned.blockers.join(","));
+  const completed = (await completion("apply", planned.planDigest)).structuredContent as {
+    readonly disposition: string;
+    readonly next: { readonly frontier: string | null };
+  };
+  equal(completed.disposition, "completed");
+  // research 不能续接：归档后的 next 不指向 continue，continue 的预览也说明原因。
+  equal(completed.next.frontier, null);
+  const again = await previewContinuation(context, {
+    kind: "optimization",
+    summary: "Follow up on the research.",
+  });
+  equal(again.status, "blocked");
+  ok(again.blockers.includes("demand-type:research"), again.blockers.join(","));
+  return "publish=research/not-applicable; route=research-completion-required and blocked until a document; plan=research-demand-has-no-implementation; evidence=document from a support surface; complete=archived with no target and no test; continue=demand-type:research";
+}
+
+// ---- card-06/indeterminate-resolution（open-items H6，能力卡 6 Q3） -----------------------------
+
+async function productPromptRecordIds(context: ScenarioContext): Promise<readonly string[]> {
+  if (!context.productHandle) throw new Error("scenario ordering: window-handshake must run first");
+  const workspaceRoot = await RootedDirectory.open(context.workspace.workspacePath);
+  try {
+    const records = await readHostHookObservations(workspaceRoot, context.driver.hostId, {
+      sessionId: context.productHandle,
+      event: "user-prompt-submit",
+    });
+    return records.records.map((record) => record.recordId);
+  } finally {
+    await workspaceRoot.close();
+  }
+}
+
+/**
+ * 没有落地证据的投递（indeterminate）的两个正式出口。prompt 没到目标会话：Controller 以 resolution
+ * rejected-before-send 结案，声明释放，只能 rearm（同信封、新围栏）。prompt 到了、只是记录对不上：Controller
+ * 引用目标会话在许可签发之后的一条 hook 记录，以 resolution accepted 结案。两种都记为 controller-resolution，
+ * 没有记录可引用的 accepted 被拒；不凭猜测重记，也不凭猜测重发。
+ */
+async function scenarioIndeterminateResolution(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  const branch = await createPrimaryDemand(context, {
+    title: "Indeterminate resolution requirement",
+    keyPrefix: "scenario-resolution",
+    objective: "实现用来走 indeterminate 出口的最小切片",
+    anchorId: "resolution-slice",
+  });
+  const prepared = await prepareDelivery(
+    context,
+    "scenario-resolution-prepare",
+    await currentStreamRevision(context),
+    branch.targetTaskId,
+  );
+  const outcomeRequest = async (
+    permit: DeliveryPermit,
+    idempotencyKey: string,
+    resolution?: Readonly<Record<string, unknown>>,
+  ) => ({
+    root,
+    demandId: branch.demandId,
+    idempotencyKey,
+    expectedStreamRevision: await currentStreamRevision(context),
+    deliveryId: permit.deliveryId,
+    claimDigest: permit.claimDigest,
+    attempt: { status: "sent" },
+    readback: { status: "pending" },
+    observedAt: new Date(Math.max(Date.now(), Date.parse(permit.issuedAt) + 1)).toISOString(),
+    ...(resolution === undefined ? {} : { resolution }),
+  });
+  const refusal = async (
+    permit: DeliveryPermit,
+    idempotencyKey: string,
+    resolution?: Readonly<Record<string, unknown>>,
+  ): Promise<string> => {
+    const refused = await context.connection.client.callTool({
+      name: WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+      arguments: await outcomeRequest(permit, idempotencyKey, resolution),
+    });
+    equal(refused.isError, true, scenarioToolText(refused));
+    return scenarioToolText(refused);
+  };
+
+  // 第一段：prompt 从未到达目标会话。
+  const silent = await recordOutcome(context, prepared.permit, "scenario-resolution-outcome-1");
+  equal(silent.outcome.disposition, "indeterminate");
+  equal(silent.outcome.claimHandling, "retain");
+  ok(
+    (await refusal(prepared.permit, "scenario-resolution-outcome-again")).includes(
+      "landing-evidence-missing",
+    ),
+    "recording again without evidence stays refused",
+  );
+  // accepted 的解决必须引用一条记录；没有记录可引用，就不能说它到了。
+  ok(
+    (
+      await refusal(prepared.permit, "scenario-resolution-accept-unproven", {
+        disposition: "accepted",
+        hookRecordId: "record-that-does-not-exist",
+        rationale: "The prompt probably arrived.",
+      })
+    ).includes("resolution-evidence-missing"),
+    "an accepted resolution needs a hook record",
+  );
+  const rejected = (
+    await call(
+      context,
+      WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+      await outcomeRequest(prepared.permit, "scenario-resolution-reject", {
+        disposition: "rejected-before-send",
+        rationale: "The target pane was gone; the prompt is not in the session.",
+      }),
+    )
+  ).structuredContent as OutcomeResult;
+  equal(rejected.outcome.disposition, "rejected-before-send");
+  equal(rejected.outcome.evidenceKind, "controller-resolution");
+  equal(rejected.outcome.claimHandling, "release-authorized");
+  equal(rejected.next.suggestedTool, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME);
+
+  // 唯一合法的再发送是 rearm：同一个信封、同一个 prompt、新围栏。
+  const rearmed = await rearmDelivery(
+    context,
+    prepared.permit.deliveryId,
+    "scenario-resolution-rearm",
+    rejected.event.streamRevision,
+  );
+  equal(rearmed.status, "rearmed");
+  equal(rearmed.permit.prompt, prepared.permit.prompt);
+  const fence = rearmed.permit.fence;
+  if (fence === null) throw new Error("a target rearm must carry a fence");
+  const second: DeliveryPermit = {
+    ...prepared.permit,
+    claimId: fence.claimId,
+    claimDigest: fence.claimDigest,
+    issuedAt: rearmed.permit.issuedAt,
+    streamRevision: fence.streamRevision,
+  };
+
+  // 第二段：这一代的 prompt 到了，但宿主留下的记录对不上（这里是一段别的文本）：仍是 indeterminate，
+  // Controller 核对后引用那条记录结案。
+  const before = new Set(await productPromptRecordIds(context));
+  const again = await recordOutcome(context, second, "scenario-resolution-outcome-2");
+  equal(again.outcome.disposition, "indeterminate");
+  await landPrompt(context, "The host rewrote this prompt beyond recognition.");
+  const landed = (await productPromptRecordIds(context)).filter((id) => !before.has(id));
+  equal(landed.length, 1, "the target session has exactly one new prompt record");
+  ok(
+    (await refusal(second, "scenario-resolution-outcome-unmatched")).includes(
+      "landing-evidence-missing",
+    ),
+    "a record that matches neither the digest nor the permit id is not landing evidence",
+  );
+  const accepted = (
+    await call(
+      context,
+      WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
+      await outcomeRequest(second, "scenario-resolution-accept", {
+        disposition: "accepted",
+        hookRecordId: landed[0],
+        rationale: "The target session shows the delivery; the host altered the text.",
+      }),
+    )
+  ).structuredContent as OutcomeResult;
+  equal(accepted.outcome.disposition, "accepted");
+  equal(accepted.outcome.evidenceKind, "controller-resolution");
+  equal(accepted.target.phase, "host-effect-accepted");
+  equal(accepted.next.frontier, "implementation-target-result-import");
+  // 已经结案的投递不再接受解决。
+  ok(
+    (
+      await refusal(second, "scenario-resolution-late", {
+        disposition: "rejected-before-send",
+        rationale: "Too late.",
+      })
+    ).length > 0,
+  );
+
+  // 收尾：取消这个 Demand，primary pod 留给后面的场景。
+  const reason = "Scenario acceptance cancels the resolution Demand.";
+  const cancelPreview = (
+    await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+      root,
+      mode: "preview",
+      demandId: branch.demandId,
+      reason,
+    })
+  ).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(cancelPreview.status, "ready", cancelPreview.blockers.join(","));
+  await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: branch.demandId,
+    reason,
+    planDigest: cancelPreview.planDigest,
+  });
+  return "silent=indeterminate, re-record refused landing-evidence-missing; accepted-without-record=resolution-evidence-missing; resolution rejected-before-send=controller-resolution, claim released, rearm only; rearm=same prompt new fence; unmatched record=still indeterminate; resolution accepted with the hook record=controller-resolution, route to result import";
+}
+
+// ---- card-07/bug-attempt-capacity（open-items D4） ---------------------------------------------
+
+const BUG_REQUIREMENT_MARKDOWN = `# 缺陷
+
+## 复现
+
+运行聚焦检查，第二条断言偶发失败。
+
+## 范围
+
+只修聚焦检查涉及的切片。
+
+## 非目标
+
+不改动投递与评审。
+
+## 验收标准
+
+- AC-1 聚焦检查的第一条断言通过。
+- AC-2 聚焦检查的第二条断言稳定通过。
+
+## 用户确认
+
+用户于 2026-11-10T04:00:00Z 确认了复现、范围与非目标。
+`;
+
+const BUG_LANDING_MARKDOWN = `# 缺陷落地
+
+## 已核实的代码事实
+
+第二条断言依赖一个未固定的顺序。
+
+## 修复方案
+
+固定顺序，保留断言。
+
+## 测试决策
+
+real-environment：测试窗口在已确认环境里跑测试合同。
+`;
+
+/**
+ * bug 类型的 Demand 走到测试预算用尽：测试合同只给一次尝试，flaky 的失败步骤想重跑时被 attempt-capacity 拒绝，
+ * 剩下的出口是升级给用户；用户决定不再继续，Demand 取消归档。
+ */
+async function scenarioBugAttemptCapacity(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.designPath || !context.testWindowId || !context.testHandle) {
+    throw new Error("scenario ordering: test-contract must run first");
+  }
+  writeFileSync(path.join(context.designPath, "drafts", "bug.md"), BUG_REQUIREMENT_MARKDOWN, {
+    mode: 0o644,
+  });
+  writeFileSync(path.join(context.designPath, "drafts", "bug-landing.md"), BUG_LANDING_MARKDOWN, {
+    mode: 0o644,
+  });
+  const branch = await createPrimaryDemand(context, {
+    title: "Bug requirement",
+    keyPrefix: "scenario-bug",
+    objective: "修复聚焦检查第二条断言的偶发失败",
+    anchorId: "bug-fix",
+    testingDecision: REAL_ENVIRONMENT_TESTING,
+    packageOverrides: {
+      demandType: "bug",
+      requirementPath: "drafts/bug.md",
+      landingPath: "drafts/bug-landing.md",
+    },
+    sectionAnchors: ["reproduction"],
+  });
+  const evidence = await acceptImplementation(context, branch, "scenario-bug-impl");
+  const testTarget = await planTestContract(context, branch, "scenario-bug-test-plan", {
+    maxAttempts: 1,
+  });
+  const permit = await deliverTest(context, testTarget.targetTaskId, "scenario-bug-test-1");
+  await importTestResult(context, permit, "scenario-bug-test-import-1", evidence, [
+    passingTestStep("ts-1", evidence),
+    failingTestStep("ts-2", evidence, "flaky"),
+  ]);
+  const inspection = await inspectReview(context, testTarget.targetTaskId);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), false);
+  const revision = await currentStreamRevision(context);
+  const overBudget = await context.connection.client.callTool({
+    name: WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+    arguments: testDecisionRequest(context, inspection, "scenario-bug-rerun", revision, {
+      decision: "request-another-attempt",
+      assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
+      outcome: "inconclusive",
+      stepIds: ["ts-2"],
+    }),
+  });
+  equal(overBudget.isError, true, "the contract froze one attempt");
+  ok(
+    scenarioToolText(overBudget).includes("attempt-capacity:1"),
+    scenarioToolText(overBudget).slice(0, 300),
+  );
+  // 预算用尽之后的出口是升级：问题交给用户，Demand 等回答。
+  const escalated = (
+    await call(
+      context,
+      WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+      testDecisionRequest(context, inspection, "scenario-bug-escalate", revision, {
+        decision: "escalate",
+        assessment: { conclusion: "inconclusive", evidenceSufficiency: "insufficient" },
+        outcome: "inconclusive",
+        escalation: {
+          classification: "needs-decision",
+          userDecision: {
+            issue: "第二步在唯一一次尝试里失败且像是偶发，测试合同没有给第二次尝试。",
+            requirementRefs: [],
+            evidence: [],
+            options: [
+              { option: "取消这个 Demand。", impact: "修复不验收，需求包撤回。" },
+              { option: "接受当前证据。", impact: "第二条验收标准没有通过的测试。" },
+            ],
+            recommendation: "建议取消后以更宽的测试预算重新发布。",
+          },
+        },
+      }),
+    )
+  ).structuredContent as DecisionResult;
+  equal(escalated.status, "committed");
+  equal(escalated.target.phase, "test-escalated");
+  const waiting = await inspectRoute(context);
+  equal(waiting.route?.disposition, "awaiting-decision");
+
+  const reason = "The user chose to cancel after the test budget ran out.";
+  const cancelPreview = (
+    await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+      root,
+      mode: "preview",
+      demandId: branch.demandId,
+      reason,
+    })
+  ).structuredContent as {
+    readonly status: string;
+    readonly blockers: readonly string[];
+    readonly planDigest: string | null;
+  };
+  equal(cancelPreview.status, "ready", cancelPreview.blockers.join(","));
+  await call(context, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: branch.demandId,
+    reason,
+    planDigest: cancelPreview.planDigest,
+  });
+  equal((await boardPackage(context, branch.requirementId)).status, "withdrawn");
+  return "package=bug (reproduction/scope/non-goals, fix plan); test contract maxAttempts 1; flaky step rerun=attempt-capacity:1; escalate=needs-decision, Demand awaiting-decision; cancel=withdrawn";
+}
+
 // ---- card-10/pod-lifecycle（ADR-0010，§13.91 D7） --------------------------------------------
 
 interface PodMutation {
@@ -3269,6 +4129,8 @@ async function publishScenarioPackage(
     readonly mode: string;
     readonly summary: string;
   }> = CONTROLLER_ONLY_TESTING,
+  // 类型、草稿路径与 supplement 的父需求；缺省是用场景草稿发布的 requirement 包。
+  overrides: Readonly<Record<string, unknown>> = {},
 ) {
   const root = context.workspace.workspacePath;
   if (!context.designSurfaceId || !context.designWindowId) {
@@ -3284,6 +4146,7 @@ async function publishScenarioPackage(
     requirementPath: "drafts/requirement.md",
     landingPath: "drafts/landing.md",
     confirmation: { confirmedAt: new Date().toISOString() },
+    ...overrides,
   };
   const ready = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
@@ -3292,7 +4155,9 @@ async function publishScenarioPackage(
     package: packageInput,
   });
   const readyPreview = ready.structuredContent as PublicationPreview;
-  if (readyPreview.planDigest === null) throw new Error("package preview is not ready");
+  if (readyPreview.planDigest === null) {
+    throw new Error(`package preview is not ready: ${readyPreview.blockers.join(",")}`);
+  }
   const applied = await call(context, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, {
     root,
     mode: "apply",
@@ -3518,9 +4383,9 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     true,
     scenarioToolText(missingWorktree),
   );
-  const checkout = path.join(context.workspace.fixtureRoot, "wt-feature-pod");
+  const { checkout, branch: podBranch } = podCheckoutOf(context, "feature-pod");
   gitInProduct(context, "commit", "--quiet", "--allow-empty", "-m", "pod baseline");
-  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", "wakeflow-feature-pod");
+  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", podBranch);
   const worktree = {
     porcelain: gitInProduct(context, "-C", checkout, "worktree", "list", "--porcelain"),
     commonDir: gitInProduct(context, "-C", checkout, "rev-parse", "--git-common-dir").trim(),
@@ -3533,7 +4398,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     checkout,
     worktree,
   );
-  equal(productBinding.worktree?.branch, "wakeflow-feature-pod");
+  equal(productBinding.worktree?.branch, podBranch);
   const readyState = await call(context, WAKEFLOW_POD_PUBLIC_TOOL_NAME, {
     root,
     mode: "recover",
@@ -3633,7 +4498,14 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     targetTaskId,
   );
   equal(prepared.permit.prompt.includes(`feature-pod (${podId})`), true, "prompt names the pod");
-  equal(prepared.permit.prompt.includes("../Workspace/"), true, "worktree-relative workspace root");
+  // prompt 里的工作区根相对检出给出：兄弟布局是 `../Workspace/`，Claude 的检出在仓库的 `.claude/worktrees/` 下、
+  // 仓库又在工作区根里，是四层 `../`（open-items D3）。
+  const workspaceFromCheckout = `${path.relative(checkout, root).split(path.sep).join("/")}/`;
+  equal(
+    prepared.permit.prompt.includes(workspaceFromCheckout),
+    true,
+    `worktree-relative workspace root ${workspaceFromCheckout}`,
+  );
   equal(
     prepared.permit.prompt.includes(context.workspace.fixtureRoot),
     false,
@@ -3693,7 +4565,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
     WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
     importRequest(context, prepared.permit, "scenario-pod-import-1", revision, {
       ...content,
-      repositoryChange: { ...content.repositoryChange, branch: "wakeflow-feature-pod" },
+      repositoryChange: { ...content.repositoryChange, branch: podBranch },
     }),
   );
   const importResult = imported.structuredContent as ImportResult;
@@ -3996,14 +4868,37 @@ function resourceAbsolutePath(context: ScenarioContext, ref: string): string {
   return path.join(context.workspace.workspacePath, ...ref.split("/"));
 }
 
+/**
+ * pod 产品窗口的检出位置与分支（open-items D3）。会话宿主（Claude Code）的检出在仓库自己的
+ * `.claude/worktrees/<名字>` 下、分支 `worktree-<名字>`——助手与 `claude --worktree` 实际产生的布局，嵌套在
+ * 仓库里而仓库又嵌套在工作区根里。项目聊天宿主（Codex）的检出由宿主自选，这里放在工作区旁边。
+ */
+function podCheckoutOf(
+  context: ScenarioContext,
+  podName: string,
+): { readonly checkout: string; readonly branch: string } {
+  return context.driver.projectThread
+    ? {
+        checkout: path.join(context.workspace.fixtureRoot, `wt-${podName}`),
+        branch: `wakeflow-${podName}`,
+      }
+    : {
+        checkout: path.join(
+          context.workspace.productPath,
+          ".claude",
+          "worktrees",
+          `wakeflow-${podName}`,
+        ),
+        branch: `worktree-wakeflow-${podName}`,
+      };
+}
+
 /** 经公共工具建一个 worktree pod 并带到 ready：四个窗口握手，产品窗口在真实 worktree 里交回 git 事实。 */
 async function createReadyPod(
   context: ScenarioContext,
   spec: {
     readonly name: string;
     readonly idempotencyKey: string;
-    readonly checkoutName: string;
-    readonly branch: string;
     readonly handlePrefix: string;
   },
 ): Promise<ReadyPod> {
@@ -4040,8 +4935,8 @@ async function createReadyPod(
   await register("controller", root);
   await register("design", path.join(root, "Design"));
   await register("test", path.join(root, "Test"));
-  const checkout = path.join(context.workspace.fixtureRoot, spec.checkoutName);
-  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", spec.branch);
+  const { checkout, branch } = podCheckoutOf(context, spec.name);
+  gitInProduct(context, "worktree", "add", "--quiet", checkout, "-b", branch);
   await register("product", checkout, {
     porcelain: gitInProduct(context, "-C", checkout, "worktree", "list", "--porcelain"),
     commonDir: gitInProduct(context, "-C", checkout, "rev-parse", "--git-common-dir").trim(),
@@ -4055,7 +4950,7 @@ async function createReadyPod(
   return {
     podId,
     name: spec.name,
-    branch: spec.branch,
+    branch,
     checkout,
     handles: ["controller", "design", "test", "product"].map(handleOf),
     windowOf,
@@ -4406,8 +5301,6 @@ async function scenarioStatusAndVerify(context: ScenarioContext): Promise<string
   const pod = await createReadyPod(context, {
     name: "observe-pod",
     idempotencyKey: "scenario-pod-observe",
-    checkoutName: "wt-observe-pod",
-    branch: "wakeflow-observe-pod",
     handlePrefix: "observe",
   });
   const demand = await createObserveDemand(context, pod);
@@ -4584,6 +5477,7 @@ async function scenarioActiveProjection(context: ScenarioContext): Promise<strin
 /** primary pod 上新建的 Demand：需求包、唯一的实现目标与包的权威摘要（评审分支与测试分支场景共用）。 */
 interface PrimaryDemandBranch {
   readonly demandId: string;
+  readonly requirementId: string;
   readonly targetTaskId: string;
   readonly taskPackageId: string;
   readonly recordDigest: string;
@@ -4602,6 +5496,10 @@ async function createPrimaryDemand(
     readonly objective: string;
     readonly anchorId: string;
     readonly testingDecision?: Readonly<{ readonly mode: string; readonly summary: string }>;
+    /** 需求包的类型与草稿路径；缺省是用场景草稿发布的 requirement 包。 */
+    readonly packageOverrides?: Readonly<Record<string, unknown>>;
+    /** 任务包引用的章节；缺省是 requirement 包的 goal。 */
+    readonly sectionAnchors?: readonly string[];
   }>,
 ): Promise<PrimaryDemandBranch> {
   const root = context.workspace.workspacePath;
@@ -4612,6 +5510,7 @@ async function createPrimaryDemand(
     context,
     options.title,
     options.testingDecision ?? CONTROLLER_ONLY_TESTING,
+    options.packageOverrides,
   );
   const demandRequest = {
     root,
@@ -4674,7 +5573,7 @@ async function createPrimaryDemand(
         },
       })),
       lineage: null,
-      sectionAnchors: ["goal"],
+      sectionAnchors: [...(options.sectionAnchors ?? ["goal"])],
     },
   });
   assertNoPrivatePath(context, planned);
@@ -4685,6 +5584,7 @@ async function createPrimaryDemand(
   ).targetTask;
   return {
     demandId,
+    requirementId: requirement.requirementId,
     targetTaskId: target.targetTaskId,
     taskPackageId: target.taskPackageId,
     recordDigest: requirement.recordDigest,
@@ -6255,6 +7155,10 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-07/blocked-and-resume": scenarioBlockedAndResume,
     "card-07/test-rerun": scenarioTestRerun,
     "card-07/product-defect-remediation": scenarioProductDefectRemediation,
+    "card-04/supplement-continuation": scenarioSupplementContinuation,
+    "card-04/research-demand": scenarioResearchDemand,
+    "card-06/indeterminate-resolution": scenarioIndeterminateResolution,
+    "card-07/bug-attempt-capacity": scenarioBugAttemptCapacity,
     "card-11/detach-workspace": scenarioDetachWorkspace,
   });
 

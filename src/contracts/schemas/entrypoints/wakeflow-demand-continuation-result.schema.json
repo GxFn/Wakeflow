@@ -119,6 +119,10 @@
             }
           ]
         },
+        "supplement": {
+          "description": "The supplement package this continuation attached to the Demand, now claimed by it; present only for a requirement-supplement continuation.",
+          "$ref": "#/$defs/packageReceipt"
+        },
         "next": {
           "$ref": "#/$defs/nextProjection"
         }

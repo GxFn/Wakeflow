@@ -5,6 +5,7 @@ import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
   derivePublishAssessment,
+  deriveSupplementBlockers,
   deriveRequirementId,
   type PackageDocumentText,
   privacyBlockers,
@@ -111,6 +112,7 @@ test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知
       testingDecisionMode: "controller-only",
       confirmedAt: "2026-09-04T10:00:00.000Z",
       supersedes: null,
+      supplements: null,
       headerTexts: [],
     }),
     { privacyHit: false, blockers: [] },
@@ -122,6 +124,7 @@ test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知
       testingDecisionMode: "not-applicable",
       confirmedAt: null,
       supersedes: "unknown",
+      supplements: null,
       headerTexts: [
         {
           label: "testingDecision.summary",
@@ -165,6 +168,7 @@ test("requirementId 由内容确定性派生", () => {
     testingDecision: { mode: "controller-only", summary: "s" },
     taskPlanReview: "controller",
     supersedes: null,
+    supplements: null,
     parkedTrigger: null,
     documents: [REQUIREMENT, LANDING],
     confirmedAt: "2026-09-04T10:00:00.000Z",
@@ -174,6 +178,60 @@ test("requirementId 由内容确定性派生", () => {
   equal(first, deriveRequirementId(input));
   equal(first.startsWith("requirement_"), true);
   equal(first === deriveRequirementId({ ...input, priority: "P0" }), false);
+  // 父需求进标识：同一份内容补充不同的需求是不同的包；没有父需求的包标识的输入里没有这一项（旧包的标识不变）。
+  const parent = "requirement_22222222-2222-4222-8222-222222222222";
+  const supplement = { ...input, demandType: "supplement" as const };
+  const attached = deriveRequirementId({ ...supplement, supplements: parent });
+  equal(attached === deriveRequirementId(supplement), false);
+  equal(
+    attached ===
+      deriveRequirementId({
+        ...supplement,
+        supplements: "requirement_33333333-3333-4333-8333-333333333333",
+      }),
+    false,
+  );
+});
+
+test("supplement 包与父需求（Q7 裁决）：必须说出补充哪个需求，父需求不能是 supplement 或 research，测试模式随父需求；别的类型不能带父需求", () => {
+  const parent = { demandType: "requirement", testingDecisionMode: "controller-only" } as const;
+  const supplement = { demandType: "supplement", testingDecisionMode: "controller-only" } as const;
+  deepEqual(deriveSupplementBlockers({ ...supplement, supplements: parent }), []);
+  deepEqual(deriveSupplementBlockers({ ...supplement, supplements: null }), [
+    "supplements-required",
+  ]);
+  deepEqual(deriveSupplementBlockers({ ...supplement, supplements: "unknown" }), [
+    "supplements-unknown",
+  ]);
+  deepEqual(
+    deriveSupplementBlockers({
+      ...supplement,
+      supplements: { demandType: "supplement", testingDecisionMode: "controller-only" },
+    }),
+    ["supplements-parent-type:supplement"],
+  );
+  deepEqual(
+    deriveSupplementBlockers({
+      ...supplement,
+      supplements: { demandType: "research", testingDecisionMode: "not-applicable" },
+    }),
+    ["supplements-parent-type:research", "supplements-testing-mode:not-applicable"],
+  );
+  deepEqual(
+    deriveSupplementBlockers({
+      ...supplement,
+      supplements: { demandType: "bug", testingDecisionMode: "real-environment" },
+    }),
+    ["supplements-testing-mode:real-environment"],
+  );
+  // 别的类型：没有父需求照常，带了就拒绝。
+  for (const demandType of ["requirement", "bug", "research"] as const) {
+    const other = { demandType, testingDecisionMode: "controller-only" } as const;
+    deepEqual(deriveSupplementBlockers({ ...other, supplements: null }), []);
+    deepEqual(deriveSupplementBlockers({ ...other, supplements: parent }), [
+      "supplements-demand-type",
+    ]);
+  }
 });
 
 test("看板投影：排序、过滤、计数、认领转移阻塞与 next", () => {
@@ -261,6 +319,7 @@ test("发布阻塞项按 256 码点截断：第 256 个码点是 emoji 时整个
     testingDecisionMode: "controller-only",
     confirmedAt: "2026-09-04T10:00:00.000Z",
     supersedes: null,
+    supplements: null,
     headerTexts: [],
   });
   const [blocker] = assessment.blockers;

@@ -40,6 +40,7 @@ import { demandFinalRootRef } from "../../governance/demand/publication/demand-p
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
 import {
+  createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
@@ -93,6 +94,7 @@ import {
   deriveTestStepReferenceBlockers,
   deriveTopologyBlockers,
   parseAcceptanceCriteria,
+  type SupplementCriteria,
 } from "./decide.js";
 
 /**
@@ -192,8 +194,13 @@ function mapHandlerError(error: unknown): never {
 
 type LoadedPackage = Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>;
 
-async function loadRequirementPackage(context: SliceContext): Promise<LoadedPackage> {
-  const lineage = context.authority.loaded.identity.source;
+/** 一份需求包记录的谱系：源需求的身份引用，或并入的 supplement 包（两者同形）。 */
+type PackageLineage = Readonly<{ readonly requirementId: string; readonly recordDigest: string }>;
+
+async function loadRequirementPackage(
+  context: SliceContext,
+  lineage: PackageLineage = context.authority.loaded.identity.source,
+): Promise<LoadedPackage> {
   let loaded: LoadedPackage;
   try {
     loaded = await new LedgerAuthorityStore(context.authority.ledgerRoot).loadRequirement(
@@ -234,14 +241,51 @@ async function readRequirementText(context: SliceContext, loaded: LoadedPackage)
   }
 }
 
+/**
+ * 并入 Demand 的 supplement 需求包（Q7 裁决）：按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝。它们的
+ * 验收标准、章节与成员文档从并入的那次续接起与源需求的一起可用。
+ */
+async function loadSupplementPackages(context: SliceContext): Promise<readonly LoadedPackage[]> {
+  const loaded: LoadedPackage[] = [];
+  for (const lineage of context.authority.loaded.aggregate.state.supplements ?? []) {
+    loaded.push(await loadRequirementPackage(context, lineage));
+  }
+  return Object.freeze(loaded);
+}
+
+async function supplementCriteriaOf(
+  context: SliceContext,
+  supplements: readonly LoadedPackage[],
+): Promise<readonly Readonly<SupplementCriteria>[]> {
+  const criteria: Readonly<SupplementCriteria>[] = [];
+  for (const loaded of supplements) {
+    criteria.push(
+      Object.freeze({
+        requirementId: loaded.record.requirementId,
+        recordDigest: loaded.recordDigest,
+        criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+      }),
+    );
+  }
+  return Object.freeze(criteria);
+}
+
 function resolveAuthorityReferences(
   context: SliceContext,
   memberRefs: readonly string[],
+  supplements: readonly LoadedPackage[],
 ): TaskPackage["selectedAuthorityRefs"] {
+  // Demand 的权威关系在创建时冻结，只含源需求的成员；并入的 supplement 包的成员按同一种引用另算。
+  const candidates = [
+    ...context.authority.loaded.authority.authorityRefs,
+    ...supplements.flatMap((loaded) =>
+      loaded.documents.map((document) =>
+        createLedgerAuthorityMemberReference(loaded, document.path),
+      ),
+    ),
+  ];
   const resolved = memberRefs.map((memberRef) => {
-    const reference = context.authority.loaded.authority.authorityRefs.find(
-      (candidate) => candidate.memberRef === memberRef,
-    );
+    const reference = candidates.find((candidate) => candidate.memberRef === memberRef);
     if (reference === undefined) {
       fail(
         "precondition-failed",
@@ -276,8 +320,12 @@ async function buildImplementationPackage(
     fail("precondition-failed", "research-demand-has-no-implementation", "$request.taskPackage");
   }
   const loaded = await loadRequirementPackage(context);
+  const supplements = await loadSupplementPackages(context);
   const review = derivePlanReview({
-    taskPlanReview: loaded.record.taskPlanReview,
+    // 源需求或任何一个并入的 supplement 包要求用户过目，就要用户过目。
+    taskPlanReview: [loaded, ...supplements].some((entry) => entry.record.taskPlanReview === "user")
+      ? "user"
+      : "controller",
     confirmedAt: input.planReviewConfirmedAt,
   });
   if (review.blocker !== null || review.planReview === null) {
@@ -293,7 +341,9 @@ async function buildImplementationPackage(
     }),
     ...deriveSectionAnchorBlockers(
       requested.sectionAnchors,
-      loaded.record.sections.map((section) => section.anchor),
+      [loaded, ...supplements].flatMap((entry) =>
+        entry.record.sections.map((section) => section.anchor),
+      ),
     ),
     ...deriveDependencyBlockers(authority.loaded.aggregate.state, requested.dependsOn),
   ];
@@ -301,6 +351,7 @@ async function buildImplementationPackage(
   const selectedAuthorityRefs = resolveAuthorityReferences(
     context,
     requested.selectedAuthorityMemberRefs,
+    supplements,
   );
   const taskPackageId = deriveDurableId(
     "task-package",
@@ -351,6 +402,7 @@ async function buildImplementationPackage(
     anchors: taskPackage.acceptanceAnchors,
     recordDigest: identity.source.recordDigest,
     criteria: parseAcceptanceCriteria(await readRequirementText(context, loaded)),
+    supplements: await supplementCriteriaOf(context, supplements),
   });
   if (anchorBlockers.length > 0)
     rejectWith(anchorBlockers, "$request.taskPackage.acceptanceAnchors");
@@ -422,16 +474,20 @@ async function buildTestPackage(
     }),
   );
   const criteria = parseAcceptanceCriteria(await readRequirementText(context, loaded));
+  const supplements = await loadSupplementPackages(context);
+  const supplementCriteria = await supplementCriteriaOf(context, supplements);
   const stepBlockers = deriveTestStepReferenceBlockers({
     steps,
     recordDigest: identity.source.recordDigest,
     criteria,
+    supplements: supplementCriteria,
   });
   if (stepBlockers.length > 0) rejectWith(stepBlockers, "$request.taskPackage.testContract.steps");
   const coverageBlockers = deriveTestContractCoverageBlockers({
     steps,
     recordDigest: identity.source.recordDigest,
     criteria,
+    supplements: supplementCriteria,
   });
   if (coverageBlockers.length > 0) {
     rejectWith(coverageBlockers, "$request.taskPackage.testContract.steps");
@@ -439,6 +495,7 @@ async function buildTestPackage(
   const selectedAuthorityRefs = resolveAuthorityReferences(
     context,
     requested.selectedAuthorityMemberRefs,
+    supplements,
   );
   let taskPackage: Readonly<TaskPackage>;
   try {

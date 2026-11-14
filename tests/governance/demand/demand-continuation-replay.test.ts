@@ -116,3 +116,73 @@ test("续接边界随事件持久化：旧形状的续接事件重放得到与�
     ),
   );
 });
+
+test("supplement 包随 requirement-supplement 续接并入（Q7 裁决）：事件带着它，状态按并入顺序累计；不带包的续接不改这张表，别的谱系不能带，同一个包不能并入两次", async () => {
+  const completed = await completedStateWithAcceptedTest();
+  const supplement = (digit: string) => ({
+    requirementId: `requirement_${digit.repeat(8)}-${digit.repeat(4)}-4${digit.repeat(3)}-8${digit.repeat(3)}-${digit.repeat(12)}`,
+    recordRef: `requirements/requirement_${digit.repeat(8)}-${digit.repeat(4)}-4${digit.repeat(3)}-8${digit.repeat(3)}-${digit.repeat(12)}/record.json`,
+    recordDigest: `sha256:${digit.repeat(64)}`,
+  });
+  const continueWith = (state: Readonly<DemandAggregateState>, continuation: Readonly<object>) => {
+    const decided = decideDemandEventSourcingCommand(state, {
+      commandType: "lifecycle.continue-demand",
+      commandVersion: 1,
+      eventId: CONTINUED_EVENT_ID,
+      demandId: state.demandId,
+      recordedAt: RECORDED_AT,
+      continuation,
+    });
+    const event = decided[0];
+    if (event?.eventType !== "lifecycle.demand-continued")
+      throw new Error("continued event missing");
+    return { event, state: evolveDemandEventSourcingState(state, event) };
+  };
+  const first = continueWith(completed, {
+    ...CONTINUATION,
+    kind: "requirement-supplement",
+    supplement: supplement("1"),
+  });
+  // 事件数据是无原型对象：按 JSON 形状比较。
+  deepEqual(JSON.parse(JSON.stringify(first.event.data.continuation.supplement)), supplement("1"));
+  deepEqual(first.state.supplements, [supplement("1")]);
+  equal(first.state.continuation?.kind, "requirement-supplement");
+
+  // 再次完成后的续接：不带包的（任何谱系）保持这张表，带新包的接在后面。
+  const completedAgain = parseDemandAggregateState({ ...first.state, lifecycle: "completed" });
+  deepEqual(continueWith(completedAgain, CONTINUATION).state.supplements, [supplement("1")]);
+  deepEqual(
+    continueWith(completedAgain, {
+      ...CONTINUATION,
+      kind: "requirement-supplement",
+      supplement: supplement("2"),
+    }).state.supplements,
+    [supplement("1"), supplement("2")],
+  );
+  // 1.3.0 之前的 requirement-supplement 续接没有包：重放不产生这张表，状态与摘要都是当时的。
+  const legacy = evolveDemandEventSourcingState(
+    completed,
+    continuedEvent(completed, {
+      continuation: { ...CONTINUATION, kind: "requirement-supplement" },
+    }),
+  );
+  equal(legacy.supplements, undefined);
+  equal(Object.hasOwn(legacy, "supplements"), false);
+
+  // 别的谱系不能带包；同一个包（或同一份记录）不能并入两次。
+  throws(() => continueWith(completed, { ...CONTINUATION, supplement: supplement("1") }));
+  throws(() =>
+    continueWith(completedAgain, {
+      ...CONTINUATION,
+      kind: "requirement-supplement",
+      supplement: supplement("1"),
+    }),
+  );
+  throws(() =>
+    continueWith(completedAgain, {
+      ...CONTINUATION,
+      kind: "requirement-supplement",
+      supplement: { ...supplement("2"), recordDigest: supplement("1").recordDigest },
+    }),
+  );
+});

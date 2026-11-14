@@ -18,3 +18,11 @@ export function parseAcceptanceCriteria(requirementText: string): readonly Accep
     ),
   );
 }
+
+/**
+ * 一条验收标准在阻塞项、门明细与覆盖清单里的写法：源需求的条目是 `ac-N`；并入 Demand 的 supplement 包
+ * （Q7 裁决）各自编号，写作 `<requirementId>/ac-N`。
+ */
+export function acceptanceCriterionLabel(requirementId: string | null, itemId: string): string {
+  return requirementId === null ? itemId : `${requirementId}/${itemId}`;
+}

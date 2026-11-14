@@ -218,6 +218,35 @@ test("test TaskPackage is a closed discriminated variant without repository muta
     "relation",
     "$/testContract/steps/0/stepId",
   );
+  // 一条验收标准只对应一步；条目在各自的需求包里编号（Q7：并入 supplement 包的 Demand 里两个包各有 ac-1），
+  // 所以同一个包的同一条重复才拒绝，另一份记录里的同名条目是另一步。
+  const firstStep = testPackage.testContract.steps[0];
+  if (firstStep === undefined) throw new Error("fixture test contract has no step");
+  const secondStep = (recordDigest: string) => ({
+    ...firstStep,
+    stepId: "ts-2",
+    requirementRef: { ...firstStep.requirementRef, recordDigest },
+  });
+  expectTaskPackageError(
+    () =>
+      parseTaskPackage({
+        ...testPackage,
+        testContract: {
+          ...testPackage.testContract,
+          steps: [firstStep, secondStep(firstStep.requirementRef.recordDigest)],
+        },
+      }),
+    "relation",
+    "$/testContract/steps/1/requirementRef/itemId",
+  );
+  const twoPackages = parseTaskPackage({
+    ...testPackage,
+    testContract: {
+      ...testPackage.testContract,
+      steps: [firstStep, secondStep(`sha256:${"9".repeat(64)}`)],
+    },
+  });
+  equal(twoPackages.workType === "test" && twoPackages.testContract.steps.length, 2);
 
   expectTaskPackageError(
     () =>

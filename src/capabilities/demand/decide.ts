@@ -199,6 +199,8 @@ export interface TerminalBlockerInput {
   readonly textBlockers?: readonly string[];
   /** 归档目标已存在且负载摘要不同。 */
   readonly archiveConflict: boolean;
+  /** 并入本 Demand 的 supplement 包在看板上的现状（Q7）；省略即没有。 */
+  readonly supplementClaims?: readonly Readonly<SupplementClaimFacts>[];
 }
 
 const BLOCKERS_MAXIMUM = 64;
@@ -223,7 +225,13 @@ function packageBlockers(input: Readonly<TerminalBlockerInput>): readonly string
   if (input.claim.status !== "claimed" || input.claim.claim?.demandId !== input.demandId) {
     return [`package-claim:${input.claim.status}`];
   }
-  return [];
+  // 并入的 supplement 包与源需求包一起结算：终态之前它们都必须仍由本 Demand 认领。
+  return (input.supplementClaims ?? []).flatMap(({ requirementId, claim }) => {
+    if (claim === null) return [`supplement-package-unknown:${requirementId}`];
+    return claim.status === "claimed" && claim.claim?.demandId === input.demandId
+      ? []
+      : [`supplement-package-claim:${requirementId}:${claim.status}`];
+  });
 }
 
 function gateBlockers(input: Readonly<TerminalBlockerInput>): readonly string[] {
@@ -275,6 +283,74 @@ export interface ContinueBlockerInput {
   }> | null;
   /** 续接摘要的凭证命中；省略即无。 */
   readonly textBlockers?: readonly string[];
+  /** 续接的谱系与它引用的 supplement 包（Q7 裁决）；省略即不检查。 */
+  readonly supplement?: Readonly<SupplementAttachInput>;
+  /** 归档清单里此前并入的 supplement 包在看板上的现状；省略即没有。 */
+  readonly attachedSupplements?: readonly Readonly<SupplementClaimFacts>[];
+}
+
+/** 一个 supplement 包在看板上的现状；看板上没有它时 `claim` 为 null。 */
+export interface SupplementClaimFacts {
+  readonly requirementId: string;
+  readonly claim: Readonly<RequirementClaimState> | null;
+}
+
+export interface SupplementAttachInput {
+  readonly kind: "optimization" | "requirement-supplement" | "verified-bug";
+  /** 请求里给的 supplement 包；没给为 null。 */
+  readonly requirementId: string | null;
+  /** 该包在看板上的状态；看板上没有为 null。 */
+  readonly claim: Readonly<RequirementClaimState> | null;
+  /** 该包在 Ledger 里的记录事实；读不到为 null。 */
+  readonly record: Readonly<{
+    readonly recordDigest: string;
+    readonly programMatches: boolean;
+    readonly demandType: RequirementClaimState["demandType"];
+    readonly supplements: string | null;
+  }> | null;
+  /** 本 Demand 的源需求（归档清单里的那个）。 */
+  readonly sourceRequirementId: string | null;
+}
+
+/**
+ * requirement-supplement 续接必须引用一个 supplement 包，别的谱系不能带（Q7 裁决）：新的验收标准只从冻结的包
+ * 进入 Demand。包必须还在 pending、记录与看板一致、属于本程序，并且声明补充的正是本 Demand 的源需求。
+ */
+export function deriveSupplementAttachBlockers(
+  input: Readonly<SupplementAttachInput>,
+): readonly string[] {
+  if (input.requirementId === null) {
+    return input.kind === "requirement-supplement" ? ["supplement-package-required"] : [];
+  }
+  if (input.kind !== "requirement-supplement") return [`supplement-package-kind:${input.kind}`];
+  if (input.claim === null || input.record === null) return ["supplement-package-unknown"];
+  const blockers: string[] = [];
+  if (input.claim.status !== "pending") {
+    blockers.push(`supplement-package-claim:${input.claim.status}`);
+  }
+  if (!input.record.programMatches) blockers.push("supplement-package-program");
+  if (input.record.recordDigest !== input.claim.recordDigest) {
+    blockers.push("supplement-package-record-drift");
+  }
+  if (input.record.demandType !== "supplement") {
+    blockers.push(`supplement-package-type:${input.record.demandType}`);
+  } else if (input.record.supplements !== input.sourceRequirementId) {
+    blockers.push(`supplement-package-parent:${input.record.supplements ?? "none"}`);
+  }
+  return blockers;
+}
+
+/** 此前并入的 supplement 包必须仍由本 Demand 归档：续接把它们与源需求包一起带回 claimed。 */
+function attachedSupplementBlockers(
+  demandId: string,
+  attached: readonly Readonly<SupplementClaimFacts>[],
+): readonly string[] {
+  return attached.flatMap(({ requirementId, claim }) => {
+    if (claim === null) return [`supplement-package-unknown:${requirementId}`];
+    return claim.status === "archived" && claim.archive?.demandId === demandId
+      ? []
+      : [`supplement-package-claim:${requirementId}:${claim.status}`];
+  });
 }
 
 /**
@@ -297,6 +373,10 @@ export function deriveContinueBlockers(input: Readonly<ContinueBlockerInput>): r
   else if (input.pod != null && input.pod.lifecycle !== "open")
     blockers.push(`pod-closing:${input.pod.podId}`);
   if (input.otherActiveDemandId !== null) blockers.push(`pod-busy:${input.otherActiveDemandId}`);
+  if (input.supplement !== undefined) {
+    blockers.push(...deriveSupplementAttachBlockers(input.supplement));
+  }
+  blockers.push(...attachedSupplementBlockers(input.demandId, input.attachedSupplements ?? []));
   blockers.push(...(input.textBlockers ?? []));
   return Object.freeze(blockers);
 }
@@ -330,11 +410,14 @@ export interface CreationBlockerInput {
     readonly activeDemandId: string | null;
   }> | null;
   readonly requestedPodId: string;
+  /** 记录里声明的父需求（supplement 包）；省略或 null 即没有。 */
+  readonly supplements?: string | null;
 }
 
 /**
  * 认领前置：包 pending、记录属于本程序且与看板绑定同一记录、目标 pod 存在且未在关闭、
- * 该 pod 没有别的活动 Demand（ADR-0010 D3：一 pod 一 Demand）。
+ * 该 pod 没有别的活动 Demand（ADR-0010 D3：一 pod 一 Demand）。声明了父需求的 supplement 包不单独认领
+ * （Q7 裁决）：它由 requirement-supplement 续接并入完成了父需求的 Demand，阻塞项带上父需求的标识。
  */
 export function deriveCreationBlockers(input: Readonly<CreationBlockerInput>): readonly string[] {
   const blockers: string[] = [];
@@ -342,6 +425,7 @@ export function deriveCreationBlockers(input: Readonly<CreationBlockerInput>): r
   else if (input.claim.status !== "pending") blockers.push(`package-claim:${input.claim.status}`);
   if (input.claim !== null && !input.programMatches) blockers.push("package-program");
   if (input.claim !== null && !input.recordMatches) blockers.push("package-record-drift");
+  if (typeof input.supplements === "string") blockers.push(`supplement-of:${input.supplements}`);
   if (input.pod === null) blockers.push(`pod-unknown:${input.requestedPodId}`);
   else {
     if (input.pod.lifecycle !== "open") blockers.push(`pod-closing:${input.pod.podId}`);

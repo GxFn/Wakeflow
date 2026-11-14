@@ -60,6 +60,8 @@ user decides; you do not pick silently.
 
 Build the `selection` from the tool's input schema - it spells out every part,
 `hosts` included - never from another workspace's config or from plugin files.
+Give every repository, support surface and window its own `selectionKey`: the
+keys share one namespace, so a window named like a surface is refused.
 Preview, show the plan and every blocker in the user's terms, and apply only
 after they say to. A refusal names the failing field and rule: fix that field
 and preview again instead of asking the user to interpret it.

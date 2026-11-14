@@ -248,6 +248,8 @@ export interface CreateRequirementClaimStateInput {
   readonly priority: WakeflowRequirementClaimState["priority"];
   readonly publishedAt: UtcInstant;
   readonly supersedes: string | null;
+  /** supplement 包补充的父需求（Q7）；其他包不给，状态文件里不写这一项。 */
+  readonly supplements?: string | null;
   /** 非空即 parked，否则 pending。 */
   readonly parkedTrigger: string | null;
   /** 需求记录的测试模式；进状态文件只为索引显示（G11）。 */
@@ -270,6 +272,9 @@ export function createRequirementClaimState(
     testingMode: input.testingMode,
     publishedAt: input.publishedAt,
     supersedes: input.supersedes,
+    ...(input.supplements === undefined || input.supplements === null
+      ? {}
+      : { supplements: input.supplements }),
     revision: 1,
     previousStateDigest: null,
     status: input.parkedTrigger === null ? "pending" : "parked",

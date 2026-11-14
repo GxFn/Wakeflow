@@ -428,7 +428,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["program", "presentation", "topology", "storage", "governance", "hosts"],
-      "description": "The fresh-initialize selection, compiled into the typed Config; repositories and windows reference each other by selectionKey. A refusal names the path in details.at and the rule in details.selection.",
+      "description": "The fresh-initialize selection, compiled into the typed Config; repositories and windows reference each other by selectionKey, and every selectionKey is unique across the whole selection (repositories, support surfaces and windows share one namespace). A refusal names the path in details.at and the rule in details.selection.",
       "properties": {
         "program": {
           "type": "object",

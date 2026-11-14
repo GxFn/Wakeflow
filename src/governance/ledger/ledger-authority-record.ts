@@ -109,6 +109,11 @@ export interface RequirementRecord {
   readonly testingDecision: Readonly<RequirementTestingDecision>;
   readonly taskPlanReview: RequirementTaskPlanReview;
   readonly supersedes: WakeflowDurableId<"requirement"> | null;
+  /**
+   * supplement 包补充的父需求（Q7 裁决，1.3.0）：只在 demandType 为 supplement 时出现。带着它的包不单独
+   * 认领，由 requirement-supplement 续接并入完成了父需求的 Demand。更早的记录没有这一项，字节不变。
+   */
+  readonly supplements?: WakeflowDurableId<"requirement">;
   /** 发布时的搁置触发条件；有值即以 parked 上板，recover 据此重建看板状态。 */
   readonly parked: Readonly<{ readonly trigger: string }> | null;
   readonly confirmation: Readonly<RequirementConfirmationPoint>;
@@ -131,12 +136,13 @@ type RequirementRecordDraftFields = Omit<
 export interface CreateRequirementRecordInput
   extends Omit<
     RequirementRecordDraftFields,
-    "requirementId" | "programId" | "originWindowId" | "supersedes"
+    "requirementId" | "programId" | "originWindowId" | "supersedes" | "supplements"
   > {
   readonly requirementId: `requirement_${string}`;
   readonly programId: `program_${string}`;
   readonly originWindowId: `window_${string}`;
   readonly supersedes: `requirement_${string}` | null;
+  readonly supplements?: `requirement_${string}`;
 }
 
 export interface CreateLedgerAuthorityRecordOptions {
@@ -208,6 +214,7 @@ const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
   "testingDecision",
   "title",
 ] as const);
+const OPTIONAL_DRAFT_FIELD = "supplements";
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
@@ -387,6 +394,17 @@ function normalizeRequirement(wire: Readonly<RequirementRecordWire>): Readonly<R
   const supersedes =
     wire.supersedes === null ? null : parseId(wire.supersedes, "requirement", "$/supersedes");
   if (supersedes === requirementId) fail("relation", "$/supersedes");
+  const supplements =
+    wire.supplements === undefined
+      ? undefined
+      : parseId(wire.supplements, "requirement", "$/supplements");
+  // 父需求只属于 supplement 包，也不能是它自己。
+  if (
+    supplements !== undefined &&
+    (wire.demandType !== "supplement" || supplements === requirementId)
+  ) {
+    fail("relation", "$/supplements");
+  }
   if ((wire.demandType === "research") !== (wire.testingDecision.mode === "not-applicable")) {
     fail("relation", "$/testingDecision/mode");
   }
@@ -414,6 +432,7 @@ function normalizeRequirement(wire: Readonly<RequirementRecordWire>): Readonly<R
     }),
     taskPlanReview: wire.taskPlanReview,
     supersedes,
+    ...(supplements === undefined ? {} : { supplements }),
     parked:
       wire.parked === null
         ? null
@@ -465,7 +484,10 @@ function exactDraft(value: unknown): Readonly<Record<string, unknown>> {
     if (error instanceof PassiveOwnDataError) fail("input", "$draft");
     throw error;
   }
-  const keys = Object.keys(record).sort();
+  // `supplements` 是唯一可缺省的草稿字段：只有 supplement 包带它。
+  const keys = Object.keys(record)
+    .filter((key) => key !== OPTIONAL_DRAFT_FIELD)
+    .sort();
   if (
     keys.length !== REQUIREMENT_DRAFT_FIELDS.length ||
     keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])
@@ -517,6 +539,7 @@ export function createRequirementRecord(
     testingDecision: draft.testingDecision,
     taskPlanReview: draft.taskPlanReview,
     supersedes: draft.supersedes,
+    ...(draft.supplements === undefined ? {} : { supplements: draft.supplements }),
     parked: draft.parked,
     confirmation: draft.confirmation,
     documents: draft.documents,

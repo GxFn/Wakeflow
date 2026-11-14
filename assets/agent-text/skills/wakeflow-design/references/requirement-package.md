@@ -60,6 +60,15 @@ preview before the user ever sees the package.
   criteria (required before publication), user
   confirmation.
 - `landing.md`: code facts, landing plan, testing decision.
+- `supplements` (required): the `requirementId` of the requirement it adds to -
+  the package the original Demand was claimed from, not another supplement.
+  Find it with `wakeflow_inspect_board`. The supplement does not become a
+  Demand of its own: once that requirement's Demand is completed, the
+  Controller continues it with this package, and its acceptance criteria join
+  the original ones. Write only the delta, and number its criteria from the
+  top - they are the supplement's own `ac-1`, `ac-2`. The testing decision's
+  mode must be the parent's (`supplements-testing-mode:<mode>` otherwise); a
+  change of testing mode is a new requirement, not a supplement.
 
 **research** - a question to answer, not code to ship:
 

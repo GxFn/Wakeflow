@@ -236,8 +236,45 @@ export interface PublishBlockerInput {
   readonly confirmedAt: string | null;
   /** 请求了 supersedes 但看板上没有该包时为 `"unknown"`；未请求为 `null`。 */
   readonly supersedes: RequirementClaimState | null | "unknown";
+  /**
+   * supplement 包补充的父需求（Q7 裁决）：没有请求为 `null`，Ledger 里没有那条记录为 `"unknown"`，否则是父记录
+   * 里与它相关的三项事实。
+   */
+  readonly supplements: SupplementParentFacts | null | "unknown";
   /** 头部里进入记录或看板的自由文本：测试决策摘要、搁置触发条件。 */
   readonly headerTexts: readonly Readonly<{ readonly label: string; readonly text: string }>[];
+}
+
+/** 父需求记录里决定一个 supplement 包能不能挂上去的事实。 */
+export interface SupplementParentFacts {
+  readonly demandType: RequirementDemandType;
+  readonly testingDecisionMode: "controller-only" | "real-environment" | "not-applicable";
+}
+
+/**
+ * supplement 包与父需求的关系（Q7 裁决，1.3.0）。supplement 包必须说出它补充哪个需求；父需求是 Demand 的
+ * 源需求，所以不能是另一个 supplement，也不能是没有实现的 research；测试模式随父需求——并入的 Demand 的测试
+ * 决策在创建时已经冻结，补充包换不了它。
+ */
+export function deriveSupplementBlockers(
+  input: Pick<PublishBlockerInput, "demandType" | "testingDecisionMode" | "supplements">,
+): readonly string[] {
+  if (input.demandType !== "supplement") {
+    return input.supplements === null ? [] : ["supplements-demand-type"];
+  }
+  if (input.supplements === null) return ["supplements-required"];
+  if (input.supplements === "unknown") return ["supplements-unknown"];
+  const blockers: string[] = [];
+  if (
+    input.supplements.demandType === "supplement" ||
+    input.supplements.demandType === "research"
+  ) {
+    blockers.push(`supplements-parent-type:${input.supplements.demandType}`);
+  }
+  if (input.supplements.testingDecisionMode !== input.testingDecisionMode) {
+    blockers.push(`supplements-testing-mode:${input.supplements.testingDecisionMode}`);
+  }
+  return blockers;
 }
 
 const BLOCKER_TEXT_MAXIMUM = 256;
@@ -267,6 +304,7 @@ export function derivePublishAssessment(input: Readonly<PublishBlockerInput>): R
     blockers.push("testing-decision-mode");
   }
   if (input.supersedes === "unknown") blockers.push("supersedes-unknown");
+  blockers.push(...deriveSupplementBlockers(input));
   return Object.freeze({
     privacyHit: input.analysis.privacyHit || headerPrivacy.length > 0,
     blockers: Object.freeze([...new Set(blockers.map(boundedBlocker))].slice(0, BLOCKERS_MAXIMUM)),
@@ -283,6 +321,8 @@ export interface RequirementIdentityInput {
   readonly testingDecision: Readonly<{ readonly mode: string; readonly summary: string }>;
   readonly taskPlanReview: string;
   readonly supersedes: string | null;
+  /** supplement 包补充的父需求；其他包为 null，不进标识的输入（旧包的标识不变）。 */
+  readonly supplements: string | null;
   readonly parkedTrigger: string | null;
   readonly documents: readonly PackageDocumentText[];
   readonly confirmedAt: string;
@@ -303,6 +343,7 @@ export function deriveRequirementId(input: Readonly<RequirementIdentityInput>): 
         testingDecision: input.testingDecision,
         taskPlanReview: input.taskPlanReview,
         supersedes: input.supersedes,
+        ...(input.supplements === null ? {} : { supplements: input.supplements }),
         parkedTrigger: input.parkedTrigger,
         confirmedAt: input.confirmedAt,
         documents: [...input.documents]

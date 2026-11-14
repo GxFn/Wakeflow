@@ -75,6 +75,11 @@
         }
       ]
     },
+    "supplements": {
+      "description": "supplement 包补充的父需求（记录里的同名字段），供看板与 status 指出它该并入哪个 Demand；1.3.0 之前的状态文件没有它。",
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
     "revision": {
       "type": "integer",
       "minimum": 1,

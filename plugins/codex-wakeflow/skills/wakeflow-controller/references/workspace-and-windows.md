@@ -41,7 +41,7 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   and preview again. Default repositories to `owner-managed`; offer
   `managed-block` only when the user wants Wakeflow's bounded block in the
   repository's instruction file, and tell them a committed block is seen by
-  every clone. `fresh-legacy-residue-present` means the scan found 0.9.x
+  every clone. `filesystem-unsupported:<type>` / `ledger-filesystem-unsupported:<type>` means the workspace root or the ledger root is not on a local macOS volume (APFS or HFS+): locks and atomic publication are not safe there, so tell the user to choose a local path - never work around it. `fresh-legacy-residue-present` means the scan found 0.9.x
   leftovers; the codes `fresh-legacy-residue-<kind>` say which (`scope-block`,
   `broad-permission`, `additional-directories`, `root-marker`,
   `ledger-directory`). Residue is cleaned by the user, never by you; a sibling
@@ -146,7 +146,7 @@ Procedure, every time:
    between, preview again - a re-derived plan that no longer matches is refused
    on purpose.
 5. If an apply is interrupted, finish it with recover and the operation it
-   reported. Do not start a second apply over a half-finished one.
+   reported. Do not start a second apply over a half-finished one. `maintenance-recovery-artifact-mismatch` means the interrupted apply was written by another plugin version (`details.writerVersion`) and this one cannot finish it: tell the user to run recover once from that version, then update again - do not delete the transaction files.
 
 After a fresh-initialize you have a config, a ledger, the surfaces, the managed
 instruction block, and the main pod's window set - but no running windows.
@@ -229,8 +229,8 @@ development builds' local formats are neither read nor migrated. `reconfigure`,
 format-upgrade or data-conversion tool. A root with an unsupported
 configuration or layout is preserved as it is - choose a separate fresh
 workspace, and never edit version headers, delete old authority or reuse old
-bindings to make it look initialized. `writer-protocol-unsupported` means this
-runtime cannot write that format and offers no upgrade path.
+bindings to make it look initialized. `config-version-unsupported` (on reads; `details.found` and `details.supported` name the two versions, and a maintenance preview lists `config-version-unsupported:<found>`) and `writer-protocol-unsupported` (on writes) both mean this
+runtime does not handle that format and offers no upgrade path: tell the user to use the plugin version that wrote it, or to keep that root and its ledger as history and initialize a fresh workspace elsewhere with a ledger root of its own.
 
 ## After a plugin update
 
@@ -292,7 +292,7 @@ those repairs and from Controller acceptance of returned work.
 event append residues: its preview is read-only, its apply rechecks the plan and
 owner facts, retires uncommitted candidates or settles already linked commits,
 and preserves committed event bytes; re-preview afterwards for ordinary layout
-maintenance. `demand-candidates-busy:<demandId>` means the writer may still be
+maintenance. Two more first plans work the same way. A `WakeflowMaintenanceGateResiduePlan` appears when `maintenance.protocol` is `recovery-required` and no residue is recoverable: a maintenance process died holding the gate before it recorded an operation, so there is nothing to recover; apply retires the dead gate lock and the orphan stage files, and refuses with `maintenance-gate-residue` when an owner may still be alive - wait and preview again. A `WakeflowHookStageResiduePlan` appears when verify reports `<host>:stage-residue-<n>` on the hook evidence gate: apply removes the stale stage files it counted as retirable; the directories and links it only counts as kept are the user's to remove. `demand-candidates-busy:<demandId>` means the writer may still be
 active - wait and inspect again. Unknown owners, unknown files and changed
 resources are not permission to force cleanup. Board and projection writers
 retire a proven inactive lock before retrying; a lock with a live or unknown

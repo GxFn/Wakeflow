@@ -8,7 +8,7 @@ import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../..
 import { sameFileNodeIdentity, } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { createUuidV4 } from "../../../foundation/identity/uuid-v4.js";
-import { readNodeSystemErrorCode } from "../../../foundation/node/node-system-error.js";
+import { observePidOwnerSync, } from "../../../foundation/node/process-instance.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
 import { isWakeflowError } from "../../../kernel/error.js";
@@ -84,19 +84,14 @@ function admitCommitPublication(commit) {
         throw error;
     }
 }
-function candidateOwnerState(address) {
+/** 追加候选的所有者状态；别的进程留下的候选按节点事实判 pid 重用与别的用户（open-items B7）。 */
+function candidateOwnerState(address, node) {
     if (address.pid === process.pid) {
         if (address.threadId !== threadId)
             return "unknown";
         return ACTIVE_APPEND_CANDIDATE_TOKENS.has(address.token) ? "active" : "inactive";
     }
-    try {
-        process.kill(address.pid, 0);
-        return "active";
-    }
-    catch (error) {
-        return readNodeSystemErrorCode(error) === "ESRCH" ? "inactive" : "unknown";
-    }
+    return observePidOwnerSync(address.pid, node);
 }
 /** 持有一个 Demand root 的 Event Store I/O 作用域。 */
 export class DemandFileEventStore {
@@ -291,7 +286,11 @@ export class DemandFileEventStore {
                 throw error;
             }
             assertDemandFileEventStoreFile(entry.node, `$candidates/${index}`, [1n, 2n]);
-            return Object.freeze({ address, entry, ownerState: candidateOwnerState(address) });
+            return Object.freeze({
+                address,
+                entry,
+                ownerState: candidateOwnerState(address, entry.node),
+            });
         });
         return Object.freeze(candidates);
     }

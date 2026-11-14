@@ -420,8 +420,11 @@ function hooksGate(facts) {
     const status = aggregate(statuses);
     const code = facts.hooks.flatMap((host) => {
         const hostCode = hookHostCode(host);
+        const stageResidue = host.stageResidue ?? 0;
         return [
             ...(hostCode === null ? [] : [`${host.hostId}:${hostCode}`]),
+            // 被跳过的条目里有多少占着原子暂存前缀（B13）：它们由 reconcile 列为可退役项，不必用户自己去找。
+            ...(stageResidue > 0 ? [`${host.hostId}:stage-residue-${stageResidue}`] : []),
             ...(host.writeFailures > 0 ? [`${host.hostId}:write-failures-${host.writeFailures}`] : []),
         ];
     });

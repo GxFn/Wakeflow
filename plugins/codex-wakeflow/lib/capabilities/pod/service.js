@@ -3,7 +3,7 @@ import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import path from "node:path";
 import { parseWakeflowConfig, WakeflowConfigError, } from "../../configuration/wakeflow-config.js";
 import { replaceWakeflowConfigAuthority, WakeflowConfigAuthorityReplacementError, } from "../../configuration/wakeflow-config-authority-replacement.js";
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { createWakeflowConfigDocumentValue } from "../../configuration/wakeflow-config-document.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error } from "../../foundation/crypto/sha256.js";
@@ -82,7 +82,7 @@ async function readSnapshot(root, signal) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
                 fail("io-failure", "aborted", "$signal", { cause: error });
-            fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+            failWakeflowConfigAuthority(error);
         }
         throw error;
     }

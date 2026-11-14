@@ -1,4 +1,4 @@
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
@@ -61,7 +61,7 @@ export async function openSliceContext(root, options) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
                 fail("io-failure", "aborted", "$signal", { cause: error });
-            fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+            failWakeflowConfigAuthority(error);
         }
         throw error;
     }

@@ -1,4 +1,4 @@
-import { readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
@@ -65,7 +65,7 @@ async function openContext(root, options) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
                 fail("io-failure", "aborted", "$signal", { cause: error });
-            fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+            failWakeflowConfigAuthority(error);
         }
         throw error;
     }

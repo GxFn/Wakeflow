@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigSnapshot, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigSnapshot, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -131,7 +131,7 @@ async function readSnapshot(root, signal) {
         const detached = error.reason === "source" ? await detachedSnapshotOrNull(root, signal) : null;
         if (detached !== null)
             return { snapshot: detached, detached: true };
-        fail("precondition-failed", "config-authority", "$request.root", { cause: error });
+        failWakeflowConfigAuthority(error);
     }
 }
 async function openLedgerRoot(root, snapshot) {
@@ -1256,6 +1256,7 @@ async function gateFacts(context, readings) {
             directory: host.directory,
             records: host.records,
             skipped: host.skipped,
+            stageResidue: host.stageResidue,
             writeFailures: host.writeFailures,
         })),
         windows: snapshot.model.topology.windows.map((window) => ({

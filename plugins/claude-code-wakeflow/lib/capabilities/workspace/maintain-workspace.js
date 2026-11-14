@@ -6,6 +6,8 @@ import { compileWakeflowFreshConfigSelection, WakeflowFreshConfigSelectionError,
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA, } from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { isLocalFilesystemType, readFilesystemTypeName, } from "../../foundation/node/filesystem-type.js";
 import { JsonValueError, parseJsonValue, } from "../../foundation/data/json-value.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
@@ -20,6 +22,7 @@ import { DemandFileEventStoreError } from "../../governance/demand/event-sourcin
 import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
+import { listHostHookStageResidue, retireHostHookStageResidue, } from "../../kernel/hook-observations.js";
 import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../kernel/layout.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
@@ -27,6 +30,7 @@ import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js"
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostTransportError, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compareWakeflowArtifactVersions, parseWakeflowArtifactManifestIdentity, WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME, } from "../../kernel/wakeflow-artifact-identity.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
+import { inspectWakeflowMaintenanceGateResidue, retireWakeflowMaintenanceGateResidue, WakeflowMaintenanceGateResidueError, } from "../../workspace/maintenance/wakeflow-maintenance-gate-residue.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceExecutionTransactionError, } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
@@ -252,6 +256,12 @@ const TRANSACTION_ERROR_TABLE = Object.freeze({
     "terminal-closure": ["recovery-required", null, "$request.root"],
     transaction: ["io-failure", null, "$request.root"],
     step: ["io-failure", null, "$request.root"],
+    // B8：被中断的事务是另一版制品写的，本构建恢复不了它；details 带那一版与操作标识。
+    "artifact-mismatch": [
+        "recovery-required",
+        "maintenance-recovery-artifact-mismatch",
+        "$request.root",
+    ],
 });
 function mapTransactionError(error) {
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) {
@@ -259,7 +269,12 @@ function mapTransactionError(error) {
         // 事务已登记的操作标识随错误公开：中断后 Agent 只凭它调用 recover。
         const details = error.operationId === null || code === "invalid-request" || code === "precondition-failed"
             ? {}
-            : { details: { operationId: error.operationId } };
+            : {
+                details: {
+                    operationId: error.operationId,
+                    ...(error.writerVersion === null ? {} : { writerVersion: error.writerVersion }),
+                },
+            };
         fail(code, reason ?? error.reason, path, {
             cause: error,
             retryable: code === "concurrency-conflict",
@@ -308,6 +323,30 @@ function deriveArtifactOverlapBlockers(rootPath, desiredConfig, artifactRoot) {
             return pathContains(resolved, artifactRoot) || pathContains(artifactRoot, resolved);
         })) {
             blockers.push("configured-root-overlaps-artifact");
+        }
+    }
+    return Object.freeze(blockers);
+}
+/**
+ * 非本地文件系统在维护预览里阻塞（open-items B11，ADR-0021）。锁、原子发布与私有模式依赖本地文件系统的
+ * link、rename 与权限语义，平台范围是 macOS 的本地文件系统；工作区根与账本根（可以在另一个卷上）各探一次。
+ * 读不出类型（别的平台、探测失败）不是证据，不阻塞。
+ */
+async function deriveFilesystemBlockers(context, desiredConfig) {
+    const blockers = [];
+    const rootPath = context.root.absolutePath;
+    const rootType = await context.readFilesystemType(rootPath);
+    if (rootType !== null && !isLocalFilesystemType(rootType)) {
+        blockers.push(`filesystem-unsupported:${rootType}`);
+    }
+    const ledgerRoot = desiredConfig?.storage.ledgerRoot ??
+        (await currentSnapshotOrNull(context))?.model.storage.ledgerRoot ??
+        null;
+    if (ledgerRoot !== null) {
+        // 账本根在 fresh-initialize 之前还不存在：探测自己会退到最近的已存在祖先。
+        const ledgerType = await context.readFilesystemType(path.resolve(rootPath, ledgerRoot));
+        if (ledgerType !== null && !isLocalFilesystemType(ledgerType)) {
+            blockers.push(`ledger-filesystem-unsupported:${ledgerType}`);
         }
     }
     return Object.freeze(blockers);
@@ -452,6 +491,103 @@ async function hasRecoveryConfig(context) {
     }
     return true;
 }
+/**
+ * reconcile 在静态物化之前先退役 hook 目录里暂存前缀的残留（B13）。没有可退役的条目就没有这份计划：留下的
+ * 目录、链接与活着的暂存仍由 verify 点名，那是用户自己的事。
+ */
+async function planHookStageResidue(context) {
+    const entries = [];
+    const hosts = [];
+    for (const hostId of context.profiles.hostProfiles.map((profile) => profile.hostId)) {
+        const listed = await listHostHookStageResidue(context.root, hostId, context.options);
+        if (listed.length === 0)
+            continue;
+        const retirable = listed.filter((entry) => entry.retirable);
+        entries.push(...retirable);
+        hosts.push({ hostId, retirable: retirable.length, kept: listed.length - retirable.length });
+    }
+    if (entries.length === 0)
+        return null;
+    const digest = computeCanonicalJsonSha256Digest(parseJsonValue(entries.map((entry) => [
+        entry.resourcePath,
+        entry.node.deviceId.toString(),
+        entry.node.inodeId.toString(),
+        entry.node.modifiedAtNanoseconds.toString(),
+    ]), "$hookStageResidue"));
+    return Object.freeze({
+        status: "ready",
+        blockers: Object.freeze([]),
+        digest,
+        plan: Object.freeze({
+            kind: "hook-stage-residue",
+            entries: Object.freeze(entries),
+            digest,
+            view: Object.freeze({
+                kind: "WakeflowHookStageResiduePlan",
+                schemaVersion: 1,
+                hosts: Object.freeze(hosts.map((host) => Object.freeze(host))),
+            }),
+        }),
+    });
+}
+/**
+ * reconcile 最先看维护门自己：没有操作可恢复的残留（B9）挡着每一次维护预览，所以它排在别的计划之前。
+ * 有 intent 或 journal 的残留不在这里——那是按 operation ID 的 recover。
+ */
+async function planGateResidue(context) {
+    let residue;
+    try {
+        residue = await inspectWakeflowMaintenanceGateResidue(context.root, context.options);
+    }
+    catch (error) {
+        mapGateResidueError(error);
+    }
+    if (residue === null)
+        return null;
+    return Object.freeze({
+        status: "ready",
+        blockers: Object.freeze([]),
+        digest: residue.digest,
+        plan: Object.freeze({
+            kind: "gate-residue",
+            residue,
+            view: Object.freeze({
+                kind: "WakeflowMaintenanceGateResiduePlan",
+                schemaVersion: 1,
+                lock: residue.lock,
+                transactionStages: residue.transactionStages,
+            }),
+        }),
+    });
+}
+function mapGateResidueError(error) {
+    if (error instanceof WakeflowMaintenanceGateResidueError) {
+        if (error.reason === "aborted")
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        if (error.reason === "changed") {
+            fail("precondition-failed", "plan-stale", "$request.planDigest", { cause: error });
+        }
+        // 属主还活着或说不清的暂存、对不上的锁：不强行清理，留给用户看。
+        fail("recovery-required", "maintenance-gate-residue", "$request.root", { cause: error });
+    }
+    throw error;
+}
+async function retireGateResidue(context, plan) {
+    try {
+        const retirement = await retireWakeflowMaintenanceGateResidue(context.root, plan.residue, context.options);
+        return Object.freeze({
+            status: "completed",
+            operationId: null,
+            planDigest: plan.residue.digest,
+            stepReceipts: Object.freeze([
+                Object.freeze({ kind: "WakeflowMaintenanceGateResidueReceipt", ...retirement }),
+            ]),
+        });
+    }
+    catch (error) {
+        mapGateResidueError(error);
+    }
+}
 /** reconcile 先结算已知 Demand 候选，再在下一轮做静态物化；preview 始终零写。 */
 async function planRuntimeRecovery(context) {
     if (!(await hasRecoveryConfig(context)))
@@ -535,7 +671,7 @@ function detachRepositoryIdOf(input) {
     }
     return null;
 }
-async function currentSnapshotOrNull(context) {
+async function currentSnapshotOrNull(context, blockers) {
     try {
         return await readWakeflowConfigAuthoritySnapshot(context.root, context.options);
     }
@@ -543,6 +679,10 @@ async function currentSnapshotOrNull(context) {
         if (error instanceof WakeflowConfigAuthoritySnapshotError) {
             if (error.reason === "aborted")
                 fail("io-failure", "aborted", "$signal", { cause: error });
+            // C7：版本不认识的配置单独点名。
+            if (error.reason === "config-version" && error.schemaVersion !== null) {
+                blockers?.push(`config-version-unsupported:${error.schemaVersion}`);
+            }
             return null;
         }
         throw error;
@@ -701,9 +841,10 @@ async function planDetach(context, input) {
     const outdated = await deriveRuntimeArtifactBlockers(context);
     if (outdated.length > 0)
         return blockedPlan(outdated);
-    const snapshot = await currentSnapshotOrNull(context);
+    const unreadable = ["current-config-unavailable"];
+    const snapshot = await currentSnapshotOrNull(context, unreadable);
     if (snapshot === null)
-        return blockedPlan(["current-config-unavailable"]);
+        return blockedPlan(unreadable);
     const occupancy = await detachOccupancy(context, input, snapshot, repositoryId);
     if (occupancy.blockers.length > 0)
         return blockedPlan(occupancy.blockers);
@@ -741,6 +882,25 @@ async function planDetach(context, input) {
         digest: ready ? executionPlan.planDigest : null,
     });
 }
+/** 计划之前先看环境：工作区与制品不重叠、卷是本地文件系统、没有更新的制品在跑。第一类有阻塞就不再往下看。 */
+async function deriveEnvironmentBlockers(context, desiredConfig) {
+    const overlap = deriveArtifactOverlapBlockers(context.root.absolutePath, desiredConfig, context.facade.artifactRoot);
+    if (overlap.length > 0)
+        return overlap;
+    const filesystem = await deriveFilesystemBlockers(context, desiredConfig);
+    if (filesystem.length > 0)
+        return filesystem;
+    return deriveRuntimeArtifactBlockers(context);
+}
+/**
+ * reconcile 在静态物化之前的恢复计划，一次只出一份、按这个顺序：维护门自己的残留（它挡着后面所有预览）、
+ * 已知 Demand 的候选残留、hook 目录的暂存残留。都没有就是平常的布局维护。
+ */
+async function planReconcileRecovery(context) {
+    return ((await planGateResidue(context)) ??
+        (await planRuntimeRecovery(context)) ??
+        (await planHookStageResidue(context)));
+}
 async function planMaintenance(context, input) {
     if (input.kind !== "effect") {
         fail("invalid-request", "mode", "$request.mode");
@@ -751,19 +911,16 @@ async function planMaintenance(context, input) {
     if (isWakeflowDetachAction(input.action))
         return planDetach(context, input);
     const { desiredConfig, compilation } = desiredConfigFor(input, context.root.absolutePath);
-    const overlap = deriveArtifactOverlapBlockers(context.root.absolutePath, desiredConfig, context.facade.artifactRoot);
-    if (overlap.length > 0)
-        return blockedPlan(overlap);
-    const outdated = await deriveRuntimeArtifactBlockers(context);
-    if (outdated.length > 0)
-        return blockedPlan(outdated);
+    const environment = await deriveEnvironmentBlockers(context, desiredConfig);
+    if (environment.length > 0)
+        return blockedPlan(environment);
     const privateModes = await privateModePlan(context, input.action);
     if (privateModes !== null)
         return privateModes;
     if (input.action === "reconcile") {
-        const runtime = await planRuntimeRecovery(context);
-        if (runtime !== null)
-            return runtime;
+        const recovery = await planReconcileRecovery(context);
+        if (recovery !== null)
+            return recovery;
     }
     const selected = await selectWriteProfiles(context, input.action, desiredConfig);
     if (selected.blockers.length > 0)
@@ -991,12 +1148,37 @@ export async function executeWakeflowMaintenancePublicRequest(facade, value, opt
         mutationScope: "maintenance",
         tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
         parseRequest,
-        open: async (root) => Object.freeze({ root, facade, profiles, options: signalOptions, writer }),
+        open: async (root) => Object.freeze({
+            root,
+            facade,
+            readFilesystemType: options.readFilesystemType ?? readFilesystemTypeName,
+            profiles,
+            options: signalOptions,
+            writer,
+        }),
         close: async () => { },
         plan: planMaintenance,
         apply: async (context, _input, plan) => {
             if (plan.kind === "private-mode-convergence")
                 return convergePrivateModes(context, plan);
+            if (plan.kind === "gate-residue")
+                return retireGateResidue(context, plan);
+            if (plan.kind === "hook-stage-residue") {
+                const retired = await retireHostHookStageResidue(context.root, plan.entries, context.options);
+                return Object.freeze({
+                    status: "completed",
+                    operationId: null,
+                    planDigest: plan.digest,
+                    stepReceipts: Object.freeze([
+                        Object.freeze({
+                            kind: "WakeflowHookStageResidueReceipt",
+                            retired,
+                            // 列出之后节点变了或已经不在的：没有删，下一次预览再看。
+                            skipped: plan.entries.length - retired,
+                        }),
+                    ]),
+                });
+            }
             if (plan.kind === "runtime-recovery") {
                 const demands = await withWorkspaceOperationScope(context.root, "exclusive", () => applyDemandRuntimeRecovery(context.root, plan.recovery, context.options), context.options);
                 return Object.freeze({

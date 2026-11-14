@@ -147,7 +147,7 @@ unavailable, and it repairs nothing. Run it when `status` looks wrong, before
 completing a Demand, and whenever a delivery looked sent but no evidence
 arrived. An `overall` of `maintenance` means `maintenance.protocol` is not
 `idle`; act on its value first: `recovery-required` - an apply was interrupted,
-run maintenance recover with the recoverable residue's operation; `busy` -
+recover the recoverable residue's operation, or preview reconcile when none is; `busy` -
 another maintenance is running, wait and read status again, never recover it;
 `absent` or `bootstrap-prefix` - the protocol root is not built yet, preview a
 reconcile; `conflict` or `unknown` - stop and report it to the user. An

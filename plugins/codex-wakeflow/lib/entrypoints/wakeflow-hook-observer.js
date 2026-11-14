@@ -146,6 +146,7 @@ function parsePayload(stdin) {
         permissionMode: optionalString(object.permission_mode),
         sessionTitle: optionalString(object.session_title),
         model: optionalString(object.model),
+        startSource: optionalString(object.source),
     }));
 }
 // ---- 记录映射（D3）--------------------------------------------------------------
@@ -268,6 +269,8 @@ function withOptionalField(required, field, value) {
             return { ...required, sessionTitle: value };
         case "model":
             return { ...required, model: value };
+        case "startSource":
+            return { ...required, startSource: value };
         default:
             return { ...required, notificationType: value };
     }
@@ -293,6 +296,10 @@ function recordInput(hostId, payload, event, clock, artifactManifestDigest, arti
         sessionTitle: degradeToKernel(required, "sessionTitle", payload.sessionTitle),
         // 模型只在会话启动时有意义：别的事件即使带了同名字段也不记（X28）。
         model: event === "session-start" ? degradeToKernel(required, "model", payload.model) : null,
+        // 启动来源只属于 SessionStart：它决定这条记录算不算一次运行时的重新装载（B14）。
+        startSource: event === "session-start"
+            ? degradeToKernel(required, "startSource", payload.startSource)
+            : null,
     });
 }
 async function nodeKind(target) {

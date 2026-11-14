@@ -195,7 +195,8 @@ async function pendingEntries(root, ref, signal) {
  * 按可重试冲突让调用方稍后再来；死写者留下的暂存由下一次同目标写入回收，守卫跳过且不删除；
  * 所有者未知时仍按残留保守拒绝。
  */
-function isDeadWriterStage(name, scope) {
+function isDeadWriterStage(entry, scope) {
+    const name = entry.name;
     if (!hasDurableAtomicFileStagePrefix(name))
         return false;
     let stage;
@@ -207,7 +208,7 @@ function isDeadWriterStage(name, scope) {
             return false;
         throw error;
     }
-    const owner = readDurableAtomicFileStageOwnerState(stage);
+    const owner = readDurableAtomicFileStageOwnerState(stage, entry.node);
     if (owner === "active") {
         fail("concurrency-conflict", `${scope}-in-flight`, "$board", { retryable: true });
     }
@@ -217,7 +218,7 @@ function isDeadWriterStage(name, scope) {
 async function assertNoPendingPodMutation(root, signal, excluding, podId) {
     for (const entry of await pendingEntries(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, signal)) {
         if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
-            if (isDeadWriterStage(entry.name, "pod-publication"))
+            if (isDeadWriterStage(entry, "pod-publication"))
                 continue;
             fail("precondition-failed", "pod-publication-residue", "$pod");
         }
@@ -233,7 +234,7 @@ async function assertNoPendingPodMutation(root, signal, excluding, podId) {
     }
     for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {
         if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
-            if (isDeadWriterStage(entry.name, "pod-lifecycle"))
+            if (isDeadWriterStage(entry, "pod-lifecycle"))
                 continue;
             fail("precondition-failed", "pod-lifecycle-residue", "$pod");
         }

@@ -330,7 +330,7 @@ async function recoverDirectoryStages(root, directoryResourcePath, signal, targe
     let activeStageCount = 0;
     let unknownStageCount = 0;
     for (const stage of stages) {
-        const ownerState = readDurableAtomicFileStageOwnerState(stage.address);
+        const ownerState = readDurableAtomicFileStageOwnerState(stage.address, stage.entry.node);
         if (ownerState === "active") {
             activeStageCount += 1;
             continue;

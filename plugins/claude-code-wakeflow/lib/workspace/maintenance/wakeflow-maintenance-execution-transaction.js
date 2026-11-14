@@ -2,17 +2,18 @@ import { types } from "node:util";
 import { computeWakeflowConfigDigest, } from "../../configuration/wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigRecord, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { assertWakeflowHostMaintenanceCapability, assertWakeflowHostMaintenanceContributionCapability, WakeflowHostMaintenanceCapabilityError, } from "./wakeflow-host-maintenance-capability.js";
 import { computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintenanceExecutionIntent, reconstructWakeflowMaintenanceExecutionFromIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
-import { assertWakeflowMaintenanceExecutionIntentCapacity, assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction, assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix, publishWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntentOrNull, recoverWakeflowMaintenanceExecutionIntentStages, retireWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentStoreError, } from "./wakeflow-maintenance-execution-intent-store.js";
+import { assertWakeflowMaintenanceExecutionIntentCapacity, assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction, assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix, peekWakeflowMaintenanceIntentWriter, publishWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntent, readWakeflowMaintenanceExecutionIntentOrNull, retireWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentStoreError, } from "./wakeflow-maintenance-execution-intent-store.js";
 import { parseWakeflowMaintenanceExecutionPlan, } from "./wakeflow-maintenance-execution-plan.js";
 import { previewWakeflowMaintenanceExecution, WakeflowMaintenanceExecutionPreviewError, } from "./wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceGateError, withExistingWakeflowMaintenanceGate, withWakeflowMaintenanceGate, } from "./wakeflow-maintenance-gate.js";
 import { beginWakeflowMaintenanceJournalStep, completeWakeflowMaintenanceJournalStep, terminalizeWakeflowMaintenanceJournal, } from "./wakeflow-maintenance-journal.js";
-import { assertWakeflowMaintenanceJournalIsOnlyTransaction, assertWakeflowPreparedMaintenanceJournalCapacity, checkpointWakeflowMaintenanceJournal, publishPreparedWakeflowMaintenanceJournal, readWakeflowMaintenanceJournal, readWakeflowMaintenanceJournalOrNull, recoverWakeflowMaintenanceJournalStages, retireTerminalWakeflowMaintenanceJournal, WakeflowMaintenanceJournalStoreError, } from "./wakeflow-maintenance-journal-store.js";
-import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
+import { assertWakeflowMaintenanceJournalIsOnlyTransaction, assertWakeflowPreparedMaintenanceJournalCapacity, checkpointWakeflowMaintenanceJournal, publishPreparedWakeflowMaintenanceJournal, readWakeflowMaintenanceJournal, readWakeflowMaintenanceJournalOrNull, retireTerminalWakeflowMaintenanceJournal, WakeflowMaintenanceJournalStoreError, } from "./wakeflow-maintenance-journal-store.js";
+import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, wakeflowMaintenanceJournalRef, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
 import { isWakeflowDetachAction, parseWakeflowStaticMaterializationPreviewRequest, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
@@ -31,6 +32,7 @@ const ERROR_MESSAGES = {
     "terminal-closure": "Wakeflow maintenance execution terminal closure failed.",
     aborted: "Wakeflow maintenance execution was aborted.",
     "recovery-required": "Wakeflow maintenance execution requires recovery.",
+    "artifact-mismatch": "Wakeflow maintenance execution was interrupted under another plugin build; recover it with that build.",
 };
 /** 聚合 maintenance transaction 失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionTransactionError extends Error {
@@ -39,15 +41,27 @@ export class WakeflowMaintenanceExecutionTransactionError extends Error {
     reason;
     path;
     operationId;
-    constructor(reason, path, operationId) {
+    /** `artifact-mismatch` 时写下被中断事务的那一版制品；其余原因为 null。 */
+    writerVersion;
+    constructor(reason, path, operationId, writerVersion = null) {
         super(ERROR_MESSAGES[reason]);
         this.reason = reason;
         this.path = path;
         this.operationId = operationId;
+        this.writerVersion = writerVersion;
     }
 }
 function fail(reason, path, operationId = null) {
     throw new WakeflowMaintenanceExecutionTransactionError(reason, path, operationId);
+}
+/**
+ * 被中断的事务是另一版制品写下的，而本构建读不了它的意图、或按它重算不出同一份计划（open-items B8）：
+ * 说出那一版，让用户用它去恢复。写者戳相同（或两边都没有戳）时不是这种情况，照原来的原因失败。
+ */
+function failIfWrittenByAnotherArtifact(written, running, operationId) {
+    if (written === null || written.manifestDigest === running?.manifestDigest)
+        return;
+    throw new WakeflowMaintenanceExecutionTransactionError("artifact-mismatch", "$intent", operationId, written.version);
 }
 function assertNotAborted(signal, operationId = null) {
     if (signal?.aborted === true)
@@ -621,6 +635,27 @@ function assertRecoveryConfigState(plan, journal, current, retired, operationId)
     fail("source-config", "$config", operationId);
 }
 /**
+ * 一个操作的 intent 与 journal 同在 `transactions` 目录，恢复它们的暂存时是同一个闭合目标集合
+ * （open-items B9，§13.242）。此前两个目标各自闭合：进程死在 journal 的暂存已链接、尚未退役的那一刻，
+ * intent 的恢复就把这份暂存当成集合外的条目拒绝，这个操作再也恢复不了。别的目标的暂存仍在集合之外，
+ * 照旧拒绝；属主还活着或说不清的暂存不动，恢复不往下走。
+ */
+async function recoverOperationStages(root, operationId) {
+    try {
+        const receipt = await recoverDurableAtomicFileStagesForTargets(root, Object.freeze([
+            wakeflowMaintenanceIntentRef(operationId),
+            wakeflowMaintenanceJournalRef(operationId),
+        ]));
+        if (receipt.activeStageCount === 0 && receipt.unknownStageCount === 0)
+            return;
+    }
+    catch (error) {
+        if (!(error instanceof DurableAtomicFileStageRecoveryError))
+            throw error;
+    }
+    fail("recovery-required", "$transactions", operationId);
+}
+/**
  * 只凭operation ID、磁盘intent/journal和固定宿主capability恢复同一事务。
  */
 export async function recoverWakeflowMaintenanceExecutionTransaction(root, operationIdValue, capabilityValue, optionsValue = {}) {
@@ -630,8 +665,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
     const operationId = admittedOperationId(operationIdValue);
     assertNotAborted(options.signal, operationId);
     try {
-        await recoverWakeflowMaintenanceExecutionIntentStages(root, operationId);
-        await recoverWakeflowMaintenanceJournalStages(root, operationId);
+        await recoverOperationStages(root, operationId);
         assertNotAborted(options.signal, operationId);
         const intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
         const initialJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
@@ -640,7 +674,17 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
                 fail("intent", "$intent", operationId);
             return await recoverTerminalJournalWithoutIntent(root, operationId, initialJournal, options);
         }
-        const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
+        let reconstructed;
+        try {
+            reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
+        }
+        catch (error) {
+            if (!(error instanceof WakeflowMaintenanceExecutionIntentError))
+                throw error;
+            // 意图读得进来，但本构建按它重算不出同一份计划：另一版制品写的就说出来，否则是意图本身坏了。
+            failIfWrittenByAnotherArtifact(intentSource.intent.writer ?? null, options.writer, operationId);
+            fail("intent", "$intent", operationId);
+        }
         const plan = reconstructed.plan;
         const requestValue = reconstructed.request;
         const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
@@ -691,6 +735,10 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
         }
         if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
             const reason = intentStoreFailureReason(error);
+            if (reason === "intent") {
+                // 本构建解析不了这份意图：先看它是不是另一版制品写的。
+                failIfWrittenByAnotherArtifact(await peekWakeflowMaintenanceIntentWriter(root, operationId), options.writer, operationId);
+            }
             fail(reason, reason === "transaction" ? "$transactions" : "$intent", operationId);
         }
         if (error instanceof WakeflowMaintenanceJournalStoreError) {

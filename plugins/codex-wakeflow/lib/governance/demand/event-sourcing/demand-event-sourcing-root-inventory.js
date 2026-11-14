@@ -211,7 +211,7 @@ async function inspectPermitPrompts(root, artifacts, signal) {
  * 写者还活着 → 一次检查点正在落盘，按 source-changed 让调用方稍后重来；写者已死 → 残留由下一次
  * 同目标写入回收，这里容忍、不计入快照数也不删除；所有者未知或名字畸形 → 仍按 tree-shape 拒绝。
  */
-function isToleratedSnapshotStageResidue(name, path) {
+function isToleratedSnapshotStageResidue(name, path, node) {
     if (!hasDurableAtomicFileStagePrefix(name))
         return false;
     let stage;
@@ -223,7 +223,7 @@ function isToleratedSnapshotStageResidue(name, path) {
             fail("tree-shape", path);
         throw error;
     }
-    const owner = readDurableAtomicFileStageOwnerState(stage);
+    const owner = readDurableAtomicFileStageOwnerState(stage, node);
     if (owner === "active")
         fail("source-changed", path);
     if (owner === "unknown")
@@ -354,7 +354,7 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     let snapshotCount = 0;
     snapshots.entries.forEach((entry, index) => {
         assertFile(entry.node, `$snapshots/${index}`);
-        if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`))
+        if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`, entry.node))
             return;
         try {
             parseDemandEventStreamCommitFileName(entry.name);

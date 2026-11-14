@@ -114,6 +114,7 @@ const OPTIONAL_RECORD_KEYS = Object.freeze([
     "permissionMode",
     "sessionTitle",
     "model",
+    "startSource",
     "promptPermitIds",
     "promptCharacters",
 ]);
@@ -173,6 +174,16 @@ function optionalPermissionMode(value, path) {
 }
 /** 模型标识是宿主给的标签：可打印、不带空白，至多 256 个字符（云提供方的 ARN 形式也在内）。 */
 const MODEL_LABEL_PATTERN = /^[!-~]{1,256}$/u;
+/** SessionStart 的来源是宿主给的小写标签（`startup`、`resume`、`clear`、`compact`，今后可能有新词）。 */
+const START_SOURCE_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
+function optionalStartSource(value, path) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "string" || !START_SOURCE_PATTERN.test(value)) {
+        fail("invalid-request", "hook-start-source", path);
+    }
+    return value;
+}
 function optionalModel(value, path) {
     if (value === null || value === undefined)
         return null;
@@ -276,6 +287,7 @@ export function createHostHookObservation(input) {
         permissionMode: optionalPermissionMode(input.permissionMode, "$observation.permissionMode"),
         sessionTitle: optionalText(input.sessionTitle, "$observation.sessionTitle"),
         model: optionalModel(input.model, "$observation.model"),
+        startSource: optionalStartSource(input.startSource, "$observation.startSource"),
         promptPermitIds: optionalPromptPermitIds(input.promptPermitIds, "$observation.promptPermitIds"),
         promptCharacters: optionalPromptCharacters(input.promptCharacters, "$observation.promptCharacters"),
     };
@@ -285,6 +297,10 @@ export function createHostHookObservation(input) {
         recordId: deriveHostHookObservationId(partial),
         ...partial,
     });
+}
+/** 后加的可选键：旧记录里没有它，读成 null；取值由 `createHostHookObservation` 核对。 */
+function optionalKey(object, key) {
+    return object[key] ?? null;
 }
 /** 严格解析一条持久化记录；键集、摘要与标识必须自洽。 */
 function parseHostHookObservation(value) {
@@ -310,14 +326,15 @@ function parseHostHookObservation(value) {
         promptDigest: object.promptDigest,
         lastAssistantMessageDigest: object.lastAssistantMessageDigest,
         transcriptRef: object.transcriptRef,
-        artifactManifestDigest: (object.artifactManifestDigest ?? null),
-        artifactVersion: (object.artifactVersion ?? null),
-        notificationType: (object.notificationType ?? null),
-        permissionMode: (object.permissionMode ?? null),
-        sessionTitle: (object.sessionTitle ?? null),
-        model: (object.model ?? null),
-        promptPermitIds: (object.promptPermitIds ?? null),
-        promptCharacters: (object.promptCharacters ?? null),
+        artifactManifestDigest: optionalKey(object, "artifactManifestDigest"),
+        artifactVersion: optionalKey(object, "artifactVersion"),
+        notificationType: optionalKey(object, "notificationType"),
+        permissionMode: optionalKey(object, "permissionMode"),
+        sessionTitle: optionalKey(object, "sessionTitle"),
+        model: optionalKey(object, "model"),
+        startSource: optionalKey(object, "startSource"),
+        promptPermitIds: optionalKey(object, "promptPermitIds"),
+        promptCharacters: optionalKey(object, "promptCharacters"),
     });
     if (record.recordId !== object.recordId) {
         fail("invalid-request", "hook-record-id", "$record.recordId");
@@ -406,7 +423,7 @@ function isAbandonedStage(entry, cutoff) {
     if (entry.node.modifiedAtNanoseconds >= cutoff)
         return false;
     const address = hostHookStageAddress(entry);
-    return address !== null && readDurableAtomicFileStageOwnerState(address) === "inactive";
+    return (address !== null && readDurableAtomicFileStageOwnerState(address, entry.node) === "inactive");
 }
 const PROBE_FOUND = Symbol("probe-found");
 /**
@@ -669,17 +686,26 @@ function readLimit(filter) {
 const FOREIGN = Symbol("foreign");
 /** 记录命名但读不出，或叶子位置上的目录 / 链接：可能藏着记录，计入 skipped 与 unreadable。 */
 const UNREADABLE = Symbol("unreadable");
+/** 占着暂存前缀的非记录条目（B13）：文件按 FOREIGN 计、目录与链接按 UNREADABLE 计，另计一次残留。 */
+const STAGE_RESIDUE_FILE = Symbol("stage-residue-file");
+const STAGE_RESIDUE_NODE = Symbol("stage-residue-node");
 // Finder、编辑器等留下的点文件不是证据通道的问题；Wakeflow 自己的暂存前缀除外。
 const IGNORED_FOREIGN_NAME_PATTERN = /^\.(?!wakeflow-)/u;
+/** 名字不是记录的条目：观察器自己的暂存不计，暂存前缀的残留、外来名字与叶子位置上的目录或链接各归各类。 */
+function classifyNonRecordEntry(entry) {
+    if (hostHookStageAddress(entry) !== null)
+        return null;
+    if (hasDurableAtomicFileStagePrefix(entry.name)) {
+        return entry.node.kind === "file" ? STAGE_RESIDUE_FILE : STAGE_RESIDUE_NODE;
+    }
+    if (entry.node.kind !== "file")
+        return UNREADABLE;
+    return IGNORED_FOREIGN_NAME_PATTERN.test(entry.name) ? null : FOREIGN;
+}
 async function scanEntry(root, hostId, entry, filter, signal, recordId, readRoot = root) {
     const match = FILE_NAME_PATTERN.exec(entry.name);
-    if (match === null) {
-        if (hostHookStageAddress(entry) !== null)
-            return null;
-        if (entry.node.kind !== "file")
-            return UNREADABLE;
-        return IGNORED_FOREIGN_NAME_PATTERN.test(entry.name) ? null : FOREIGN;
-    }
+    if (match === null)
+        return classifyNonRecordEntry(entry);
     if (recordId !== undefined && match[3] !== recordId)
         return null;
     const prefilter = namePrefilter(entry.name, filter);
@@ -744,11 +770,24 @@ async function scanEntryBatch(root, hostId, entries, filter, signal, recordId) {
     return results;
 }
 /** Full, bounded-memory scan. Callers discard their local aggregates if it rejects. */
+/** 计数口径：文件形状的非记录只计 skipped，目录与链接再计 unreadable；暂存前缀的另记一笔残留（B13）。 */
+function tallyScanOutcome(counts, outcome, visit) {
+    if (outcome === null)
+        return;
+    if (typeof outcome !== "symbol") {
+        counts.records += 1;
+        visit(outcome);
+        return;
+    }
+    counts.skipped += 1;
+    if (outcome === UNREADABLE || outcome === STAGE_RESIDUE_NODE)
+        counts.unreadable += 1;
+    if (outcome === STAGE_RESIDUE_FILE || outcome === STAGE_RESIDUE_NODE)
+        counts.stageResidue += 1;
+}
 async function scanObservations(root, hostIdValue, filter, visit, options = {}, onListed = null, recordId) {
     const hostId = parseWakeflowHostId(hostIdValue);
-    let records = 0;
-    let skipped = 0;
-    let unreadable = 0;
+    const counts = { records: 0, skipped: 0, unreadable: 0, stageResidue: 0 };
     let observed = false;
     const signal = options.signal === undefined ? {} : { signal: options.signal };
     const pending = [];
@@ -757,17 +796,7 @@ async function scanObservations(root, hostIdValue, filter, visit, options = {}, 
         for (const result of settled) {
             if (result.status === "rejected")
                 throw result.reason;
-            const record = result.value;
-            if (record === FOREIGN)
-                skipped += 1;
-            else if (record === UNREADABLE) {
-                skipped += 1;
-                unreadable += 1;
-            }
-            else if (record !== null) {
-                records += 1;
-                visit(record);
-            }
+            tallyScanOutcome(counts, result.value, visit);
         }
     };
     try {
@@ -799,7 +828,7 @@ async function scanObservations(root, hostIdValue, filter, visit, options = {}, 
         }
         throw error;
     }
-    return Object.freeze({ records, skipped, unreadable });
+    return Object.freeze({ ...counts });
 }
 /** Complete streaming scan; a callback only builds disposable local aggregates. */
 export async function scanHostHookObservations(root, hostId, filter, visit, options = {}) {
@@ -830,8 +859,73 @@ async function readObservations(root, hostIdValue, filter, options, onListed) {
         records: Object.freeze(records),
         skipped: scan.skipped,
         unreadable: scan.unreadable,
+        stageResidue: scan.stageResidue,
         complete: scan.records <= limit,
     });
+}
+function stageResidueOf(entry) {
+    if (!hasDurableAtomicFileStagePrefix(entry.name) || hostHookStageAddress(entry) !== null) {
+        return null;
+    }
+    if (entry.node.kind !== "file")
+        return false;
+    try {
+        const address = parseDurableAtomicFileStageFileName(entry.name);
+        return readDurableAtomicFileStageOwnerState(address, entry.node) === "inactive";
+    }
+    catch (error) {
+        if (error instanceof DurableAtomicFileStageAddressError)
+            return true;
+        throw error;
+    }
+}
+/** 列出一个宿主 hook 目录里暂存前缀的残留（按路径排序，至多 `maximum` 条）；只读。 */
+export async function listHostHookStageResidue(root, hostIdValue, options = {}) {
+    const hostId = parseWakeflowHostId(hostIdValue);
+    const maximum = options.maximum ?? 256;
+    const entries = [];
+    try {
+        await visitHostHookDirectory(root, hostId, async (entry) => {
+            const retirable = stageResidueOf(entry);
+            if (retirable === null || entries.length >= maximum)
+                return;
+            entries.push(Object.freeze({ resourcePath: entry.resourcePath, node: entry.node, retirable }));
+        }, options.signal === undefined ? {} : { signal: options.signal });
+    }
+    catch (error) {
+        rethrowAbort(error);
+        if (error instanceof RootedDirectoryError) {
+            fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
+        }
+        if (error instanceof StableDirectoryReadError) {
+            fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
+        }
+        throw error;
+    }
+    return Object.freeze(entries.sort((left, right) => left.resourcePath.localeCompare(right.resourcePath)));
+}
+/**
+ * 退役列出的残留里可退役的那些：按列出时的节点精确删除，节点已经变了或不在了的跳过（下一次列举再看）。
+ * 返回实际删除的条数。
+ */
+export async function retireHostHookStageResidue(root, entries, options = {}) {
+    let retired = 0;
+    for (const entry of entries) {
+        if (!entry.retirable)
+            continue;
+        try {
+            await unlinkRegularFileExactly(root, entry.resourcePath, {
+                expectedNode: entry.node,
+                durability: "none",
+                ...(options.signal === undefined ? {} : { signal: options.signal }),
+            });
+            retired += 1;
+        }
+        catch (error) {
+            rethrowAbort(error);
+        }
+    }
+    return retired;
 }
 /** 有界读取一个宿主的记录；无法读入的条目只计数，不让证据通道整体失败。 */
 export async function readHostHookObservations(root, hostIdValue, filter = {}, options = {}) {

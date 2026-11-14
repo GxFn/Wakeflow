@@ -1,6 +1,5 @@
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
@@ -23,25 +22,6 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
  * 必须只含intent+journal。Intent先退休后，prepared/terminal journal才能最终退休。
  */
 const WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$maintenanceJournal.maximumBytes");
-/** 对一个 exact journal target 执行关闭作用域的 Foundation stage 恢复。 */
-export async function recoverWakeflowMaintenanceJournalStages(root, operationIdValue) {
-    const operationId = admittedOperationId(operationIdValue);
-    try {
-        const receipt = await recoverDurableAtomicFileStagesForTargets(root, Object.freeze([wakeflowMaintenanceJournalRef(operationId)]));
-        if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-            fail("recovery-required", "$journalStage");
-        }
-        return receipt;
-    }
-    catch (error) {
-        if (error instanceof WakeflowMaintenanceJournalStoreError)
-            throw error;
-        if (error instanceof DurableAtomicFileStageRecoveryError) {
-            fail("recovery-required", "$journalStage");
-        }
-        throw error;
-    }
-}
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance journal store input is invalid.",
     gate: "Wakeflow maintenance journal store requires the active matching gate.",

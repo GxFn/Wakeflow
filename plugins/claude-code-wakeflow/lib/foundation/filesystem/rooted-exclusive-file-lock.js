@@ -15,7 +15,7 @@ import { readDeterministicJsonFile } from "./deterministic-json-file.js";
 import { DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE, DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "./durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError } from "./durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
-import { sameFileNodeSnapshot } from "./file-node-snapshot.js";
+import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import { StableFileReadError } from "./stable-file-read.js";
@@ -380,6 +380,10 @@ export async function inspectRootedExclusiveFileLock(root, lockPath) {
  * 调用方必须先持有自己的领域恢复证据；本函数不读取恢复意图记录，不根据
  * `mtime` 猜测锁是否过期，也不接受自行构造的观察结果。调用方声明的相关目标与
  * lockPath 必须位于同一父目录；发现集合外 stage 时保持锁和该 stage 不变。
+ *
+ * 持有者死在锁已链接、它的创建暂存尚未退役的那一刻时，观察到的锁节点是双链接的（open-items B9，
+ * §13.242）：这里先结算并退役那份暂存，锁节点的链接数与 ctime 随之改变，所以这种情形下只比节点身份——
+ * 令牌、内容摘要与属主状态照旧逐项核对——并按结算后的节点删除。
  */
 export async function retireRootedExclusiveFileLockResidue(root, lockPath, observation, options) {
     assertRoot(root);
@@ -393,11 +397,14 @@ export async function retireRootedExclusiveFileLockResidue(root, lockPath, obser
     }
     if (observation.ownerState !== "inactive")
         fail("owner-active", "$lock");
+    let linkedStageSettled = false;
     try {
         const stageRecovery = await recoverDurableAtomicFileStagesForTargets(root, retirementTargets);
         if (stageRecovery.activeStageCount !== 0 || stageRecovery.unknownStageCount !== 0) {
             fail("residue-changed", "$lock");
         }
+        linkedStageSettled =
+            observation.node.linkCount === 2n && stageRecovery.settledTargetCount !== 0;
     }
     catch (error) {
         if (error instanceof RootedExclusiveFileLockError)
@@ -412,12 +419,14 @@ export async function retireRootedExclusiveFileLockResidue(root, lockPath, obser
         current.ownerState !== "inactive" ||
         current.record.token !== observation.record.token ||
         current.digest !== observation.digest ||
-        !sameFileNodeSnapshot(current.node, observation.node)) {
+        !(linkedStageSettled
+            ? sameFileNodeIdentity(current.node, observation.node) && current.node.linkCount === 1n
+            : sameFileNodeSnapshot(current.node, observation.node))) {
         fail("residue-changed", "$lock");
     }
     try {
         await unlinkRegularFileExactly(root, lockPath, {
-            expectedNode: observation.node,
+            expectedNode: current.node,
         });
     }
     catch (error) {

@@ -75,7 +75,6 @@
     {
       "includes": [
         "src/configuration/wakeflow-config-authority-replacement-contract.ts",
-        "src/configuration/wakeflow-config-authority-replacement-recovery.ts",
         "src/configuration/wakeflow-config.ts",
         "src/foundation/artifact/loaded-artifact-tree-identity.ts",
         "src/foundation/artifact/loaded-artifact-tree-transfer-plan.ts",
@@ -135,7 +134,6 @@
         "src/governance/evidence/managed-evidence-publication-payload-materializer.ts",
         "src/governance/evidence/managed-evidence-publication-record-publisher.ts",
         "src/governance/evidence/managed-evidence-publication-transaction-store.ts",
-        "src/governance/evidence/managed-evidence-reading-service.ts",
         "src/governance/evidence/managed-evidence-record-set-inventory.ts",
         "src/governance/ledger/ledger-authority-reader.ts",
         "src/governance/ledger/ledger-authority-record.ts",
@@ -160,8 +158,6 @@
         "src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts",
         "src/workspace/maintenance/wakeflow-maintenance-gate.ts",
         "src/workspace/maintenance/wakeflow-maintenance-journal-store.ts",
-        "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",
-        "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
         "src/workspace/maintenance/wakeflow-private-mode-census.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-preview-contract.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
@@ -170,11 +166,9 @@
         "src/workspace/managed-integration/wakeflow-external-instruction-inspection.ts",
         "src/workspace/managed-integration/wakeflow-gitignore-body-authority.ts",
         "src/workspace/managed-integration/wakeflow-gitignore-inspection.ts",
-        "src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.ts",
         "src/workspace/managed-integration/wakeflow-gitignore-recomposition.ts",
         "src/workspace/managed-integration/wakeflow-managed-block-file.ts",
         "src/workspace/managed-integration/wakeflow-program-instruction-inspection.ts",
-        "src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.ts",
         "src/workspace/managed-integration/wakeflow-program-instruction-recomposition.ts",
         "src/workspace/support/wakeflow-managed-support-root-materialization.ts",
         "src/workspace/support/wakeflow-support-memory-inspection.ts",
@@ -185,9 +179,7 @@
         "src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.ts",
         "src/workspace/window-runtime/wakeflow-window-runtime-projection-document.ts",
         "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts",
-        "src/workspace/workspace-resource-declaration.ts",
-        "tests/governance/delivery/delivery-records.fixture.ts",
-        "tests/governance/demand/demand-aggregate-state.test.ts"
+        "src/workspace/workspace-resource-declaration.ts"
       ],
       "linter": {
         "rules": {

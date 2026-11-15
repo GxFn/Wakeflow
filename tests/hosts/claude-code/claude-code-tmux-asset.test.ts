@@ -15,6 +15,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-request.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
 import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
@@ -1277,9 +1278,20 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
     paneWindowId: "@5",
     paneDead: false,
     currentCommand: "claude",
-    windowName: null,
     options: { programId: null, hostId: null, windowId: null, bindingId: null, locatorId: null },
   });
+  // 观察的每一行就是登记合同里封闭的 `tmuxPaneObservation`：多一个字段，整份观察（存活证据、退役的关闭
+  // 证据）都会被服务端拒绝。此前这里把 `windowName: null` 钉成了期望（1.3.0 终验，open-items Z11）。
+  const paneContract = (
+    WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA.$defs as unknown as Record<
+      string,
+      { readonly properties: Record<string, unknown>; readonly additionalProperties: boolean }
+    >
+  ).tmuxPaneObservation;
+  equal(paneContract?.additionalProperties, false);
+  for (const pane of observation.panes) {
+    deepEqual(Object.keys(pane).sort(), Object.keys(paneContract?.properties ?? {}).sort());
+  }
   equal(
     (
       runHelper(current, ["panes"], { env: { WAKEFLOW_STUB_FAIL: "list-panes" } }).json
@@ -1549,13 +1561,19 @@ test("panes keeps only Wakeflow-related rows, mark writes the locator identity, 
   const closed = runHelper(current, ["close", "--window", PRODUCT_WINDOW_ID]);
   equal(closed.status, 0, JSON.stringify(closed.json));
   const closure = closed.json.closure as {
-    preClose: { kind: string };
+    preClose: { kind: string; panes: readonly Record<string, unknown>[] };
     closeResult: { status: string };
-    postClose: { kind: string };
+    postClose: { kind: string; panes: readonly Record<string, unknown>[] };
   };
   equal(closure.preClose.kind, "tmux-panes");
   deepEqual(closure.closeResult, { status: "closed" });
   equal(closure.postClose.kind, "tmux-panes");
+  // 退役请求原样带着这两份观察：每一行都只有登记合同的八个字段（open-items Z11）。
+  equal(closure.preClose.panes.length > 0, true);
+  for (const pane of [...closure.preClose.panes, ...closure.postClose.panes]) {
+    equal("windowName" in pane, false);
+    equal(Object.keys(pane).length, 8);
+  }
   deepEqual(
     tmuxLog(current).map((entry) => entry[0]),
     ["list-panes", "list-panes", "kill-window", "list-panes"],

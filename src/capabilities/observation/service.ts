@@ -1,12 +1,12 @@
 import path from "node:path";
 
 import {
+  failWakeflowConfigAuthority,
   readWakeflowConfigAuthoritySnapshot,
   readWakeflowDetachedConfigSnapshot,
   WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_DETACHED_CONFIG_FILE_REF,
   type WakeflowConfigAuthoritySnapshot,
-  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -22,6 +22,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
@@ -63,8 +64,8 @@ import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import type { WorktreeCheckoutObservation } from "../../kernel/pod-worktree-receipts.js";
 import {
-  type RequirementClaimState,
   readRequirementClaimState,
+  supplementAttachTarget,
 } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import {
@@ -114,6 +115,7 @@ import {
   deriveWorkspaceGates,
   detachedWorkspaceGates,
   disposalGuidance,
+  hostAssetsNeedRepair,
   type NextActionInput,
   nextFromActions,
   projectionFreshness,
@@ -124,7 +126,6 @@ import {
   type WindowRuntimeView,
   type WorkspaceGateFacts,
 } from "./decide.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Observation：两个读工具的执行器（gate-log §13.94 D1、D3、D4）。
@@ -452,20 +453,6 @@ function privateValues(context: SliceContext): Iterable<string> {
 }
 
 // ---- status ----------------------------------------------------------------------
-
-/**
- * 一个 pending 的 supplement 包该并入哪个 Demand（Q7 裁决）：它声明的父需求已由某个 Demand 归档时是那个
- * Demand；父需求还在进行、未认领或看板上没有时为 null（等它完成）。不是 supplement 包（没有父需求）返回
- * undefined。
- */
-function supplementAttachTarget(
-  states: readonly Readonly<RequirementClaimState>[],
-  state: Readonly<RequirementClaimState>,
-): string | null | undefined {
-  if (state.supplements === undefined) return undefined;
-  const parent = states.find((entry) => entry.requirementId === state.supplements);
-  return parent?.status === "archived" && parent.archive !== null ? parent.archive.demandId : null;
-}
 
 function boardView(observation: Readonly<WorkspaceObservation>) {
   const board = observation.board.value;
@@ -1131,6 +1118,7 @@ function nextActionInput(
       (runtime.view.artifactManifestDigest === null || runtime.view.artifactOnDisk === "unknown"),
     // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
     maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
+    hostAssetsNeedRepair: hostAssetsNeedRepair(observation.assets),
     unregisteredWindows:
       bindingsObserved && podsObserved
         ? snapshot.model.topology.windows

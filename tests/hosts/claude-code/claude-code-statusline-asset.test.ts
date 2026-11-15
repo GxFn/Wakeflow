@@ -70,6 +70,7 @@ const FEATURE_WINDOW_IDS: Readonly<Record<string, string>> = Object.freeze({
 });
 const MAIN_SESSION_ID = "claude-session-main-0123456789abcdef";
 const FEATURE_SESSION_ID = "claude-session-feature-fedcba9876543210";
+const FEATURE_CONTROLLER_SESSION_ID = "claude-session-feature-controller-00001111";
 const UNKNOWN_SESSION_ID = "claude-session-unknown-0000000000000000";
 const MODEL_NAME = "Opus 4.1";
 /** 绑定目录从内核布局派生：资产脚本里的字面量必须与之一致，布局移动时本测试报错。 */
@@ -118,10 +119,13 @@ function base64url(value: string): string {
 function configWithFeaturePod(): Record<string, unknown> {
   const value = createMinimalWakeflowConfig();
   const topology = value.topology as { windows: Record<string, unknown>[] };
+  // pod 窗口的显示名是 pod 切片派生的真实形状 `<pod 名> · <标题>`；产品窗口故意留一个不带前缀的旧形状。
   const featureWindows = topology.windows.map((window) => ({
     ...window,
     windowId: FEATURE_WINDOW_IDS[window.role as string],
     podId: FEATURE_POD_ID,
+    displayName:
+      window.role === "product" ? window.displayName : `feature-x · ${String(window.displayName)}`,
   }));
   topology.windows = [...topology.windows, ...featureWindows];
   (value.pods as unknown[]).push({
@@ -240,6 +244,13 @@ test("状态栏资产以 node 执行：main pod 窗口为「模型 · 窗口」�
     "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2",
   );
 
+  writeBinding(
+    workspace,
+    FEATURE_WINDOW_IDS.controller ?? "",
+    FEATURE_CONTROLLER_SESSION_ID,
+    "c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3",
+  );
+
   // 命令行的形状本身是合同：资产路径在工作区运行时目录里，根以 base64url 显式传入。
   const decoded = decodeCommand(claudeCodeStatuslineCommand(workspace));
   equal(decoded.asset, path.join(workspace, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/")));
@@ -258,6 +269,12 @@ test("状态栏资产以 node 执行：main pod 窗口为「模型 · 窗口」�
     runAsset(argv, statuslineInput(FEATURE_SESSION_ID)),
     `${MODEL_NAME} · feature-x · Product A`,
     privateValues,
+  );
+  // 显示名已经带着 pod 名前缀（pod 切片派生的真实形状）：pod 名只出现一次（1.3.0 终验："fv13 · fv13 · Controller"）。
+  expectSingleLine(
+    runAsset(argv, statuslineInput(FEATURE_CONTROLLER_SESSION_ID)),
+    `${MODEL_NAME} · feature-x · Controller`,
+    [...privateValues, FEATURE_CONTROLLER_SESSION_ID],
   );
   expectSingleLine(runAsset(argv, statuslineInput(UNKNOWN_SESSION_ID)), MODEL_NAME, privateValues);
   // 没有 session_id 的输入同样只打印模型，不会误配任何绑定。

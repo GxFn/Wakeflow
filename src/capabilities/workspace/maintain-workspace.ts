@@ -28,10 +28,6 @@ import {
 import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  isLocalFilesystemType,
-  readFilesystemTypeName,
-} from "../../foundation/node/filesystem-type.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   type JsonValue,
@@ -54,6 +50,10 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import {
+  isLocalFilesystemType,
+  readFilesystemTypeName,
+} from "../../foundation/node/filesystem-type.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
@@ -71,12 +71,12 @@ import { DemandFileEventStoreError } from "../../governance/demand/event-sourcin
 import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
+import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import {
   type HostHookStageResidueEntry,
   listHostHookStageResidue,
   retireHostHookStageResidue,
 } from "../../kernel/hook-observations.js";
-import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -87,18 +87,24 @@ import {
 } from "../../kernel/publication-transaction.js";
 import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
 import {
-  configuredWakeflowWorkspaceHostTransport,
-  selectWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostTransportError,
-  type WakeflowWorkspaceHostTransportSource,
-} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
-import {
   compareWakeflowArtifactVersions,
   parseWakeflowArtifactManifestIdentity,
   WAKEFLOW_ARTIFACT_MANIFEST_FILE_NAME,
 } from "../../kernel/wakeflow-artifact-identity.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
+import {
+  configuredWakeflowWorkspaceHostTransport,
+  selectWakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostTransportError,
+  type WakeflowWorkspaceHostTransportSource,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenance/wakeflow-maintenance-execution-plan.js";
+import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import {
+  WakeflowMaintenanceExecutionTransactionError,
+  type WakeflowMaintenanceExecutionTransactionErrorReason,
+  type WakeflowMaintenanceExecutionTransactionReceipt,
+} from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
   inspectWakeflowMaintenanceGateResidue,
   retireWakeflowMaintenanceGateResidue,
@@ -106,12 +112,6 @@ import {
   WakeflowMaintenanceGateResidueError,
   type WakeflowMaintenanceGateResidueRetirement,
 } from "../../workspace/maintenance/wakeflow-maintenance-gate-residue.js";
-import { WakeflowMaintenanceExecutionPreviewError } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
-import {
-  WakeflowMaintenanceExecutionTransactionError,
-  type WakeflowMaintenanceExecutionTransactionErrorReason,
-  type WakeflowMaintenanceExecutionTransactionReceipt,
-} from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import {
   parseWakeflowMaintenanceOperationId,
   type WakeflowMaintenanceOperationId,
@@ -349,6 +349,11 @@ function admitHostFacade(
       typeof facade.preview !== "function" ||
       typeof facade.apply !== "function" ||
       typeof facade.recover !== "function" ||
+      !(
+        facade.privateAssetOperationKinds === undefined ||
+        (Object.isFrozen(facade.privateAssetOperationKinds) &&
+          facade.privateAssetOperationKinds.every((kind) => typeof kind === "string"))
+      ) ||
       !(
         facade.artifactRoot === null ||
         (typeof facade.artifactRoot === "string" && path.isAbsolute(facade.artifactRoot))
@@ -1429,16 +1434,40 @@ function nextAfterLaunchIntents(
   });
 }
 
+/**
+ * 一份就绪的计划由谁应用。两种计划归 Controller 自己执行：模式收回——只恢复 Wakeflow 私有树的权限位、不改
+ * 任何内容（不安全的节点已在计划阶段阻塞；现场 L20，§13.226）；以及只重装宿主私有资产的 reconcile——每一步
+ * 都是宿主声明为私有资产的操作（助手、状态栏脚本），换上的是已装制品里的字节（1.3.0 终验，用户裁决
+ * 2026-11-15：此前每次插件更新都要用户为它确认一次）。其余计划改动的是用户的目录，由用户确认。
+ */
+function applyOwnerOf(
+  plan: SlicePlan | null,
+  privateAssetOperationKinds: readonly string[],
+): "controller" | "user" {
+  if (plan === null) return "user";
+  if (plan.kind === "private-mode-convergence") return "controller";
+  if (plan.kind !== "materialization" || plan.executionRequest.action !== "reconcile")
+    return "user";
+  const steps = plan.executionPlan.steps;
+  return steps.length > 0 &&
+    steps.every(
+      (step) =>
+        step.boundary === "host-capability" &&
+        privateAssetOperationKinds.includes(step.operationKind),
+    )
+    ? "controller"
+    : "user";
+}
+
 function deriveNext(
   phase: PublicationTransactionPhase<SlicePlan, SliceOutcome>,
+  privateAssetOperationKinds: readonly string[],
 ): Readonly<NextProjection> {
   if (phase.mode === "preview") {
     if (phase.planned.status === "ready") {
       return Object.freeze({
         frontier: "workspace-maintenance-apply",
-        // 模式收回只恢复 Wakeflow 私有树的权限位、不改任何内容（不安全的节点已在计划阶段阻塞）：这一步归
-        // Controller 自己执行，随后再预览；其余计划改动的是用户的目录，由用户确认（现场 L20，§13.226）。
-        owner: phase.planned.plan?.kind === "private-mode-convergence" ? "controller" : "user",
+        owner: applyOwnerOf(phase.planned.plan, privateAssetOperationKinds),
         suggestedTool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
         blockers: Object.freeze([]),
       });
@@ -1742,7 +1771,7 @@ export async function executeWakeflowMaintenancePublicRequest(
           mapTransactionError(error);
         }
       },
-      next: async (_context, phase) => deriveNext(phase),
+      next: async (_context, phase) => deriveNext(phase, facade.privateAssetOperationKinds ?? []),
       result: (_envelope, input, phase, next) => assembleResult(facade, input, phase, next),
     },
     value,

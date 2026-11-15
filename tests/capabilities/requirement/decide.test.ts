@@ -5,8 +5,8 @@ import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
   derivePublishAssessment,
-  deriveSupplementBlockers,
   deriveRequirementId,
+  deriveSupplementBlockers,
   type PackageDocumentText,
   privacyBlockers,
 } from "../../../src/capabilities/requirement/decide.js";
@@ -289,23 +289,41 @@ test("看板投影：排序、过滤、计数、认领转移阻塞与 next", () 
     ["claim-state-drift", "claim-status:pending"],
   );
   deepEqual(deriveClaimTransitionBlockers("withdraw", null, digest), ["package-unknown"]);
+  const none = { claimable: 0, attachable: 0 };
   equal(
-    deriveRequirementNext({ confirmationMissing: true, awaitingApply: false, pendingCount: 0 })
+    deriveRequirementNext({ confirmationMissing: true, awaitingApply: false, pending: none })
       .frontier,
     "requirement-confirmation",
   );
   equal(
-    deriveRequirementNext({ confirmationMissing: false, awaitingApply: true, pendingCount: 0 })
+    deriveRequirementNext({ confirmationMissing: false, awaitingApply: true, pending: none })
       .frontier,
     "requirement-publication-apply",
   );
   equal(
-    deriveRequirementNext({ confirmationMissing: false, awaitingApply: false, pendingCount: 2 })
-      .suggestedTool,
+    deriveRequirementNext({
+      confirmationMissing: false,
+      awaitingApply: false,
+      pending: { claimable: 2, attachable: 1 },
+    }).suggestedTool,
     "wakeflow_create_demand",
   );
+  // supplement 包不认领：只剩可续接的包时，下一步是续接它的 Demand（与 status 同一条路；1.3.0 终验）。
+  deepEqual(
+    deriveRequirementNext({
+      confirmationMissing: false,
+      awaitingApply: false,
+      pending: { claimable: 0, attachable: 1 },
+    }),
+    {
+      frontier: "supplement-attach",
+      owner: "controller",
+      suggestedTool: "wakeflow_continue_demand",
+      blockers: [],
+    },
+  );
   equal(
-    deriveRequirementNext({ confirmationMissing: false, awaitingApply: false, pendingCount: 0 })
+    deriveRequirementNext({ confirmationMissing: false, awaitingApply: false, pending: none })
       .frontier,
     null,
   );

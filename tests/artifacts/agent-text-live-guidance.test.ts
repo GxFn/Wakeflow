@@ -238,6 +238,20 @@ test("C8：更新后先告诉用户再就地重启 Controller 自己，verify �
     tell < self && self < others && others < othersRestart,
     "tell the user, restart this window, and only then restart the other windows",
   );
+  // 1.3.0 终验（open-items Z1）：已发布的宿主资产待修时，reconcile 排在同伴窗口的重启之前——窗口是助手开的，
+  // 上一版助手重启出来的窗口没有带上写拒绝规则。两个宿主的渲染都带这一句顺序。
+  for (const rendered of [update, section(codex(WINDOWS), PLUGIN_UPDATE_HEADING)]) {
+    const repairFirst = indexOfRequired(
+      rendered,
+      "preview and apply reconcile before you restart or launch any peer",
+    );
+    ok(
+      rendered.includes("verify fails `host-settings-assets`") &&
+        repairFirst <
+          indexOfRequired(rendered, "Restart the stale windows with the host's procedure"),
+      "host assets are repaired before the peer windows restart",
+    );
+  }
   // 本窗口的重启是完整的一条助手调用；其他窗口沿用同一前缀。
   ok(
     update.includes(

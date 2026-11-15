@@ -156,3 +156,7 @@
 ## 修订（2026-10-26，Codex 审阅修复批 J：R-ROOT-08 [open-items W15](../../references/open-items.md)）
 
 - **8.4 处置建议不改路径（W15）。** closing pod 的 `disposal.suggested`（`wakeflow_pod` 关闭结果与 `wakeflow_status` 的 pod 段）此前在引用之前把检出路径单行化——连续空白压成一个空格、越过 512 时截断加省略号——合法路径 `worktree  alpha`（两个空格）的建议命令于是指向不存在的 `worktree alpha`。现在可执行命令只做 POSIX 单引号引用，回执路径的每个码位原样保留（含连续与首尾空白）；路径含控制字符（Cc 与 U+2028/2029）、为空，或连引号后整条命令越过 `singleLineText` 的 512 时，`suggested` 改为一句不含路径的说明（按 `git worktree list` 的输出自行确认后 remove，登记时加锁的先 unlock），从不返回改变身份的命令。`alternative` 与两份结果 Schema 不变（`src/governance/pod/worktree-disposal.ts`，覆盖 `tests/governance/pod/worktree-disposal.test.ts`）。
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+- **8.4 处置建议的命令写法（open-items Z12）。** `disposal.suggested` 改为 `git -C <检出> worktree remove .`，加锁时前面多一条 `git -C <检出> worktree unlock .`（仍用 `;` 连接）：命令从工作区根执行，而 `git worktree remove <路径>` 问的是当前目录所在的仓库，找不到产品仓库的检出。路径的引用规则（W15：每个码位原样、只做 POSIX 单引号引用、放不下时换成不含路径的说明）不变，长度上界照新的固定部分重算。

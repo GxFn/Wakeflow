@@ -158,3 +158,10 @@
 - **评审前一次更正。** 目标在 Controller 记录任何决定之前可以用 `supersedes`（点名本投递已回报那份结果的 `targetResultId`）再导入一次：目标须停在 `result-reported` / `test-result-reported`，被点名的必须是当前那份且是本投递的第一份（序号 1），否则 `supersede-target-phase:<phase>`、`supersede-result-mismatch`、`supersede-exhausted`。一个投递只能取代一次；决定之后只有返工（实现）或再一次尝试（测试）。
 - **身份。** 第一份结果的身份照旧由围栏声明派生（既有流不变）；取代的那份由同一声明加 `target-result-supersede` 派生，事件与提交 id 同理；wire 带可选 `supersedes`，解析时序号与 `supersedes` 的有无必须一致。流审计允许同一声明至多两份结果且第二份必须点名第一份。
 - **效果。** 新结果照常签发新的 wake-controller 回调（代际 1）；聚合在目标上记 `supersededTargetResultIds`；评审快照与检视结果以 `supersededResults` 列出被取代的身份（只在非空时进入评审单元基底，既有单元摘要不变）；对旧身份的决定以 `result-unknown` / `snapshot-stale` 失败。被取代的报告不是返工，不计刹车。
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 7.2 评审投影的 `callback`（open-items Z6） | 多带 `callbackId`——这次回调的投递标识，重发时交给 `wakeflow_rearm_delivery` 的就是它。此前单元里只有状态、代际、签发时刻与落地记录，Controller 要重发一条静默的回调只能去列许可目录。 |
+| 回调没有到 Controller（open-items Z6，文本） | 结果已经导入，回调只是唤醒：`pending` 时由目标在原因消除后重发同一张许可；`silent`（签发十分钟后仍无落地记录）时 Controller 用 `wakeflow_rearm_delivery` 重签，把返回的许可经助手投给自己的窗口，落地有了记录再照常评审。终验在 tmux 传输上走过这条路（重签一次，落地 `match: digest`）。 |

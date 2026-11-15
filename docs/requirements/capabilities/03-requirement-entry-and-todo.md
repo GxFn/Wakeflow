@@ -161,3 +161,9 @@
 - **索引刷新进看板级锁。** `refreshRequirementBoardIndex` 此前在锁外调用 `listRequirementClaimStates` 列举状态，发布时只对索引文件自身的 node/digest 做 CAS，决定所依赖的列举不在期望里：一次读完 pending 后被挂起的旧刷新，可以在 withdrawn 的新刷新发布之后再发布，两次都成功而索引回到 pending（权威状态文件与 `wakeflow_inspect_board` 不受影响，下一次刷新自愈，P3）。现在"列举 → 渲染 → 发布"在 `board/locks/index.lock` 内连成一步：任何一次刷新看到的列举都不早于另一次正在发布的索引。
 - **两把锁互不嵌套。** 状态写入（`createRequirementClaimStateFile`、`replaceRequirementClaimStateFile`）只持 `board/locks/<requirementId>.lock`，刷新只持 `index.lock`，调用方（requirement 切片、Demand 终态、维护 apply、Demand 发布）仍在状态提交之后、锁外调用一次刷新；签名、渲染、`board-projection:v2` 标记与初始化权威摘要（Fresh 初始化写空索引的那一步不经本锁）都不变。
 - **失败语义沿用。** 等不到索引锁（活动或未知持有者，与状态锁相同的 10 秒上限）仍以可重试的 `board-index-contended` 返回，调用方的静默自愈不变；已证明失活的持有者残留先退休再进入；带信号的中止以 `board-index-lock-aborted` 穿出，发布包按 `-aborted` 识别。锁内与锁外写者相撞的重列重写与几次后仍撞的 `board-index-contended` 保留。
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 发布结果与看板检视的 `next`（open-items Z3） | 看板上 pending 的包分成两种：普通的包去认领（`requirement-claim` / `wakeflow_create_demand`）；父需求已归档的 supplement 包去续接（`supplement-attach` / `wakeflow_continue_demand`）。父需求还没有完成的 supplement 包不算可做的一步。并入去处的判断在内核的看板模块里，`wakeflow_status`、`wakeflow_publish_requirement` 与 `wakeflow_inspect_board` 读同一条规则；此前后两者只看"有没有 pending 包"，对 supplement 包指错了工具。 |

@@ -154,3 +154,10 @@
 | 项 | 修订后 |
 | --- | --- |
 | 9.1 `repositories[].worktrees[].prunable`（R-ROOT-07，W31） | 此前 `collectWorktrees` 把 gitdir 的 missing / unreadable / malformed 都压成 null，`observeCheckout` 再把 null 当 absent：gitdir 读不出（io 失败、不是普通文件、超过 4 KiB）或不是严格文本（CRLF、空文件）的真实检出被报成可清理，而同文件的松散引用读取早已区分 unreadable。现在 gitdir 走区分结局的 `readPointer`：只有文件确认不存在（missing，与 git 自己的 prune 判定一致）才是 absent ⇒ `prunable: true`；读不出与不是严格文本都是 unknown ⇒ `prunable: false`，条目照常保留。Schema 不变（`prunable` 仍是 boolean），false 只说明"没有证据说它可清理"，不证明检出在。覆盖：`tests/governance/observation/repository-pointer-observation.test.ts`（不是普通文件、CRLF、EACCES、文件不存在与恢复对照）。 |
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| status `nextActions` 与 verify `next` 的顺序（open-items Z1） | 制品过期（本进程）> **宿主资产待修（维护）** > 过期窗口（汇总一项，再逐窗口）> 维护 > 未登记窗口 > Demand 前沿 > 待认领的包。`host-settings-assets` 门不通过即"宿主资产待修"，status 与 verify 读同一个判断；此前 status 的下一步不提助手待修，verify 把过期窗口排在维护之前。原因：窗口是助手开的，上一版助手重启出来的窗口没有这一版在启动时加的东西（写拒绝规则）。 |
+| 9.4 状态栏（open-items Z7） | worktree pod 的窗口显示为「模型 · 显示名」：显示名本身已是 `<pod 名> · <标题>`，脚本不再把 pod 名加第二遍；显示名不带前缀的旧形状仍补上 pod 名。 |

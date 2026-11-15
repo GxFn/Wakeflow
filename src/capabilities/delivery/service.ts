@@ -14,6 +14,7 @@ import type {
   RootedDirectory,
   RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
@@ -82,6 +83,10 @@ import type {
   DemandTargetTaskState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import {
+  LedgerAuthorityStore,
+  LedgerAuthorityStoreError,
+} from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   type ObservationHostAssets,
@@ -128,7 +133,6 @@ import {
   readHostHookObservationRecord,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
-import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -140,6 +144,7 @@ import {
   DEFAULT_ALLOWED_ID_PREFIXES,
   scanPrivacy,
 } from "../../kernel/privacy-scan.js";
+import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import {
   createWorkClaim,
   deriveWorkClaimId,
@@ -149,6 +154,11 @@ import {
   takeWorkClaim,
   type WorkClaim,
 } from "../../kernel/work-claims.js";
+import {
+  configuredWakeflowWorkspaceHostTransport,
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -156,11 +166,6 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import {
-  configuredWakeflowWorkspaceHostTransport,
-  selectWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostTransportTable,
-} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import {
   compileWakeflowWindowLaunchIntents,
   type WakeflowWindowLaunchIntent,
@@ -195,11 +200,13 @@ import {
   sendReturnProvesLanding,
 } from "./decide.js";
 import {
+  type DeliveryPromptResolvedAuthorityMember,
+  type DeliveryPromptSupplementRecord,
   type DeliveryTestContractSection,
+  deliveryPromptRequirementMembers,
   deliveryPromptRequirementPackage,
   renderDeliveryPortablePrompt,
 } from "./prompt.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Delivery：三个追加型执行器（能力卡 6，ADR-0009，ADR-0012 D1 D2）。
@@ -1137,6 +1144,8 @@ function testContractSection(
 interface PromptSources {
   readonly taskPackage: Readonly<TaskPackage>;
   readonly route: Readonly<WindowRoute>;
+  /** 阅读顺序里的需求文档：任务包选了 supplement 成员时是它选定的那些，否则是源需求的全部成员。 */
+  readonly requirementMembers: readonly Readonly<DeliveryPromptResolvedAuthorityMember>[];
   readonly attachedWorktrees: readonly Readonly<{
     readonly repositoryId: string;
     readonly pathFromWindow: string;
@@ -1194,7 +1203,7 @@ function renderPrompt(
         taskPackage.workType === "implementation" ? taskPackage.sectionAnchors : [],
       requirementPackage: deliveryPromptRequirementPackage(
         context.authority.config.model.storage.ledgerRoot,
-        context.authority.loaded.admittedAuthority.resolvedAuthority,
+        sources.requirementMembers,
       ),
       workspaceInstructionFile: instructionFile,
       repositoryInstructionFile: repositoryId === null ? null : instructionFile,
@@ -1403,6 +1412,50 @@ interface PrepareSources {
   readonly remediationSource: Awaited<ReturnType<typeof loadRemediationSource>> | null;
 }
 
+/** 一份并入的 supplement 需求包记录：按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝。 */
+async function loadSupplementRecord(
+  context: SliceContext,
+  lineage: Readonly<{ readonly requirementId: string; readonly recordDigest: string }>,
+): Promise<Readonly<DeliveryPromptSupplementRecord>> {
+  let loaded: Awaited<ReturnType<LedgerAuthorityStore["loadRequirement"]>>;
+  try {
+    loaded = await new LedgerAuthorityStore(context.authority.ledgerRoot).loadRequirement(
+      lineage.requirementId,
+      signalOptions(context.options.signal),
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof LedgerAuthorityStoreError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    fail("precondition-failed", `requirement-record-${error.reason}`, "$ledger", { cause: error });
+  }
+  if (loaded.recordDigest !== lineage.recordDigest) {
+    fail("precondition-failed", "requirement-record-drift", "$ledger");
+  }
+  return Object.freeze({ recordDigest: loaded.recordDigest, record: loaded.record });
+}
+
+/**
+ * 任务包选定的成员所属的 supplement 需求包记录（Q7 裁决）。只在任务包确实选了源需求之外的记录时才读——
+ * 没有 supplement 的 Demand 不多一次读取。
+ */
+async function selectedSupplementRecords(
+  context: SliceContext,
+  taskPackage: Readonly<TaskPackage>,
+): Promise<readonly Readonly<DeliveryPromptSupplementRecord>[]> {
+  const sourceDigest = context.authority.loaded.identity.source.recordDigest;
+  const wanted = new Set(
+    taskPackage.selectedAuthorityRefs
+      .map((reference) => reference.recordDigest)
+      .filter((digest) => digest !== sourceDigest),
+  );
+  const records: Readonly<DeliveryPromptSupplementRecord>[] = [];
+  for (const lineage of context.authority.loaded.aggregate.state.supplements ?? []) {
+    if (wanted.has(lineage.recordDigest))
+      records.push(await loadSupplementRecord(context, lineage));
+  }
+  return Object.freeze(records);
+}
+
 async function prepareSources(
   context: SliceContext,
   repository: DemandEventSourcingRepository,
@@ -1413,6 +1466,11 @@ async function prepareSources(
 ): Promise<PrepareSources> {
   const signal = context.options.signal;
   const attachedWorktrees = await attachedWorktreesFor(context, taskPackage, route);
+  const requirementMembers = deliveryPromptRequirementMembers(
+    context.authority.loaded.admittedAuthority.resolvedAuthority,
+    taskPackage.selectedAuthorityRefs,
+    await selectedSupplementRecords(context, taskPackage),
+  );
   if (taskPackage.workType === "test") {
     const testAttemptId = deriveDurableId(
       "test-attempt",
@@ -1425,6 +1483,7 @@ async function prepareSources(
       prompt: {
         taskPackage,
         route,
+        requirementMembers,
         attachedWorktrees,
         rework: null,
         remediation: null,
@@ -1441,6 +1500,7 @@ async function prepareSources(
       prompt: {
         taskPackage,
         route,
+        requirementMembers,
         attachedWorktrees,
         rework:
           basis.reworkSource === null

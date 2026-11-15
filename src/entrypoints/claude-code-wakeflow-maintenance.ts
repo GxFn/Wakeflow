@@ -2,6 +2,7 @@ import {
   executeWakeflowMaintenancePublicRequest,
   type WakeflowMaintenancePublicRequestOptions,
 } from "../capabilities/workspace/maintain-workspace.js";
+import { CLAUDE_CODE_PRIVATE_ASSET_OPERATION_KINDS } from "../hosts/claude-code/claude-code-maintenance-capability.js";
 import {
   executeClaudeCodeMaintenanceExecution,
   previewClaudeCodeMaintenanceExecution,
@@ -36,6 +37,7 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
   currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
   transports: claudeCodeWorkspaceHostTransportTable,
   hostProfiles: CLAUDE_CODE_MAINTENANCE_HOST_PROFILES,
+  privateAssetOperationKinds: CLAUDE_CODE_PRIVATE_ASSET_OPERATION_KINDS,
   preview: previewClaudeCodeMaintenanceExecution,
   apply: executeClaudeCodeMaintenanceExecution,
   recover: recoverClaudeCodeMaintenanceExecution,

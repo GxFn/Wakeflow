@@ -25,11 +25,13 @@ import {
   createRequirementClaimState,
   createRequirementClaimStateFile,
   listRequirementClaimStates,
+  pendingRequirementWork,
   publishRequirementBoardIndex,
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   renderRequirementBoardIndex,
   replaceRequirementClaimStateFile,
+  supplementAttachTarget,
   withdrawRequirementClaim,
 } from "../../src/kernel/requirement-board.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
@@ -212,6 +214,40 @@ test("转移是纯函数：修订链、状态载荷与拒绝的来源状态", ()
     (error: unknown) =>
       error instanceof WakeflowError && error.reason === "claim-activate-from-pending",
   );
+});
+
+test("supplement 包并入哪个 Demand：父需求已归档才有去处；看板上能动手的 pending 包分成可认领与可续接两种（Q7；1.3.0 终验）", () => {
+  const parent = pending();
+  const supplement = createRequirementClaimState({
+    requirementId: OTHER,
+    programId: parent.programId,
+    recordDigest: `sha256:${"b".repeat(64)}` as never,
+    title: "示例补充",
+    demandType: "supplement",
+    priority: "P1",
+    testingMode: "controller-only",
+    publishedAt: AT,
+    supersedes: null,
+    supplements: REQUIREMENT,
+    parkedTrigger: null,
+  });
+  // 不是 supplement 包：没有并入的去处，去认领。
+  equal(supplementAttachTarget([parent], parent), undefined);
+  // 父需求还没有被认领、正在进行、或看板上没有：等它完成。
+  equal(supplementAttachTarget([parent, supplement], supplement), null);
+  const claimed = claimRequirementPackage(parent, DEMAND, LATER);
+  equal(supplementAttachTarget([claimed, supplement], supplement), null);
+  equal(supplementAttachTarget([supplement], supplement), null);
+  // 父需求已由某个 Demand 归档：并入那个 Demand。
+  const archived = archiveRequirementClaim(claimed, LATER);
+  equal(supplementAttachTarget([archived, supplement], supplement), DEMAND);
+
+  deepEqual(pendingRequirementWork([]), { claimable: 0, attachable: 0 });
+  deepEqual(pendingRequirementWork([parent, supplement]), { claimable: 1, attachable: 0 });
+  deepEqual(pendingRequirementWork([claimed, supplement]), { claimable: 0, attachable: 0 });
+  deepEqual(pendingRequirementWork([archived, supplement]), { claimable: 0, attachable: 1 });
+  const third = pending("requirement_66666666-6666-4666-8666-666666666666");
+  deepEqual(pendingRequirementWork([archived, supplement, third]), { claimable: 1, attachable: 1 });
 });
 
 test("索引的 Parked 列是触发词前 40 个码点加省略号：第 40 个码点是 emoji 时整个保留，索引 well-formed（§13.209，R-ROOT-05）", () => {

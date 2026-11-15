@@ -6,8 +6,8 @@ import {
   constants,
   fstatSync,
   lstatSync,
-  openSync,
   opendirSync,
+  openSync,
   readSync,
 } from "node:fs";
 import path from "node:path";
@@ -176,7 +176,12 @@ function labelFor(config, windowId) {
   const windowLabel = cleanLabel(window.displayName, "window");
   const pod = config.pods.find((entry) => entry?.podId === window.podId);
   if (pod === undefined || pod.placement === "primary") return windowLabel;
-  return cleanLabel(pod.name, "pod") + SEPARATOR + windowLabel;
+  // pod 窗口的显示名本身就是 `<pod 名> · <标题>`（生产者是 pod 切片的 derivePodWindows）：已带前缀时不再加
+  // 一遍（1.3.0 终验：worktree pod 的状态栏显示成 "fv13 · fv13 · Controller"）。
+  const podLabel = cleanLabel(pod.name, "pod");
+  return windowLabel.startsWith(podLabel + SEPARATOR)
+    ? windowLabel
+    : podLabel + SEPARATOR + windowLabel;
 }
 
 function readStdin() {

@@ -3,6 +3,7 @@ import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   compareRequirementClaimStates,
   computeRequirementClaimStateDigest,
+  type PendingRequirementWork,
   type RequirementClaimState,
   type RequirementClaimStatus,
 } from "../../kernel/requirement-board.js";
@@ -107,10 +108,15 @@ export interface RequirementNextInput {
   readonly confirmationMissing: boolean;
   /** preview 就绪、尚未 apply。 */
   readonly awaitingApply: boolean;
-  readonly pendingCount: number;
+  /** 看板上 Controller 现在能动手的 pending 包（预览阶段全为 0）。 */
+  readonly pending: Readonly<PendingRequirementWork>;
 }
 
-/** 本切片对 `next` 的贡献：确认、应用、认领三个前沿。 */
+/**
+ * 本切片对 `next` 的贡献：确认、应用、认领，以及 supplement 包的续接。supplement 包不认领
+ * （`supplement-of:<id>`），它并入完成了父需求的 Demand——与 `wakeflow_status` 给的是同一条路（1.3.0 终验：
+ * 发布 supplement 包之后这里曾指向 `wakeflow_create_demand`）。
+ */
 export function deriveRequirementNext(
   input: Readonly<RequirementNextInput>,
 ): Readonly<NextProjection> {
@@ -130,11 +136,19 @@ export function deriveRequirementNext(
       blockers: Object.freeze([]),
     });
   }
-  if (input.pendingCount > 0) {
+  if (input.pending.claimable > 0) {
     return Object.freeze({
       frontier: "requirement-claim",
       owner: "controller",
       suggestedTool: "wakeflow_create_demand",
+      blockers: Object.freeze([]),
+    });
+  }
+  if (input.pending.attachable > 0) {
+    return Object.freeze({
+      frontier: "supplement-attach",
+      owner: "controller",
+      suggestedTool: "wakeflow_continue_demand",
       blockers: Object.freeze([]),
     });
   }

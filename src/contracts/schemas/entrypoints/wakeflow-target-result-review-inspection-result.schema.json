@@ -2376,9 +2376,12 @@
     "callbackStatus": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "generation", "issuedAt", "landedRecordId"],
-      "description": "回调落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 为超过静默阈值仍无记录；acknowledged 为已记录评审决定。",
+      "required": ["callbackId", "status", "generation", "issuedAt", "landedRecordId"],
+      "description": "回调落地状态：由 Controller 会话的 user-prompt-submit 记录派生；silent 为超过静默阈值仍无记录；acknowledged 为已记录评审决定。callbackId 是这次回调的投递标识，重发（wakeflow_rearm_delivery）时用它。",
       "properties": {
+        "callbackId": {
+          "$ref": "#/$defs/targetDeliveryId"
+        },
         "status": {
           "enum": ["pending", "landed", "silent", "acknowledged"]
         },

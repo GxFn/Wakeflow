@@ -93,6 +93,8 @@ test("落地后的回调不再重发；过期基线被拒；blocked 之后只有
     equal(landed.reviewUnit.status, "reported");
     equal(landed.reviewUnit.callback.status, "landed");
     equal(typeof landed.reviewUnit.callback.landedRecordId, "string");
+    // 评审单元带着回调自己的投递标识：重发静默的回调时把它交给 wakeflow_rearm_delivery（1.3.0 终验）。
+    equal(landed.reviewUnit.callback.callbackId, callbackId);
     equal(landed.reviewUnit.targetCompletion.status, "confirmed");
     deepEqual(plain(landed.reviewUnit.allowedDecisions), [
       "accept",

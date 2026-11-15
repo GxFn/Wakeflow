@@ -1,7 +1,7 @@
 import {
+  failWakeflowConfigAuthority,
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
-  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -26,6 +26,7 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
@@ -59,6 +60,8 @@ import {
   createRequirementClaimState,
   createRequirementClaimStateFile,
   listRequirementClaimStates,
+  type PendingRequirementWork,
+  pendingRequirementWork,
   type RequirementClaimState,
   type RequirementClaimStateSource,
   readRequirementClaimState,
@@ -83,13 +86,13 @@ import {
   analyzePackageDocuments,
   deriveClaimTransitionBlockers,
   derivePublishAssessment,
-  type SupplementParentFacts,
   deriveRequirementId,
   type PackageAnalysis,
   type PackageDocumentText,
   privacyBlockers,
   type RecordSection,
   type SummarySection,
+  type SupplementParentFacts,
 } from "./decide.js";
 import {
   boardCounts,
@@ -97,7 +100,6 @@ import {
   selectBoardEntries,
   toBoardEntry,
 } from "./projection.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Requirement：`wakeflow_publish_requirement` 与
@@ -159,7 +161,7 @@ interface Outcome {
   readonly disposition: "published" | "current" | "activated" | "withdrawn" | "recovered";
   readonly package: PackageReceipt;
   readonly superseded: PackageReceipt | null;
-  readonly pendingCount: number;
+  readonly pending: Readonly<PendingRequirementWork>;
 }
 
 interface PreviewFacts {
@@ -767,9 +769,9 @@ async function withdrawSuperseded(
   return receiptOf(loaded, current);
 }
 
-async function pendingCount(context: RequirementContext): Promise<number> {
+async function pendingWork(context: RequirementContext): Promise<Readonly<PendingRequirementWork>> {
   const listing = await listRequirementClaimStates(context.root, context.signal);
-  return listing.states.filter((state) => state.status === "pending").length;
+  return pendingRequirementWork(listing.states);
 }
 
 /** 索引是自愈的投影：权威状态已提交，与并发写者的争用不能让本次调用报失败。 */
@@ -795,7 +797,7 @@ async function applyPublish(context: RequirementContext, plan: PublishPlan): Pro
     disposition: wrote ? "published" : "current",
     package: receiptOf(loaded, source),
     superseded,
-    pendingCount: await pendingCount(context),
+    pending: await pendingWork(context),
   });
 }
 
@@ -825,7 +827,7 @@ async function applyClaimTransition(
     disposition: plan.action === "activate" ? "activated" : "withdrawn",
     package: receiptOf(loaded, reread),
     superseded: null,
-    pendingCount: await pendingCount(context),
+    pending: await pendingWork(context),
   });
 }
 
@@ -854,9 +856,14 @@ async function recoverPublish(
     disposition: "recovered",
     package: receiptOf(loaded, source),
     superseded,
-    pendingCount: await pendingCount(context),
+    pending: await pendingWork(context),
   });
 }
+
+const NO_PENDING_WORK: Readonly<PendingRequirementWork> = Object.freeze({
+  claimable: 0,
+  attachable: 0,
+});
 
 function nextOf(
   phase: PublicationTransactionPhase<RequirementPlan, Outcome>,
@@ -866,13 +873,13 @@ function nextOf(
     return deriveRequirementNext({
       confirmationMissing: phase.planned.status === "blocked" && facts.confirmationMissing,
       awaitingApply: phase.planned.status === "ready",
-      pendingCount: 0,
+      pending: NO_PENDING_WORK,
     });
   }
   return deriveRequirementNext({
     confirmationMissing: false,
     awaitingApply: false,
-    pendingCount: phase.outcome.pendingCount,
+    pending: phase.outcome.pending,
   });
 }
 
@@ -1029,7 +1036,7 @@ async function inspectBoard(
   const next = deriveRequirementNext({
     confirmationMissing: false,
     awaitingApply: false,
-    pendingCount: counts.pending,
+    pending: pendingRequirementWork(listing.states),
   });
   const base = {
     schemaVersion: WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION,

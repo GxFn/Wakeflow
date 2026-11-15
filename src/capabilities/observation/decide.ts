@@ -188,6 +188,12 @@ export interface NextActionInput {
    * `next` 的前沿，只是让 Controller 在 status 里就看得见，而不是等下一次投递的结局才知道。
    */
   readonly permissionModeMismatchWindows?: readonly string[];
+  /**
+   * 已发布的宿主资产（助手、状态栏脚本、设置条目）不是制品期望的那一份：`host-settings-assets` 门不通过。
+   * reconcile 能修，而且要排在窗口重启之前——窗口是助手开的，上一版助手开出来的窗口没有这一版助手在启动时
+   * 加的东西（1.3.0 终验：先重启、后 reconcile，七个窗口都没有带上写拒绝规则）。
+   */
+  readonly hostAssetsNeedRepair?: boolean;
 }
 
 const NEXT_ACTIONS_MAXIMUM = 64;
@@ -263,8 +269,9 @@ function staleWindowActions(staleWindows: NextActionInput["staleWindows"]): read
 }
 
 /**
- * 顺序：制品过期（用户）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 > 活动 pod 的未登记窗口 > 活动 Demand 前沿
- * （primary 先，再按 demandId）> 待认领需求包 > 权限模式不一致的窗口（排在最后，不抢前沿）；去重，上限 64。
+ * 顺序：制品过期（用户）> 宿主资产待修（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
+ * 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按 demandId）> 待认领需求包 > 权限模式不一致的窗口
+ * （排在最后，不抢前沿）；去重，上限 64。
  */
 export function deriveNextActions(
   input: Readonly<NextActionInput>,
@@ -286,15 +293,15 @@ export function deriveNextActions(
       subject: input.artifactServerSupersededBy,
     });
   }
+  const maintenance: NextAction = {
+    owner: "controller",
+    tool: MAINTENANCE_TOOL,
+    reason: WORKSPACE_MAINTENANCE_FRONTIER,
+    subject: null,
+  };
+  if (input.hostAssetsNeedRepair === true) actions.push(maintenance);
   actions.push(...staleWindowActions(input.staleWindows));
-  if (input.maintenance) {
-    actions.push({
-      owner: "controller",
-      tool: MAINTENANCE_TOOL,
-      reason: WORKSPACE_MAINTENANCE_FRONTIER,
-      subject: null,
-    });
-  }
+  if (input.maintenance) actions.push(maintenance);
   for (const window of [...input.unregisteredWindows]
     .filter((entry) => entry.podActive)
     .sort((left, right) => left.windowId.localeCompare(right.windowId))) {
@@ -990,11 +997,16 @@ function artifactOlderThanStreamGate(facts: WorkspaceGateFacts): Readonly<Verify
   return gate(name, "runtime", "pass", serverVersion === null ? "not-applicable" : null);
 }
 
+type HostAssetFacts = WorkspaceGateFacts["assets"];
+
+function applicableAssets(assets: HostAssetFacts): HostAssetFacts {
+  return assets.filter((asset) => asset.status !== "not-applicable");
+}
+
 /** 资产字节与本地设置条目各一票：资产读不出、设置文件不是 JSON 对象算 unavailable。 */
-function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
-  const applicable = facts.assets.filter((asset) => asset.status !== "not-applicable");
-  const status = aggregate(
-    applicable.flatMap((asset) => [
+function hostAssetsStatus(assets: HostAssetFacts): VerifyGateStatus {
+  return aggregate(
+    applicableAssets(assets).flatMap((asset) => [
       verdict(asset.status === "current", asset.status === "unavailable"),
       // 用户自己的状态行算通过：Wakeflow 不管它，但在 code 里点名（复审 T31）。没有状态栏的传输
       // （ADR-0025 D6）不期望任何条目，settings 为 not-applicable，同样通过且不点名。
@@ -1006,6 +1018,16 @@ function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
       ),
     ]),
   );
+}
+
+/** status 的下一步与 verify 的 `host-settings-assets` 门读同一个判断：门不通过即待修。 */
+export function hostAssetsNeedRepair(assets: HostAssetFacts): boolean {
+  return hostAssetsStatus(assets) !== "pass";
+}
+
+function assetsGate(facts: WorkspaceGateFacts): Readonly<VerifyGate> {
+  const applicable = applicableAssets(facts.assets);
+  const status = hostAssetsStatus(facts.assets);
   const code =
     applicable.length === 0
       ? "not-applicable"
@@ -1177,7 +1199,9 @@ export function verifyNext(
       blockers,
     });
   }
-  if (artifactCodes.some((code) => code.startsWith("windows-stale"))) {
+  // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。
+  const assetsFailing = failing.some((entry) => entry.name === "host-settings-assets");
+  if (!assetsFailing && artifactCodes.some((code) => code.startsWith("windows-stale"))) {
     return Object.freeze({
       frontier: "window-artifact-stale",
       owner: "controller",

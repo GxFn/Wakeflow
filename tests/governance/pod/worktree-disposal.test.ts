@@ -13,8 +13,12 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 
 const SINGLE_LINE_TEXT_MAXIMUM_LENGTH = 512;
-const REMOVE_COMMAND_PREFIX = "git worktree remove ";
-const UNLOCK_COMMAND_PREFIX = "git worktree unlock ";
+/**
+ * 命令从工作区根执行：`git -C <检出> worktree … .` 让 git 从检出找到它所属的产品仓库。此前的
+ * `git worktree remove <路径>` 在工作区根上找不到这个检出（1.3.0 终验，open-items Z12）。
+ */
+const remove = (word: string) => `git -C ${word} worktree remove .`;
+const unlock = (word: string) => `git -C ${word} worktree unlock .`;
 const UNLOCK_SEPARATOR = "; ";
 const NO_CONTROL_CHARACTERS = /^\P{Cc}+$/u;
 
@@ -30,24 +34,21 @@ const DEEP_RELATIVE_PATH = "workspaces/product-alpha/".repeat(40);
 test("路径里的连续空白与首尾空白原样进入引用后的命令，不被压成一个空格（R-ROOT-08，W15）", () => {
   equal(
     worktreeDisposalGuidance("git-worktree", "worktree  alpha", false).suggested,
-    `${REMOVE_COMMAND_PREFIX}'worktree  alpha'`,
+    remove("'worktree  alpha'"),
   );
-  equal(
-    worktreeDisposalGuidance("git-worktree", " a ", false).suggested,
-    `${REMOVE_COMMAND_PREFIX}' a '`,
-  );
+  equal(worktreeDisposalGuidance("git-worktree", " a ", false).suggested, remove("' a '"));
   equal(
     worktreeDisposalGuidance("claude-worktree-flag", "worktree  alpha", true).suggested,
-    `${UNLOCK_COMMAND_PREFIX}'worktree  alpha'${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}'worktree  alpha'`,
+    `${unlock("'worktree  alpha'")}${UNLOCK_SEPARATOR}${remove("'worktree  alpha'")}`,
   );
 });
 
 test("建议命令在 singleLineText 上界处原样保留，越界时换成不含路径的说明而不是截断", () => {
-  const room = SINGLE_LINE_TEXT_MAXIMUM_LENGTH - REMOVE_COMMAND_PREFIX.length;
+  const room = SINGLE_LINE_TEXT_MAXIMUM_LENGTH - remove("").length;
 
   const atBound = DEEP_RELATIVE_PATH.slice(0, room);
   const at = worktreeDisposalGuidance("git-worktree", atBound, false);
-  equal(at.suggested, `${REMOVE_COMMAND_PREFIX}${atBound}`);
+  equal(at.suggested, remove(atBound));
   equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
 
   const overBound = DEEP_RELATIVE_PATH.slice(0, room + 1);
@@ -58,13 +59,13 @@ test("建议命令在 singleLineText 上界处原样保留，越界时换成不�
 });
 
 test("越界判断把引号与转义计入：恰好 512 的引用命令原样保留，再多一个码位就换成说明", () => {
-  // 20（前缀）+ 2（引号）+ 1（a）+ 4（'\''）+ n（b）= 512 ⇒ n = 485。
-  const atBound = `a'${"b".repeat(485)}`;
+  // 25（命令的固定部分）+ 2（引号）+ 1（a）+ 4（'\''）+ n（b）= 512 ⇒ n = 480。
+  const atBound = `a'${"b".repeat(480)}`;
   const at = worktreeDisposalGuidance("git-worktree", atBound, false);
-  equal(at.suggested, `${REMOVE_COMMAND_PREFIX}'a'\\''${"b".repeat(485)}'`);
+  equal(at.suggested, remove(`'a'\\''${"b".repeat(480)}'`));
   equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
 
-  const overBound = `a'${"b".repeat(486)}`;
+  const overBound = `a'${"b".repeat(481)}`;
   equal(
     worktreeDisposalGuidance("git-worktree", overBound, false).suggested,
     UNREPRESENTABLE_UNLOCKED,
@@ -95,25 +96,26 @@ test("含控制字符、换行或行分隔符的路径不给带路径的命令�
 test("带空格或 shell 元字符的检出路径整体加单引号，单引号写成 '\\''，加锁时 unlock 与 remove 用同一个引用（§13.130 审查）", () => {
   equal(
     worktreeDisposalGuidance("git-worktree", "work trees/a b", false).suggested,
-    "git worktree remove 'work trees/a b'",
+    "git -C 'work trees/a b' worktree remove .",
   );
   equal(
     worktreeDisposalGuidance("git-worktree", "it's/here", false).suggested,
-    "git worktree remove 'it'\\''s/here'",
+    "git -C 'it'\\''s/here' worktree remove .",
   );
   equal(
     worktreeDisposalGuidance("git-worktree", "x;rm -rf $(y)", true).suggested,
-    "git worktree unlock 'x;rm -rf $(y)'; git worktree remove 'x;rm -rf $(y)'",
+    "git -C 'x;rm -rf $(y)' worktree unlock .; git -C 'x;rm -rf $(y)' worktree remove .",
   );
 });
 
 test("长度按 UTF-16 码元计（比 Schema 的码位数保守）：星号面路径放得下时原样保留，放不下时整条换成说明而不是按码位截断", () => {
-  const atBound = "𝔞".repeat(246);
+  // 25 + 2n ≤ 512 ⇒ n ≤ 243（511 个码元）；244 个就是 513。
+  const atBound = "𝔞".repeat(243);
   const at = worktreeDisposalGuidance("git-worktree", atBound, false);
-  equal(at.suggested, `${REMOVE_COMMAND_PREFIX}${atBound}`);
-  equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
+  equal(at.suggested, remove(atBound));
+  equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH - 1);
 
-  const over = worktreeDisposalGuidance("git-worktree", "𝔞".repeat(247), false);
+  const over = worktreeDisposalGuidance("git-worktree", "𝔞".repeat(244), false);
   equal(over.suggested, UNREPRESENTABLE_UNLOCKED);
   equal(over.suggested.includes("𝔞"), false);
 });
@@ -125,18 +127,14 @@ test("空路径与只含控制字符的路径不产生命令；只含空格的�
     worktreeDisposalGuidance("git-worktree", "   \n\t  ", false).suggested,
     UNREPRESENTABLE_UNLOCKED,
   );
-  equal(
-    worktreeDisposalGuidance("git-worktree", "   ", false).suggested,
-    `${REMOVE_COMMAND_PREFIX}'   '`,
-  );
+  equal(worktreeDisposalGuidance("git-worktree", "   ", false).suggested, remove("'   '"));
 });
 
 test("不可表示时的两句说明本身满足 singleLineText、不是命令，加锁的那句多出解锁步骤", () => {
   for (const sentence of [UNREPRESENTABLE_UNLOCKED, UNREPRESENTABLE_LOCKED]) {
     equal(NO_CONTROL_CHARACTERS.test(sentence), true);
     equal(sentence.length <= SINGLE_LINE_TEXT_MAXIMUM_LENGTH, true);
-    equal(sentence.startsWith(REMOVE_COMMAND_PREFIX), false);
-    equal(sentence.startsWith(UNLOCK_COMMAND_PREFIX), false);
+    equal(sentence.startsWith("git "), false);
     equal(sentence.includes("git worktree list"), true);
   }
   notEqual(UNREPRESENTABLE_LOCKED, UNREPRESENTABLE_UNLOCKED);
@@ -147,26 +145,23 @@ test("不可表示时的两句说明本身满足 singleLineText、不是命令�
 test("登记时加锁的检出先解锁再删（§13.130）：同一路径出现两次，用 ; 连接，未加锁仍是单条 remove", () => {
   const checkout = "Alembic/.claude/worktrees/wakeflow-round7";
   const locked = worktreeDisposalGuidance("claude-worktree-flag", checkout, true);
+  equal(locked.suggested, `${unlock(checkout)}${UNLOCK_SEPARATOR}${remove(checkout)}`);
   equal(
     locked.suggested,
-    `${UNLOCK_COMMAND_PREFIX}${checkout}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${checkout}`,
+    "git -C Alembic/.claude/worktrees/wakeflow-round7 worktree unlock .; git -C Alembic/.claude/worktrees/wakeflow-round7 worktree remove .",
   );
   const unlocked = worktreeDisposalGuidance("claude-worktree-flag", checkout, false);
-  equal(unlocked.suggested, `${REMOVE_COMMAND_PREFIX}${checkout}`);
+  equal(unlocked.suggested, remove(checkout));
   equal(locked.alternative, unlocked.alternative);
 });
 
 test("加锁形式的上界：两处路径都放得下时原样保留，放不下时换成带解锁步骤的说明", () => {
-  const fixed =
-    UNLOCK_COMMAND_PREFIX.length + UNLOCK_SEPARATOR.length + REMOVE_COMMAND_PREFIX.length;
+  const fixed = unlock("").length + UNLOCK_SEPARATOR.length + remove("").length;
   const room = Math.floor((SINGLE_LINE_TEXT_MAXIMUM_LENGTH - fixed) / 2);
 
   const atBound = DEEP_RELATIVE_PATH.slice(0, room);
   const at = worktreeDisposalGuidance("claude-worktree-flag", atBound, true);
-  equal(
-    at.suggested,
-    `${UNLOCK_COMMAND_PREFIX}${atBound}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${atBound}`,
-  );
+  equal(at.suggested, `${unlock(atBound)}${UNLOCK_SEPARATOR}${remove(atBound)}`);
   equal(at.suggested.length, SINGLE_LINE_TEXT_MAXIMUM_LENGTH);
 
   const over = worktreeDisposalGuidance("claude-worktree-flag", DEEP_RELATIVE_PATH, true);

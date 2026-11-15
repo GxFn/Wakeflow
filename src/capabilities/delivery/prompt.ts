@@ -109,6 +109,42 @@ export function deliveryPromptRequirementPackage(
   });
 }
 
+/** 并入 Demand 的一份 supplement 需求包：记录摘要认出任务包选定的成员属于它，章节表给出各成员的锚点。 */
+export interface DeliveryPromptSupplementRecord {
+  readonly recordDigest: string;
+  readonly record: DeliveryPromptResolvedAuthorityMember["record"]["record"];
+}
+
+/**
+ * 阅读顺序里的需求文档由谁决定：任务包选定的权威成员。Demand 的权威引用在创建时冻结，只含源需求的成员；
+ * 续接并入的 supplement 包的成员不在其中，任务包却可以选定它们（`selectedAuthorityRefs`）。此前阅读顺序一律
+ * 取源需求的成员，supplement 任务的目标因此被引去读原需求的文档（1.3.0 终验：目标两份都读了，以任务包为准）。
+ *
+ * 任务包选了 supplement 成员时，阅读顺序就是它选定的那些成员，各自带所属记录的章节；一个 supplement 成员都
+ * 没有选时沿用源需求的全部成员——那是 supplement 出现之前的行为，不动。
+ */
+export function deliveryPromptRequirementMembers(
+  base: readonly Readonly<DeliveryPromptResolvedAuthorityMember>[],
+  selected: readonly Readonly<
+    Pick<LedgerAuthorityMemberReference, "role" | "memberPath" | "memberRef" | "recordDigest">
+  >[],
+  supplements: readonly Readonly<DeliveryPromptSupplementRecord>[],
+): readonly Readonly<DeliveryPromptResolvedAuthorityMember>[] {
+  const supplementOf = (reference: (typeof selected)[number]) =>
+    supplements.find((entry) => entry.recordDigest === reference.recordDigest);
+  if (!selected.some((reference) => supplementOf(reference) !== undefined)) return base;
+  return Object.freeze(
+    selected.flatMap((reference): Readonly<DeliveryPromptResolvedAuthorityMember>[] => {
+      const supplement = supplementOf(reference);
+      if (supplement !== undefined) {
+        return [Object.freeze({ reference, record: Object.freeze({ record: supplement.record }) })];
+      }
+      const member = base.find((entry) => entry.reference.memberRef === reference.memberRef);
+      return member === undefined ? [] : [member];
+    }),
+  );
+}
+
 /**
  * 交回指针与派发记录。不带流修订（H11）：准备投递时的修订到目标导入时一定已经过期——Controller
  * 随后就记录投递结局——印在 prompt 里只会被目标拿去当 `expectedStreamRevision` 而撞上并发冲突。

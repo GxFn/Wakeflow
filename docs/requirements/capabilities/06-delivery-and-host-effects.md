@@ -157,3 +157,10 @@
 - **现在的顺序**：取路由 → 本宿主资产核对（批 G 的 W16 前置不变，仍在取声明之前）→ 读窗口声明并判定（阻塞项不变：`window-claimed:<demandId|targetTaskId|deliveryId>`）→ 没有孤儿时照旧以独占创建取得声明并复核绑定摘要；有可回收孤儿时**不释放**，只复核绑定摘要、在内存里算出本声明（围栏摘要由声明内容决定，不依赖落盘）→ 渲染 prompt、信封带本声明的围栏 → `appendCommand`。追加以流修订 CAS 提交之后，才精确释放孤儿（持有者已自行回滚的 `claim-absent` 不是错误）并以独占创建写入本声明；追加撞上 `stream-revision` 时什么都不释放——孤儿留给它的持有者，本次也没有创建过声明。没有孤儿的路径保留原来的"先取声明、追加失败精确回滚"。
 - 不加 TTL、策略字段或 Schema；结果形状、`orphanWorkClaims` 的观察判定与结局记录的 `releaseClaimFor`（IfHeld 已容忍缺失与易主）不变。同键重放（`replayPermit`）不取声明，围栏来自签发事件，顺序调整不影响它。残余：提交之后"释放孤儿 → 写入本声明"仍是两步文件操作，第三个并发 prepare 恰好落在其间会让本次在提交之后以 `window-claimed` 失败（同键重试即重放许可）；这个间隙此前就存在于回收路径上，不因本次调整扩大。
 - 覆盖：`tests/capabilities/delivery/prepare-claim-race.test.ts`（钩住仓储的 `appendPreparedCommit` 做确定性交错：B 先提交则声明属于 B 且 A 的回滚碰不到它；A 先提交则 B 什么都不释放、声明仍属于 A；死孤儿在追加边界上仍在盘上、提交后才被换成本次声明，持有者先行回滚的 `claim-absent` 被容忍）。
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 投递 prompt 的阅读顺序（open-items Z4） | 需求文档跟任务包选定的权威成员走：任务包选了并入的 supplement 包的成员时，阅读顺序就是它选定的那些成员，章节取 supplement 记录自己的；一个 supplement 成员都没有选时仍是源需求的全部成员（原行为）。supplement 记录按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝（`requirement-record-drift`，读不出为 `requirement-record-<原因>`），与任务规划同一组拒绝原因。此前阅读顺序一律取 Demand 创建时冻结的权威引用，supplement 任务的目标被引去读源需求的文档。 |
+| worktree pod 产品窗口的登记（open-items Z5，文本） | tmux 助手不等待启动（`--wait 0`）时打印的观察带 `worktreeObservation: "pending"`、没有 worktree 记录，登记它会被拒 `worktree-receipt-required`；会话起来之后再跑一次同样的 `launch`，助手收养已在运行的窗口并打印完整的观察。 |

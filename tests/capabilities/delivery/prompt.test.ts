@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   type DeliveryPromptReadingOrder,
+  deliveryPromptRequirementMembers,
   deliveryPromptRequirementPackage,
   renderDeliveryPortablePrompt,
 } from "../../../src/capabilities/delivery/prompt.js";
@@ -135,6 +136,89 @@ function readingSection(prompt: string, header: string): readonly string[] {
   const end = lines.indexOf("", start);
   return lines.slice(start + 1, end === -1 ? undefined : end);
 }
+
+test("阅读顺序里的需求文档跟任务包选定的成员走：选了并入的 supplement 包的成员就列它们，带 supplement 记录自己的章节；没选时仍是源需求的全部成员（1.3.0 终验）", () => {
+  const SOURCE_DIGEST = `sha256:${"a".repeat(64)}`;
+  const SUPPLEMENT_DIGEST = `sha256:${"b".repeat(64)}`;
+  const SUPPLEMENT_ROOT = "requirements/requirement_99999999-9999-4999-8999-999999999999";
+  const selectedOf = (root: string, recordDigest: string, file: "requirement" | "landing") => ({
+    role: file,
+    memberPath: parsePortableResourcePath(`${file}.md`),
+    memberRef: parsePortableResourcePath(`${root}/${file}.md`),
+    recordDigest: recordDigest as never,
+  });
+  const supplement = {
+    recordDigest: SUPPLEMENT_DIGEST,
+    record: {
+      sections: [
+        { path: parsePortableResourcePath("requirement.md"), anchor: "requirement-delta" },
+        { path: parsePortableResourcePath("requirement.md"), anchor: "acceptance-criteria" },
+        { path: parsePortableResourcePath("landing.md"), anchor: "landing-plan" },
+      ],
+    },
+  };
+  // 只选了源需求的成员（或 Demand 没有并入任何 supplement）：原样返回源需求的全部成员。
+  equal(
+    deliveryPromptRequirementMembers(
+      RESOLVED_MEMBERS,
+      [selectedOf(REQUIREMENT_ROOT, SOURCE_DIGEST, "requirement")],
+      [supplement],
+    ),
+    RESOLVED_MEMBERS,
+  );
+  equal(
+    deliveryPromptRequirementMembers(
+      RESOLVED_MEMBERS,
+      [selectedOf(SUPPLEMENT_ROOT, SUPPLEMENT_DIGEST, "requirement")],
+      [],
+    ),
+    RESOLVED_MEMBERS,
+  );
+  // supplement 任务：只列它选定的 supplement 文档，章节取 supplement 记录的，不再指向源需求的文档。
+  const members = deliveryPromptRequirementMembers(
+    RESOLVED_MEMBERS,
+    [
+      selectedOf(SUPPLEMENT_ROOT, SUPPLEMENT_DIGEST, "requirement"),
+      selectedOf(SUPPLEMENT_ROOT, SUPPLEMENT_DIGEST, "landing"),
+    ],
+    [supplement],
+  );
+  const lines = readingSection(
+    render(
+      readingOrder({
+        requirementSections: ["requirement-delta", "acceptance-criteria", "landing-plan"],
+        requirementPackage: deliveryPromptRequirementPackage("../wakeflow-ledger", members),
+      }),
+      "zh-Hans",
+    ),
+    "按序阅读:",
+  );
+  deepEqual(
+    lines.filter((line) => line.includes("requirement_") && line.includes("wakeflow-ledger")),
+    [
+      `2. ../../wakeflow-ledger/${SUPPLEMENT_ROOT}/requirement.md`,
+      `3. ../../wakeflow-ledger/${SUPPLEMENT_ROOT}/landing.md`,
+    ],
+  );
+  ok(lines.includes("   章节: requirement-delta, acceptance-criteria"));
+  ok(lines.includes("   章节: landing-plan"));
+  ok(!lines.some((line) => line.includes(REQUIREMENT_ROOT)));
+  // 同时选了源需求与 supplement 的成员：按选定顺序都列，各带各自记录的章节。
+  deepEqual(
+    deliveryPromptRequirementMembers(
+      RESOLVED_MEMBERS,
+      [
+        selectedOf(REQUIREMENT_ROOT, SOURCE_DIGEST, "requirement"),
+        selectedOf(SUPPLEMENT_ROOT, SUPPLEMENT_DIGEST, "requirement"),
+      ],
+      [supplement],
+    ).map((member) => [member.reference.memberRef, member.record.record.sections.length]),
+    [
+      [`${REQUIREMENT_ROOT}/requirement.md`, RECORD_SECTIONS.length],
+      [`${SUPPLEMENT_ROOT}/requirement.md`, 3],
+    ],
+  );
+});
 
 test("需求包成员按记录章节归组：每份成员只带落在自己路径上的锚点", () => {
   const requirementPackage = deliveryPromptRequirementPackage(

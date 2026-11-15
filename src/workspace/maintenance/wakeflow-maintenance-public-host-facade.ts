@@ -36,6 +36,12 @@ export interface WakeflowMaintenancePublicHostFacade {
    */
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
   readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+  /**
+   * 只重装 Wakeflow 自己发布在私有运行时目录里的文件的宿主操作种类（Claude Code 的助手与状态栏脚本）。
+   * 一份 reconcile 计划的每一步都是这样的操作时，应用它归 Controller，不必用户确认——它不碰用户的任何
+   * 文件，换上的是用户已经装好的制品里的字节（用户裁决 2026-11-15）。没有这类操作的宿主缺省。
+   */
+  readonly privateAssetOperationKinds?: readonly string[] | undefined;
   readonly preview: (
     root: RootedDirectory,
     request: WakeflowStaticMaterializationPreviewRequest,

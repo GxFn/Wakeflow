@@ -17,11 +17,13 @@ import { type TestContext, test } from "node:test";
 import { compileWakeflowFreshConfigSelection } from "../../src/configuration/wakeflow-fresh-config-selection.js";
 import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { CLAUDE_CODE_STATUSLINE_ASSET_REF } from "../../src/hosts/claude-code/claude-code-statusline-asset.js";
+import { CLAUDE_CODE_TMUX_ASSET_REF } from "../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { previewCodexMaintenanceExecution } from "../../src/hosts/codex/codex-maintenance-execution.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import { WORK_CLAIMS_ROOT_REF } from "../../src/kernel/layout.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
@@ -207,6 +209,72 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
     equal(caught.path, "$request.planDigest");
   }
   equal(existsSync(path.join(root, "wakeflow.config.json")), false);
+});
+
+test("只重装私有资产的 reconcile 归 Controller 自己应用；计划里还有用户文件的步骤时仍由用户确认（1.3.0 终验，用户裁决 2026-11-15）", async (t) => {
+  const root = await fixture(t, "claude-assets");
+  const selected = selection();
+  const fresh = await executeClaudeCodeWakeflowMaintenance({
+    root,
+    action: "fresh-initialize",
+    mode: "preview",
+    request: { selection: selected },
+  });
+  // 首次初始化改的是用户的目录：用户确认。
+  equal(fresh.next.owner, "user");
+  if (fresh.planDigest === null) throw new Error("Expected a ready fresh plan.");
+  await executeClaudeCodeWakeflowMaintenance({
+    root,
+    action: "fresh-initialize",
+    mode: "apply",
+    request: { selection: selected },
+    planDigest: fresh.planDigest,
+  });
+  const previewReconcile = async () => {
+    const preview = await executeClaudeCodeWakeflowMaintenance({
+      root,
+      action: "reconcile",
+      mode: "preview",
+      request: {},
+    });
+    if (preview.mode !== "preview") throw new Error("Expected a preview result.");
+    const plan = preview.plan as {
+      readonly steps: readonly { readonly boundary: string; readonly operationKind?: string }[];
+    } | null;
+    return {
+      preview,
+      kinds: (plan?.steps ?? []).map((step) => step.operationKind ?? step.boundary),
+      next: [preview.next.frontier, preview.next.owner],
+    };
+  };
+
+  // 插件更新之后的样子：工作区里的助手是上一版制品发布的字节。计划只有重装它的一步，归 Controller。
+  const helper = path.join(root, ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"));
+  writeFileSync(helper, "// the helper an older artifact published\n");
+  const assetsOnly = await previewReconcile();
+  equal(assetsOnly.preview.status, "ready");
+  deepEqual(assetsOnly.kinds, ["tmux-asset"]);
+  deepEqual(assetsOnly.next, ["workspace-maintenance-apply", "controller"]);
+  equal(assetsOnly.preview.next.suggestedTool, "wakeflow_maintain_workspace");
+
+  // 状态栏脚本也落后：仍然只有私有资产，仍归 Controller。
+  const statusline = path.join(root, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"));
+  writeFileSync(statusline, "// the status line script an older artifact published\n");
+  const bothAssets = await previewReconcile();
+  deepEqual(bothAssets.kinds, ["statusline-asset", "tmux-asset"]);
+  deepEqual(bothAssets.next, ["workspace-maintenance-apply", "controller"]);
+
+  // 计划里多了一步用户的文件（根的本地设置条目被删掉）：整份计划回到用户确认。
+  rmSync(path.join(root, ".claude", "settings.local.json"));
+  const mixed = await previewReconcile();
+  equal(mixed.preview.status, "ready");
+  equal(mixed.kinds.includes("tmux-asset"), true);
+  equal(
+    mixed.kinds.some((kind) => kind !== "tmux-asset" && kind !== "statusline-asset"),
+    true,
+    mixed.kinds.join(","),
+  );
+  deepEqual(mixed.next, ["workspace-maintenance-apply", "user"]);
 });
 
 test("Public recovery consumes only an operation ID and its private intent", async (t) => {

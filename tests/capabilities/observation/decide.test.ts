@@ -7,6 +7,7 @@ import {
   deriveServerRuntime,
   deriveWindowRuntime,
   deriveWorkspaceGates,
+  hostAssetsNeedRepair,
   IDLE_REQUIREMENT_AUTHORING,
   type NextActionInput,
   nextFromActions,
@@ -351,6 +352,105 @@ test("deriveNextActions：过期窗口先给汇总项，再按 windowId 逐窗�
   equal(
     deriveNextActions(nextInput()).some((action) => action.reason.startsWith("stale-window-")),
     false,
+  );
+});
+
+test("deriveNextActions：已发布的助手待修时，维护排在过期窗口之前——窗口是助手开的，上一版助手开出来的窗口没有这一版在启动时加的东西（1.3.0 终验）", () => {
+  const actions = deriveNextActions(
+    nextInput({
+      hostAssetsNeedRepair: true,
+      staleWindows: [{ windowId: WINDOW_A, conversed: true }],
+    }),
+  );
+  deepEqual(
+    actions.map((action) => [action.owner, action.tool, action.reason, action.subject]),
+    [
+      ["controller", "wakeflow_maintain_workspace", "workspace-maintenance", null],
+      ["controller", null, "window-artifact-stale", null],
+      ["controller", null, STALE_WINDOW_RESUME, WINDOW_A],
+    ],
+  );
+  equal(nextFromActions(actions).frontier, "workspace-maintenance");
+  // 本窗口的服务进程过期时它仍在最前：过期的服务拒绝写入，reconcile 也做不了。
+  deepEqual(
+    deriveNextActions(
+      nextInput({
+        hostAssetsNeedRepair: true,
+        artifactServerOutdated: true,
+        artifactServerRefreshOwner: "controller",
+        staleWindows: [{ windowId: WINDOW_A, conversed: true }],
+      }),
+    ).map((action) => action.reason),
+    [
+      "runtime-artifact-outdated",
+      "workspace-maintenance",
+      "window-artifact-stale",
+      STALE_WINDOW_RESUME,
+    ],
+  );
+  // 两个来源都指向维护时只列一次；没有过期窗口时它就是前沿——此前 status 的下一步不提助手待修。
+  deepEqual(
+    deriveNextActions(nextInput({ hostAssetsNeedRepair: true, maintenance: true })).map(
+      (action) => action.reason,
+    ),
+    ["workspace-maintenance"],
+  );
+});
+
+test("hostAssetsNeedRepair 与 host-settings-assets 门是同一个判断；verifyNext 在这道门不通过时先指向维护，哪怕还有过期窗口", () => {
+  const asset = (
+    status: WorkspaceGateFacts["assets"][number]["status"],
+    settings: WorkspaceGateFacts["assets"][number]["settings"],
+  ): WorkspaceGateFacts["assets"][number] => ({
+    hostId: "claude-code",
+    status,
+    settings,
+    companion: null,
+  });
+  for (const [entry, repair] of [
+    [asset("current", "current"), false],
+    [asset("current", "custom"), false],
+    [asset("current", "not-applicable"), false],
+    [asset("not-applicable", "missing"), false],
+    [asset("drift", "current"), true],
+    [asset("missing", "current"), true],
+    [asset("unavailable", "current"), true],
+    [asset("current", "drift"), true],
+    [asset("current", "unreadable"), true],
+  ] as const) {
+    equal(hostAssetsNeedRepair([entry]), repair, `${entry.status}/${entry.settings}`);
+    const gate = deriveWorkspaceGates(healthyFacts({ assets: [entry] })).find(
+      (candidate) => candidate.name === "host-settings-assets",
+    );
+    equal(gate?.status !== "pass", repair, `gate ${entry.status}/${entry.settings}`);
+  }
+  equal(hostAssetsNeedRepair([]), false);
+  const stale: Readonly<VerifyGate> = {
+    name: "runtime-artifact",
+    owner: "runtime",
+    status: "fail",
+    code: "windows-stale:9",
+    evidence: [],
+  };
+  const assets: Readonly<VerifyGate> = {
+    name: "host-settings-assets",
+    owner: "host-assets",
+    status: "fail",
+    code: "claude-code:drift",
+    evidence: [],
+  };
+  deepEqual(verifyNext([stale, assets], "controller"), {
+    frontier: "workspace-maintenance",
+    owner: "controller",
+    suggestedTool: "wakeflow_maintain_workspace",
+    blockers: ["runtime-artifact:fail", "host-settings-assets:fail"],
+  });
+  equal(verifyNext([stale], "controller").frontier, "window-artifact-stale");
+  // 本进程过期仍然最先。
+  equal(
+    verifyNext([{ ...stale, code: "server-outdated,windows-stale:9" }, assets], "controller")
+      .frontier,
+    "runtime-artifact-outdated",
   );
 });
 

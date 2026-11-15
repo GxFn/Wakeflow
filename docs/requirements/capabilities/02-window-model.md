@@ -212,3 +212,9 @@
 | 2.1 窗口随仓库退出配置 | `detach-repository` 以既有 `publish-config` 发布去掉该仓库及其 primary-pod 产品窗口的配置；`detach-workspace` 以 `retire-config` 让整份配置退役（改名为 `wakeflow.detached.json`）。含该仓库 worktree 的 pod 未关闭即 `detach-pod-open:<podId>`：先按 pod 关闭的两段退役窗口与检出，再 detach。 |
 | 2.5 窗口运行投影的退役 | 步骤种类 `retire-window-projections`（detach-repository 对被分离仓库的窗口，detach-workspace 对全部窗口）复用 pod 关闭的投影退役：按已知 windowId 精确删除本宿主 `projections/window-runtime/<windowId>.json`，不枚举目录，文件不在即 absent。绑定、工作声明与 hook 记录留在 `.wakeflow-local`（列入 `leftBehind`）。 |
 | 2.6 Claude 宿主步 | `remove-portable-settings-rules`：在程序根与托管支撑面的 `.claude/settings.json` 精确删除 Wakeflow 当前与退役的允许规则条目（文件里没有 Wakeflow 规则即 current，用户规则保留；读不出或不是 JSON 即 `detach-settings-unreadable:<root>`）；`remove-statusline-entry`：只删所有权判定为 Wakeflow 的那一条 `statusLine`（现行判据：命令带 `--wakeflow-statusline-v1` 或 0.9.x 的 `wakeflow-statusline.mjs`），用户自己的不碰。Codex 没有宿主步。 |
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| tmux 窗格观察的行（open-items Z11） | 助手打印的 `tmux-panes` 观察里每一行只有登记合同 `tmuxPaneObservation` 的八个字段（socket、session、窗口与窗格标识、`paneWindowId`、`paneDead`、`currentCommand`、`options`）。窗口名是 `mark` 核对改名用的内部字段，不进观察；此前它随每一行出来，按文件引用登记的退役与存活证据因此被整份拒绝。 |

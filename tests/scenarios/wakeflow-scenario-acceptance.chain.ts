@@ -241,6 +241,7 @@ interface ReviewInspection {
     readonly callback: {
       readonly status: string;
       readonly generation: number;
+      readonly callbackId: string;
       readonly landedRecordId: string | null;
     };
     readonly targetCompletion: { readonly status: string };
@@ -2425,6 +2426,7 @@ async function scenarioWakeController(context: ScenarioContext): Promise<string>
   const landed = await inspectReview(context, context.targetTaskId);
   equal(landed.reviewUnit.callback.status, "landed");
   equal(typeof landed.reviewUnit.callback.landedRecordId, "string");
+  ok(landed.reviewUnit.callback.callbackId.startsWith("target-delivery_"));
   equal(landed.reviewUnit.callback.generation, 1);
   const afterLanding = await context.connection.client.callTool({
     name: WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME,
@@ -3456,8 +3458,12 @@ async function scenarioSupplementContinuation(context: ScenarioContext): Promise
     context,
     { ...parent, targetTaskId: target.targetTaskId, taskPackageId: target.taskPackageId },
     "scenario-supplement-2",
-    // 投递的 prompt 指向任务包；任务包带着 supplement 包的成员引用，目标读到的就是补充后的需求。
-    (prompt) => ok(prompt.length > 0),
+    // 投递的 prompt 指向任务包，阅读顺序里的需求文档是任务包选定的 supplement 包成员——不是源需求的文档
+    // （1.3.0 终验：此前这里只断言 prompt 非空，而阅读顺序一直指向源需求）。
+    (prompt) => {
+      for (const memberRef of supplement.memberRefs) ok(prompt.includes(memberRef), memberRef);
+      ok(!prompt.includes(`requirements/${parent.requirementId}/`), prompt);
+    },
   );
   await completeDemand(context);
 

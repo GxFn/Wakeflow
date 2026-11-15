@@ -245,3 +245,9 @@
 | 1.4 reconcile 在布局维护之前的恢复计划 | 一次只出一份，按这个顺序：`WakeflowMaintenanceGateResiduePlan`（没有操作可恢复的维护门残留：已死进程的门锁与事务目录里的孤儿暂存；属主还活着或说不清时 apply 以 `maintenance-gate-residue` 拒绝）、`WakeflowDemandRuntimeRecoveryPlan`（已有）、`WakeflowHookStageResiduePlan`（hook 目录的暂存前缀残留）。都没有才是平常的布局维护。预览始终零写。 |
 | 1.5 中断事务的恢复 | 一个操作的 intent 与 journal 是同一个闭合的暂存恢复集合；被另一版制品中断的事务以 `maintenance-recovery-artifact-mismatch` 说出那一版（`details.writerVersion`），由用户用那一版恢复。 |
 | 1.2 / 1.3 预览的环境阻塞 | 工作区根或账本根不在本地卷（`apfs` / `hfs`）上：`filesystem-unsupported:<类型>` / `ledger-filesystem-unsupported:<类型>`。配置的 `schemaVersion` 是本构建不认识的整数：读配置的工具报 `config-version-unsupported`，预览列出 `config-version-unsupported:<found>`。 |
+
+## 修订（2026-11-15，1.3.0 终验，[gate-log §13.247](../../progress/consolidation-gate-log.md)；用户裁决）
+
+| 项 | 修订后 |
+| --- | --- |
+| 维护预览的 `next.owner`（open-items Z2） | 一份就绪的计划由谁应用：私有模式收敛归 Controller（§13.226，不变）；**只重装宿主私有资产的 reconcile 也归 Controller**——计划的每一步都是宿主入口声明的私有资产操作（Claude Code：`statusline-asset`、`tmux-asset`、`desktop-asset`），换上的是已装制品里的字节，不碰用户的任何文件。计划里只要还有别的步骤（共享步、设置条目等）整份仍由用户确认。种类表是宿主门面上的一个可选值，公共协调器不认文件名；Codex 没有这类操作。 |

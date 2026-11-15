@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { opendirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { HelperFailure, emit, refuse, unexpectedDetail } from "./shared/failure.mjs";
+import { emit, HelperFailure, refuse, unexpectedDetail } from "./shared/failure.mjs";
 import {
   DEFAULT_LANDING_WAIT_SECONDS,
   HOOK_POLL_MS,
@@ -17,45 +17,45 @@ import {
   waitForNewSessionStart,
 } from "./shared/hook-records.mjs";
 import {
-  MAX_VERSION,
-  NODE_ENGINES,
   boundedDetail,
   claudeInstallForm,
   hostEnvironment,
   hostVersionOf,
+  MAX_VERSION,
+  NODE_ENGINES,
   nodeVersionSupported,
   run,
   versionOf,
 } from "./shared/host-process.mjs";
+import { withObservationFiles } from "./shared/observation-files.mjs";
 import {
   DIGEST_PATTERN,
   PERMIT_PROMPT_REF_PATTERN,
   promptDigestOf,
   promptPermitIdsOf,
 } from "./shared/prompt-rules.mjs";
-import { withObservationFiles } from "./shared/observation-files.mjs";
 import { MAX_STDIN_BYTES, readStdinJson, readStdinText } from "./shared/stdin.mjs";
-import { SGR_PATTERN, cleanLabel, isControl, sha256 } from "./shared/text.mjs";
+import { cleanLabel, isControl, SGR_PATTERN, sha256 } from "./shared/text.mjs";
 import {
   BINDINGS,
   HANDLE_KIND,
   HOST_ID,
+  knownRole,
   LOCATORS,
   MAX_RECORD_BYTES,
-  ROOT,
-  UUID_PATTERN,
-  WINDOW_ID_PATTERN,
-  WORKSPACE_ROOT_PLACEHOLDER,
-  knownRole,
   parseWindowId,
+  ROOT,
   readBoundedJson,
   readConfig,
   realpathOrNull,
   resolvePlacement,
   sessionRuleArguments,
   sessionWriteDenyReport,
+  UUID_PATTERN,
+  WINDOW_ID_PATTERN,
+  WORKSPACE_ROOT_PLACEHOLDER,
 } from "./shared/workspace.mjs";
-import { WORKTREE_NAME_PATTERN, observeWorktree, prepareWorktree } from "./shared/worktree.mjs";
+import { observeWorktree, prepareWorktree, WORKTREE_NAME_PATTERN } from "./shared/worktree.mjs";
 
 const DEFAULT_SESSION_NAME = "wakeflow";
 // tmux 把格式输出里的制表符等不可打印字符替换成下划线（3.6 实测），字段分隔符因此必须是可打印且不会出现在字段里的串。
@@ -662,9 +662,29 @@ function relatedPanes(rows, programId) {
           )
           .slice(0, MAX_PANES);
   return Object.freeze({
-    panes: kept.map((entry) => entry.row),
+    panes: kept.map((entry) => observedPane(entry.row)),
     truncated: ranked.length > MAX_PANES,
     total: rows.length,
+  });
+}
+
+/**
+ * 观察里的一行：登记合同的 `tmuxPaneObservation` 是封闭的八个字段。窗口名只供 `mark` 核对改名，留在助手内部——
+ * 带着它的观察会被服务端整份拒绝（`additional:windowName`）。从 1.1.1 加上窗口名起每一份 tmux-panes 观察都带着
+ * 它；观察改成按文件引用登记之后 Controller 不再转抄，这才暴露出来（1.3.0 终验：关 pod 的八次退役都被拒，
+ * Controller 只能手工去掉这个字段）。
+ * @param {PaneRow} row
+ */
+function observedPane(row) {
+  return Object.freeze({
+    socketName: row.socketName,
+    sessionName: row.sessionName,
+    windowId: row.windowId,
+    paneId: row.paneId,
+    paneWindowId: row.paneWindowId,
+    paneDead: row.paneDead,
+    currentCommand: row.currentCommand,
+    options: row.options,
   });
 }
 

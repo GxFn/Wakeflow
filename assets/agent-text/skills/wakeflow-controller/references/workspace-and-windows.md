@@ -88,7 +88,7 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   private modes: when something under `.wakeflow-local` or `.wakeflow-active` has only drifted
   wider than 0700 / 0600 in a safe way (a `chmod -R go+rX`, a Finder `.DS_Store`), the preview's plan
   is a `WakeflowPrivateModeConvergencePlan` (counts and areas) and `next` names you as its owner: it only
-  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan.
+  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan. The same holds for a reconcile whose plan only reinstalls Wakeflow's own published files (every step a `statusline-asset`, `tmux-asset` or `desktop-asset`, the plan after a plugin update): `next.owner` is `controller`, apply it without asking and say afterwards what was reinstalled. Any other step in the plan puts the apply back with the user.
   A private node another user owns, that group or others can write, or that
   is a symlink is reported as `private-mode-unsafe:<area>` and never touched,
   and the other intents refuse with `private-mode-drift` until reconcile has
@@ -281,10 +281,10 @@ profile moved; `comparison: "config"` is an older binding compared by the whole
 config digest). `session` shows the model and permission mode the host reported.
 Only a replacing handshake renews the record; no gate fails on it, never rebind for it.
 
-Restart the stale windows with the host's procedure: {{windowResume}} After this
-server is current, preview and apply reconcile for repairable workspace gates
-such as host-settings-assets. A peer's `unverified` state remains separate from
-those repairs and from Controller acceptance of returned work.
+Order: this server first, then the published host assets, then the peer windows. Once this server is current and verify fails `host-settings-assets` (status then lists `workspace-maintenance` ahead of the stale windows), preview and apply reconcile before you restart or launch any peer: where a published helper starts the windows, a window started by the previous artifact's helper lacks what the current one adds at launch, such as the write-deny rules - restart such a window once more after the reconcile.
+Restart the stale windows with the host's procedure: {{windowResume}} Afterwards
+preview and apply reconcile for repairable workspace gates that remain. A peer's `unverified` state remains
+separate from those repairs and from Controller acceptance of returned work.
 
 ## Interrupted writes and cancellation
 
@@ -330,7 +330,7 @@ main checkout; every other pod works in a worktree.
    need not start one by one: launch them all without waiting (`--wait 0` on
    the Claude Code tmux helper; the desktop helper returns once the session
    has started), keep each printed observation, and register them once their
-   session-start records exist.
+   session-start records exist. A tmux launch that printed `worktreeObservation: "pending"` did not wait for the worktree record, and registering that observation is refused `worktree-receipt-required`: once the session is up, run the same `launch` again - it starts nothing, adopts the running window (`adopted: true`) and prints the complete observation to register.
 4. If receipts and config disagree after an interruption, reconcile with
    recover before doing anything else.
 

@@ -1030,6 +1030,8 @@ async function inspectReview(context, request) {
                 },
             resumptionBasis,
             callback: {
+                // 重发一条静默的回调要用它的投递标识；此前单元里没有，Controller 只能去翻许可目录（1.3.0 终验）。
+                callbackId: callback.callbackId,
                 status: callbackStatus.status,
                 generation: callback.generation,
                 issuedAt: callback.issuedAt,

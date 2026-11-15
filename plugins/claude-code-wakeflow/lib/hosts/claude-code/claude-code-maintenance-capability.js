@@ -3,16 +3,16 @@ import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } f
 import { isWakeflowDetachAction } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { executeWakeflowWindowRuntimeProjectionOperation, planWakeflowWindowRuntimeProjectionMaintenance, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND, WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID, } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
-import { CLAUDE_CODE_DESKTOP_ASSET_BLOCKER, CLAUDE_CODE_DESKTOP_ASSET_OPERATION_KIND, CLAUDE_CODE_DESKTOP_ASSET_OWNER_ID, executeClaudeCodeDesktopAssetOperation, planClaudeCodeDesktopAssetOperation, } from "./claude-code-desktop-asset-operation.js";
 import { CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME } from "./claude-code-desktop-asset.js";
+import { CLAUDE_CODE_DESKTOP_ASSET_BLOCKER, CLAUDE_CODE_DESKTOP_ASSET_OPERATION_KIND, CLAUDE_CODE_DESKTOP_ASSET_OWNER_ID, executeClaudeCodeDesktopAssetOperation, planClaudeCodeDesktopAssetOperation, } from "./claude-code-desktop-asset-operation.js";
 import { ClaudeCodeHostAssetOperationError } from "./claude-code-host-asset-operation.js";
 import { CLAUDE_CODE_PORTABLE_SETTINGS_REMOVAL_OPERATION_KIND, claudeCodePortableSettingsRemovalTargetKey, planClaudeCodePortableSettingsComposition, } from "./claude-code-portable-settings-composition.js";
 import { ClaudeCodePortableSettingsOperationExecutionError, executeClaudeCodePortableSettingsOperation, } from "./claude-code-portable-settings-operation-executor.js";
-import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "./claude-code-statusline-asset.js";
+import { CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_ASSET_OWNER_ID, executeClaudeCodeStatuslineAssetOperation, planClaudeCodeStatuslineAssetOperation, } from "./claude-code-statusline-asset-operation.js";
 import { CLAUDE_CODE_STATUSLINE_REMOVAL_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_BLOCKER, CLAUDE_CODE_STATUSLINE_SETTINGS_OPERATION_KIND, CLAUDE_CODE_STATUSLINE_SETTINGS_OWNER_ID, ClaudeCodeStatuslineSettingsOperationError, executeClaudeCodeStatuslineSettingsOperation, executeClaudeCodeStatuslineSettingsRemoval, planClaudeCodeStatuslineSettingsOperation, planClaudeCodeStatuslineSettingsRemoval, planClaudeCodeStatuslineSettingsSurfaceOperations, } from "./claude-code-statusline-settings-operation.js";
-import { CLAUDE_CODE_TMUX_ASSET_BLOCKER, CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND, CLAUDE_CODE_TMUX_ASSET_OWNER_ID, executeClaudeCodeTmuxAssetOperation, planClaudeCodeTmuxAssetOperation, } from "./claude-code-tmux-asset-operation.js";
 import { CLAUDE_CODE_TMUX_ASSET_FILE_NAME } from "./claude-code-tmux-asset.js";
+import { CLAUDE_CODE_TMUX_ASSET_BLOCKER, CLAUDE_CODE_TMUX_ASSET_OPERATION_KIND, CLAUDE_CODE_TMUX_ASSET_OWNER_ID, executeClaudeCodeTmuxAssetOperation, planClaudeCodeTmuxAssetOperation, } from "./claude-code-tmux-asset-operation.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
 import { CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OPERATION_KIND, CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_OWNER_ID, ClaudeCodeWindowTransportRetirementError, executeClaudeCodeWindowTransportRetirement, planClaudeCodeWindowTransportRetirement, } from "./claude-code-window-transport-retirement.js";
 /**
@@ -88,6 +88,15 @@ const HELPER_ASSET_OPERATIONS_BY_FILE_NAME = new Map([
             execute: executeClaudeCodeDesktopAssetOperation,
         }),
     ],
+]);
+/**
+ * 只重装 Wakeflow 自己发布在私有运行时目录里的文件的操作种类：状态栏脚本与两种传输的助手。它们写的都是
+ * `.wakeflow-local` 下的资产文件，内容是制品里的字节；本地设置条目（`settings.local.json`）不在其中——那是
+ * 用户的文件。公共协调器据此把只含这些操作的 reconcile 计划交给 Controller 自己应用。
+ */
+export const CLAUDE_CODE_PRIVATE_ASSET_OPERATION_KINDS = Object.freeze([
+    CLAUDE_CODE_STATUSLINE_ASSET_OPERATION_KIND,
+    ...[...HELPER_ASSET_OPERATIONS_BY_FILE_NAME.values()].map((helper) => helper.operationKind),
 ]);
 /** 选出的 profile 要发布的助手资产操作；没有助手或文件名不在表里的 profile 不是本宿主的传输。 */
 function helperAssetOperationsOf(profile) {

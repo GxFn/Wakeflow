@@ -1,8 +1,9 @@
 import path from "node:path";
-import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigSnapshot, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { failWakeflowConfigAuthority, readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigSnapshot, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandWindowIds, evaluateVerifyGates, } from "../../governance/demand/demand-verify-gates.js";
@@ -17,7 +18,7 @@ import { commandShellExecutionOptions, runCommandShell } from "../../kernel/comm
 import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
-import { readRequirementClaimState, } from "../../kernel/requirement-board.js";
+import { readRequirementClaimState, supplementAttachTarget, } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { readWakeflowMaintenanceJournalOrNull, WakeflowMaintenanceJournalStoreError, } from "../../workspace/maintenance/wakeflow-maintenance-journal-store.js";
@@ -26,8 +27,7 @@ import { previewWakeflowStaticMaterialization } from "../../workspace/maintenanc
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { compileWakeflowWindowLaunchIntents, computeWakeflowWindowLaunchExecutionDigest, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitStatusResult, admitVerifyResult, parseStatusRequest, parseVerifyRequest, WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION, WAKEFLOW_STATUS_PUBLIC_TOOL_NAME, WAKEFLOW_VERIFY_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { capStatusList, DETACHED_WORKSPACE_NEXT, deriveNextActions, deriveServerRuntime, deriveWindowRuntime, deriveWorkspaceGates, detachedWorkspaceGates, disposalGuidance, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { capStatusList, DETACHED_WORKSPACE_NEXT, deriveNextActions, deriveServerRuntime, deriveWindowRuntime, deriveWorkspaceGates, detachedWorkspaceGates, disposalGuidance, hostAssetsNeedRepair, nextFromActions, projectionFreshness, STATUS_LIST_MAXIMUMS, summarizeGates, verifyNext, } from "./decide.js";
 /** status 的残留列表上限（wire 的 maxItems）；超出只报略去的条数。 */
 const MAINTENANCE_RESIDUES_MAXIMUM = 64;
 const RESIDUE_NAME_MAXIMUM = 128;
@@ -258,17 +258,6 @@ function privateValues(context) {
     return values;
 }
 // ---- status ----------------------------------------------------------------------
-/**
- * 一个 pending 的 supplement 包该并入哪个 Demand（Q7 裁决）：它声明的父需求已由某个 Demand 归档时是那个
- * Demand；父需求还在进行、未认领或看板上没有时为 null（等它完成）。不是 supplement 包（没有父需求）返回
- * undefined。
- */
-function supplementAttachTarget(states, state) {
-    if (state.supplements === undefined)
-        return undefined;
-    const parent = states.find((entry) => entry.requirementId === state.supplements);
-    return parent?.status === "archived" && parent.archive !== null ? parent.archive.demandId : null;
-}
 function boardView(observation) {
     const board = observation.board.value;
     const states = board?.states ?? [];
@@ -788,6 +777,7 @@ function nextActionInput(context, runtime) {
             (runtime.view.artifactManifestDigest === null || runtime.view.artifactOnDisk === "unknown"),
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
         maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
+        hostAssetsNeedRepair: hostAssetsNeedRepair(observation.assets),
         unregisteredWindows: bindingsObserved && podsObserved
             ? snapshot.model.topology.windows
                 .filter((window) => !bound.has(window.windowId))

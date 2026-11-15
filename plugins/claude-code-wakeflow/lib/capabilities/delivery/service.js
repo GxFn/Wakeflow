@@ -3,6 +3,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { CanonicalJsonError, encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
@@ -20,6 +21,7 @@ import { DemandEventSourcingRepository, DemandEventSourcingRepositoryError, } fr
 import { upcastDemandEventSourcingStoredEvent } from "../../governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
 import { computeDemandEventStreamCommitDigest, } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governance/ledger/ledger-authority-store.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { observeHostAssetState, selectObservationHostAssets, } from "../../governance/observation/workspace-observation.js";
 import { deriveTargetResultCallbackStatus, parseTargetResultCallbackReissue, TARGET_RESULT_CALLBACK_GENERATION_LIMIT, TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS, TargetResultCallbackError, } from "../../governance/result/target-result-callback.js";
@@ -31,20 +33,19 @@ import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookObservations, } from "../../kernel/hook-observations.js";
-import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, } from "../../kernel/privacy-scan.js";
+import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import { createWorkClaim, deriveWorkClaimId, inspectWorkClaim, releaseWorkClaim, releaseWorkClaimIfHeld, takeWorkClaim, } from "../../kernel/work-claims.js";
+import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
-import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitPrepareDeliveryResult, admitRearmDeliveryResult, admitRecordDeliveryOutcomeResult, parsePrepareDeliveryRequest, parseRearmDeliveryRequest, parseRecordDeliveryOutcomeRequest, WAKEFLOW_DELIVERY_PUBLIC_SCHEMA_VERSION, WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_REARM_DELIVERY_PUBLIC_TOOL_NAME, WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveClaimBlocker, deriveDeliveryDisposition, derivePermissionModeBlocker, derivePrepareBlockers, deriveRearmBlockers, expectedLaunchPermissionMode, landingSilenceExceeded, sendReturnProvesLanding, } from "./decide.js";
-import { deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { deliveryPromptRequirementMembers, deliveryPromptRequirementPackage, renderDeliveryPortablePrompt, } from "./prompt.js";
 function isCallbackPermit(outcome) {
     return "kind" in outcome && outcome.kind === "callback";
 }
@@ -615,7 +616,7 @@ function renderPrompt(context, input, sources, pointer, controllerDesktopSession
             attachedWorktrees: sources.attachedWorktrees,
             taskPackageRef: deliveryTaskPackageRef(taskPackage.demandId, taskPackage.taskPackageId),
             requirementSections: taskPackage.workType === "implementation" ? taskPackage.sectionAnchors : [],
-            requirementPackage: deliveryPromptRequirementPackage(context.authority.config.model.storage.ledgerRoot, context.authority.loaded.admittedAuthority.resolvedAuthority),
+            requirementPackage: deliveryPromptRequirementPackage(context.authority.config.model.storage.ledgerRoot, sources.requirementMembers),
             workspaceInstructionFile: instructionFile,
             repositoryInstructionFile: repositoryId === null ? null : instructionFile,
             stateRootRef: demandFinalRootRef(taskPackage.demandId),
@@ -758,9 +759,44 @@ async function assertHostAssetsCurrent(context, route, requestPath = "$request.t
         return;
     rejectWith([`host-asset-${observed.status}${observed.companion === null ? "" : `:${observed.companion}`}`], requestPath);
 }
+/** 一份并入的 supplement 需求包记录：按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝。 */
+async function loadSupplementRecord(context, lineage) {
+    let loaded;
+    try {
+        loaded = await new LedgerAuthorityStore(context.authority.ledgerRoot).loadRequirement(lineage.requirementId, signalOptions(context.options.signal));
+    }
+    catch (error) {
+        if (!(error instanceof LedgerAuthorityStoreError))
+            throw error;
+        if (error.reason === "aborted")
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        fail("precondition-failed", `requirement-record-${error.reason}`, "$ledger", { cause: error });
+    }
+    if (loaded.recordDigest !== lineage.recordDigest) {
+        fail("precondition-failed", "requirement-record-drift", "$ledger");
+    }
+    return Object.freeze({ recordDigest: loaded.recordDigest, record: loaded.record });
+}
+/**
+ * 任务包选定的成员所属的 supplement 需求包记录（Q7 裁决）。只在任务包确实选了源需求之外的记录时才读——
+ * 没有 supplement 的 Demand 不多一次读取。
+ */
+async function selectedSupplementRecords(context, taskPackage) {
+    const sourceDigest = context.authority.loaded.identity.source.recordDigest;
+    const wanted = new Set(taskPackage.selectedAuthorityRefs
+        .map((reference) => reference.recordDigest)
+        .filter((digest) => digest !== sourceDigest));
+    const records = [];
+    for (const lineage of context.authority.loaded.aggregate.state.supplements ?? []) {
+        if (wanted.has(lineage.recordDigest))
+            records.push(await loadSupplementRecord(context, lineage));
+    }
+    return Object.freeze(records);
+}
 async function prepareSources(context, repository, target, taskPackage, route, binding) {
     const signal = context.options.signal;
     const attachedWorktrees = await attachedWorktreesFor(context, taskPackage, route);
+    const requirementMembers = deliveryPromptRequirementMembers(context.authority.loaded.admittedAuthority.resolvedAuthority, taskPackage.selectedAuthorityRefs, await selectedSupplementRecords(context, taskPackage));
     if (taskPackage.workType === "test") {
         const testAttemptId = deriveDurableId("test-attempt", "prepare-delivery", taskPackage.demandId, binding.idempotencyKey);
         const attempt = await testAttemptFor(repository, target, taskPackage, testAttemptId, signal);
@@ -768,6 +804,7 @@ async function prepareSources(context, repository, target, taskPackage, route, b
             prompt: {
                 taskPackage,
                 route,
+                requirementMembers,
                 attachedWorktrees,
                 rework: null,
                 remediation: null,
@@ -784,6 +821,7 @@ async function prepareSources(context, repository, target, taskPackage, route, b
             prompt: {
                 taskPackage,
                 route,
+                requirementMembers,
                 attachedWorktrees,
                 rework: basis.reworkSource === null
                     ? null

@@ -42,7 +42,11 @@ export function selectBoardEntries(states, filter, limit) {
         totalMatched: matched.length,
     });
 }
-/** 本切片对 `next` 的贡献：确认、应用、认领三个前沿。 */
+/**
+ * 本切片对 `next` 的贡献：确认、应用、认领，以及 supplement 包的续接。supplement 包不认领
+ * （`supplement-of:<id>`），它并入完成了父需求的 Demand——与 `wakeflow_status` 给的是同一条路（1.3.0 终验：
+ * 发布 supplement 包之后这里曾指向 `wakeflow_create_demand`）。
+ */
 export function deriveRequirementNext(input) {
     if (input.confirmationMissing) {
         return Object.freeze({
@@ -60,11 +64,19 @@ export function deriveRequirementNext(input) {
             blockers: Object.freeze([]),
         });
     }
-    if (input.pendingCount > 0) {
+    if (input.pending.claimable > 0) {
         return Object.freeze({
             frontier: "requirement-claim",
             owner: "controller",
             suggestedTool: "wakeflow_create_demand",
+            blockers: Object.freeze([]),
+        });
+    }
+    if (input.pending.attachable > 0) {
+        return Object.freeze({
+            frontier: "supplement-attach",
+            owner: "controller",
+            suggestedTool: "wakeflow_continue_demand",
             blockers: Object.freeze([]),
         });
     }

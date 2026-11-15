@@ -187,7 +187,8 @@ changed, and every Wakeflow release changes it. Running sessions keep the old ho
 MCP server until `/reload-plugins` or a new session, so the Controller's
 `wakeflow_status` then reports `runtime-artifact-outdated` for its own server and
 `windows-stale:<n>` for peer windows started under the previous artifact. Under the tmux
-transport the Controller refreshes them itself through the tmux helper (its skill section "After a
+transport the Controller first reconciles, which reinstalls the tmux helper this version ships, and
+then refreshes them itself through that helper (its skill section "After a
 plugin update"); under desktop sessions the desktop app reloads each session's Wakeflow
 server on its own within a few turns - if the Controller's does not, archive and unarchive it and
 message it, which restarts its process on the current artifact -

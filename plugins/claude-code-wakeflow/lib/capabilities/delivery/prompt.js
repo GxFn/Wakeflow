@@ -19,6 +19,27 @@ export function deliveryPromptRequirementPackage(ledgerRootFromWorkspace, member
         }))),
     });
 }
+/**
+ * 阅读顺序里的需求文档由谁决定：任务包选定的权威成员。Demand 的权威引用在创建时冻结，只含源需求的成员；
+ * 续接并入的 supplement 包的成员不在其中，任务包却可以选定它们（`selectedAuthorityRefs`）。此前阅读顺序一律
+ * 取源需求的成员，supplement 任务的目标因此被引去读原需求的文档（1.3.0 终验：目标两份都读了，以任务包为准）。
+ *
+ * 任务包选了 supplement 成员时，阅读顺序就是它选定的那些成员，各自带所属记录的章节；一个 supplement 成员都
+ * 没有选时沿用源需求的全部成员——那是 supplement 出现之前的行为，不动。
+ */
+export function deliveryPromptRequirementMembers(base, selected, supplements) {
+    const supplementOf = (reference) => supplements.find((entry) => entry.recordDigest === reference.recordDigest);
+    if (!selected.some((reference) => supplementOf(reference) !== undefined))
+        return base;
+    return Object.freeze(selected.flatMap((reference) => {
+        const supplement = supplementOf(reference);
+        if (supplement !== undefined) {
+            return [Object.freeze({ reference, record: Object.freeze({ record: supplement.record }) })];
+        }
+        const member = base.find((entry) => entry.reference.memberRef === reference.memberRef);
+        return member === undefined ? [] : [member];
+    }));
+}
 const MAXIMUM_ANCHORS = 4;
 /** 与登记 Schema 的 `desktopSessionLocator.sessionId` 同一形状；别的值不进 prompt。 */
 const DESKTOP_SESSION_ID_PATTERN = /^local_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;

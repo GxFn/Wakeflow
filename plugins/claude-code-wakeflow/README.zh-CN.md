@@ -137,8 +137,8 @@ Controller 会告诉你是哪个窗口在问。你的账号没有 auto 模式时
 Claude Code 只在插件清单的版本号变化时替换已安装的副本，Wakeflow 每次发布都会改它。正在运行的
 会话在 `/reload-plugins` 或新会话之前仍用旧的 hook 与 MCP server，所以 Controller 的
 `wakeflow_status` 会对自己的 server 报 `runtime-artifact-outdated`、对在旧制品下启动的同伴窗口报
-`windows-stale:<n>`。tmux 传输下 Controller 按技能的 "After a plugin update" 一节用 tmux 助手自己
-刷新它们；桌面会话传输下桌面 app 会在几个回合内自行重载各会话的 Wakeflow 服务——Controller 的
+`windows-stale:<n>`。tmux 传输下 Controller 按技能的 "After a plugin update" 一节先对账——重装这一版
+带的 tmux 助手——再用它自己刷新这些窗口；桌面会话传输下桌面 app 会在几个回合内自行重载各会话的 Wakeflow 服务——Controller 的
 服务没有重载时，归档再取消归档并发一条消息即可令其以当前制品重起——然后 Controller 校验并对账。没有窗口再是 stale 之后，
 `wakeflow_verify` 的 `runtime-artifact` 门重新通过；`unverified` 不是失败。
 

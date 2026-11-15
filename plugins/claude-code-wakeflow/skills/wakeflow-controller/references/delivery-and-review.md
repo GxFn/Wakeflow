@@ -236,6 +236,8 @@ window goes idle instead of deciding around it. The turn in which the callback
 landed may run from the inspection to the decision in one go; the decision is
 the stop.
 
+A callback that never arrived (the target says its send was refused, or the user asks why nothing came): the result is already imported and the callback only wakes you, so inspect the unit - its `callback` carries `callbackId` and `status`: `pending`, `landed`, `silent` (no landing ten minutes after it was issued) or `acknowledged`. While it is `pending`, have the target send the same permit again once the cause is gone. Once it is `silent`, call `wakeflow_rearm_delivery` with that `callbackId` as `deliveryId` (refused `callback-pending` or `callback-landed` otherwise), send the returned permit to your own window through the helper so the landing is on record, then review as usual.
+
 If the set of allowed decisions does not contain what you want to record, the
 reason is in the unit: the target's completion evidence has not arrived yet, or
 the Demand is waiting on a decision. Fix the cause; do not look for another

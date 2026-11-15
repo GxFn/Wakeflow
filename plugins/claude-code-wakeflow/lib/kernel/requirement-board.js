@@ -14,6 +14,7 @@ import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRoo
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../foundation/filesystem/strict-text-file.js";
+import { signalOptions } from "../foundation/node/abort-signal.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
@@ -21,7 +22,6 @@ import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant } from "../foundation/time/utc-instant.js";
 import { fail, WakeflowError } from "./error.js";
 import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, requirementClaimStateRef, } from "./layout.js";
-import { signalOptions } from "../foundation/node/abort-signal.js";
 /**
  * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
  *
@@ -40,6 +40,32 @@ export const REQUIREMENT_CLAIM_STATUSES = Object.freeze([
     "withdrawn",
     "archived",
 ]);
+/**
+ * 一个 pending 的 supplement 包该并入哪个 Demand（Q7 裁决）：它声明的父需求已由某个 Demand 归档时是那个
+ * Demand；父需求还在进行、未认领或看板上没有时为 null（等它完成）。不是 supplement 包（没有父需求）返回
+ * undefined。
+ */
+export function supplementAttachTarget(states, state) {
+    if (state.supplements === undefined)
+        return undefined;
+    const parent = states.find((entry) => entry.requirementId === state.supplements);
+    return parent?.status === "archived" && parent.archive !== null ? parent.archive.demandId : null;
+}
+/** 父需求还没有完成的 supplement 包两边都不算：它暂时没有可做的一步。 */
+export function pendingRequirementWork(states) {
+    let claimable = 0;
+    let attachable = 0;
+    for (const state of states) {
+        if (state.status !== "pending")
+            continue;
+        const target = supplementAttachTarget(states, state);
+        if (target === undefined)
+            claimable += 1;
+        else if (target !== null)
+            attachable += 1;
+    }
+    return Object.freeze({ claimable, attachable });
+}
 const STATE_MAXIMUM_BYTES = parseByteCount(64 * 1024, "$claimState.maximumBytes");
 const INDEX_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$boardIndex.maximumBytes");
 const BOARD_MAXIMUM_ENTRIES = 4096;

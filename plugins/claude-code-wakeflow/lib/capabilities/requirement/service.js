@@ -1,10 +1,11 @@
-import { readWakeflowConfigAuthoritySnapshot, failWakeflowConfigAuthority, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { failWakeflowConfigAuthority, readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
@@ -14,11 +15,10 @@ import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../governan
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
-import { activateRequirementClaim, createRequirementClaimState, createRequirementClaimStateFile, listRequirementClaimStates, readRequirementClaimState, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
+import { activateRequirementClaim, createRequirementClaimState, createRequirementClaimStateFile, listRequirementClaimStates, pendingRequirementWork, readRequirementClaimState, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
 import { admitBoardInspectionResult, admitRequirementPublicationResult, parseBoardInspectionRequest, parseRequirementPublicationRequest, WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION, WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { analyzePackageDocuments, deriveClaimTransitionBlockers, derivePublishAssessment, deriveRequirementId, privacyBlockers, } from "./decide.js";
 import { boardCounts, deriveRequirementNext, selectBoardEntries, toBoardEntry, } from "./projection.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 const MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$member.maximumBytes");
 const MEDIA_TYPES = Object.freeze({
     md: "text/markdown",
@@ -489,9 +489,9 @@ async function withdrawSuperseded(context, supersedes, successor, at) {
         fail("recovery-required", "record-vanished", "$ledger");
     return receiptOf(loaded, current);
 }
-async function pendingCount(context) {
+async function pendingWork(context) {
     const listing = await listRequirementClaimStates(context.root, context.signal);
-    return listing.states.filter((state) => state.status === "pending").length;
+    return pendingRequirementWork(listing.states);
 }
 /** 索引是自愈的投影：权威状态已提交，与并发写者的争用不能让本次调用报失败。 */
 async function refreshBoardIndexQuietly(context) {
@@ -512,7 +512,7 @@ async function applyPublish(context, plan) {
         disposition: wrote ? "published" : "current",
         package: receiptOf(loaded, source),
         superseded,
-        pendingCount: await pendingCount(context),
+        pending: await pendingWork(context),
     });
 }
 async function applyClaimTransition(context, plan) {
@@ -540,7 +540,7 @@ async function applyClaimTransition(context, plan) {
         disposition: plan.action === "activate" ? "activated" : "withdrawn",
         package: receiptOf(loaded, reread),
         superseded: null,
-        pendingCount: await pendingCount(context),
+        pending: await pendingWork(context),
     });
 }
 /** recover：记录是权威，看板可由记录补齐；被替代包若仍待认领则撤回。 */
@@ -562,21 +562,25 @@ async function recoverPublish(context, requirementId) {
         disposition: "recovered",
         package: receiptOf(loaded, source),
         superseded,
-        pendingCount: await pendingCount(context),
+        pending: await pendingWork(context),
     });
 }
+const NO_PENDING_WORK = Object.freeze({
+    claimable: 0,
+    attachable: 0,
+});
 function nextOf(phase, facts) {
     if (phase.mode === "preview") {
         return deriveRequirementNext({
             confirmationMissing: phase.planned.status === "blocked" && facts.confirmationMissing,
             awaitingApply: phase.planned.status === "ready",
-            pendingCount: 0,
+            pending: NO_PENDING_WORK,
         });
     }
     return deriveRequirementNext({
         confirmationMissing: false,
         awaitingApply: false,
-        pendingCount: phase.outcome.pendingCount,
+        pending: phase.outcome.pending,
     });
 }
 function assembleResult(envelope, input, phase, next, facts) {
@@ -698,7 +702,7 @@ async function inspectBoard(context, request) {
     const next = deriveRequirementNext({
         confirmationMissing: false,
         awaitingApply: false,
-        pendingCount: counts.pending,
+        pending: pendingRequirementWork(listing.states),
     });
     const base = {
         schemaVersion: WAKEFLOW_REQUIREMENT_PUBLIC_SCHEMA_VERSION,

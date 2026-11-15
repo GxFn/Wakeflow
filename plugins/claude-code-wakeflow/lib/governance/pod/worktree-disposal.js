@@ -15,12 +15,19 @@
  */
 /** 与 `wakeflow-status-result.schema.json` 的 `$defs.singleLineText.maxLength` 一致。 */
 const SUGGESTED_MAXIMUM_LENGTH = 512;
-const REMOVE_COMMAND_PREFIX = "git worktree remove ";
+/**
+ * 命令从工作区根执行，而检出属于某个产品仓库：`git worktree remove <路径>` 在工作区根上问的是工作区根所在的
+ * 仓库（测试工作区的根本身就是一个仓库）或根本不在仓库里，两种情况都找不到这个检出（1.3.0 终验：两次关 pod，
+ * Controller 都得自己改成 `git -C`）。`git -C <检出> worktree … .` 让 git 从检出自己找到它所属的仓库，路径仍然
+ * 只出现在一个参数里。
+ */
+const GIT_AT_CHECKOUT_PREFIX = "git -C ";
+const REMOVE_COMMAND_SUFFIX = " worktree remove .";
 /**
  * 登记时已加锁的检出（Claude Code 给它用的检出加锁，会话结束后锁仍在）先解锁再删（§13.130）。
  * 用 `;` 而不是 `&&`：锁在登记之后已被释放时 unlock 会失败，remove 仍要照做。
  */
-const UNLOCK_COMMAND_PREFIX = "git worktree unlock ";
+const UNLOCK_COMMAND_SUFFIX = " worktree unlock .";
 const UNLOCK_SEPARATOR = "; ";
 /**
  * 路径不可原样表示时的说明：不含路径、不是命令，本身满足 `singleLineText`；
@@ -71,9 +78,10 @@ function removeCommand(relativePath, locked) {
     if (!isSingleLinePath(relativePath))
         return null;
     const word = shellPathWord(relativePath);
+    const remove = `${GIT_AT_CHECKOUT_PREFIX}${word}${REMOVE_COMMAND_SUFFIX}`;
     const command = locked
-        ? `${UNLOCK_COMMAND_PREFIX}${word}${UNLOCK_SEPARATOR}${REMOVE_COMMAND_PREFIX}${word}`
-        : `${REMOVE_COMMAND_PREFIX}${word}`;
+        ? `${GIT_AT_CHECKOUT_PREFIX}${word}${UNLOCK_COMMAND_SUFFIX}${UNLOCK_SEPARATOR}${remove}`
+        : remove;
     return command.length <= SUGGESTED_MAXIMUM_LENGTH ? command : null;
 }
 /**

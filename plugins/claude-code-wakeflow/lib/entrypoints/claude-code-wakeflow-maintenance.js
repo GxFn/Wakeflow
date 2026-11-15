@@ -1,4 +1,5 @@
 import { executeWakeflowMaintenancePublicRequest, } from "../capabilities/workspace/maintain-workspace.js";
+import { CLAUDE_CODE_PRIVATE_ASSET_OPERATION_KINDS } from "../hosts/claude-code/claude-code-maintenance-capability.js";
 import { executeClaudeCodeMaintenanceExecution, previewClaudeCodeMaintenanceExecution, recoverClaudeCodeMaintenanceExecution, } from "../hosts/claude-code/claude-code-maintenance-execution.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -22,6 +23,7 @@ const CLAUDE_CODE_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
     currentHostProfile: claudeCodeWorkspaceHostResourceProfile,
     transports: claudeCodeWorkspaceHostTransportTable,
     hostProfiles: CLAUDE_CODE_MAINTENANCE_HOST_PROFILES,
+    privateAssetOperationKinds: CLAUDE_CODE_PRIVATE_ASSET_OPERATION_KINDS,
     preview: previewClaudeCodeMaintenanceExecution,
     apply: executeClaudeCodeMaintenanceExecution,
     recover: recoverClaudeCodeMaintenanceExecution,

@@ -26,7 +26,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        # macOS is the only supported platform (ADR-0021): the gate runs where the product runs.
+        # Ubuntu left the matrix on 2026-11-15 - a red job on an unsupported platform would block
+        # the release check, which requires this whole run to be green.
+        os: [macos-15]
         profile: [gate, artifact]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,9 +66,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   handoff:
-    name: handoff / ubuntu
+    name: handoff / macos
     if: github.ref_type != 'tag'
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     # The read-only handoff checklist (whitespace, private content, build:check, docs pointers,
     # duration-table coverage, CLAUDE.md/AGENTS.md parity, Git state) ran only locally before
     # batch 5 (open-items D9); a push that passes the gate but fails handoff is now visible remotely.
@@ -84,7 +87,7 @@ jobs:
       - name: Run the handoff checklist
         run: npm run --silent wf -- handoff
   release:
-    name: release check / ubuntu
+    name: release check / macos
     # open-items C12: six tags (v1.1.0 - v1.2.2) were cut on commits whose remote gate was red and
     # nothing said so. A v* tag now runs the strict release consistency check remotely: the version
     # sources agree, the tag points at this commit, the tree is clean, the artifacts are release
@@ -92,7 +95,7 @@ jobs:
     # and `--require-remote` are local-checkout questions (a tag checkout has no branch); the job
     # proves the remote side of them instead: the tagged commit is on origin/main.
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     timeout-minutes: 20
     permissions:
       contents: read

@@ -20,7 +20,8 @@ test("CI retains separate platform/profile results, pins actions and uploads onl
   const strategy = object(job.strategy);
   equal(strategy["fail-fast"], false);
   deepEqual(object(strategy.matrix).profile, ["gate", "artifact"]);
-  deepEqual(object(strategy.matrix).os, ["ubuntu-24.04", "macos-15"]);
+  // 只在受支持的平台上跑（ADR-0021：macOS）；交接与发布检查两个作业也在同一个平台。
+  deepEqual(object(strategy.matrix).os, ["macos-15"]);
   ok(Array.isArray(job.steps));
   const steps = job.steps.map(object);
   for (const step of steps.filter((step) => step.uses !== undefined))
@@ -48,6 +49,7 @@ test("CI retains separate platform/profile results, pins actions and uploads onl
 
   // handoff 作业：完整历史检出、同样钉死的 action、只跑只读交接检查。
   const handoff = object(object(workflow.jobs).handoff);
+  equal(handoff["runs-on"], "macos-15");
   ok(Array.isArray(handoff.steps));
   const handoffSteps = handoff.steps.map(object);
   for (const step of handoffSteps.filter((step) => step.uses !== undefined))
@@ -70,6 +72,7 @@ test("CI retains separate platform/profile results, pins actions and uploads onl
   equal(job.if, "github.ref_type != 'tag'");
   equal(handoff.if, "github.ref_type != 'tag'");
   const release = object(object(workflow.jobs).release);
+  equal(release["runs-on"], "macos-15");
   equal(release.if, "github.ref_type == 'tag'");
   deepEqual(release.permissions, { contents: "read", actions: "read" });
   ok(Array.isArray(release.steps));

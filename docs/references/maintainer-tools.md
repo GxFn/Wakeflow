@@ -210,7 +210,7 @@ npm run --silent wf -- live verify --id live-EXAMPLE --evidence "<collected-evid
 
 ## 8. CI 与可分享验证摘要
 
-`.github/workflows/verify.yml` 为 pull request、main push 和手动触发分别运行 `gate` / `artifact` × Ubuntu 24.04 / macOS 15，固定 Node 24.19.0、npm 11.17.0、2 个测试 worker；另有一个 Ubuntu 上的 `handoff` 作业运行 `wf handoff`（完整历史检出，§15 的只读交接检查）。模型测试的种子按 `github.run_number` 轮换，反例文件 `.build/model/*.json` 随摘要上传（§6）。矩阵不隐藏失败；被后续提交取代的 pull request 运行会被取消，main 上的每次 push 都保留完整记录，作业外层期限 120 分钟（§13.161）。workflow 只给 contents: read，不保留 checkout 凭证；不调用原生聊天、发布或安装缓存操作。
+`.github/workflows/verify.yml` 为 pull request、main push 和手动触发分别在 macOS 15 上运行 `gate` 与 `artifact`（2026-11-15 起只跑受支持的平台，ADR-0021 的补记；此前还有 Ubuntu 24.04），固定 Node 24.19.0、npm 11.17.0、2 个测试 worker；另有一个 `handoff` 作业运行 `wf handoff`（完整历史检出，§15 的只读交接检查）。模型测试的种子按 `github.run_number` 轮换，反例文件 `.build/model/*.json` 随摘要上传（§6）。矩阵不隐藏失败；被后续提交取代的 pull request 运行会被取消，main 上的每次 push 都保留完整记录，作业外层期限 120 分钟（§13.161）。workflow 只给 contents: read，不保留 checkout 凭证；不调用原生聊天、发布或安装缓存操作。
 
 三个 Action 固定完整 Git 提交，版本来源为 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1)、[setup-node v7.0.0](https://github.com/actions/setup-node/releases/tag/v7.0.0)、[upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1)。本地保存配置和静态验证不等于 GitHub 上已经运行成功；提交、推送与远端执行仍需分别完成。Windows 尚不纳入完整门矩阵，不通过 skip 将其说成支持。
 

@@ -98,8 +98,9 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   never enters the artifacts, owns no Demand state, and its lab, live and
   capture receipts under `.build/` carry local paths and stay uncommitted.
 - `.github/workflows/verify.yml` runs the same `wf verify gate|artifact`
-  profiles on Ubuntu and macOS and uploads only the bounded `ci export`
-  report. A green local gate is not a remote run; say which one ran.
+  profiles on macOS only - the one supported platform (ADR-0021) - and
+  uploads only the bounded `ci export` report. A green local gate is not a
+  remote run; say which one ran.
 - `wakeflow-architecture-atlas/` is a separate read-only map subproject with
   its own `npm run check` in that directory; `maps/` is its canon. It is not
   part of the root gate and must not be cited as runtime authority.

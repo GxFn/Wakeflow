@@ -152,7 +152,8 @@ either; nothing broader such as `Bash(tmux *)` is written. Windows other than th
 also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,
 `.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that
 lowers the chance of a stray edit and is not isolation - a process running as you can still
-write there. A trust dialog for a root Wakeflow
+write there. Under desktop sessions these rules do not survive the app taking a session
+over, so they hold under the tmux transport only. A trust dialog for a root Wakeflow
 wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a
 `..` directory in that list is 0.9.x residue or the repository's own settings: delete or
 review it before accepting, because accepting activates it.

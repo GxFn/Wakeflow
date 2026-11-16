@@ -236,7 +236,7 @@ edit files, do not read the helper's source.
 
 Permissions are the same as under tmux: the helper starts every session with
 `--allowedTools` for its role's Wakeflow tools and the helper itself, and outside the Controller
-with the managed-path deny rules (whether those outlive step 3's takeover is not yet confirmed); the
+with the managed-path deny rules (those do not outlive step 3's takeover - the app restarts the session with its own arguments, so here only the instruction file guards those paths); the
 settings rules maintenance writes are unchanged, and a product repository's `.claude/settings.json` is never written.
 
 ## Step 8 - delivering on this transport

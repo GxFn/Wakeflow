@@ -111,6 +111,7 @@ Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两
 同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。Controller 之外的窗口启动时还带着
 对 Wakeflow 自身文件（`.wakeflow-local`、`.wakeflow-active`、`wakeflow.config.json`、根上的 Claude
 settings 与账本）的编辑拒绝规则：它降低误改的机会，不是隔离——以你的身份运行的进程仍然写得了那里。
+桌面会话传输下这些规则过不了应用对会话的接管，所以只在 tmux 传输下成立。
 因此 Wakeflow 写过的根，
 其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，
 那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。

@@ -1,9 +1,9 @@
 import path from "node:path";
 import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import {
+  failWakeflowConfigAuthority,
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
-  failWakeflowConfigAuthority,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
@@ -42,6 +42,7 @@ import {
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -76,9 +77,11 @@ import {
   type WorkClaim,
 } from "../../kernel/work-claims.js";
 import {
+  selectWakeflowWindowTransportPort,
   selectWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostTransportTable,
 } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import type { WakeflowWindowTransportPort } from "../../workspace/host-runtime/wakeflow-window-transport-port.js";
 import {
   createWakeflowWindowHostBinding,
   renderWakeflowWindowHostBinding,
@@ -126,7 +129,6 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostLocatorProvider,
   type WakeflowWorkspaceHostResourceProfile,
   wakeflowWorkspaceHostLocatorProvider,
 } from "../../workspace/workspace-host-resource-profile.js";
@@ -147,25 +149,17 @@ import {
   rejectForeignHandleOwner,
 } from "./decide.js";
 import {
-  classifyDesktopSessions,
-  type DesktopSessionObservation,
-} from "./desktop-session-classification.js";
-import {
   createWindowLocatorRecord,
   readWindowLocator,
   retireWindowLocator,
-  toTmuxLocator,
   type WindowLocatorRecord,
-  type WindowLocatorTarget,
   writeWindowLocator,
 } from "./locator-store.js";
-import { classifyTmuxPanes, type TmuxPaneObservation } from "./pane-classification.js";
 import {
   deriveEndpointNext,
   type ProjectionReceipt,
   publishProjectionDocument,
 } from "./projection.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Endpoint：`wakeflow_register_window_binding` 的薄壳。
@@ -188,6 +182,11 @@ export interface WindowBindingHostFacade {
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   /** 多传输宿主的 profile 表（ADR-0025 D1）；准入时按配置选出一份，之后只读选出的 profile。 */
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
+  /**
+   * 窗口传输端口（open-items L6）：没有传输表的宿主在这里给出它唯一的一份；有传输表的宿主把端口放在表里，
+   * 与 profile 同键。切片按配置选出一份之后只调用它，不认传输的名字。
+   */
+  readonly windowTransport?: Readonly<WakeflowWindowTransportPort> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
   /**
@@ -266,6 +265,7 @@ interface AdmittedFacade {
   readonly hostId: WakeflowHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
+  readonly windowTransport?: Readonly<WakeflowWindowTransportPort> | undefined;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
   readonly renderLaunchValues?: WakeflowWindowLaunchValuesRenderer | undefined;
@@ -274,6 +274,8 @@ interface AdmittedFacade {
 interface EndpointContext {
   readonly root: RootedDirectory;
   readonly facade: AdmittedFacade;
+  /** 按这个工作区配置的窗口传输选出的端口；此后本上下文只调用这一份。 */
+  readonly transport: Readonly<WakeflowWindowTransportPort>;
   readonly snapshot: Readonly<WakeflowConfigAuthoritySnapshot>;
   readonly windows: readonly Readonly<WakeflowWindowRuntimeDesiredWindow>[];
   readonly programId: string;
@@ -350,8 +352,9 @@ function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade 
     return Object.freeze({
       hostId,
       resourceProfile,
-      // 传输表随门面进来（ADR-0025 D1）：openContext 按配置从它选出本工作区的 profile。
+      // 传输表随门面进来（ADR-0025 D1）：openContext 按配置从它选出本工作区的 profile 与端口。
       ...(facade.transports === undefined ? {} : { transports: facade.transports }),
+      ...(facade.windowTransport === undefined ? {} : { windowTransport: facade.windowTransport }),
       identityProfile,
       renderLaunchInstructions: facade.renderLaunchInstructions,
       ...(typeof facade.renderLaunchValues === "function"
@@ -366,9 +369,24 @@ function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade 
   }
 }
 
-/** 定位器提供者由宿主资源 Profile 的启动模板推导（ADR-0025 D2），而不是比较宿主 id 或传输名。 */
-function locatorProvider(facade: AdmittedFacade): WakeflowWorkspaceHostLocatorProvider {
-  return wakeflowWorkspaceHostLocatorProvider(facade.resourceProfile);
+/**
+ * 按配置选出这个工作区的窗口传输端口（open-items L6）。门面没有给出端口，或端口的传输与选出的 profile
+ * 推导出的定位子提供者（ADR-0025 D2）不是同一个，都是组合根的合同违背——两个值都来自宿主，这里只核对
+ * 它们一致，不拿名字分支。
+ */
+function selectTransport(
+  hostFacade: AdmittedFacade,
+  resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
+): Readonly<WakeflowWindowTransportPort> {
+  const transport = selectWakeflowWindowTransportPort(hostFacade, snapshot.model);
+  if (
+    transport === null ||
+    transport.provider !== wakeflowWorkspaceHostLocatorProvider(resourceProfile)
+  ) {
+    fail("unexpected", "host-facade", "$facade");
+  }
+  return transport;
 }
 
 function bindingDigestOf(binding: Readonly<WakeflowWindowHostBinding>): Sha256Digest {
@@ -436,6 +454,7 @@ async function openContext(
   return Object.freeze({
     root,
     facade,
+    transport: selectTransport(hostFacade, resourceProfile, snapshot),
     snapshot,
     windows: topology.windows,
     programId: topology.programId,
@@ -661,15 +680,15 @@ async function loadState(
   const worktreeReceipts = await loadWorktreeReceipts(context);
   const binding = bindings.find((entry) => entry.windowId === window.windowId) ?? null;
   const claim = await loadClaim(context, window.windowId);
-  const locator =
-    locatorProvider(context.facade) !== "none"
-      ? await readWindowLocator(
-          context.root,
-          context.facade.hostId,
-          window.windowId,
-          context.signal,
-        )
-      : null;
+  const locator = context.transport.hasLocator
+    ? await readWindowLocator(
+        context.root,
+        context.facade.hostId,
+        window.windowId,
+        context.transport.locatorCodecs,
+        context.signal,
+      )
+    : null;
   return Object.freeze({
     bindings,
     binding,
@@ -696,7 +715,8 @@ function endpointState(context: EndpointContext, loaded: LoadedState): EndpointS
   return Object.freeze({
     windowKnown: context.window !== null && context.intent !== null,
     launchIntentDigest: context.intent?.intentDigest ?? "",
-    locatorProvider: locatorProvider(context.facade),
+    hasLocator: context.transport.hasLocator,
+    relocation: context.transport.relocation,
     worktreeRequired: context.intent !== null && context.intent.worktree !== null,
     binding:
       loaded.binding === null || loaded.bindingDigest === null
@@ -735,54 +755,31 @@ function admitHandle(
   }
 }
 
-/** 存活观察按种类分派；观察的种类与定位器的传输不一致（或没有定位器）时是 no-locator：什么也证明不了。 */
+/**
+ * 存活观察交给窗口传输端口分类（open-items L6）：观察的种类不是本传输的、定位记录是另一种传输留下的、
+ * 或者没有绑定可对照时，端口的结论都是"什么也证明不了"。
+ */
 function classifyLiveness(
   context: EndpointContext,
   loaded: LoadedState,
   observation: LivenessObservation,
 ): ClosureLiveness {
-  if (observation.kind === "tmux-panes") {
-    if (loaded.locator === null || loaded.binding === null || loaded.locator.provider !== "tmux") {
-      return Object.freeze({ kind: "tmux-panes" as const, status: "no-locator" as const });
-    }
-    const socketName = context.snapshot.model.hosts?.["claude-code"]?.tmux?.socketName ?? null;
-    const status = classifyTmuxPanes(
-      toTmuxLocator(loaded.locator),
-      { bindingId: loaded.binding.bindingId, socketName },
-      observation.panes as readonly TmuxPaneObservation[],
-    );
-    return Object.freeze({ kind: "tmux-panes" as const, status });
-  }
-  if (observation.kind === "desktop-sessions") {
-    if (
-      loaded.locator === null ||
-      loaded.binding === null ||
-      loaded.locator.provider !== "desktop"
-    ) {
-      return Object.freeze({ kind: "desktop-sessions" as const, status: "no-locator" as const });
-    }
-    // 句柄是 Claude 会话 id，定位器里是桌面 id；`list_sessions` 的行按两者之一匹配（ADR-0025 D3，X17）。
-    const status = classifyDesktopSessions(
-      {
-        sessionId: loaded.binding.handle.value,
-        desktopSessionId: loaded.locator.desktop.sessionId,
-      },
-      observation.sessions as readonly DesktopSessionObservation[],
-    );
-    return Object.freeze({ kind: "desktop-sessions" as const, status });
-  }
-  if (observation.kind === "codex-thread") {
-    return Object.freeze({ kind: "codex-thread" as const, status: observation.status });
-  }
-  return Object.freeze({ kind: "unobserved" as const });
+  return context.transport.classifyLiveness({
+    binding:
+      loaded.binding === null
+        ? null
+        : { bindingId: loaded.binding.bindingId, handleValue: loaded.binding.handle.value },
+    locator: loaded.locator,
+    observation,
+    hosts: context.snapshot.model.hosts,
+  });
 }
 
-function creationCommand(observation: CreationObservation) {
+function creationCommand(context: EndpointContext, observation: CreationObservation) {
   return Object.freeze({
     handleValue: observation.handle.value,
     launchIntentDigest: observation.launchIntentDigest,
-    hasTmuxCoordinates: observation.tmux !== undefined,
-    hasDesktopSession: observation.desktop !== undefined,
+    locatorRefusal: context.transport.admitCreationLocator(observation),
     hasWorktreeObservation: observation.worktree !== undefined,
   });
 }
@@ -796,19 +793,19 @@ function toCommand(
     case "register":
       return Object.freeze({
         operation: "register" as const,
-        observation: creationCommand(request.observation),
+        observation: creationCommand(context, request.observation),
       });
     case "replace":
       return Object.freeze({
         operation: "replace" as const,
-        observation: creationCommand(request.observation),
+        observation: creationCommand(context, request.observation),
         expectedBindingId: request.expectedBindingId,
         expectedBindingDigest: request.expectedBindingDigest,
       });
     case "relocate":
       return Object.freeze({
         operation: "relocate" as const,
-        observation: creationCommand(request.observation),
+        observation: creationCommand(context, request.observation),
         expectedBindingId: request.expectedBindingId,
         expectedBindingDigest: request.expectedBindingDigest,
       });
@@ -1017,10 +1014,9 @@ function inspectionResult(context: EndpointContext, loaded: LoadedState): Window
         ? { status: "unregistered" }
         : { status: "registered", ...bindingSummary(loaded.binding) },
     claim: claimSummary(loaded.claim, loaded.claimExpired),
-    locator:
-      locatorProvider(context.facade) === "none"
-        ? { status: "not-applicable" }
-        : { status: loaded.locator === null ? "absent" : "present" },
+    locator: context.transport.hasLocator
+      ? { status: loaded.locator === null ? "absent" : "present" }
+      : { status: "not-applicable" },
     next: nextFor(
       context,
       loaded.bindings,
@@ -1048,53 +1044,43 @@ async function readBindingSource(context: EndpointContext, ref: PortableResource
   }
 }
 
-/** 观察里属于本传输的定位子（ADR-0025 D3）；准入已保证它在场，缺席只会出现在退役路径。 */
-function locatorTarget(
-  provider: Exclude<WakeflowWorkspaceHostLocatorProvider, "none">,
-  observation: CreationObservation,
-): WindowLocatorTarget | null {
-  if (provider === "tmux") {
-    return observation.tmux === undefined
-      ? null
-      : {
-          provider: "tmux",
-          tmux: {
-            socketName: observation.tmux.socketName,
-            sessionName: observation.tmux.sessionName,
-            windowId: observation.tmux.windowId,
-            paneId: observation.tmux.paneId,
-          },
-        };
-  }
-  return observation.desktop === undefined
-    ? null
-    : { provider: "desktop", desktop: { sessionId: observation.desktop.sessionId } };
-}
-
+/**
+ * 绑定变了就把定位记录换成新的一代：定位由传输端口从创建观察里取出（ADR-0025 D3；准入已保证它在场，
+ * 缺席只会出现在退役路径），没有绑定或没有定位时删掉记录。没有定位子的传输什么也不做。
+ */
 async function refreshLocator(
   context: EndpointContext,
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
   binding: Readonly<WakeflowWindowHostBinding> | null,
   observation: CreationObservation | null,
 ): Promise<void> {
-  const provider = locatorProvider(context.facade);
-  if (provider === "none") return;
-  const target =
-    binding === null || observation === null ? null : locatorTarget(provider, observation);
+  const transport = context.transport;
+  if (!transport.hasLocator) return;
+  const target = binding === null || observation === null ? null : transport.locatorOf(observation);
   if (binding === null || target === null) {
-    await retireWindowLocator(context.root, context.facade.hostId, window.windowId, context.signal);
+    await retireWindowLocator(
+      context.root,
+      context.facade.hostId,
+      window.windowId,
+      transport.locatorCodecs,
+      context.signal,
+    );
     return;
   }
   await writeWindowLocator(
     context.root,
-    createWindowLocatorRecord({
-      programId: context.programId,
-      hostId: context.facade.hostId,
-      windowId: binding.windowId,
-      bindingId: binding.bindingId,
-      registeredAt: binding.registeredAt,
-      ...target,
-    }),
+    createWindowLocatorRecord(
+      {
+        programId: context.programId,
+        hostId: context.facade.hostId,
+        windowId: binding.windowId,
+        bindingId: binding.bindingId,
+        registeredAt: binding.registeredAt,
+        target,
+      },
+      transport.locatorCodecs,
+    ),
+    transport.locatorCodecs,
     context.signal,
   );
 }

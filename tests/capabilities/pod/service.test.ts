@@ -26,9 +26,11 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeTmuxWindowTransportPort } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
@@ -51,9 +53,11 @@ useDisposableDurability();
 /** 与 Codex 组合根一致的 pod facade：本宿主 Codex，两个宿主的 profile 都在（W7）。 */
 const CODEX: PodHostFacade & {
   readonly renderLaunchInstructions: typeof renderCodexWindowLaunchInstructions;
+  readonly windowTransport: typeof codexWindowTransportPort;
 } = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
   hosts: CODEX_OBSERVATION_FACADE.hosts,
@@ -61,6 +65,7 @@ const CODEX: PodHostFacade & {
 const CLAUDE: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeTmuxWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };

@@ -25,13 +25,14 @@ import {
   renderCodexWindowLaunchInstructions,
   renderCodexWindowLaunchValues,
 } from "../hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
 import {
   resolveWakeflowArtifactIdentity,
   wakeflowArtifactWriterOf,
 } from "./wakeflow-artifact-identity.js";
-import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
@@ -50,6 +51,8 @@ const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
 const CODEX_HOST_FACADE = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
+  // L6：项目聊天只有一种传输，端口直接给出（Claude Code 的两份在它的传输表里）。
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
   // G14：握手时把这个窗口解析后的启动取值记进绑定。

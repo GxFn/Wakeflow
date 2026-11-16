@@ -28,12 +28,17 @@ import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/u
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
 import {
+  claudeCodeDesktopWindowTransportPort,
+  claudeCodeTmuxWindowTransportPort,
+  claudeCodeWindowTransportTable,
+} from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
+import {
   claudeCodeDesktopWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
-  claudeCodeWorkspaceHostTransportTable,
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
@@ -55,12 +60,14 @@ useDisposableDurability();
 const CODEX: WindowBindingHostFacade = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 };
 const CLAUDE: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeTmuxWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };
@@ -68,6 +75,7 @@ const CLAUDE: WindowBindingHostFacade = {
 const CLAUDE_DESKTOP: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeDesktopWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };
@@ -1613,7 +1621,7 @@ test("Claude Code 桌面传输经配置选择（ADR-0025 D1）：hosts.claude-co
   }
   const facade: WindowBindingHostFacade = {
     ...CLAUDE,
-    transports: claudeCodeWorkspaceHostTransportTable,
+    transports: claudeCodeWindowTransportTable,
   };
   const desktop = await fixture(t, executeClaudeCodeWakeflowMaintenance, {
     "claude-code": { windowTransport: "desktop" },

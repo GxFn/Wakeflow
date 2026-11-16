@@ -1,4 +1,5 @@
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
+import type { WakeflowWindowTransportPort } from "./wakeflow-window-transport-port.js";
 
 /**
  * Wakeflow Workspace / Host Runtime：窗口传输的 profile 选择（ADR-0025 D1）。
@@ -13,12 +14,19 @@ export interface WakeflowWorkspaceHostTransportTable {
   /** 配置未声明时选用的键。 */
   readonly defaultTransport: string;
   readonly profiles: Readonly<Record<string, Readonly<WakeflowWorkspaceHostResourceProfile>>>;
+  /**
+   * 每种传输的端口（open-items L6），键与 `profiles` 相同。只有执行端点切片用它；别的切片只读 profile，
+   * 所以它是可选的。
+   */
+  readonly ports?: Readonly<Record<string, Readonly<WakeflowWindowTransportPort>>> | undefined;
 }
 
 export interface WakeflowWorkspaceHostTransportSource {
   readonly hostId: string;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
+  /** 没有传输表的宿主（一种传输）直接给出它的端口。 */
+  readonly windowTransport?: Readonly<WakeflowWindowTransportPort> | undefined;
 }
 
 /**
@@ -74,4 +82,19 @@ export function selectWakeflowWorkspaceHostResourceProfile(
   if (profile === undefined)
     throw new WakeflowWorkspaceHostTransportError("unknown-transport", transport);
   return profile;
+}
+
+/**
+ * 按配置选出当前工作区该宿主的窗口传输端口：有传输表的宿主取表里与所选 profile 同键的那一份，没有表的
+ * 宿主取它直接给出的那一份；都没有即 null，由调用方决定这算不算合同违背。
+ */
+export function selectWakeflowWindowTransportPort(
+  host: Readonly<WakeflowWorkspaceHostTransportSource>,
+  model: Readonly<WakeflowWorkspaceHostTransportModel>,
+): Readonly<WakeflowWindowTransportPort> | null {
+  const transport = configuredWakeflowWorkspaceHostTransport(host, model);
+  if (transport === null || host.transports === undefined) return host.windowTransport ?? null;
+  const ports = host.transports.ports;
+  if (ports === undefined || !Object.hasOwn(ports, transport)) return null;
+  return ports[transport] ?? null;
 }

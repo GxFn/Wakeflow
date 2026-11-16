@@ -22,6 +22,7 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
@@ -206,6 +207,7 @@ test("maintain_workspace reconcile repairs missing Wakeflow-owned static directo
 const CODEX_FACADE = {
   hostId: "codex",
   resourceProfile: codexWorkspaceHostResourceProfile,
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 } as const;

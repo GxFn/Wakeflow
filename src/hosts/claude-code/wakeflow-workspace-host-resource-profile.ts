@@ -1,5 +1,5 @@
-import { parseWakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceHostTransportTable } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Host / Claude Code：资源矩阵所需的 Claude Code 静态值，按窗口传输各一份（ADR-0025）。

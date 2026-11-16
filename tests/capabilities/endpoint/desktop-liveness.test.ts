@@ -14,6 +14,7 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeDesktopWindowTransportPort } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import { claudeCodeDesktopWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
@@ -32,6 +33,7 @@ useDisposableDurability();
 const CLAUDE_DESKTOP: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeDesktopWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeDesktopWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };

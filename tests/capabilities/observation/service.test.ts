@@ -37,12 +37,12 @@ import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   isLocalFilesystemType,
   readFilesystemTypeName,
 } from "../../../src/foundation/node/filesystem-type.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../../src/governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../../src/governance/delivery/delivery-rearm.js";
@@ -75,6 +75,7 @@ import {
   renderCodexWindowLaunchInstructions,
   renderCodexWindowLaunchValues,
 } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -169,6 +170,7 @@ const GATE_NAMES = Object.freeze([
 const CODEX_ENDPOINT_FACADE = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
   // 与组合根一致：握手时把窗口解析后的启动取值记进绑定（open-items G14）。

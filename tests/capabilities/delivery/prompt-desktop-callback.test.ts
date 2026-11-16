@@ -11,15 +11,19 @@ import {
 } from "../../../src/capabilities/delivery/prompt.js";
 import {
   createWindowLocatorRecord,
-  readWindowDesktopSessionId,
-  type WindowLocatorTarget,
+  readBoundWindowLocator,
   writeWindowLocator,
 } from "../../../src/capabilities/endpoint/locator-store.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
+import {
+  claudeCodeDesktopSessionIdOf,
+  claudeCodeDesktopWindowTransportPort,
+} from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
+import type { WakeflowWindowLocatorTarget } from "../../../src/workspace/host-runtime/wakeflow-window-transport-port.js";
 import {
   TASKING_CREATED_AT,
   taskPackageDraft,
@@ -30,7 +34,8 @@ useDisposableDurability();
 
 /**
  * 1 级（组件）：投递回传段里 Controller 的桌面会话（open-items X15）。Controller 窗口的定位器记录在一次性根上写入，
- * `readWindowDesktopSessionId` 只在记录是桌面 provider 且绑定代际相同时给出 `local_<uuid>`；prompt 渲染器只在拿到
+ * 组合根的读法（按当前绑定读定位器，再由宿主取出桌面会话 id）只在记录是桌面 provider 且绑定代际相同时给出
+ * `local_<uuid>`；prompt 渲染器只在拿到
  * 这个值时于回传段加一行 `- controller desktop session: …`，tmux 记录、缺席与旧绑定都不出这一行，所以 tmux
  * 投递的 prompt 字节不变；这一行在渲染文本里，prompt 摘要随之不同；形状不对的值不进 prompt。
  */
@@ -106,47 +111,58 @@ async function rootedFixture(t: TestContext): Promise<RootedDirectory> {
 async function writeControllerLocator(
   root: RootedDirectory,
   bindingId: string,
-  target: WindowLocatorTarget,
+  target: WakeflowWindowLocatorTarget,
 ): Promise<void> {
   await writeWindowLocator(
     root,
-    createWindowLocatorRecord({
-      programId: "program-1",
-      hostId: "claude-code",
-      windowId: CONTROLLER_WINDOW_ID,
-      bindingId,
-      registeredAt: parseUtcInstant("2026-11-01T10:00:00.000Z"),
-      ...target,
-    }),
+    createWindowLocatorRecord(
+      {
+        programId: "program-1",
+        hostId: "claude-code",
+        windowId: CONTROLLER_WINDOW_ID,
+        bindingId,
+        registeredAt: parseUtcInstant("2026-11-01T10:00:00.000Z"),
+        target,
+      },
+      CODECS,
+    ),
+    CODECS,
     undefined,
   );
 }
 
-const read = (root: RootedDirectory) =>
-  readWindowDesktopSessionId(
-    root,
-    "claude-code",
-    CONTROLLER_WINDOW_ID,
-    CONTROLLER_BINDING_ID,
-    undefined,
+/** Claude Code 认得的两种定位载荷（两份端口带的是同一组）。 */
+const CODECS = claudeCodeDesktopWindowTransportPort.locatorCodecs;
+
+/** 与 Claude Code 组合根同一个读法：按当前绑定读定位器，再由宿主取出桌面会话 id。 */
+const read = async (root: RootedDirectory) =>
+  claudeCodeDesktopSessionIdOf(
+    await readBoundWindowLocator(
+      root,
+      "claude-code",
+      CONTROLLER_WINDOW_ID,
+      CONTROLLER_BINDING_ID,
+      CODECS,
+      undefined,
+    ),
   );
 
-test("readWindowDesktopSessionId gives the Controller's desktop session only for a desktop locator of the same binding generation", async (t) => {
+test("the Controller's desktop session is read only from a desktop locator of the same binding generation", async (t) => {
   const root = await rootedFixture(t);
   equal(await read(root), null, "no locator: nothing to render");
   await writeControllerLocator(root, CONTROLLER_BINDING_ID, {
     provider: "tmux",
-    tmux: { socketName: null, sessionName: "wakeflow", windowId: "@1", paneId: "%1" },
+    payload: { socketName: null, sessionName: "wakeflow", windowId: "@1", paneId: "%1" },
   });
   equal(await read(root), null, "a tmux locator has no desktop session");
   await writeControllerLocator(root, "window_binding_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", {
     provider: "desktop",
-    desktop: { sessionId: DESKTOP_SESSION_ID },
+    payload: { sessionId: DESKTOP_SESSION_ID },
   });
   equal(await read(root), null, "an older binding generation is not the Controller now");
   await writeControllerLocator(root, CONTROLLER_BINDING_ID, {
     provider: "desktop",
-    desktop: { sessionId: DESKTOP_SESSION_ID },
+    payload: { sessionId: DESKTOP_SESSION_ID },
   });
   equal(await read(root), DESKTOP_SESSION_ID);
 });

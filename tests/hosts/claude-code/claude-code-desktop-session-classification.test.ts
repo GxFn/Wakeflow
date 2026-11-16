@@ -4,7 +4,7 @@ import { test } from "node:test";
 import {
   classifyDesktopSessions,
   type DesktopSessionObservation,
-} from "../../../src/capabilities/endpoint/desktop-session-classification.js";
+} from "../../../src/hosts/claude-code/claude-code-desktop-session-classification.js";
 
 /**
  * 桌面会话分类（第 0 级，纯逻辑；ADR-0025 D3，open-items X17）：行取自桌面的 `list_sessions`，会话在侧栏里

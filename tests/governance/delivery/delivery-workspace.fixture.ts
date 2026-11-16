@@ -23,6 +23,7 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
+import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   type WriteHostHookObservationReceipt,
@@ -63,6 +64,7 @@ export const CODEX_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & {
 } = Object.freeze({
   hostId: "codex" as const,
   resourceProfile: codexWorkspaceHostResourceProfile,
+  windowTransport: codexWindowTransportPort,
   identityProfile: codexWindowHostIdentityProfile,
   renderLaunchInstructions: renderCodexWindowLaunchInstructions,
 });

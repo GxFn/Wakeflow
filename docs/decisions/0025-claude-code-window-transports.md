@@ -54,3 +54,13 @@ Claude Code 宿主今天只有一种窗口传输：每个窗口是 tmux pane 里
 ## 验证
 
 K1 的第 2 级门；`claude-code-desktop-asset.test.ts` 以假 `claude` 与假 `script` 走通三步与失败码；场景链桌面驱动 26/26；L18 真实桌面 Controller 从认领到归档；L19 tmux 回归。
+
+## 2026-11-16 补记：窗口传输端口（open-items L6，用户裁决，gate-log §13.254）
+
+D2 让共享代码从 profile 推导"定位子提供者"而不比较宿主 id；D3 定了桌面传输的定位与存活证据。两条落地之后，执行端点切片里仍然留着按传输名与观察种类写的分支——定位的取出、记录的两种形状、存活的两种分类、relocate 只对 tmux 成立——加一种传输要改切片。1.3.1 把它们收成一个端口：
+
+- **端口**（`src/workspace/host-runtime/wakeflow-window-transport-port.ts`）：`provider`（只写进记录）、有没有定位子、relocate 成不成立、本宿主认得的定位载荷编解码器、创建观察的定位子准入、从创建观察取出定位、把一份存活观察分类成"还在 / 不在了 / 证明不了"。
+- **实现在宿主层**：`src/hosts/claude-code/claude-code-window-transport-ports.ts`（tmux 与桌面两份，同形）、`src/hosts/codex/codex-window-transport-port.ts`（没有定位子）。两种传输同批改。
+- **怎么到切片手里**：Claude Code 的两份放在传输表里，与 profile 同键，切片按配置选 profile 的同一步选出端口；Codex 的门面直接给出。端口的 `provider` 必须等于所选 profile 推导出的定位子提供者，否则是组合根的合同违背。
+- **不变的**：公共合同（观察的 wire 形状）、拒绝的 reason（`tmux-coordinates-required`、`desktop-session-required`、`locator-kind-mismatch`、`relocate-not-applicable`、`locator-provider`）、定位记录落盘的字节与代际标识的派生——1.3.0 写下的记录原样读回，测试把三份记录的全文钉成字面量。
+- **收紧的一处**：端口只认本传输的观察。Claude 窗口上交来的 Codex 线程状态此前被原样通过（`archived` 算"不在了"），现在不算证据。

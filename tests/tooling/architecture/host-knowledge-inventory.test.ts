@@ -9,22 +9,20 @@ import { test } from "node:test";
  * 依赖方向的检查只看 import：切片不引用 `src/hosts`，架构门就是绿的。可宿主的知识不靠 import 也渗得
  * 进来——tmux 的坐标与 pane、Codex 的线程、桌面会话、以宿主命名的配置键。这里把它们在 `src/hosts` 与
  * `src/contracts`（公共合同的词汇本来就点名观察种类）之外的每一处出现数出来，钉成一张清单：清单之外的
- * 文件出现这些词即失败；清单之内的文件多了要说明为什么、少了要把数字降下来。它不要求今天就搬走——
- * endpoint 切片按公共合同的观察种类分派，这是合同的一部分；它保证的是这类知识不再悄悄扩散，并且写明
- * 每一处为什么在那里。注释不计，只数代码。
+ * 文件出现这些词即失败；清单之内的文件多了要说明为什么、少了要把数字降下来。它保证的是这类知识不再
+ * 悄悄扩散，并且写明每一处为什么在那里。注释不计，只数代码。
+ *
+ * 1.3.1（gate-log §13.254）：endpoint 切片按观察种类与传输名分派的四个文件出了清单——定位的取出与解析、
+ * 存活的分类、能否 relocate 都由宿主层实现的窗口传输端口给出，切片只调用。清单从 14 个文件降到 10 个。
  */
 
 const VOCABULARY =
   /tmux|\bpanes?\b|codex-thread|desktop-session|create_thread|"claude-code"|"codex"/giu;
 
 const INVENTORY: Readonly<Record<string, readonly [count: number, why: string]>> = Object.freeze({
-  // 公共合同的观察种类（tmux-panes、codex-thread、desktop-session）由 endpoint 切片分派：合同词汇。
+  // 公共合同的文字说明里点名了坐标与会话 id 不进结果：合同词汇。endpoint 切片的其余四处（决定、服务、定位
+  // 存储、pane 分类，合计 120 处）在 1.3.1 搬到了窗口传输端口之后（gate-log §13.254）：切片不再点名传输。
   "src/capabilities/endpoint/contract.ts": [3, "wire observation kinds"],
-  "src/capabilities/endpoint/decide.ts": [27, "decisions over the wire observation kinds"],
-  "src/capabilities/endpoint/service.ts": [33, "dispatch on the wire observation kinds"],
-  // 两份纯函数模块：定位记录的两种形状与 tmux pane 的存活分类。搬到宿主 profile 之后是 L6 的余项。
-  "src/capabilities/endpoint/locator-store.ts": [27, "locator records per transport"],
-  "src/capabilities/endpoint/pane-classification.ts": [33, "tmux pane liveness classification"],
   "src/capabilities/delivery/prompt.ts": [1, "prompt text names the host action"],
   // 配置文档的 hosts 段以宿主标识为键：配置合同。
   "src/configuration/wakeflow-config-document.ts": [13, "config keys under hosts"],

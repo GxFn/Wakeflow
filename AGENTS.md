@@ -63,7 +63,11 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   registers the gap in `docs/references/open-items.md` (section Y for tmux,
   section X for desktop) with the batch that restores parity. Shared code
   consumes transport values from the host profile and never checks the
-  transport name ad hoc. The plan is
+  transport name ad hoc. The execution endpoint slice reaches a transport only
+  through the window transport port
+  (`src/workspace/host-runtime/wakeflow-window-transport-port.ts`), implemented
+  once per transport under `src/hosts/<host>/`; a new transport is a new port,
+  not a new branch in the slice. The plan is
   `docs/reviews/2026-10-30-claude-host-dual-transport-plan.md`.
 - `src/contracts/schemas/` holds the portable JSON Schemas;
   `src/contracts/generated/` is derived by `npm run schema:build` and checked

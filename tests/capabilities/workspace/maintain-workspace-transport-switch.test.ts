@@ -44,6 +44,7 @@ import {
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeTmuxWindowTransportPort } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostTransportTable,
@@ -70,6 +71,7 @@ useDisposableDurability();
 const CLAUDE_TMUX: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeTmuxWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };

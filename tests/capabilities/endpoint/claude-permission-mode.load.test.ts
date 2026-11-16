@@ -12,6 +12,7 @@ import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/c
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { renderClaudeCodeWindowLaunchInstructions } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeTmuxWindowTransportPort } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -28,6 +29,7 @@ useDisposableDurability();
 const CLAUDE: WindowBindingHostFacade = {
   hostId: "claude-code",
   resourceProfile: claudeCodeWorkspaceHostResourceProfile,
+  windowTransport: claudeCodeTmuxWindowTransportPort,
   identityProfile: claudeCodeWindowHostIdentityProfile,
   renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
 };

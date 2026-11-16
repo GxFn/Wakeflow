@@ -218,3 +218,10 @@
 | 项 | 修订后 |
 | --- | --- |
 | tmux 窗格观察的行（open-items Z11） | 助手打印的 `tmux-panes` 观察里每一行只有登记合同 `tmuxPaneObservation` 的八个字段（socket、session、窗口与窗格标识、`paneWindowId`、`paneDead`、`currentCommand`、`options`）。窗口名是 `mark` 核对改名用的内部字段，不进观察；此前它随每一行出来，按文件引用登记的退役与存活证据因此被整份拒绝。 |
+
+## 修订（2026-11-16，1.3.1，[gate-log §13.254](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 2.3 定位器与存活分类（open-items L6） | 随传输变的三件事——创建观察里哪一段是定位、落盘记录里那一段的形状、一份存活观察说明了什么——收成**窗口传输端口**（`src/workspace/host-runtime/wakeflow-window-transport-port.ts`），宿主在 `src/hosts/` 里按传输各实现一份：Claude Code 的 tmux 与桌面，Codex 的项目聊天。两个分类器搬到 `src/hosts/claude-code/`；`locator-store.ts` 只留身份字段、读写与代际标识的核对，位置是一段载荷，由宿主交来的编解码器解析。切片的决定只读端口给的三个值：定位子的准入结论、存活结论（还在 / 不在了 / 证明不了）、能否 relocate。公共合同、拒绝的 reason 与落盘的字节都不变。 |
+| 存活证据只认本传输的（收紧） | 观察的种类不是当前传输的，一律"证明不了"：桌面工作区里的 pane 清单、tmux 工作区里的会话清单本来就是这样；**新收紧的一处**是 Claude 窗口上交来的 Codex 线程状态——此前原样通过，`archived` 会被当成"端点不在了"而放行声明释放，现在不算证据。 |

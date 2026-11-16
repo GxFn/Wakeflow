@@ -20,7 +20,6 @@ import {
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import type { PortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
@@ -51,6 +50,7 @@ import {
   renderClaudeCodeWindowLaunchInstructions,
   renderClaudeCodeWindowLaunchValues,
 } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeWindowTransportTable } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
 import {
   claudeCodeWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostTransportTable,
@@ -58,6 +58,7 @@ import {
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { workClaimRef } from "../../../src/kernel/layout.js";
+import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -126,7 +127,7 @@ const CLAUDE_DELIVERY_FACADE: Readonly<DeliveryHostFacade> & Readonly<WindowBind
   Object.freeze({
     hostId: "claude-code" as const,
     resourceProfile: claudeCodeWorkspaceHostResourceProfile,
-    transports: claudeCodeWorkspaceHostTransportTable,
+    transports: claudeCodeWindowTransportTable,
     identityProfile: claudeCodeWindowHostIdentityProfile,
     renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
     transportAssets: Object.freeze({

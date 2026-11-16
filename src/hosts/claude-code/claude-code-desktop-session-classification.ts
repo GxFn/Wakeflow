@@ -1,5 +1,5 @@
 /**
- * Wakeflow Capabilities / Endpoint：Claude 桌面会话观察的分类器（ADR-0025 D3，open-items X17）。
+ * Wakeflow Host / Claude Code：桌面会话观察的分类器（ADR-0025 D3，open-items X17；open-items L6 起住在宿主层）。
  *
  * 输入是 Agent 交回的会话行，输出是封闭的状态词汇。行取自桌面自己的会话清单 `list_sessions`：会话只要还在
  * 侧栏（未归档）就在清单里，进程空闲退出后也一样（L18：`claude agents --json` 只列进程存活的会话，空闲后进程

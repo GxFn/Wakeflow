@@ -6034,3 +6034,19 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 死结的修复：第 2 级门 run-spG3eP 1867/1867、`inputsUnchanged`（我的运行，开发工作树；改了聚合守卫与合同词表的说明），门内新增 2 条测试；提交 `4b1a691f`（源码与测试）、`8fadd25e`（制品）。写拒绝的如实说明只动宿主助手与文本，按影响报告是第 1 级：`wf verify quick --changed` run-BcInhi 394/394（56 个测试文件，含制品类测试）、`helpers:check` 与 `build:check` 通过，`smoke:artifacts` 4/4（重建后的制品）。`wf timings apply` 已按第 2 级那份回执写回耗时表。`wf handoff` 九项里八项通过、远端门一项未核对（开发分支没有远端运行）。
 
 **结论：桌面一轮查出的死结已修并过门（第 2 级，1867/1867，本地）；写拒绝规则在桌面传输下不生效已核实并如实写进制品，补上保护排 1.3.1。桌面一轮的后半——修复进主检出后在卡住的 Demand 上重走、带 `@` 的投递、Test 投递、桌面 pod——还没有做。**
+
+### 13.250 终验的桌面一轮（后半）：修复进主检出之后卡住的 Demand 走到归档——死结的修复在现场成立，一次真实环境的测试投递、桌面升级路径、权限模式不一致都有记录；带 `@` 的投递没有触发按身份落地，桌面 pod 按用户裁决放 1.3.1（2026-11-16）
+
+§13.249 的两处改动由用户快进到 `main` 并推送（`ecec844f`）。同一个桌面测试工作区、同一个卡住的 Demand 接着走；用户在场，确认点由用户在会话里回答。
+
+- **桌面升级路径。** 新的 Controller 会话是在上一版制品下启动的、一直空闲；用户发 `/wakeflow:next` 时应用用当前制品重起了它的进程（`artifactOnDisk: same`，写入直接被接受）。status → reconcile 预览（一步：桌面助手，`next.owner: controller`）→ 4 秒后应用，没有问用户。Test 会话是另一种情形：它的旧进程一直活着。Controller 在准备测试投递之前做了存活观察、看见了，按参考请用户授权归档再恢复那个会话。
+- **死结的修复在现场成立（Z13）。** `wakeflow_rearm_delivery` 照旧拒绝 `binding-changed`；`wakeflow_prepare_delivery` 这次提交成功（新信封，第 1 代，`desktop-session`）；发送、`desktop.mjs landing --window … --prompt-ref …`（`landed: true`，`match: digest`，2613/2613 字符）、结局 `accepted`（hook 记录）。
+- **实现目标。** ProductA：提示作为跨会话消息到达，加载目标技能，加 `check.sh` 与 README 一句、提交一次，导入一次即过（不带流修订），回调经应用的 SendMessage 发回，再用助手核对落地（`match: digest`）。Controller：自己在真实检出里跑了检查，记 3 条证据——隐私扫描把 `/dev/null` 与 `#!/bin/sh` 标为绝对路径，它读过那几行之后以 `contentReview: controller-confirmed` 确认——接受。
+- **一次 Test 投递（清单项）。** 测试任务按 `real-environment` 规划。归档会话那一步被宿主拦下（见下），用户手工归档并恢复之后：准备、发送、核对落地、结局。Test 窗口加载目标与测试两个技能，在真实的 ProductA 检出里跑 `sh check.sh`，用自己角色的工具记 2 条证据，导入逐步报告，回调落地 `match: digest`。Controller 重算了两条证据的摘要，`record_test_review_decision` 接受（第 1 次尝试）；严格校验 16/16，Demand 自己的门全部通过；完成预览 → 用户确认 → 归档。
+- **归档会话被宿主的权限检查拒绝（open-items Z16，宿主约束）。** Controller 调 `archive_session`：第一次"没有裁定"（应用的 hook 在审查之后给输入加了一个会话标签），带着那份输入再调一次被 auto 模式的分类器判为危险而拒绝，没有给理由。Controller 没有绕过，什么都没改，把两条路摆给用户。我替用户恢复会话的那次 `unarchive_session` 被同样拒绝，也没有绕过。桌面传输下关闭与重启窗口都靠归档会话，而在 auto 模式里它可能被拦，即使用户已经在对话里同意——届时只能用户自己在侧栏里做。已发布的文字没有提前说到这一点。
+- **权限模式不一致（X4）。** 用户把 ProductB 切到手动模式、发了一句话：那条 hook 记录的 `permissionMode` 是 `default`；status 的 `nextActions` 在主前沿之后多出 `permission-mode-mismatch`（subject 是 ProductB 的窗口），窗口的 `session.permissionMode` 为配置 `auto`、观察 `default`、`mismatch`；严格校验仍是 16/16。
+- **查出、未改的两处。** Z15：新的 Controller 不记得那份被拒投递的标识，而 status 的路线在 `implementation-host-effect-rearm` 这个前沿里只带目标、不带 `wakeflow_rearm_delivery` 要的 `deliveryId`，它只好去活动目录里只读地搜——"status 里什么都有"在这个前沿上不成立。另外它把助手的 drift 说成"有什么东西改写了这个文件"：插件更新之后的 drift 就是更新本身，它依据的文字没有这样说。
+- **没有触发的。** 按许可身份落地：三次投递与回调的文本里都带着 `@README.md`，宿主都没有改动，落地全是摘要匹配——这条路仍只有测试覆盖。改标题的确认（X13）：标题随启动带入，没有调用改标题。配置的模型跨接管（X28）：这个工作区没有配置模型，status 只显示了观察到的模型。桌面 pod（X6）：**按用户裁决放 1.3.1**，连同归档被拦这件事一起。正式工作区里的升级由用户在自然使用时走。
+- **验证。** 本节只有文档改动：第 0 级（`git diff --check`、`wf handoff`）。`ecec844f` 的远端运行（43786027526）写这一节时还在跑。
+
+**结论：桌面一轮走完了能触发的——升级路径、死结修复的现场复核、`landing --prompt-ref`、一次真实环境的测试投递、角色校验、权限模式不一致、存活观察都有记录；写拒绝规则在桌面上不生效（已照实写进制品，拦截排 1.3.1）；按身份落地、改标题确认、模型跨接管、桌面 pod 没有在现场走到。1.3.0 还差 `ecec844f` 之后这一版的远端门与 tag。**

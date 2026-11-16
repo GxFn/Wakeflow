@@ -389,29 +389,15 @@
     },
     {
       "path": "lib/capabilities/endpoint/decide.js",
-      "bytes": 9178,
-      "sha256": "sha256:b264e428112e0887fe92a1ff0704be4df7e9bb065a7a39a07826ef893efc0157",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
-      "path": "lib/capabilities/endpoint/desktop-session-classification.js",
-      "bytes": 1828,
-      "sha256": "sha256:154baa8f0f0bd1bf509a797e8c82b434c20fe9f977078709073e54938c864ba1",
+      "bytes": 7646,
+      "sha256": "sha256:970e14341ad3f063dbd98a487b9cd33eba438497f95cd8c1ab07658ca620f852",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/endpoint/locator-store.js",
-      "bytes": 11113,
-      "sha256": "sha256:e15c64737c826f0ce8f0a8afdddbae5bb4bec22ba30ee6272ab91ff30e833c18",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
-      "path": "lib/capabilities/endpoint/pane-classification.js",
-      "bytes": 2465,
-      "sha256": "sha256:f9b3490929eec54a4436cd479ae1c7590134a262389c54473a152d4ac4ff970e",
+      "bytes": 10618,
+      "sha256": "sha256:1d7bd1262a1f342f0b9a5448760c09f06391cb46aea12ce5b1baad89793b20de",
       "mode": "0644",
       "scope": "shared"
     },
@@ -424,8 +410,8 @@
     },
     {
       "path": "lib/capabilities/endpoint/service.js",
-      "bytes": 54673,
-      "sha256": "sha256:38375f4f8e09cb815ba4b88118783b3897b69df27c6c81afadf28cc165ce2ca9",
+      "bytes": 53769,
+      "sha256": "sha256:135abfe13971cefdd05d316226038147c68146a7c096ebbbad76326910f1bec9",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1404,8 +1390,8 @@
     },
     {
       "path": "lib/entrypoints/claude-code-wakeflow-mcp.js",
-      "bytes": 11059,
-      "sha256": "sha256:6a45dbe1cba7eab606b2fc7b3424bd3402be959d8a169f921c63e909f4abfe1b",
+      "bytes": 11430,
+      "sha256": "sha256:e6f25f5d59619888f591292f002e38b823e64cfcf2982eeeb65c97157b6559c9",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2719,6 +2705,13 @@
       "scope": "current-host"
     },
     {
+      "path": "lib/hosts/claude-code/claude-code-desktop-session-classification.js",
+      "bytes": 1851,
+      "sha256": "sha256:bb6da9f6b50c7210b3eeb5d81c67af71e0fc2f13b5ec275bf29145a8cc78cff1",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
       "path": "lib/hosts/claude-code/claude-code-helper-asset-template.js",
       "bytes": 4119,
       "sha256": "sha256:f64d3b75afd8abf8a6101f7f8acb8027aefc79e341cfcc18c2126572e945bee0",
@@ -2817,6 +2810,13 @@
       "scope": "current-host"
     },
     {
+      "path": "lib/hosts/claude-code/claude-code-tmux-pane-classification.js",
+      "bytes": 2488,
+      "sha256": "sha256:b21a162c4ef05648a8120a6cb9a777c42b3bbba1f53c37965361a33c55349881",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
       "path": "lib/hosts/claude-code/claude-code-window-host-identity-profile.js",
       "bytes": 663,
       "sha256": "sha256:6ec02d1e1857b2a2469b022e98c6fcf51c2c7fe7aa4e17eb93bda136f44f8d6e",
@@ -2827,6 +2827,13 @@
       "path": "lib/hosts/claude-code/claude-code-window-launch-instructions.js",
       "bytes": 10182,
       "sha256": "sha256:6852409491e4115c1c265febb13db8a5704ccf86b781594232102cd49aa731ce",
+      "mode": "0644",
+      "scope": "current-host"
+    },
+    {
+      "path": "lib/hosts/claude-code/claude-code-window-transport-ports.js",
+      "bytes": 9655,
+      "sha256": "sha256:371ae4d1842feb2a46852a1254e95b62bbfef9aa0d647b8dbe353780110e5cc5",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3077,8 +3084,15 @@
     },
     {
       "path": "lib/workspace/host-runtime/wakeflow-host-window-transport.js",
-      "bytes": 1757,
-      "sha256": "sha256:6784875fc70c0850b233c7f30b635e888b9914ca9134cfc89ec338bdd28e7d3e",
+      "bytes": 2435,
+      "sha256": "sha256:1e73f9f9292619f57d0c3688cfe1f1571a702d322030e153621c06f2b25ab476",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/workspace/host-runtime/wakeflow-window-transport-port.js",
+      "bytes": 526,
+      "sha256": "sha256:a9034e871ebfac50de405047d1c135a0648923477c55c28a7947497d5d4f6656",
       "mode": "0644",
       "scope": "shared"
     },

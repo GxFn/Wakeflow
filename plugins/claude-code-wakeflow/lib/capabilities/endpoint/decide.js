@@ -12,39 +12,14 @@ export function rejectForeignHandleOwner(handleOwners, handleValue, windowId) {
     }
     return null;
 }
-/**
- * 定位子按传输二选一（ADR-0025 D3）：带了另一种传输的定位子先报 locator-kind-mismatch（指向多余的那个字段），
- * 再看本传输的定位子在不在；没有定位子的宿主（项目聊天）两者都不看。
- */
-function admitLocator(state, observation) {
-    switch (state.locatorProvider) {
-        case "tmux":
-            if (observation.hasDesktopSession) {
-                return reject("invalid-request", "locator-kind-mismatch", "$request.observation.desktop");
-            }
-            if (!observation.hasTmuxCoordinates) {
-                return reject("invalid-request", "tmux-coordinates-required", "$request.observation.tmux");
-            }
-            return null;
-        case "desktop":
-            if (observation.hasTmuxCoordinates) {
-                return reject("invalid-request", "locator-kind-mismatch", "$request.observation.tmux");
-            }
-            if (!observation.hasDesktopSession) {
-                return reject("invalid-request", "desktop-session-required", "$request.observation.desktop");
-            }
-            return null;
-        case "none":
-            return null;
-    }
-}
 function admitCreation(state, observation, windowId) {
     if (observation.launchIntentDigest !== state.launchIntentDigest) {
         return reject("precondition-failed", "launch-intent-drift", "$request.observation.launchIntentDigest");
     }
-    const locator = admitLocator(state, observation);
-    if (locator !== null)
-        return locator;
+    // 定位子按传输二选一（ADR-0025 D3）：带了别的传输的、或缺了本传输的，端口已经给出原因与字段。
+    if (observation.locatorRefusal !== null) {
+        return reject("invalid-request", observation.locatorRefusal.reason, observation.locatorRefusal.path);
+    }
     if (state.worktreeRequired && !observation.hasWorktreeObservation) {
         return reject("invalid-request", "worktree-receipt-required", "$request.observation.worktree");
     }
@@ -62,18 +37,12 @@ function assertBindingExpectation(state, expectedBindingId, expectedBindingDiges
     }
     return null;
 }
-/** 端点确定不在了：pane 没了或已死、桌面会话不在清单里、Codex 线程已归档。`no-locator` 什么也证明不了。 */
+/** 端点确定不在了（传输端口的结论）；对不上定位或没有观察时什么也证明不了，两个判断都是假。 */
 function absent(liveness) {
-    return ((liveness.kind === "tmux-panes" &&
-        (liveness.status === "missing" || liveness.status === "pane-dead")) ||
-        (liveness.kind === "desktop-sessions" && liveness.status === "absent") ||
-        (liveness.kind === "codex-thread" && liveness.status === "archived"));
+    return liveness.presence === "absent";
 }
 function alive(liveness) {
-    return ((liveness.kind === "tmux-panes" && liveness.status === "live") ||
-        (liveness.kind === "desktop-sessions" &&
-            (liveness.status === "present-busy" || liveness.status === "present-idle")) ||
-        (liveness.kind === "codex-thread" && liveness.status === "active"));
+    return liveness.presence === "alive";
 }
 function decideDecommission(state, command) {
     const expectation = assertBindingExpectation(state, command.expectedBindingId, command.expectedBindingDigest);
@@ -85,8 +54,8 @@ function decideDecommission(state, command) {
         return reject("precondition-failed", "closure-blocked", "$request.closure");
     }
     const sessionEnded = state.binding !== null && state.endedSessions.has(state.binding.handleValue);
-    // 机器核实需要一个有定位子的传输（pane 清单或桌面会话清单证明端点已不在）加上 session-end 记录。
-    const machineVerified = state.locatorProvider !== "none" &&
+    // 机器核实需要一个有定位子的传输（它的清单证明端点已不在）加上 session-end 记录。
+    const machineVerified = state.hasLocator &&
         command.closeResult === "closed" &&
         absent(command.postClose) &&
         (alive(command.preClose) || absent(command.preClose)) &&
@@ -141,19 +110,19 @@ function decideReplace(state, command, windowId) {
     return Object.freeze({ accepted: true, operation: "replace", disposition: "replaced" });
 }
 /**
- * relocate：会话没变、pane 变了（宿主 resume 之后）。绑定 CAS 与 register 同样的准入（意图、坐标、
- * hook 证据）之外，句柄必须与当前绑定相同，只有 tmux 定位器的宿主才有 pane 可换：桌面会话发消息即续、
- * 没有可换的坐标，报 relocate-not-applicable（ADR-0025 D3）；没有定位子的宿主报 locator-provider。
- * 持有中的工作声明不阻塞——同一会话继续工作。
+ * relocate：会话没变、位置变了（宿主 resume 之后换了 pane）。绑定 CAS 与 register 同样的准入（意图、定位、
+ * hook 证据）之外，句柄必须与当前绑定相同，并且这种传输得有位置可换：有定位子却没有可换位置的传输报
+ * relocate-not-applicable（ADR-0025 D3），没有定位子的报 locator-provider。持有中的工作声明不阻塞——
+ * 同一会话继续工作。
  */
 function decideRelocate(state, command, windowId) {
     const expectation = assertBindingExpectation(state, command.expectedBindingId, command.expectedBindingDigest);
     if (expectation !== null)
         return expectation;
-    if (state.locatorProvider === "desktop") {
+    if (state.relocation === "not-applicable") {
         return reject("precondition-failed", "relocate-not-applicable", "$request.operation");
     }
-    if (state.locatorProvider !== "tmux") {
+    if (state.relocation !== "supported") {
         return reject("precondition-failed", "locator-provider", "$request.operation");
     }
     if (state.binding?.handleValue !== command.observation.handleValue) {

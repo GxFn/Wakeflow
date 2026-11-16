@@ -14,11 +14,15 @@ import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-ins
 import { fail } from "../../kernel/error.js";
 import { hostWindowLocatorsRootRef } from "../../kernel/layout.js";
 /**
- * Wakeflow Capabilities / Endpoint：Claude 窗口定位器记录（能力卡 2.3，ADR-0025 D3）。
+ * Wakeflow Capabilities / Endpoint：窗口定位器记录（能力卡 2.3，ADR-0025 D3；open-items L6）。
  *
- * 定位器把一个绑定代际固定到窗口传输里的位置：tmux 传输是 socket、session、window、pane 四元组，
- * 桌面传输是桌面 app 的会话 id（`local_<uuid>`）。它是私有权威（0600）；替换时随新绑定重写，
- * 退役时删除。Codex 没有对等物。记录的 `provider` 与观察里带的定位子种类一致，读取方按它分派。
+ * 定位器把一个绑定代际固定到窗口传输里的位置。它是私有权威（0600）；替换时随新绑定重写，退役时删除。
+ * 没有定位子的宿主没有这份记录。
+ *
+ * 这里只管与传输无关的部分：记录的身份字段、读写与代际标识的核对。位置本身是一段载荷，形状归传输——
+ * 记录里存成 `{ provider, [provider]: 载荷 }`，载荷的解析与代际标识的派生输入由宿主交来的编解码器给出
+ * （`WakeflowWindowLocatorCodec`）。本模块按记录里的 `provider` 找编解码器，从不拿传输的名字分支；
+ * 找不到编解码器的记录与损坏的记录同样处理。磁盘上的字节与 1.3.0 相同。
  */
 const LOCATOR_KIND = "WakeflowWindowLocator";
 const LOCATOR_MAXIMUM_BYTES = parseByteCount(16 * 1024, "$locator.maximumBytes");
@@ -30,120 +34,101 @@ function windowLocatorRootRef(hostId) {
 function windowLocatorRef(hostId, windowId) {
     return parsePortableResourcePath(`${windowLocatorRootRef(hostId)}/${windowId}.json`, "$locator");
 }
-/** 定位器代际由位置派生：同一绑定换了 pane 或桌面会话就是新的 locatorId。tmux 的派生保持原样，磁盘上的旧记录照常读回。 */
-function locatorIdFor(input) {
-    if (input.provider === "tmux") {
-        return deriveUuidV4("wakeflow-window-locator", input.hostId, input.windowId, input.bindingId, input.tmux.socketName ?? "", input.tmux.sessionName, input.tmux.windowId, input.tmux.paneId);
-    }
-    return deriveUuidV4("wakeflow-window-locator-desktop", input.hostId, input.windowId, input.bindingId, input.desktop.sessionId);
+function invalidLocatorRecord(path) {
+    fail("invalid-request", "locator-record", path);
 }
-export function createWindowLocatorRecord(input) {
-    const identity = {
+/** 记录里点名的传输的编解码器；宿主不认得这种传输时与损坏的记录同样处理。 */
+function codecFor(codecs, provider) {
+    const codec = typeof provider === "string" ? codecs.find((entry) => entry.provider === provider) : undefined;
+    if (codec === undefined)
+        invalidLocatorRecord("$locator");
+    return codec;
+}
+/**
+ * 定位器代际由位置派生：同一绑定换了位置就是新的 locatorId。派生输入是传输给的命名空间、记录的三个身份
+ * 字段与载荷里参与派生的各段——顺序是合同，磁盘上的旧记录靠它读回。
+ */
+export function createWindowLocatorRecord(input, codecs) {
+    const codec = codecFor(codecs, input.target.provider);
+    const payload = codec.parsePayload(input.target.payload, invalidLocatorRecord);
+    const seed = codec.identitySeed(payload);
+    return Object.freeze({
         kind: LOCATOR_KIND,
         schemaVersion: 1,
-        locatorId: locatorIdFor(input),
+        locatorId: deriveUuidV4(seed.namespace, input.hostId, input.windowId, input.bindingId, ...seed.parts),
         programId: input.programId,
         hostId: input.hostId,
         windowId: input.windowId,
         bindingId: input.bindingId,
-    };
-    const registeredAt = parseUtcInstant(input.registeredAt, "$locator.registeredAt");
-    if (input.provider === "tmux") {
-        return Object.freeze({
-            ...identity,
-            provider: "tmux",
-            tmux: Object.freeze({ ...input.tmux }),
-            registeredAt,
-        });
-    }
-    return Object.freeze({
-        ...identity,
-        provider: "desktop",
-        desktop: Object.freeze({ sessionId: input.desktop.sessionId }),
-        registeredAt,
+        provider: codec.provider,
+        payload,
+        registeredAt: parseUtcInstant(input.registeredAt, "$locator.registeredAt"),
     });
 }
 function text(value, path) {
     if (typeof value !== "string" || value.length === 0 || value.length > 256) {
-        fail("invalid-request", "locator-record", path);
+        invalidLocatorRecord(path);
     }
     return value;
 }
 function plainObject(value, path) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        fail("invalid-request", "locator-record", path);
+        invalidLocatorRecord(path);
     }
     return value;
 }
-function parseLocatorTarget(record) {
-    if (record.provider === "tmux") {
-        const coordinates = plainObject(record.tmux, "$locator");
-        return {
-            provider: "tmux",
-            tmux: {
-                socketName: coordinates.socketName === null
-                    ? null
-                    : text(coordinates.socketName, "$locator.tmux.socketName"),
-                sessionName: text(coordinates.sessionName, "$locator.tmux.sessionName"),
-                windowId: text(coordinates.windowId, "$locator.tmux.windowId"),
-                paneId: text(coordinates.paneId, "$locator.tmux.paneId"),
-            },
-        };
-    }
-    if (record.provider === "desktop") {
-        const desktop = plainObject(record.desktop, "$locator");
-        return {
-            provider: "desktop",
-            desktop: { sessionId: text(desktop.sessionId, "$locator.desktop.sessionId") },
-        };
-    }
-    fail("invalid-request", "locator-record", "$locator");
-}
-function parseWindowLocatorRecord(value, hostId) {
+function parseWindowLocatorRecord(value, hostId, codecs) {
     const record = plainObject(parseJsonValue(value, "$locator"), "$locator");
     if (record.kind !== LOCATOR_KIND || record.schemaVersion !== 1) {
-        fail("invalid-request", "locator-record", "$locator");
+        invalidLocatorRecord("$locator");
     }
     if (record.hostId !== hostId) {
-        fail("invalid-request", "locator-record", "$locator.hostId");
+        invalidLocatorRecord("$locator.hostId");
     }
+    const programId = text(record.programId, "$locator.programId");
+    const windowId = text(record.windowId, "$locator.windowId");
+    const bindingId = text(record.bindingId, "$locator.bindingId");
+    const codec = codecFor(codecs, record.provider);
     const parsed = createWindowLocatorRecord({
-        programId: text(record.programId, "$locator.programId"),
+        programId,
         hostId,
-        windowId: text(record.windowId, "$locator.windowId"),
-        bindingId: text(record.bindingId, "$locator.bindingId"),
+        windowId,
+        bindingId,
         registeredAt: record.registeredAt,
-        ...parseLocatorTarget(record),
-    });
+        target: {
+            provider: codec.provider,
+            payload: plainObject(record[codec.provider], "$locator"),
+        },
+    }, codecs);
     if (parsed.locatorId !== record.locatorId) {
         fail("invalid-request", "locator-record-id", "$locator.locatorId");
     }
     return parsed;
 }
+/** 落盘的文档：身份字段、`provider`、以传输名为键的载荷、登记时刻。 */
 function renderWindowLocatorRecord(record) {
-    return renderDeterministicJsonDocument(parseJsonValue(record, "$locator"), "$locator");
+    const document = {
+        kind: record.kind,
+        schemaVersion: record.schemaVersion,
+        locatorId: record.locatorId,
+        programId: record.programId,
+        hostId: record.hostId,
+        windowId: record.windowId,
+        bindingId: record.bindingId,
+        provider: record.provider,
+        [record.provider]: record.payload,
+        registeredAt: record.registeredAt,
+    };
+    return renderDeterministicJsonDocument(parseJsonValue(document, "$locator"), "$locator");
 }
-/** 只有 tmux 记录能变成 pane 分类器的定位器；调用方先按 `provider` 收窄。 */
-export function toTmuxLocator(record) {
-    return Object.freeze({
-        ...record.tmux,
-        identity: Object.freeze({
-            programId: record.programId,
-            hostId: record.hostId,
-            windowId: record.windowId,
-            bindingId: record.bindingId,
-            locatorId: record.locatorId,
-        }),
-    });
-}
-async function readLocatorSource(root, hostId, windowId, signal) {
+async function readLocatorSource(root, hostId, windowId, codecs, signal) {
     try {
         const read = await readDeterministicJsonFile(root, windowLocatorRef(hostId, windowId), {
             maximumBytes: LOCATOR_MAXIMUM_BYTES,
             ...(signal === undefined ? {} : { signal }),
         });
         return {
-            record: parseWindowLocatorRecord(parseDeterministicJsonDocument(read.text, "$locator"), hostId),
+            record: parseWindowLocatorRecord(parseDeterministicJsonDocument(read.text, "$locator"), hostId, codecs),
             read,
         };
     }
@@ -163,23 +148,19 @@ async function readLocatorSource(root, hostId, windowId, signal) {
     }
 }
 /** 读取某窗口的定位器；不存在返回 `null`。 */
-export async function readWindowLocator(root, hostId, windowId, signal) {
-    return (await readLocatorSource(root, hostId, windowId, signal))?.record ?? null;
+export async function readWindowLocator(root, hostId, windowId, codecs, signal) {
+    return (await readLocatorSource(root, hostId, windowId, codecs, signal))?.record ?? null;
 }
 /**
- * 某窗口当前绑定代际的桌面会话 id（open-items X15）：定位器记录在、`provider` 是桌面、且记录的 `bindingId`
- * 等于调用方给出的绑定时返回 `local_<uuid>`；记录不在、属于另一种传输或另一代绑定都返回 `null`——
- * 调用方据此决定渲染与否，不判断传输名。投递的回传段用它给出 Controller 窗口的桌面会话。
+ * 某窗口当前绑定代际的定位器（open-items X15）：记录在、并且记录的 `bindingId` 等于调用方给出的绑定时
+ * 返回它；记录不在或属于另一代绑定都返回 `null`。载荷里有什么由调用方的宿主自己读——这里不看传输。
  */
-export async function readWindowDesktopSessionId(root, hostId, windowId, bindingId, signal) {
-    const record = await readWindowLocator(root, hostId, windowId, signal);
-    if (record === null || record.provider !== "desktop" || record.bindingId !== bindingId) {
-        return null;
-    }
-    return record.desktop.sessionId;
+export async function readBoundWindowLocator(root, hostId, windowId, bindingId, codecs, signal) {
+    const record = await readWindowLocator(root, hostId, windowId, codecs, signal);
+    return record === null || record.bindingId !== bindingId ? null : record;
 }
 /** 写入或整体替换某窗口的定位器：绑定代际变化时定位器随之更换。 */
-export async function writeWindowLocator(root, record, signal) {
+export async function writeWindowLocator(root, record, codecs, signal) {
     const ref = windowLocatorRef(record.hostId, record.windowId);
     const options = signal === undefined ? {} : { signal };
     try {
@@ -195,7 +176,7 @@ export async function writeWindowLocator(root, record, signal) {
         throw error;
     }
     const bytes = encodeUtf8(renderWindowLocatorRecord(record), "$locator");
-    const current = await readLocatorSource(root, record.hostId, record.windowId, signal);
+    const current = await readLocatorSource(root, record.hostId, record.windowId, codecs, signal);
     try {
         if (current === null) {
             await createFileAtomically(root, ref, bytes, { mode: FILE_MODE, ...options });
@@ -222,8 +203,8 @@ export async function writeWindowLocator(root, record, signal) {
     return ref;
 }
 /** 删除某窗口的定位器；不存在视为已完成。 */
-export async function retireWindowLocator(root, hostId, windowId, signal) {
-    const current = await readLocatorSource(root, hostId, windowId, signal);
+export async function retireWindowLocator(root, hostId, windowId, codecs, signal) {
+    const current = await readLocatorSource(root, hostId, windowId, codecs, signal);
     if (current === null)
         return "absent";
     try {

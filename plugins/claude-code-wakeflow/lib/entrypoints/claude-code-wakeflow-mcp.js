@@ -1,5 +1,5 @@
 import { executePrepareDeliveryRequest, executeRearmDeliveryRequest, executeRecordDeliveryOutcomeRequest, } from "../capabilities/delivery/service.js";
-import { readWindowDesktopSessionId } from "../capabilities/endpoint/locator-store.js";
+import { readBoundWindowLocator } from "../capabilities/endpoint/locator-store.js";
 import { executeWindowBindingRequest } from "../capabilities/endpoint/service.js";
 import { executeStatusRequest, executeVerifyRequest } from "../capabilities/observation/service.js";
 import { executePodRequest } from "../capabilities/pod/service.js";
@@ -10,11 +10,12 @@ import { CLAUDE_CODE_LOCAL_SETTINGS_REF, CLAUDE_CODE_STATUSLINE_SETTINGS_KEY, cl
 import { CLAUDE_CODE_TMUX_ASSET_DIGEST, CLAUDE_CODE_TMUX_ASSET_FILE_NAME, } from "../hosts/claude-code/claude-code-tmux-asset.js";
 import { claudeCodeWindowHostIdentityProfile } from "../hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWindowExecutionPlacement, renderClaudeCodeWindowLaunchInstructions, renderClaudeCodeWindowLaunchValues, } from "../hosts/claude-code/claude-code-window-launch-instructions.js";
+import { claudeCodeDesktopSessionIdOf, claudeCodeDesktopWindowTransportPort, claudeCodeWindowTransportTable, } from "../hosts/claude-code/claude-code-window-transport-ports.js";
 import { claudeCodeWorkspaceHostResourceProfile, claudeCodeWorkspaceHostTransportTable, } from "../hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../hosts/codex/codex-window-host-identity-profile.js";
-import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
-import { selectWakeflowWorkspaceHostResourceProfile } from "../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { selectWakeflowWorkspaceHostResourceProfile } from "../workspace/host-runtime/wakeflow-host-window-transport.js";
+import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
 import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
@@ -68,8 +69,9 @@ const CLAUDE_CODE_HOST_ASSETS_BY_TRANSPORT = Object.freeze({
 const CLAUDE_CODE_HOST_FACADE = Object.freeze({
     hostId: "claude-code",
     resourceProfile: claudeCodeWorkspaceHostResourceProfile,
-    // ADR-0025：tmux 与桌面两种传输的 profile 表，切片按工作区配置选一份。
-    transports: claudeCodeWorkspaceHostTransportTable,
+    // ADR-0025：tmux 与桌面两种传输的 profile 表，切片按工作区配置选一份；这一份还带着同键的窗口传输端口
+    // （open-items L6），执行端点切片按同一个键取。
+    transports: claudeCodeWindowTransportTable,
     identityProfile: claudeCodeWindowHostIdentityProfile,
     renderLaunchInstructions: renderClaudeCodeWindowLaunchInstructions,
     // G14：握手时把这个窗口解析后的启动取值记进绑定。
@@ -77,7 +79,7 @@ const CLAUDE_CODE_HOST_FACADE = Object.freeze({
     // F1（ADR-0020）：投递许可签发前核对选出传输的这些资产的字节。
     transportAssets: CLAUDE_CODE_HOST_ASSETS_BY_TRANSPORT,
     // X15：桌面会话传输下投递 prompt 的回传段由服务端渲染 Controller 的桌面会话 id；tmux 定位器读出 null。
-    readControllerDesktopSessionId: (root, windowId, bindingId, signal) => readWindowDesktopSessionId(root, "claude-code", windowId, bindingId, signal),
+    readControllerDesktopSessionId: async (root, windowId, bindingId, signal) => claudeCodeDesktopSessionIdOf(await readBoundWindowLocator(root, "claude-code", windowId, bindingId, claudeCodeDesktopWindowTransportPort.locatorCodecs, signal)),
 });
 /** pod 读两个宿主的绑定与投影：对端仍握着的窗口登记也阻塞关闭完成（open-items W7）。 */
 const CLAUDE_CODE_POD_FACADE = Object.freeze({

@@ -1,5 +1,5 @@
 /**
- * Wakeflow Capabilities / Endpoint：Claude tmux pane 观察的分类器（能力卡 2.3，ADR-0009）。
+ * Wakeflow Host / Claude Code：tmux pane 观察的分类器（能力卡 2.3，ADR-0009；open-items L6 起住在宿主层）。
  *
  * 输入是 Agent 交回的 `tmux list-panes -a` 行与写在窗口选项里的五个 Wakeflow 标识，
  * 输出是封闭的状态词汇。判定顺序与旧实现一致；只有 `live` 可派发。本模块是纯函数，

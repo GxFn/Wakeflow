@@ -36,3 +36,16 @@ export function selectWakeflowWorkspaceHostResourceProfile(host, model) {
         throw new WakeflowWorkspaceHostTransportError("unknown-transport", transport);
     return profile;
 }
+/**
+ * 按配置选出当前工作区该宿主的窗口传输端口：有传输表的宿主取表里与所选 profile 同键的那一份，没有表的
+ * 宿主取它直接给出的那一份；都没有即 null，由调用方决定这算不算合同违背。
+ */
+export function selectWakeflowWindowTransportPort(host, model) {
+    const transport = configuredWakeflowWorkspaceHostTransport(host, model);
+    if (transport === null || host.transports === undefined)
+        return host.windowTransport ?? null;
+    const ports = host.transports.ports;
+    if (ports === undefined || !Object.hasOwn(ports, transport))
+        return null;
+    return ports[transport] ?? null;
+}

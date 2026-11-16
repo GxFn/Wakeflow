@@ -6,6 +6,7 @@ import {
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   type DemandEventStreamCommit,
@@ -120,10 +121,6 @@ interface DemandFileEventStoreOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 export function failDemandFileEventStore(
   reason: DemandFileEventStoreErrorReason,
   path: string,
@@ -164,7 +161,7 @@ export function assertDemandFileEventStoreDirectory(
   if (
     node.kind !== "directory" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     failDemandFileEventStore("node-policy", path);
   }
@@ -179,7 +176,7 @@ export function assertDemandFileEventStoreFile(
     node.kind !== "file" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
     !admittedLinkCounts.includes(node.linkCount) ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     failDemandFileEventStore("node-policy", path);
   }

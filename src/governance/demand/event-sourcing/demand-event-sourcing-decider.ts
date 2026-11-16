@@ -591,6 +591,599 @@ function parseReason(value: unknown): string {
   return value;
 }
 
+function parsePublishDemandCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, PUBLISH_FIELDS);
+  return Object.freeze({
+    commandType: "publication.publish-demand",
+    commandVersion: 1,
+    demandId: parseId(command.demandId, "demand", "$/demandId"),
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    recordedAt: parseTime(command.recordedAt),
+    identityDigest: parseDigest(command.identityDigest, "$/identityDigest"),
+    authorityDigest: parseDigest(command.authorityDigest, "$/authorityDigest"),
+  });
+}
+
+function parseCancelDemandCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, CANCEL_FIELDS);
+  return Object.freeze({
+    commandType: "lifecycle.cancel-demand",
+    commandVersion: 1,
+    demandId: parseId(command.demandId, "demand", "$/demandId"),
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    recordedAt: parseTime(command.recordedAt),
+    reason: parseReason(command.reason),
+  });
+}
+
+function parseCompleteDemandCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, COMPLETE_DEMAND_FIELDS);
+  let authority: Readonly<DemandAuthority>;
+  let completion: Readonly<DemandCompletion>;
+  try {
+    authority = parseDemandAuthority(command.authority);
+  } catch (error: unknown) {
+    if (error instanceof DemandAuthorityError) {
+      fail("demand-authority", "$/authority", error);
+    }
+    throw error;
+  }
+  try {
+    completion = parseDemandCompletion(command.completion);
+  } catch (error: unknown) {
+    if (error instanceof DemandCompletionError) {
+      fail("demand-completion", "$/completion", error);
+    }
+    throw error;
+  }
+  if (
+    authority.demandId !== completion.demandId ||
+    completion.testingMode !== authority.testingDecision.mode ||
+    computeDemandAuthorityDigest(authority) !== completion.authorityDigest
+  ) {
+    fail("demand-completion", "$/completion");
+  }
+  return Object.freeze({
+    commandType: "lifecycle.complete-demand",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    authority,
+    completion,
+  });
+}
+
+function parseEscalateDemandCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, ESCALATE_DEMAND_FIELDS);
+  return Object.freeze({
+    commandType: "lifecycle.escalate-demand",
+    commandVersion: 1,
+    demandId: parseId(command.demandId, "demand", "$/demandId"),
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    recordedAt: parseTime(command.recordedAt),
+    escalation: escalationData(command.escalation),
+  });
+}
+
+function parseRecordDecisionCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, RECORD_DECISION_FIELDS);
+  return Object.freeze({
+    commandType: "lifecycle.record-decision",
+    commandVersion: 1,
+    demandId: parseId(command.demandId, "demand", "$/demandId"),
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    recordedAt: parseTime(command.recordedAt),
+    decision: decisionData(command.decision),
+  });
+}
+
+function parseContinueDemandCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, CONTINUE_DEMAND_FIELDS);
+  return Object.freeze({
+    commandType: "lifecycle.continue-demand",
+    commandVersion: 1,
+    demandId: parseId(command.demandId, "demand", "$/demandId"),
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    recordedAt: parseTime(command.recordedAt),
+    continuation: continuationData(command.continuation),
+  });
+}
+
+function parsePlanTargetTaskCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, PLAN_TARGET_TASK_FIELDS);
+  let taskPackage: Readonly<TaskPackage>;
+  try {
+    taskPackage = parseTaskPackage(command.taskPackage);
+  } catch (error: unknown) {
+    if (error instanceof TaskPackageError) {
+      fail("task-package", "$/taskPackage", error);
+    }
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "tasking.plan-target-task",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    taskPackage,
+  });
+}
+
+function parseRecordManagedEvidenceCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, RECORD_MANAGED_EVIDENCE_FIELDS);
+  let manifest: Readonly<ManagedEvidenceManifest>;
+  try {
+    manifest = parseManagedEvidenceManifest(command.manifest);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceManifestError) {
+      fail("managed-evidence-manifest", "$/manifest", error);
+    }
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "evidence.record-managed-evidence",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    manifest,
+  });
+}
+
+/** prepare 命令带来的信封与任务包：各自合法，并且彼此对得上。 */
+function parsePreparedEnvelopeAndPackage(
+  command: Readonly<Record<string, unknown>>,
+): Readonly<{ envelope: Readonly<DeliveryEnvelope>; taskPackage: Readonly<TaskPackage> }> {
+  let envelope: Readonly<DeliveryEnvelope>;
+  let taskPackage: Readonly<TaskPackage>;
+  try {
+    envelope = parseDeliveryEnvelope(command.envelope);
+  } catch (error: unknown) {
+    if (error instanceof DeliveryEnvelopeError) {
+      fail("delivery-envelope", "$/envelope", error);
+    }
+    throw error;
+  }
+  try {
+    taskPackage = parseTaskPackage(command.taskPackage);
+    assertDeliveryEnvelopeMatchesTaskPackage(envelope, taskPackage);
+  } catch (error: unknown) {
+    if (error instanceof TaskPackageError) {
+      fail("task-package", "$/taskPackage", error);
+    }
+    if (error instanceof DeliveryEnvelopeError) {
+      fail("delivery-envelope", "$/envelope", error);
+    }
+    throw error;
+  }
+  return { envelope, taskPackage };
+}
+
+/** 由决定与上一份结果投影出返工上下文，与信封里的那份比摘要。 */
+function assertReworkContextMatchesEnvelope(
+  decision: Readonly<ControllerImplementationReviewDecision>,
+  previousResult: Readonly<TargetResult>,
+  envelope: Readonly<DeliveryEnvelope>,
+): void {
+  try {
+    const projected = createTargetDeliveryReworkContext({
+      decision,
+      previousResult,
+    });
+    if (
+      envelope.rework === undefined ||
+      computeCanonicalJsonSha256Digest(projected) !==
+        computeCanonicalJsonSha256Digest(envelope.rework)
+    ) {
+      fail("target-delivery-rework-context", "$/reworkSource");
+    }
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingDecisionError) throw error;
+    if (error instanceof TargetDeliveryReworkContextError) {
+      fail("target-delivery-rework-context", "$/reworkSource", error);
+    }
+    throw error;
+  }
+}
+
+/** 返工投递的来源：评审决定与上一份结果，投影出来的返工上下文必须与信封里的那份逐字节相同。 */
+function parseReworkSource(
+  value: unknown,
+  envelope: Readonly<DeliveryEnvelope>,
+): NonNullable<PrepareDeliveryCommand["reworkSource"]> {
+  let source: Readonly<Record<string, unknown>>;
+  try {
+    source = parsePlainRecord(value, "$/reworkSource");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) {
+      fail("target-delivery-rework-context", "$/reworkSource", error);
+    }
+    throw error;
+  }
+  const sourceKeys = Object.keys(source).sort();
+  if (
+    sourceKeys.length !== 2 ||
+    sourceKeys[0] !== "decision" ||
+    sourceKeys[1] !== "previousResult"
+  ) {
+    fail("target-delivery-rework-context", "$/reworkSource");
+  }
+  let decision: Readonly<ControllerImplementationReviewDecision>;
+  let previousResult: Readonly<TargetResult>;
+  try {
+    decision = parseControllerImplementationReviewDecision(source.decision);
+  } catch (error: unknown) {
+    if (error instanceof ControllerImplementationReviewDecisionError) {
+      fail("controller-implementation-review-decision", "$/reworkSource/decision", error);
+    }
+    throw error;
+  }
+  try {
+    previousResult = parseTargetResult(source.previousResult);
+  } catch (error: unknown) {
+    if (error instanceof TargetResultError) {
+      fail("target-result", "$/reworkSource/previousResult", error);
+    }
+    throw error;
+  }
+  assertReworkContextMatchesEnvelope(decision, previousResult, envelope);
+  return Object.freeze({ decision, previousResult });
+}
+
+/** 由授权与上一份结果投影出修复上下文，与信封里的那份比摘要。 */
+function assertRemediationContextMatchesEnvelope(
+  authorization: Readonly<ControllerProductDefectRemediationAuthorization>,
+  previousResult: Readonly<TargetResult>,
+  envelope: Readonly<DeliveryEnvelope>,
+): void {
+  try {
+    const projected = createTargetDeliveryProductDefectRemediationContext({
+      authorization,
+      previousResult,
+    });
+    if (
+      envelope.productDefectRemediation === undefined ||
+      computeCanonicalJsonSha256Digest(projected) !==
+        computeCanonicalJsonSha256Digest(envelope.productDefectRemediation)
+    ) {
+      fail(
+        "target-delivery-product-defect-remediation-context",
+        "$/productDefectRemediationSource",
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingDecisionError) throw error;
+    if (error instanceof TargetDeliveryProductDefectRemediationContextError) {
+      fail(
+        "target-delivery-product-defect-remediation-context",
+        "$/productDefectRemediationSource",
+        error,
+      );
+    }
+    throw error;
+  }
+}
+
+/** 产品缺陷修复投递的来源：授权与上一份结果，投影出来的修复上下文必须与信封里的那份逐字节相同。 */
+function parseProductDefectRemediationSource(
+  value: unknown,
+  envelope: Readonly<DeliveryEnvelope>,
+): NonNullable<PrepareDeliveryCommand["productDefectRemediationSource"]> {
+  let source: Readonly<Record<string, unknown>>;
+  try {
+    source = parsePlainRecord(value, "$/productDefectRemediationSource");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) {
+      fail(
+        "target-delivery-product-defect-remediation-context",
+        "$/productDefectRemediationSource",
+        error,
+      );
+    }
+    throw error;
+  }
+  const sourceKeys = Object.keys(source).sort();
+  if (
+    sourceKeys.length !== 2 ||
+    sourceKeys[0] !== "authorization" ||
+    sourceKeys[1] !== "previousResult"
+  ) {
+    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource");
+  }
+  let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
+  let previousResult: Readonly<TargetResult>;
+  try {
+    authorization = parseControllerProductDefectRemediationAuthorization(source.authorization);
+  } catch (error: unknown) {
+    if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
+      fail(
+        "controller-product-defect-remediation-authorization",
+        "$/productDefectRemediationSource/authorization",
+        error,
+      );
+    }
+    throw error;
+  }
+  try {
+    previousResult = parseTargetResult(source.previousResult);
+  } catch (error: unknown) {
+    if (error instanceof TargetResultError) {
+      fail("target-result", "$/productDefectRemediationSource/previousResult", error);
+    }
+    throw error;
+  }
+  assertRemediationContextMatchesEnvelope(authorization, previousResult, envelope);
+  return Object.freeze({ authorization, previousResult });
+}
+
+function assertTestAttemptMatchesPackage(
+  envelope: Readonly<Extract<DeliveryEnvelope, { readonly workType: "test" }>>,
+  taskPackage: Readonly<TaskPackage>,
+): void {
+  try {
+    assertTestExecutionAttemptMatchesPackage(envelope.attempt, taskPackage);
+  } catch (error: unknown) {
+    if (error instanceof TestExecutionAttemptError) {
+      fail("delivery-envelope", "$/envelope/attempt", error);
+    }
+    throw error;
+  }
+}
+
+/** 命令带着返工来源就解析它；没带而信封里有返工上下文，是缺了来源。 */
+function optionalReworkSource(
+  present: boolean,
+  command: Readonly<Record<string, unknown>>,
+  envelope: Readonly<DeliveryEnvelope>,
+): PrepareDeliveryCommand["reworkSource"] {
+  if (present) return parseReworkSource(command.reworkSource, envelope);
+  if (envelope.rework !== undefined) fail("target-delivery-rework-context", "$/reworkSource");
+  return undefined;
+}
+
+/** 命令带着修复来源就解析它；没带而信封里有修复上下文，是缺了来源。 */
+function optionalProductDefectRemediationSource(
+  present: boolean,
+  command: Readonly<Record<string, unknown>>,
+  envelope: Readonly<DeliveryEnvelope>,
+): PrepareDeliveryCommand["productDefectRemediationSource"] {
+  if (present) {
+    return parseProductDefectRemediationSource(command.productDefectRemediationSource, envelope);
+  }
+  if (envelope.productDefectRemediation !== undefined) {
+    fail("target-delivery-product-defect-remediation-context", "$/productDefectRemediationSource");
+  }
+  return undefined;
+}
+
+function parsePrepareDeliveryCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const hasReworkSource = Object.hasOwn(base, "reworkSource");
+  const hasProductDefectRemediationSource = Object.hasOwn(base, "productDefectRemediationSource");
+  if (hasReworkSource && hasProductDefectRemediationSource) {
+    fail("input", "$command");
+  }
+  const command = exactCommand(
+    base,
+    [
+      ...PREPARE_DELIVERY_BASE_FIELDS,
+      ...(hasReworkSource ? (["reworkSource"] as const) : []),
+      ...(hasProductDefectRemediationSource ? (["productDefectRemediationSource"] as const) : []),
+    ].sort(),
+  );
+  const { envelope, taskPackage } = parsePreparedEnvelopeAndPackage(command);
+  if (envelope.workType === "test") {
+    assertTestAttemptMatchesPackage(envelope, taskPackage);
+    if (hasReworkSource || hasProductDefectRemediationSource) {
+      fail("input", "$command");
+    }
+  }
+  const reworkSource = optionalReworkSource(hasReworkSource, command, envelope);
+  const productDefectRemediationSource = optionalProductDefectRemediationSource(
+    hasProductDefectRemediationSource,
+    command,
+    envelope,
+  );
+  return Object.freeze({
+    commandType: "delivery.prepare-delivery",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    envelope,
+    taskPackage,
+    ...(reworkSource === undefined ? {} : { reworkSource }),
+    ...(productDefectRemediationSource === undefined ? {} : { productDefectRemediationSource }),
+  });
+}
+
+function parseRecordDeliveryOutcomeCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, RECORD_DELIVERY_OUTCOME_FIELDS);
+  let outcome: Readonly<DeliveryOutcome>;
+  try {
+    outcome = parseDeliveryOutcome(command.outcome);
+  } catch (error: unknown) {
+    if (error instanceof DeliveryOutcomeError) {
+      fail("delivery-outcome", "$/outcome", error);
+    }
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "delivery.record-delivery-outcome",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    outcome,
+  });
+}
+
+function parseRearmDeliveryCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, REARM_DELIVERY_FIELDS);
+  let rearm: Readonly<DeliveryRearm>;
+  try {
+    rearm = parseDeliveryRearm(command.rearm);
+  } catch (error: unknown) {
+    if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/rearm", error);
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "delivery.rearm-delivery",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    rearm,
+  });
+}
+
+function parseRecordTargetResultCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, RECORD_TARGET_RESULT_FIELDS);
+  let result: Readonly<TargetResult>;
+  try {
+    result = parseTargetResult(command.result);
+  } catch (error: unknown) {
+    if (error instanceof TargetResultError) {
+      fail("target-result", "$/result", error);
+    }
+    throw error;
+  }
+  let callback: Readonly<TargetResultCallbackRecord>;
+  let evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+  try {
+    callback = parseTargetResultCallbackRecord(command.callback, "$/callback");
+    evidenceResolution = parseTargetResultEvidenceResolutions(
+      command.evidenceResolution,
+      "$/evidenceResolution",
+    );
+  } catch (error: unknown) {
+    if (error instanceof TargetResultCallbackError) {
+      fail("target-result-callback", error.path, error);
+    }
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "result.record-target-result",
+    commandVersion: 1,
+    result,
+    callback,
+    evidenceResolution,
+  });
+}
+
+function parseReissueCallbackCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const command = exactCommand(base, REISSUE_CALLBACK_FIELDS);
+  let reissue: Readonly<TargetResultCallbackReissue>;
+  try {
+    reissue = parseTargetResultCallbackReissue(command.reissue, "$/reissue");
+  } catch (error: unknown) {
+    if (error instanceof TargetResultCallbackError) {
+      fail("target-result-callback", error.path, error);
+    }
+    throw error;
+  }
+  return Object.freeze({
+    commandType: "result.reissue-callback",
+    commandVersion: 1,
+    eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+    reissue,
+  });
+}
+
+function parseDecideTargetResultCommand(
+  base: Readonly<Record<string, unknown>>,
+): Readonly<DemandEventSourcingCommand> {
+  const hasAuthorization = Object.hasOwn(base, "authorization");
+  const command = exactCommand(
+    base,
+    hasAuthorization
+      ? DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS
+      : DECIDE_TARGET_RESULT_REVIEW_FIELDS,
+  );
+  let decision: Readonly<ControllerReviewDecision>;
+  try {
+    decision = parseControllerReviewDecision(command.decision);
+  } catch (error: unknown) {
+    if (error instanceof ControllerReviewDecisionError) {
+      fail("controller-review-decision", "$/decision", error);
+    }
+    throw error;
+  }
+  const productDefect =
+    decision.kind === "WakeflowControllerTestReviewDecision" &&
+    decision.escalation?.classification === "product-defect";
+  if (productDefect !== hasAuthorization) fail("input", "$/authorization");
+  if (!hasAuthorization) {
+    return Object.freeze({
+      commandType: "review.decide-target-result",
+      commandVersion: 1,
+      decision,
+    });
+  }
+  let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
+  try {
+    authorization = parseControllerProductDefectRemediationAuthorization(command.authorization);
+  } catch (error: unknown) {
+    if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
+      fail("controller-product-defect-remediation-authorization", "$/authorization", error);
+    }
+    throw error;
+  }
+  if (
+    authorization.source.testReviewDecision.targetReviewDecisionId !==
+      decision.targetReviewDecisionId ||
+    authorization.source.testReviewDecision.decisionDigest !== decision.decisionDigest ||
+    authorization.source.reviewSnapshotDigest !== decision.reviewed.snapshotDigest ||
+    authorization.source.streamRevision !== decision.reviewed.streamRevision + 1
+  ) {
+    fail("controller-product-defect-remediation-authorization", "$/authorization/source");
+  }
+  return Object.freeze({
+    commandType: "review.decide-target-result",
+    commandVersion: 1,
+    decision,
+    authorization,
+  });
+}
+
+/**
+ * 每种命令一个解析函数（open-items L5）：`parseDemandEventSourcingCommand` 只做信封核对与分派，
+ * 各命令自己的字段在各自的函数里。键是命令类型的字面量，分派用 `Object.hasOwn`，原型键不算命令。
+ */
+const COMMAND_PARSERS: Readonly<
+  Record<string, (base: Readonly<Record<string, unknown>>) => Readonly<DemandEventSourcingCommand>>
+> = Object.freeze({
+  "publication.publish-demand": parsePublishDemandCommand,
+  "lifecycle.cancel-demand": parseCancelDemandCommand,
+  "lifecycle.complete-demand": parseCompleteDemandCommand,
+  "lifecycle.escalate-demand": parseEscalateDemandCommand,
+  "lifecycle.record-decision": parseRecordDecisionCommand,
+  "lifecycle.continue-demand": parseContinueDemandCommand,
+  "tasking.plan-target-task": parsePlanTargetTaskCommand,
+  "evidence.record-managed-evidence": parseRecordManagedEvidenceCommand,
+  "delivery.prepare-delivery": parsePrepareDeliveryCommand,
+  "delivery.record-delivery-outcome": parseRecordDeliveryOutcomeCommand,
+  "delivery.rearm-delivery": parseRearmDeliveryCommand,
+  "result.record-target-result": parseRecordTargetResultCommand,
+  "result.reissue-callback": parseReissueCallbackCommand,
+  "review.decide-target-result": parseDecideTargetResultCommand,
+});
+
 export function parseDemandEventSourcingCommand(
   value: unknown,
 ): Readonly<DemandEventSourcingCommand> {
@@ -602,493 +1195,13 @@ export function parseDemandEventSourcingCommand(
     throw error;
   }
   if (base.commandVersion !== 1) fail("input", "$/commandVersion");
-
-  if (base.commandType === "publication.publish-demand") {
-    const command = exactCommand(base, PUBLISH_FIELDS);
-    return Object.freeze({
-      commandType: "publication.publish-demand",
-      commandVersion: 1,
-      demandId: parseId(command.demandId, "demand", "$/demandId"),
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      recordedAt: parseTime(command.recordedAt),
-      identityDigest: parseDigest(command.identityDigest, "$/identityDigest"),
-      authorityDigest: parseDigest(command.authorityDigest, "$/authorityDigest"),
-    });
-  }
-
-  if (base.commandType === "lifecycle.cancel-demand") {
-    const command = exactCommand(base, CANCEL_FIELDS);
-    return Object.freeze({
-      commandType: "lifecycle.cancel-demand",
-      commandVersion: 1,
-      demandId: parseId(command.demandId, "demand", "$/demandId"),
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      recordedAt: parseTime(command.recordedAt),
-      reason: parseReason(command.reason),
-    });
-  }
-
-  if (base.commandType === "lifecycle.complete-demand") {
-    const command = exactCommand(base, COMPLETE_DEMAND_FIELDS);
-    let authority: Readonly<DemandAuthority>;
-    let completion: Readonly<DemandCompletion>;
-    try {
-      authority = parseDemandAuthority(command.authority);
-    } catch (error: unknown) {
-      if (error instanceof DemandAuthorityError) {
-        fail("demand-authority", "$/authority", error);
-      }
-      throw error;
-    }
-    try {
-      completion = parseDemandCompletion(command.completion);
-    } catch (error: unknown) {
-      if (error instanceof DemandCompletionError) {
-        fail("demand-completion", "$/completion", error);
-      }
-      throw error;
-    }
-    if (
-      authority.demandId !== completion.demandId ||
-      completion.testingMode !== authority.testingDecision.mode ||
-      computeDemandAuthorityDigest(authority) !== completion.authorityDigest
-    ) {
-      fail("demand-completion", "$/completion");
-    }
-    return Object.freeze({
-      commandType: "lifecycle.complete-demand",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      authority,
-      completion,
-    });
-  }
-
-  if (base.commandType === "lifecycle.escalate-demand") {
-    const command = exactCommand(base, ESCALATE_DEMAND_FIELDS);
-    return Object.freeze({
-      commandType: "lifecycle.escalate-demand",
-      commandVersion: 1,
-      demandId: parseId(command.demandId, "demand", "$/demandId"),
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      recordedAt: parseTime(command.recordedAt),
-      escalation: escalationData(command.escalation),
-    });
-  }
-
-  if (base.commandType === "lifecycle.record-decision") {
-    const command = exactCommand(base, RECORD_DECISION_FIELDS);
-    return Object.freeze({
-      commandType: "lifecycle.record-decision",
-      commandVersion: 1,
-      demandId: parseId(command.demandId, "demand", "$/demandId"),
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      recordedAt: parseTime(command.recordedAt),
-      decision: decisionData(command.decision),
-    });
-  }
-
-  if (base.commandType === "lifecycle.continue-demand") {
-    const command = exactCommand(base, CONTINUE_DEMAND_FIELDS);
-    return Object.freeze({
-      commandType: "lifecycle.continue-demand",
-      commandVersion: 1,
-      demandId: parseId(command.demandId, "demand", "$/demandId"),
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      recordedAt: parseTime(command.recordedAt),
-      continuation: continuationData(command.continuation),
-    });
-  }
-
-  if (base.commandType === "tasking.plan-target-task") {
-    const command = exactCommand(base, PLAN_TARGET_TASK_FIELDS);
-    let taskPackage: Readonly<TaskPackage>;
-    try {
-      taskPackage = parseTaskPackage(command.taskPackage);
-    } catch (error: unknown) {
-      if (error instanceof TaskPackageError) {
-        fail("task-package", "$/taskPackage", error);
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "tasking.plan-target-task",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      taskPackage,
-    });
-  }
-
-  if (base.commandType === "evidence.record-managed-evidence") {
-    const command = exactCommand(base, RECORD_MANAGED_EVIDENCE_FIELDS);
-    let manifest: Readonly<ManagedEvidenceManifest>;
-    try {
-      manifest = parseManagedEvidenceManifest(command.manifest);
-    } catch (error: unknown) {
-      if (error instanceof ManagedEvidenceManifestError) {
-        fail("managed-evidence-manifest", "$/manifest", error);
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "evidence.record-managed-evidence",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      manifest,
-    });
-  }
-
-  if (base.commandType === "delivery.prepare-delivery") {
-    const hasReworkSource = Object.hasOwn(base, "reworkSource");
-    const hasProductDefectRemediationSource = Object.hasOwn(base, "productDefectRemediationSource");
-    if (hasReworkSource && hasProductDefectRemediationSource) {
-      fail("input", "$command");
-    }
-    const command = exactCommand(
-      base,
-      [
-        ...PREPARE_DELIVERY_BASE_FIELDS,
-        ...(hasReworkSource ? (["reworkSource"] as const) : []),
-        ...(hasProductDefectRemediationSource ? (["productDefectRemediationSource"] as const) : []),
-      ].sort(),
-    );
-    let envelope: Readonly<DeliveryEnvelope>;
-    let taskPackage: Readonly<TaskPackage>;
-    try {
-      envelope = parseDeliveryEnvelope(command.envelope);
-    } catch (error: unknown) {
-      if (error instanceof DeliveryEnvelopeError) {
-        fail("delivery-envelope", "$/envelope", error);
-      }
-      throw error;
-    }
-    try {
-      taskPackage = parseTaskPackage(command.taskPackage);
-      assertDeliveryEnvelopeMatchesTaskPackage(envelope, taskPackage);
-    } catch (error: unknown) {
-      if (error instanceof TaskPackageError) {
-        fail("task-package", "$/taskPackage", error);
-      }
-      if (error instanceof DeliveryEnvelopeError) {
-        fail("delivery-envelope", "$/envelope", error);
-      }
-      throw error;
-    }
-    if (envelope.workType === "test") {
-      try {
-        assertTestExecutionAttemptMatchesPackage(envelope.attempt, taskPackage);
-      } catch (error: unknown) {
-        if (error instanceof TestExecutionAttemptError) {
-          fail("delivery-envelope", "$/envelope/attempt", error);
-        }
-        throw error;
-      }
-      if (hasReworkSource || hasProductDefectRemediationSource) {
-        fail("input", "$command");
-      }
-    }
-    let reworkSource: PrepareDeliveryCommand["reworkSource"];
-    let productDefectRemediationSource: PrepareDeliveryCommand["productDefectRemediationSource"];
-    if (hasReworkSource) {
-      let source: Readonly<Record<string, unknown>>;
-      try {
-        source = parsePlainRecord(command.reworkSource, "$/reworkSource");
-      } catch (error: unknown) {
-        if (error instanceof PassiveOwnDataError) {
-          fail("target-delivery-rework-context", "$/reworkSource", error);
-        }
-        throw error;
-      }
-      const sourceKeys = Object.keys(source).sort();
-      if (
-        sourceKeys.length !== 2 ||
-        sourceKeys[0] !== "decision" ||
-        sourceKeys[1] !== "previousResult"
-      ) {
-        fail("target-delivery-rework-context", "$/reworkSource");
-      }
-      let decision: Readonly<ControllerImplementationReviewDecision>;
-      let previousResult: Readonly<TargetResult>;
-      try {
-        decision = parseControllerImplementationReviewDecision(source.decision);
-      } catch (error: unknown) {
-        if (error instanceof ControllerImplementationReviewDecisionError) {
-          fail("controller-implementation-review-decision", "$/reworkSource/decision", error);
-        }
-        throw error;
-      }
-      try {
-        previousResult = parseTargetResult(source.previousResult);
-      } catch (error: unknown) {
-        if (error instanceof TargetResultError) {
-          fail("target-result", "$/reworkSource/previousResult", error);
-        }
-        throw error;
-      }
-      try {
-        const projected = createTargetDeliveryReworkContext({
-          decision,
-          previousResult,
-        });
-        if (
-          envelope.rework === undefined ||
-          computeCanonicalJsonSha256Digest(projected) !==
-            computeCanonicalJsonSha256Digest(envelope.rework)
-        ) {
-          fail("target-delivery-rework-context", "$/reworkSource");
-        }
-      } catch (error: unknown) {
-        if (error instanceof DemandEventSourcingDecisionError) throw error;
-        if (error instanceof TargetDeliveryReworkContextError) {
-          fail("target-delivery-rework-context", "$/reworkSource", error);
-        }
-        throw error;
-      }
-      reworkSource = Object.freeze({ decision, previousResult });
-    } else if (envelope.rework !== undefined) {
-      fail("target-delivery-rework-context", "$/reworkSource");
-    }
-    if (hasProductDefectRemediationSource) {
-      let source: Readonly<Record<string, unknown>>;
-      try {
-        source = parsePlainRecord(
-          command.productDefectRemediationSource,
-          "$/productDefectRemediationSource",
-        );
-      } catch (error: unknown) {
-        if (error instanceof PassiveOwnDataError) {
-          fail(
-            "target-delivery-product-defect-remediation-context",
-            "$/productDefectRemediationSource",
-            error,
-          );
-        }
-        throw error;
-      }
-      const sourceKeys = Object.keys(source).sort();
-      if (
-        sourceKeys.length !== 2 ||
-        sourceKeys[0] !== "authorization" ||
-        sourceKeys[1] !== "previousResult"
-      ) {
-        fail(
-          "target-delivery-product-defect-remediation-context",
-          "$/productDefectRemediationSource",
-        );
-      }
-      let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
-      let previousResult: Readonly<TargetResult>;
-      try {
-        authorization = parseControllerProductDefectRemediationAuthorization(source.authorization);
-      } catch (error: unknown) {
-        if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-          fail(
-            "controller-product-defect-remediation-authorization",
-            "$/productDefectRemediationSource/authorization",
-            error,
-          );
-        }
-        throw error;
-      }
-      try {
-        previousResult = parseTargetResult(source.previousResult);
-      } catch (error: unknown) {
-        if (error instanceof TargetResultError) {
-          fail("target-result", "$/productDefectRemediationSource/previousResult", error);
-        }
-        throw error;
-      }
-      try {
-        const projected = createTargetDeliveryProductDefectRemediationContext({
-          authorization,
-          previousResult,
-        });
-        if (
-          envelope.productDefectRemediation === undefined ||
-          computeCanonicalJsonSha256Digest(projected) !==
-            computeCanonicalJsonSha256Digest(envelope.productDefectRemediation)
-        ) {
-          fail(
-            "target-delivery-product-defect-remediation-context",
-            "$/productDefectRemediationSource",
-          );
-        }
-      } catch (error: unknown) {
-        if (error instanceof DemandEventSourcingDecisionError) throw error;
-        if (error instanceof TargetDeliveryProductDefectRemediationContextError) {
-          fail(
-            "target-delivery-product-defect-remediation-context",
-            "$/productDefectRemediationSource",
-            error,
-          );
-        }
-        throw error;
-      }
-      productDefectRemediationSource = Object.freeze({
-        authorization,
-        previousResult,
-      });
-    } else if (envelope.productDefectRemediation !== undefined) {
-      fail(
-        "target-delivery-product-defect-remediation-context",
-        "$/productDefectRemediationSource",
-      );
-    }
-    return Object.freeze({
-      commandType: "delivery.prepare-delivery",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      envelope,
-      taskPackage,
-      ...(reworkSource === undefined ? {} : { reworkSource }),
-      ...(productDefectRemediationSource === undefined ? {} : { productDefectRemediationSource }),
-    });
-  }
-
-  if (base.commandType === "delivery.record-delivery-outcome") {
-    const command = exactCommand(base, RECORD_DELIVERY_OUTCOME_FIELDS);
-    let outcome: Readonly<DeliveryOutcome>;
-    try {
-      outcome = parseDeliveryOutcome(command.outcome);
-    } catch (error: unknown) {
-      if (error instanceof DeliveryOutcomeError) {
-        fail("delivery-outcome", "$/outcome", error);
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "delivery.record-delivery-outcome",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      outcome,
-    });
-  }
-
-  if (base.commandType === "delivery.rearm-delivery") {
-    const command = exactCommand(base, REARM_DELIVERY_FIELDS);
-    let rearm: Readonly<DeliveryRearm>;
-    try {
-      rearm = parseDeliveryRearm(command.rearm);
-    } catch (error: unknown) {
-      if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$/rearm", error);
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "delivery.rearm-delivery",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      rearm,
-    });
-  }
-
-  if (base.commandType === "result.record-target-result") {
-    const command = exactCommand(base, RECORD_TARGET_RESULT_FIELDS);
-    let result: Readonly<TargetResult>;
-    try {
-      result = parseTargetResult(command.result);
-    } catch (error: unknown) {
-      if (error instanceof TargetResultError) {
-        fail("target-result", "$/result", error);
-      }
-      throw error;
-    }
-    let callback: Readonly<TargetResultCallbackRecord>;
-    let evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
-    try {
-      callback = parseTargetResultCallbackRecord(command.callback, "$/callback");
-      evidenceResolution = parseTargetResultEvidenceResolutions(
-        command.evidenceResolution,
-        "$/evidenceResolution",
-      );
-    } catch (error: unknown) {
-      if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path, error);
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "result.record-target-result",
-      commandVersion: 1,
-      result,
-      callback,
-      evidenceResolution,
-    });
-  }
-
-  if (base.commandType === "result.reissue-callback") {
-    const command = exactCommand(base, REISSUE_CALLBACK_FIELDS);
-    let reissue: Readonly<TargetResultCallbackReissue>;
-    try {
-      reissue = parseTargetResultCallbackReissue(command.reissue, "$/reissue");
-    } catch (error: unknown) {
-      if (error instanceof TargetResultCallbackError) {
-        fail("target-result-callback", error.path, error);
-      }
-      throw error;
-    }
-    return Object.freeze({
-      commandType: "result.reissue-callback",
-      commandVersion: 1,
-      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
-      reissue,
-    });
-  }
-
-  if (base.commandType === "review.decide-target-result") {
-    const hasAuthorization = Object.hasOwn(base, "authorization");
-    const command = exactCommand(
-      base,
-      hasAuthorization
-        ? DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS
-        : DECIDE_TARGET_RESULT_REVIEW_FIELDS,
-    );
-    let decision: Readonly<ControllerReviewDecision>;
-    try {
-      decision = parseControllerReviewDecision(command.decision);
-    } catch (error: unknown) {
-      if (error instanceof ControllerReviewDecisionError) {
-        fail("controller-review-decision", "$/decision", error);
-      }
-      throw error;
-    }
-    const productDefect =
-      decision.kind === "WakeflowControllerTestReviewDecision" &&
-      decision.escalation?.classification === "product-defect";
-    if (productDefect !== hasAuthorization) fail("input", "$/authorization");
-    if (!hasAuthorization) {
-      return Object.freeze({
-        commandType: "review.decide-target-result",
-        commandVersion: 1,
-        decision,
-      });
-    }
-    let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
-    try {
-      authorization = parseControllerProductDefectRemediationAuthorization(command.authorization);
-    } catch (error: unknown) {
-      if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-        fail("controller-product-defect-remediation-authorization", "$/authorization", error);
-      }
-      throw error;
-    }
-    if (
-      authorization.source.testReviewDecision.targetReviewDecisionId !==
-        decision.targetReviewDecisionId ||
-      authorization.source.testReviewDecision.decisionDigest !== decision.decisionDigest ||
-      authorization.source.reviewSnapshotDigest !== decision.reviewed.snapshotDigest ||
-      authorization.source.streamRevision !== decision.reviewed.streamRevision + 1
-    ) {
-      fail("controller-product-defect-remediation-authorization", "$/authorization/source");
-    }
-    return Object.freeze({
-      commandType: "review.decide-target-result",
-      commandVersion: 1,
-      decision,
-      authorization,
-    });
-  }
-
-  fail("input", "$/commandType");
+  const commandType = base.commandType;
+  const parser =
+    typeof commandType === "string" && Object.hasOwn(COMMAND_PARSERS, commandType)
+      ? COMMAND_PARSERS[commandType]
+      : undefined;
+  if (parser === undefined) fail("input", "$/commandType");
+  return parser(base);
 }
 
 /** 计算已准入命令的稳定幂等摘要；事件存储不接受调用方自行声明的摘要。 */
@@ -1115,273 +1228,317 @@ function parseState(value: unknown): Readonly<DemandAggregateState> | null {
   }
 }
 
-/** 根据当前状态对一条业务命令作出纯事件决策。 */
-export function decideDemandEventSourcingCommand(
-  stateValue: unknown,
-  commandValue: unknown,
+/** 一种命令的已解析形状：分派之后各段拿到的就是自己那一种（open-items L5）。 */
+type CommandOf<Type extends DemandEventSourcingCommand["commandType"]> = Extract<
+  DemandEventSourcingCommand,
+  { readonly commandType: Type }
+>;
+
+function decidePublishDemand(
+  state: Readonly<DemandAggregateState> | null,
+  command: Readonly<CommandOf<"publication.publish-demand">>,
 ): DecidedEvents {
-  const state = parseState(stateValue);
-  const command = parseDemandEventSourcingCommand(commandValue);
+  if (state !== null) fail("transition", "$state");
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.demandId,
+      recordedAt: command.recordedAt,
+      eventType: "publication.demand-published",
+      data: {
+        identityRef: "identity.json",
+        identityDigest: command.identityDigest,
+        authorityRef: "authority.json",
+        authorityDigest: command.authorityDigest,
+      },
+    }),
+  );
+}
 
-  if (command.commandType === "publication.publish-demand") {
-    if (state !== null) fail("transition", "$state");
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.demandId,
-        recordedAt: command.recordedAt,
-        eventType: "publication.demand-published",
-        data: {
-          identityRef: "identity.json",
-          identityDigest: command.identityDigest,
-          authorityRef: "authority.json",
-          authorityDigest: command.authorityDigest,
-        },
-      }),
-    );
+function decideRecordManagedEvidence(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"evidence.record-managed-evidence">>,
+): DecidedEvents {
+  if (state.demandId !== command.manifest.demandId) {
+    fail("identity", "$/manifest/demandId");
   }
+  try {
+    recordManagedEvidenceInDemandAggregateState(state, command.manifest);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/managedEvidence", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.manifest.demandId,
+      recordedAt: command.manifest.capturedAt,
+      eventType: "evidence.managed-evidence-recorded",
+      data: { manifest: command.manifest },
+    }),
+  );
+}
 
-  if (state === null) fail("transition", "$state");
-  if (command.commandType === "evidence.record-managed-evidence") {
-    if (state.demandId !== command.manifest.demandId) {
-      fail("identity", "$/manifest/demandId");
+function decideCompleteDemand(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"lifecycle.complete-demand">>,
+): DecidedEvents {
+  if (state.demandId !== command.completion.demandId) {
+    fail("identity", "$/completion/demandId");
+  }
+  try {
+    completeDemandAggregateState(state, command.completion);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state", error);
     }
-    try {
-      recordManagedEvidenceInDemandAggregateState(state, command.manifest);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/managedEvidence", error);
-      }
-      throw error;
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.completion.demandId,
+      recordedAt: command.completion.completedAt,
+      eventType: "lifecycle.demand-completed",
+      data: { completion: command.completion },
+    }),
+  );
+}
+
+function decideRecordTargetResult(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"result.record-target-result">>,
+): DecidedEvents {
+  try {
+    recordTargetResultInDemandAggregateState(state, command.result, command.callback);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
     }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.manifest.demandId,
-        recordedAt: command.manifest.capturedAt,
-        eventType: "evidence.managed-evidence-recorded",
-        data: { manifest: command.manifest },
-      }),
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: targetResultRecordedEventIdFromResult(command.result),
+      demandId: command.result.demandId,
+      recordedAt: command.result.report.reportedAt,
+      eventType: "result.target-result-recorded",
+      data: {
+        result: command.result,
+        callback: command.callback,
+        evidenceResolution: command.evidenceResolution,
+      },
+    }),
+  );
+}
+
+function decideReissueCallback(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"result.reissue-callback">>,
+): DecidedEvents {
+  try {
+    reissueCallbackInDemandAggregateState(state, command.reissue);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: state.demandId,
+      recordedAt: command.reissue.issuedAt,
+      eventType: "result.callback-reissued",
+      data: { reissue: command.reissue },
+    }),
+  );
+}
+
+function decideRearmDelivery(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"delivery.rearm-delivery">>,
+): DecidedEvents {
+  try {
+    rearmDeliveryInDemandAggregateState(state, command.rearm);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: state.demandId,
+      recordedAt: command.rearm.rearmedAt,
+      eventType: "delivery.delivery-rearmed",
+      data: { rearm: command.rearm },
+    }),
+  );
+}
+
+function decideRecordDeliveryOutcome(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"delivery.record-delivery-outcome">>,
+): DecidedEvents {
+  try {
+    recordDeliveryOutcomeInDemandAggregateState(state, command.outcome);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: state.demandId,
+      recordedAt: command.outcome.observedAt,
+      eventType: "delivery.delivery-outcome-recorded",
+      data: { outcome: command.outcome },
+    }),
+  );
+}
+
+function decidePrepareDelivery(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"delivery.prepare-delivery">>,
+): DecidedEvents {
+  if (state.demandId !== command.envelope.demandId) {
+    fail("identity", "$/envelope/demandId");
+  }
+  try {
+    prepareDeliveryInDemandAggregateState(state, command.envelope);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.envelope.demandId,
+      recordedAt: command.envelope.preparedAt,
+      eventType: "delivery.delivery-prepared",
+      data: { envelope: command.envelope },
+    }),
+  );
+}
+
+function decidePlanTargetTask(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"tasking.plan-target-task">>,
+): DecidedEvents {
+  if (state.demandId !== command.taskPackage.demandId) {
+    fail("identity", "$/taskPackage/demandId");
+  }
+  try {
+    planTargetTaskInDemandAggregateState(state, command.taskPackage);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.taskPackage.demandId,
+      recordedAt: command.taskPackage.createdAt,
+      eventType: "tasking.target-task-planned",
+      data: { taskPackage: command.taskPackage },
+    }),
+  );
+}
+
+function decideEscalateDemand(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"lifecycle.escalate-demand">>,
+): DecidedEvents {
+  try {
+    escalateDemandAggregateState(state, command.escalation, command.eventId);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/awaitingDecision", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.demandId,
+      recordedAt: command.recordedAt,
+      eventType: "lifecycle.demand-escalated",
+      data: { escalation: command.escalation },
+    }),
+  );
+}
+
+function decideRecordDecision(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"lifecycle.record-decision">>,
+): DecidedEvents {
+  try {
+    recordDecisionInDemandAggregateState(state, command.decision.escalationEventId);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/awaitingDecision", error);
+    }
+    throw error;
+  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.demandId,
+      recordedAt: command.recordedAt,
+      eventType: "lifecycle.decision-recorded",
+      data: { decision: command.decision },
+    }),
+  );
+}
+
+function decideContinueDemand(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"lifecycle.continue-demand">>,
+): DecidedEvents {
+  // 续接边界是决策事实：续接前已有的 test 目标随事件持久化，归约器只照抄事件携带的边界。
+  const historicalTestTargetIds = historicalTestTargetIdsAtContinuation(state);
+  try {
+    continueDemandAggregateState(
+      state,
+      command.continuation.kind,
+      command.eventId,
+      historicalTestTargetIds,
+      command.continuation.supplement,
     );
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/lifecycle", error);
+    }
+    throw error;
   }
-  if (command.commandType === "lifecycle.complete-demand") {
-    if (state.demandId !== command.completion.demandId) {
-      fail("identity", "$/completion/demandId");
-    }
-    try {
-      completeDemandAggregateState(state, command.completion);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.completion.demandId,
-        recordedAt: command.completion.completedAt,
-        eventType: "lifecycle.demand-completed",
-        data: { completion: command.completion },
-      }),
-    );
-  }
-  if (command.commandType === "review.decide-target-result") {
-    return decideReview(state, command);
-  }
-  if (command.commandType === "result.record-target-result") {
-    try {
-      recordTargetResultInDemandAggregateState(state, command.result, command.callback);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: targetResultRecordedEventIdFromResult(command.result),
-        demandId: command.result.demandId,
-        recordedAt: command.result.report.reportedAt,
-        eventType: "result.target-result-recorded",
-        data: {
-          result: command.result,
-          callback: command.callback,
-          evidenceResolution: command.evidenceResolution,
-        },
-      }),
-    );
-  }
-  if (command.commandType === "result.reissue-callback") {
-    try {
-      reissueCallbackInDemandAggregateState(state, command.reissue);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: state.demandId,
-        recordedAt: command.reissue.issuedAt,
-        eventType: "result.callback-reissued",
-        data: { reissue: command.reissue },
-      }),
-    );
-  }
-  if (command.commandType === "delivery.rearm-delivery") {
-    try {
-      rearmDeliveryInDemandAggregateState(state, command.rearm);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: state.demandId,
-        recordedAt: command.rearm.rearmedAt,
-        eventType: "delivery.delivery-rearmed",
-        data: { rearm: command.rearm },
-      }),
-    );
-  }
-  if (command.commandType === "delivery.record-delivery-outcome") {
-    try {
-      recordDeliveryOutcomeInDemandAggregateState(state, command.outcome);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: state.demandId,
-        recordedAt: command.outcome.observedAt,
-        eventType: "delivery.delivery-outcome-recorded",
-        data: { outcome: command.outcome },
-      }),
-    );
-  }
-  if (command.commandType === "delivery.prepare-delivery") {
-    if (state.demandId !== command.envelope.demandId) {
-      fail("identity", "$/envelope/demandId");
-    }
-    try {
-      prepareDeliveryInDemandAggregateState(state, command.envelope);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.envelope.demandId,
-        recordedAt: command.envelope.preparedAt,
-        eventType: "delivery.delivery-prepared",
-        data: { envelope: command.envelope },
-      }),
-    );
-  }
-  if (command.commandType === "tasking.plan-target-task") {
-    if (state.demandId !== command.taskPackage.demandId) {
-      fail("identity", "$/taskPackage/demandId");
-    }
-    try {
-      planTargetTaskInDemandAggregateState(state, command.taskPackage);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.taskPackage.demandId,
-        recordedAt: command.taskPackage.createdAt,
-        eventType: "tasking.target-task-planned",
-        data: { taskPackage: command.taskPackage },
-      }),
-    );
-  }
-  if (state.demandId !== command.demandId) fail("identity", "$/demandId");
-  if (command.commandType === "lifecycle.escalate-demand") {
-    try {
-      escalateDemandAggregateState(state, command.escalation, command.eventId);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.demandId,
-        recordedAt: command.recordedAt,
-        eventType: "lifecycle.demand-escalated",
-        data: { escalation: command.escalation },
-      }),
-    );
-  }
-  if (command.commandType === "lifecycle.record-decision") {
-    try {
-      recordDecisionInDemandAggregateState(state, command.decision.escalationEventId);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.demandId,
-        recordedAt: command.recordedAt,
-        eventType: "lifecycle.decision-recorded",
-        data: { decision: command.decision },
-      }),
-    );
-  }
-  if (command.commandType === "lifecycle.continue-demand") {
-    // 续接边界是决策事实：续接前已有的 test 目标随事件持久化，归约器只照抄事件携带的边界。
-    const historicalTestTargetIds = historicalTestTargetIdsAtContinuation(state);
-    try {
-      continueDemandAggregateState(
-        state,
-        command.continuation.kind,
-        command.eventId,
-        historicalTestTargetIds,
-        command.continuation.supplement,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle", error);
-      }
-      throw error;
-    }
-    return singleEvent(
-      parseDemandUncommittedEvent({
-        eventId: command.eventId,
-        demandId: command.demandId,
-        recordedAt: command.recordedAt,
-        eventType: "lifecycle.demand-continued",
-        data: {
-          continuation: command.continuation,
-          ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
-        },
-      }),
-    );
-  }
+  return singleEvent(
+    parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.demandId,
+      recordedAt: command.recordedAt,
+      eventType: "lifecycle.demand-continued",
+      data: {
+        continuation: command.continuation,
+        ...(historicalTestTargetIds.length === 0 ? {} : { historicalTestTargetIds }),
+      },
+    }),
+  );
+}
+
+function decideCancelDemand(
+  state: Readonly<DemandAggregateState>,
+  command: Readonly<CommandOf<"lifecycle.cancel-demand">>,
+): DecidedEvents {
   if (state.lifecycle !== "active") fail("transition", "$state/lifecycle");
   return singleEvent(
     parseDemandUncommittedEvent({
@@ -1392,6 +1549,54 @@ export function decideDemandEventSourcingCommand(
       data: { reason: command.reason },
     }),
   );
+}
+
+/** 根据当前状态对一条业务命令作出纯事件决策。 */
+export function decideDemandEventSourcingCommand(
+  stateValue: unknown,
+  commandValue: unknown,
+): DecidedEvents {
+  const state = parseState(stateValue);
+  const command = parseDemandEventSourcingCommand(commandValue);
+
+  if (command.commandType === "publication.publish-demand") {
+    return decidePublishDemand(state, command);
+  }
+  if (state === null) fail("transition", "$state");
+  // 这一组命令各自在聚合的守卫里核对归属，不在这里比对 demandId。
+  switch (command.commandType) {
+    case "evidence.record-managed-evidence":
+      return decideRecordManagedEvidence(state, command);
+    case "lifecycle.complete-demand":
+      return decideCompleteDemand(state, command);
+    case "review.decide-target-result":
+      return decideReview(state, command);
+    case "result.record-target-result":
+      return decideRecordTargetResult(state, command);
+    case "result.reissue-callback":
+      return decideReissueCallback(state, command);
+    case "delivery.rearm-delivery":
+      return decideRearmDelivery(state, command);
+    case "delivery.record-delivery-outcome":
+      return decideRecordDeliveryOutcome(state, command);
+    case "delivery.prepare-delivery":
+      return decidePrepareDelivery(state, command);
+    case "tasking.plan-target-task":
+      return decidePlanTargetTask(state, command);
+    default:
+      break;
+  }
+  if (state.demandId !== command.demandId) fail("identity", "$/demandId");
+  switch (command.commandType) {
+    case "lifecycle.escalate-demand":
+      return decideEscalateDemand(state, command);
+    case "lifecycle.record-decision":
+      return decideRecordDecision(state, command);
+    case "lifecycle.continue-demand":
+      return decideContinueDemand(state, command);
+    default:
+      return decideCancelDemand(state, command);
+  }
 }
 
 /**
@@ -1538,6 +1743,214 @@ function derivedEventId(
   );
 }
 
+/** 一种事件的已解析形状：分派之后各段拿到的就是自己那一种（open-items L5）。 */
+type EventOf<Type extends DemandUncommittedEvent["eventType"]> = Extract<
+  DemandUncommittedEvent,
+  { readonly eventType: Type }
+>;
+
+function applyManagedEvidenceRecorded(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"evidence.managed-evidence-recorded">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return recordManagedEvidenceInDemandAggregateState(state, event.data.manifest);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/managedEvidence", error);
+    }
+    throw error;
+  }
+}
+
+function applyTargetTaskPlanned(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"tasking.target-task-planned">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return planTargetTaskInDemandAggregateState(state, event.data.taskPackage);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyDeliveryPrepared(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"delivery.delivery-prepared">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return prepareDeliveryInDemandAggregateState(state, event.data.envelope);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyDeliveryOutcomeRecorded(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"delivery.delivery-outcome-recorded">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return recordDeliveryOutcomeInDemandAggregateState(state, event.data.outcome);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyDeliveryRearmed(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"delivery.delivery-rearmed">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return rearmDeliveryInDemandAggregateState(state, event.data.rearm);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyTargetResultRecorded(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"result.target-result-recorded">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return recordTargetResultInDemandAggregateState(state, event.data.result, event.data.callback);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyCallbackReissued(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"result.callback-reissued">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return reissueCallbackInDemandAggregateState(state, event.data.reissue);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyTargetResultDecided(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"review.target-result-decided">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return decideTargetResultReviewInDemandAggregateState(state, event.data.decision);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyProductDefectRemediationAuthorized(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"review.product-defect-remediation-authorized">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return authorizeProductDefectRemediationInDemandAggregateState(state, event.data.authorization);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/targetTasks", error);
+    }
+    throw error;
+  }
+}
+
+function applyDemandEscalated(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"lifecycle.demand-escalated">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return escalateDemandAggregateState(state, event.data.escalation, event.eventId);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/awaitingDecision", error);
+    }
+    throw error;
+  }
+}
+
+function applyDecisionRecorded(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"lifecycle.decision-recorded">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return recordDecisionInDemandAggregateState(state, event.data.decision.escalationEventId);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/awaitingDecision", error);
+    }
+    throw error;
+  }
+}
+
+function applyDemandContinued(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"lifecycle.demand-continued">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return continueDemandAggregateState(
+      state,
+      event.data.continuation.kind,
+      event.eventId,
+      event.data.historicalTestTargetIds,
+      event.data.continuation.supplement,
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/lifecycle", error);
+    }
+    throw error;
+  }
+}
+
+function applyDemandCompleted(
+  state: Readonly<DemandAggregateState>,
+  event: Readonly<EventOf<"lifecycle.demand-completed">>,
+): Readonly<DemandAggregateState> {
+  try {
+    return completeDemandAggregateState(state, event.data.completion);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/lifecycle", error);
+    }
+    throw error;
+  }
+}
+
+/** 取消事件只带原因，状态的转移不看它。 */
+function applyDemandCancelled(
+  state: Readonly<DemandAggregateState>,
+): Readonly<DemandAggregateState> {
+  try {
+    return cancelDemandAggregateState(state);
+  } catch (error: unknown) {
+    if (error instanceof DemandAggregateStateError) {
+      fail("transition", "$state/lifecycle", error);
+    }
+    throw error;
+  }
+}
+
 /** 将一个已决定但尚未持久化的事件确定性应用到状态。 */
 export function evolveDemandEventSourcingState(
   stateValue: unknown,
@@ -1558,160 +1971,38 @@ export function evolveDemandEventSourcingState(
   }
   if (state === null) fail("transition", "$state");
   if (state.demandId !== event.demandId) fail("identity", "$/demandId");
-  if (event.eventType === "evidence.managed-evidence-recorded") {
-    try {
-      return recordManagedEvidenceInDemandAggregateState(state, event.data.manifest);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/managedEvidence", error);
-      }
-      throw error;
-    }
+  switch (event.eventType) {
+    case "evidence.managed-evidence-recorded":
+      return applyManagedEvidenceRecorded(state, event);
+    case "tasking.target-task-planned":
+      return applyTargetTaskPlanned(state, event);
+    case "delivery.delivery-prepared":
+      return applyDeliveryPrepared(state, event);
+    case "delivery.delivery-outcome-recorded":
+      return applyDeliveryOutcomeRecorded(state, event);
+    case "delivery.delivery-rearmed":
+      return applyDeliveryRearmed(state, event);
+    case "result.target-result-recorded":
+      return applyTargetResultRecorded(state, event);
+    case "result.callback-reissued":
+      return applyCallbackReissued(state, event);
+    case "review.target-result-decided":
+      return applyTargetResultDecided(state, event);
+    case "review.product-defect-remediation-authorized":
+      return applyProductDefectRemediationAuthorized(state, event);
+    case "lifecycle.demand-escalated":
+      return applyDemandEscalated(state, event);
+    case "lifecycle.decision-recorded":
+      return applyDecisionRecorded(state, event);
+    case "lifecycle.demand-continued":
+      return applyDemandContinued(state, event);
+    case "lifecycle.demand-completed":
+      return applyDemandCompleted(state, event);
+    case "lifecycle.demand-cancelled":
+      return applyDemandCancelled(state);
+    default:
+      return unhandledEvent(event);
   }
-  if (event.eventType === "tasking.target-task-planned") {
-    try {
-      return planTargetTaskInDemandAggregateState(state, event.data.taskPackage);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.delivery-prepared") {
-    try {
-      return prepareDeliveryInDemandAggregateState(state, event.data.envelope);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.delivery-outcome-recorded") {
-    try {
-      return recordDeliveryOutcomeInDemandAggregateState(state, event.data.outcome);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "delivery.delivery-rearmed") {
-    try {
-      return rearmDeliveryInDemandAggregateState(state, event.data.rearm);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "result.target-result-recorded") {
-    try {
-      return recordTargetResultInDemandAggregateState(
-        state,
-        event.data.result,
-        event.data.callback,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "result.callback-reissued") {
-    try {
-      return reissueCallbackInDemandAggregateState(state, event.data.reissue);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "review.target-result-decided") {
-    try {
-      return decideTargetResultReviewInDemandAggregateState(state, event.data.decision);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "review.product-defect-remediation-authorized") {
-    try {
-      return authorizeProductDefectRemediationInDemandAggregateState(
-        state,
-        event.data.authorization,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/targetTasks", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "lifecycle.demand-escalated") {
-    try {
-      return escalateDemandAggregateState(state, event.data.escalation, event.eventId);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "lifecycle.decision-recorded") {
-    try {
-      return recordDecisionInDemandAggregateState(state, event.data.decision.escalationEventId);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/awaitingDecision", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "lifecycle.demand-continued") {
-    try {
-      return continueDemandAggregateState(
-        state,
-        event.data.continuation.kind,
-        event.eventId,
-        event.data.historicalTestTargetIds,
-        event.data.continuation.supplement,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "lifecycle.demand-completed") {
-    try {
-      return completeDemandAggregateState(state, event.data.completion);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle", error);
-      }
-      throw error;
-    }
-  }
-  if (event.eventType === "lifecycle.demand-cancelled") {
-    try {
-      return cancelDemandAggregateState(state);
-    } catch (error: unknown) {
-      if (error instanceof DemandAggregateStateError) {
-        fail("transition", "$state/lifecycle", error);
-      }
-      throw error;
-    }
-  }
-  return unhandledEvent(event);
 }
 
 /** 穷尽性守卫：事件联合多出成员时这里编译不过，新事件不会落进任何兜底分支。 */

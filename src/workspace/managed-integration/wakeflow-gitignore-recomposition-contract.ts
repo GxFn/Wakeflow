@@ -22,6 +22,8 @@ import type {
   RootedExclusiveFileLockError,
   RootedExclusiveFileLockOptions,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
   parseWakeflowWorkspaceStaticResourceMatrix,
@@ -43,7 +45,6 @@ import {
   WakeflowGitignoreBodyAuthorityError,
 } from "./wakeflow-gitignore-body-authority.js";
 import type { WakeflowGitignoreInspection } from "./wakeflow-gitignore-inspection.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Gitignore 重组与显式恢复共享的输入、错误和机械操作准入合同。
@@ -310,10 +311,9 @@ export function assertWakeflowGitignoreRecompositionNotAborted(
 }
 
 export function currentWakeflowGitignoreRecompositionUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    failWakeflowGitignoreRecomposition("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() =>
+    failWakeflowGitignoreRecomposition("unsupported-platform", "$root"),
+  );
 }
 
 export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(

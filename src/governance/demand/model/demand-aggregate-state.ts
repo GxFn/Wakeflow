@@ -1171,8 +1171,324 @@ function parseTestAttemptLineage(
   return Object.freeze([first, ...attempts.slice(1)]);
 }
 
+type TargetTaskWire = DemandAggregateStateWire["targetTasks"][number];
+
+/** 两种目标共有的四个字段。 */
+interface TargetTaskCommon {
+  readonly targetTaskId: WakeflowDurableId<"target-task">;
+  readonly taskPackageId: WakeflowDurableId<"task-package">;
+  readonly taskPackageDigest: Sha256Digest;
+  readonly windowId: WakeflowDurableId<"window">;
+}
+
+/** 登记当前投递的围栏声明；同一声明在整个状态里出现第二次即失败。 */
+type RegisterClaim = (delivery: Readonly<DemandCurrentDeliveryBase>) => void;
+
+/** 一个测试目标的状态：阶段决定当前投递要带哪些事实，谱系的末项必须就是当前投递。 */
+function parseTestTargetTask(
+  value: TargetTaskWire,
+  path: string,
+  common: Readonly<TargetTaskCommon>,
+  registerClaim: RegisterClaim,
+): Readonly<DemandTargetTaskState> {
+  if (value.reworkCount !== undefined) {
+    fail("relation", path);
+  }
+  if (value.phase === "planned") {
+    return Object.freeze({
+      ...common,
+      workType: "test" as const,
+      phase: "planned" as const,
+    });
+  }
+  if (
+    (value.phase !== "test-delivery-prepared" &&
+      value.phase !== "test-host-effect-accepted" &&
+      value.phase !== "test-host-effect-indeterminate" &&
+      value.phase !== "test-host-effect-rejected" &&
+      value.phase !== "test-result-reported" &&
+      value.phase !== "test-accepted" &&
+      value.phase !== "test-another-attempt-requested" &&
+      value.phase !== "test-product-defect" &&
+      value.phase !== "test-review-blocked" &&
+      value.phase !== "test-escalated") ||
+    value.currentDelivery === undefined ||
+    value.testAttempts === undefined
+  ) {
+    fail("relation", path);
+  }
+  const currentDelivery = parseTestCurrentDelivery(
+    value.currentDelivery as
+      | TestCurrentDeliveryWire
+      | TestObservedCurrentDeliveryWire
+      | TestResultCurrentDeliveryWire
+      | TestReviewedCurrentDeliveryWire,
+    `${path}/currentDelivery`,
+  );
+  registerClaim(currentDelivery);
+  const testAttempts = parseTestAttemptLineage(value.testAttempts, common, `${path}/testAttempts`);
+  const attemptState = lastTestAttempt(testAttempts);
+  if (
+    attemptState.attempt.targetTaskId !== common.targetTaskId ||
+    currentDelivery.testAttemptId !== attemptState.attempt.testAttemptId ||
+    currentDelivery.deliveryId !== attemptState.delivery.deliveryId ||
+    currentDelivery.envelopeDigest !== attemptState.delivery.envelopeDigest
+  ) {
+    fail("relation", `${path}/testAttempts`);
+  }
+  if (value.phase === "test-delivery-prepared") {
+    return Object.freeze({
+      ...common,
+      workType: "test" as const,
+      phase: "test-delivery-prepared" as const,
+      currentDelivery,
+      testAttempts,
+    });
+  }
+  const observedDelivery = value.currentDelivery as
+    | TestObservedCurrentDeliveryWire
+    | TestResultCurrentDeliveryWire
+    | TestReviewedCurrentDeliveryWire;
+  if (observedDelivery.outcome === undefined) {
+    fail("relation", `${path}/currentDelivery/outcome`);
+  }
+  const outcome = parseDeliveryOutcomeSummary(
+    observedDelivery.outcome,
+    `${path}/currentDelivery/outcome`,
+  );
+  if (
+    value.phase === "test-accepted" ||
+    value.phase === "test-another-attempt-requested" ||
+    value.phase === "test-product-defect" ||
+    value.phase === "test-review-blocked" ||
+    value.phase === "test-escalated"
+  ) {
+    const reviewedDelivery = value.currentDelivery as TestReviewedCurrentDeliveryWire;
+    if (
+      reviewedDelivery.targetResult === undefined ||
+      reviewedDelivery.reviewDecision === undefined ||
+      outcome.disposition === "rejected-before-send"
+    ) {
+      fail("relation", `${path}/currentDelivery`);
+    }
+    const targetResult = parseTargetResultSummary(
+      reviewedDelivery.targetResult,
+      `${path}/currentDelivery/targetResult`,
+    );
+    const reviewDecision = parseReviewDecisionSummary(
+      reviewedDelivery.reviewDecision,
+      `${path}/currentDelivery/reviewDecision`,
+    );
+    const expectedPhase = value.phase;
+    if (!testReviewPhasesForDecision(reviewDecision.decision).includes(expectedPhase)) {
+      fail("relation", `${path}/phase`);
+    }
+    return Object.freeze({
+      ...common,
+      workType: "test" as const,
+      phase: expectedPhase,
+      currentDelivery: Object.freeze({
+        ...currentDelivery,
+        outcome,
+        targetResult,
+        reviewDecision,
+      }),
+      testAttempts,
+    });
+  } else if (value.phase === "test-result-reported") {
+    const resultDelivery = value.currentDelivery as TestResultCurrentDeliveryWire;
+    if (
+      resultDelivery.targetResult === undefined ||
+      outcome.disposition === "rejected-before-send"
+    ) {
+      fail("relation", `${path}/currentDelivery`);
+    }
+    return Object.freeze({
+      ...common,
+      workType: "test" as const,
+      phase: "test-result-reported" as const,
+      currentDelivery: Object.freeze({
+        ...currentDelivery,
+        outcome,
+        targetResult: parseTargetResultSummary(
+          resultDelivery.targetResult,
+          `${path}/currentDelivery/targetResult`,
+        ),
+      }),
+      testAttempts,
+    });
+  } else {
+    const expectedPhase =
+      outcome.disposition === "accepted"
+        ? ("test-host-effect-accepted" as const)
+        : outcome.disposition === "indeterminate"
+          ? ("test-host-effect-indeterminate" as const)
+          : ("test-host-effect-rejected" as const);
+    if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
+    return Object.freeze({
+      ...common,
+      workType: "test" as const,
+      phase: expectedPhase,
+      currentDelivery: Object.freeze({
+        ...currentDelivery,
+        outcome,
+      }),
+      testAttempts,
+    });
+  }
+}
+
+/** 一个实现目标的状态：阶段沿投递、结局、结果、评审逐层加事实，每一层缺了前一层即失败。 */
+function parseProductTargetTask(
+  value: TargetTaskWire,
+  path: string,
+  common: Readonly<TargetTaskCommon>,
+  registerClaim: RegisterClaim,
+  repositoryIds: Set<string>,
+): Readonly<DemandTargetTaskState> {
+  if (
+    value.repositoryId === undefined ||
+    value.commitExpectation === undefined ||
+    value.acceptanceAnchorIds === undefined
+  ) {
+    fail("schema", path);
+  }
+  const repositoryId = parseId(value.repositoryId, "repository", `${path}/repositoryId`);
+  // 一个仓库同时只能有一个未接受且未被替代的实现目标；已接受与被替代的目标是历史。
+  if (value.phase !== "accepted" && value.phase !== "superseded") {
+    if (repositoryIds.has(repositoryId)) fail("relation", path);
+    repositoryIds.add(repositoryId);
+  }
+  const base = {
+    ...common,
+    repositoryId,
+    commitExpectation: value.commitExpectation,
+    acceptanceAnchorIds: parseAcceptanceAnchorIds(
+      value.acceptanceAnchorIds,
+      `${path}/acceptanceAnchorIds`,
+    ),
+    ...(value.reworkCount === undefined ? {} : { reworkCount: value.reworkCount }),
+  };
+  const productCurrentDelivery = value.currentDelivery as ProductCurrentDeliveryWire | undefined;
+  if (value.phase === "superseded") {
+    if (value.supersededByTargetTaskId === undefined) {
+      fail("schema", `${path}/supersededByTargetTaskId`);
+    }
+    const supersededByTargetTaskId = parseId(
+      value.supersededByTargetTaskId,
+      "target-task",
+      `${path}/supersededByTargetTaskId`,
+    );
+    if (supersededByTargetTaskId === common.targetTaskId) fail("relation", path);
+    return Object.freeze({
+      ...base,
+      phase: "superseded" as const,
+      supersededByTargetTaskId,
+    });
+  }
+  if (value.phase === "planned") {
+    return Object.freeze({ ...base, phase: "planned" as const });
+  }
+  if (productCurrentDelivery === undefined) {
+    fail("relation", `${path}/currentDelivery`);
+  }
+  const currentDelivery = parseCurrentDeliveryBase(
+    productCurrentDelivery,
+    `${path}/currentDelivery`,
+  );
+  registerClaim(currentDelivery);
+  if (value.phase === "delivery-prepared") {
+    return Object.freeze({
+      ...base,
+      phase: "delivery-prepared" as const,
+      currentDelivery,
+    });
+  }
+  if (productCurrentDelivery.outcome === undefined) {
+    fail("relation", `${path}/currentDelivery/outcome`);
+  }
+  const observedDelivery = Object.freeze({
+    ...currentDelivery,
+    outcome: parseDeliveryOutcomeSummary(
+      productCurrentDelivery.outcome,
+      `${path}/currentDelivery/outcome`,
+    ),
+  });
+  if (
+    value.phase === "host-effect-accepted" ||
+    value.phase === "host-effect-indeterminate" ||
+    value.phase === "host-effect-rejected"
+  ) {
+    const expectedPhase =
+      observedDelivery.outcome.disposition === "accepted"
+        ? ("host-effect-accepted" as const)
+        : observedDelivery.outcome.disposition === "indeterminate"
+          ? ("host-effect-indeterminate" as const)
+          : ("host-effect-rejected" as const);
+    if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
+    return Object.freeze({
+      ...base,
+      phase: expectedPhase,
+      currentDelivery: observedDelivery,
+    });
+  }
+  if (
+    productCurrentDelivery.targetResult === undefined ||
+    observedDelivery.outcome.disposition === "rejected-before-send"
+  ) {
+    fail("relation", `${path}/currentDelivery/targetResult`);
+  }
+  const resultDelivery = Object.freeze({
+    ...observedDelivery,
+    targetResult: parseTargetResultSummary(
+      productCurrentDelivery.targetResult,
+      `${path}/currentDelivery/targetResult`,
+    ),
+  });
+  if (value.phase === "result-reported") {
+    return Object.freeze({
+      ...base,
+      phase: "result-reported" as const,
+      currentDelivery: resultDelivery,
+    });
+  }
+  if (productCurrentDelivery.reviewDecision === undefined) {
+    fail("relation", `${path}/currentDelivery/reviewDecision`);
+  }
+  const reviewDecision = parseReviewDecisionSummary(
+    productCurrentDelivery.reviewDecision,
+    `${path}/currentDelivery/reviewDecision`,
+  );
+  const reviewedDelivery = Object.freeze({
+    ...resultDelivery,
+    reviewDecision,
+  });
+  if (value.phase === "product-defect-rework-requested") {
+    if (value.productDefectRemediation === undefined) {
+      fail("relation", `${path}/productDefectRemediation`);
+    }
+    return Object.freeze({
+      ...base,
+      phase: "product-defect-rework-requested" as const,
+      currentDelivery: reviewedDelivery,
+      productDefectRemediation: parseProductDefectRemediationSummary(
+        value.productDefectRemediation,
+        reviewDecision,
+        `${path}/productDefectRemediation`,
+      ),
+    });
+  }
+  const phase = reviewPhaseForDecision(reviewDecision.decision);
+  if (value.phase !== phase) fail("relation", `${path}/phase`);
+  return Object.freeze({
+    ...base,
+    phase,
+    currentDelivery: reviewedDelivery,
+  });
+}
+
 function parseTargetTasks(
-  values: readonly DemandAggregateStateWire["targetTasks"][number][],
+  values: readonly TargetTaskWire[],
 ): readonly Readonly<DemandTargetTaskState>[] {
   const result: Readonly<DemandTargetTaskState>[] = [];
   const packageIds = new Set<string>();
@@ -1207,326 +1523,10 @@ function parseTargetTasks(
       }
       claimIds.add(delivery.fence.claimId);
     };
-    if (value.workType === "test") {
-      if (value.reworkCount !== undefined) {
-        fail("relation", path);
-      }
-      if (value.phase === "planned") {
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            phase: "planned" as const,
-          }),
-        );
-        continue;
-      }
-      if (
-        (value.phase !== "test-delivery-prepared" &&
-          value.phase !== "test-host-effect-accepted" &&
-          value.phase !== "test-host-effect-indeterminate" &&
-          value.phase !== "test-host-effect-rejected" &&
-          value.phase !== "test-result-reported" &&
-          value.phase !== "test-accepted" &&
-          value.phase !== "test-another-attempt-requested" &&
-          value.phase !== "test-product-defect" &&
-          value.phase !== "test-review-blocked" &&
-          value.phase !== "test-escalated") ||
-        value.currentDelivery === undefined ||
-        value.testAttempts === undefined
-      ) {
-        fail("relation", path);
-      }
-      const currentDelivery = parseTestCurrentDelivery(
-        value.currentDelivery as
-          | TestCurrentDeliveryWire
-          | TestObservedCurrentDeliveryWire
-          | TestResultCurrentDeliveryWire
-          | TestReviewedCurrentDeliveryWire,
-        `${path}/currentDelivery`,
-      );
-      registerClaim(currentDelivery);
-      const testAttempts = parseTestAttemptLineage(
-        value.testAttempts,
-        common,
-        `${path}/testAttempts`,
-      );
-      const attemptState = lastTestAttempt(testAttempts);
-      if (
-        attemptState.attempt.targetTaskId !== common.targetTaskId ||
-        currentDelivery.testAttemptId !== attemptState.attempt.testAttemptId ||
-        currentDelivery.deliveryId !== attemptState.delivery.deliveryId ||
-        currentDelivery.envelopeDigest !== attemptState.delivery.envelopeDigest
-      ) {
-        fail("relation", `${path}/testAttempts`);
-      }
-      if (value.phase === "test-delivery-prepared") {
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            phase: "test-delivery-prepared" as const,
-            currentDelivery,
-            testAttempts,
-          }),
-        );
-        continue;
-      }
-      const observedDelivery = value.currentDelivery as
-        | TestObservedCurrentDeliveryWire
-        | TestResultCurrentDeliveryWire
-        | TestReviewedCurrentDeliveryWire;
-      if (observedDelivery.outcome === undefined) {
-        fail("relation", `${path}/currentDelivery/outcome`);
-      }
-      const outcome = parseDeliveryOutcomeSummary(
-        observedDelivery.outcome,
-        `${path}/currentDelivery/outcome`,
-      );
-      if (
-        value.phase === "test-accepted" ||
-        value.phase === "test-another-attempt-requested" ||
-        value.phase === "test-product-defect" ||
-        value.phase === "test-review-blocked" ||
-        value.phase === "test-escalated"
-      ) {
-        const reviewedDelivery = value.currentDelivery as TestReviewedCurrentDeliveryWire;
-        if (
-          reviewedDelivery.targetResult === undefined ||
-          reviewedDelivery.reviewDecision === undefined ||
-          outcome.disposition === "rejected-before-send"
-        ) {
-          fail("relation", `${path}/currentDelivery`);
-        }
-        const targetResult = parseTargetResultSummary(
-          reviewedDelivery.targetResult,
-          `${path}/currentDelivery/targetResult`,
-        );
-        const reviewDecision = parseReviewDecisionSummary(
-          reviewedDelivery.reviewDecision,
-          `${path}/currentDelivery/reviewDecision`,
-        );
-        const expectedPhase = value.phase;
-        if (!testReviewPhasesForDecision(reviewDecision.decision).includes(expectedPhase)) {
-          fail("relation", `${path}/phase`);
-        }
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            phase: expectedPhase,
-            currentDelivery: Object.freeze({
-              ...currentDelivery,
-              outcome,
-              targetResult,
-              reviewDecision,
-            }),
-            testAttempts,
-          }),
-        );
-      } else if (value.phase === "test-result-reported") {
-        const resultDelivery = value.currentDelivery as TestResultCurrentDeliveryWire;
-        if (
-          resultDelivery.targetResult === undefined ||
-          outcome.disposition === "rejected-before-send"
-        ) {
-          fail("relation", `${path}/currentDelivery`);
-        }
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            phase: "test-result-reported" as const,
-            currentDelivery: Object.freeze({
-              ...currentDelivery,
-              outcome,
-              targetResult: parseTargetResultSummary(
-                resultDelivery.targetResult,
-                `${path}/currentDelivery/targetResult`,
-              ),
-            }),
-            testAttempts,
-          }),
-        );
-      } else {
-        const expectedPhase =
-          outcome.disposition === "accepted"
-            ? ("test-host-effect-accepted" as const)
-            : outcome.disposition === "indeterminate"
-              ? ("test-host-effect-indeterminate" as const)
-              : ("test-host-effect-rejected" as const);
-        if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
-        result.push(
-          Object.freeze({
-            ...common,
-            workType: "test" as const,
-            phase: expectedPhase,
-            currentDelivery: Object.freeze({
-              ...currentDelivery,
-              outcome,
-            }),
-            testAttempts,
-          }),
-        );
-      }
-      continue;
-    }
-    if (
-      value.repositoryId === undefined ||
-      value.commitExpectation === undefined ||
-      value.acceptanceAnchorIds === undefined
-    ) {
-      fail("schema", path);
-    }
-    const repositoryId = parseId(value.repositoryId, "repository", `${path}/repositoryId`);
-    // 一个仓库同时只能有一个未接受且未被替代的实现目标；已接受与被替代的目标是历史。
-    if (value.phase !== "accepted" && value.phase !== "superseded") {
-      if (repositoryIds.has(repositoryId)) fail("relation", path);
-      repositoryIds.add(repositoryId);
-    }
-    const base = {
-      ...common,
-      repositoryId,
-      commitExpectation: value.commitExpectation,
-      acceptanceAnchorIds: parseAcceptanceAnchorIds(
-        value.acceptanceAnchorIds,
-        `${path}/acceptanceAnchorIds`,
-      ),
-      ...(value.reworkCount === undefined ? {} : { reworkCount: value.reworkCount }),
-    };
-    const productCurrentDelivery = value.currentDelivery as ProductCurrentDeliveryWire | undefined;
-    if (value.phase === "superseded") {
-      if (value.supersededByTargetTaskId === undefined) {
-        fail("schema", `${path}/supersededByTargetTaskId`);
-      }
-      const supersededByTargetTaskId = parseId(
-        value.supersededByTargetTaskId,
-        "target-task",
-        `${path}/supersededByTargetTaskId`,
-      );
-      if (supersededByTargetTaskId === targetTaskId) fail("relation", path);
-      result.push(
-        Object.freeze({
-          ...base,
-          phase: "superseded" as const,
-          supersededByTargetTaskId,
-        }),
-      );
-      continue;
-    }
-    if (value.phase === "planned") {
-      result.push(Object.freeze({ ...base, phase: "planned" as const }));
-      continue;
-    }
-    if (productCurrentDelivery === undefined) {
-      fail("relation", `${path}/currentDelivery`);
-    }
-    const currentDelivery = parseCurrentDeliveryBase(
-      productCurrentDelivery,
-      `${path}/currentDelivery`,
-    );
-    registerClaim(currentDelivery);
-    if (value.phase === "delivery-prepared") {
-      result.push(
-        Object.freeze({
-          ...base,
-          phase: "delivery-prepared" as const,
-          currentDelivery,
-        }),
-      );
-      continue;
-    }
-    if (productCurrentDelivery.outcome === undefined) {
-      fail("relation", `${path}/currentDelivery/outcome`);
-    }
-    const observedDelivery = Object.freeze({
-      ...currentDelivery,
-      outcome: parseDeliveryOutcomeSummary(
-        productCurrentDelivery.outcome,
-        `${path}/currentDelivery/outcome`,
-      ),
-    });
-    if (
-      value.phase === "host-effect-accepted" ||
-      value.phase === "host-effect-indeterminate" ||
-      value.phase === "host-effect-rejected"
-    ) {
-      const expectedPhase =
-        observedDelivery.outcome.disposition === "accepted"
-          ? ("host-effect-accepted" as const)
-          : observedDelivery.outcome.disposition === "indeterminate"
-            ? ("host-effect-indeterminate" as const)
-            : ("host-effect-rejected" as const);
-      if (value.phase !== expectedPhase) fail("relation", `${path}/phase`);
-      result.push(
-        Object.freeze({
-          ...base,
-          phase: expectedPhase,
-          currentDelivery: observedDelivery,
-        }),
-      );
-      continue;
-    }
-    if (
-      productCurrentDelivery.targetResult === undefined ||
-      observedDelivery.outcome.disposition === "rejected-before-send"
-    ) {
-      fail("relation", `${path}/currentDelivery/targetResult`);
-    }
-    const resultDelivery = Object.freeze({
-      ...observedDelivery,
-      targetResult: parseTargetResultSummary(
-        productCurrentDelivery.targetResult,
-        `${path}/currentDelivery/targetResult`,
-      ),
-    });
-    if (value.phase === "result-reported") {
-      result.push(
-        Object.freeze({
-          ...base,
-          phase: "result-reported" as const,
-          currentDelivery: resultDelivery,
-        }),
-      );
-      continue;
-    }
-    if (productCurrentDelivery.reviewDecision === undefined) {
-      fail("relation", `${path}/currentDelivery/reviewDecision`);
-    }
-    const reviewDecision = parseReviewDecisionSummary(
-      productCurrentDelivery.reviewDecision,
-      `${path}/currentDelivery/reviewDecision`,
-    );
-    const reviewedDelivery = Object.freeze({
-      ...resultDelivery,
-      reviewDecision,
-    });
-    if (value.phase === "product-defect-rework-requested") {
-      if (value.productDefectRemediation === undefined) {
-        fail("relation", `${path}/productDefectRemediation`);
-      }
-      result.push(
-        Object.freeze({
-          ...base,
-          phase: "product-defect-rework-requested" as const,
-          currentDelivery: reviewedDelivery,
-          productDefectRemediation: parseProductDefectRemediationSummary(
-            value.productDefectRemediation,
-            reviewDecision,
-            `${path}/productDefectRemediation`,
-          ),
-        }),
-      );
-      continue;
-    }
-    const phase = reviewPhaseForDecision(reviewDecision.decision);
-    if (value.phase !== phase) fail("relation", `${path}/phase`);
     result.push(
-      Object.freeze({
-        ...base,
-        phase,
-        currentDelivery: reviewedDelivery,
-      }),
+      value.workType === "test"
+        ? parseTestTargetTask(value, path, common, registerClaim)
+        : parseProductTargetTask(value, path, common, registerClaim, repositoryIds),
     );
   }
   return Object.freeze(result);

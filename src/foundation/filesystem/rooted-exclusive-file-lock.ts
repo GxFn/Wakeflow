@@ -13,6 +13,8 @@ import {
   parsePlainRecord,
 } from "../data/passive-own-data.js";
 import { createUuidV4, parseUuidV4, UuidV4Error, type UuidV4Factory } from "../identity/uuid-v4.js";
+import { isAbortSignal } from "../node/abort-signal.js";
+import { ownedByAnotherUser } from "../node/current-user.js";
 import { observeProcessInstance, recordedProcessIsInactive } from "../node/process-instance.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 import { encodeUtf8 } from "../text/utf8.js";
@@ -50,13 +52,12 @@ import {
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "./rooted-directory.js";
 import { StableFileReadError } from "./stable-file-read.js";
 import { StrictTextFileError } from "./strict-text-file.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的短生命周期独占文件锁。
@@ -497,7 +498,7 @@ export async function inspectRootedExclusiveFileLock(
     read.node.kind !== "file" ||
     (read.node.linkCount !== 1n && read.node.linkCount !== 2n) ||
     read.node.permissionBits !== 0o600 ||
-    (typeof process.geteuid === "function" && read.node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(read.node.userId)
   ) {
     fail("unsafe-lock", "$lock");
   }

@@ -195,6 +195,39 @@ function completionBasis(
   };
 }
 
+/** 完成记录里的需求包来源：按需求谱系引用的合同解析，错误路径改写到 `$/packageSource` 之下。 */
+function parsePackageSourceLineage(
+  source: Readonly<{ requirementId: unknown; recordRef: unknown; recordDigest: unknown }>,
+): ReturnType<typeof parseRequirementLineageReference> {
+  try {
+    return parseRequirementLineageReference({
+      artifactKind: "wakeflow-requirement-lineage",
+      schemaVersion: 1,
+      requirementId: source.requirementId,
+      recordRef: source.recordRef,
+      recordDigest: source.recordDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof RequirementLineageError) {
+      fail(
+        error.reason === "path" ? "path" : "package",
+        `$/packageSource${error.path.slice(1)}`,
+        error,
+      );
+    }
+    throw error;
+  }
+}
+
+function parseCompletedAt(value: unknown): UtcInstant {
+  try {
+    return parseUtcInstant(value, "$/completedAt");
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) fail("time", "$/completedAt", error);
+    throw error;
+  }
+}
+
 /** 严格解析并复验self-excluding digest的Demand Completion。 */
 export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion> {
   let json: JsonValue;
@@ -207,25 +240,7 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
   const validated = validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
-  let lineage: ReturnType<typeof parseRequirementLineageReference>;
-  try {
-    lineage = parseRequirementLineageReference({
-      artifactKind: "wakeflow-requirement-lineage",
-      schemaVersion: 1,
-      requirementId: wire.packageSource.requirementId,
-      recordRef: wire.packageSource.recordRef,
-      recordDigest: wire.packageSource.recordDigest,
-    });
-  } catch (error: unknown) {
-    if (error instanceof RequirementLineageError) {
-      fail(
-        error.reason === "path" ? "path" : "package",
-        `$/packageSource${error.path.slice(1)}`,
-        error,
-      );
-    }
-    throw error;
-  }
+  const lineage = parsePackageSourceLineage(wire.packageSource);
   if (
     !Number.isSafeInteger(wire.observedState.streamRevision) ||
     wire.observedState.streamRevision < 1 ||
@@ -234,13 +249,7 @@ export function parseDemandCompletion(value: unknown): Readonly<DemandCompletion
   ) {
     fail("position", "$completion");
   }
-  let completedAt: UtcInstant;
-  try {
-    completedAt = parseUtcInstant(wire.completedAt, "$/completedAt");
-  } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/completedAt", error);
-    throw error;
-  }
+  const completedAt = parseCompletedAt(wire.completedAt);
   const basis = completionBasis({
     kind: COMPLETION_KIND,
     schemaVersion: COMPLETION_SCHEMA_VERSION,

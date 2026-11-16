@@ -4,6 +4,7 @@ import {
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import { ownString } from "../../foundation/data/own-string.js";
 import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
@@ -12,6 +13,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { fail as failWakeflow } from "../../kernel/error.js";
 import {
   LedgerAuthorityStore,
@@ -24,7 +26,6 @@ import {
 } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
 import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
-import { ownString } from "../../foundation/data/own-string.js";
 
 /**
  * Wakeflow Governance / Demand：一次业务操作共享的只读组合权威上下文。
@@ -85,10 +86,6 @@ function fail(reason: DemandOperationAuthorityContextErrorReason, cause?: unknow
   );
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 /** 从Workspace root安全打开一个已发布Demand的私有根目录。 */
 export async function openDemandOperationRoot(
   workspaceRoot: RootedDirectory,
@@ -107,7 +104,7 @@ export async function openDemandOperationRoot(
   if (
     observation.node.kind !== "directory" ||
     observation.node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserId() !== null && observation.node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && observation.node.userId !== currentUserIdOrNull())
   ) {
     fail("root");
   }

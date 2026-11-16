@@ -23,6 +23,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -150,15 +151,11 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== 0o700 ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("prefix-conflict", path);
   }
@@ -256,7 +253,7 @@ async function inspectPartialTree(
           !childNames.has(entry.name) ||
           entry.node.kind !== "directory" ||
           entry.node.permissionBits !== 0o700 ||
-          (currentUserId() !== null && entry.node.userId !== currentUserId()),
+          (currentUserIdOrNull() !== null && entry.node.userId !== currentUserIdOrNull()),
       ) ||
       (requireComplete && directory.entries.length !== childNames.size)
     ) {

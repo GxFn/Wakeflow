@@ -19,15 +19,17 @@ import {
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   type ByteCount,
   ByteCountError,
@@ -47,7 +49,6 @@ import {
   type WakeflowManagedTextEnvelopeTarget,
   type WakeflowManagedTextRemovalResult,
 } from "./wakeflow-managed-text-envelope.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：任意根目录里一个文件中 Wakeflow 托管块的
@@ -216,10 +217,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
 }
 
 async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {

@@ -7,9 +7,9 @@ import {
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
@@ -25,6 +25,7 @@ import {
   type GitIgnorePathObservation,
   observeGitIgnorePaths,
 } from "../../foundation/git/git-ignore-observation.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import type { WakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
@@ -192,10 +193,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("source-policy", "$source");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("source-policy", "$source"));
 }
 
 async function readSource(

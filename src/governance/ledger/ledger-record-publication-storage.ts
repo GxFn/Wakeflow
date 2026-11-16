@@ -35,6 +35,7 @@ import {
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   type WakeflowDirectoryContainerRecipe,
@@ -45,7 +46,6 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
 import {
-  currentUserId,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
   LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
@@ -116,7 +116,7 @@ export async function ledgerPublicationResourceNodeOrNull(
 }
 
 function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserId();
+  const userId = currentUserIdOrNull();
   if (
     node.kind !== "file" ||
     node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE ||
@@ -128,7 +128,7 @@ function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
 }
 
 function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserId();
+  const userId = currentUserIdOrNull();
   if (
     node.kind !== "directory" ||
     node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE ||

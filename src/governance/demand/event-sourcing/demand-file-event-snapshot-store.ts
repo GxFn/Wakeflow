@@ -27,9 +27,9 @@ import {
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -38,6 +38,7 @@ import {
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -192,15 +193,11 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("node-policy", "$snapshots");
   }
@@ -211,7 +208,7 @@ function assertPrivateFile(node: Readonly<FileNodeSnapshot>, path: string): void
     node.kind !== "file" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
     node.linkCount !== 1n ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("node-policy", path);
   }

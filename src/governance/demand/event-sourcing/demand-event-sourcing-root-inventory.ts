@@ -1,5 +1,4 @@
 import { types } from "node:util";
-import type { PidOwnedNodeEvidence } from "../../../foundation/node/process-instance.js";
 import {
   PassiveOwnDataError,
   parsePlainRecord,
@@ -23,6 +22,8 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
+import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
+import type { PidOwnedNodeEvidence } from "../../../foundation/node/process-instance.js";
 import {
   inspectManagedEvidenceRecordSetInventory,
   type ManagedEvidenceRecordSetInventory,
@@ -191,7 +192,7 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(node.userId)
   ) {
     fail("node-policy", path);
   }
@@ -202,7 +203,7 @@ function assertFile(node: Readonly<FileNodeSnapshot>, path: string): void {
     node.kind !== "file" ||
     node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
     node.linkCount !== 1n ||
-    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(node.userId)
   ) {
     fail("node-policy", path);
   }

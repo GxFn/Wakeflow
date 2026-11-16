@@ -29,6 +29,7 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -247,7 +248,7 @@ function privateNode(
   kind: "directory" | "file",
   path: string,
 ): void {
-  const currentUserId = typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
+  const currentUserId = currentUserIdOrNull();
   if (
     node.kind !== kind ||
     node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||

@@ -35,6 +35,8 @@ import {
   type WholeFileContentTransition,
   WholeFileContentTransitionError,
 } from "../../foundation/filesystem/whole-file-content-transition.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -62,7 +64,6 @@ import {
   type WakeflowSupportMemoryAuthority,
   WakeflowSupportMemoryAuthorityError,
 } from "./wakeflow-support-memory-authority.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
@@ -306,10 +307,7 @@ function assertRoot(value: unknown, path: string): asserts value is RootedDirect
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("root-policy", "$supportRoot");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("root-policy", "$supportRoot"));
 }
 
 async function admitRoots(

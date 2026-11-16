@@ -101,6 +101,20 @@ function sameContent(left: Readonly<ContentSnapshot>, right: Readonly<ContentSna
   );
 }
 
+/** 被接受的当前内容两两不同：第一份与前面某份相同的内容即失败。 */
+function assertDistinctCurrentContents(current: readonly Readonly<ContentSnapshot>[]): void {
+  for (let index = 0; index < current.length; index += 1) {
+    const entry = current[index];
+    if (entry === undefined) continue;
+    for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
+      const prior = current[priorIndex];
+      if (prior !== undefined && sameContent(prior, entry)) {
+        fail("duplicate-current", `$request.currentContents/${index}`);
+      }
+    }
+  }
+}
+
 function parseRequest(value: unknown): Readonly<{
   readonly current: readonly Readonly<ContentSnapshot>[];
   readonly desired: Readonly<ContentSnapshot>;
@@ -133,16 +147,7 @@ function parseRequest(value: unknown): Readonly<{
       snapshotBytes(content, `$request.currentContents/${index}`),
     ),
   );
-  for (let index = 0; index < current.length; index += 1) {
-    const entry = current[index];
-    if (entry === undefined) continue;
-    for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-      const prior = current[priorIndex];
-      if (prior !== undefined && sameContent(prior, entry)) {
-        fail("duplicate-current", `$request.currentContents/${index}`);
-      }
-    }
-  }
+  assertDistinctCurrentContents(current);
   return Object.freeze({ current, desired });
 }
 

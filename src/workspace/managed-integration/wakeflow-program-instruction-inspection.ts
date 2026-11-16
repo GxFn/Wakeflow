@@ -11,14 +11,16 @@ import {
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import {
-  type RootedDirectory,
   isRootedDirectory,
+  type RootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
@@ -50,7 +52,6 @@ import {
   type WakeflowProgramInstructionBodyAuthority,
   WakeflowProgramInstructionBodyAuthorityError,
 } from "./wakeflow-program-instruction-body-authority.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的只读文件检查。
@@ -287,10 +288,7 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
 }
 
 async function readSource(

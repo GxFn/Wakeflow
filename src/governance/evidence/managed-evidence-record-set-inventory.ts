@@ -24,6 +24,7 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
@@ -218,7 +219,7 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== 0o700 ||
-    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(node.userId)
   ) {
     fail("node-policy", path);
   }

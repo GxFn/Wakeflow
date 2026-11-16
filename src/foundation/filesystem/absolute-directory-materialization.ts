@@ -188,6 +188,49 @@ function mapMaterializationError(error: DurableDirectoryMaterializationError): n
   fail("materialization", "$absolutePath");
 }
 
+/**
+ * 在最近的已有祖先下把目录路径建出来：打开祖先的句柄、物化、关闭句柄。物化的错误先于关闭的错误报告；
+ * 物化成功而句柄关不上是 close-failure。
+ */
+async function materializeUnderAncestor(
+  ancestor: string,
+  resourcePath: Parameters<typeof materializeDirectoryPath>[1],
+  options: ReturnType<typeof parseOptions>,
+): Promise<Awaited<ReturnType<typeof materializeDirectoryPath>>> {
+  let root: RootedDirectory;
+  try {
+    root = await RootedDirectory.open(ancestor, "$ancestor");
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor", error);
+    throw error;
+  }
+  let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>> | undefined;
+  let primaryError: unknown;
+  try {
+    materialized = await materializeDirectoryPath(root, resourcePath, {
+      mode: options.mode,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  } catch (error: unknown) {
+    primaryError = error;
+  }
+  let closeError: unknown;
+  try {
+    await root.close();
+  } catch (error: unknown) {
+    closeError = error;
+  }
+  if (primaryError !== undefined) {
+    if (primaryError instanceof DurableDirectoryMaterializationError) {
+      mapMaterializationError(primaryError);
+    }
+    throw primaryError;
+  }
+  if (closeError !== undefined) fail("close-failure", "$root");
+  if (materialized === undefined) fail("materialization", "$absolutePath");
+  return materialized;
+}
+
 /** 从最近安全祖先开始，持久且幂等地物化一个规范绝对目录位置。 */
 export async function materializeAbsoluteDirectoryPlacement(
   value: unknown,
@@ -223,37 +266,7 @@ export async function materializeAbsoluteDirectoryPlacement(
   // 先证明相对路径可移植，再打开句柄，避免 input 失败泄漏 root。
   const resourcePath = relativeResourcePath(ancestor, absolutePath);
   assertNotAborted(options.signal);
-  let root: RootedDirectory;
-  try {
-    root = await RootedDirectory.open(ancestor, "$ancestor");
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-open", "$ancestor", error);
-    throw error;
-  }
-  let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>> | undefined;
-  let primaryError: unknown;
-  try {
-    materialized = await materializeDirectoryPath(root, resourcePath, {
-      mode: options.mode,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-  } catch (error: unknown) {
-    primaryError = error;
-  }
-  let closeError: unknown;
-  try {
-    await root.close();
-  } catch (error: unknown) {
-    closeError = error;
-  }
-  if (primaryError !== undefined) {
-    if (primaryError instanceof DurableDirectoryMaterializationError) {
-      mapMaterializationError(primaryError);
-    }
-    throw primaryError;
-  }
-  if (closeError !== undefined) fail("close-failure", "$root");
-  if (materialized === undefined) fail("materialization", "$absolutePath");
+  const materialized = await materializeUnderAncestor(ancestor, resourcePath, options);
 
   const final = await inspect(absolutePath, "$absolutePath");
   if (

@@ -8,10 +8,11 @@ import {
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
+import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -120,15 +121,11 @@ function fail(
   );
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory" ||
     node.permissionBits !== 0o700 ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("layout", path);
   }

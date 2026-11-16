@@ -37,6 +37,7 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -198,10 +199,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertPrivateNode(
   node: Readonly<FileNodeSnapshot>,
   kind: "directory" | "file",
@@ -211,7 +208,7 @@ function assertPrivateNode(
     node.kind !== kind ||
     node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
     (kind === "file" && node.linkCount !== 1n) ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("prefix-conflict", path);
   }

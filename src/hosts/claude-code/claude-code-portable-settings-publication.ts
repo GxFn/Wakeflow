@@ -30,6 +30,7 @@ import {
   StableFileReadError,
   type StableFileReadResult,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
@@ -229,15 +230,11 @@ function parseOptions(value: unknown, allowedKeys: readonly string[]): Readonly<
   });
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertDirectoryNode(node: Readonly<FileNodeSnapshot>): void {
   if (
     node.kind !== "directory" ||
     (node.permissionBits !== 0o700 && node.permissionBits !== 0o755) ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("directory-policy", "$settingsDirectory");
   }
@@ -248,7 +245,7 @@ function assertSourceNode(node: Readonly<FileNodeSnapshot>): void {
     node.kind !== "file" ||
     node.permissionBits !== 0o644 ||
     node.linkCount !== 1n ||
-    (currentUserId() !== null && node.userId !== currentUserId())
+    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
   ) {
     fail("source-policy", "$settings");
   }

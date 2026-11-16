@@ -5,17 +5,17 @@ import {
   materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   LEDGER_ARCHIVES_ROOT_REF,
   LEDGER_REQUIREMENTS_ROOT_REF,
   LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
 import {
-  currentUserId,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_TRANSACTION_DIRECTORY_MODE,
 } from "./ledger-authority-storage-policy.js";
@@ -103,7 +103,7 @@ async function inspectEntry(
       policy.resourcePath,
       `$layout/${policy.resourcePath}`,
     );
-    const userId = currentUserId();
+    const userId = currentUserIdOrNull();
     const current =
       resource.node.kind === "directory" &&
       resource.node.permissionBits === policy.mode &&

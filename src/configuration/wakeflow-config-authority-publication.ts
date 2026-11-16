@@ -7,9 +7,11 @@ import {
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
-  type RootedDirectory,
   isRootedDirectory,
+  type RootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
   computeWakeflowConfigDigest,
@@ -29,7 +31,6 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Configuration：严格 Config 权威记录的仅限首次创建持久发布。
@@ -143,10 +144,7 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 }
 
 function currentEffectiveUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
 }
 
 async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {

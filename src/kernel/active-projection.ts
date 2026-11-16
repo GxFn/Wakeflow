@@ -47,6 +47,7 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
@@ -101,10 +102,6 @@ function assertRoot(root: unknown): asserts root is RootedDirectory {
   if (!(root instanceof RootedDirectory)) fail("invalid-request", "projection-root", "$root");
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 // ---- 两级容器 ----------------------------------------------------------------
 
 export interface ActiveLayoutEntryInspection {
@@ -121,7 +118,7 @@ export interface ActiveLayoutInspection {
 }
 
 function privateDirectoryCurrent(node: Readonly<FileNodeSnapshot>): boolean {
-  const user = currentUserId();
+  const user = currentUserIdOrNull();
   return (
     node.kind === "directory" &&
     node.permissionBits === ACTIVE_PROJECTION_DIRECTORY_MODE &&
@@ -958,7 +955,7 @@ function classifyReadFailure(error: unknown): string | null {
 function nodePolicyViolation(node: Readonly<FileNodeSnapshot>): string | null {
   if (node.linkCount !== 1n) return "links";
   if (node.permissionBits !== ACTIVE_PROJECTION_FILE_MODE) return "mode";
-  const user = currentUserId();
+  const user = currentUserIdOrNull();
   if (user !== null && node.userId !== user) return "owner";
   return null;
 }

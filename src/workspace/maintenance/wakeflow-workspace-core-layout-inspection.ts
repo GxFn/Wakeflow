@@ -5,10 +5,10 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
-  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
@@ -19,6 +19,7 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import {
@@ -160,10 +161,7 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("inspection", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("inspection", "$root"));
 }
 
 function nodeDigest(node: Readonly<FileNodeSnapshot>): Sha256Digest {

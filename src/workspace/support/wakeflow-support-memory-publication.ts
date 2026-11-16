@@ -6,6 +6,7 @@ import {
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   inspectWakeflowSupportMemory,
   WAKEFLOW_SUPPORT_MEMORY_FILE_MODE,
@@ -144,10 +145,7 @@ function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFile
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("source-invalid", "$source");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("source-invalid", "$source"));
 }
 
 function assertReadback(

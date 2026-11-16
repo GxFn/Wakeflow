@@ -24,6 +24,7 @@ import {
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { type ByteCount, parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -185,10 +186,7 @@ export function assertWakeflowPreparedMaintenanceJournalCapacity(
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("source-policy", "$journal");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("source-policy", "$journal"));
 }
 
 function assertGate(

@@ -21,12 +21,13 @@ import {
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -168,12 +169,8 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
-function currentUserId(): bigint | null {
-  return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
-
 function assertJournalNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserId();
+  const userId = currentUserIdOrNull();
   if (
     node.kind !== "file" ||
     node.permissionBits !== MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE ||

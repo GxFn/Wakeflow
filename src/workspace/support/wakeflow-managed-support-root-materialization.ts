@@ -36,6 +36,8 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -49,7 +51,6 @@ import {
   createWakeflowManagedSupportResourceCatalog,
   type WakeflowManagedSupportResourceCatalog,
 } from "./wakeflow-managed-support-resource-catalog.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Support：单个受管 Support 根目录的机械物化 owner。
@@ -263,10 +264,7 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
 }
 
 function currentUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    fail("root-policy", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() => fail("root-policy", "$root"));
 }
 
 function assertWorkspaceRoot(value: unknown): asserts value is RootedDirectory {

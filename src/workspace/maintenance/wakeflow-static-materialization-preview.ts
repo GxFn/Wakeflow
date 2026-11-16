@@ -1328,72 +1328,59 @@ async function planExistingCoreRepair(
   await planHostCapabilityLayoutRepair(rootValue, request, desired, blockers, steps);
 }
 
-/** 按期望配置计划各类受管资源：账本、窗口运行投影、支撑面、托管文本与最后的配置一步。 */
-async function planDesiredResources(
+/** fresh 初始化：当前宿主的窗口运行投影，以及（宿主声明了的话）它的能力布局。 */
+function planFreshHostRuntime(
   working: Readonly<PreviewWorkingSet>,
   desired: WakeflowConfigModel,
-  placements: Readonly<WakeflowConfigRootPlacementReport>,
-): Promise<void> {
-  const { rootValue, request, matrix, current, blockers, steps } = working;
-  await inspectLedgerParticipant(request, placements, blockers, steps);
-
-  if (request.action === "fresh-initialize") {
-    try {
-      const windowRuntime = compileWakeflowFreshWindowRuntimeAuthority(
-        desired,
-        request.currentHostProfile,
-      );
+): void {
+  const { request, blockers, steps } = working;
+  try {
+    const windowRuntime = compileWakeflowFreshWindowRuntimeAuthority(
+      desired,
+      request.currentHostProfile,
+    );
+    steps.push(
+      step({
+        stepId: "host:window-runtime",
+        kind: "publish-unregistered-window-runtime",
+        ownerId: "window-runtime-projection",
+        targetKey: request.currentHostProfile.hostId,
+        sourceDigest: null,
+        targetDigest: windowRuntime.authorityDigest,
+        dependsOn: [],
+      }),
+    );
+    const hostCapability = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
+    if (hostCapability.declarations.length > 0) {
       steps.push(
         step({
-          stepId: "host:window-runtime",
-          kind: "publish-unregistered-window-runtime",
-          ownerId: "window-runtime-projection",
+          stepId: "host:capability-layout",
+          kind: "materialize-host-capability-layout",
+          ownerId: "host-capability-layout",
           targetKey: request.currentHostProfile.hostId,
           sourceDigest: null,
-          targetDigest: windowRuntime.authorityDigest,
-          dependsOn: [],
+          targetDigest: hostCapability.authorityDigest,
+          dependsOn: ["host:window-runtime"],
         }),
       );
-      const hostCapability = compileWakeflowHostCapabilityLayoutAuthority(
-        request.currentHostProfile,
-      );
-      if (hostCapability.declarations.length > 0) {
-        steps.push(
-          step({
-            stepId: "host:capability-layout",
-            kind: "materialize-host-capability-layout",
-            ownerId: "host-capability-layout",
-            targetKey: request.currentHostProfile.hostId,
-            sourceDigest: null,
-            targetDigest: hostCapability.authorityDigest,
-            dependsOn: ["host:window-runtime"],
-          }),
-        );
-      }
-    } catch (error: unknown) {
-      if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
-        addBlocker(blockers, `host-capability-layout-${error.reason}`);
-      } else if (
-        error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
-        error instanceof WakeflowWindowRuntimeDesiredTopologyError
-      ) {
-        addBlocker(blockers, `window-runtime-${error.reason}`);
-      } else {
-        throw error;
-      }
+    }
+  } catch (error: unknown) {
+    if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
+      addBlocker(blockers, `host-capability-layout-${error.reason}`);
+    } else if (
+      error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
+      error instanceof WakeflowWindowRuntimeDesiredTopologyError
+    ) {
+      addBlocker(blockers, `window-runtime-${error.reason}`);
+    } else {
+      throw error;
     }
   }
+}
 
-  await inspectSupportMemories(
-    rootValue,
-    request,
-    current?.model ?? null,
-    desired,
-    placements,
-    blockers,
-    steps,
-  );
-
+/** 工作区 `.gitignore` 的受管块：需要重排时加一步。 */
+async function planGitignoreRecomposition(working: Readonly<PreviewWorkingSet>): Promise<void> {
+  const { rootValue, request, matrix, blockers, steps } = working;
   try {
     const gitignore = await inspectWakeflowWorkspaceGitignore(rootValue, {
       matrix,
@@ -1422,7 +1409,14 @@ async function planDesiredResources(
       throw error;
     }
   }
+}
 
+/** 当前宿主的程序指令块：需要重排时加一步。 */
+async function planProgramInstructionRecomposition(
+  working: Readonly<PreviewWorkingSet>,
+  desired: WakeflowConfigModel,
+): Promise<void> {
+  const { rootValue, request, matrix, current, blockers, steps } = working;
   try {
     const program = await inspectWakeflowProgramInstruction(rootValue, {
       matrix,
@@ -1455,6 +1449,14 @@ async function planDesiredResources(
       throw error;
     }
   }
+}
+
+/** 对端宿主的程序指令块：只有来源是已准入的当前文本、并且需要重排时才加一步。 */
+async function planPeerProgramInstructionRecompositions(
+  working: Readonly<PreviewWorkingSet>,
+  desired: WakeflowConfigModel,
+): Promise<void> {
+  const { rootValue, request, current, blockers, steps } = working;
   for (const peer of peerHostProfiles(request)) {
     assertNotAborted(request.signal);
     try {
@@ -1494,17 +1496,14 @@ async function planDesiredResources(
       }
     }
   }
+}
 
-  await inspectExternalInstructions(
-    rootValue,
-    request,
-    current?.model ?? null,
-    desired,
-    placements,
-    blockers,
-    steps,
-  );
-
+/** 最后一步：配置变了（并且不是 reconcile）就发布配置，它依赖前面所有的步骤。 */
+function planConfigPublication(
+  working: Readonly<PreviewWorkingSet>,
+  desired: WakeflowConfigModel,
+): void {
+  const { request, current, steps } = working;
   const desiredConfigDigest = computeWakeflowConfigDigest(desired);
   const configChanged = current?.configDigest !== desiredConfigDigest;
   if (request.action !== "reconcile" && configChanged) {
@@ -1521,6 +1520,45 @@ async function planDesiredResources(
       }),
     );
   }
+}
+
+/** 按期望配置计划各类受管资源：账本、窗口运行投影、支撑面、托管文本与最后的配置一步。 */
+async function planDesiredResources(
+  working: Readonly<PreviewWorkingSet>,
+  desired: WakeflowConfigModel,
+  placements: Readonly<WakeflowConfigRootPlacementReport>,
+): Promise<void> {
+  const { rootValue, request, current, blockers, steps } = working;
+  await inspectLedgerParticipant(request, placements, blockers, steps);
+
+  if (request.action === "fresh-initialize") planFreshHostRuntime(working, desired);
+
+  await inspectSupportMemories(
+    rootValue,
+    request,
+    current?.model ?? null,
+    desired,
+    placements,
+    blockers,
+    steps,
+  );
+
+  await planGitignoreRecomposition(working);
+
+  await planProgramInstructionRecomposition(working, desired);
+  await planPeerProgramInstructionRecompositions(working, desired);
+
+  await inspectExternalInstructions(
+    rootValue,
+    request,
+    current?.model ?? null,
+    desired,
+    placements,
+    blockers,
+    steps,
+  );
+
+  planConfigPublication(working, desired);
 }
 
 export async function previewWakeflowStaticMaterialization(

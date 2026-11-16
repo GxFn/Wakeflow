@@ -21,6 +21,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -239,7 +240,7 @@ function assertPrivateRootNode(node: Readonly<FileNodeSnapshot>, owner: "stage" 
   if (
     node.kind !== "directory" ||
     node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(node.userId)
   ) {
     fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
   }

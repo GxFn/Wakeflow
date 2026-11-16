@@ -49,6 +49,22 @@ async function coveragePackage(
   });
 }
 
+/** 任务包引用的那条验收项的标签：引用必须指向已核对的某个需求包的验收标准一节，否则是引用漂移。 */
+function coveredCriterionLabel(
+  packages: readonly CoveragePackage[],
+  requirementRef: Readonly<{
+    readonly recordDigest: string;
+    readonly sectionAnchor: string;
+    readonly itemId: string;
+  }>,
+): string {
+  const referenced = packages.find((entry) => entry.recordDigest === requirementRef.recordDigest);
+  if (referenced === undefined || requirementRef.sectionAnchor !== "acceptance-criteria") {
+    fail("precondition-failed", "coverage-reference-drift", "$coverage");
+  }
+  return acceptanceCriterionLabel(referenced.requirementId, requirementRef.itemId);
+}
+
 /**
  * 从不可变需求与已接受目标派生覆盖，不改变聚合或旧状态摘要。验收全集是源需求的条目加上历次
  * requirement-supplement 续接并入的 supplement 包的条目（Q7 裁决）；引用按记录摘要认包，supplement 包的条目
@@ -85,16 +101,9 @@ export async function readDemandAcceptanceCoverage(
     if (planned === null) fail("precondition-failed", "coverage-task-package-missing", "$coverage");
     const task = planned.event.data.taskPackage;
     const references = task.workType === "test" ? task.testContract.steps : task.acceptanceAnchors;
+    const covered = task.workType === "test" ? tested : implemented;
     for (const { requirementRef } of references) {
-      const referenced = packages.find(
-        (entry) => entry.recordDigest === requirementRef.recordDigest,
-      );
-      if (referenced === undefined || requirementRef.sectionAnchor !== "acceptance-criteria") {
-        fail("precondition-failed", "coverage-reference-drift", "$coverage");
-      }
-      (task.workType === "test" ? tested : implemented).add(
-        acceptanceCriterionLabel(referenced.requirementId, requirementRef.itemId),
-      );
+      covered.add(coveredCriterionLabel(packages, requirementRef));
     }
   }
   const required =

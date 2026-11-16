@@ -6,6 +6,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { ownedByAnotherUser } from "../node/current-user.js";
 import {
   computeDurableAtomicFileStageTargetDigest,
   type DurableAtomicFileStageAddress,
@@ -34,7 +35,7 @@ import {
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -172,7 +173,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function assertCurrentOwner(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid())) {
+  if (ownedByAnotherUser(node.userId)) {
     fail("node-policy", path);
   }
 }

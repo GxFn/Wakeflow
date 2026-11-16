@@ -13,6 +13,8 @@ import type {
   RootedExclusiveFileLockError,
   RootedExclusiveFileLockOptions,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   createWakeflowWorkspaceStaticResourceOperationContext,
   WakeflowWorkspaceStaticResourceOperationContextError,
@@ -26,7 +28,6 @@ import {
   WakeflowProgramInstructionInspectionError,
   type WakeflowProgramInstructionInspectionRequest,
 } from "./wakeflow-program-instruction-inspection.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
@@ -214,10 +215,9 @@ export function assertWakeflowProgramInstructionRecompositionNotAborted(
 }
 
 export function currentWakeflowProgramInstructionRecompositionUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() =>
+    failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root"),
+  );
 }
 
 export async function assertCurrentUserWakeflowProgramInstructionRoot(

@@ -31,6 +31,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -239,7 +240,7 @@ function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string):
   if (
     node.kind !== "directory" ||
     node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-    (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))
+    ownedByAnotherUser(node.userId)
   ) {
     fail("stage-conflict", path);
   }

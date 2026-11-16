@@ -22,6 +22,8 @@ import type {
   RootedExclusiveFileLockOptions,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import {
   computeWakeflowConfigDigest,
@@ -42,7 +44,6 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "./wakeflow-config-root-placement.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
 
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
@@ -233,10 +234,9 @@ export function assertWakeflowConfigAuthorityNotAborted(signal: AbortSignal | un
 }
 
 export function currentWakeflowConfigAuthorityUserId(): bigint {
-  if (process.platform === "win32" || typeof process.geteuid !== "function") {
-    failWakeflowConfigAuthorityReplacement("unsupported-platform", "$root");
-  }
-  return BigInt(process.geteuid());
+  return requireCurrentUserId(() =>
+    failWakeflowConfigAuthorityReplacement("unsupported-platform", "$root"),
+  );
 }
 
 export async function assertCurrentUserWakeflowConfigAuthorityRoot(
@@ -402,6 +402,22 @@ export async function assertWakeflowConfigAuthorityDesiredPlacements(
   }
 }
 
+/** 提交之前读当前权威快照失败：按快照错误的原因归类，认不出的一律是来源无效。 */
+function failSnapshotRead(error: unknown): never {
+  if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+    if (error.reason === "aborted") {
+      failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
+    }
+    if (error.reason === "root-scope") {
+      failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
+    }
+    if (error.reason === "source-policy") {
+      failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
+    }
+  }
+  failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
+}
+
 export async function readCurrentWakeflowConfigAuthority(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -416,19 +432,7 @@ export async function readCurrentWakeflowConfigAuthority(
     if (afterCommit) {
       failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath", error);
     }
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") {
-        failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
-      }
-      if (error.reason === "root-scope") {
-        failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
-      }
-      if (error.reason === "source-policy") {
-        failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
-      }
-      failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
-    }
-    failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
+    failSnapshotRead(error);
   }
 }
 

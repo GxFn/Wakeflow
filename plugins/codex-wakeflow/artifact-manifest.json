@@ -2141,9 +2141,51 @@
       "scope": "shared"
     },
     {
+      "path": "lib/governance/demand/model/demand-aggregate-state-delivery.js",
+      "bytes": 19646,
+      "sha256": "sha256:c1088734b991a515337b19fcf0fdb904e3007c3d3f93a01d45c7232662e12f60",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/governance/demand/model/demand-aggregate-state-lifecycle.js",
+      "bytes": 16995,
+      "sha256": "sha256:f88acd3c211d03cc37ce3768bf462d4dd4d440410ac4a9aa513427074a8d8b67",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/governance/demand/model/demand-aggregate-state-model.js",
+      "bytes": 3058,
+      "sha256": "sha256:eccfd3ef9dcc629dc8469c397a4b867234071837dd29b0329fe939aa026e166d",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/governance/demand/model/demand-aggregate-state-result.js",
+      "bytes": 11926,
+      "sha256": "sha256:8e91532a57758c106919462bbd6ac555204301086d526a97f10714a1437a752f",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/governance/demand/model/demand-aggregate-state-review.js",
+      "bytes": 12106,
+      "sha256": "sha256:986e5e4ec3a8d387636d502effa8ad645ce872fb0c9fc11f32cef7504bc04736",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/governance/demand/model/demand-aggregate-state-wire.js",
+      "bytes": 41251,
+      "sha256": "sha256:b6625dadbb4c2254d993aac8fbd3a15a2cd24045c02dfcf92c8020ce3537db77",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
       "path": "lib/governance/demand/model/demand-aggregate-state.js",
-      "bytes": 98894,
-      "sha256": "sha256:c21c5ea0954a62b322e3c81ca0a8f4c28406c72db487e482cec1da8734cbba29",
+      "bytes": 2885,
+      "sha256": "sha256:3e3784b044f1684c868e4bd4dd294a5b4ab63e0bb90610755103482709f14091",
       "mode": "0644",
       "scope": "shared"
     },

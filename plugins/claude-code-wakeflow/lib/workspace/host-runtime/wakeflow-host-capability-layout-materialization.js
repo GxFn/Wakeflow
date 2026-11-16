@@ -5,6 +5,7 @@ import { createDirectoryAtomically, DurableDirectoryMaterializationError, materi
 import { parsePortableResourcePath, splitPortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, } from "../workspace-host-runtime-paths.js";
 import { compileWakeflowHostCapabilityLayoutAuthority, WakeflowHostCapabilityLayoutAuthorityError, } from "./wakeflow-host-capability-layout-authority.js";
@@ -58,13 +59,10 @@ function parseOptions(value) {
         signal: record.signal,
     });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertPrivateDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== 0o700 ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("prefix-conflict", path);
     }
 }
@@ -147,7 +145,7 @@ async function inspectPartialTree(root, expected, signal, requireComplete) {
         if (directory.entries.some((entry) => !childNames.has(entry.name) ||
             entry.node.kind !== "directory" ||
             entry.node.permissionBits !== 0o700 ||
-            (currentUserId() !== null && entry.node.userId !== currentUserId())) ||
+            (currentUserIdOrNull() !== null && entry.node.userId !== currentUserIdOrNull())) ||
             (requireComplete && directory.entries.length !== childNames.size)) {
             fail("prefix-conflict", `$layout/${parent}`);
         }

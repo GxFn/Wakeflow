@@ -34,6 +34,43 @@ class ClaudeCodePortableSettingsCompositionError extends Error {
 function fail(reason, path, cause) {
     throw new ClaudeCodePortableSettingsCompositionError(reason, path, cause === undefined ? undefined : { cause });
 }
+function parseRequestConfig(value) {
+    try {
+        return parseWakeflowConfig(value);
+    }
+    catch (error) {
+        if (error instanceof WakeflowConfigError)
+            fail("config", error.path, error);
+        throw error;
+    }
+}
+/** 请求里的宿主 profile：必须是本宿主的、带可移植 settings 面的，并且是本宿主某种传输的 profile。 */
+function parseRequestProfile(value) {
+    let profile;
+    try {
+        profile = parseWakeflowWorkspaceHostResourceProfile(value);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
+            fail("profile", error.path, error);
+        }
+        throw error;
+    }
+    if (profile.hostId !== "claude-code" ||
+        profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
+        fail("profile", "$/profile");
+    }
+    // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
+    try {
+        claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
+    }
+    catch (error) {
+        if (error instanceof ClaudeCodePortableSettingsTransitionError)
+            fail("profile", "$/profile", error);
+        throw error;
+    }
+    return profile;
+}
 function parseRequest(value) {
     let record;
     try {
@@ -57,38 +94,8 @@ function parseRequest(value) {
                 !(record.signal instanceof AbortSignal)))) {
         fail("input", "$request");
     }
-    let model;
-    try {
-        model = parseWakeflowConfig(record.config);
-    }
-    catch (error) {
-        if (error instanceof WakeflowConfigError)
-            fail("config", error.path, error);
-        throw error;
-    }
-    let profile;
-    try {
-        profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-    }
-    catch (error) {
-        if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("profile", error.path, error);
-        }
-        throw error;
-    }
-    if (profile.hostId !== "claude-code" ||
-        profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF) {
-        fail("profile", "$/profile");
-    }
-    // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
-    try {
-        claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
-    }
-    catch (error) {
-        if (error instanceof ClaudeCodePortableSettingsTransitionError)
-            fail("profile", "$/profile", error);
-        throw error;
-    }
+    const model = parseRequestConfig(record.config);
+    const profile = parseRequestProfile(record.profile);
     return Object.freeze({
         action: record.action,
         model,

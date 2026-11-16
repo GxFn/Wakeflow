@@ -11,6 +11,7 @@ import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRoo
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError, } from "../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
@@ -45,11 +46,8 @@ function assertRoot(root) {
     if (!(root instanceof RootedDirectory))
         fail("invalid-request", "projection-root", "$root");
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function privateDirectoryCurrent(node) {
-    const user = currentUserId();
+    const user = currentUserIdOrNull();
     return (node.kind === "directory" &&
         node.permissionBits === ACTIVE_PROJECTION_DIRECTORY_MODE &&
         (user === null || node.userId === user));
@@ -575,7 +573,7 @@ function nodePolicyViolation(node) {
         return "links";
     if (node.permissionBits !== ACTIVE_PROJECTION_FILE_MODE)
         return "mode";
-    const user = currentUserId();
+    const user = currentUserIdOrNull();
     if (user !== null && node.userId !== user)
         return "owner";
     return null;

@@ -7,6 +7,7 @@ import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from
 import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
@@ -115,7 +116,7 @@ async function loadExactJournal(demandRoot, transaction, signal, expectedNode) {
 function assertPrivateDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail("stage-conflict", path);
     }
 }

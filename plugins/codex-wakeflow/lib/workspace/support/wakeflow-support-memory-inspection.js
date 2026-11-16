@@ -7,6 +7,8 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { planWholeFileContentTransition, WholeFileContentTransitionError, } from "../../foundation/filesystem/whole-file-content-transition.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -15,7 +17,6 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
 import { WAKEFLOW_MANAGED_SUPPORT_ROOT_MODE } from "./wakeflow-managed-support-root-materialization.js";
 import { createWakeflowSupportMemoryAuthority, WakeflowSupportMemoryAuthorityError, } from "./wakeflow-support-memory-authority.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Support：whole-file memory 的只读检查。
  *
@@ -176,10 +177,7 @@ function assertRoot(value, path) {
     }
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("root-policy", "$supportRoot");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("root-policy", "$supportRoot"));
 }
 async function admitRoots(workspaceRoot, supportRoot, request) {
     let report;

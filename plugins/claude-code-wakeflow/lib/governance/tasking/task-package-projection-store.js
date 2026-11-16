@@ -9,6 +9,7 @@ import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from 
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -134,15 +135,12 @@ function parseMaterializeOptions(value) {
     const parsed = parseSignal(value, new Set(["signal"]));
     return Object.freeze({ signal: parsed.signal });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertPrivateNode(node, kind, path) {
     if (kind === "file" &&
         node.kind === "file" &&
         node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE &&
         node.linkCount === 2n &&
-        (currentUserId() === null || node.userId === currentUserId())) {
+        (currentUserIdOrNull() === null || node.userId === currentUserIdOrNull())) {
         // 原子 create 的已发布目标在 stage 退休前短暂拥有两个硬链接；调用方必须重试，
         // 不能在提交者尚未完成耐久结算时把它宣布为 current。
         fail("recovery-required", path);
@@ -153,7 +151,7 @@ function assertPrivateNode(node, kind, path) {
                 ? TASK_PACKAGE_PROJECTION_FILE_MODE
                 : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE) ||
         (kind === "file" && node.linkCount !== 1n) ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("node-policy", path);
     }
 }

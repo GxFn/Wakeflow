@@ -1,10 +1,11 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
 import { GitIgnoreCandidateObservationError, observeGitIgnoreCandidate, } from "../../foundation/git/git-ignore-candidate-observation.js";
 import { GitIgnoreObservationError, observeGitIgnorePaths, } from "../../foundation/git/git-ignore-observation.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
@@ -83,10 +84,7 @@ function parseRequest(value) {
     });
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("source-policy", "$source");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("source-policy", "$source"));
 }
 async function readSource(root, signal, expectedUserId) {
     try {

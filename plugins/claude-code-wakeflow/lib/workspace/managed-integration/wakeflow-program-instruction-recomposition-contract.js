@@ -1,10 +1,11 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { wakeflowProgramInstructionRecompositionLockRef } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowProgramInstructionInspectionRequest, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
  *
@@ -106,10 +107,7 @@ export function assertWakeflowProgramInstructionRecompositionNotAborted(signal) 
     }
 }
 export function currentWakeflowProgramInstructionRecompositionUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root"));
 }
 export async function assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId) {
     try {

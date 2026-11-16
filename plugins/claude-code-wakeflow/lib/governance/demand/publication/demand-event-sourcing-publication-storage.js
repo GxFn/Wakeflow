@@ -10,6 +10,7 @@ import { splitPortableResourcePath, } from "../../../foundation/filesystem/porta
 import { RootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
@@ -72,7 +73,7 @@ export function assertPrivatePublicationNode(node, kind, path, admittedFileLinks
                 ? DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE
                 : DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE) ||
         (kind === "file" && !admittedFileLinks.includes(node.linkCount)) ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail("conflict", path);
     }
 }

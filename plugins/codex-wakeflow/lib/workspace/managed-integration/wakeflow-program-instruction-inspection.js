@@ -3,6 +3,8 @@ import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
@@ -10,7 +12,6 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { planWakeflowManagedTextAuthorityTransition, WakeflowManagedTextAuthorityTransitionError, } from "./wakeflow-managed-text-authority-transition.js";
 import { historicalWakeflowManagedTextTargets, WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY, } from "./wakeflow-managed-text-history.js";
 import { createWakeflowProgramInstructionBodyAuthority, WakeflowProgramInstructionBodyAuthorityError, } from "./wakeflow-program-instruction-body-authority.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的只读文件检查。
  *
@@ -167,10 +168,7 @@ function assertRoot(value) {
         fail("input", "$root");
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("unsupported-platform", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
 }
 async function readSource(root, request, expectedUserId) {
     try {

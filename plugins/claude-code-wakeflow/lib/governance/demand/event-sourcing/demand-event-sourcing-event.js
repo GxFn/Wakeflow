@@ -173,330 +173,357 @@ function parseCanonicalReason(value) {
     }
     return value;
 }
+function parseDemandPublishedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, PUBLISHED_DATA_FIELDS, "$/data");
+    if (data.identityRef !== "identity.json" || data.authorityRef !== "authority.json") {
+        fail("event-type", "$/data");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "publication.demand-published",
+        data: Object.freeze({
+            identityRef: "identity.json",
+            identityDigest: parseDigest(data.identityDigest, "$/data/identityDigest"),
+            authorityRef: "authority.json",
+            authorityDigest: parseDigest(data.authorityDigest, "$/data/authorityDigest"),
+        }),
+    });
+}
+function parseDemandCancelledEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, CANCELLED_DATA_FIELDS, "$/data");
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "lifecycle.demand-cancelled",
+        data: Object.freeze({ reason: parseCanonicalReason(data.reason) }),
+    });
+}
+function parseDemandCompletedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, COMPLETED_DATA_FIELDS, "$/data");
+    let completion;
+    try {
+        completion = parseDemandCompletion(data.completion);
+    }
+    catch (error) {
+        if (error instanceof DemandCompletionError) {
+            fail("demand-completion", "$/data/completion", error);
+        }
+        throw error;
+    }
+    if (completion.demandId !== demandId || completion.completedAt !== recordedAt) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "lifecycle.demand-completed",
+        data: Object.freeze({ completion }),
+    });
+}
+function parseDemandEscalatedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, ESCALATED_DATA_FIELDS, "$/data");
+    const escalation = lifecycleData(validateEscalatedData, data, "$/data").escalation;
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "lifecycle.demand-escalated",
+        data: Object.freeze({ escalation: Object.freeze(escalation) }),
+    });
+}
+function parseDecisionRecordedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, DECISION_RECORDED_DATA_FIELDS, "$/data");
+    const decision = lifecycleData(validateDecisionRecordedData, data, "$/data").decision;
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "lifecycle.decision-recorded",
+        data: Object.freeze({ decision: Object.freeze(decision) }),
+    });
+}
+function parseDemandContinuedEvent(record, { eventId, demandId, recordedAt }) {
+    const withHistory = typeof record.data === "object" &&
+        record.data !== null &&
+        Object.hasOwn(record.data, "historicalTestTargetIds");
+    const data = exactRecord(record.data, withHistory ? CONTINUED_WITH_HISTORY_DATA_FIELDS : CONTINUED_DATA_FIELDS, "$/data");
+    const parsed = lifecycleData(validateContinuedData, data, "$/data");
+    const historical = parsed.historicalTestTargetIds;
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "lifecycle.demand-continued",
+        data: Object.freeze({
+            continuation: Object.freeze(parsed.continuation),
+            ...(historical === undefined
+                ? {}
+                : {
+                    historicalTestTargetIds: Object.freeze(historical.map((id, index) => parseId(id, "target-task", `$/data/historicalTestTargetIds/${index}`))),
+                }),
+        }),
+    });
+}
+function parseManagedEvidenceRecordedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, MANAGED_EVIDENCE_RECORDED_DATA_FIELDS, "$/data");
+    let manifest;
+    try {
+        manifest = parseManagedEvidenceManifest(data.manifest);
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidenceManifestError) {
+            fail("managed-evidence-manifest", "$/data/manifest", error);
+        }
+        throw error;
+    }
+    if (manifest.demandId !== demandId || manifest.capturedAt !== recordedAt) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "evidence.managed-evidence-recorded",
+        data: Object.freeze({ manifest }),
+    });
+}
+function parseTargetTaskPlannedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, TARGET_TASK_PLANNED_DATA_FIELDS, "$/data");
+    let taskPackage;
+    try {
+        taskPackage = parseTaskPackage(data.taskPackage);
+    }
+    catch (error) {
+        if (error instanceof TaskPackageError) {
+            fail("task-package", "$/data/taskPackage", error);
+        }
+        throw error;
+    }
+    if (taskPackage.demandId !== demandId || taskPackage.createdAt !== recordedAt) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "tasking.target-task-planned",
+        data: Object.freeze({ taskPackage }),
+    });
+}
+function parseDeliveryPreparedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, DELIVERY_PREPARED_DATA_FIELDS, "$/data");
+    let envelope;
+    try {
+        envelope = parseDeliveryEnvelope(data.envelope);
+    }
+    catch (error) {
+        if (error instanceof DeliveryEnvelopeError) {
+            fail("delivery-envelope", "$/data/envelope", error);
+        }
+        throw error;
+    }
+    if (envelope.demandId !== demandId || envelope.preparedAt !== recordedAt) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "delivery.delivery-prepared",
+        data: Object.freeze({ envelope }),
+    });
+}
+function parseDeliveryOutcomeRecordedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, DELIVERY_OUTCOME_RECORDED_DATA_FIELDS, "$/data");
+    let outcome;
+    try {
+        outcome = parseDeliveryOutcome(data.outcome);
+    }
+    catch (error) {
+        if (error instanceof DeliveryOutcomeError) {
+            fail("delivery-outcome", "$/data/outcome", error);
+        }
+        throw error;
+    }
+    if (outcome.observedAt !== recordedAt)
+        fail("relation", "$event");
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "delivery.delivery-outcome-recorded",
+        data: Object.freeze({ outcome }),
+    });
+}
+function parseDeliveryRearmedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, DELIVERY_REARMED_DATA_FIELDS, "$/data");
+    let rearm;
+    try {
+        rearm = parseDeliveryRearm(data.rearm);
+    }
+    catch (error) {
+        if (error instanceof DeliveryRearmError)
+            fail("delivery-rearm", "$/data/rearm", error);
+        throw error;
+    }
+    if (rearm.rearmedAt !== recordedAt)
+        fail("relation", "$event");
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "delivery.delivery-rearmed",
+        data: Object.freeze({ rearm }),
+    });
+}
+function parseTargetResultRecordedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
+    let result;
+    try {
+        result = parseTargetResult(data.result);
+    }
+    catch (error) {
+        if (error instanceof TargetResultError) {
+            fail("target-result", "$/data/result", error);
+        }
+        throw error;
+    }
+    let callback;
+    let evidenceResolution;
+    try {
+        callback = parseTargetResultCallbackRecord(data.callback, "$/data/callback");
+        evidenceResolution = parseTargetResultEvidenceResolutions(data.evidenceResolution, "$/data/evidenceResolution");
+    }
+    catch (error) {
+        if (error instanceof TargetResultCallbackError) {
+            fail("target-result-callback", error.path, error);
+        }
+        throw error;
+    }
+    if (result.demandId !== demandId ||
+        result.report.reportedAt !== recordedAt ||
+        targetResultRecordedEventIdFromResult(result) !== eventId ||
+        callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "result.target-result-recorded",
+        data: Object.freeze({ result, callback, evidenceResolution }),
+    });
+}
+function parseCallbackReissuedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, CALLBACK_REISSUED_DATA_FIELDS, "$/data");
+    let reissue;
+    try {
+        reissue = parseTargetResultCallbackReissue(data.reissue, "$/data/reissue");
+    }
+    catch (error) {
+        if (error instanceof TargetResultCallbackError) {
+            fail("target-result-callback", error.path, error);
+        }
+        throw error;
+    }
+    if (reissue.issuedAt !== recordedAt ||
+        reissue.callbackId !== deriveTargetResultCallbackId(reissue.targetResultId)) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "result.callback-reissued",
+        data: Object.freeze({ reissue }),
+    });
+}
+function parseTargetResultDecidedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS, "$/data");
+    let decision;
+    try {
+        decision = parseControllerReviewDecision(data.decision);
+    }
+    catch (error) {
+        if (error instanceof ControllerReviewDecisionError) {
+            fail("controller-review-decision", "$/data/decision", error);
+        }
+        throw error;
+    }
+    if (decision.demandId !== demandId ||
+        decision.decidedAt !== recordedAt ||
+        controllerReviewDecisionEventId(decision) !== eventId) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "review.target-result-decided",
+        data: Object.freeze({ decision }),
+    });
+}
+function parseProductDefectRemediationAuthorizedEvent(record, { eventId, demandId, recordedAt }) {
+    const data = exactRecord(record.data, PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS, "$/data");
+    let authorization;
+    try {
+        authorization = parseControllerProductDefectRemediationAuthorization(data.authorization);
+    }
+    catch (error) {
+        if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
+            fail("controller-product-defect-remediation-authorization", "$/data/authorization", error);
+        }
+        throw error;
+    }
+    if (authorization.demandId !== demandId ||
+        authorization.authorizedAt !== recordedAt ||
+        productDefectRemediationAuthorizedEventId(authorization) !== eventId) {
+        fail("relation", "$event");
+    }
+    return Object.freeze({
+        eventId,
+        demandId,
+        recordedAt,
+        eventType: "review.product-defect-remediation-authorized",
+        data: Object.freeze({ authorization }),
+    });
+}
+/**
+ * 每种事件一个解析函数（open-items L5）：`parseDemandUncommittedEvent` 只解析三个公共字段并分派。键是事件
+ * 类型的字面量，分派用 `Object.hasOwn`，原型键不算事件。
+ */
+const EVENT_PARSERS = Object.freeze({
+    "publication.demand-published": parseDemandPublishedEvent,
+    "lifecycle.demand-cancelled": parseDemandCancelledEvent,
+    "lifecycle.demand-completed": parseDemandCompletedEvent,
+    "lifecycle.demand-escalated": parseDemandEscalatedEvent,
+    "lifecycle.decision-recorded": parseDecisionRecordedEvent,
+    "lifecycle.demand-continued": parseDemandContinuedEvent,
+    "evidence.managed-evidence-recorded": parseManagedEvidenceRecordedEvent,
+    "tasking.target-task-planned": parseTargetTaskPlannedEvent,
+    "delivery.delivery-prepared": parseDeliveryPreparedEvent,
+    "delivery.delivery-outcome-recorded": parseDeliveryOutcomeRecordedEvent,
+    "delivery.delivery-rearmed": parseDeliveryRearmedEvent,
+    "result.target-result-recorded": parseTargetResultRecordedEvent,
+    "result.callback-reissued": parseCallbackReissuedEvent,
+    "review.target-result-decided": parseTargetResultDecidedEvent,
+    "review.product-defect-remediation-authorized": parseProductDefectRemediationAuthorizedEvent,
+});
 /** 解析字段集合严格受限，且不含任何持久化位置字段的未提交事件。 */
 export function parseDemandUncommittedEvent(value) {
     const record = exactRecord(value, BASE_FIELDS, "$event");
     const eventId = parseId(record.eventId, "demand-event", "$/eventId");
     const demandId = parseId(record.demandId, "demand", "$/demandId");
     const recordedAt = parseTime(record.recordedAt);
-    if (record.eventType === "publication.demand-published") {
-        const data = exactRecord(record.data, PUBLISHED_DATA_FIELDS, "$/data");
-        if (data.identityRef !== "identity.json" || data.authorityRef !== "authority.json") {
-            fail("event-type", "$/data");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "publication.demand-published",
-            data: Object.freeze({
-                identityRef: "identity.json",
-                identityDigest: parseDigest(data.identityDigest, "$/data/identityDigest"),
-                authorityRef: "authority.json",
-                authorityDigest: parseDigest(data.authorityDigest, "$/data/authorityDigest"),
-            }),
-        });
-    }
-    if (record.eventType === "lifecycle.demand-cancelled") {
-        const data = exactRecord(record.data, CANCELLED_DATA_FIELDS, "$/data");
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "lifecycle.demand-cancelled",
-            data: Object.freeze({ reason: parseCanonicalReason(data.reason) }),
-        });
-    }
-    if (record.eventType === "lifecycle.demand-completed") {
-        const data = exactRecord(record.data, COMPLETED_DATA_FIELDS, "$/data");
-        let completion;
-        try {
-            completion = parseDemandCompletion(data.completion);
-        }
-        catch (error) {
-            if (error instanceof DemandCompletionError) {
-                fail("demand-completion", "$/data/completion", error);
-            }
-            throw error;
-        }
-        if (completion.demandId !== demandId || completion.completedAt !== recordedAt) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "lifecycle.demand-completed",
-            data: Object.freeze({ completion }),
-        });
-    }
-    if (record.eventType === "lifecycle.demand-escalated") {
-        const data = exactRecord(record.data, ESCALATED_DATA_FIELDS, "$/data");
-        const escalation = lifecycleData(validateEscalatedData, data, "$/data").escalation;
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "lifecycle.demand-escalated",
-            data: Object.freeze({ escalation: Object.freeze(escalation) }),
-        });
-    }
-    if (record.eventType === "lifecycle.decision-recorded") {
-        const data = exactRecord(record.data, DECISION_RECORDED_DATA_FIELDS, "$/data");
-        const decision = lifecycleData(validateDecisionRecordedData, data, "$/data").decision;
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "lifecycle.decision-recorded",
-            data: Object.freeze({ decision: Object.freeze(decision) }),
-        });
-    }
-    if (record.eventType === "lifecycle.demand-continued") {
-        const withHistory = typeof record.data === "object" &&
-            record.data !== null &&
-            Object.hasOwn(record.data, "historicalTestTargetIds");
-        const data = exactRecord(record.data, withHistory ? CONTINUED_WITH_HISTORY_DATA_FIELDS : CONTINUED_DATA_FIELDS, "$/data");
-        const parsed = lifecycleData(validateContinuedData, data, "$/data");
-        const historical = parsed.historicalTestTargetIds;
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "lifecycle.demand-continued",
-            data: Object.freeze({
-                continuation: Object.freeze(parsed.continuation),
-                ...(historical === undefined
-                    ? {}
-                    : {
-                        historicalTestTargetIds: Object.freeze(historical.map((id, index) => parseId(id, "target-task", `$/data/historicalTestTargetIds/${index}`))),
-                    }),
-            }),
-        });
-    }
-    if (record.eventType === "evidence.managed-evidence-recorded") {
-        const data = exactRecord(record.data, MANAGED_EVIDENCE_RECORDED_DATA_FIELDS, "$/data");
-        let manifest;
-        try {
-            manifest = parseManagedEvidenceManifest(data.manifest);
-        }
-        catch (error) {
-            if (error instanceof ManagedEvidenceManifestError) {
-                fail("managed-evidence-manifest", "$/data/manifest", error);
-            }
-            throw error;
-        }
-        if (manifest.demandId !== demandId || manifest.capturedAt !== recordedAt) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "evidence.managed-evidence-recorded",
-            data: Object.freeze({ manifest }),
-        });
-    }
-    if (record.eventType === "tasking.target-task-planned") {
-        const data = exactRecord(record.data, TARGET_TASK_PLANNED_DATA_FIELDS, "$/data");
-        let taskPackage;
-        try {
-            taskPackage = parseTaskPackage(data.taskPackage);
-        }
-        catch (error) {
-            if (error instanceof TaskPackageError) {
-                fail("task-package", "$/data/taskPackage", error);
-            }
-            throw error;
-        }
-        if (taskPackage.demandId !== demandId || taskPackage.createdAt !== recordedAt) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "tasking.target-task-planned",
-            data: Object.freeze({ taskPackage }),
-        });
-    }
-    if (record.eventType === "delivery.delivery-prepared") {
-        const data = exactRecord(record.data, DELIVERY_PREPARED_DATA_FIELDS, "$/data");
-        let envelope;
-        try {
-            envelope = parseDeliveryEnvelope(data.envelope);
-        }
-        catch (error) {
-            if (error instanceof DeliveryEnvelopeError) {
-                fail("delivery-envelope", "$/data/envelope", error);
-            }
-            throw error;
-        }
-        if (envelope.demandId !== demandId || envelope.preparedAt !== recordedAt) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "delivery.delivery-prepared",
-            data: Object.freeze({ envelope }),
-        });
-    }
-    if (record.eventType === "delivery.delivery-outcome-recorded") {
-        const data = exactRecord(record.data, DELIVERY_OUTCOME_RECORDED_DATA_FIELDS, "$/data");
-        let outcome;
-        try {
-            outcome = parseDeliveryOutcome(data.outcome);
-        }
-        catch (error) {
-            if (error instanceof DeliveryOutcomeError) {
-                fail("delivery-outcome", "$/data/outcome", error);
-            }
-            throw error;
-        }
-        if (outcome.observedAt !== recordedAt)
-            fail("relation", "$event");
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "delivery.delivery-outcome-recorded",
-            data: Object.freeze({ outcome }),
-        });
-    }
-    if (record.eventType === "delivery.delivery-rearmed") {
-        const data = exactRecord(record.data, DELIVERY_REARMED_DATA_FIELDS, "$/data");
-        let rearm;
-        try {
-            rearm = parseDeliveryRearm(data.rearm);
-        }
-        catch (error) {
-            if (error instanceof DeliveryRearmError)
-                fail("delivery-rearm", "$/data/rearm", error);
-            throw error;
-        }
-        if (rearm.rearmedAt !== recordedAt)
-            fail("relation", "$event");
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "delivery.delivery-rearmed",
-            data: Object.freeze({ rearm }),
-        });
-    }
-    if (record.eventType === "result.target-result-recorded") {
-        const data = exactRecord(record.data, TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
-        let result;
-        try {
-            result = parseTargetResult(data.result);
-        }
-        catch (error) {
-            if (error instanceof TargetResultError) {
-                fail("target-result", "$/data/result", error);
-            }
-            throw error;
-        }
-        let callback;
-        let evidenceResolution;
-        try {
-            callback = parseTargetResultCallbackRecord(data.callback, "$/data/callback");
-            evidenceResolution = parseTargetResultEvidenceResolutions(data.evidenceResolution, "$/data/evidenceResolution");
-        }
-        catch (error) {
-            if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path, error);
-            }
-            throw error;
-        }
-        if (result.demandId !== demandId ||
-            result.report.reportedAt !== recordedAt ||
-            targetResultRecordedEventIdFromResult(result) !== eventId ||
-            callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "result.target-result-recorded",
-            data: Object.freeze({ result, callback, evidenceResolution }),
-        });
-    }
-    if (record.eventType === "result.callback-reissued") {
-        const data = exactRecord(record.data, CALLBACK_REISSUED_DATA_FIELDS, "$/data");
-        let reissue;
-        try {
-            reissue = parseTargetResultCallbackReissue(data.reissue, "$/data/reissue");
-        }
-        catch (error) {
-            if (error instanceof TargetResultCallbackError) {
-                fail("target-result-callback", error.path, error);
-            }
-            throw error;
-        }
-        if (reissue.issuedAt !== recordedAt ||
-            reissue.callbackId !== deriveTargetResultCallbackId(reissue.targetResultId)) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "result.callback-reissued",
-            data: Object.freeze({ reissue }),
-        });
-    }
-    if (record.eventType === "review.target-result-decided") {
-        const data = exactRecord(record.data, CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS, "$/data");
-        let decision;
-        try {
-            decision = parseControllerReviewDecision(data.decision);
-        }
-        catch (error) {
-            if (error instanceof ControllerReviewDecisionError) {
-                fail("controller-review-decision", "$/data/decision", error);
-            }
-            throw error;
-        }
-        if (decision.demandId !== demandId ||
-            decision.decidedAt !== recordedAt ||
-            controllerReviewDecisionEventId(decision) !== eventId) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "review.target-result-decided",
-            data: Object.freeze({ decision }),
-        });
-    }
-    if (record.eventType === "review.product-defect-remediation-authorized") {
-        const data = exactRecord(record.data, PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS, "$/data");
-        let authorization;
-        try {
-            authorization = parseControllerProductDefectRemediationAuthorization(data.authorization);
-        }
-        catch (error) {
-            if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-                fail("controller-product-defect-remediation-authorization", "$/data/authorization", error);
-            }
-            throw error;
-        }
-        if (authorization.demandId !== demandId ||
-            authorization.authorizedAt !== recordedAt ||
-            productDefectRemediationAuthorizedEventId(authorization) !== eventId) {
-            fail("relation", "$event");
-        }
-        return Object.freeze({
-            eventId,
-            demandId,
-            recordedAt,
-            eventType: "review.product-defect-remediation-authorized",
-            data: Object.freeze({ authorization }),
-        });
-    }
-    fail("event-type", "$/eventType");
+    const eventType = record.eventType;
+    const parser = typeof eventType === "string" && Object.hasOwn(EVENT_PARSERS, eventType)
+        ? EVENT_PARSERS[eventType]
+        : undefined;
+    if (parser === undefined)
+        fail("event-type", "$/eventType");
+    return parser(record, Object.freeze({ eventId, demandId, recordedAt }));
 }

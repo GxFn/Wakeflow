@@ -1,9 +1,10 @@
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "./wakeflow-maintenance-operation-id.js";
@@ -52,10 +53,7 @@ function assertRoot(value) {
         fail("input", "$root");
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("inspection", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("inspection", "$root"));
 }
 function nodeDigest(node) {
     return computeCanonicalJsonSha256Digest({

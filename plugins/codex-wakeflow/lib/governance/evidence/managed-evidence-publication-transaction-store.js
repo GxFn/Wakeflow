@@ -5,9 +5,10 @@ import { readDeterministicJsonFile, } from "../../foundation/filesystem/determin
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -83,11 +84,8 @@ function assertNotAborted(signal) {
     if (signal?.aborted === true)
         fail("aborted", "$signal");
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertJournalNode(node) {
-    const userId = currentUserId();
+    const userId = currentUserIdOrNull();
     if (node.kind !== "file" ||
         node.permissionBits !== MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE ||
         node.linkCount !== 1n ||

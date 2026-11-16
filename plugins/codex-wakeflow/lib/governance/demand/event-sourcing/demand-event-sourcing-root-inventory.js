@@ -4,6 +4,7 @@ import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, pa
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
+import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
 import { inspectManagedEvidenceRecordSetInventory, ManagedEvidenceRecordSetInventoryError, } from "../../evidence/managed-evidence-record-set-inventory.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME } from "../../evidence/managed-evidence-resource-paths.js";
 import { parseTaskPackageProjectionFileName, TASK_PACKAGE_PROJECTIONS_ROOT_REF, TaskPackageProjectionPathError, } from "../../tasking/task-package-projection-paths.js";
@@ -62,7 +63,7 @@ function assertArtifactNames(read) {
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail("node-policy", path);
     }
 }
@@ -70,7 +71,7 @@ function assertFile(node, path) {
     if (node.kind !== "file" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
         node.linkCount !== 1n ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail("node-policy", path);
     }
 }

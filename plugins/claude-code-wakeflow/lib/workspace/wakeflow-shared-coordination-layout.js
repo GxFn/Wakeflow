@@ -2,7 +2,8 @@ import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../foundation/resource/resource-processing-contract.js";
 import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import { privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
@@ -50,13 +51,10 @@ export class WakeflowSharedCoordinationLayoutError extends Error {
 function fail(reason, path, cause) {
     throw new WakeflowSharedCoordinationLayoutError(reason, path, cause === undefined ? undefined : { cause });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== 0o700 ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("layout", path);
     }
 }

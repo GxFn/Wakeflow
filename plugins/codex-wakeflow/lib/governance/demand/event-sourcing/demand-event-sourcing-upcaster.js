@@ -24,6 +24,18 @@ export class DemandEventSourcingUpcasterError extends Error {
 function fail(reason, path, cause) {
     throw new DemandEventSourcingUpcasterError(reason, path, cause === undefined ? undefined : { cause });
 }
+/** 版本演进失败按位置与原因归类：事件类型不认、版本不认、编解码失败，其余是升级本身失败。 */
+function failVersionEvolution(error) {
+    if (error.path === "$/eventType") {
+        fail("unsupported-event-type", "$/eventType", error);
+    }
+    if (error.reason === "unsupported-version") {
+        fail("unsupported-version", "$/eventVersion", error);
+    }
+    if (error.reason === "codec")
+        fail("codec", "$/data", error);
+    fail("upcast", "$/data", error);
+}
 /** 把任一受支持的持久化版本转换为当前归约器事件。 */
 export function upcastDemandEventSourcingStoredEvent(value) {
     let envelope;
@@ -40,17 +52,8 @@ export function upcastDemandEventSourcingStoredEvent(value) {
         return decodeDemandEventSourcingPersistedEvent(envelope);
     }
     catch (error) {
-        if (error instanceof EventSourcingVersionEvolutionError) {
-            if (error.path === "$/eventType") {
-                fail("unsupported-event-type", "$/eventType", error);
-            }
-            if (error.reason === "unsupported-version") {
-                fail("unsupported-version", "$/eventVersion", error);
-            }
-            if (error.reason === "codec")
-                fail("codec", "$/data", error);
-            fail("upcast", "$/data", error);
-        }
+        if (error instanceof EventSourcingVersionEvolutionError)
+            failVersionEvolution(error);
         if (error instanceof DemandEventSourcingEventError) {
             fail("event", "$event", error);
         }

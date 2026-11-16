@@ -6,6 +6,7 @@ import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-direct
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -83,10 +84,7 @@ export function assertWakeflowPreparedMaintenanceJournalCapacity(operationId, in
     return admittedJournalByteCount(encodeUtf8(renderWakeflowMaintenanceJournal(journal)));
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("source-policy", "$journal");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("source-policy", "$journal"));
 }
 function assertGate(root, context) {
     try {

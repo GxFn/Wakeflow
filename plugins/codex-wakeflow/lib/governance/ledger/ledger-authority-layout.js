@@ -1,8 +1,9 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { LEDGER_ARCHIVES_ROOT_REF, LEDGER_REQUIREMENTS_ROOT_REF, LEDGER_TRANSACTIONS_ROOT_REF, } from "./ledger-authority-paths.js";
-import { currentUserId, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_DIRECTORY_MODE, } from "./ledger-authority-storage-policy.js";
+import { LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_TRANSACTION_DIRECTORY_MODE, } from "./ledger-authority-storage-policy.js";
 import { throwLedgerAuthorityStoreError as fail } from "./ledger-authority-store-contract.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "./ledger-resource-catalog.js";
 /**
@@ -47,7 +48,7 @@ function assertNotAborted(signal) {
 async function inspectEntry(root, policy) {
     try {
         const resource = await root.inspectExistingResource(policy.resourcePath, `$layout/${policy.resourcePath}`);
-        const userId = currentUserId();
+        const userId = currentUserIdOrNull();
         const current = resource.node.kind === "directory" &&
             resource.node.permissionBits === policy.mode &&
             (!policy.requireCurrentUser || userId === null || resource.node.userId === userId);

@@ -65,19 +65,23 @@ async function readBirth(pid) {
         return null;
     }
 }
+/** Signal 0 probes existence without touching the process: ESRCH means gone, any other failure is unknown. */
+function probeProcess(pid) {
+    try {
+        process.kill(pid, 0);
+        return "active";
+    }
+    catch (error) {
+        return readNodeSystemErrorCode(error) === "ESRCH" ? "inactive" : "unknown";
+    }
+}
 /** Unknown platforms/permissions remain unknown; elapsed time is never death evidence. */
 export async function observeProcessInstance(pid) {
     if (!Number.isSafeInteger(pid) || pid <= 0)
         throw new TypeError("Invalid process identifier.");
-    let state = "active";
-    try {
-        process.kill(pid, 0);
-    }
-    catch (error) {
-        if (readNodeSystemErrorCode(error) === "ESRCH")
-            return Object.freeze({ state: "inactive", birthDigest: null });
-        state = "unknown";
-    }
+    let state = probeProcess(pid);
+    if (state === "inactive")
+        return Object.freeze({ state: "inactive", birthDigest: null });
     if (pid === process.pid && ownBirth === undefined)
         ownBirth = readBirth(pid);
     const birth = pid === process.pid ? ownBirth : readBirth(pid);
@@ -86,14 +90,9 @@ export async function observeProcessInstance(pid) {
         ownBirth = undefined;
     if (birthDigest === null && state === "active" && pid !== process.pid) {
         // The process may have exited between kill(0) and the birth read: confirm it is still there.
-        try {
-            process.kill(pid, 0);
-        }
-        catch (error) {
-            if (readNodeSystemErrorCode(error) === "ESRCH")
-                return Object.freeze({ state: "inactive", birthDigest: null });
-            state = "unknown";
-        }
+        state = probeProcess(pid);
+        if (state === "inactive")
+            return Object.freeze({ state: "inactive", birthDigest: null });
     }
     return Object.freeze({ state, birthDigest });
 }

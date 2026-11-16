@@ -213,6 +213,26 @@ function parseCopies(value, maximumLength) {
         });
     }));
 }
+/** 逐个文件核对：目录计划与复制清单的第 n 项就是清单的第 n 个文件——路径、字节数、摘要、权限位与落点。 */
+function assertCopiesFollowManifest(manifest, directoryPlan, copies, candidateRootPath) {
+    for (const [index, manifestFile] of manifest.files.entries()) {
+        const plannedFile = directoryPlan.files[index];
+        const copy = copies[index];
+        if (plannedFile === undefined ||
+            copy === undefined ||
+            plannedFile.path !== manifestFile.ref ||
+            plannedFile.byteCount !== manifestFile.bytes ||
+            plannedFile.digest !== manifestFile.digest ||
+            (manifestFile.executable
+                ? (plannedFile.mode & 0o500) !== 0o500
+                : (plannedFile.mode & 0o400) !== 0o400 || (plannedFile.mode & 0o111) !== 0) ||
+            copy.sourceResourcePath !== manifestFile.ref ||
+            copy.candidateResourcePath !==
+                joinDirectoryTreeCandidatePath(candidateRootPath, manifestFile.ref)) {
+            fail("plan", `$plan.copies.${index}`);
+        }
+    }
+}
 /** 严格重验 transfer plan 的 manifest、目录计划、copy 映射和完整摘要。 */
 export function parseLoadedArtifactTreeTransferPlan(value) {
     let record;
@@ -250,23 +270,7 @@ export function parseLoadedArtifactTreeTransferPlan(value) {
         artifactDigest !== computeCanonicalJsonSha256Digest(manifest, "$plan.manifest")) {
         fail("plan", "$plan");
     }
-    for (const [index, manifestFile] of manifest.files.entries()) {
-        const plannedFile = directoryPlan.files[index];
-        const copy = copies[index];
-        if (plannedFile === undefined ||
-            copy === undefined ||
-            plannedFile.path !== manifestFile.ref ||
-            plannedFile.byteCount !== manifestFile.bytes ||
-            plannedFile.digest !== manifestFile.digest ||
-            (manifestFile.executable
-                ? (plannedFile.mode & 0o500) !== 0o500
-                : (plannedFile.mode & 0o400) !== 0o400 || (plannedFile.mode & 0o111) !== 0) ||
-            copy.sourceResourcePath !== manifestFile.ref ||
-            copy.candidateResourcePath !==
-                joinDirectoryTreeCandidatePath(candidateRootPath, manifestFile.ref)) {
-            fail("plan", `$plan.copies.${index}`);
-        }
-    }
+    assertCopiesFollowManifest(manifest, directoryPlan, copies, candidateRootPath);
     const basis = planDigestBasis(artifactDigest, candidateRootPath, directoryPlan, copies);
     if (planDigest !== computeCanonicalJsonSha256Digest(basis, "$plan")) {
         fail("plan", "$plan.planDigest");

@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { parsePlainRecord } from "../data/passive-own-data.js";
 import { createUuidV4 } from "../identity/uuid-v4.js";
+import { ownedByAnotherUser } from "../node/current-user.js";
 import { readMonotonicClock } from "../time/monotonic-clock.js";
 import { isMonotonicDeadlineReached, monotonicDeadlineAfter, monotonicDeadlineRemaining, } from "../time/monotonic-deadline.js";
 import { monotonicDurationFromMilliseconds } from "../time/monotonic-duration.js";
@@ -79,8 +80,7 @@ async function entriesOf(root, area) {
         maximumEntries: MAXIMUM_ENTRIES,
     });
     const directory = listing.directoryNode;
-    if (directory.permissionBits !== 0o700 ||
-        (typeof process.geteuid === "function" && directory.userId !== BigInt(process.geteuid())))
+    if (directory.permissionBits !== 0o700 || ownedByAnotherUser(directory.userId))
         fail("unsafe");
     const readers = [];
     for (const entry of listing.entries) {

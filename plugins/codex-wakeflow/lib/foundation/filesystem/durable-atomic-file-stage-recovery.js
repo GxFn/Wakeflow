@@ -1,5 +1,6 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../data/passive-own-data.js";
+import { ownedByAnotherUser } from "../node/current-user.js";
 import { computeDurableAtomicFileStageTargetDigest, DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "./durable-atomic-file-stage-address.js";
 import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
 import { DurableRegularFileSettlementError, settleRegularFileDurability, } from "./durable-regular-file-settlement.js";
@@ -72,7 +73,7 @@ function parseOptions(value) {
     return Object.freeze({ signal: record.signal });
 }
 function assertCurrentOwner(node, path) {
-    if (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid())) {
+    if (ownedByAnotherUser(node.userId)) {
         fail("node-policy", path);
     }
 }

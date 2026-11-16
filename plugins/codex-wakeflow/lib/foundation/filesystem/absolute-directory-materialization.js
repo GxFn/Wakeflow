@@ -116,38 +116,11 @@ function mapMaterializationError(error) {
     }
     fail("materialization", "$absolutePath");
 }
-/** 从最近安全祖先开始，持久且幂等地物化一个规范绝对目录位置。 */
-export async function materializeAbsoluteDirectoryPlacement(value, optionsValue) {
-    const options = parseOptions(optionsValue);
-    assertNotAborted(options.signal);
-    const initial = await inspect(value, "$absolutePath");
-    const absolutePath = initial.absolutePath;
-    if (initial.state === "present") {
-        if (initial.spellingIsCanonical !== true || initial.node === null) {
-            fail("alias", "$absolutePath");
-        }
-        return Object.freeze({
-            absolutePath,
-            node: initial.node,
-            segments: Object.freeze([
-                Object.freeze({
-                    absolutePath,
-                    disposition: "existing",
-                    node: initial.node,
-                }),
-            ]),
-        });
-    }
-    const nearestAncestor = initial.nearestExistingAncestor;
-    if (nearestAncestor === null)
-        fail("scope", "$absolutePath");
-    if (nearestAncestor.spellingIsCanonical !== true) {
-        fail("alias", "$ancestor");
-    }
-    const ancestor = nearestAncestor.absolutePath;
-    // 先证明相对路径可移植，再打开句柄，避免 input 失败泄漏 root。
-    const resourcePath = relativeResourcePath(ancestor, absolutePath);
-    assertNotAborted(options.signal);
+/**
+ * 在最近的已有祖先下把目录路径建出来：打开祖先的句柄、物化、关闭句柄。物化的错误先于关闭的错误报告；
+ * 物化成功而句柄关不上是 close-failure。
+ */
+async function materializeUnderAncestor(ancestor, resourcePath, options) {
     let root;
     try {
         root = await RootedDirectory.open(ancestor, "$ancestor");
@@ -185,6 +158,41 @@ export async function materializeAbsoluteDirectoryPlacement(value, optionsValue)
         fail("close-failure", "$root");
     if (materialized === undefined)
         fail("materialization", "$absolutePath");
+    return materialized;
+}
+/** 从最近安全祖先开始，持久且幂等地物化一个规范绝对目录位置。 */
+export async function materializeAbsoluteDirectoryPlacement(value, optionsValue) {
+    const options = parseOptions(optionsValue);
+    assertNotAborted(options.signal);
+    const initial = await inspect(value, "$absolutePath");
+    const absolutePath = initial.absolutePath;
+    if (initial.state === "present") {
+        if (initial.spellingIsCanonical !== true || initial.node === null) {
+            fail("alias", "$absolutePath");
+        }
+        return Object.freeze({
+            absolutePath,
+            node: initial.node,
+            segments: Object.freeze([
+                Object.freeze({
+                    absolutePath,
+                    disposition: "existing",
+                    node: initial.node,
+                }),
+            ]),
+        });
+    }
+    const nearestAncestor = initial.nearestExistingAncestor;
+    if (nearestAncestor === null)
+        fail("scope", "$absolutePath");
+    if (nearestAncestor.spellingIsCanonical !== true) {
+        fail("alias", "$ancestor");
+    }
+    const ancestor = nearestAncestor.absolutePath;
+    // 先证明相对路径可移植，再打开句柄，避免 input 失败泄漏 root。
+    const resourcePath = relativeResourcePath(ancestor, absolutePath);
+    assertNotAborted(options.signal);
+    const materialized = await materializeUnderAncestor(ancestor, resourcePath, options);
     const final = await inspect(absolutePath, "$absolutePath");
     if (final.state !== "present" ||
         final.spellingIsCanonical !== true ||

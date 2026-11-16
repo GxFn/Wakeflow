@@ -11,6 +11,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
@@ -88,14 +89,11 @@ function parseOptions(value) {
         signal: record.signal,
     });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertPrivateNode(node, kind, path) {
     if (node.kind !== kind ||
         node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
         (kind === "file" && node.linkCount !== 1n) ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("prefix-conflict", path);
     }
 }

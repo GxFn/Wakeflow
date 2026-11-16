@@ -1,5 +1,6 @@
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectWakeflowSupportMemory, WAKEFLOW_SUPPORT_MEMORY_FILE_MODE, WakeflowSupportMemoryInspectionError, } from "./wakeflow-support-memory-inspection.js";
 import { assertWakeflowSupportMemoryPublicationNotAborted, failWakeflowSupportMemoryPublication as fail, parseWakeflowSupportMemoryPublicationOptions, parseWakeflowSupportMemoryPublicationRequest, WakeflowSupportMemoryPublicationError, wakeflowSupportMemoryInspectionRequest, } from "./wakeflow-support-memory-publication-contract.js";
 /**
@@ -99,10 +100,7 @@ function sameSource(left, right) {
         sameFileNodeSnapshot(left.node, right.node));
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("source-invalid", "$source");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("source-invalid", "$source"));
 }
 function assertReadback(request, before, effect, after) {
     const source = after.source;

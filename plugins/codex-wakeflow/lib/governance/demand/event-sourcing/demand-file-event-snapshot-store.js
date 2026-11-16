@@ -7,10 +7,11 @@ import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesInDi
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { RootedDirectoryError, isRootedDirectory, } from "../../../foundation/filesystem/rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
@@ -80,13 +81,10 @@ function parseOptions(value) {
     }
     return Object.freeze({ signal: record.signal });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertPrivateDirectory(node) {
     if (node.kind !== "directory" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("node-policy", "$snapshots");
     }
 }
@@ -94,7 +92,7 @@ function assertPrivateFile(node, path) {
     if (node.kind !== "file" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
         node.linkCount !== 1n ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("node-policy", path);
     }
 }

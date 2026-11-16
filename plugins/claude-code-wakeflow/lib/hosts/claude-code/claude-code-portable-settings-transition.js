@@ -118,24 +118,25 @@ function blocked(reason, sourceDigest) {
         desiredText: null,
     });
 }
-function duplicateKeyExists(node) {
-    if (node.type === "object") {
-        const seen = new Set();
-        for (const property of node.children ?? []) {
-            const keyNode = property.children?.[0];
-            const valueNode = property.children?.[1];
-            if (keyNode?.type !== "string" ||
-                typeof keyNode.value !== "string" ||
-                valueNode === undefined)
-                return true;
-            if (seen.has(keyNode.value))
-                return true;
-            seen.add(keyNode.value);
-            if (duplicateKeyExists(valueNode))
-                return true;
-        }
-        return false;
+/** 对象节点：属性形状不完整、键重复，或某个值里面有重复键。 */
+function objectHasDuplicateKey(node) {
+    const seen = new Set();
+    for (const property of node.children ?? []) {
+        const keyNode = property.children?.[0];
+        const valueNode = property.children?.[1];
+        if (keyNode?.type !== "string" || typeof keyNode.value !== "string" || valueNode === undefined)
+            return true;
+        if (seen.has(keyNode.value))
+            return true;
+        seen.add(keyNode.value);
+        if (duplicateKeyExists(valueNode))
+            return true;
     }
+    return false;
+}
+function duplicateKeyExists(node) {
+    if (node.type === "object")
+        return objectHasDuplicateKey(node);
     if (node.type === "array") {
         return (node.children ?? []).some(duplicateKeyExists);
     }

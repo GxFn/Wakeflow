@@ -44,6 +44,20 @@ function sameContent(left, right) {
         left.digest === right.digest &&
         left.bytes.equals(right.bytes));
 }
+/** 被接受的当前内容两两不同：第一份与前面某份相同的内容即失败。 */
+function assertDistinctCurrentContents(current) {
+    for (let index = 0; index < current.length; index += 1) {
+        const entry = current[index];
+        if (entry === undefined)
+            continue;
+        for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
+            const prior = current[priorIndex];
+            if (prior !== undefined && sameContent(prior, entry)) {
+                fail("duplicate-current", `$request.currentContents/${index}`);
+            }
+        }
+    }
+}
 function parseRequest(value) {
     let record;
     try {
@@ -69,17 +83,7 @@ function parseRequest(value) {
     }
     const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");
     const current = Object.freeze(currentValues.map((content, index) => snapshotBytes(content, `$request.currentContents/${index}`)));
-    for (let index = 0; index < current.length; index += 1) {
-        const entry = current[index];
-        if (entry === undefined)
-            continue;
-        for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-            const prior = current[priorIndex];
-            if (prior !== undefined && sameContent(prior, entry)) {
-                fail("duplicate-current", `$request.currentContents/${index}`);
-            }
-        }
-    }
+    assertDistinctCurrentContents(current);
     return Object.freeze({ current, desired });
 }
 /** 计划一份 absent/current/replace 的整文件字节转换，不执行任何 I/O。 */

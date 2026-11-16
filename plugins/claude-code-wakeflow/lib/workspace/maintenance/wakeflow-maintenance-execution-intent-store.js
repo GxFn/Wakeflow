@@ -1,12 +1,12 @@
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { parseWakeflowMaintenanceWriter, } from "./wakeflow-maintenance-writer.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -14,6 +14,7 @@ import { computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintena
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { parseWakeflowMaintenanceWriter, } from "./wakeflow-maintenance-writer.js";
 /**
  * Wakeflow Workspace / Maintenance：immutable execution intent 的私有物理 store。
  *
@@ -82,10 +83,7 @@ export function assertWakeflowMaintenanceExecutionIntentCapacity(value) {
     return admittedByteCount(bytes);
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("source-policy", "$intent");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("source-policy", "$intent"));
 }
 function assertSource(value) {
     if (typeof value !== "object" || value === null || !ISSUED_SOURCES.has(value)) {

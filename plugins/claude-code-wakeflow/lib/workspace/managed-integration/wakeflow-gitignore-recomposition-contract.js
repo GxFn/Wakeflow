@@ -2,11 +2,12 @@ import { types } from "node:util";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
 import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Gitignore 重组与显式恢复共享的输入、错误和机械操作准入合同。
  *
@@ -175,10 +176,7 @@ export function assertWakeflowGitignoreRecompositionNotAborted(signal) {
     }
 }
 export function currentWakeflowGitignoreRecompositionUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        failWakeflowGitignoreRecomposition("unsupported-platform", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => failWakeflowGitignoreRecomposition("unsupported-platform", "$root"));
 }
 export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId) {
     try {

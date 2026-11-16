@@ -8,10 +8,11 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { AbsoluteDirectoryMaterializationError, materializeAbsoluteDirectoryPlacement, } from "../../foundation/filesystem/absolute-directory-materialization.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog, } from "./wakeflow-managed-support-resource-catalog.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 /**
  * Wakeflow Workspace / Support：单个受管 Support 根目录的机械物化 owner。
  *
@@ -147,10 +148,7 @@ function parseRequest(value) {
     });
 }
 function currentUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        fail("root-policy", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => fail("root-policy", "$root"));
 }
 function assertWorkspaceRoot(value) {
     if (typeof value !== "object" ||

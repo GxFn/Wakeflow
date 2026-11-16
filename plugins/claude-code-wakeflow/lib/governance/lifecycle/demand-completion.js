@@ -86,6 +86,34 @@ function completionBasis(value) {
         completedAt: value.completedAt,
     };
 }
+/** 完成记录里的需求包来源：按需求谱系引用的合同解析，错误路径改写到 `$/packageSource` 之下。 */
+function parsePackageSourceLineage(source) {
+    try {
+        return parseRequirementLineageReference({
+            artifactKind: "wakeflow-requirement-lineage",
+            schemaVersion: 1,
+            requirementId: source.requirementId,
+            recordRef: source.recordRef,
+            recordDigest: source.recordDigest,
+        });
+    }
+    catch (error) {
+        if (error instanceof RequirementLineageError) {
+            fail(error.reason === "path" ? "path" : "package", `$/packageSource${error.path.slice(1)}`, error);
+        }
+        throw error;
+    }
+}
+function parseCompletedAt(value) {
+    try {
+        return parseUtcInstant(value, "$/completedAt");
+    }
+    catch (error) {
+        if (error instanceof UtcInstantError)
+            fail("time", "$/completedAt", error);
+        throw error;
+    }
+}
 /** 严格解析并复验self-excluding digest的Demand Completion。 */
 export function parseDemandCompletion(value) {
     let json;
@@ -101,37 +129,14 @@ export function parseDemandCompletion(value) {
     if (!validated.ok)
         fail("schema", validated.path);
     const wire = validated.value;
-    let lineage;
-    try {
-        lineage = parseRequirementLineageReference({
-            artifactKind: "wakeflow-requirement-lineage",
-            schemaVersion: 1,
-            requirementId: wire.packageSource.requirementId,
-            recordRef: wire.packageSource.recordRef,
-            recordDigest: wire.packageSource.recordDigest,
-        });
-    }
-    catch (error) {
-        if (error instanceof RequirementLineageError) {
-            fail(error.reason === "path" ? "path" : "package", `$/packageSource${error.path.slice(1)}`, error);
-        }
-        throw error;
-    }
+    const lineage = parsePackageSourceLineage(wire.packageSource);
     if (!Number.isSafeInteger(wire.observedState.streamRevision) ||
         wire.observedState.streamRevision < 1 ||
         !Number.isSafeInteger(wire.packageSource.claimStateRevision) ||
         wire.packageSource.claimStateRevision < 2) {
         fail("position", "$completion");
     }
-    let completedAt;
-    try {
-        completedAt = parseUtcInstant(wire.completedAt, "$/completedAt");
-    }
-    catch (error) {
-        if (error instanceof UtcInstantError)
-            fail("time", "$/completedAt", error);
-        throw error;
-    }
+    const completedAt = parseCompletedAt(wire.completedAt);
     const basis = completionBasis({
         kind: COMPLETION_KIND,
         schemaVersion: COMPLETION_SCHEMA_VERSION,

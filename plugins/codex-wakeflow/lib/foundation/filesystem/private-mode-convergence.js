@@ -1,5 +1,6 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { open as openFileHandle } from "node:fs/promises";
+import { currentUserIdOrNull } from "../node/current-user.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, } from "./file-node-snapshot.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
@@ -42,9 +43,6 @@ export class PrivateModeConvergenceError extends Error {
 function fail(reason, path, cause) {
     throw new PrivateModeConvergenceError(reason, path, cause === undefined ? undefined : { cause });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 /** 目录 0700、文件 0600；其余类型没有私有模式。 */
 function privateModeOf(node) {
     if (node.kind === "directory")
@@ -58,7 +56,7 @@ export function classifyPrivateNode(node) {
     const target = privateModeOf(node);
     if (target === null)
         return "unsafe";
-    const user = currentUserId();
+    const user = currentUserIdOrNull();
     if (user !== null && node.userId !== user)
         return "unsafe";
     if ((node.rawMode & SPECIAL_BITS) !== 0n)

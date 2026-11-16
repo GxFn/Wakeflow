@@ -7,6 +7,7 @@ import { createDirectoryAtomically, DurableDirectoryMaterializationError, } from
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { planClaudeCodePortableSettingsRemovalTransition, planClaudeCodePortableSettingsTransition, } from "./claude-code-portable-settings-transition.js";
@@ -111,13 +112,10 @@ function parseOptions(value, allowedKeys) {
         expectedSourceDigest: parseExpectedSourceDigest(record.expectedSourceDigest),
     });
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 function assertDirectoryNode(node) {
     if (node.kind !== "directory" ||
         (node.permissionBits !== 0o700 && node.permissionBits !== 0o755) ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("directory-policy", "$settingsDirectory");
     }
 }
@@ -125,7 +123,7 @@ function assertSourceNode(node) {
     if (node.kind !== "file" ||
         node.permissionBits !== 0o644 ||
         node.linkCount !== 1n ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         fail("source-policy", "$settings");
     }
 }

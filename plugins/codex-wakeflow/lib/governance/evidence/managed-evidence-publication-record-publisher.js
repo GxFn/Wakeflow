@@ -4,6 +4,7 @@ import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } fr
 import { DurableDirectoryTreePublicationError, publishDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { deriveManagedEvidencePublicationRecordTreePlan, ManagedEvidencePublicationTransactionError, parseManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction.js";
 import { ManagedEvidencePublicationTransactionStoreError, requireCurrentManagedEvidencePublicationTransaction, } from "./managed-evidence-publication-transaction-store.js";
@@ -120,7 +121,7 @@ async function inspectPhysicalState(root, plan) {
 function assertPrivateRootNode(node, owner) {
     if (node.kind !== "directory" ||
         node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
     }
 }

@@ -10,6 +10,7 @@ import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRoo
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
@@ -113,7 +114,7 @@ function assertNotAborted(signal) {
         fail("aborted", "$signal");
 }
 function privateNode(node, kind, path) {
-    const currentUserId = typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
+    const currentUserId = currentUserIdOrNull();
     if (node.kind !== kind ||
         node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
         (kind === "file" && node.linkCount !== 1n) ||

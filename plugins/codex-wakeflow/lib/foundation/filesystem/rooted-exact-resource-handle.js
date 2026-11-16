@@ -101,26 +101,29 @@ function snapshotOpenedHandle(value, errorPath) {
         throw error;
     }
 }
+/** 第一次检查失败：按根目录错误的原因归类；别名与中途变化都算资源变了，其余是根作用域。 */
+function failInitialInspection(error, errorPath) {
+    if (error.reason === "resource-path")
+        fail("input", errorPath, error);
+    if (error.reason === "resource-not-found") {
+        fail("resource-not-found", errorPath, error);
+    }
+    if (error.reason === "resource-changed") {
+        fail("resource-changed", errorPath, error);
+    }
+    if (error.reason === "resource-alias") {
+        fail("resource-changed", errorPath, error);
+    }
+    fail("root-scope", errorPath, error);
+}
 async function inspectInitialResource(root, resourcePath, expectedNode, admission, errorPath) {
     let resource;
     try {
         resource = await root.inspectExistingResource(resourcePath, errorPath);
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError) {
-            if (error.reason === "resource-path")
-                fail("input", errorPath, error);
-            if (error.reason === "resource-not-found") {
-                fail("resource-not-found", errorPath, error);
-            }
-            if (error.reason === "resource-changed") {
-                fail("resource-changed", errorPath, error);
-            }
-            if (error.reason === "resource-alias") {
-                fail("resource-changed", errorPath, error);
-            }
-            fail("root-scope", errorPath, error);
-        }
+        if (error instanceof RootedDirectoryError)
+            failInitialInspection(error, errorPath);
         throw error;
     }
     const kind = admitResourceKind(resource.node, admission, errorPath);

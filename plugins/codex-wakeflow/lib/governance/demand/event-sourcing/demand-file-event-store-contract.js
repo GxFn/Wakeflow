@@ -1,5 +1,6 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import { renderDemandEventStreamCommit, } from "./demand-event-stream-commit.js";
 /** Demand 文件事件存储的容量、回执和稳定错误合同。 */
@@ -37,9 +38,6 @@ export class DemandFileEventStoreError extends Error {
         this.path = path;
     }
 }
-function currentUserId() {
-    return typeof process.geteuid === "function" ? BigInt(process.geteuid()) : null;
-}
 export function failDemandFileEventStore(reason, path, cause) {
     throw new DemandFileEventStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
@@ -67,7 +65,7 @@ export function parseDemandFileEventStoreOptions(value) {
 export function assertDemandFileEventStoreDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         failDemandFileEventStore("node-policy", path);
     }
 }
@@ -75,7 +73,7 @@ export function assertDemandFileEventStoreFile(node, path, admittedLinkCounts = 
     if (node.kind !== "file" ||
         node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
         !admittedLinkCounts.includes(node.linkCount) ||
-        (currentUserId() !== null && node.userId !== currentUserId())) {
+        (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())) {
         failDemandFileEventStore("node-policy", path);
     }
 }

@@ -5,6 +5,7 @@ import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, insp
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
+import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import { deriveManagedEvidencePublicationRecordTreePlan, } from "./managed-evidence-publication-transaction.js";
 import { loadManagedEvidencePublicationTransaction, ManagedEvidencePublicationTransactionStoreError, } from "./managed-evidence-publication-transaction-store.js";
 import { loadManagedEvidenceRecord, ManagedEvidenceRecordReaderError, } from "./managed-evidence-record-reader.js";
@@ -97,7 +98,7 @@ function parseOptions(value) {
 function assertDirectory(node, path) {
     if (node.kind !== "directory" ||
         node.permissionBits !== 0o700 ||
-        (typeof process.geteuid === "function" && node.userId !== BigInt(process.geteuid()))) {
+        ownedByAnotherUser(node.userId)) {
         fail("node-policy", path);
     }
 }

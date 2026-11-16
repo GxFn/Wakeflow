@@ -9,11 +9,12 @@ import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-direct
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
-import { currentUserId, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_TRANSACTION_FILE_MODE, } from "./ledger-authority-storage-policy.js";
+import { LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, LEDGER_TRANSACTION_FILE_MODE, } from "./ledger-authority-storage-policy.js";
 import { throwLedgerAuthorityStoreError as fail, LedgerAuthorityStoreError, } from "./ledger-authority-store-contract.js";
 import { LedgerRecordPublicationIntentError, parseLedgerRecordPublicationIntentDocument, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, } from "./ledger-record-publication-intent.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
@@ -45,7 +46,7 @@ export async function ledgerPublicationResourceNodeOrNull(root, resourcePath) {
     }
 }
 function assertTransactionFileNode(node) {
-    const userId = currentUserId();
+    const userId = currentUserIdOrNull();
     if (node.kind !== "file" ||
         node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE ||
         node.linkCount !== 1n ||
@@ -54,7 +55,7 @@ function assertTransactionFileNode(node) {
     }
 }
 function assertTransactionStageNode(node) {
-    const userId = currentUserId();
+    const userId = currentUserIdOrNull();
     if (node.kind !== "directory" ||
         node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE ||
         (userId !== null && node.userId !== userId)) {

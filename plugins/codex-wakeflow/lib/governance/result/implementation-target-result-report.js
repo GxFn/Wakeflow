@@ -156,23 +156,12 @@ function stringArray(value, path, maximumItems = 64) {
         fail("relation", path);
     return Object.freeze(result);
 }
-/** 准入不含时钟和摘要的Agent业务陈述，并返回独立冻结快照。 */
-function parseImplementationTargetResultReportContent(value) {
-    const record = jsonRecord(value, [
-        "anchorEvidence",
-        "evidenceLocators",
-        "outcome",
-        "repositoryChange",
-        "risks",
-        "summary",
-        "verification",
-    ], "$content");
-    if (record.outcome !== "completed" &&
-        record.outcome !== "blocked" &&
-        record.outcome !== "needs-review") {
-        fail("input", "$/outcome");
-    }
-    const repository = jsonRecord(record.repositoryChange, ["branch", "commits", "disposition", "repositoryId"], "$/repositoryChange");
+/**
+ * 报告里的仓库变更：分支、处置与提交各自合法，并且"已提交"与"有提交"同真同假。仓库标识原样交回——它在
+ * 内容的其余部分都核对之后才解析，错误的先后不变。
+ */
+function parseRepositoryChangeFields(value) {
+    const repository = jsonRecord(value, ["branch", "commits", "disposition", "repositoryId"], "$/repositoryChange");
     if (repository.branch !== null &&
         (typeof repository.branch !== "string" || !BRANCH_PATTERN.test(repository.branch))) {
         fail("text", "$/repositoryChange/branch");
@@ -191,6 +180,30 @@ function parseImplementationTargetResultReportContent(value) {
         (repository.disposition === "committed") !== commits.length > 0) {
         fail("relation", "$/repositoryChange/commits");
     }
+    return {
+        repositoryIdValue: repository.repositoryId,
+        disposition: repository.disposition,
+        branch: repository.branch,
+        commits,
+    };
+}
+/** 准入不含时钟和摘要的Agent业务陈述，并返回独立冻结快照。 */
+function parseImplementationTargetResultReportContent(value) {
+    const record = jsonRecord(value, [
+        "anchorEvidence",
+        "evidenceLocators",
+        "outcome",
+        "repositoryChange",
+        "risks",
+        "summary",
+        "verification",
+    ], "$content");
+    if (record.outcome !== "completed" &&
+        record.outcome !== "blocked" &&
+        record.outcome !== "needs-review") {
+        fail("input", "$/outcome");
+    }
+    const change = parseRepositoryChangeFields(record.repositoryChange);
     if (!Array.isArray(record.evidenceLocators) || record.evidenceLocators.length > 64) {
         fail("input", "$/evidenceLocators");
     }
@@ -251,10 +264,10 @@ function parseImplementationTargetResultReportContent(value) {
         outcome: record.outcome,
         summary: text(record.summary, "$/summary"),
         repositoryChange: Object.freeze({
-            repositoryId: repositoryId(repository.repositoryId, "$/repositoryChange/repositoryId"),
-            disposition: repository.disposition,
-            branch: repository.branch,
-            commits: Object.freeze(commits),
+            repositoryId: repositoryId(change.repositoryIdValue, "$/repositoryChange/repositoryId"),
+            disposition: change.disposition,
+            branch: change.branch,
+            commits: Object.freeze(change.commits),
         }),
         evidenceLocators: Object.freeze(locators),
         verification: stringArray(record.verification, "$/verification"),

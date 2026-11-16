@@ -6,12 +6,13 @@ import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/d
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import { computeWakeflowConfigDigest, parseWakeflowConfig, WakeflowConfigError, } from "./wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot, WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_CONFIG_MAXIMUM_BYTES, WakeflowConfigAuthoritySnapshotError, } from "./wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError, } from "./wakeflow-config-root-placement.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
 /**
  * Config 替换流程的领域合同、无副作用输入准入，以及共享的源资源和目标事实。
  *
@@ -108,10 +109,7 @@ export function assertWakeflowConfigAuthorityNotAborted(signal) {
     }
 }
 export function currentWakeflowConfigAuthorityUserId() {
-    if (process.platform === "win32" || typeof process.geteuid !== "function") {
-        failWakeflowConfigAuthorityReplacement("unsupported-platform", "$root");
-    }
-    return BigInt(process.geteuid());
+    return requireCurrentUserId(() => failWakeflowConfigAuthorityReplacement("unsupported-platform", "$root"));
 }
 export async function assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId) {
     try {
@@ -247,6 +245,21 @@ export async function assertWakeflowConfigAuthorityDesiredPlacements(root, model
         failWakeflowConfigAuthorityReplacement("placement", "$placements", error);
     }
 }
+/** 提交之前读当前权威快照失败：按快照错误的原因归类，认不出的一律是来源无效。 */
+function failSnapshotRead(error) {
+    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+        if (error.reason === "aborted") {
+            failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
+        }
+        if (error.reason === "root-scope") {
+            failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
+        }
+        if (error.reason === "source-policy") {
+            failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
+        }
+    }
+    failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
+}
 export async function readCurrentWakeflowConfigAuthority(root, signal, afterCommit) {
     try {
         return await readWakeflowConfigAuthoritySnapshot(root, afterCommit || signal === undefined ? undefined : { signal });
@@ -255,19 +268,7 @@ export async function readCurrentWakeflowConfigAuthority(root, signal, afterComm
         if (afterCommit) {
             failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath", error);
         }
-        if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-            if (error.reason === "aborted") {
-                failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
-            }
-            if (error.reason === "root-scope") {
-                failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
-            }
-            if (error.reason === "source-policy") {
-                failWakeflowConfigAuthorityReplacement("source-policy", "$source", error);
-            }
-            failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
-        }
-        failWakeflowConfigAuthorityReplacement("source-invalid", "$source", error);
+        failSnapshotRead(error);
     }
 }
 export function assertWakeflowConfigAuthoritySourcePolicy(snapshot, expectedUserId) {

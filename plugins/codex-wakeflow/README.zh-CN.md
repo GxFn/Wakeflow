@@ -58,7 +58,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 1. 为你的 Agent 宿主安装插件。
 2. 确认 Agent 宿主能启动 `node`：在它启动时所用的 `PATH` 上，或由宿主自带
-   （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
+   （Codex 桌面应用）。插件的工具服务与它的 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
    代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux` 或已用
    订阅登录的 Claude 桌面 app，取决于工作区用哪种窗口传输；
@@ -128,7 +128,7 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
 
 ## 它会碰你机器上的什么
 
-- 完全在你的机器上运行：一个走 stdio 的工具服务与观察 hook，都由 Agent 宿主以
+- 完全在你的机器上运行：一个走 stdio 的工具服务与插件的 hook，都由 Agent 宿主以
   `node` 启动。不联网、不发遥测、不需要账号。
 - 在工作区内写 `wakeflow.config.json`、`.wakeflow-active/`、`.wakeflow-local/`（运行时
   状态、hook 记录与它发布的宿主资产）、你选的账本目录、它管理的 Design 与 Test

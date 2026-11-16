@@ -385,8 +385,8 @@ window helper of the workspace's transport, `tmux.mjs` or `desktop.mjs`, and
 under tmux the status line) and whether their bytes are still the artifact's.
 A helper that is `drift`, `missing` or `mode` is not yours to run:
 `wakeflow_prepare_delivery` refuses with `host-asset-<status>` until a
-reconcile republishes it - tell the user something rewrote the file, never
-repair it by hand. `settings: custom` is the user's own status line.
+reconcile republishes it - never repair it by hand, and tell the user something rewrote the file unless the plugin was just updated (then the drift is the update).
+`settings: custom` is the user's own status line.
 
 `legacyResidue` lists what the old JavaScript plugin left behind in the
 workspace root, the present repository roots and the support-surface roots:

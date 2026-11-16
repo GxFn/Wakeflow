@@ -154,6 +154,10 @@ function implementationFrontier(target) {
         frontier: Object.freeze({
             ...descriptor,
             target: implementationTargetReference(target),
+            ...(descriptor.kind === "implementation-host-effect-rearm" &&
+                target.phase === "host-effect-rejected"
+                ? { deliveryId: target.currentDelivery.deliveryId }
+                : {}),
         }),
         blocker,
     });
@@ -197,6 +201,10 @@ function postAcceptanceFrontier(loaded, route) {
     return Object.freeze({
         ...descriptor,
         target: testTargetReference(target),
+        ...(descriptor.kind === "test-host-effect-rearm" &&
+            stage.status === "test-delivery-rearm-planning"
+            ? { deliveryId: stage.rejectedDelivery.deliveryId }
+            : {}),
     });
 }
 /** test-review-blocked 前沿携带外部条件阻塞项；其余 post-acceptance 前沿没有阻塞项。 */

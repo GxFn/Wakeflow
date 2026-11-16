@@ -58,7 +58,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 1. 为你的 Agent 宿主安装插件。
 2. 确认 Agent 宿主能启动 `node`：在它启动时所用的 `PATH` 上，或由宿主自带
-   （Codex 桌面应用）。插件的工具服务与观察 hook 都以 `node` 启动，找不到它时
+   （Codex 桌面应用）。插件的工具服务与它的 hook 都以 `node` 启动，找不到它时
    会静默失败。Wakeflow 需要 Node 24.19 及以上、低于 25 的版本（其他版本在任何
    代码运行之前就以 stderr 上的一行拒绝）、`git`，Claude Code 上还需要 `tmux` 或已用
    订阅登录的 Claude 桌面 app，取决于工作区用哪种窗口传输；
@@ -106,12 +106,12 @@ Design、Test 面）与每个产品仓库：引导会话把它们列出来、说
 你同意后由它在桌面 app 里逐个打开，app 随即记下信任（当前版本不再弹窗）；想自己来也可以：在 app 里
 打开该目录或在终端里到该目录运行 `claude`，接受信任对话。没有你的同意，不会信任任何目录。
 Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次
-即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和
+即可（目录会记住）。关闭或重启一个窗口要归档它的会话；`auto` 模式下 app 可能在你同意之后仍然拒绝 Controller 的这个请求，这时由你自己在侧栏里归档（并恢复）那个会话，Controller 会说是哪一个。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和
 Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口
 同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。Controller 之外的窗口启动时还带着
 对 Wakeflow 自身文件（`.wakeflow-local`、`.wakeflow-active`、`wakeflow.config.json`、根上的 Claude
 settings 与账本）的编辑拒绝规则：它降低误改的机会，不是隔离——以你的身份运行的进程仍然写得了那里。
-桌面会话传输下这些规则过不了应用对会话的接管，所以只在 tmux 传输下成立。
+桌面会话传输下这些启动规则过不了应用对会话的接管；两种传输下，插件自己的 hook 还会拒绝已绑定的非 Controller 窗口用编辑工具改这些路径，shell 命令不在检查之列。
 因此 Wakeflow 写过的根，
 其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，
 那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。
@@ -161,7 +161,7 @@ scope 块；`wakeflow_status` 按仓库根列出它们，往那里开窗口之�
 
 ## 它会碰你机器上的什么
 
-- 完全在你的机器上运行：一个走 stdio 的工具服务与观察 hook，都由 Agent 宿主以
+- 完全在你的机器上运行：一个走 stdio 的工具服务与插件的 hook，都由 Agent 宿主以
   `node` 启动。不联网、不发遥测、不需要账号。
 - 在工作区内写 `wakeflow.config.json`、`.wakeflow-active/`、`.wakeflow-local/`（运行时
   状态、hook 记录与它发布的宿主资产）、你选的账本目录、它管理的 Design 与 Test

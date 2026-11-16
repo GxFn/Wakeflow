@@ -161,7 +161,7 @@ sanctioned way to send again - or `{"disposition": "accepted", "hookRecordId":
 was merely missed. A resolution is your decision and is recorded as such; it is
 refused while the delivery is not indeterminate.
 
-`wakeflow_rearm_delivery` re-issues the permit for a rejected-before-send
+`wakeflow_rearm_delivery` (its `deliveryId` is on the route's rearm frontier in `wakeflow_status` with the Demand id - never search Wakeflow's files for it) re-issues the permit for a rejected-before-send
 delivery with a fresh claim and fence, at most three times per envelope. After
 that, prepare the target again for a new envelope. A window replaced since the permit was issued is the exception: its old envelope cannot be re-armed (`binding-changed`), so prepare the target again at once - `rearm-available` does not block that, and the new prompt names the current binding and Controller. On a transport where a window's session can be gone, check that the target's and the Controller's sessions still exist before you prepare, not after. Given the callback delivery
 of a result-reported target instead, it re-issues the wake-controller callback
@@ -179,7 +179,7 @@ which Wakeflow stores only as a digest; `controller-resolution` is your
 explicit resolution. Treat a self-reported landing as weaker than an observed
 one when you weigh a silent window. `wakeflow_prepare_delivery` itself refuses
 with `host-asset-<status>` when the published helper's bytes are not the
-artifact's (see `hostAssets` in `wakeflow_status`): reconcile first, and tell
+artifact's (see `hostAssets` in `wakeflow_status`): reconcile first. Right after a plugin update that drift is the update itself - the workspace still holds the previous version's helper - and needs no remark; otherwise tell
 the user that something rewrote the file.
 
 Never resend a prompt by hand because a window "looks idle". Duplicate work in

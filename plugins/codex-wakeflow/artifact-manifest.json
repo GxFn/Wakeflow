@@ -110,13 +110,13 @@
   "agentText": [
     {
       "path": "README.md",
-      "bytes": 13461,
-      "sha256": "sha256:c403da09066f2d539af7375aa2a3ea687e510d72591413d0a0c74d026ecd1751"
+      "bytes": 13446,
+      "sha256": "sha256:baaf257e75d12fa3b24d009883021289c425976dd3a9283543587fbb66fdea06"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 12399,
-      "sha256": "sha256:939dd98b519332068787db75e78307d3fdf3389fedfebc1d9fb48e281affa430"
+      "bytes": 12402,
+      "sha256": "sha256:fd9ecf8f8389bcd20af94990d9c275a79eda410c9632a4294224b6d554d0d3ee"
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
@@ -125,8 +125,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 25550,
-      "sha256": "sha256:f56caa7d0ab7e939dd89279090b1b941332bfd1ba304ab3a005db3f789c5fb7f"
+      "bytes": 25828,
+      "sha256": "sha256:f728f92c12be7f8a45fce0d2c54383c154c65970e19c107bf7db7ce3225888ba"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -145,8 +145,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 32261,
-      "sha256": "sha256:804a1310d74b4cb162c7b837b09a0f3e1738381ece8a321bb0393980a3fb22b7"
+      "bytes": 32331,
+      "sha256": "sha256:c63debfe50f0a263bae7baae0f72ad4940a80f31aacfda0f3cf8413e152664e0"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -203,15 +203,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 13461,
-      "sha256": "sha256:c403da09066f2d539af7375aa2a3ea687e510d72591413d0a0c74d026ecd1751",
+      "bytes": 13446,
+      "sha256": "sha256:baaf257e75d12fa3b24d009883021289c425976dd3a9283543587fbb66fdea06",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "README.zh-CN.md",
-      "bytes": 12399,
-      "sha256": "sha256:939dd98b519332068787db75e78307d3fdf3389fedfebc1d9fb48e281affa430",
+      "bytes": 12402,
+      "sha256": "sha256:fd9ecf8f8389bcd20af94990d9c275a79eda410c9632a4294224b6d554d0d3ee",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -791,8 +791,8 @@
     },
     {
       "path": "lib/contracts/generated/entrypoints/wakeflow-status-result.generated.js",
-      "bytes": 37790,
-      "sha256": "sha256:423a32fc0e59243676006d0879e9b65bdf4a96a61eb25e99a17245c369fe3fec",
+      "bytes": 38136,
+      "sha256": "sha256:a5bf70e8a4246fd835ea27797a57c6c2fe834a3fbf36b70ed19ebaee0dd9e38b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1358,8 +1358,22 @@
     },
     {
       "path": "lib/entrypoints/wakeflow-hook-observer.js",
-      "bytes": 36302,
-      "sha256": "sha256:1787baf4a50a0d2c2f7e453e42bc1df554e9a2b951f058a82f7e0b260d7b72e4",
+      "bytes": 24913,
+      "sha256": "sha256:5aaefcd56951ccbf6db61836731bc94bb3996dc492dfc0b0c69360f541888ec4",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/entrypoints/wakeflow-hook-workspaces.js",
+      "bytes": 13898,
+      "sha256": "sha256:369b8db25336c622242b537aa3f0a1d7d34992f06139d40a41f2916c05a44d0f",
+      "mode": "0644",
+      "scope": "shared"
+    },
+    {
+      "path": "lib/entrypoints/wakeflow-hook-write-guard.js",
+      "bytes": 11702,
+      "sha256": "sha256:5f7af52f063e1aabc7060c6c1f57ff5ef7beaedca3adf00adbb206d0d9619856",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1904,8 +1918,8 @@
     },
     {
       "path": "lib/governance/controller/demand-controller-route.js",
-      "bytes": 15496,
-      "sha256": "sha256:cc2db233a56650f97dc30615de30808a991642014026f7975a78b549eae0620e",
+      "bytes": 15920,
+      "sha256": "sha256:2a3a95a7002a5e886d7a610a039fbc9ffd2340a9dff9749e53e1e2dbdf65c443",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6636,8 +6650,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 25550,
-      "sha256": "sha256:f56caa7d0ab7e939dd89279090b1b941332bfd1ba304ab3a005db3f789c5fb7f",
+      "bytes": 25828,
+      "sha256": "sha256:f728f92c12be7f8a45fce0d2c54383c154c65970e19c107bf7db7ce3225888ba",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -6664,8 +6678,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 32261,
-      "sha256": "sha256:804a1310d74b4cb162c7b837b09a0f3e1738381ece8a321bb0393980a3fb22b7",
+      "bytes": 32331,
+      "sha256": "sha256:c63debfe50f0a263bae7baae0f72ad4940a80f31aacfda0f3cf8413e152664e0",
       "mode": "0644",
       "scope": "agent-text"
     },

@@ -76,7 +76,7 @@ status", "keep going", "open a pod for this".
 1. Install the plugin for your agent host.
 2. Make sure your agent host can start `node`: on the `PATH` it launches
    with, or the runtime the host itself supplies (Codex desktop). The plugin's
-   tool server and its observation hooks are started as `node`, and a host
+   tool server and its hooks are started as `node`, and a host
    that cannot find it fails silently. Wakeflow needs Node 24.19 or later
    below 25 (other versions are refused with one line on stderr before
    anything runs), `git`, and on Claude Code either `tmux` or the Claude
@@ -144,7 +144,10 @@ what trusting them means and, with your agreement, opens each in the desktop app
 records the trust without a further dialog on the current app version; if you would rather
 do it yourself, open each folder in the app or run `claude` in a terminal there and accept
 the dialog; nothing is trusted without your word - and approve the one card per folder the app may show when the Controller switches a
-window there to the `auto` permission mode (the folder remembers it). Maintenance also
+window there to the `auto` permission mode (the folder remembers it). Closing or
+restarting a window means archiving its session; under `auto` the app may refuse the
+Controller's request even after you agreed, and then you archive (and restore) that session in
+the sidebar yourself - the Controller tells you which one. Maintenance also
 writes precise allow rules for the published helper and the Wakeflow MCP tools into the
 workspace root's `.claude/settings.json`, and every window the helper launches is started
 with those two tools allowed, so product and test windows do not stop at a permission prompt for them
@@ -152,8 +155,9 @@ either; nothing broader such as `Bash(tmux *)` is written. Windows other than th
 also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,
 `.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that
 lowers the chance of a stray edit and is not isolation - a process running as you can still
-write there. Under desktop sessions these rules do not survive the app taking a session
-over, so they hold under the tmux transport only. A trust dialog for a root Wakeflow
+write there. Under desktop sessions these launch rules do not survive the app taking a
+session over; on both transports the plugin's hook also refuses the edit tools on those
+paths for a bound window other than the Controller, and shell commands are not checked. A trust dialog for a root Wakeflow
 wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a
 `..` directory in that list is 0.9.x residue or the repository's own settings: delete or
 review it before accepting, because accepting activates it.
@@ -222,7 +226,7 @@ failure on purpose: "we could not check" is never reported as "it is fine".
 ## What it touches on your machine
 
 - It runs entirely on your machine: a tool server over stdio and the
-  observation hooks, both started as `node` by your agent host. It makes no
+  plugin's hooks, both started as `node` by your agent host. It makes no
   network call, sends no telemetry and needs no account.
 - Inside the workspace it writes `wakeflow.config.json`, `.wakeflow-active/`,
   `.wakeflow-local/` (runtime state, hook records and the host assets it

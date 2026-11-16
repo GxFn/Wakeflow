@@ -425,65 +425,77 @@ function parseTracking(value: unknown): Readonly<WakeflowWorkspaceResourceTracki
   });
 }
 
+/** 文件节点的策略：权限、链接数与可执行位。 */
+function parseFileNodePolicy(
+  record: Readonly<Record<string, unknown>>,
+): Readonly<WakeflowWorkspaceResourceNodePolicy> {
+  assertExactFields(record, FILE_NODE_POLICY_FIELDS, "$/nodePolicy");
+  if (typeof record.mode !== "string" || !FILE_MODE_SET.has(record.mode)) {
+    fail("node-policy", "$/nodePolicy/mode");
+  }
+  if (record.linkPolicy !== "single-link" && record.linkPolicy !== "owner-defined") {
+    fail("node-policy", "$/nodePolicy/linkPolicy");
+  }
+  if (record.executablePolicy !== "forbidden" && record.executablePolicy !== "profile-declared") {
+    fail("node-policy", "$/nodePolicy/executablePolicy");
+  }
+  return Object.freeze({
+    kind: "file",
+    mode: record.mode as WakeflowWorkspaceResourceFileMode,
+    linkPolicy: record.linkPolicy,
+    executablePolicy: record.executablePolicy,
+  });
+}
+
+/** 目录节点的策略：权限，符号链接一律拒绝，已有目录的权限只观察不改。 */
+function parseDirectoryNodePolicy(
+  record: Readonly<Record<string, unknown>>,
+): Readonly<WakeflowWorkspaceResourceNodePolicy> {
+  assertExactFields(record, DIRECTORY_NODE_POLICY_FIELDS, "$/nodePolicy");
+  if (typeof record.mode !== "string" || !DIRECTORY_MODE_SET.has(record.mode)) {
+    fail("node-policy", "$/nodePolicy/mode");
+  }
+  if (record.symlinkPolicy !== "reject") {
+    fail("node-policy", "$/nodePolicy/symlinkPolicy");
+  }
+  if (record.existingModePolicy !== "observe-without-change") {
+    fail("node-policy", "$/nodePolicy/existingModePolicy");
+  }
+  return Object.freeze({
+    kind: "directory",
+    mode: record.mode as WakeflowWorkspaceResourceDirectoryMode,
+    symlinkPolicy: "reject",
+    existingModePolicy: "observe-without-change",
+  });
+}
+
+/** 目录树节点的策略：根的权限，符号链接一律拒绝，可执行位由清单声明或禁止。 */
+function parseTreeNodePolicy(
+  record: Readonly<Record<string, unknown>>,
+): Readonly<WakeflowWorkspaceResourceNodePolicy> {
+  assertExactFields(record, TREE_NODE_POLICY_FIELDS, "$/nodePolicy");
+  if (typeof record.rootMode !== "string" || !DIRECTORY_MODE_SET.has(record.rootMode)) {
+    fail("node-policy", "$/nodePolicy/rootMode");
+  }
+  if (record.symlinkPolicy !== "reject") {
+    fail("node-policy", "$/nodePolicy/symlinkPolicy");
+  }
+  if (record.executablePolicy !== "forbidden" && record.executablePolicy !== "manifest-declared") {
+    fail("node-policy", "$/nodePolicy/executablePolicy");
+  }
+  return Object.freeze({
+    kind: "tree",
+    rootMode: record.rootMode as WakeflowWorkspaceResourceDirectoryMode,
+    symlinkPolicy: "reject",
+    executablePolicy: record.executablePolicy,
+  });
+}
+
 function parseNodePolicy(value: unknown): Readonly<WakeflowWorkspaceResourceNodePolicy> {
   const record = plainRecord(value, "$/nodePolicy");
-  if (record.kind === "file") {
-    assertExactFields(record, FILE_NODE_POLICY_FIELDS, "$/nodePolicy");
-    if (typeof record.mode !== "string" || !FILE_MODE_SET.has(record.mode)) {
-      fail("node-policy", "$/nodePolicy/mode");
-    }
-    if (record.linkPolicy !== "single-link" && record.linkPolicy !== "owner-defined") {
-      fail("node-policy", "$/nodePolicy/linkPolicy");
-    }
-    if (record.executablePolicy !== "forbidden" && record.executablePolicy !== "profile-declared") {
-      fail("node-policy", "$/nodePolicy/executablePolicy");
-    }
-    return Object.freeze({
-      kind: "file",
-      mode: record.mode as WakeflowWorkspaceResourceFileMode,
-      linkPolicy: record.linkPolicy,
-      executablePolicy: record.executablePolicy,
-    });
-  }
-  if (record.kind === "directory") {
-    assertExactFields(record, DIRECTORY_NODE_POLICY_FIELDS, "$/nodePolicy");
-    if (typeof record.mode !== "string" || !DIRECTORY_MODE_SET.has(record.mode)) {
-      fail("node-policy", "$/nodePolicy/mode");
-    }
-    if (record.symlinkPolicy !== "reject") {
-      fail("node-policy", "$/nodePolicy/symlinkPolicy");
-    }
-    if (record.existingModePolicy !== "observe-without-change") {
-      fail("node-policy", "$/nodePolicy/existingModePolicy");
-    }
-    return Object.freeze({
-      kind: "directory",
-      mode: record.mode as WakeflowWorkspaceResourceDirectoryMode,
-      symlinkPolicy: "reject",
-      existingModePolicy: "observe-without-change",
-    });
-  }
-  if (record.kind === "tree") {
-    assertExactFields(record, TREE_NODE_POLICY_FIELDS, "$/nodePolicy");
-    if (typeof record.rootMode !== "string" || !DIRECTORY_MODE_SET.has(record.rootMode)) {
-      fail("node-policy", "$/nodePolicy/rootMode");
-    }
-    if (record.symlinkPolicy !== "reject") {
-      fail("node-policy", "$/nodePolicy/symlinkPolicy");
-    }
-    if (
-      record.executablePolicy !== "forbidden" &&
-      record.executablePolicy !== "manifest-declared"
-    ) {
-      fail("node-policy", "$/nodePolicy/executablePolicy");
-    }
-    return Object.freeze({
-      kind: "tree",
-      rootMode: record.rootMode as WakeflowWorkspaceResourceDirectoryMode,
-      symlinkPolicy: "reject",
-      executablePolicy: record.executablePolicy,
-    });
-  }
+  if (record.kind === "file") return parseFileNodePolicy(record);
+  if (record.kind === "directory") return parseDirectoryNodePolicy(record);
+  if (record.kind === "tree") return parseTreeNodePolicy(record);
   fail("node-policy", "$/nodePolicy/kind");
 }
 

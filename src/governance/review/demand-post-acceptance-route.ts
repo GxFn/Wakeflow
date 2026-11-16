@@ -690,6 +690,25 @@ function mapContextError(error: DemandOperationAuthorityContextError): never {
   fail("aborted");
 }
 
+/** 路线依据的评审快照；读不出按中止与评审两种原因归类。 */
+async function readReviewSnapshot(
+  demandRoot: Parameters<typeof readDemandResultReviewSnapshot>[0],
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DemandResultReviewSnapshot>> {
+  try {
+    return await readDemandResultReviewSnapshot(
+      demandRoot,
+      signal === undefined ? undefined : { signal },
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandResultReviewSnapshotError) {
+      if (error.reason === "aborted") fail("aborted");
+      fail("review");
+    }
+    throw error;
+  }
+}
+
 /**
  * 零写读取当前Demand的post-acceptance下一阶段路由；任何后续owner都必须重新复验其
  * `authorityDigest + reviewSnapshotDigest + observedEventStream`，不能把本读模型当成写许可。
@@ -716,19 +735,7 @@ export async function readDemandPostAcceptanceRoute(
   let result: Readonly<DemandPostAcceptanceRoute> | undefined;
   let failure: unknown;
   try {
-    let snapshot: Readonly<DemandResultReviewSnapshot>;
-    try {
-      snapshot = await readDemandResultReviewSnapshot(
-        context.demandRoot,
-        input.signal === undefined ? undefined : { signal: input.signal },
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandResultReviewSnapshotError) {
-        if (error.reason === "aborted") fail("aborted");
-        fail("review");
-      }
-      throw error;
-    }
+    const snapshot = await readReviewSnapshot(context.demandRoot, input.signal);
     result = buildDemandPostAcceptanceRoute(context.loaded, snapshot);
   } catch (error: unknown) {
     failure = error;

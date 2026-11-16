@@ -7,6 +7,7 @@ import {
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidateProgress,
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   ledgerRecordPublicationIntentRefForIdentity,
@@ -57,6 +58,38 @@ function parseExpectedIntent(value: unknown): Readonly<LedgerRecordPublicationIn
   }
 }
 
+/**
+ * 暂存目录必须已经写全才能接着发布：按意图里的树计划核对进度，没写全就要求调用方带着原始输入重试。
+ */
+async function completeStageCandidate(
+  root: RootedDirectory,
+  intent: Readonly<LedgerRecordPublicationIntent>,
+  stageNode: Readonly<FileNodeSnapshot>,
+  signal: AbortSignal | undefined,
+) {
+  let progress: Awaited<ReturnType<typeof inspectDirectoryTreeCandidateProgress>>;
+  try {
+    progress = await inspectDirectoryTreeCandidateProgress(root, intent.stageRef, intent.treePlan, {
+      expectedRootNode: stageNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof DurableDirectoryTreeCandidateError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("conflict", "$stage", error);
+    }
+    throw error;
+  }
+  if (progress.status !== "complete") {
+    fail("recovery-input-required", "$stage");
+  }
+  return Object.freeze({
+    candidateRootPath: progress.candidateRootPath,
+    plan: progress.plan,
+    rootNode: progress.rootNode,
+  });
+}
+
 async function recoverPublication(
   root: RootedDirectory,
   recordId: WakeflowDurableId<"requirement">,
@@ -94,32 +127,7 @@ async function recoverPublication(
     if (residues.stageNode === null) {
       fail("recovery-input-required", "$stage");
     }
-    let progress: Awaited<ReturnType<typeof inspectDirectoryTreeCandidateProgress>>;
-    try {
-      progress = await inspectDirectoryTreeCandidateProgress(
-        root,
-        stored.intent.stageRef,
-        stored.intent.treePlan,
-        {
-          expectedRootNode: residues.stageNode,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      );
-    } catch (error: unknown) {
-      if (error instanceof DurableDirectoryTreeCandidateError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
-        fail("conflict", "$stage", error);
-      }
-      throw error;
-    }
-    if (progress.status !== "complete") {
-      fail("recovery-input-required", "$stage");
-    }
-    const candidate = Object.freeze({
-      candidateRootPath: progress.candidateRootPath,
-      plan: progress.plan,
-      rootNode: progress.rootNode,
-    });
+    const candidate = await completeStageCandidate(root, stored.intent, residues.stageNode, signal);
     await publishLedgerRecordStage(root, stored.intent, candidate, signal);
     const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
     const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);

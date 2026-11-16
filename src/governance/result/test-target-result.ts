@@ -5,6 +5,7 @@ import {
   type DeliveryEnvelope,
   DeliveryEnvelopeError,
   parseDeliveryEnvelope,
+  type TestDeliveryEnvelope,
 } from "../delivery/delivery-envelope.js";
 import {
   parseTaskPackage,
@@ -104,12 +105,13 @@ function assertReportMatchesContract(
   }
 }
 
-export function createTestTargetResult(
-  input: Readonly<CreateTestTargetResultInput>,
-): Readonly<TestTargetResult> {
+/** 测试结果依据的任务包与信封：都是测试类型，信封对得上任务包，信封里的尝试也对得上任务包。 */
+function parseTestPackageAndEnvelope(input: Readonly<CreateTestTargetResultInput>): Readonly<{
+  taskPackage: Readonly<TestTaskPackage>;
+  envelope: Readonly<TestDeliveryEnvelope>;
+}> {
   let taskPackage: ReturnType<typeof parseTaskPackage>;
   let envelope: ReturnType<typeof parseDeliveryEnvelope>;
-  let report: ReturnType<typeof parseTestTargetResultReport>;
   try {
     taskPackage = parseTaskPackage(input.taskPackage);
   } catch (error: unknown) {
@@ -131,6 +133,14 @@ export function createTestTargetResult(
     if (error instanceof TestExecutionAttemptError) fail("envelope");
     throw error;
   }
+  return { taskPackage, envelope };
+}
+
+export function createTestTargetResult(
+  input: Readonly<CreateTestTargetResultInput>,
+): Readonly<TestTargetResult> {
+  const { taskPackage, envelope } = parseTestPackageAndEnvelope(input);
+  let report: ReturnType<typeof parseTestTargetResultReport>;
   try {
     report = parseTestTargetResultReport(input.report);
   } catch (error: unknown) {

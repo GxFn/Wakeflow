@@ -146,6 +146,55 @@ function stringArray(value: unknown): readonly string[] | null {
     : null;
 }
 
+/** 一份 settings 文本的 `permissions` 对象：文本不是 JSON 为 "unreadable"，文档里没有这一段为 null。 */
+function settingsPermissionsOf(
+  text: string,
+): Readonly<Record<string, unknown>> | "unreadable" | null {
+  let document: unknown;
+  try {
+    document = JSON.parse(text);
+  } catch {
+    return "unreadable";
+  }
+  if (typeof document !== "object" || document === null || Array.isArray(document)) return null;
+  const permissions = (document as Record<string, unknown>).permissions;
+  if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions)) {
+    return null;
+  }
+  return permissions as Record<string, unknown>;
+}
+
+/** 一份 settings 里的两类残留：0.9.x 留下的宽 Bash 放行规则，与指向上级目录的附加目录。 */
+function reportSettingsResidue(
+  collector: Collector,
+  root: WakeflowLegacyResidueRoot,
+  relative: string,
+  text: string,
+  permissions: Readonly<Record<string, unknown>>,
+): void {
+  const allow = stringArray(permissions.allow) ?? [];
+  for (const rule of WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES) {
+    if (!allow.includes(rule)) continue;
+    push(collector, {
+      root: root.key,
+      kind: "broad-permission",
+      path: relative,
+      line: lineOf(text, JSON.stringify(rule)),
+      detail: rule,
+    });
+  }
+  const additional = stringArray(permissions.additionalDirectories) ?? [];
+  if (additional.includes(WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY)) {
+    push(collector, {
+      root: root.key,
+      kind: "additional-directories",
+      path: relative,
+      line: lineOf(text, "additionalDirectories"),
+      detail: WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY,
+    });
+  }
+}
+
 async function scanSettingsFiles(
   collector: Collector,
   root: WakeflowLegacyResidueRoot,
@@ -156,39 +205,13 @@ async function scanSettingsFiles(
       nodePath.join(root.absolutePath, ...relative.split("/")),
     );
     if (text === null) continue;
-    let document: unknown;
-    try {
-      document = JSON.parse(text);
-    } catch {
+    const permissions = settingsPermissionsOf(text);
+    if (permissions === "unreadable") {
       collector.unreadable += 1;
       continue;
     }
-    if (typeof document !== "object" || document === null || Array.isArray(document)) continue;
-    const permissions = (document as Record<string, unknown>).permissions;
-    if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions))
-      continue;
-    const allow = stringArray((permissions as Record<string, unknown>).allow) ?? [];
-    for (const rule of WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES) {
-      if (!allow.includes(rule)) continue;
-      push(collector, {
-        root: root.key,
-        kind: "broad-permission",
-        path: relative,
-        line: lineOf(text, JSON.stringify(rule)),
-        detail: rule,
-      });
-    }
-    const additional =
-      stringArray((permissions as Record<string, unknown>).additionalDirectories) ?? [];
-    if (additional.includes(WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY)) {
-      push(collector, {
-        root: root.key,
-        kind: "additional-directories",
-        path: relative,
-        line: lineOf(text, "additionalDirectories"),
-        detail: WAKEFLOW_LEGACY_ADDITIONAL_DIRECTORY,
-      });
-    }
+    if (permissions === null) continue;
+    reportSettingsResidue(collector, root, relative, text, permissions);
   }
 }
 

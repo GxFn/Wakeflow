@@ -138,6 +138,61 @@ function isJsonObject(value: JsonValue): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function parseRecordedAt(value: unknown): UtcInstant {
+  try {
+    return parseUtcInstant(value, "$/recordedAt");
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) fail("time", "$/recordedAt", error);
+    throw error;
+  }
+}
+
+/** 事件数据是一个 JSON 对象：不是合法 JSON 是 json，不是对象是 schema。 */
+function parseEventData(value: unknown) {
+  let data: JsonValue;
+  try {
+    data = parseJsonValue(value, "$/data");
+  } catch (error: unknown) {
+    if (error instanceof JsonValueError) fail("json", "$/data", error);
+    throw error;
+  }
+  if (!isJsonObject(data)) {
+    fail("schema", "$/data");
+  }
+  return data;
+}
+
+function parseResultingStateDigest(value: unknown): Sha256Digest {
+  try {
+    return parseSha256Digest(value, "$/resultingStateDigest");
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail("digest", "$/resultingStateDigest", error);
+    throw error;
+  }
+}
+
+function parseResultingStateModelVersion(value: unknown): DemandEventSourcingStateModelVersion {
+  try {
+    return parseDemandEventSourcingStateModelVersion(value, "$/resultingStateModelVersion");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingStateVersionError) {
+      fail("state-version", "$/resultingStateModelVersion", error);
+    }
+    throw error;
+  }
+}
+
+function parseStreamRevision(value: unknown): DemandEventStreamRevision {
+  try {
+    return parseDemandEventStreamRevision(value, "$/streamRevision");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("revision", "$/streamRevision", error);
+    }
+    throw error;
+  }
+}
+
 /** 解析 envelope；未知 eventType/eventVersion 在本层仍是有效路由事实。 */
 export function parseDemandEventSourcingPersistedEventEnvelope(
   value: unknown,
@@ -152,51 +207,13 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
   const result = validateWire(json);
   if (!result.ok) fail("schema", result.path);
   const wire = result.value;
-  let recordedAt: UtcInstant;
-  try {
-    recordedAt = parseUtcInstant(wire.recordedAt, "$/recordedAt");
-  } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("time", "$/recordedAt", error);
-    throw error;
-  }
-  let data: JsonValue;
-  try {
-    data = parseJsonValue(wire.data, "$/data");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("json", "$/data", error);
-    throw error;
-  }
-  if (!isJsonObject(data)) {
-    fail("schema", "$/data");
-  }
-  let resultingStateDigest: Sha256Digest;
-  try {
-    resultingStateDigest = parseSha256Digest(wire.resultingStateDigest, "$/resultingStateDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$/resultingStateDigest", error);
-    throw error;
-  }
-  let resultingStateModelVersion: DemandEventSourcingStateModelVersion;
-  try {
-    resultingStateModelVersion = parseDemandEventSourcingStateModelVersion(
-      wire.resultingStateModelVersion,
-      "$/resultingStateModelVersion",
-    );
-  } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingStateVersionError) {
-      fail("state-version", "$/resultingStateModelVersion", error);
-    }
-    throw error;
-  }
-  let streamRevision: DemandEventStreamRevision;
-  try {
-    streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamPositionError) {
-      fail("revision", "$/streamRevision", error);
-    }
-    throw error;
-  }
+  const recordedAt = parseRecordedAt(wire.recordedAt);
+  const data = parseEventData(wire.data);
+  const resultingStateDigest = parseResultingStateDigest(wire.resultingStateDigest);
+  const resultingStateModelVersion = parseResultingStateModelVersion(
+    wire.resultingStateModelVersion,
+  );
+  const streamRevision = parseStreamRevision(wire.streamRevision);
   return Object.freeze({
     artifactKind: DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION,

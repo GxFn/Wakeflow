@@ -138,18 +138,21 @@ function candidateOptions(signal: AbortSignal | undefined) {
   });
 }
 
+function parsePublicationRecord(value: unknown): Readonly<LedgerAuthorityRecord> {
+  try {
+    return parseLedgerAuthorityRecord(value);
+  } catch (error: unknown) {
+    if (error instanceof LedgerAuthorityRecordError) fail("input", "$record", error);
+    throw error;
+  }
+}
+
 function preparePublication(
   recordValue: unknown,
   membersValue: readonly LedgerAuthorityMemberInput[],
   signal: AbortSignal | undefined,
 ): Readonly<PreparedPublication> {
-  let record: Readonly<LedgerAuthorityRecord>;
-  try {
-    record = parseLedgerAuthorityRecord(recordValue);
-  } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityRecordError) fail("input", "$record", error);
-    throw error;
-  }
+  const record = parsePublicationRecord(recordValue);
   const members = parseMembers(membersValue, record);
   const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
   if (recordBytes.byteLength > LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES) {
@@ -234,6 +237,26 @@ async function createOrSettleStage(
   }
 }
 
+/**
+ * final 已经在了：有意图记录就按"已提交"收尾（清掉意图）；没有意图记录而暂存目录还在，是需要恢复的残留；
+ * 两者都没有，就是之前已经发布完的同一份记录，读回来核对。
+ */
+async function loadAlreadyPublished(
+  root: RootedDirectory,
+  prepared: Readonly<PreparedPublication>,
+  storedBefore: Awaited<ReturnType<typeof existingLedgerRecordPublicationIntentOrNull>>,
+  residuesBefore: Awaited<ReturnType<typeof inspectLedgerRecordPublicationResidues>>,
+  signal: AbortSignal | undefined,
+): ReturnType<typeof loadExactPublishedLedgerRecord> {
+  if (storedBefore !== null) {
+    return settleCommittedLedgerIntent(root, storedBefore, residuesBefore, signal);
+  }
+  if (residuesBefore.stageNode !== null) {
+    fail("recovery-required", "$stage");
+  }
+  return loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+}
+
 /** 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。 */
 export async function publishLedgerAuthorityRecord(
   root: RootedDirectory,
@@ -259,19 +282,13 @@ export async function publishLedgerAuthorityRecord(
     const residuesBefore = await inspectLedgerRecordPublicationResidues(root, prepared.intent);
     const finalNode = await ledgerPublicationResourceNodeOrNull(root, prepared.intent.finalRootRef);
     if (finalNode !== null) {
-      if (storedBefore !== null) {
-        const loaded = await settleCommittedLedgerIntent(
-          root,
-          storedBefore,
-          residuesBefore,
-          signal,
-        );
-        return Object.freeze({ wroteAuthority: false, loaded });
-      }
-      if (residuesBefore.stageNode !== null) {
-        fail("recovery-required", "$stage");
-      }
-      const loaded = await loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+      const loaded = await loadAlreadyPublished(
+        root,
+        prepared,
+        storedBefore,
+        residuesBefore,
+        signal,
+      );
       return Object.freeze({ wroteAuthority: false, loaded });
     }
     if (storedBefore === null && residuesBefore.stageNode !== null) {

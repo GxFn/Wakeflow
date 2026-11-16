@@ -215,6 +215,35 @@ export async function inspectWakeflowSharedCoordinationLayout(
   });
 }
 
+/** 把一条声明的目录建出来；交回这一次是否新建了它。 */
+async function materializeDeclaredDirectory(
+  root: RootedDirectory,
+  declaration: (typeof WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS)[number],
+  signal: AbortSignal | undefined,
+): Promise<boolean> {
+  const ref = declaration.placement.relativePath;
+  if (ref === null) fail("authority", "$declarations");
+  try {
+    admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
+    const result = await materializeDirectoryPath(root, ref, {
+      mode: 0o700,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const target = result.segments.find((entry) => entry.resourcePath === ref);
+    return target?.disposition === "created";
+  } catch (error: unknown) {
+    if (error instanceof WakeflowResourceProcessingContractError) {
+      fail("authority", "$declarations", error);
+    }
+    if (error instanceof DurableDirectoryMaterializationError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("operation-failure", `$layout/${ref}`, error);
+    }
+    throw error;
+  }
+}
+
 /** 按fresh/recover/ensure语义耐久物化三层共享协调目录。 */
 export async function materializeWakeflowSharedCoordinationLayout(
   root: RootedDirectory,
@@ -228,26 +257,8 @@ export async function materializeWakeflowSharedCoordinationLayout(
   }
   let createdDirectoryCount = 0;
   for (const declaration of WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS) {
-    const ref = declaration.placement.relativePath;
-    if (ref === null) fail("authority", "$declarations");
-    try {
-      admitWakeflowResourceOperation(declaration.processing, "materialize-directory");
-      const result = await materializeDirectoryPath(root, ref, {
-        mode: 0o700,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      });
-      const target = result.segments.find((entry) => entry.resourcePath === ref);
-      if (target?.disposition === "created") createdDirectoryCount += 1;
-    } catch (error: unknown) {
-      if (error instanceof WakeflowResourceProcessingContractError) {
-        fail("authority", "$declarations", error);
-      }
-      if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
-        if (error.reason === "root-scope") fail("root-scope", "$root", error);
-        fail("operation-failure", `$layout/${ref}`, error);
-      }
-      throw error;
+    if (await materializeDeclaredDirectory(root, declaration, options.signal)) {
+      createdDirectoryCount += 1;
     }
   }
   const after = await inspectWakeflowSharedCoordinationLayout(root);

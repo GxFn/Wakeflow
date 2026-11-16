@@ -388,6 +388,48 @@ export function createDemandAuthority(
   );
 }
 
+/** 准入的选项只认一个 `signal`，并且必须是真的 AbortSignal。 */
+function parseAdmissionSignal(options: unknown): AbortSignal | undefined {
+  let optionRecord: Readonly<Record<string, unknown>>;
+  try {
+    optionRecord = parsePlainRecord(options === undefined ? {} : options, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
+    throw error;
+  }
+  if (
+    Object.keys(optionRecord).some((key) => key !== "signal") ||
+    (optionRecord.signal !== undefined &&
+      (typeof optionRecord.signal !== "object" ||
+        optionRecord.signal === null ||
+        types.isProxy(optionRecord.signal) ||
+        !(optionRecord.signal instanceof AbortSignal)))
+  ) {
+    fail("input", "$options");
+  }
+  return optionRecord.signal as AbortSignal | undefined;
+}
+
+/** 向账本解析权威引用；账本自己的失败归成中止或解析失败。 */
+async function resolveAuthorityReferences(
+  ledgerStore: LedgerAuthorityStore,
+  references: Parameters<LedgerAuthorityStore["resolveMemberReferences"]>[0],
+  signal: AbortSignal | undefined,
+): Promise<Awaited<ReturnType<LedgerAuthorityStore["resolveMemberReferences"]>>> {
+  try {
+    return await ledgerStore.resolveMemberReferences(
+      references,
+      signal === undefined ? undefined : { signal },
+    );
+  } catch (error: unknown) {
+    if (error instanceof LedgerAuthorityStoreError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("resolution", "$/authorityRefs", error);
+    }
+    throw error;
+  }
+}
+
 /**
  * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program；
  * 成员与身份需求包记录的绑定由解析时的身份关系检查保证。
@@ -408,39 +450,14 @@ export async function admitDemandAuthority(
   ) {
     fail("input", "$ledgerStore");
   }
-  let optionRecord: Readonly<Record<string, unknown>>;
-  try {
-    optionRecord = parsePlainRecord(options === undefined ? {} : options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(optionRecord).some((key) => key !== "signal") ||
-    (optionRecord.signal !== undefined &&
-      (typeof optionRecord.signal !== "object" ||
-        optionRecord.signal === null ||
-        types.isProxy(optionRecord.signal) ||
-        !(optionRecord.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  const signal = optionRecord.signal as AbortSignal | undefined;
+  const signal = parseAdmissionSignal(options);
   if (signal?.aborted === true) fail("aborted", "$signal");
   const resolved: ResolvedDemandAuthorityReference[] = [];
-  let ledgerResolutions: Awaited<ReturnType<LedgerAuthorityStore["resolveMemberReferences"]>>;
-  try {
-    ledgerResolutions = await ledgerStore.resolveMemberReferences(
-      authority.authorityRefs,
-      signal === undefined ? undefined : { signal },
-    );
-  } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      fail("resolution", "$/authorityRefs", error);
-    }
-    throw error;
-  }
+  const ledgerResolutions = await resolveAuthorityReferences(
+    ledgerStore,
+    authority.authorityRefs,
+    signal,
+  );
   for (const [index, resolution] of ledgerResolutions.entries()) {
     const record = resolution.loaded;
     if (record.record.programId !== identity.programId) {

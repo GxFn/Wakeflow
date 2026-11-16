@@ -49,6 +49,22 @@ import {
  * 摘要和 Matrix 摘要全部闭合才返回成功；锁残留与不确定提交由显式恢复 owner 处理。
  */
 
+/** 提交之前的检查失败：按检查错误的原因归类；认不出的一律是来源无效。 */
+function failInspectionBeforeCommit(error: unknown): never {
+  if (error instanceof WakeflowProgramInstructionInspectionError) {
+    if (error.reason === "aborted") fail("aborted", "$signal", error);
+    if (error.reason === "unsupported-platform") {
+      fail("unsupported-platform", "$root", error);
+    }
+    if (error.reason === "target-capacity") fail("capacity", "$target", error);
+    if (error.reason === "source-capacity") fail("capacity", "$source", error);
+    if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
+      fail("input", error.path, error);
+    }
+  }
+  fail("source-invalid", "$source", error);
+}
+
 async function inspectCurrent(
   root: RootedDirectory,
   request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
@@ -62,19 +78,7 @@ async function inspectCurrent(
     );
   } catch (error: unknown) {
     if (afterCommit) fail("commit-uncertain", "$resourcePath", error);
-    if (error instanceof WakeflowProgramInstructionInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "unsupported-platform") {
-        fail("unsupported-platform", "$root", error);
-      }
-      if (error.reason === "target-capacity") fail("capacity", "$target", error);
-      if (error.reason === "source-capacity") fail("capacity", "$source", error);
-      if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-        fail("input", error.path, error);
-      }
-      fail("source-invalid", "$source", error);
-    }
-    fail("source-invalid", "$source", error);
+    failInspectionBeforeCommit(error);
   }
 }
 

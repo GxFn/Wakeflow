@@ -54,6 +54,22 @@ import {
  * 退休崩溃锁残留；锁残留和不确定提交由显式恢复职责所有者处理。
  */
 
+/** 提交之前的检查失败：按检查错误的原因归类；不是检查错误的一律算观察失败。 */
+function failInspectionBeforeCommit(error: unknown): never {
+  if (error instanceof WakeflowGitignoreInspectionError) {
+    if (error.reason === "aborted") fail("aborted", "$signal", error);
+    if (error.reason === "target-capacity") fail("capacity", "$target", error);
+    if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
+      fail("input", error.path, error);
+    }
+    if (error.reason === "git" || error.reason === "git-repository") {
+      fail("observation-failure", "$git", error);
+    }
+    fail("source-invalid", "$source", error);
+  }
+  fail("observation-failure", "$git", error);
+}
+
 async function inspectCurrent(
   root: RootedDirectory,
   request: Readonly<ParsedWakeflowGitignoreRecompositionRequest>,
@@ -67,18 +83,7 @@ async function inspectCurrent(
     );
   } catch (error: unknown) {
     if (afterCommit) fail("commit-uncertain", "$resourcePath", error);
-    if (error instanceof WakeflowGitignoreInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "target-capacity") fail("capacity", "$target", error);
-      if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
-        fail("input", error.path, error);
-      }
-      if (error.reason === "git" || error.reason === "git-repository") {
-        fail("observation-failure", "$git", error);
-      }
-      fail("source-invalid", "$source", error);
-    }
-    fail("observation-failure", "$git", error);
+    failInspectionBeforeCommit(error);
   }
 }
 

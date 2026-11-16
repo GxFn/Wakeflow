@@ -181,6 +181,59 @@ function hasTarget(
   );
 }
 
+function parseRequestProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
+  try {
+    return parseWakeflowWorkspaceHostResourceProfile(value);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
+      fail("input", "$request.profile", error);
+    }
+    throw error;
+  }
+}
+
+function parseRequestTarget(value: unknown): Readonly<WakeflowExternalInstructionTarget> {
+  try {
+    return parseWakeflowExternalInstructionTarget(value, "$request.target");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
+      fail("input", error.path, error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 当前配置与它的期望摘要成对出现：没有当前配置时摘要也必须是 null；有的话摘要要对得上，并且与期望配置
+ * 是同一个 program。
+ */
+function parseCurrentConfigPair(
+  record: Readonly<Record<string, unknown>>,
+  desiredConfig: WakeflowConfigModel,
+): Readonly<{
+  currentConfig: WakeflowConfigModel | null;
+  currentConfigDigest: Sha256Digest | null;
+}> {
+  if (record.currentConfig === null) {
+    if (record.expectedCurrentConfigDigest !== null) {
+      fail("input", "$request.expectedCurrentConfigDigest");
+    }
+    return { currentConfig: null, currentConfigDigest: null };
+  }
+  const currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
+  const currentConfigDigest = parseDigest(
+    record.expectedCurrentConfigDigest,
+    "$request.expectedCurrentConfigDigest",
+  );
+  if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
+    fail("input", "$request.expectedCurrentConfigDigest");
+  }
+  if (currentConfig.program.programId !== desiredConfig.program.programId) {
+    fail("input", "$request.desiredConfig.program.programId");
+  }
+  return { currentConfig, currentConfigDigest };
+}
+
 /** 快照并绑定 Host Profile、target 与 current/desired Config 摘要。 */
 export function parseWakeflowExternalInstructionInspectionRequest(
   value: unknown,
@@ -209,24 +262,8 @@ export function parseWakeflowExternalInstructionInspectionRequest(
   ) {
     fail("input", "$request");
   }
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$request.profile", error);
-    }
-    throw error;
-  }
-  let target: Readonly<WakeflowExternalInstructionTarget>;
-  try {
-    target = parseWakeflowExternalInstructionTarget(record.target, "$request.target");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-      fail("input", error.path, error);
-    }
-    throw error;
-  }
+  const profile = parseRequestProfile(record.profile);
+  const target = parseRequestTarget(record.target);
   const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
   const desiredConfigDigest = parseDigest(
     record.expectedDesiredConfigDigest,
@@ -236,27 +273,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(
     fail("input", "$request.expectedDesiredConfigDigest");
   }
   if (!hasTarget(desiredConfig, target)) fail("input", "$request.target");
-  let currentConfig: WakeflowConfigModel | null;
-  let currentConfigDigest: Sha256Digest | null;
-  if (record.currentConfig === null) {
-    if (record.expectedCurrentConfigDigest !== null) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    currentConfig = null;
-    currentConfigDigest = null;
-  } else {
-    currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
-    currentConfigDigest = parseDigest(
-      record.expectedCurrentConfigDigest,
-      "$request.expectedCurrentConfigDigest",
-    );
-    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    if (currentConfig.program.programId !== desiredConfig.program.programId) {
-      fail("input", "$request.desiredConfig.program.programId");
-    }
-  }
+  const { currentConfig, currentConfigDigest } = parseCurrentConfigPair(record, desiredConfig);
   return Object.freeze({
     profile,
     target,

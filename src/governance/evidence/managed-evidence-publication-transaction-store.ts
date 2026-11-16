@@ -429,6 +429,45 @@ function assertStoredCapability(
   }
 }
 
+/** 退役之前按原节点重读日志：中止与根作用域原样抛，其余读不出都是与当前状态冲突。 */
+async function readCurrentForRetirement(
+  root: RootedDirectory,
+  node: Readonly<FileNodeSnapshot>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
+  try {
+    return await readStoredAtNode(root, node, signal);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
+      if (error.reason === "aborted") throw error;
+      if (error.reason === "root-scope") throw error;
+      fail("conflict", "$transaction", error);
+    }
+    throw error;
+  }
+}
+
+/** 按节点精确删除日志文件；删不掉而又不是中止或根作用域的，一律需要恢复。 */
+async function unlinkJournalExactly(
+  root: RootedDirectory,
+  expectedNode: Readonly<FileNodeSnapshot>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<ExactRegularFileUnlinkReceipt>> {
+  try {
+    return await unlinkRegularFileExactly(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {
+      expectedNode,
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof ExactRegularFileUnlinkError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (error.reason === "root-scope") fail("root-scope", "$root", error);
+      fail("recovery-required", "$transaction", error);
+    }
+    throw error;
+  }
+}
+
 /** 只退休Store重新读证后的exact journal；缺失、替换或提交不确定均不伪造成功。 */
 export async function retireManagedEvidencePublicationTransactionJournal(
   root: RootedDirectory,
@@ -440,17 +479,7 @@ export async function retireManagedEvidencePublicationTransactionJournal(
   assertStoredCapability(storedValue);
   assertNotAborted(options.signal);
   admitMutation(storedValue.transaction, "exact-retire");
-  let current: Readonly<StoredManagedEvidencePublicationTransaction>;
-  try {
-    current = await readStoredAtNode(root, storedValue.source.node, options.signal);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
-      if (error.reason === "aborted") throw error;
-      if (error.reason === "root-scope") throw error;
-      fail("conflict", "$transaction", error);
-    }
-    throw error;
-  }
+  const current = await readCurrentForRetirement(root, storedValue.source.node, options.signal);
   if (
     current.transactionDigest !== storedValue.transactionDigest ||
     !sameFileNodeSnapshot(current.source.node, storedValue.source.node) ||
@@ -458,24 +487,7 @@ export async function retireManagedEvidencePublicationTransactionJournal(
   ) {
     fail("conflict", "$transaction");
   }
-  let retirement: Readonly<ExactRegularFileUnlinkReceipt>;
-  try {
-    retirement = await unlinkRegularFileExactly(
-      root,
-      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-      {
-        expectedNode: current.source.node,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      },
-    );
-  } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "root-scope") fail("root-scope", "$root", error);
-      fail("recovery-required", "$transaction", error);
-    }
-    throw error;
-  }
+  const retirement = await unlinkJournalExactly(root, current.source.node, options.signal);
   ISSUED_STORED_TRANSACTIONS.delete(storedValue);
   return Object.freeze({
     transactionDigest: storedValue.transactionDigest,

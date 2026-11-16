@@ -16,13 +16,13 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA } from "../../../src/contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
-import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import type { WakeflowWindowRole } from "../../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { createRuntimeJsonSchemaValidator } from "../../../src/foundation/schema/runtime-json-schema.js";
+import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_COMMAND,
   CLAUDE_CODE_DESKTOP_ASSET_CONTENT,
@@ -709,8 +709,12 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
   deepEqual(run.json.background, { id: SHORT_ID, firstTurn: "done", stopped: true });
   equal(run.json.worktreePrepared, "not-requested");
   equal(run.json.worktreeObservation, undefined);
-  // 受管路径的写拒绝（F1）：规则随后台会话的启动参数带入，结果只报数目。
-  deepEqual(run.json.writeDeny, expectedClaudeCodeWriteDenyReport("product"));
+  // 受管路径的写拒绝（F1）：规则随后台会话的启动参数带入，结果报数目，并如实标出接管进桌面之后它们
+  // 不再跟着会话（1.3.0 终验实测，open-items X30）。
+  deepEqual(run.json.writeDeny, {
+    ...expectedClaudeCodeWriteDenyReport("product"),
+    afterTakeover: "not-carried",
+  });
   const observation = run.json.observation as Record<string, unknown>;
   deepEqual(Object.keys(observation).sort(), [
     "desktop",
@@ -794,7 +798,10 @@ test("launch runs the three steps in order: claude --bg with the prompt first an
   const controllerStart = callLog(current)[1] ?? [];
   equal(controllerStart[2], startupPrompt(CONTROLLER_WINDOW_ID, "controller", "Controller"));
   assertSessionPermissionRules(current, controllerStart.slice(1), "controller");
-  deepEqual(controller.json.writeDeny, expectedClaudeCodeWriteDenyReport("controller"));
+  deepEqual(controller.json.writeDeny, {
+    ...expectedClaudeCodeWriteDenyReport("controller"),
+    afterTakeover: "not-carried",
+  });
   deepEqual(controller.json.window, { name: "Controller", cwd: "." });
   equal(readFileSync(path.join(current.state, "bg-cwd.txt"), "utf8").trim(), current.root);
 });

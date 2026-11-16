@@ -98,8 +98,10 @@ const WINDOW_LAUNCH =
   "ledger - and the result's `writeDeny` counts them: `unexpressed` above 0 means that many " +
   "of those paths got no rule (the path has characters a rule cannot spell, or the config " +
   "names no ledger root), so tell the user. The rules stop the host's edit tools and the " +
-  "file commands it recognizes, not every process, and it is not yet confirmed that they " +
-  "outlive the takeover into the desktop app: never tell the user a window cannot write " +
+  "file commands it recognizes, not every process, and under desktop sessions they do not " +
+  "outlive the takeover into the app (the desktop helper's result says " +
+  '`afterTakeover: "not-carried"`; a window there can write those paths, only its ' +
+  "instruction file tells it not to): never tell the user a window cannot write " +
   "there. The workspace root's `.claude/settings.json` carries those " +
   "two rules, Design and Test carry only their role's tools, and a product repository's " +
   "`.claude/settings.json` is never written, so a trust dialog for a Wakeflow-written root " +
@@ -434,7 +436,8 @@ const HOST_TRUST_STEPS_EN = [
   "also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,",
   "`.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that",
   "lowers the chance of a stray edit and is not isolation - a process running as you can still",
-  "write there. A trust dialog for a root Wakeflow",
+  "write there. Under desktop sessions these rules do not survive the app taking a session",
+  "over, so they hold under the tmux transport only. A trust dialog for a root Wakeflow",
   "wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a",
   "`..` directory in that list is 0.9.x residue or the repository's own settings: delete or",
   "review it before accepting, because accepting activates it.",
@@ -475,6 +478,7 @@ const HOST_TRUST_STEPS_ZH = [
   "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。Controller 之外的窗口启动时还带着",
   "对 Wakeflow 自身文件（`.wakeflow-local`、`.wakeflow-active`、`wakeflow.config.json`、根上的 Claude",
   "settings 与账本）的编辑拒绝规则：它降低误改的机会，不是隔离——以你的身份运行的进程仍然写得了那里。",
+  "桌面会话传输下这些规则过不了应用对会话的接管，所以只在 tmux 传输下成立。",
   "因此 Wakeflow 写过的根，",
   "其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，",
   "那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。",

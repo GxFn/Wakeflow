@@ -3,7 +3,7 @@
 // wakeflow-desktop-helper-schema: 1
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { HelperFailure, emit, refuse, unexpectedDetail } from "./shared/failure.mjs";
+import { emit, HelperFailure, refuse, unexpectedDetail } from "./shared/failure.mjs";
 import {
   DEFAULT_LANDING_WAIT_SECONDS,
   HOOK_POLL_MS,
@@ -15,44 +15,44 @@ import {
   waitForNewSessionStart,
 } from "./shared/hook-records.mjs";
 import {
-  MAX_VERSION,
-  NODE_ENGINES,
   boundedDetail,
   claudeInstallForm,
   git,
   hostVersionOf,
+  MAX_VERSION,
+  NODE_ENGINES,
   nodeVersionSupported,
   run,
   versionOf,
 } from "./shared/host-process.mjs";
+import { withObservationFiles } from "./shared/observation-files.mjs";
 import {
   DIGEST_PATTERN,
   PERMIT_PROMPT_REF_PATTERN,
   promptDigestOf,
   promptPermitIdsOf,
 } from "./shared/prompt-rules.mjs";
-import { withObservationFiles } from "./shared/observation-files.mjs";
 import { MAX_STDIN_BYTES, readStdinJson } from "./shared/stdin.mjs";
-import { MAX_LABEL, SGR_PATTERN, cleanLabel } from "./shared/text.mjs";
+import { cleanLabel, MAX_LABEL, SGR_PATTERN } from "./shared/text.mjs";
 import {
   BINDINGS,
   HANDLE_KIND,
   HOST_ID,
+  knownRole,
   LOCATORS,
   MAX_RECORD_BYTES,
-  ROOT,
-  UUID_PATTERN,
-  WORKSPACE_ROOT_PLACEHOLDER,
-  knownRole,
   parseWindowId,
+  ROOT,
   readBoundedJson,
   readConfig,
   realpathOrNull,
   resolvePlacement,
   sessionRuleArguments,
   sessionWriteDenyReport,
+  UUID_PATTERN,
+  WORKSPACE_ROOT_PLACEHOLDER,
 } from "./shared/workspace.mjs";
-import { WORKTREE_NAME_PATTERN, observeWorktree, prepareWorktree } from "./shared/worktree.mjs";
+import { observeWorktree, prepareWorktree, WORKTREE_NAME_PATTERN } from "./shared/worktree.mjs";
 
 // 启动意图的执行种类（ADR-0025 D3）：tmux 意图是 "claude-code"，桌面意图另有一种，参数里没有 --session-id。
 const EXECUTION_KIND = "claude-code-desktop";
@@ -757,8 +757,10 @@ function commandLaunch(options) {
       hook: { sessionStart: "observed" },
       window: { name: title, cwd: cwd.relative },
       background: { id: session.shortId, firstTurn: session.state, stopped },
-      // 规则随后台会话的启动参数带入；接管进桌面之后是否仍然生效，宿主文档没有写（open-items X）。
-      writeDeny: sessionWriteDenyReport(launchIntent.role),
+      // 规则随后台会话的启动参数带入，接管进桌面之后不再生效：应用用自己的参数重起这个会话（1.3.0 终验
+      // 实测——接管后的产品窗口往 `.wakeflow-local` 写文件成功；open-items X30）。结果如实标出，不让
+      // Controller 以为这些路径在桌面窗口里有规则守着。
+      writeDeny: { ...sessionWriteDenyReport(launchIntent.role), afterTakeover: "not-carried" },
       ...(prepared !== null && worktree === null ? { worktreeObservation: "pending" } : {}),
       worktreePrepared: prepared === null ? "not-requested" : prepared.prepared,
       ...(prepared === null

@@ -164,3 +164,10 @@
 | --- | --- |
 | 投递 prompt 的阅读顺序（open-items Z4） | 需求文档跟任务包选定的权威成员走：任务包选了并入的 supplement 包的成员时，阅读顺序就是它选定的那些成员，章节取 supplement 记录自己的；一个 supplement 成员都没有选时仍是源需求的全部成员（原行为）。supplement 记录按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝（`requirement-record-drift`，读不出为 `requirement-record-<原因>`），与任务规划同一组拒绝原因。此前阅读顺序一律取 Demand 创建时冻结的权威引用，supplement 任务的目标被引去读源需求的文档。 |
 | worktree pod 产品窗口的登记（open-items Z5，文本） | tmux 助手不等待启动（`--wait 0`）时打印的观察带 `worktreeObservation: "pending"`、没有 worktree 记录，登记它会被拒 `worktree-receipt-required`；会话起来之后再跑一次同样的 `launch`，助手收养已在运行的窗口并打印完整的观察。 |
+
+## 修订（2026-11-16，1.3.0 终验的桌面一轮，[gate-log §13.249](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| 发送前被拒的目标何时换新信封（open-items Z13） | rearm 用尽，**或者窗口在信封签发之后被替换过**（被拒信封绑定的已不是窗口当前的绑定）。后一种情形下那份信封 rearm 不了（`binding-changed`），此前准备新信封又被 `rearm-available` 挡住，目标卡死。切片在判断阻塞项之前先读被拒目标的窗口路由；聚合的 delivery-prepared 守卫用被拒投递记下的 `bindingId` 与新信封的 `route.bindingId` 核对同一件事。窗口没有换时规则不变。新信封的代际从 1 起，测试目标重发的仍是同一次尝试。 |
+| 受管路径的写拒绝规则与桌面传输（open-items X30） | 规则随助手第一步启动的后台会话带入；应用接管会话时用自己的参数重起进程，规则不再跟着——接管后的窗口写得进 `.wakeflow-local`（实测）。桌面助手的启动结果标出 `afterTakeover: "not-carried"`。桌面传输下这些路径只有指令文件一道约束；补上规则层面的拦截排 1.3.1（hook）。 |

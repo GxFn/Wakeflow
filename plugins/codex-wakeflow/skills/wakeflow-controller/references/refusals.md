@@ -90,6 +90,7 @@ Finish that operation's recovery before anything else. For maintenance, `details
 - `review-unit-stale` - the review unit changed after your inspection (a newer result landed). Inspect again; the decision must cite the current digests.
 - `fence-mismatch` - the report carries a claim digest that no recorded outcome of this delivery has: it was written for another delivery. The target imports with the digest from its own delivery prompt - never edit the digest to make it pass.
 - `window-claimed` - the window already works on another delivery. Wait for that result or read status; do not release its claim.
+- `binding-changed` - the window was replaced after this permit was issued, so its envelope can no longer be recorded against or re-armed. For a delivery already recorded as rejected before send, prepare the target again: a replaced window gets a new envelope at once, without using up the re-arms, and the new prompt names the current binding.
 - `claim-held` - the window still holds a work claim, so its binding cannot be retired. Let the delivery finish or cancel the Demand first; never release a live claim to get past it.
 - `pod-busy` - the pod already carries an active Demand, or an interrupted Demand publication still reserves it. One Demand per pod: complete, cancel or recover that one, or claim into another pod.
 - `hook-evidence-missing` - no hook record proves the session named in the observation started in that window. Launch or resume the window with the host procedure, then register again - never register a handle the host did not report.

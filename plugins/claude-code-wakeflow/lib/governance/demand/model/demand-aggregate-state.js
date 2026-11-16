@@ -1,4 +1,3 @@
-import { wakeflowRearmablePhase, wakeflowTargetPhaseAdmission, } from "../../../contracts/vocabulary/wakeflow-target-phases.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
@@ -7,6 +6,7 @@ import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../cont
 import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.js";
+import { wakeflowRearmablePhase, wakeflowTargetPhaseAdmission, } from "../../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, Sha256Error, } from "../../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue, } from "../../../foundation/data/json-value.js";
@@ -781,14 +781,22 @@ function assertClaimUnused(current, claimId) {
         fail("transition", "$/targetTasks");
     }
 }
+/**
+ * 发送前被拒的信封何时可以被一份新信封取代：rearm 已经用尽，或者新信封绑定的窗口绑定不是被拒信封的那一个
+ * ——窗口在那之后被替换过，被拒的信封再也 rearm 不了（rearm 拒绝 `binding-changed`）。只认第一条时，窗口
+ * 一被替换目标就既不能重签也不能重新准备（1.3.0 终验的桌面一轮）。
+ */
+function rejectedEnvelopeReplaceable(rejected, replacementBindingId) {
+    return rejected.generation > DELIVERY_REARM_LIMIT || replacementBindingId !== rejected.bindingId;
+}
 /** `delivery.delivery-prepared.v1` 使用的纯状态转换：实现与 test 两类目标共用。 */
 /**
- * rearm 用尽的测试投递换新信封：同一次尝试原样重发，只替换这次尝试的投递摘要；
+ * rearm 用尽（或窗口已被替换）的测试投递换新信封：同一次尝试原样重发，只替换这次尝试的投递摘要；
  * 被拒的投递从未到达会话，所以不产生新的尝试序号。
  */
 function replaceRejectedTestAttemptDelivery(current, target, attempt, replacement) {
     const rejected = lastTestAttempt(target.testAttempts);
-    if (target.currentDelivery.generation <= DELIVERY_REARM_LIMIT ||
+    if (!rejectedEnvelopeReplaceable(target.currentDelivery, replacement.currentDelivery.bindingId) ||
         rejected.delivery.deliveryId !== target.currentDelivery.deliveryId ||
         computeCanonicalJsonSha256Digest(rejected.attempt) !== computeCanonicalJsonSha256Digest(attempt)) {
         fail("transition", "$/targetTasks");
@@ -933,9 +941,9 @@ export function prepareDeliveryInDemandAggregateState(currentValue, envelopeValu
             fail("transition", "$/targetTasks");
     }
     else if (target.phase === "host-effect-rejected") {
-        // rearm 用尽后换新信封重新准备。状态不保留被拒信封的返工依据，由切片从被拒信封
-        // 原样带过来，决策器校验依据与信封自洽；这里只守住代际上限。
-        if (target.currentDelivery.generation <= DELIVERY_REARM_LIMIT) {
+        // rearm 用尽、或窗口已被替换之后换新信封重新准备。状态不保留被拒信封的返工依据，由切片从被拒信封
+        // 原样带过来，决策器校验依据与信封自洽；这里只守住"被拒的那份信封确实不能再 rearm"。
+        if (!rejectedEnvelopeReplaceable(target.currentDelivery, envelope.route.bindingId)) {
             fail("transition", "$/targetTasks");
         }
     }

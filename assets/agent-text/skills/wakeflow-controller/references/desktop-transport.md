@@ -237,7 +237,7 @@ edit files, do not read the helper's source.
 
 Permissions are the same as under tmux: the helper starts every session with
 `--allowedTools` for its role's Wakeflow tools and the helper itself, and outside the Controller
-with the managed-path deny rules (those do not outlive step 3's takeover - the app restarts the session with its own arguments, so here only the instruction file guards those paths); the
+with the managed-path deny rules (those do not outlive step 3's takeover - the app restarts the session with its own arguments; from then on the plugin's `PreToolUse` hook refuses the edit tools on those paths once the window is bound, and shell commands are not checked); the
 settings rules maintenance writes are unchanged, and a product repository's `.claude/settings.json` is never written.
 
 ## Step 8 - delivering on this transport
@@ -322,7 +322,7 @@ callback's `user-prompt-submit` record in the Controller session.
   it. `relocate` does not apply on this transport - a session is never moved
   into another process - and `wakeflow_register_window_binding` refuses it.
 - **Close** is `archive_session`, only when the user authorizes retiring
-  that window. Archiving stops the process and removes the session from the
+  that window. Under the `auto` permission mode the host may still refuse that call (and `unarchive_session`) after the user agreed in the conversation: do not retry or look for another way - ask the user to archive (and, for a restart, restore) that session in the sidebar themselves, then go on from the observation. Archiving stops the process and removes the session from the
   sidebar; `list_sessions` then reports it archived, which Wakeflow
   classifies as absent. Never archive a pod's window while the pod is open,
   and never run `claude rm` on any Wakeflow session - it deletes checkouts

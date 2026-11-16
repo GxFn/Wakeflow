@@ -6050,3 +6050,21 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 本节只有文档改动：第 0 级（`git diff --check`、`wf handoff`）。`ecec844f` 的远端运行（43786027526）写这一节时还在跑。
 
 **结论：桌面一轮走完了能触发的——升级路径、死结修复的现场复核、`landing --prompt-ref`、一次真实环境的测试投递、角色校验、权限模式不一致、存活观察都有记录；写拒绝规则在桌面上不生效（已照实写进制品，拦截排 1.3.1）；按身份落地、改标题确认、模型跨接管、桌面 pod 没有在现场走到。1.3.0 还差 `ecec844f` 之后这一版的远端门与 tag。**
+
+### 13.251 1.3.1 第一段：写守卫 hook——已绑定的非 Controller 窗口用编辑工具写受管路径，两种传输下都被插件自己的 hook 拒绝；rearm 前沿带上投递标识；归档被拒与更新后 drift 的措辞（2026-11-16）
+
+用户裁决"直接开始 1.3.1，不要硬等待"：同一个工作树目录里开 `dev/1.3.1`，版本输入先升到 1.3.1（`9d9f7c3d`、`21e9f40d`）。`v1.3.0` 的 tag 仍是用户的操作。这一段收的是终验桌面一轮留下的三件事。
+
+- **写守卫（open-items X30，ADR-0020 的 2026-11-16 补记二）。** `hooks/hooks.json` 多一个事件 `PreToolUse`：matcher `Edit|Write|MultiEdit|NotebookEdit`（精确名字的列表），同步、5 秒，启动的仍是 `hooks/observe.mjs`，argv 以 `--wakeflow-write-guard-v1` 开头；进程入口按标记把这次调用交给新模块 `src/entrypoints/wakeflow-hook-write-guard.ts`。三件事同时成立才拒绝——会话在匹配的工作区里绑定着窗口、绑定的每个窗口在配置里都是 Controller 之外的已知角色、路径在那个工作区的受管表里（两个目录、三个文件、配置里的账本根；与启动规则同一张表，测试核对两处相等）。其余一律放行：没有绑定、Controller、角色认不出、配置读不出、stdin 不合形状或超限、内部故障、超时。拒绝是退出 0 加 stdout 一行 `permissionDecision: "deny"` 与一段不含路径的说明。没有加第二个 launcher，制品的文件布局不变。
+- **观察器拆出一份共用的定位（不改行为）。** 工作区定位、有界读取、绑定读取与 stdin 的 JSON 读取从 `wakeflow-hook-observer.ts` 原样搬进 `wakeflow-hook-workspaces.ts`（观察器 1,115 → 754 行，新模块 439 行，守卫 308 行），守卫与观察器读同一份：记录写进哪个工作区，守卫就在哪个工作区生效。`workspaceBindsSession` 换成 `sessionBoundWindowIds`（交回窗口，观察器只问有没有）。观察器自己的合同不变——不写 stdout、退出 0；它的闭包绊线现在放行同目录这两个模块，两个模块各自按同一条规则被钉住（只引用 `node:fs`、`node:fs/promises`、`node:path`、foundation、kernel 与彼此；只有守卫写 stdout，且只有一处）。
+- **宿主合同：先查文档，再在真实宿主上核。** 文档（hooks 参考）给出的几条决定了做法：`PreToolUse` 的 stdin 带 `tool_input.file_path`（`Write`、`Edit` 下总是绝对路径）；拒绝有两种形式（退出 2，或退出 0 加 `permissionDecision: "deny"`）；只含字母与 `|` 的 matcher 是精确名字的列表；超时、崩溃、非 0 非 2 的退出码都是放行；异步 hook 的决定不作数；同样的事件在桌面 app 里照常触发。现场：Claude Code 2.1.325，无头会话（`-p`，`acceptEdits`），候选制品经 `--plugin-dir` 装入（会话的插件清单里只有候选这一份 wakeflow），草稿区里手搭的工作区加一条产品窗口的绑定。三次：① 绑定的会话写 `.wakeflow-local/runtime/` 下一个文件——工具结果是 `PreToolUse:Write hook error:` 加守卫的说明，`permission_denials` 一条，文件没有出现；② 同一个会话（`--resume`）写自己仓库里的文件——写成；③ 一个没有绑定的会话写 ① 那个路径——写成。
+- **只读核对：真实绑定上的判定。** 对一个 tmux 测试工作区现有的绑定（四种角色各取一个会话）问守卫五个路径——运行时目录、配置、根上的本地 settings、账本、Design 面的草稿：产品、Test、Design 前四个都是 deny、草稿 allow；Controller 五个都是 allow。守卫只读，没有写任何文件。
+- **代价。** 每次编辑工具调用多一次 `node` 启动：非 Wakeflow 目录与测试工作区里都是约 80 毫秒（空 `node` 约 30 毫秒）。
+- **rearm 前沿带上投递标识（Z15）。** 路线的 `implementation-host-effect-rearm` 与 `test-host-effect-rearm` 两个前沿带被拒投递的 `deliveryId`；status 结果 Schema 在这两个前沿上加了可选字段，生成类型随之更新。Controller 文本写明标识在前沿上、不要去 Wakeflow 的文件里找。
+- **文字。** 桌面传输的参考：auto 模式下宿主可能在用户同意之后仍拒绝归档与恢复会话——不重试、不绕过，请用户在侧栏里做（Z16）；README 两种语言各一句。插件更新之后的助手 drift 就是更新本身（两份参考）。写拒绝的说明改成两层：启动规则（桌面接管后不保留）与插件的 hook（两种传输都在，不看 shell 命令）；"永远不要对用户说窗口写不了那里"留着。两份 README 里"观察 hook"改成"hook"——Claude Code 上不再只有观察。三份参考的行数不变（398 / 400 / 400）。
+- **没有做的。** 桌面 app 里的会话没有核过（要用户在场；登记在 X30）。守卫不看 Bash：桌面传输下 shell 写这些路径没有任何拦截，这是这一层的边界。不记录"拒绝过一次"。Codex 的片段不接这个事件。桌面 pod 的现场（X6 / Z16）、Z14、批 8 的五项余项都还在。
+- **过程里自己的两处。** 一次临时的 `npx tsc --noEmit -p .` 在源文件旁边写出了六个编译产物（新文件当时还没进项目的文件清单）；发现后删掉，类型检查只用 `npm run typecheck`。完整门第一次启动约两分钟后停掉了——为了把 README 里"观察 hook"那一处改进同一次门里；那次没有回执，不作数。
+- **测试。** 新文件 `tests/entrypoints/wakeflow-hook-write-guard.test.ts`（级别 1，12 条：表与宿主层相等、各角色与各路径、放行的各种情形、符号链接、账本根、宿主标识、不合形状的调用、拒绝的字节、两个模块的闭包）；观察器测试加一条经 launcher 的进程合同（拒绝时 stdout 恰好一行、放行时为空、退出 0、不写观察记录）；片段测试加写守卫的组与渲染字节；路线测试两条（两个 rearm 前沿）。
+- **验证。** 第 2 级门：run-RkE3sH 1883/1883、`inputsUnchanged`（我的运行，开发工作树；本段改了状态结果的 Schema 与生成类型、Controller 路线和每次 hook 都启动的入口，按规则走完整门）。一次通过；门内新增 16 条（守卫 12、观察器 1、片段 1、路线 2）。门之前的聚焦运行：三份 hook 测试 40/40（第一次 38/40——两条夹具用配置渲染器写校验器不收的配置，改为原样写出）；制品与文本钉子、宿主知识清点、路线、桌面助手共 79/79；四个生成物的漂移检查与 `build:check` 全过。门后：`wf timings apply`（362 个文件）、`smoke:artifacts` 4/4（两份制品上的双产品与 worktree 实验）、`wf handoff`。真实宿主：上面那三次无头会话；桌面 app 没有核。远端：`dev/1.3.1` 没有推送，没有远端运行。
+
+**结论：写拒绝从启动参数那一层多了一层随插件走的：编辑工具对受管路径的写，在已绑定的非 Controller 窗口里由 hook 拒绝，两种传输、续接与接管之后都是同一份；宿主合同在真实的 Claude Code 上核过，桌面 app 里的那一次要等用户在场。它仍然不是隔离，也不看 shell。rearm 前沿从此带着投递标识。1.3.1 还剩桌面 pod 的现场、Z14 与批 8 的五项余项。**

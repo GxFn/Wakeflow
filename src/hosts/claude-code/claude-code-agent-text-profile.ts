@@ -100,9 +100,12 @@ const WINDOW_LAUNCH =
   "names no ledger root), so tell the user. The rules stop the host's edit tools and the " +
   "file commands it recognizes, not every process, and under desktop sessions they do not " +
   "outlive the takeover into the app (the desktop helper's result says " +
-  '`afterTakeover: "not-carried"`; a window there can write those paths, only its ' +
-  "instruction file tells it not to): never tell the user a window cannot write " +
-  "there. The workspace root's `.claude/settings.json` carries those " +
+  '`afterTakeover: "not-carried"`). On both transports the plugin\'s own `PreToolUse` hook ' +
+  "also refuses the edit tools (`Edit`, `Write`, `NotebookEdit`) on those paths once the " +
+  "session is bound as a Design, Test or product window; it does not read shell commands and " +
+  "lets a call through whenever it cannot tell (an unbound session, an unreadable config): " +
+  "never tell the user a window cannot write there. The workspace root's " +
+  "`.claude/settings.json` carries those " +
   "two rules, Design and Test carry only their role's tools, and a product repository's " +
   "`.claude/settings.json` is never written, so a trust dialog for a Wakeflow-written root " +
   "lists only those rules. Entries it lists beyond them - `Bash(git *)`, `Bash(node *)`, " +
@@ -428,7 +431,10 @@ const HOST_TRUST_STEPS_EN = [
   "records the trust without a further dialog on the current app version; if you would rather",
   "do it yourself, open each folder in the app or run `claude` in a terminal there and accept",
   "the dialog; nothing is trusted without your word - and approve the one card per folder the app may show when the Controller switches a",
-  "window there to the `auto` permission mode (the folder remembers it). Maintenance also",
+  "window there to the `auto` permission mode (the folder remembers it). Closing or",
+  "restarting a window means archiving its session; under `auto` the app may refuse the",
+  "Controller's request even after you agreed, and then you archive (and restore) that session in",
+  "the sidebar yourself - the Controller tells you which one. Maintenance also",
   "writes precise allow rules for the published helper and the Wakeflow MCP tools into the",
   "workspace root's `.claude/settings.json`, and every window the helper launches is started",
   "with those two tools allowed, so product and test windows do not stop at a permission prompt for them",
@@ -436,8 +442,9 @@ const HOST_TRUST_STEPS_EN = [
   "also start with deny rules for edits to Wakeflow's own files (`.wakeflow-local`,",
   "`.wakeflow-active`, `wakeflow.config.json`, the root's Claude settings and the ledger): that",
   "lowers the chance of a stray edit and is not isolation - a process running as you can still",
-  "write there. Under desktop sessions these rules do not survive the app taking a session",
-  "over, so they hold under the tmux transport only. A trust dialog for a root Wakeflow",
+  "write there. Under desktop sessions these launch rules do not survive the app taking a",
+  "session over; on both transports the plugin's hook also refuses the edit tools on those",
+  "paths for a bound window other than the Controller, and shell commands are not checked. A trust dialog for a root Wakeflow",
   "wrote therefore lists only those rules; `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)` or a",
   "`..` directory in that list is 0.9.x residue or the repository's own settings: delete or",
   "review it before accepting, because accepting activates it.",
@@ -473,12 +480,12 @@ const HOST_TRUST_STEPS_ZH = [
   "你同意后由它在桌面 app 里逐个打开，app 随即记下信任（当前版本不再弹窗）；想自己来也可以：在 app 里",
   "打开该目录或在终端里到该目录运行 `claude`，接受信任对话。没有你的同意，不会信任任何目录。",
   "Controller 把窗口切到 `auto` 权限模式时，app 可能每个目录弹一次确认卡，确认一次",
-  "即可（目录会记住）。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
+  "即可（目录会记住）。关闭或重启一个窗口要归档它的会话；`auto` 模式下 app 可能在你同意之后仍然拒绝 Controller 的这个请求，这时由你自己在侧栏里归档（并恢复）那个会话，Controller 会说是哪一个。维护还会往工作区根的 `.claude/settings.json` 写只放行所发布助手和",
   "Wakeflow MCP 工具的 allow 规则；助手启动的每个窗口也带着这两项放行启动，所以产品窗口和测试窗口",
   "同样不会为它们弹权限。不会写 `Bash(tmux *)` 之类更宽的规则。Controller 之外的窗口启动时还带着",
   "对 Wakeflow 自身文件（`.wakeflow-local`、`.wakeflow-active`、`wakeflow.config.json`、根上的 Claude",
   "settings 与账本）的编辑拒绝规则：它降低误改的机会，不是隔离——以你的身份运行的进程仍然写得了那里。",
-  "桌面会话传输下这些规则过不了应用对会话的接管，所以只在 tmux 传输下成立。",
+  "桌面会话传输下这些启动规则过不了应用对会话的接管；两种传输下，插件自己的 hook 还会拒绝已绑定的非 Controller 窗口用编辑工具改这些路径，shell 命令不在检查之列。",
   "因此 Wakeflow 写过的根，",
   "其信任对话框只会列出这几条；对话框里若出现 `Bash(git *)`、`Bash(node *)`、`Bash(tmux *)` 或 `..` 目录，",
   "那是 0.9.x 的残留或仓库自己的设置——接受就会生效，先删掉或确认再接受。",

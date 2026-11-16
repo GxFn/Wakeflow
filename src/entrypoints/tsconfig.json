@@ -13,6 +13,8 @@
     "wakeflow-artifact-identity.ts",
     "wakeflow-caller-role-gate.ts",
     "wakeflow-hook-observer.ts",
+    "wakeflow-hook-workspaces.ts",
+    "wakeflow-hook-write-guard.ts",
     "wakeflow-mcp-stdio.ts",
     "wakeflow-public-mcp-catalog.ts",
     "wakeflow-public-mcp-server-configuration.ts",

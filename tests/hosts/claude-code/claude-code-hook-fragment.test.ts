@@ -6,6 +6,11 @@ import {
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
   WAKEFLOW_HOOK_OBSERVER_MARKER,
 } from "../../../src/entrypoints/wakeflow-hook-observer.js";
+import {
+  WAKEFLOW_WRITE_GUARD_EVENT,
+  WAKEFLOW_WRITE_GUARD_HOST_ARGUMENT,
+  WAKEFLOW_WRITE_GUARD_MARKER,
+} from "../../../src/entrypoints/wakeflow-hook-write-guard.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   CLAUDE_CODE_HOOK_FRAGMENT,
@@ -14,16 +19,31 @@ import {
   CLAUDE_CODE_HOOK_OBSERVER_HOST_ID,
   CLAUDE_CODE_HOOK_OBSERVER_MARKER,
   CLAUDE_CODE_HOOK_OBSERVER_SCRIPT_PATH,
+  CLAUDE_CODE_WRITE_GUARD_MARKER,
+  CLAUDE_CODE_WRITE_GUARD_MATCHER,
   type ClaudeCodeHookEventName,
   renderClaudeCodeHooksJson,
 } from "../../../src/hosts/claude-code/claude-code-hook-fragment.js";
 import { parseWakeflowHostId } from "../../../src/kernel/layout.js";
 
-/** Claude Code 插件级 hook 片段（gate-log §13.97 D5、D6）：事件集合、exec 形处理器、同步异步、字节稳定与摘要。 */
+/**
+ * 级别 1（纯函数）：Claude Code 插件级 hook 片段（gate-log §13.97 D5、D6）——事件集合、exec 形处理器、
+ * 同步异步、字节稳定与摘要；以及 `PreToolUse` 上的写守卫组（ADR-0020 的 2026-11-16 补充）。
+ */
 
+/** 五个观察事件：共用观察器的 argv，不设 matcher。 */
 const EVENTS: readonly ClaudeCodeHookEventName[] = [
   "SessionStart",
   "UserPromptSubmit",
+  "Notification",
+  "Stop",
+  "SessionEnd",
+];
+/** 片段的键序（渲染字节的一部分）：写守卫的 `PreToolUse` 排在提示之后、通知之前。 */
+const FRAGMENT_KEYS: readonly ClaudeCodeHookEventName[] = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "PreToolUse",
   "Notification",
   "Stop",
   "SessionEnd",
@@ -80,6 +100,28 @@ const EXPECTED_ASYNC_HANDLER: string = [
   '            "timeout": 5',
   "          }",
 ].join("\n");
+const EXPECTED_WRITE_GUARD_BLOCK: string = [
+  '    "PreToolUse": [',
+  "      {",
+  '        "matcher": "Edit|Write|MultiEdit|NotebookEdit",',
+  '        "hooks": [',
+  "          {",
+  '            "type": "command",',
+  '            "command": "node",',
+  '            "args": [',
+  EXPECTED_SCRIPT_ARG_LINE,
+  '              "--wakeflow-write-guard-v1",',
+  '              "--host",',
+  '              "claude-code"',
+  "            ],",
+  '            "timeout": 5',
+  "          }",
+  "        ]",
+  "      }",
+  "    ],",
+  '    "Notification": [',
+  "",
+].join("\n");
 const EXPECTED_SUFFIX: string = [
   '    "SessionEnd": [',
   "      {",
@@ -109,9 +151,9 @@ function handlerOf(event: ClaudeCodeHookEventName) {
   return handler;
 }
 
-test("片段恰好覆盖五个生命周期事件（键序固定），每个事件一个无 matcher 的组、组里恰好一个 exec 形 command 处理器", () => {
-  // D3/D6：五个事件同名同形（Notification 为 §13.167 A7 所加）；键序是渲染字节的一部分，所以按顺序比较而不是按集合。
-  deepEqual(Object.keys(CLAUDE_CODE_HOOK_FRAGMENT.hooks), [...EVENTS]);
+test("片段恰好覆盖五个观察事件与写守卫的 PreToolUse（键序固定）；观察事件各一个无 matcher 的组、组里恰好一个 exec 形 command 处理器", () => {
+  // D3/D6：五个观察事件同名同形（Notification 为 §13.167 A7 所加）；键序是渲染字节的一部分，所以按顺序比较而不是按集合。
+  deepEqual(Object.keys(CLAUDE_CODE_HOOK_FRAGMENT.hooks), [...FRAGMENT_KEYS]);
   deepEqual(Object.keys(CLAUDE_CODE_HOOK_FRAGMENT), ["hooks"]);
   for (const event of EVENTS) {
     const groups = CLAUDE_CODE_HOOK_FRAGMENT.hooks[event];
@@ -155,6 +197,35 @@ test("args 是插件根占位符脚本路径加入口约定的固定 argv，占�
   equal(CLAUDE_CODE_HOOK_OBSERVER_SCRIPT_PATH, "hooks/observe.mjs");
 });
 
+test("写守卫的组：PreToolUse 上只对编辑工具、同步 5 秒、带守卫的标记启动同一个脚本；matcher 是精确名字的列表", () => {
+  const groups = CLAUDE_CODE_HOOK_FRAGMENT.hooks.PreToolUse;
+  equal(groups.length, 1);
+  const group = groups[0];
+  ok(group !== undefined);
+  deepEqual(Object.keys(group), ["matcher", "hooks"], "键序：matcher 在前");
+  equal(group.matcher, "Edit|Write|MultiEdit|NotebookEdit");
+  equal(group.matcher, CLAUDE_CODE_WRITE_GUARD_MATCHER);
+  // 宿主把只含字母、数字、`_`、`-`、空格、逗号与 `|` 的 matcher 当精确名字的列表，别的字符才当正则。
+  ok(/^[A-Za-z|]+$/u.test(CLAUDE_CODE_WRITE_GUARD_MATCHER), "不含会让宿主把它当正则的字符");
+  const handler = handlerOf("PreToolUse");
+  equal(handler.type, "command");
+  equal(handler.command, "node");
+  // 同步：异步 hook 的决定宿主不认，拒绝就不作数了。
+  equal("async" in handler, false);
+  deepEqual(Object.keys(handler), ["type", "command", "args", "timeout"]);
+  equal(handler.timeout, 5);
+  deepEqual(handler.args, [
+    `${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`,
+    "--wakeflow-write-guard-v1",
+    "--host",
+    "claude-code",
+  ]);
+  // 标记、事件名与 --host 参数是与入口约定的字面量：两处相等。
+  equal(CLAUDE_CODE_WRITE_GUARD_MARKER, WAKEFLOW_WRITE_GUARD_MARKER);
+  equal(CLAUDE_CODE_HOOK_OBSERVER_HOST_ARGUMENT, WAKEFLOW_WRITE_GUARD_HOST_ARGUMENT);
+  equal(WAKEFLOW_WRITE_GUARD_EVENT, "PreToolUse");
+});
+
 test("渲染是 2 空格缩进、尾随单个换行的确定性 JSON，解析回片段本身，摘要等于渲染字节的 sha256", () => {
   const rendered = renderClaudeCodeHooksJson();
   equal(renderClaudeCodeHooksJson(), rendered, "渲染只由片段数据决定");
@@ -162,6 +233,7 @@ test("渲染是 2 空格缩进、尾随单个换行的确定性 JSON，解析回
   // 结尾的三层收束与单个尾随换行；实现改用别的缩进或键序时这三条都会失败。
   ok(rendered.startsWith(EXPECTED_PREFIX), "SessionStart 块的字节形状");
   ok(rendered.includes(EXPECTED_ASYNC_HANDLER), "异步处理器块的字节形状");
+  ok(rendered.includes(EXPECTED_WRITE_GUARD_BLOCK), "写守卫组的字节形状");
   ok(rendered.endsWith(EXPECTED_SUFFIX), "SessionEnd 块与收尾的字节形状");
   equal(rendered.endsWith("\n\n"), false);
   equal(rendered.includes("\t"), false);

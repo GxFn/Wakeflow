@@ -91,7 +91,7 @@
 | 能力组 | Codex | Claude Code | 共享形状 |
 | --- | --- | --- | --- |
 | 2 窗口握手 | Agent 用 Codex 线程能力开线程，回执为线程 id 与 cwd | Agent 调用 Wakeflow 发布的 tmux 助手开窗口并启动 `claude`，助手打印会话 id 与 pane 坐标的 observation（§13.117 D4） | 端点、工作声明、围栏令牌、回执准入 |
-| 6 投递执行与 hook 证据通道 | 线程发送；hook 片段 `src/hosts/codex/codex-hook-fragment.ts` 渲染命令串加 `${PLUGIN_ROOT}`，用户在 `/hooks` 按定义哈希信任后生效；`notify` 插件发不了 | 粘贴与回车，控制模式为可选强观察；hook 片段 `src/hosts/claude-code/claude-code-hook-fragment.ts` 渲染 exec 形式加 `${CLAUDE_PLUGIN_ROOT}` | 信封、outcome、回读摘要、ambiguous 解决；hook 通道**已落地**：观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 把两宿主同名的四个事件写成同形记录，制品的 `hooks/observe.mjs` 与 `hooks/hooks.json` 由构建器渲染（2026-09-18 gate-log §13.97，已实现、宿主未验证） |
+| 6 投递执行与 hook 证据通道 | 线程发送；hook 片段 `src/hosts/codex/codex-hook-fragment.ts` 渲染命令串加 `${PLUGIN_ROOT}`，用户在 `/hooks` 按定义哈希信任后生效；`notify` 插件发不了 | 粘贴与回车，控制模式为可选强观察；hook 片段 `src/hosts/claude-code/claude-code-hook-fragment.ts` 渲染 exec 形式加 `${CLAUDE_PLUGIN_ROOT}` | 信封、outcome、回读摘要、ambiguous 解决；hook 通道**已落地**：观察脚本 `src/entrypoints/wakeflow-hook-observer.ts` 把两宿主同名的四个事件写成同形记录，制品的 `hooks/observe.mjs` 与 `hooks/hooks.json` 由构建器渲染（2026-09-18 gate-log §13.97，已实现、宿主未验证）；Claude Code 的片段另有一个不是观察的事件——`PreToolUse` 上的写守卫（`src/entrypoints/wakeflow-hook-write-guard.ts`，gate-log §13.251），同一个脚本按 argv 的标记分派 |
 | ADR-0010 worktree | Worktree 线程，detached HEAD，结果导入前需建分支，默认保留 15 个 | `claude --worktree <name>`，分支 `worktree-<name>`，退出无改动自动清理 | porcelain 回执、pod 四状态、关闭先于会话归档 |
 | 9 状态栏 | 无 | statusline 与 tmux 助手两份资产、`settings.local.json` | 无 |
 | 10 命令面 | 无 slash 命令 | 4 个命令（`/wakeflow:init`、`/wakeflow:status`、`/wakeflow:next`、`/wakeflow:pod`；Claude Code 的插件命令一律带插件名前缀，2026-09-24 联合测试确认裸名 `/wakeflow-next` 不可解析，§13.119），且命令不承载技能之外的步骤 | skills 文本 |

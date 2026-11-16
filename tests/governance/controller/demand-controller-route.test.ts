@@ -25,6 +25,10 @@ import {
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
 } from "../delivery/delivery-workspace.fixture.js";
+import {
+  cleanupTestDeliveryWorkspaceFixture,
+  createTestDeliveryWorkspaceFixture,
+} from "../delivery/test-delivery-workspace.fixture.js";
 import { implementationReviewJudgmentWire } from "../review/controller-implementation-review-decision.fixture.js";
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
@@ -148,6 +152,36 @@ test("Controller Route保持投递准备、Agent宿主效果与Result Import边�
   }
 });
 
+test("rearm 前沿带着要重签的那份投递的标识——接手的 Controller 不必去活动目录里搜；别的前沿不带（open-items Z15，1.3.0 终验的桌面一轮）", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    const planningReady = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal("deliveryId" in (planningReady.frontiers[0] ?? {}), false);
+
+    const prepared = await prepareFixtureDelivery(fixture);
+    const hostEffect = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    equal(hostEffect.frontiers[0]?.kind, "implementation-host-effect-execution");
+    equal("deliveryId" in (hostEffect.frontiers[0] ?? {}), false);
+
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "failed-before-send" },
+      readback: { status: "unavailable" },
+    });
+    equal(rejected.outcome.disposition, "rejected-before-send");
+    const rearm = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    const frontier = rearm.frontiers[0];
+    equal(frontier?.kind, "implementation-host-effect-rearm");
+    equal(frontier?.owner, "target-host-effect-rearm");
+    // 被拒投递的声明已经释放，status 的 claims 里没有它：路线是唯一说得出这个标识的地方。
+    equal(
+      frontier !== undefined && "deliveryId" in frontier ? frontier.deliveryId : null,
+      prepared.delivery.deliveryId,
+    );
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
 test("Controller Route组合Review Snapshot并在accept后委托Completion Route", async () => {
   const fixture = await createControllerImplementationReviewDecisionServiceFixture();
   try {
@@ -212,6 +246,36 @@ test("Controller Route把blocked评审暴露为外部条件阻塞，把escalate�
     equal(route.blockers[0]?.kind, "awaiting-decision");
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(escalating);
+  }
+});
+
+test("测试投递发送前被拒：test-host-effect-rearm 前沿同样带着要重签的投递标识（open-items Z15）", async () => {
+  const fixture = await createTestDeliveryWorkspaceFixture();
+  try {
+    const target = {
+      workspacePath: fixture.workspacePath,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.testTargetTaskId,
+    };
+    const prepared = await prepareFixtureDelivery(target, {
+      expectedStreamRevision: 8,
+      idempotencyKey: "fixture-route-test-prepare-1",
+    });
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "failed-before-send" },
+      readback: { status: "unavailable" },
+      idempotencyKey: "fixture-route-test-outcome-1",
+    });
+    equal(rejected.target.phase, "test-host-effect-rejected");
+    const route = await readControllerRoute(fixture.workspaceRoot, fixture.demandId);
+    const frontier = route.frontiers[0];
+    equal(frontier?.kind, "test-host-effect-rearm");
+    equal(
+      frontier !== undefined && "deliveryId" in frontier ? frontier.deliveryId : null,
+      prepared.delivery.deliveryId,
+    );
+  } finally {
+    await cleanupTestDeliveryWorkspaceFixture(fixture);
   }
 });
 

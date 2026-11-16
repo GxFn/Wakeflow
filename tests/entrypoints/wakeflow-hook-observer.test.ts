@@ -29,6 +29,10 @@ import {
   WAKEFLOW_HOOK_OBSERVER_MARKER,
   WAKEFLOW_HOOK_OBSERVER_STDIN_MAXIMUM_BYTES,
 } from "../../src/entrypoints/wakeflow-hook-observer.js";
+import {
+  renderWriteGuardDenial,
+  WAKEFLOW_WRITE_GUARD_MARKER,
+} from "../../src/entrypoints/wakeflow-hook-write-guard.js";
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
@@ -1018,6 +1022,52 @@ test("编译后的入口经 D1 形状的 launcher 以 node 执行：正常 paylo
   assertFixedCode(spawnLauncher(missing, argvFor("codex"), "{}"), "launcher", "module missing");
 });
 
+test("同一个脚本带写守卫的标记启动（ADR-0020 的 2026-11-16 补充）：拒绝时 stdout 恰好一行决定 JSON、放行时 stdout 空，退出码都是 0，从不写观察记录", async (t) => {
+  const fixture = createFixture(t);
+  const sessionId = SESSION_IDS["claude-code"];
+  writeBinding(fixture.workspace, "claude-code", sessionId);
+  const launcherDirectory = temporaryDirectory(t, "wakeflow-hook-write-guard-launcher-");
+  const launcher = path.join(launcherDirectory, "observe.mjs");
+  writeFileSync(launcher, launcherSource(COMPILED_OBSERVER_URL), { mode: 0o755 });
+  const guardArgv = [
+    WAKEFLOW_WRITE_GUARD_MARKER,
+    WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
+    "claude-code",
+  ];
+  const preToolUse = (target: string): string =>
+    hookPayload("PreToolUse", sessionId, fixture.repository, fixture.transcriptPath, {
+      tool_name: "Write",
+      tool_input: { file_path: target, content: "x" },
+      tool_use_id: "toolu_01",
+    });
+
+  // 夹具的绑定是产品窗口（最小配置里的 window_8888…）：写受管路径被拒。
+  const denied = spawnLauncher(
+    launcher,
+    guardArgv,
+    preToolUse(path.join(fixture.workspace, ".wakeflow-local", "runtime", "x.json")),
+  );
+  equal(denied.status, 0);
+  equal(denied.stderr, "");
+  equal(denied.stdout, `${renderWriteGuardDenial()}\n`);
+  deepEqual(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, "deny");
+
+  // 同一个窗口写自己的仓库：放行，什么也不输出。
+  const allowed = spawnLauncher(
+    launcher,
+    guardArgv,
+    preToolUse(path.join(fixture.repository, "src", "a.ts")),
+  );
+  deepEqual(allowed, { status: 0, stdout: "", stderr: "" });
+
+  // 调用不合形状：放行，stderr 一行守卫自己前缀的固定代码，stdout 仍为空。
+  const invalid = spawnLauncher(launcher, guardArgv, "not json");
+  deepEqual(invalid, { status: 0, stdout: "", stderr: "wakeflow-write-guard: stdin-invalid\n" });
+
+  // 守卫这一种调用不是观察：三次启动之后工作区里没有任何 hook 记录。
+  deepEqual((await readBack(fixture.workspace, "claude-code")).records, []);
+});
+
 test("进程级故障（D4）：main() 返回后的未捕获异常与未处理拒绝各只在 stderr 打一行固定代码、退出 0、stdout 空；launcher 再次登记守卫也不会多打一行，故障前的记录已落地", {
   timeout: 60_000,
 }, async (t) => {
@@ -1077,7 +1127,7 @@ test("registerProcessGuards 幂等：首次为两个进程事件各登记一个�
   equal(process.listenerCount("unhandledRejection"), unhandledBefore + 1);
 });
 
-test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引用 node:fs、node:fs/promises、node:path、node:child_process（ADR-0023 的一次 tmux 客户端）与这两层的模块", () => {
+test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引用 node:fs/promises、node:path、node:child_process（ADR-0023 的一次 tmux 客户端）、这两层的模块，与同目录守同一条规则的两个 hook 模块", () => {
   const source = readFileSync(
     fileURLToPath(import.meta.resolve("../../src/entrypoints/wakeflow-hook-observer.js")),
     "utf8",
@@ -1093,7 +1143,9 @@ test("入口的闭包限于 foundation 与 kernel（D1）：编译产物只引�
     ok(
       ["node:fs", "node:fs/promises", "node:path", "node:child_process"].includes(specifier) ||
         specifier.startsWith("../foundation/") ||
-        specifier.startsWith("../kernel/"),
+        specifier.startsWith("../kernel/") ||
+        // 工作区定位与写守卫：各自的闭包由 `wakeflow-hook-write-guard.test.ts` 按同一条规则钉着。
+        ["./wakeflow-hook-workspaces.js", "./wakeflow-hook-write-guard.js"].includes(specifier),
       `unexpected import ${specifier}`,
     );
   }

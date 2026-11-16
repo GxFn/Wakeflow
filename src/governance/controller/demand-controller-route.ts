@@ -122,19 +122,28 @@ type ScopedImplementationFrontierDescriptor = Readonly<
 >;
 type ScopedTestFrontierDescriptor = Readonly<{ readonly scope: "target" } & TestFrontierDescriptor>;
 
+/**
+ * rearm 前沿上要重签的那份投递：`wakeflow_rearm_delivery` 的 `deliveryId`。被拒投递的声明已经释放，status 的
+ * `claims` 里没有它；此前路线也不带，接手的 Controller 会话只能去活动目录里搜这个标识（1.3.0 终验的桌面
+ * 一轮，open-items Z15）。只有 rearm 前沿带它——完成时的路线没有这种前沿，`postAcceptanceRouteDigest` 不受影响。
+ */
+type RearmDelivery = Readonly<{ readonly deliveryId?: WakeflowDurableId<"target-delivery"> }>;
+
 export type DemandControllerRouteFrontier =
   | Readonly<{ readonly scope: "demand" } & DemandFrontierDescriptor>
   | Readonly<
       {
         readonly scope: "target";
         readonly target: Readonly<DemandControllerImplementationTargetReference>;
-      } & ImplementationFrontierDescriptor
+      } & ImplementationFrontierDescriptor &
+        RearmDelivery
     >
   | Readonly<
       {
         readonly scope: "target";
         readonly target: Readonly<DemandControllerTestTargetReference>;
-      } & TestFrontierDescriptor
+      } & TestFrontierDescriptor &
+        RearmDelivery
     >;
 
 export type DemandControllerRouteBlocker =
@@ -348,6 +357,10 @@ function implementationFrontier(target: Readonly<ImplementationTargetState>): Re
     frontier: Object.freeze({
       ...descriptor,
       target: implementationTargetReference(target),
+      ...(descriptor.kind === "implementation-host-effect-rearm" &&
+      target.phase === "host-effect-rejected"
+        ? { deliveryId: target.currentDelivery.deliveryId }
+        : {}),
     }),
     blocker,
   });
@@ -402,6 +415,10 @@ function postAcceptanceFrontier(
   return Object.freeze({
     ...descriptor,
     target: testTargetReference(target),
+    ...(descriptor.kind === "test-host-effect-rearm" &&
+    stage.status === "test-delivery-rearm-planning"
+      ? { deliveryId: stage.rejectedDelivery.deliveryId }
+      : {}),
   });
 }
 

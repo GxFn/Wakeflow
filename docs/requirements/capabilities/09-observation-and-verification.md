@@ -161,3 +161,9 @@
 | --- | --- |
 | status `nextActions` 与 verify `next` 的顺序（open-items Z1） | 制品过期（本进程）> **宿主资产待修（维护）** > 过期窗口（汇总一项，再逐窗口）> 维护 > 未登记窗口 > Demand 前沿 > 待认领的包。`host-settings-assets` 门不通过即"宿主资产待修"，status 与 verify 读同一个判断；此前 status 的下一步不提助手待修，verify 把过期窗口排在维护之前。原因：窗口是助手开的，上一版助手重启出来的窗口没有这一版在启动时加的东西（写拒绝规则）。 |
 | 9.4 状态栏（open-items Z7） | worktree pod 的窗口显示为「模型 · 显示名」：显示名本身已是 `<pod 名> · <标题>`，脚本不再把 pod 名加第二遍；显示名不带前缀的旧形状仍补上 pod 名。 |
+
+## 修订（2026-11-16，1.3.1，[gate-log §13.251](../../progress/consolidation-gate-log.md)）
+
+| 项 | 修订后 |
+| --- | --- |
+| Controller 路线的 rearm 前沿（open-items Z15） | `implementation-host-effect-rearm` 与 `test-host-effect-rearm` 两个前沿带上被拒投递的 `deliveryId`（status 结果 Schema 里是这两个前沿上的可选字段，别的前沿不带）。接手的 Controller 会话从路线就拿得到 `wakeflow_rearm_delivery` 要的标识，不用去读 Wakeflow 自己的文件。 |

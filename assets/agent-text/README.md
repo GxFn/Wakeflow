@@ -76,7 +76,7 @@ status", "keep going", "open a pod for this".
 1. Install the plugin for your agent host.
 2. Make sure your agent host can start `node`: on the `PATH` it launches
    with, or the runtime the host itself supplies (Codex desktop). The plugin's
-   tool server and its observation hooks are started as `node`, and a host
+   tool server and its hooks are started as `node`, and a host
    that cannot find it fails silently. Wakeflow needs Node 24.19 or later
    below 25 (other versions are refused with one line on stderr before
    anything runs), `git`, and on Claude Code either `tmux` or the Claude
@@ -156,7 +156,7 @@ failure on purpose: "we could not check" is never reported as "it is fine".
 ## What it touches on your machine
 
 - It runs entirely on your machine: a tool server over stdio and the
-  observation hooks, both started as `node` by your agent host. It makes no
+  plugin's hooks, both started as `node` by your agent host. It makes no
   network call, sends no telemetry and needs no account.
 - Inside the workspace it writes `wakeflow.config.json`, `.wakeflow-active/`,
   `.wakeflow-local/` (runtime state, hook records and the host assets it

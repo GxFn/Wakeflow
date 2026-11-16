@@ -1852,6 +1852,10 @@
         },
         "target": {
           "$ref": "#/$defs/implementationTarget"
+        },
+        "deliveryId": {
+          "$ref": "#/$defs/deliveryId",
+          "description": "只在 rearm 前沿上出现：要重签的那份投递，即 wakeflow_rearm_delivery 的 deliveryId。"
         }
       }
     },
@@ -1885,6 +1889,10 @@
         },
         "target": {
           "$ref": "#/$defs/testTarget"
+        },
+        "deliveryId": {
+          "$ref": "#/$defs/deliveryId",
+          "description": "只在 rearm 前沿上出现：要重签的那份投递，即 wakeflow_rearm_delivery 的 deliveryId。"
         }
       }
     },

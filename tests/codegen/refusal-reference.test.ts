@@ -81,6 +81,7 @@ test("参考按 code 给出处理办法与各切片的 reason；注记点名的 
         "review-unit-stale",
         "fence-mismatch",
         "window-claimed",
+        "binding-changed",
         "claim-held",
         "pod-busy",
         "hook-evidence-missing",
@@ -93,7 +94,7 @@ test("参考按 code 给出处理办法与各切片的 reason；注记点名的 
   const text = renderRefusalReference(complete);
   ok(text.startsWith("# Refusals by code and reason\n"));
   ok(text.includes("## `idempotency-mismatch` - this idempotency key already belongs"));
-  ok(text.includes("- **all**: `authority-reference-unknown`, `claim-held`"));
+  ok(text.includes("- **all**: `authority-reference-unknown`, `binding-changed`, `claim-held`"));
   ok(text.includes("- `request-digest` - the key was used with a different request body."));
   throws(
     () => renderRefusalReference(scanRefusalReasons([])),

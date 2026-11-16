@@ -45,8 +45,8 @@ export type WakeflowTestTargetPhase = (typeof WAKEFLOW_TEST_TARGET_PHASES)[numbe
 export type WakeflowTargetWorkType = "implementation" | "test";
 
 /**
- * 该阶段能否准备新信封：`yes`；`after-rearm-exhausted`——只有当前代际超过 rearm 上限才换新信封，否则先
- * rearm；`no`。
+ * 该阶段能否准备新信封：`yes`；`after-rearm-exhausted`——只有当前代际超过 rearm 上限、或窗口在信封签发之后
+ * 被替换过（那份信封 rearm 不了）才换新信封，否则先 rearm；`no`。
  */
 export type WakeflowTargetPrepareAdmission = "yes" | "after-rearm-exhausted" | "no";
 

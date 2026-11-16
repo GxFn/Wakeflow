@@ -12,6 +12,7 @@ import {
   deriveRearmBlockers,
   expectedLaunchPermissionMode,
   landingSilenceExceeded,
+  prepareDependsOnRearm,
   sendReturnProvesLanding,
 } from "../../../src/capabilities/delivery/decide.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -296,6 +297,39 @@ test("准备与 rearm 的 phase 阻塞：rearm 未用尽的 rejected 目标必�
       generation: 4,
     }),
     [],
+  );
+  // 窗口在信封签发之后被替换过：那份信封 rearm 不了（`binding-changed`），不再要求先把 rearm 用完——否则两条
+  // 路互相挡住（1.3.0 终验，桌面一轮）。别的阻塞项不受它影响。
+  for (const [workType, phase] of [
+    ["implementation", "host-effect-rejected"],
+    ["test", "test-host-effect-rejected"],
+  ] as const) {
+    deepEqual(derivePrepareBlockers({ workType, phase, generation: 1, bindingReplaced: true }), []);
+    deepEqual(derivePrepareBlockers({ workType, phase, generation: 1, bindingReplaced: false }), [
+      "rearm-available:1",
+    ]);
+    equal(prepareDependsOnRearm(workType, phase), true);
+  }
+  equal(prepareDependsOnRearm("implementation", "planned"), false);
+  equal(prepareDependsOnRearm("implementation", "delivery-prepared"), false);
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "delivery-prepared",
+      generation: 1,
+      bindingReplaced: true,
+    }),
+    ["target-phase:delivery-prepared"],
+  );
+  deepEqual(
+    derivePrepareBlockers({
+      workType: "implementation",
+      phase: "host-effect-rejected",
+      generation: 1,
+      bindingReplaced: true,
+      awaitingDecision: true,
+    }),
+    ["awaiting-decision"],
   );
   deepEqual(
     derivePrepareBlockers({

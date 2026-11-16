@@ -12,8 +12,8 @@ import type {
 } from "../../governance/delivery/delivery-outcome.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../governance/delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../../governance/delivery/delivery-rearm.js";
-import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import { findPromptLanding } from "../../kernel/prompt-digest.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Capabilities / Delivery：投递切片的纯决定（能力卡 6，ADR-0009，ADR-0012 D2）。
@@ -214,9 +214,20 @@ export interface PrepareTargetView {
   readonly awaitingDecision?: boolean;
   /** 任务包 `dependsOn` 里尚未接受的实现目标（R4）：排在等决定之后、阶段许可之前。 */
   readonly pendingDependencies?: readonly string[];
+  /**
+   * 被拒信封签发时的绑定已经不是窗口当前的绑定——窗口在那之后被替换过。那份信封再也 rearm 不了
+   * （`binding-changed`），所以不再要求"先把 rearm 用完"，直接换新信封。
+   */
+  readonly bindingReplaced?: boolean;
 }
 
-/** 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm；等用户决定时一律阻塞。 */
+/**
+ * 准备投递的目标 phase 阻塞项；rearm 未用尽的 rejected 目标必须先 rearm；等用户决定时一律阻塞。
+ *
+ * 例外是窗口已被替换（`bindingReplaced`）：rearm 拒绝 `binding-changed`，这里若仍拒绝 `rearm-available`，两条路
+ * 互相挡住，目标既不能重签也不能重新准备（1.3.0 终验的桌面一轮：窗口的会话已不在，投递记为发送前被拒，
+ * 窗口替换之后 Demand 卡死）。
+ */
 export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): readonly string[] {
   if (target.awaitingDecision === true) return Object.freeze(["awaiting-decision"]);
   if (target.pendingDependencies !== undefined && target.pendingDependencies.length > 0) {
@@ -231,12 +242,18 @@ export function derivePrepareBlockers(target: Readonly<PrepareTargetView>): read
   }
   if (
     admission.prepare === "after-rearm-exhausted" &&
+    target.bindingReplaced !== true &&
     target.generation !== null &&
     target.generation <= DELIVERY_REARM_LIMIT
   ) {
     return Object.freeze([`rearm-available:${target.generation}`]);
   }
   return Object.freeze([]);
+}
+
+/** 该阶段的准备许可取决于 rearm 是否还走得通：切片据此决定要不要先读窗口当前的绑定。 */
+export function prepareDependsOnRearm(workType: "implementation" | "test", phase: string): boolean {
+  return wakeflowTargetPhaseAdmission(workType, phase)?.prepare === "after-rearm-exhausted";
 }
 
 export interface RearmTargetView {

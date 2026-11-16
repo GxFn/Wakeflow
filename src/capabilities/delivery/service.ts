@@ -197,6 +197,7 @@ import {
   expectedLaunchPermissionMode,
   type HookLandingRecord,
   landingSilenceExceeded,
+  prepareDependsOnRearm,
   sendReturnProvesLanding,
 } from "./decide.js";
 import {
@@ -1255,6 +1256,39 @@ async function replayPermit(
   });
 }
 
+/**
+ * 发送前被拒的目标：窗口当前的路由，以及被拒信封绑定的是否已经不是它——窗口在那之后被替换过，那份信封
+ * rearm 不了，只能换新信封。别的阶段不读路由（阻塞项的先后不变）。
+ */
+async function rejectedTargetRoute(
+  context: SliceContext,
+  target: Readonly<DemandTargetTaskState>,
+  workType: "implementation" | "test",
+  taskPackage: Readonly<TaskPackage>,
+): Promise<Readonly<{ route: Readonly<WindowRoute> | null; bindingReplaced: boolean }>> {
+  if (
+    !prepareDependsOnRearm(workType, target.phase) ||
+    target.phase === "planned" ||
+    target.phase === "superseded"
+  ) {
+    return Object.freeze({ route: null, bindingReplaced: false });
+  }
+  const route = await loadRoute(context, taskPackage.assignment.windowId);
+  return Object.freeze({
+    route,
+    bindingReplaced: route.binding.bindingId !== target.currentDelivery.bindingId,
+  });
+}
+
+/** 准入之后的路由：发送前被拒的目标在判断阻塞项时已经读过，别的阶段到这里才读。 */
+async function admittedRoute(
+  context: SliceContext,
+  known: Readonly<WindowRoute> | null,
+  taskPackage: Readonly<TaskPackage>,
+): Promise<Readonly<WindowRoute>> {
+  return known ?? loadRoute(context, taskPackage.assignment.windowId);
+}
+
 async function executePrepare(
   context: SliceContext,
   input: PrepareInput,
@@ -1281,10 +1315,13 @@ async function executePrepare(
       : target.currentDelivery.generation;
   const taskPackage = await loadTaskPackage(repository, target, options.signal);
   const state = context.authority.loaded.aggregate.state;
+  const workType = target.workType === "test" ? "test" : "implementation";
+  const rejected = await rejectedTargetRoute(context, target, workType, taskPackage);
   const blockers = derivePrepareBlockers({
-    workType: target.workType === "test" ? "test" : "implementation",
+    workType,
     phase: target.phase,
     generation: currentGeneration,
+    bindingReplaced: rejected.bindingReplaced,
     awaitingDecision: state.awaitingDecision !== undefined,
     // R4：依赖的实现目标以聚合里的阶段为准，包本身从已规划事件重读（与 coverage 同一做法）。
     pendingDependencies:
@@ -1297,7 +1334,7 @@ async function executePrepare(
         : [],
   });
   if (blockers.length > 0) rejectWith(blockers, "$request.targetTaskId");
-  const route = await loadRoute(context, taskPackage.assignment.windowId);
+  const route = await admittedRoute(context, rejected.route, taskPackage);
   await assertHostAssetsCurrent(context, route);
   const demandId = authority.loaded.identity.demandId;
   const deliveryId = deriveDurableId(

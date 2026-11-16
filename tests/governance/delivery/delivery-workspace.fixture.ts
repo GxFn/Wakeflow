@@ -203,6 +203,72 @@ export async function registerFixtureWindowRoute(
   });
 }
 
+/**
+ * 窗口的会话没了、换一个新会话顶上：新会话的 session-start 记录加一次 `replace`，绑定标识随之改变。
+ * 之前签发的信封绑定的仍是旧绑定。
+ */
+export async function replaceFixtureWindowRoute(
+  fixture: Readonly<{
+    readonly workspacePath: string;
+    readonly workspaceRoot: TargetTaskPlanningWorkspaceFixture["workspaceRoot"];
+  }>,
+  windowId: string,
+  handle: Readonly<{
+    readonly value: string;
+    readonly uuid: string;
+    readonly observedAt: UtcInstant;
+    readonly registeredAt: UtcInstant;
+  }>,
+): Promise<Readonly<Pick<DeliveryWindowRoute, "windowId" | "bindingId" | "rawHandle">>> {
+  const options = {
+    uuidFactory: () => handle.uuid,
+    clock: () => handle.registeredAt,
+    durability: DISPOSABLE_WORKSPACE_DURABILITY,
+  };
+  const inspected = await executeWindowBindingRequest(
+    CODEX_DELIVERY_FACADE,
+    { root: fixture.workspacePath, operation: "inspect", windowId },
+    options,
+  );
+  if (
+    inspected.kind !== "WakeflowWindowBindingInspection" ||
+    inspected.binding.status !== "registered"
+  ) {
+    throw new Error("Expected a bound window to replace.");
+  }
+  await writeHostHookObservation(fixture.workspaceRoot, {
+    hostId: "codex",
+    event: "session-start",
+    sessionId: handle.value,
+    cwd: fixture.workspacePath,
+    recordedAt: handle.observedAt,
+  });
+  const replaced = await executeWindowBindingRequest(
+    CODEX_DELIVERY_FACADE,
+    {
+      root: fixture.workspacePath,
+      operation: "replace",
+      windowId,
+      observation: {
+        handle: { kind: "codex-thread", value: handle.value },
+        launchIntentDigest: inspected.launchIntent.intentDigest,
+        observedAt: handle.observedAt,
+      },
+      expectedBindingId: inspected.binding.bindingId,
+      expectedBindingDigest: inspected.binding.bindingDigest,
+    },
+    options,
+  );
+  if (replaced.kind !== "WakeflowWindowBindingMutation" || replaced.binding === null) {
+    throw new Error("Expected a replaced Binding fixture.");
+  }
+  return Object.freeze({
+    windowId,
+    bindingId: replaced.binding.bindingId,
+    rawHandle: handle.value,
+  });
+}
+
 /** 基线事实：规划事实加上这一档基线里已规划目标的身份值。 */
 interface DeliveryWorkspaceFacts extends TargetTaskPlanningWorkspaceFacts {
   readonly targetTaskId: string;

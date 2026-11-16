@@ -163,7 +163,7 @@ refused while the delivery is not indeterminate.
 
 `wakeflow_rearm_delivery` re-issues the permit for a rejected-before-send
 delivery with a fresh claim and fence, at most three times per envelope. After
-that, prepare the target again for a new envelope. Given the callback delivery
+that, prepare the target again for a new envelope. A window replaced since the permit was issued is the exception: its old envelope cannot be re-armed (`binding-changed`), so prepare the target again at once - `rearm-available` does not block that, and the new prompt names the current binding and Controller. On a transport where a window's session can be gone, check that the target's and the Controller's sessions still exist before you prepare, not after. Given the callback delivery
 of a result-reported target instead, it re-issues the wake-controller callback
 permit against the current Controller binding, with no claim or fence. A
 re-armed target permit carries the first generation's prompt byte for byte -

@@ -17,11 +17,12 @@ import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   deliverFixtureTarget,
-  registerFixtureWindowRoute,
   landFixturePrompt,
   loadFixtureDeliveryEnvelope,
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
+  registerFixtureWindowRoute,
+  replaceFixtureWindowRoute,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupTestDeliveryWorkspaceFixture,
@@ -425,6 +426,67 @@ test("rearm 用尽的测试投递换新信封：前沿回到准备，重发同�
     });
     equal(reprepared.status, "committed");
     equal(reprepared.delivery.phase, "test-delivery-prepared");
+    const before = await loadFixtureDeliveryEnvelope(fixture, prepared.delivery.deliveryId);
+    const after = await loadFixtureDeliveryEnvelope(fixture, reprepared.delivery.deliveryId);
+    if (before.workType !== "test" || after.workType !== "test") {
+      throw new Error("Expected test envelopes.");
+    }
+    equal(after.attempt.testAttemptId, before.attempt.testAttemptId);
+  } finally {
+    await cleanupTestDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("发送前被拒的测试投递在窗口被替换之后换新信封：不必先把 rearm 用完，重发的仍是同一次尝试（1.3.0 终验，桌面一轮的死结）", async () => {
+  const fixture = await createTestDeliveryWorkspaceFixture();
+  try {
+    const target = {
+      workspacePath: fixture.workspacePath,
+      demandId: fixture.demandId,
+      targetTaskId: fixture.testTargetTaskId,
+    };
+    const prepared = await prepareFixtureDelivery(target, {
+      expectedStreamRevision: 8,
+      idempotencyKey: "fixture-test-prepare-replaced-1",
+    });
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: { status: "failed-before-send" },
+      readback: { status: "unavailable" },
+      idempotencyKey: "fixture-test-replaced-outcome-1",
+    });
+    equal(rejected.target.phase, "test-host-effect-rejected");
+    const revision = rejected.event.streamRevision;
+    await rejects(
+      prepareFixtureDelivery(target, {
+        expectedStreamRevision: revision,
+        idempotencyKey: "fixture-test-prepare-same-binding",
+      }),
+      rejectedWith("rearm-available"),
+    );
+    const replaced = await replaceFixtureWindowRoute(fixture, prepared.permit.hostAction.windowId, {
+      value: "codex-thread-test-replacement-0001",
+      uuid: "6b6b6b6b-6b6b-4b6b-8b6b-6b6b6b6b6b6b",
+      observedAt: at("12:30:00"),
+      registeredAt: at("12:30:05"),
+    });
+    notEqual(replaced.bindingId, prepared.permit.hostAction.bindingId);
+    await rejects(
+      rearmCallback(
+        fixture,
+        prepared.delivery.deliveryId,
+        "fixture-test-rearm-after-replace",
+        revision,
+        at("12:31:00"),
+      ),
+      rejectedWith("binding-changed"),
+    );
+    const reprepared = await prepareFixtureDelivery(target, {
+      expectedStreamRevision: revision,
+      idempotencyKey: "fixture-test-prepare-after-replace",
+    });
+    equal(reprepared.status, "committed");
+    equal(reprepared.delivery.phase, "test-delivery-prepared");
+    equal(reprepared.permit.hostAction.bindingId, replaced.bindingId);
     const before = await loadFixtureDeliveryEnvelope(fixture, prepared.delivery.deliveryId);
     const after = await loadFixtureDeliveryEnvelope(fixture, reprepared.delivery.deliveryId);
     if (before.workType !== "test" || after.workType !== "test") {

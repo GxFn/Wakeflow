@@ -1,4 +1,4 @@
-import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import { deepEqual, equal, notEqual, ok, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -16,7 +16,6 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -25,6 +24,7 @@ import {
   writeHostHookObservation,
 } from "../../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef, workClaimRef } from "../../../src/kernel/layout.js";
+import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import {
   CODEX_DELIVERY_FACADE,
@@ -35,6 +35,7 @@ import {
   landFixturePrompt,
   prepareFixtureDelivery,
   recordFixtureDeliveryOutcome,
+  replaceFixtureWindowRoute,
 } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupTestDeliveryWorkspaceFixture,
@@ -55,6 +56,59 @@ useDisposableDurability();
  * 结局记录之后的同键重放仍是通过结果 Schema 的幂等回执，阶段来自签发事件、当前状态只进 next
  * （open-items W17）。Claude 宿主的资产前置在 host-assets.test.ts。
  */
+
+test("发送前被拒之后窗口被替换：旧信封 rearm 不了（binding-changed），准备新信封不再被 rearm-available 挡住（1.3.0 终验，桌面一轮的死结）", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    const prepared = await prepareFixtureDelivery(fixture);
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      attempt: {
+        status: "failed-before-send",
+        failure: { code: "session-absent", summary: "the bound session no longer exists" },
+      },
+      readback: { status: "unavailable" },
+    });
+    equal(rejected.outcome.disposition, "rejected-before-send");
+    equal(rejected.target.phase, "host-effect-rejected");
+    const revision = rejected.event.streamRevision;
+    // 窗口还是原来那个绑定时规则不变：先 rearm。
+    await rejects(
+      prepareFixtureDelivery(fixture, {
+        idempotencyKey: "fixture-prepare-same-binding",
+        expectedStreamRevision: revision,
+      }),
+      rejectedWith("rearm-available"),
+    );
+
+    const replaced = await replaceFixtureWindowRoute(fixture, fixture.route.windowId, {
+      value: "codex-thread-replacement-0001",
+      uuid: "5a5a5a5a-5a5a-4a5a-8a5a-5a5a5a5a5a5a",
+      observedAt: parseUtcInstant("2026-08-29T12:30:00.000Z"),
+      registeredAt: parseUtcInstant("2026-08-29T12:30:05.000Z"),
+    });
+    notEqual(replaced.bindingId, fixture.route.bindingId);
+
+    // 旧信封绑定的是被替换掉的绑定：rearm 拒绝，而且不消耗代际。
+    await rejects(
+      rearm(fixture, prepared.delivery.deliveryId, "fixture-rearm-after-replace", revision),
+      rejectedWith("binding-changed"),
+    );
+    // 此前这里拒绝 rearm-available:1——目标既不能重签也不能重新准备。
+    const reprepared = await prepareFixtureDelivery(fixture, {
+      idempotencyKey: "fixture-prepare-after-replace",
+      expectedStreamRevision: revision,
+    });
+    equal(reprepared.status, "committed");
+    notEqual(reprepared.delivery.deliveryId, prepared.delivery.deliveryId);
+    equal(reprepared.delivery.generation, 1);
+    equal(reprepared.delivery.phase, "delivery-prepared");
+    equal(reprepared.permit.hostAction.bindingId, replaced.bindingId);
+    equal(reprepared.next.suggestedTool, "wakeflow_record_delivery_outcome");
+    equal(existsSync(claimPath(fixture)), true, "the new envelope holds the window's claim");
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
 
 /** 事件流里摘要为 outcomeDigest 的处置记录的 attempt.failure（复审 D6）。 */
 function recordedOutcomeFailure(workspacePath: string, outcomeDigest: string): unknown {

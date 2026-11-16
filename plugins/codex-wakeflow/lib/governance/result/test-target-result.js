@@ -44,10 +44,10 @@ function assertReportMatchesContract(report, taskPackage, scope) {
         fail("relation");
     }
 }
-export function createTestTargetResult(input) {
+/** 测试结果依据的任务包与信封：都是测试类型，信封对得上任务包，信封里的尝试也对得上任务包。 */
+function parseTestPackageAndEnvelope(input) {
     let taskPackage;
     let envelope;
-    let report;
     try {
         taskPackage = parseTaskPackage(input.taskPackage);
     }
@@ -77,6 +77,11 @@ export function createTestTargetResult(input) {
             fail("envelope");
         throw error;
     }
+    return { taskPackage, envelope };
+}
+export function createTestTargetResult(input) {
+    const { taskPackage, envelope } = parseTestPackageAndEnvelope(input);
+    let report;
     try {
         report = parseTestTargetResultReport(input.report);
     }

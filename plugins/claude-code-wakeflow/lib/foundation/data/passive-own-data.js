@@ -85,6 +85,31 @@ function readArrayLength(value, path) {
     }
     return length;
 }
+/** 选择数组自己的 `length`：数据属性、正的安全整数。 */
+function propertySelectionLength(value, selectionPath) {
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+    if (lengthDescriptor === undefined || !Object.hasOwn(lengthDescriptor, "value")) {
+        fail("property-selection", selectionPath);
+    }
+    const length = lengthDescriptor.value;
+    if (typeof length !== "number" || !Number.isSafeInteger(length) || length <= 0) {
+        fail("property-selection", selectionPath);
+    }
+    return length;
+}
+/** 除了 `length`，选择数组的自有键只能是范围内的规范下标：没有符号键，没有多出来的属性。 */
+function assertOnlyIndexKeys(value, length, selectionPath) {
+    for (const ownKey of Reflect.ownKeys(value)) {
+        if (ownKey === "length")
+            continue;
+        if (typeof ownKey === "symbol")
+            fail("property-selection", selectionPath);
+        const ownPath = appendPropertyPath(selectionPath, ownKey);
+        const index = parseCanonicalArrayIndex(ownKey);
+        if (index === undefined || index >= length)
+            fail("property-selection", ownPath);
+    }
+}
 /**
  * 属性名列表也是输入数据，不能用普通数组读取隐式信任它。这里要求标准原型、
  * 稠密索引、可枚举数据属性、非空字符串和唯一值，并忽略所有成员行为。
@@ -97,24 +122,8 @@ function parsePropertySelection(value, basePath) {
     if (Object.getPrototypeOf(value) !== Array.prototype) {
         fail("property-selection", selectionPath);
     }
-    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
-    if (lengthDescriptor === undefined || !Object.hasOwn(lengthDescriptor, "value")) {
-        fail("property-selection", selectionPath);
-    }
-    const length = lengthDescriptor.value;
-    if (typeof length !== "number" || !Number.isSafeInteger(length) || length <= 0) {
-        fail("property-selection", selectionPath);
-    }
-    for (const ownKey of Reflect.ownKeys(value)) {
-        if (ownKey === "length")
-            continue;
-        if (typeof ownKey === "symbol")
-            fail("property-selection", selectionPath);
-        const ownPath = appendPropertyPath(selectionPath, ownKey);
-        const index = parseCanonicalArrayIndex(ownKey);
-        if (index === undefined || index >= length)
-            fail("property-selection", ownPath);
-    }
+    const length = propertySelectionLength(value, selectionPath);
+    assertOnlyIndexKeys(value, length, selectionPath);
     const selection = [];
     const seen = new Set();
     for (let index = 0; index < length; index += 1) {

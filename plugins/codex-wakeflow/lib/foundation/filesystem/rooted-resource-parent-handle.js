@@ -88,6 +88,24 @@ function snapshotNode(value, reason, errorPath) {
         throw error;
     }
 }
+/** 父目录检查失败：按根目录错误的原因归类成父目录的几种情形，认不出的是根作用域。 */
+function failParentInspection(error, errorPath) {
+    if (error.reason === "resource-not-found") {
+        fail("parent-not-found", errorPath, error);
+    }
+    if (error.reason === "ancestor-symlink") {
+        fail("parent-symlink", errorPath, error);
+    }
+    if (error.reason === "ancestor-type") {
+        fail("parent-not-directory", errorPath, error);
+    }
+    if (error.reason === "resource-changed" || error.reason === "resource-alias") {
+        fail("parent-changed", errorPath, error);
+    }
+    if (error.reason === "resource-path")
+        fail("input", errorPath, error);
+    fail("root-scope", errorPath, error);
+}
 async function inspectInitialParent(root, address, errorPath) {
     if (address.parentResourcePath === null) {
         try {
@@ -107,23 +125,8 @@ async function inspectInitialParent(root, address, errorPath) {
         parent = await root.inspectExistingResource(address.parentResourcePath, errorPath);
     }
     catch (error) {
-        if (error instanceof RootedDirectoryError) {
-            if (error.reason === "resource-not-found") {
-                fail("parent-not-found", errorPath, error);
-            }
-            if (error.reason === "ancestor-symlink") {
-                fail("parent-symlink", errorPath, error);
-            }
-            if (error.reason === "ancestor-type") {
-                fail("parent-not-directory", errorPath, error);
-            }
-            if (error.reason === "resource-changed" || error.reason === "resource-alias") {
-                fail("parent-changed", errorPath, error);
-            }
-            if (error.reason === "resource-path")
-                fail("input", errorPath, error);
-            fail("root-scope", errorPath, error);
-        }
+        if (error instanceof RootedDirectoryError)
+            failParentInspection(error, errorPath);
         throw error;
     }
     if (parent.node.kind === "symbolic-link") {

@@ -1488,8 +1488,8 @@
     },
     {
       "path": "lib/foundation/artifact/loaded-artifact-tree-identity.js",
-      "bytes": 16764,
-      "sha256": "sha256:dd9c0949bd4a526ea9a20e812bbd068c823c4ac529d0e554d8ecd3314488b9bb",
+      "bytes": 17035,
+      "sha256": "sha256:ba412302faec3ed9cacd56d46da4ff547de9cd79d4d674466f1bb71cc0d50faa",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1558,8 +1558,8 @@
     },
     {
       "path": "lib/foundation/data/passive-own-data.js",
-      "bytes": 9561,
-      "sha256": "sha256:2886613fba736cf3a4de22fbaf54e356155b7d1c3cbe5d418056d236f28f291c",
+      "bytes": 10031,
+      "sha256": "sha256:42de13b68cd78a1c85f541fba7b9d809b7a427b9262caf9505aa4766c98bc2a8",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1593,8 +1593,8 @@
     },
     {
       "path": "lib/foundation/filesystem/bounded-directory-tree-scan.js",
-      "bytes": 8029,
-      "sha256": "sha256:7e1aeee30bf1baf7053a3670c52cd34b0d7bbc0c0cb7befa2bb542a80a67807a",
+      "bytes": 8264,
+      "sha256": "sha256:005827c9257c508cc92ca77ebe1df43ccb8269a55bc249aa8248744211182123",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1761,8 +1761,8 @@
     },
     {
       "path": "lib/foundation/filesystem/private-mode-convergence.js",
-      "bytes": 7950,
-      "sha256": "sha256:4bc5dc323b107958df32bd2b16e6e0248937674c70643b7d43d3753d32890b86",
+      "bytes": 8415,
+      "sha256": "sha256:7e9e521583bead018aef9320429b014d1e6eebeffad9e3da8d8c56a5a2028643",
       "mode": "0644",
       "scope": "shared"
     },
@@ -1803,8 +1803,8 @@
     },
     {
       "path": "lib/foundation/filesystem/rooted-resource-parent-handle.js",
-      "bytes": 11908,
-      "sha256": "sha256:46cda86ad920faefa7da33eaa6d08e81ceae4cc5c95b3e71dc11877b65d5a503",
+      "bytes": 12005,
+      "sha256": "sha256:715503d7df6f03e4d868f56fd47e72373440f8541e54b5be8a18ca1f5cab7770",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2076,8 +2076,8 @@
     },
     {
       "path": "lib/governance/demand/event-sourcing/demand-event-sourcing-aggregate.js",
-      "bytes": 5730,
-      "sha256": "sha256:9e8fab48f5a775e54e34c81691275ddafe04c3a62316b58975e352e3478a802e",
+      "bytes": 6271,
+      "sha256": "sha256:eb4c709f59cb7c7ddd4e362f2530a9b19551d8d963620401c335b6d04a14d455",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2118,8 +2118,8 @@
     },
     {
       "path": "lib/governance/demand/event-sourcing/demand-event-sourcing-persisted-event-envelope.js",
-      "bytes": 7204,
-      "sha256": "sha256:bd5bdbaf7914e35900fa7d1fd55593c845dddb18cfe53d91de40e726cc9498d6",
+      "bytes": 7652,
+      "sha256": "sha256:aa1d6ccae7cfc2606c8561d3e59390693e4bfd1b50f9d434d405d76a4ea5e953",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2230,8 +2230,8 @@
     },
     {
       "path": "lib/governance/demand/model/demand-authority.js",
-      "bytes": 15042,
-      "sha256": "sha256:222d99a7876b479f672f0cd9123f4ff7172170534ee09e7c90022fc828dae704",
+      "bytes": 15435,
+      "sha256": "sha256:4f41ffdfaced1d7f024d7235d64e65392c0c5258213d6d018a338c563cef03e5",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2279,8 +2279,8 @@
     },
     {
       "path": "lib/governance/demand/publication/demand-event-sourcing-publication-stage.js",
-      "bytes": 9436,
-      "sha256": "sha256:c7b1b2d517ec094b8c3b9a7e370400b2daf6fc477ad46338edc3b7ad871e34a9",
+      "bytes": 9832,
+      "sha256": "sha256:c5575ce70db95254bd0e5582feca20541fcf75635011a494c83617efa1f8d297",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2349,8 +2349,8 @@
     },
     {
       "path": "lib/governance/evidence/managed-evidence-publication-record-publisher.js",
-      "bytes": 12994,
-      "sha256": "sha256:37f65732f3ef51974d2a1718b9a98127c0719bfe3bc7864ff56128301d81af81",
+      "bytes": 13589,
+      "sha256": "sha256:37d5a72b0b5696e9f1d32b7b320c6bfa638da7a1eb3095c495f740970bebaf6b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2370,8 +2370,8 @@
     },
     {
       "path": "lib/governance/evidence/managed-evidence-publication-transaction-store.js",
-      "bytes": 15033,
-      "sha256": "sha256:726d26832bb0f5d8281a509f9d799362e79d290dcfd90c69413e36cbb04d01c1",
+      "bytes": 15478,
+      "sha256": "sha256:f994bacc0a06800da7d3a41bb0395c1892925f3eb48a36102af234e1786e499b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2447,15 +2447,15 @@
     },
     {
       "path": "lib/governance/ledger/ledger-authority-reader.js",
-      "bytes": 13333,
-      "sha256": "sha256:e8c4206e8e6a9e42398e31f79b950ca0f9632e1b8933c2a5405d564e2a165262",
+      "bytes": 13155,
+      "sha256": "sha256:cd49ebf8e5b8687627d6c594ef4e63609cc60fdea0ac659a78a39d639a84ab99",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-authority-record.js",
-      "bytes": 16922,
-      "sha256": "sha256:2240f3e250831a1657932099f501ca2e74a6d9458d0342e1fec28af65d586a1a",
+      "bytes": 17251,
+      "sha256": "sha256:04ae4616449e71f5b159bed218f2636d8b706ee12dcfa61bc83b4c165e9e1172",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2489,8 +2489,8 @@
     },
     {
       "path": "lib/governance/ledger/ledger-record-publication-recovery.js",
-      "bytes": 5902,
-      "sha256": "sha256:fb164399a3886e22d53ac88c0ed9f995a949d262d9f91b33b35101a902e3d7b5",
+      "bytes": 6112,
+      "sha256": "sha256:a0ad699436f42004452c37507abfac8afd40bfb7e78a41de4db219ec24567c7b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2503,8 +2503,8 @@
     },
     {
       "path": "lib/governance/ledger/ledger-record-publisher.js",
-      "bytes": 9746,
-      "sha256": "sha256:d15d0a163e170b8eaad6bf4e7b5462698f3ba6aeaf8636d9534c1b9b08f8b4e0",
+      "bytes": 10116,
+      "sha256": "sha256:ac34d21f926ac86daaf69a3ce319e425ca2c32731bac8000a89948440abbb22c",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2622,8 +2622,8 @@
     },
     {
       "path": "lib/governance/result/test-target-result.js",
-      "bytes": 5625,
-      "sha256": "sha256:d7b8b121952bfaf96cdede98fd2e1c8285b329aa6ad73a70693e5057c5dae7f2",
+      "bytes": 5925,
+      "sha256": "sha256:5f8af111fd910dc6d240c26ab5c5f467a5846cf1a6bdfa70d435b13ed11a77a6",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2664,8 +2664,8 @@
     },
     {
       "path": "lib/governance/review/demand-post-acceptance-route.js",
-      "bytes": 20523,
-      "sha256": "sha256:149fdbd1f8f74b616aae720ada86f07328bd8450b5e936b51fa05d9a756c40d3",
+      "bytes": 20654,
+      "sha256": "sha256:3f79ba5728a8e04312a38610564771741d53e99c05b29e6ec4398fa19c0491d4",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3231,8 +3231,8 @@
     },
     {
       "path": "lib/workspace/managed-integration/wakeflow-external-instruction-inspection.js",
-      "bytes": 11372,
-      "sha256": "sha256:55a08a6ba2ea699a28f27426f957bf8560e74b20d2be6912a2f9bf23395e2332",
+      "bytes": 11812,
+      "sha256": "sha256:09532a447ab89ac1eeef6c1d02e0a9824372df479ee63737b200047ff18bcf52",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3266,8 +3266,8 @@
     },
     {
       "path": "lib/workspace/managed-integration/wakeflow-gitignore-recomposition.js",
-      "bytes": 9619,
-      "sha256": "sha256:a8a1a5dbfe63cdb1f17fd387bc8eaba084c4d112501e893c49a7d291647c75db",
+      "bytes": 9769,
+      "sha256": "sha256:8d038287ab1ce65b04d904dbd66034934423f8d81c2ee388460075b9aecd6cb2",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3329,8 +3329,8 @@
     },
     {
       "path": "lib/workspace/managed-integration/wakeflow-program-instruction-recomposition.js",
-      "bytes": 9616,
-      "sha256": "sha256:50c3afaa78756ae9843b08bd58f7f404c0a4cb991de51386357bb2f1c01c89c8",
+      "bytes": 9699,
+      "sha256": "sha256:76c7d4bbeac86fb6fd74ee169196e6f490261a3782e2cd507fc35f06627a5ae8",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3399,15 +3399,15 @@
     },
     {
       "path": "lib/workspace/wakeflow-legacy-residue-scan.js",
-      "bytes": 8956,
-      "sha256": "sha256:ae3c4d905727df9f19ca2257ea91ac446b32df7adcacbaae301d78fae5c3d237",
+      "bytes": 9509,
+      "sha256": "sha256:e98f18f0456668e2ceaf4d3e09742fdd0954c394df8037c4da4d51e58753d2d6",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/workspace/wakeflow-shared-coordination-layout.js",
-      "bytes": 8358,
-      "sha256": "sha256:f1d19a1ea880e4e59ec5e25249b4f3da1c6cce45cf78190e6d66d9b4626550bf",
+      "bytes": 8483,
+      "sha256": "sha256:a3fa915d21b8b51751c2c7bf6145c43b25992f958342a0970ef44b1622ea9c29",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3574,8 +3574,8 @@
     },
     {
       "path": "lib/workspace/workspace-resource-declaration.js",
-      "bytes": 17504,
-      "sha256": "sha256:8c1e82ee17cd4cec669f73e83752274a1e6ceda09d67a1eb4b64cdb4f6f2caba",
+      "bytes": 17832,
+      "sha256": "sha256:84bb57512de20d9c0fcc95645cead2a6cb206d060484aa7dd372a23082b9d35d",
       "mode": "0644",
       "scope": "shared"
     },

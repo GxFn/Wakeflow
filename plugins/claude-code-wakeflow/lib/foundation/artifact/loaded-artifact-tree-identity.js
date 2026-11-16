@@ -266,6 +266,32 @@ function assertManifestTopology(files, limits) {
         admit(file.ref, "file", path);
     }
 }
+/** 清单的文件项：逐个解析，按路径严格升序，字节数累加不溢出也不超过总量上限。 */
+function parseManifestFiles(values, limits) {
+    const files = [];
+    let previousRef;
+    let totalBytes = parseByteCount(0, "$manifest.totalBytes");
+    for (const [index, value] of values.entries()) {
+        const file = parseManifestFile(value, index, limits);
+        if (previousRef !== undefined && compareText(previousRef, file.ref) >= 0) {
+            fail("manifest-order", `$manifest.files.${index}.ref`);
+        }
+        previousRef = file.ref;
+        try {
+            totalBytes = addByteCounts(totalBytes, file.bytes, "$manifest.totalBytes");
+        }
+        catch (error) {
+            if (error instanceof ByteCountError)
+                fail("manifest-totals", "$manifest.totalBytes", error);
+            throw error;
+        }
+        if (totalBytes > limits.maxTotalBytes) {
+            fail("total-bytes", "$manifest.totalBytes");
+        }
+        files.push(file);
+    }
+    return { files, totalBytes };
+}
 function parseManifest(value, limits) {
     let record;
     try {
@@ -296,28 +322,7 @@ function parseManifest(value, limits) {
     }
     if (values.length === 0)
         fail("empty-tree", "$manifest.files");
-    const files = [];
-    let previousRef;
-    let totalBytes = parseByteCount(0, "$manifest.totalBytes");
-    for (const [index, value] of values.entries()) {
-        const file = parseManifestFile(value, index, limits);
-        if (previousRef !== undefined && compareText(previousRef, file.ref) >= 0) {
-            fail("manifest-order", `$manifest.files.${index}.ref`);
-        }
-        previousRef = file.ref;
-        try {
-            totalBytes = addByteCounts(totalBytes, file.bytes, "$manifest.totalBytes");
-        }
-        catch (error) {
-            if (error instanceof ByteCountError)
-                fail("manifest-totals", "$manifest.totalBytes", error);
-            throw error;
-        }
-        if (totalBytes > limits.maxTotalBytes) {
-            fail("total-bytes", "$manifest.totalBytes");
-        }
-        files.push(file);
-    }
+    const { files, totalBytes } = parseManifestFiles(values, limits);
     assertManifestTopology(files, limits);
     const fileCount = parseNonNegativeInteger(record.fileCount, "$manifest.fileCount", "manifest-shape");
     const declaredTotalBytes = parseNonNegativeInteger(record.totalBytes, "$manifest.totalBytes", "manifest-shape");

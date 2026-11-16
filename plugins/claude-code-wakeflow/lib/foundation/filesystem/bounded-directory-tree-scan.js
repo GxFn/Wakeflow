@@ -137,6 +137,28 @@ function createTreeEntry(parent, entry) {
         node: entry.node,
     });
 }
+/**
+ * 把一个目录的直接子项记进结果，并把其中的子目录按逆序压栈——出栈时就是列举的顺序。
+ */
+function collectDirectoryChildren(pending, children, entries, pendingDirectories) {
+    const childDirectories = [];
+    for (const child of children) {
+        const treeEntry = createTreeEntry(pending, child);
+        entries.push(treeEntry);
+        if (treeEntry.node.kind === "directory") {
+            childDirectories.push(Object.freeze({
+                resourcePath: treeEntry.resourcePath,
+                depth: treeEntry.depth,
+                expectedNode: treeEntry.node,
+            }));
+        }
+    }
+    for (let index = childDirectories.length - 1; index >= 0; index -= 1) {
+        const child = childDirectories[index];
+        if (child !== undefined)
+            pendingDirectories.push(child);
+    }
+}
 async function scanTree(root, treeRootResourcePath, options) {
     const pendingDirectories = [
         {
@@ -159,23 +181,7 @@ async function scanTree(root, treeRootResourcePath, options) {
             treeRootNode = directory.directoryNode;
         if (atDepthLimit)
             continue;
-        const childDirectories = [];
-        for (const child of directory.entries) {
-            const treeEntry = createTreeEntry(pending, child);
-            entries.push(treeEntry);
-            if (treeEntry.node.kind === "directory") {
-                childDirectories.push(Object.freeze({
-                    resourcePath: treeEntry.resourcePath,
-                    depth: treeEntry.depth,
-                    expectedNode: treeEntry.node,
-                }));
-            }
-        }
-        for (let index = childDirectories.length - 1; index >= 0; index -= 1) {
-            const child = childDirectories[index];
-            if (child !== undefined)
-                pendingDirectories.push(child);
-        }
+        collectDirectoryChildren(pending, directory.entries, entries, pendingDirectories);
     }
     if (treeRootNode === undefined)
         fail("inspection-failure", "$tree");

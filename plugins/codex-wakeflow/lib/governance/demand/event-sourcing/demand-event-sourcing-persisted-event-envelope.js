@@ -56,6 +56,64 @@ function parseId(value, kind, path) {
 function isJsonObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+function parseRecordedAt(value) {
+    try {
+        return parseUtcInstant(value, "$/recordedAt");
+    }
+    catch (error) {
+        if (error instanceof UtcInstantError)
+            fail("time", "$/recordedAt", error);
+        throw error;
+    }
+}
+/** 事件数据是一个 JSON 对象：不是合法 JSON 是 json，不是对象是 schema。 */
+function parseEventData(value) {
+    let data;
+    try {
+        data = parseJsonValue(value, "$/data");
+    }
+    catch (error) {
+        if (error instanceof JsonValueError)
+            fail("json", "$/data", error);
+        throw error;
+    }
+    if (!isJsonObject(data)) {
+        fail("schema", "$/data");
+    }
+    return data;
+}
+function parseResultingStateDigest(value) {
+    try {
+        return parseSha256Digest(value, "$/resultingStateDigest");
+    }
+    catch (error) {
+        if (error instanceof Sha256Error)
+            fail("digest", "$/resultingStateDigest", error);
+        throw error;
+    }
+}
+function parseResultingStateModelVersion(value) {
+    try {
+        return parseDemandEventSourcingStateModelVersion(value, "$/resultingStateModelVersion");
+    }
+    catch (error) {
+        if (error instanceof DemandEventSourcingStateVersionError) {
+            fail("state-version", "$/resultingStateModelVersion", error);
+        }
+        throw error;
+    }
+}
+function parseStreamRevision(value) {
+    try {
+        return parseDemandEventStreamRevision(value, "$/streamRevision");
+    }
+    catch (error) {
+        if (error instanceof DemandEventStreamPositionError) {
+            fail("revision", "$/streamRevision", error);
+        }
+        throw error;
+    }
+}
 /** 解析 envelope；未知 eventType/eventVersion 在本层仍是有效路由事实。 */
 export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     let json;
@@ -71,56 +129,11 @@ export function parseDemandEventSourcingPersistedEventEnvelope(value) {
     if (!result.ok)
         fail("schema", result.path);
     const wire = result.value;
-    let recordedAt;
-    try {
-        recordedAt = parseUtcInstant(wire.recordedAt, "$/recordedAt");
-    }
-    catch (error) {
-        if (error instanceof UtcInstantError)
-            fail("time", "$/recordedAt", error);
-        throw error;
-    }
-    let data;
-    try {
-        data = parseJsonValue(wire.data, "$/data");
-    }
-    catch (error) {
-        if (error instanceof JsonValueError)
-            fail("json", "$/data", error);
-        throw error;
-    }
-    if (!isJsonObject(data)) {
-        fail("schema", "$/data");
-    }
-    let resultingStateDigest;
-    try {
-        resultingStateDigest = parseSha256Digest(wire.resultingStateDigest, "$/resultingStateDigest");
-    }
-    catch (error) {
-        if (error instanceof Sha256Error)
-            fail("digest", "$/resultingStateDigest", error);
-        throw error;
-    }
-    let resultingStateModelVersion;
-    try {
-        resultingStateModelVersion = parseDemandEventSourcingStateModelVersion(wire.resultingStateModelVersion, "$/resultingStateModelVersion");
-    }
-    catch (error) {
-        if (error instanceof DemandEventSourcingStateVersionError) {
-            fail("state-version", "$/resultingStateModelVersion", error);
-        }
-        throw error;
-    }
-    let streamRevision;
-    try {
-        streamRevision = parseDemandEventStreamRevision(wire.streamRevision, "$/streamRevision");
-    }
-    catch (error) {
-        if (error instanceof DemandEventStreamPositionError) {
-            fail("revision", "$/streamRevision", error);
-        }
-        throw error;
-    }
+    const recordedAt = parseRecordedAt(wire.recordedAt);
+    const data = parseEventData(wire.data);
+    const resultingStateDigest = parseResultingStateDigest(wire.resultingStateDigest);
+    const resultingStateModelVersion = parseResultingStateModelVersion(wire.resultingStateModelVersion);
+    const streamRevision = parseStreamRevision(wire.streamRevision);
     return Object.freeze({
         artifactKind: DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
         schemaVersion: DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION,

@@ -122,6 +122,50 @@ async function inspectPath(root, resourcePath, errorPath) {
         throw error;
     }
 }
+/** 打开要改权限的节点；路径中途消失或变成链接算资源变了，其余打不开是 chmod 失败。 */
+async function openForModeChange(physicalPath, kind, errorPath) {
+    try {
+        return await openFileHandle(physicalPath, openFlags(kind, errorPath));
+    }
+    catch (error) {
+        if (error instanceof PrivateModeConvergenceError)
+            throw error;
+        const code = readNodeSystemErrorCode(error);
+        if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
+            fail("resource-changed", errorPath, error);
+        }
+        fail("chmod-failure", errorPath, error);
+    }
+}
+/**
+ * 经句柄改权限：先确认打开的就是观察到的那个节点，改完再按句柄读回核对，持久化模式下同步一次。
+ */
+async function chmodThroughHandle(handle, observedNode, target, errorPath, sync) {
+    const opened = await statHandle(handle, errorPath);
+    if (opened.kind !== observedNode.kind ||
+        !sameFileNodeIdentity(opened, observedNode) ||
+        opened.permissionBits !== observedNode.permissionBits) {
+        fail("resource-changed", errorPath);
+    }
+    try {
+        await handle.chmod(target);
+    }
+    catch (cause) {
+        fail("chmod-failure", errorPath, cause);
+    }
+    const hardened = await statHandle(handle, errorPath);
+    if (!sameFileNodeIdentity(hardened, observedNode) || hardened.permissionBits !== target) {
+        fail("chmod-failure", errorPath);
+    }
+    if (sync) {
+        try {
+            await handle.sync();
+        }
+        catch (cause) {
+            fail("chmod-failure", errorPath, cause);
+        }
+    }
+}
 /**
  * 把一个观察时是安全漂移的节点收回私有模式。`expected` 是规划时的节点快照：路径上的节点必须仍是
  * 同一 inode、同一模式，否则 `resource-changed`（重新规划）。已经是私有模式返回 `current`。
@@ -145,44 +189,9 @@ export async function convergePrivateNodeMode(root, resourcePath, expected, opti
         fail("resource-unsafe", errorPath);
     const kind = observed.node.kind === "directory" ? "directory" : "file";
     const target = kind === "directory" ? PRIVATE_DIRECTORY_MODE : PRIVATE_FILE_MODE;
-    let handle;
+    const handle = await openForModeChange(observed.physicalPath, kind, errorPath);
     try {
-        handle = await openFileHandle(observed.physicalPath, openFlags(kind, errorPath));
-    }
-    catch (error) {
-        if (error instanceof PrivateModeConvergenceError)
-            throw error;
-        const code = readNodeSystemErrorCode(error);
-        if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
-            fail("resource-changed", errorPath, error);
-        }
-        fail("chmod-failure", errorPath, error);
-    }
-    try {
-        const opened = await statHandle(handle, errorPath);
-        if (opened.kind !== observed.node.kind ||
-            !sameFileNodeIdentity(opened, observed.node) ||
-            opened.permissionBits !== observed.node.permissionBits) {
-            fail("resource-changed", errorPath);
-        }
-        try {
-            await handle.chmod(target);
-        }
-        catch (cause) {
-            fail("chmod-failure", errorPath, cause);
-        }
-        const hardened = await statHandle(handle, errorPath);
-        if (!sameFileNodeIdentity(hardened, observed.node) || hardened.permissionBits !== target) {
-            fail("chmod-failure", errorPath);
-        }
-        if (root.durability === "fsync") {
-            try {
-                await handle.sync();
-            }
-            catch (cause) {
-                fail("chmod-failure", errorPath, cause);
-            }
-        }
+        await chmodThroughHandle(handle, observed.node, target, errorPath, root.durability === "fsync");
     }
     finally {
         await handle.close().catch(() => undefined);

@@ -265,19 +265,8 @@ export function createDemandAuthority(identityValue, draft) {
         testingDecision: record.testingDecision,
     }, identity);
 }
-/**
- * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program；
- * 成员与身份需求包记录的绑定由解析时的身份关系检查保证。
- */
-export async function admitDemandAuthority(identityValue, authorityValue, ledgerStore, options) {
-    const identity = parseDemandIdentity(identityValue);
-    const authority = parseDemandAuthority(authorityValue, identity);
-    if (typeof ledgerStore !== "object" ||
-        ledgerStore === null ||
-        types.isProxy(ledgerStore) ||
-        !(ledgerStore instanceof LedgerAuthorityStore)) {
-        fail("input", "$ledgerStore");
-    }
+/** 准入的选项只认一个 `signal`，并且必须是真的 AbortSignal。 */
+function parseAdmissionSignal(options) {
     let optionRecord;
     try {
         optionRecord = parsePlainRecord(options === undefined ? {} : options, "$options");
@@ -295,13 +284,12 @@ export async function admitDemandAuthority(identityValue, authorityValue, ledger
                 !(optionRecord.signal instanceof AbortSignal)))) {
         fail("input", "$options");
     }
-    const signal = optionRecord.signal;
-    if (signal?.aborted === true)
-        fail("aborted", "$signal");
-    const resolved = [];
-    let ledgerResolutions;
+    return optionRecord.signal;
+}
+/** 向账本解析权威引用；账本自己的失败归成中止或解析失败。 */
+async function resolveAuthorityReferences(ledgerStore, references, signal) {
     try {
-        ledgerResolutions = await ledgerStore.resolveMemberReferences(authority.authorityRefs, signal === undefined ? undefined : { signal });
+        return await ledgerStore.resolveMemberReferences(references, signal === undefined ? undefined : { signal });
     }
     catch (error) {
         if (error instanceof LedgerAuthorityStoreError) {
@@ -311,6 +299,25 @@ export async function admitDemandAuthority(identityValue, authorityValue, ledger
         }
         throw error;
     }
+}
+/**
+ * 通过 `LedgerAuthorityStore` 解析每个成员，并证明每个成员都属于同一 Program；
+ * 成员与身份需求包记录的绑定由解析时的身份关系检查保证。
+ */
+export async function admitDemandAuthority(identityValue, authorityValue, ledgerStore, options) {
+    const identity = parseDemandIdentity(identityValue);
+    const authority = parseDemandAuthority(authorityValue, identity);
+    if (typeof ledgerStore !== "object" ||
+        ledgerStore === null ||
+        types.isProxy(ledgerStore) ||
+        !(ledgerStore instanceof LedgerAuthorityStore)) {
+        fail("input", "$ledgerStore");
+    }
+    const signal = parseAdmissionSignal(options);
+    if (signal?.aborted === true)
+        fail("aborted", "$signal");
+    const resolved = [];
+    const ledgerResolutions = await resolveAuthorityReferences(ledgerStore, authority.authorityRefs, signal);
     for (const [index, resolution] of ledgerResolutions.entries()) {
         const record = resolution.loaded;
         if (record.record.programId !== identity.programId) {

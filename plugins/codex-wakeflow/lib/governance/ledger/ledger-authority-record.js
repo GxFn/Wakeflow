@@ -156,6 +156,25 @@ function parseDocument(wire, index) {
         digest: parseDigest(wire.digest, "document", `${path}/digest`),
     });
 }
+/**
+ * 把一个文档路径的每一级登记进去：同一个不分大小写的名字只能对应一种写法、一种节点——两个文档不能只差
+ * 大小写，一个路径也不能既是文件又是别的文档的目录。
+ */
+function registerDocumentNodes(nodesByCaseKey, documentPath, index) {
+    const segments = splitPortableResourcePath(documentPath);
+    for (let depth = 1; depth <= segments.length; depth += 1) {
+        const nodePath = segments.slice(0, depth).join("/");
+        const kind = depth === segments.length ? "file" : "directory";
+        const caseKey = nodePath.toLowerCase();
+        const existing = nodesByCaseKey.get(caseKey);
+        if (existing !== undefined && (existing.path !== nodePath || existing.kind !== kind)) {
+            fail("document", `$/documents/${index}/path`);
+        }
+        if (existing === undefined) {
+            nodesByCaseKey.set(caseKey, Object.freeze({ path: nodePath, kind }));
+        }
+    }
+}
 /** 成员按路径严格升序、无大小写冲突，且恰有一份 requirement.md 与一份 landing.md。 */
 function assertDocumentRelations(documents) {
     const nodesByCaseKey = new Map();
@@ -169,19 +188,7 @@ function assertDocumentRelations(documents) {
         if (previous !== undefined && compareText(previous.path, document.path) >= 0) {
             fail("document", `$/documents/${index}/path`);
         }
-        const segments = splitPortableResourcePath(document.path);
-        for (let depth = 1; depth <= segments.length; depth += 1) {
-            const nodePath = segments.slice(0, depth).join("/");
-            const kind = depth === segments.length ? "file" : "directory";
-            const caseKey = nodePath.toLowerCase();
-            const existing = nodesByCaseKey.get(caseKey);
-            if (existing !== undefined && (existing.path !== nodePath || existing.kind !== kind)) {
-                fail("document", `$/documents/${index}/path`);
-            }
-            if (existing === undefined) {
-                nodesByCaseKey.set(caseKey, Object.freeze({ path: nodePath, kind }));
-            }
-        }
+        registerDocumentNodes(nodesByCaseKey, document.path, index);
         if (document.role === "requirement")
             requirementCount += 1;
         if (document.role === "landing")

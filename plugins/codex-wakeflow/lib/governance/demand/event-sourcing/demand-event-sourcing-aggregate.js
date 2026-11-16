@@ -50,24 +50,9 @@ function parseDigest(value, path) {
         throw error;
     }
 }
-/** 对进程内聚合游标和状态事实执行完整的防御性复验。 */
-export function parseDemandEventSourcingAggregate(value) {
-    let record;
+function parseAggregateDemandId(value) {
     try {
-        record = parsePlainRecord(value, "$aggregate");
-    }
-    catch (error) {
-        if (error instanceof PassiveOwnDataError)
-            fail("input", "$aggregate", error);
-        throw error;
-    }
-    const keys = Object.keys(record).sort();
-    if (keys.length !== FIELDS.length || keys.some((key, index) => key !== FIELDS[index])) {
-        fail("input", "$aggregate");
-    }
-    let demandId;
-    try {
-        demandId = parseWakeflowDurableIdOfKind(record.demandId, "demand", "$/demandId");
+        return parseWakeflowDurableIdOfKind(value, "demand", "$/demandId");
     }
     catch (error) {
         if (error instanceof WakeflowDurableIdError) {
@@ -75,9 +60,12 @@ export function parseDemandEventSourcingAggregate(value) {
         }
         throw error;
     }
+}
+/** 聚合的最后一个事件：先按存储形状解析，再确认它的状态模型版本受支持、事件本身升级得上来。 */
+function parseAggregateLastEvent(value) {
     let lastEvent;
     try {
-        lastEvent = parseDemandEventSourcingStoredEvent(record.lastEvent);
+        lastEvent = parseDemandEventSourcingStoredEvent(value);
     }
     catch (error) {
         if (error instanceof DemandEventSourcingStoredEventError) {
@@ -96,20 +84,23 @@ export function parseDemandEventSourcingAggregate(value) {
         }
         throw error;
     }
-    let state;
+    return lastEvent;
+}
+function parseAggregateState(value) {
     try {
-        state = parseDemandAggregateState(record.state);
+        return parseDemandAggregateState(value);
     }
     catch (error) {
         if (error instanceof DemandAggregateStateError)
             fail("state", "$/state", error);
         throw error;
     }
-    let streamRevision;
-    let commitSequence;
+}
+function parseAggregatePosition(record) {
     try {
-        streamRevision = parseDemandEventStreamRevision(record.streamRevision, "$/streamRevision");
-        commitSequence = parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence");
+        const streamRevision = parseDemandEventStreamRevision(record.streamRevision, "$/streamRevision");
+        const commitSequence = parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence");
+        return { streamRevision, commitSequence };
     }
     catch (error) {
         if (error instanceof DemandEventStreamPositionError) {
@@ -117,6 +108,26 @@ export function parseDemandEventSourcingAggregate(value) {
         }
         throw error;
     }
+}
+/** 对进程内聚合游标和状态事实执行完整的防御性复验。 */
+export function parseDemandEventSourcingAggregate(value) {
+    let record;
+    try {
+        record = parsePlainRecord(value, "$aggregate");
+    }
+    catch (error) {
+        if (error instanceof PassiveOwnDataError)
+            fail("input", "$aggregate", error);
+        throw error;
+    }
+    const keys = Object.keys(record).sort();
+    if (keys.length !== FIELDS.length || keys.some((key, index) => key !== FIELDS[index])) {
+        fail("input", "$aggregate");
+    }
+    const demandId = parseAggregateDemandId(record.demandId);
+    const lastEvent = parseAggregateLastEvent(record.lastEvent);
+    const state = parseAggregateState(record.state);
+    const { streamRevision, commitSequence } = parseAggregatePosition(record);
     const lastEventDigest = parseDigest(record.lastEventDigest, "$/lastEventDigest");
     const stateDigest = parseDigest(record.stateDigest, "$/stateDigest");
     if (commitSequence > streamRevision ||

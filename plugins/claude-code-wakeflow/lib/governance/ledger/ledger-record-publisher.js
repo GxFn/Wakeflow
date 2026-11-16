@@ -65,16 +65,18 @@ function candidateOptions(signal) {
         ...(signal === undefined ? {} : { signal }),
     });
 }
-function preparePublication(recordValue, membersValue, signal) {
-    let record;
+function parsePublicationRecord(value) {
     try {
-        record = parseLedgerAuthorityRecord(recordValue);
+        return parseLedgerAuthorityRecord(value);
     }
     catch (error) {
         if (error instanceof LedgerAuthorityRecordError)
             fail("input", "$record", error);
         throw error;
     }
+}
+function preparePublication(recordValue, membersValue, signal) {
+    const record = parsePublicationRecord(recordValue);
     const members = parseMembers(membersValue, record);
     const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
     if (recordBytes.byteLength > LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES) {
@@ -141,6 +143,19 @@ async function createOrSettleStage(root, prepared, stageNodePresent, signal) {
         throw error;
     }
 }
+/**
+ * final 已经在了：有意图记录就按"已提交"收尾（清掉意图）；没有意图记录而暂存目录还在，是需要恢复的残留；
+ * 两者都没有，就是之前已经发布完的同一份记录，读回来核对。
+ */
+async function loadAlreadyPublished(root, prepared, storedBefore, residuesBefore, signal) {
+    if (storedBefore !== null) {
+        return settleCommittedLedgerIntent(root, storedBefore, residuesBefore, signal);
+    }
+    if (residuesBefore.stageNode !== null) {
+        fail("recovery-required", "$stage");
+    }
+    return loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+}
 /** 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。 */
 export async function publishLedgerAuthorityRecord(root, recordValue, membersValue, signal) {
     const prepared = preparePublication(recordValue, membersValue, signal);
@@ -155,14 +170,7 @@ export async function publishLedgerAuthorityRecord(root, recordValue, membersVal
         const residuesBefore = await inspectLedgerRecordPublicationResidues(root, prepared.intent);
         const finalNode = await ledgerPublicationResourceNodeOrNull(root, prepared.intent.finalRootRef);
         if (finalNode !== null) {
-            if (storedBefore !== null) {
-                const loaded = await settleCommittedLedgerIntent(root, storedBefore, residuesBefore, signal);
-                return Object.freeze({ wroteAuthority: false, loaded });
-            }
-            if (residuesBefore.stageNode !== null) {
-                fail("recovery-required", "$stage");
-            }
-            const loaded = await loadExactPublishedLedgerRecord(root, prepared.intent, signal);
+            const loaded = await loadAlreadyPublished(root, prepared, storedBefore, residuesBefore, signal);
             return Object.freeze({ wroteAuthority: false, loaded });
         }
         if (storedBefore === null && residuesBefore.stageNode !== null) {

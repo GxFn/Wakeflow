@@ -63,6 +63,16 @@ function mapTreeError(error) {
         fail("root-scope", "$root");
     fail("conflict", "$record");
 }
+/** 稳定读取失败的归类：中止、根作用域、超过容量；其余读不出都是与预期节点冲突。 */
+function failStableRead(error, path) {
+    if (error.reason === "aborted")
+        fail("aborted", "$signal", error);
+    if (error.reason === "root-scope")
+        fail("root-scope", "$root", error);
+    if (error.reason === "too-large")
+        fail("capacity", path, error);
+    fail("conflict", path, error);
+}
 async function readRecordDocument(root, recordRef, expectedNode, signal) {
     try {
         return await readDeterministicJsonFile(root, recordRef, {
@@ -72,15 +82,8 @@ async function readRecordDocument(root, recordRef, expectedNode, signal) {
         });
     }
     catch (error) {
-        if (error instanceof StableFileReadError) {
-            if (error.reason === "aborted")
-                fail("aborted", "$signal", error);
-            if (error.reason === "root-scope")
-                fail("root-scope", "$root", error);
-            if (error.reason === "too-large")
-                fail("capacity", "$record", error);
-            fail("conflict", "$record", error);
-        }
+        if (error instanceof StableFileReadError)
+            failStableRead(error, "$record");
         if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
             fail("record", "$record", error);
         }
@@ -270,15 +273,8 @@ export async function resolveLoadedLedgerAuthorityMemberReference(root, loaded, 
         });
     }
     catch (error) {
-        if (error instanceof StableFileReadError) {
-            if (error.reason === "aborted")
-                fail("aborted", "$signal", error);
-            if (error.reason === "root-scope")
-                fail("root-scope", "$root", error);
-            if (error.reason === "too-large")
-                fail("capacity", "$reference", error);
-            fail("conflict", "$reference", error);
-        }
+        if (error instanceof StableFileReadError)
+            failStableRead(error, "$reference");
         throw error;
     }
     if (read.digest !== reference.memberDigest)

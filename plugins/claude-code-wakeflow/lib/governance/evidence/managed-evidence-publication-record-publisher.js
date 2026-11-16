@@ -223,6 +223,38 @@ async function currentFinalOrNull(root, transaction, plan, journalNode, signal) 
     await requireJournal(root, transaction, signal, journalNode);
     return finalRecord;
 }
+/**
+ * 发布失败之后看是不是别的发布者已经把同一份记录发布好了：目的地已存在、来源变了、提交不确定这三种才看。
+ * durability-failure 不在其列——rename 已经发生、同步却没有，final 可见也不算 current。
+ */
+async function concurrentFinalAfter(error, root, transaction, plan, journalNode) {
+    if (error.reason === "destination-exists" ||
+        error.reason === "source-changed" ||
+        error.reason === "commit-uncertain") {
+        return currentFinalOrNull(root, transaction, plan, journalNode, undefined);
+    }
+    return null;
+}
+/**
+ * 发布之后把 final 读回来并复核日志：rename 已经发生，这里的任何核对失败都不能说"没发布"，一律是
+ * commit-uncertain。
+ */
+async function readPublishedFinal(root, transaction, plan, journalNode) {
+    try {
+        const finalNode = await nodeOrNull(root, plan.destinationRootPath);
+        if (finalNode === null)
+            fail("commit-uncertain", "$final");
+        const finalRecord = await inspectTree(root, plan.destinationRootPath, plan, finalNode, "final", undefined);
+        await requireJournal(root, transaction, undefined, journalNode);
+        return finalRecord;
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
+            fail("commit-uncertain", "$final", error);
+        }
+        throw error;
+    }
+}
 /** 发布或幂等读取journal绑定的immutable final record；不检查或追加Event。 */
 export async function publishManagedEvidencePublicationRecord(demandRootValue, transactionValue, optionsValue = {}) {
     assertRoot(demandRootValue);
@@ -256,38 +288,20 @@ export async function publishManagedEvidencePublicationRecord(demandRootValue, t
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreePublicationError) {
-            // durability-failure 不在这里：rename 已经发生、同步却没有，final 可见也不算 current。
-            if (error.reason === "destination-exists" ||
-                error.reason === "source-changed" ||
-                error.reason === "commit-uncertain") {
-                const concurrent = await currentFinalOrNull(demandRootValue, transaction, plan, stored.source.node, undefined);
-                if (concurrent !== null) {
-                    return Object.freeze({
-                        disposition: "current",
-                        transactionDigest: stored.transactionDigest,
-                        finalRecord: concurrent,
-                        publication: null,
-                    });
-                }
+            const concurrent = await concurrentFinalAfter(error, demandRootValue, transaction, plan, stored.source.node);
+            if (concurrent !== null) {
+                return Object.freeze({
+                    disposition: "current",
+                    transactionDigest: stored.transactionDigest,
+                    finalRecord: concurrent,
+                    publication: null,
+                });
             }
             mapPublicationError(error);
         }
         throw error;
     }
-    let finalRecord;
-    try {
-        const finalNode = await nodeOrNull(demandRootValue, plan.destinationRootPath);
-        if (finalNode === null)
-            fail("commit-uncertain", "$final");
-        finalRecord = await inspectTree(demandRootValue, plan.destinationRootPath, plan, finalNode, "final", undefined);
-        await requireJournal(demandRootValue, transaction, undefined, stored.source.node);
-    }
-    catch (error) {
-        if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
-            fail("commit-uncertain", "$final", error);
-        }
-        throw error;
-    }
+    const finalRecord = await readPublishedFinal(demandRootValue, transaction, plan, stored.source.node);
     return Object.freeze({
         disposition: "published",
         transactionDigest: stored.transactionDigest,

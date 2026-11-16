@@ -296,16 +296,10 @@ function assertStoredCapability(value) {
         fail("input", "$stored");
     }
 }
-/** 只退休Store重新读证后的exact journal；缺失、替换或提交不确定均不伪造成功。 */
-export async function retireManagedEvidencePublicationTransactionJournal(root, storedValue, optionsValue = {}) {
-    assertRoot(root);
-    const options = parseOptions(optionsValue);
-    assertStoredCapability(storedValue);
-    assertNotAborted(options.signal);
-    admitMutation(storedValue.transaction, "exact-retire");
-    let current;
+/** 退役之前按原节点重读日志：中止与根作用域原样抛，其余读不出都是与当前状态冲突。 */
+async function readCurrentForRetirement(root, node, signal) {
     try {
-        current = await readStoredAtNode(root, storedValue.source.node, options.signal);
+        return await readStoredAtNode(root, node, signal);
     }
     catch (error) {
         if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
@@ -317,16 +311,13 @@ export async function retireManagedEvidencePublicationTransactionJournal(root, s
         }
         throw error;
     }
-    if (current.transactionDigest !== storedValue.transactionDigest ||
-        !sameFileNodeSnapshot(current.source.node, storedValue.source.node) ||
-        !sameTransaction(current.transaction, storedValue.transaction)) {
-        fail("conflict", "$transaction");
-    }
-    let retirement;
+}
+/** 按节点精确删除日志文件；删不掉而又不是中止或根作用域的，一律需要恢复。 */
+async function unlinkJournalExactly(root, expectedNode, signal) {
     try {
-        retirement = await unlinkRegularFileExactly(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {
-            expectedNode: current.source.node,
-            ...(options.signal === undefined ? {} : { signal: options.signal }),
+        return await unlinkRegularFileExactly(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {
+            expectedNode,
+            ...(signal === undefined ? {} : { signal }),
         });
     }
     catch (error) {
@@ -339,6 +330,21 @@ export async function retireManagedEvidencePublicationTransactionJournal(root, s
         }
         throw error;
     }
+}
+/** 只退休Store重新读证后的exact journal；缺失、替换或提交不确定均不伪造成功。 */
+export async function retireManagedEvidencePublicationTransactionJournal(root, storedValue, optionsValue = {}) {
+    assertRoot(root);
+    const options = parseOptions(optionsValue);
+    assertStoredCapability(storedValue);
+    assertNotAborted(options.signal);
+    admitMutation(storedValue.transaction, "exact-retire");
+    const current = await readCurrentForRetirement(root, storedValue.source.node, options.signal);
+    if (current.transactionDigest !== storedValue.transactionDigest ||
+        !sameFileNodeSnapshot(current.source.node, storedValue.source.node) ||
+        !sameTransaction(current.transaction, storedValue.transaction)) {
+        fail("conflict", "$transaction");
+    }
+    const retirement = await unlinkJournalExactly(root, current.source.node, options.signal);
     ISSUED_STORED_TRANSACTIONS.delete(storedValue);
     return Object.freeze({
         transactionDigest: storedValue.transactionDigest,

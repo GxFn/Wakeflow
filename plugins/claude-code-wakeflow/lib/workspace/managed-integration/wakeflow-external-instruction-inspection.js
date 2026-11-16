@@ -71,6 +71,49 @@ function hasTarget(config, target) {
     const key = wakeflowExternalInstructionTargetKey(target);
     return listWakeflowExternalInstructionTargets(config).some((candidate) => wakeflowExternalInstructionTargetKey(candidate) === key);
 }
+function parseRequestProfile(value) {
+    try {
+        return parseWakeflowWorkspaceHostResourceProfile(value);
+    }
+    catch (error) {
+        if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
+            fail("input", "$request.profile", error);
+        }
+        throw error;
+    }
+}
+function parseRequestTarget(value) {
+    try {
+        return parseWakeflowExternalInstructionTarget(value, "$request.target");
+    }
+    catch (error) {
+        if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
+            fail("input", error.path, error);
+        }
+        throw error;
+    }
+}
+/**
+ * 当前配置与它的期望摘要成对出现：没有当前配置时摘要也必须是 null；有的话摘要要对得上，并且与期望配置
+ * 是同一个 program。
+ */
+function parseCurrentConfigPair(record, desiredConfig) {
+    if (record.currentConfig === null) {
+        if (record.expectedCurrentConfigDigest !== null) {
+            fail("input", "$request.expectedCurrentConfigDigest");
+        }
+        return { currentConfig: null, currentConfigDigest: null };
+    }
+    const currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
+    const currentConfigDigest = parseDigest(record.expectedCurrentConfigDigest, "$request.expectedCurrentConfigDigest");
+    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
+        fail("input", "$request.expectedCurrentConfigDigest");
+    }
+    if (currentConfig.program.programId !== desiredConfig.program.programId) {
+        fail("input", "$request.desiredConfig.program.programId");
+    }
+    return { currentConfig, currentConfigDigest };
+}
 /** 快照并绑定 Host Profile、target 与 current/desired Config 摘要。 */
 export function parseWakeflowExternalInstructionInspectionRequest(value) {
     let record;
@@ -97,26 +140,8 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
         (record.signal !== undefined && !isAbortSignal(record.signal))) {
         fail("input", "$request");
     }
-    let profile;
-    try {
-        profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-    }
-    catch (error) {
-        if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-            fail("input", "$request.profile", error);
-        }
-        throw error;
-    }
-    let target;
-    try {
-        target = parseWakeflowExternalInstructionTarget(record.target, "$request.target");
-    }
-    catch (error) {
-        if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-            fail("input", error.path, error);
-        }
-        throw error;
-    }
+    const profile = parseRequestProfile(record.profile);
+    const target = parseRequestTarget(record.target);
     const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
     const desiredConfigDigest = parseDigest(record.expectedDesiredConfigDigest, "$request.expectedDesiredConfigDigest");
     if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
@@ -124,25 +149,7 @@ export function parseWakeflowExternalInstructionInspectionRequest(value) {
     }
     if (!hasTarget(desiredConfig, target))
         fail("input", "$request.target");
-    let currentConfig;
-    let currentConfigDigest;
-    if (record.currentConfig === null) {
-        if (record.expectedCurrentConfigDigest !== null) {
-            fail("input", "$request.expectedCurrentConfigDigest");
-        }
-        currentConfig = null;
-        currentConfigDigest = null;
-    }
-    else {
-        currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
-        currentConfigDigest = parseDigest(record.expectedCurrentConfigDigest, "$request.expectedCurrentConfigDigest");
-        if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
-            fail("input", "$request.expectedCurrentConfigDigest");
-        }
-        if (currentConfig.program.programId !== desiredConfig.program.programId) {
-            fail("input", "$request.desiredConfig.program.programId");
-        }
-    }
+    const { currentConfig, currentConfigDigest } = parseCurrentConfigPair(record, desiredConfig);
     return Object.freeze({
         profile,
         target,

@@ -26,6 +26,34 @@ function parseExpectedIntent(value) {
         throw error;
     }
 }
+/**
+ * 暂存目录必须已经写全才能接着发布：按意图里的树计划核对进度，没写全就要求调用方带着原始输入重试。
+ */
+async function completeStageCandidate(root, intent, stageNode, signal) {
+    let progress;
+    try {
+        progress = await inspectDirectoryTreeCandidateProgress(root, intent.stageRef, intent.treePlan, {
+            expectedRootNode: stageNode,
+            ...(signal === undefined ? {} : { signal }),
+        });
+    }
+    catch (error) {
+        if (error instanceof DurableDirectoryTreeCandidateError) {
+            if (error.reason === "aborted")
+                fail("aborted", "$signal", error);
+            fail("conflict", "$stage", error);
+        }
+        throw error;
+    }
+    if (progress.status !== "complete") {
+        fail("recovery-input-required", "$stage");
+    }
+    return Object.freeze({
+        candidateRootPath: progress.candidateRootPath,
+        plan: progress.plan,
+        rootNode: progress.rootNode,
+    });
+}
 async function recoverPublication(root, recordId, expectedIntent, signal) {
     const intentRef = ledgerRecordPublicationIntentRefForIdentity(recordId);
     const lockRef = ledgerRecordPublicationLockRefForIdentity(recordId);
@@ -55,29 +83,7 @@ async function recoverPublication(root, recordId, expectedIntent, signal) {
         if (residues.stageNode === null) {
             fail("recovery-input-required", "$stage");
         }
-        let progress;
-        try {
-            progress = await inspectDirectoryTreeCandidateProgress(root, stored.intent.stageRef, stored.intent.treePlan, {
-                expectedRootNode: residues.stageNode,
-                ...(signal === undefined ? {} : { signal }),
-            });
-        }
-        catch (error) {
-            if (error instanceof DurableDirectoryTreeCandidateError) {
-                if (error.reason === "aborted")
-                    fail("aborted", "$signal", error);
-                fail("conflict", "$stage", error);
-            }
-            throw error;
-        }
-        if (progress.status !== "complete") {
-            fail("recovery-input-required", "$stage");
-        }
-        const candidate = Object.freeze({
-            candidateRootPath: progress.candidateRootPath,
-            plan: progress.plan,
-            rootNode: progress.rootNode,
-        });
+        const candidate = await completeStageCandidate(root, stored.intent, residues.stageNode, signal);
         await publishLedgerRecordStage(root, stored.intent, candidate, signal);
         const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
         const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, intentRef, signal);

@@ -34,6 +34,48 @@ function mapStageError(error) {
     }
     throw error;
 }
+/**
+ * 在暂存根里把一个新 Demand 的全部初始内容建出来：事件存储与三个目录、身份与权威文本、发布标记、
+ * 初始提交与它的快照，最后按"发布中"的口径清点一遍。每一步都可重入。
+ */
+async function populateDemandPublicationStage(stageRoot, transaction, signal) {
+    const eventStore = new DemandFileEventStore(stageRoot);
+    await eventStore.initialize(signal === undefined ? undefined : { signal });
+    for (const ref of [
+        DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
+        TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+        DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
+    ]) {
+        await materializeDirectoryPath(stageRoot, ref, {
+            mode: DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
+            ...(signal === undefined ? {} : { signal }),
+        });
+    }
+    await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_IDENTITY_REF, renderDemandIdentity(transaction.identity), 512 * 1024, signal);
+    await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_AUTHORITY_REF, renderDemandAuthority(transaction.authority), 1024 * 1024, signal);
+    await ensurePublicationTransaction(stageRoot, DEMAND_PUBLICATION_MARKER_REF, transaction, signal);
+    await eventStore.recoverAppendCandidates(signal === undefined ? undefined : { signal });
+    const snapshotStore = new DemandFileEventSnapshotStore(stageRoot);
+    await snapshotStore.recoverPublicationStages(signal === undefined ? undefined : { signal });
+    const repository = new DemandEventSourcingRepository(stageRoot);
+    // 有意不盖写者戳（C11）：初始提交由事务用 planDemandEventStreamCommit 规划并以 initialCommitDigest
+    // 绑定，戳进提交摘要链，带戳重算的摘要就对不上下面的比对；Demand 的后续提交才带戳。
+    const result = await executeDemandEventSourcingCommand(repository, transaction.initialCommand, {
+        commitId: transaction.initialCommit.commitId,
+        expectedStreamRevision: 0,
+        ...(signal === undefined ? {} : { signal }),
+    });
+    if (result.commandDigest !== transaction.initialCommandDigest ||
+        computeDemandEventStreamCommitDigest(result.commit) !== transaction.initialCommitDigest ||
+        result.aggregate.streamRevision !== 1) {
+        fail("conflict", "$stage/commit");
+    }
+    await repository.publishSnapshot(result.aggregate, signal === undefined ? undefined : { signal });
+    await inspectDemandEventSourcingRootInventory(stageRoot, {
+        phase: "demand-publication",
+        ...(signal === undefined ? {} : { signal }),
+    });
+}
 export async function materializeDemandPublicationStage(workspaceRoot, transaction, signal) {
     let stageNode;
     try {
@@ -48,42 +90,7 @@ export async function materializeDemandPublicationStage(workspaceRoot, transacti
     const stageRoot = await openDemandPublicationRoot(workspaceRoot, transaction.stageRef, stageNode);
     let operationError;
     try {
-        const eventStore = new DemandFileEventStore(stageRoot);
-        await eventStore.initialize(signal === undefined ? undefined : { signal });
-        for (const ref of [
-            DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
-            TASK_PACKAGE_PROJECTIONS_ROOT_REF,
-            DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
-        ]) {
-            await materializeDirectoryPath(stageRoot, ref, {
-                mode: DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
-                ...(signal === undefined ? {} : { signal }),
-            });
-        }
-        await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_IDENTITY_REF, renderDemandIdentity(transaction.identity), 512 * 1024, signal);
-        await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_AUTHORITY_REF, renderDemandAuthority(transaction.authority), 1024 * 1024, signal);
-        await ensurePublicationTransaction(stageRoot, DEMAND_PUBLICATION_MARKER_REF, transaction, signal);
-        await eventStore.recoverAppendCandidates(signal === undefined ? undefined : { signal });
-        const snapshotStore = new DemandFileEventSnapshotStore(stageRoot);
-        await snapshotStore.recoverPublicationStages(signal === undefined ? undefined : { signal });
-        const repository = new DemandEventSourcingRepository(stageRoot);
-        // 有意不盖写者戳（C11）：初始提交由事务用 planDemandEventStreamCommit 规划并以 initialCommitDigest
-        // 绑定，戳进提交摘要链，带戳重算的摘要就对不上下面的比对；Demand 的后续提交才带戳。
-        const result = await executeDemandEventSourcingCommand(repository, transaction.initialCommand, {
-            commitId: transaction.initialCommit.commitId,
-            expectedStreamRevision: 0,
-            ...(signal === undefined ? {} : { signal }),
-        });
-        if (result.commandDigest !== transaction.initialCommandDigest ||
-            computeDemandEventStreamCommitDigest(result.commit) !== transaction.initialCommitDigest ||
-            result.aggregate.streamRevision !== 1) {
-            fail("conflict", "$stage/commit");
-        }
-        await repository.publishSnapshot(result.aggregate, signal === undefined ? undefined : { signal });
-        await inspectDemandEventSourcingRootInventory(stageRoot, {
-            phase: "demand-publication",
-            ...(signal === undefined ? {} : { signal }),
-        });
+        await populateDemandPublicationStage(stageRoot, transaction, signal);
     }
     catch (error) {
         operationError = error;
@@ -126,6 +133,18 @@ export async function publishDemandStage(root, transaction, signal) {
         throw error;
     }
 }
+/** 读回 final 失败：本模块自己的错误原样抛；根权威读不出按中止与冲突归类；其余原样抛。 */
+function rethrowFinalLoadError(error) {
+    if (error instanceof DemandEventSourcingPublicationServiceError) {
+        throw error;
+    }
+    if (error instanceof DemandEventSourcingRootAuthorityError) {
+        if (error.reason === "aborted")
+            fail("aborted", "$signal");
+        fail("conflict", "$demandRoot");
+    }
+    throw error;
+}
 export async function loadFinalDemandPublication(workspaceRoot, ledgerStore, transaction, signal) {
     const finalNode = await publicationNodeOrNull(workspaceRoot, transaction.finalRootRef);
     if (finalNode === null)
@@ -153,17 +172,8 @@ export async function loadFinalDemandPublication(workspaceRoot, ledgerStore, tra
     catch (error) {
         closeError = error;
     }
-    if (operationError !== undefined) {
-        if (operationError instanceof DemandEventSourcingPublicationServiceError) {
-            throw operationError;
-        }
-        if (operationError instanceof DemandEventSourcingRootAuthorityError) {
-            if (operationError.reason === "aborted")
-                fail("aborted", "$signal");
-            fail("conflict", "$demandRoot");
-        }
-        throw operationError;
-    }
+    if (operationError !== undefined)
+        rethrowFinalLoadError(operationError);
     if (closeError !== undefined) {
         fail("operation-failure", "$demandRoot/close", "unknown", closeError);
     }

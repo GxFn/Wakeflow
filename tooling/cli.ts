@@ -23,6 +23,12 @@ import { planLiveProject } from "./live/plan.js";
 import { captureHostReceipt } from "./live/receipt.js";
 import { isMainModule } from "./main-module.js";
 import { callArtifactTool, parseToolArguments } from "./mcp/call.js";
+import {
+  type DemandArchiveMetrics,
+  measureArchivedDemand,
+  measureSessionTranscript,
+  type SessionCallMetrics,
+} from "./metrics/demand-metrics.js";
 import { planVersionBump } from "./release/bump-version.js";
 import { refreshPluginCache } from "./release/cache-refresh.js";
 import {
@@ -84,6 +90,8 @@ npm run wf -- scaffold test --for src/path.ts [--apply]
 npm run wf -- scaffold node --section 13.N --title TITLE [--apply]
 npm run wf -- scaffold requirement (--root WORKSPACE | --design DIR) --name NAME --title TITLE [--apply]
 npm run wf -- timings apply --receipt .build/verification/run-ID/receipt.json
+npm run wf -- metrics archive --dir ARCHIVE_REVISION_DIR
+npm run wf -- metrics transcript --input SESSION_JSONL [--since ISO_TIME] [--until ISO_TIME]
 
 Verification writes private receipts under .build/verification/. It never rebuilds plugins/ implicitly.
 Doctor reads only. Imported runtime reports are unverified; no command installs, trusts or activates a plugin.
@@ -138,6 +146,7 @@ function flags(args: readonly string[]): Map<string, string[]> {
         "--step",
         "--changed",
         "--since",
+        "--until",
         "--no-artifacts",
         "--version",
         "--apply",
@@ -597,6 +606,28 @@ function runTimingsCommand(
   };
 }
 
+/** 1.4 的三个度量：归档里的手写字节数与两段时长，会话记录里的工具调用数。只读。 */
+function runMetricsCommand(
+  action: string | undefined,
+  options: Map<string, string[]>,
+  root: string,
+): DemandArchiveMetrics | SessionCallMetrics {
+  const directory = options.get("--dir")?.[0];
+  if (action === "archive" && options.size === 1 && directory !== undefined)
+    return measureArchivedDemand(path.resolve(root, directory));
+  const input = options.get("--input")?.[0];
+  if (
+    action !== "transcript" ||
+    input === undefined ||
+    [...options.keys()].some((key) => !["--input", "--since", "--until"].includes(key))
+  )
+    invalid();
+  return measureSessionTranscript(path.resolve(root, input), {
+    since: options.get("--since")?.[0] ?? null,
+    until: options.get("--until")?.[0] ?? null,
+  });
+}
+
 type CommandHandler = (
   action: string | undefined,
   options: Map<string, string[]>,
@@ -615,6 +646,7 @@ const COMMANDS: Readonly<Record<string, CommandHandler>> = Object.freeze({
   handoff: runHandoffCommand,
   release: runReleaseCommand,
   timings: runTimingsCommand,
+  metrics: runMetricsCommand,
   doctor: runDoctorCommand,
   mcp: runMcpCommand,
   cache: runCacheCommand,
@@ -642,6 +674,7 @@ export async function runToolingCli(args: readonly string[], root: string, signa
       | typeof runHandoffCommand
       | typeof runReleaseCommand
       | typeof runTimingsCommand
+      | typeof runMetricsCommand
       | typeof runDoctorCommand
       | typeof runMcpCommand
       | typeof runCacheCommand

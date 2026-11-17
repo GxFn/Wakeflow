@@ -489,3 +489,17 @@ npm run refusals:check
 `assets/agent-text/skills/wakeflow-controller/references/refusals.md` 是生成的（open-items G5，gate-log §13.243）：`tooling/codegen/refusal-reference.ts` 扫 `src/` 里六个拒绝类 `code`（`concurrency-conflict`、`idempotency-mismatch`、`precondition-failed`、`not-found`、`capacity-exceeded`、`recovery-required`）后面紧跟的 reason 字面量与模板——`fail(...)`、判定函数的 `reject(...)`、映射元组三种写法都是这个形状——按 `code` 与切片列出。每个 `code` 的处理办法与个别 reason 的注记写在生成器里，不在源码里。
 
 新增、改名或删除一个拒绝 reason 之后先跑 `refusals:build`，再重建制品；`refusals:check` 在 `npm test` 里，漂移即失败。注记点名的 reason 从源码里消失时生成失败，要同时删掉或改名那条注记。`invalid-request` 的 reason、`io-failure` 与 `unexpected`、预览的 `blockerCodes` 不在表里。
+
+## 28. Demand 的三个度量
+
+```bash
+npm run --silent wf -- metrics archive --dir LEDGER/archives/DEMAND_ID/REVISION
+npm run --silent wf -- metrics transcript --input SESSION.jsonl --since 2026-11-16T23:35:58 --until 2026-11-16T23:53:45
+```
+
+1.4 开发计划第 1 节的三个数由这两条只读命令量出（`tooling/metrics/demand-metrics.ts`，ADR-0029）：
+
+- `archive` 读一个归档修订目录的 `payload/event-sourcing/commits/`：事件数与各类型的个数、目标数、投递数、各种决定的个数、证据条数；**Controller 手写的字节数**——任务包里由它写的文字（目标、已确认的上下文、边界三段、完成预期、锚点的三句话）加评审决定里由它写的文字（理由、独立检查的做法与观察、阻塞原因、剩余风险）；**目标干活的秒数**（投递结局到这份投递的结果）与**评审阶段的秒数**（结果到针对它的决定），各给出每次的值与中位数。
+- `transcript` 读一份宿主会话记录（JSONL），数 `--since` 到 `--until` 之间的工具调用：Wakeflow 的工具按名字计数，助手脚本（`operations/assets/*.mjs`）单列，其余归一类；同一个调用在记录里重复出现时只数一次。
+
+口径的两处限制：投递时写的三段文字与证据的选择没有在归档里单独存下来，不计入手写字节数（1.3.1 的小样本里这两类合计约两成）；会话记录在本机的宿主目录里，路径与内容都是私有的，命令只输出计数。两条命令都不读工作区状态、不进制品。

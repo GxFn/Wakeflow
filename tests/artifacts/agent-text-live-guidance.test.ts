@@ -388,6 +388,13 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
       "names `requirement-authoring` with the user as owner",
     ),
   );
+  // X31（§13.258 现场）：插件更新之后，长寿会话上下文里的技能是旧的；桌面上没有就地重启来提示重读，
+  // 所以三条命令都写明"status 报出本会话没见过的制品版本时重新加载技能"。
+  for (const command of ["commands/next.md", "commands/pod.md", "commands/status.md"]) {
+    const text = flat(source(command));
+    ok(text.includes("a `runtime.artifactVersion` new to this session"), command);
+    ok(/the copy in your context predates it|your copy predates the update/u.test(text), command);
+  }
   // 连续 `/next`（V3，§13.208；I21，2026-11-09 用户裁决）：owner 是 Controller 就连续；停点只剩 owner 变化
   // 且无自有工作、用户决定点、阻塞；记录决定与投递结局是步骤边界不是停点。旧的"一步即停"与"每次决定停一次"
   // 的措辞都不再出现。
@@ -959,6 +966,9 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "The helper's `sessions` is only the process view",
       'Right after each registration call the desktop `set_session_permission_mode` tool with the window\'s `desktop.sessionId` and `"auto"`',
       "`permission-mode-mismatch:<windowId>` means the landing record shows that window in another permission mode than `auto`",
+      // X32（§13.258 现场）：不符项读的是窗口最近一条记录，可能是旧的；宿主拒绝设模式时不重试、不绕过。
+      "when the host's reply shows the session already in `auto`, change nothing - its next record clears the entry",
+      "When the host refuses the call, do not retry or work around it: ask the user to switch that session to auto themselves",
       "Opening a folder in the desktop app does not always write the record, so the root can lack it too",
       "collect the refusals, ask the user once about each distinct `trustRoot`, and with their agreement record the trust with `trust` (below)",
       "never open one with `claude --desktop` yourself and never pass `--user-agreed` without their word",

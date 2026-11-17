@@ -288,7 +288,7 @@ settings rules maintenance writes are unchanged, and a product repository's `.cl
    cross-session messages for approval. The
    one-time fix is step 3 of Step 1: `set_session_permission_mode` with its
    `desktop.sessionId` and `"auto"`, the user approving the card once for
-   that folder. `wakeflow_status` shows the same fact without a delivery: the
+   that folder. The entry reads that window's last record, so it can be stale: when the host's reply shows the session already in `auto`, change nothing - its next record clears the entry. When the host refuses the call, do not retry or work around it: ask the user to switch that session to auto themselves. `wakeflow_status` shows the same fact without a delivery: the
    window's `session.permissionMode` and a `permission-mode-mismatch` entry in
    `nextActions`, both gone once a later record reports the launch mode.
 

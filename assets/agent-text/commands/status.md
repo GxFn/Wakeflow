@@ -6,12 +6,13 @@ argument-hint: "[demand id]"
 Report where this Wakeflow workspace stands.
 
 Load the `wakeflow-controller` skill and follow its "Checking the workspace"
-section. `runtime-artifact-outdated` / `server-outdated` describe this serving
+section - again whenever the status shows a `runtime.artifactVersion` new to
+this session: the plugin was updated and the copy in your context predates it.
+`runtime-artifact-outdated` / `server-outdated` describe this serving
 MCP process; its `next` owner follows the host - `controller` where this
 Controller restarts its own window in place, `user` where only an application
 restart reloads the server. `window-runtime-unverified` describes missing peer runtime evidence,
-not a proven stale process. Load the current skill and follow "After a plugin
-update"; do not infer MCP readiness from SessionStart or Stop records.
+not a proven stale process. Follow "After a plugin update"; do not infer MCP readiness from SessionStart or Stop records.
 
 First tool call: `wakeflow_status`, passing a Demand id if the user named one,
 to attach that Demand's route or its archive receipt.

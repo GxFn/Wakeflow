@@ -18,7 +18,9 @@ lineage, not a correction.
   paragraph you write, because it is what stops a target from "improving"
   code no one reviewed.
 - **Completion expectation** - what must be true and observable when the work
-  is done.
+  is done: the end state (content, files touched, branch), never a commit
+  count. The package cannot be edited and targets never rewrite history, so a
+  rework lands as one more commit on top and "exactly one commit" turns false.
 - **Acceptance anchors** - each one bound to an acceptance-criteria item that
   exists in the requirement package. An invented anchor is refused; that
   refusal is protecting the trace from requirement to result.

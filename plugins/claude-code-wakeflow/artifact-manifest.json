@@ -152,8 +152,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 26039,
-      "sha256": "sha256:9f2c56d90c49b9a85907ecc1495dc8e4ded8896642f6526728a47e0d711e6e32"
+      "bytes": 26259,
+      "sha256": "sha256:0497f603e69c46fde3d708dba7e79872c917d0cb54277d0cf445633d2d8041c5"
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-transport.md",
@@ -177,8 +177,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 47447,
-      "sha256": "sha256:e3cd2c2336faa68287b18a35695585e51b12ad34c33425923cd1a87378beb18b"
+      "bytes": 47839,
+      "sha256": "sha256:9655f54eaedbc7662d9b645dadef1908fac88b66a42fe6e7f9689109da3b8ba0"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -2902,8 +2902,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-tmux-helper.generated.js",
-      "bytes": 149899,
-      "sha256": "sha256:317a235f08f0c801208d71d36fb72b69436b30045e4ae8a24a55b4e38e8a2195",
+      "bytes": 150952,
+      "sha256": "sha256:58f95ec67bfc878e171f9d8e0647f0a9e03969c60ae1127e1453e0d88d8e45cd",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -7004,8 +7004,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/delivery-and-review.md",
-      "bytes": 26039,
-      "sha256": "sha256:9f2c56d90c49b9a85907ecc1495dc8e4ded8896642f6526728a47e0d711e6e32",
+      "bytes": 26259,
+      "sha256": "sha256:0497f603e69c46fde3d708dba7e79872c917d0cb54277d0cf445633d2d8041c5",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -7039,8 +7039,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-and-windows.md",
-      "bytes": 47447,
-      "sha256": "sha256:e3cd2c2336faa68287b18a35695585e51b12ad34c33425923cd1a87378beb18b",
+      "bytes": 47839,
+      "sha256": "sha256:9655f54eaedbc7662d9b645dadef1908fac88b66a42fe6e7f9689109da3b8ba0",
       "mode": "0644",
       "scope": "agent-text"
     },

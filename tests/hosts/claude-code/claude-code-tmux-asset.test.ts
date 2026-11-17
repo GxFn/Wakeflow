@@ -2882,13 +2882,33 @@ test("resume --in-place restarts the bound session inside the window's own pane 
   rmSync(path.join(current.state, "respawn-exits"));
 
   // 定位失败按 deliver 的原因拒绝；没有绑定不能 resume；不带 --in-place 时照旧拒绝活着的 pane。
+  // 窗口根本没在运行（pane 没了、tmux 服务器不在）时拒绝带上该走的路：不带 --in-place 的 resume 再 relocate
+  // （open-items Y18）；已有自己提示的原因不被盖掉。
+  const notRunningHint =
+    "the window is not running, so there is nothing to restart in place: run resume without --in-place (it opens a new pane), then relocate and mark; a session that never held a conversation is closed, launched and replaced instead";
   writeFileSync(path.join(current.state, "panes.txt"), "");
-  equal(resumeWith(idle, ["--wait", "0"]).json.reason, "pane-missing");
+  const paneMissing = resumeWith(idle, ["--wait", "0"]).json;
+  equal(paneMissing.reason, "pane-missing");
+  equal(paneMissing.hint, notRunningHint);
+  resetLog(current);
+  const noServer = runHelper(current, ["resume", "--window", PRODUCT_WINDOW_ID, "--in-place"], {
+    input: intent,
+    env: { WAKEFLOW_STUB_FAIL: "list-panes" },
+  });
+  equal(noServer.status, 1);
+  equal(noServer.json.reason, "panes-unavailable");
+  equal(noServer.json.hint, notRunningHint);
+  equal(
+    tmuxLog(current).some((entry) => entry[0] === "respawn-pane" || entry[0] === "new-window"),
+    false,
+  );
   writeFileSync(
     path.join(current.state, "panes.txt"),
     `${paneRow({ window: "@5", pane: "%9" })}\n`,
   );
-  equal(resumeWith(idle, ["--wait", "0"]).json.reason, "metadata-mismatch");
+  const mismatch = resumeWith(idle, ["--wait", "0"]).json;
+  equal(mismatch.reason, "metadata-mismatch");
+  equal(mismatch.hint, "run mark for this window first");
   writeFileSync(path.join(current.state, "panes.txt"), `${livePane}\n`);
   equal(
     runHelper(current, ["resume", "--window", CONTROLLER_WINDOW_ID, "--in-place"], {

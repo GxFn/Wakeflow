@@ -158,7 +158,8 @@ const WINDOW_LAUNCH =
  * 重启其他过期窗口；过期的服务算出的启动意图是旧代码的，维护也不能从它跑，所以本窗口先换代：助手排好
  * 两秒后的重启，会话带着新插件与新的 MCP 服务器自己续上，用户不必 `/mcp` 重连，也不必碰 tmux；续上后
  * verify、必要时对账装上新助手，才轮到其他窗口。窗格已经没了的续接（新窗格 + relocate）仍在 WINDOW_LAUNCH
- * 里。工作区里的助手只由维护部署：还是就地重启之前的旧助手时它以 `argument-unknown` 拒绝 `--in-place`，
+ * 里；过期窗口其实已经不在运行（tmux 重启之后）时就地重启被拒为 `panes-unavailable` / `pane-missing` /
+ * `pane-dead`，这里用一句话接回那条续接（open-items Y18，§13.256 现场：Controller 查不到这个 reason，停下来问了用户）。工作区里的助手只由维护部署：还是就地重启之前的旧助手时它以 `argument-unknown` 拒绝 `--in-place`，
  * 这一次只能先由用户 `/mcp` 重连本窗口的服务、再对账装上新助手，然后从头再来。"只能开新会话"的四步
  * （close → launch → replace → mark）从共享参考移到这里，因为它是 tmux 的分步。
  * 桌面：没有就地重启；L18（X20）证实 app 会在几个回合内自行重载过期的 MCP 服务，所以文本让 Controller 等
@@ -187,6 +188,9 @@ const WINDOW_RESUME =
   "does not override it: go on with the next window and retry this one once its turn has " +
   "ended - a dialog, a menu or typed input waits for the user, so tell them which window it " +
   "is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. " +
+  "`panes-unavailable`, `pane-missing` or `pane-dead` means that window is not running at all - tmux was restarted or the pane was closed - " +
+  "so there is nothing to restart in place: bring it back yourself with `resume --window <windowId>` without `--in-place`, " +
+  "register the printed observation with `relocate` and `mark` it, as for any window whose pane is gone; it starts on the updated plugin. " +
   "A `stale-window-relaunch` window (its session never conversed, so `resume` would refuse with `resume-never-conversed`) " +
   "is not probed or resumed: close the old one, launch it again, " +
   "register it with `replace` and `mark` it - four calls, one helper call per Bash command, " +

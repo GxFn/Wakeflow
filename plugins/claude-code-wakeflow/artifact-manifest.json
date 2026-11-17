@@ -132,18 +132,18 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 2033,
-      "sha256": "sha256:f864668ee2f03105ec7a2fe1cf451d1873e1eacbeb8436ba7b91c8f7895d590b"
+      "bytes": 2194,
+      "sha256": "sha256:c78dd2be3b6924aa2d7c5fc76b6514a9e401366effa78b6cca22485621ee61e1"
     },
     {
       "path": "commands/pod.md",
-      "bytes": 1487,
-      "sha256": "sha256:e012e084d386f71d3a0eac24393ef63f6178d1f888d977a2678b41a1c8a6befd"
+      "bytes": 1666,
+      "sha256": "sha256:f36654c63c571f664fc4c9bf1465d9bf07515be95c2094d0f4927174c4903d0a"
     },
     {
       "path": "commands/status.md",
-      "bytes": 2283,
-      "sha256": "sha256:6882c7383c5deb68d8e8ad4b66dad70dc3682f7723717f362b462cdbed8891c6"
+      "bytes": 2403,
+      "sha256": "sha256:0fb9b4764c51eec492a0f2c6fd95efa8362018bf403ccaeccd47c4e962fcbb88"
     },
     {
       "path": "skills/wakeflow-controller/SKILL.md",
@@ -157,8 +157,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-transport.md",
-      "bytes": 27853,
-      "sha256": "sha256:9fa8e4520f0d5fc3081757942e27ca067997e46f8cc4cfe7d5ec27f346dbe207"
+      "bytes": 28146,
+      "sha256": "sha256:8838e3761774f12c678b64a203e73aab28400fa828278782e77a1e1783a6cee5"
     },
     {
       "path": "skills/wakeflow-controller/references/evidence.md",
@@ -270,22 +270,22 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 2033,
-      "sha256": "sha256:f864668ee2f03105ec7a2fe1cf451d1873e1eacbeb8436ba7b91c8f7895d590b",
+      "bytes": 2194,
+      "sha256": "sha256:c78dd2be3b6924aa2d7c5fc76b6514a9e401366effa78b6cca22485621ee61e1",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "commands/pod.md",
-      "bytes": 1487,
-      "sha256": "sha256:e012e084d386f71d3a0eac24393ef63f6178d1f888d977a2678b41a1c8a6befd",
+      "bytes": 1666,
+      "sha256": "sha256:f36654c63c571f664fc4c9bf1465d9bf07515be95c2094d0f4927174c4903d0a",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "commands/status.md",
-      "bytes": 2283,
-      "sha256": "sha256:6882c7383c5deb68d8e8ad4b66dad70dc3682f7723717f362b462cdbed8891c6",
+      "bytes": 2403,
+      "sha256": "sha256:0fb9b4764c51eec492a0f2c6fd95efa8362018bf403ccaeccd47c4e962fcbb88",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -7011,8 +7011,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-transport.md",
-      "bytes": 27853,
-      "sha256": "sha256:9fa8e4520f0d5fc3081757942e27ca067997e46f8cc4cfe7d5ec27f346dbe207",
+      "bytes": 28146,
+      "sha256": "sha256:8838e3761774f12c678b64a203e73aab28400fa828278782e77a1e1783a6cee5",
       "mode": "0644",
       "scope": "agent-text"
     },

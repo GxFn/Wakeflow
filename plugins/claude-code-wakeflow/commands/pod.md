@@ -7,7 +7,9 @@ Create or close a Wakeflow pod.
 
 Load the `wakeflow-controller` skill and follow its "Step 13 - Close the pod"
 section; the full create and close procedure is in its
-`references/workspace-and-windows.md`.
+`references/workspace-and-windows.md`. Load both again when the plugin was
+updated since this session read them (`wakeflow_status` shows a
+`runtime.artifactVersion` new to this session): your copy predates the update.
 
 First tool call: `wakeflow_pod` in preview, for the create or close intent the
 user asked for. Preview writes nothing; show the user the plan before applying

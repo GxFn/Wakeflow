@@ -92,6 +92,10 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   run; `wakeflow_verify` names the same areas in its `local-layout` gate. A
   hand-edited block, a foreign file where a Wakeflow directory belongs, or an
   unreadable projection is reported as a blocker and never overwritten.
+  After any apply, the no-op one included, Wakeflow re-renders the pages
+  people read: the board index and the ledger's `history.md` in the workspace
+  language, plus the page of every archived Demand that has none yet. So one
+  reconcile after an update or a language change brings them all up to date.
 - **detach-repository** `{repositoryId}` / **detach-workspace** - the exit
   path (ADR-0024). "Take repository X out of Wakeflow" or "stop using Wakeflow
   here" is this intent, never a hand deletion of Wakeflow's files; both run

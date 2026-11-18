@@ -242,22 +242,6 @@ async function findBinding(context, windowId) {
     return bindings.find((entry) => entry.windowId === windowId);
 }
 /**
- * 目标所在 pod 的 Controller 窗口当前绑定的桌面会话 id（X15）：组合根没有注入读取端、该 pod 没有 Controller
- * 绑定或定位器不是桌面会话时为 null；tmux 目标的 prompt 因此逐字节不变。
- */
-async function controllerDesktopSessionIdFor(context, route) {
-    const read = context.facade.readControllerDesktopSessionId;
-    if (read === undefined)
-        return null;
-    const controller = compileWakeflowWindowLaunchIntents(context.authority.config.model, context.facade.resourceProfile).intents.find((entry) => entry.role === "controller" && entry.podId === route.podId);
-    if (controller === undefined)
-        return null;
-    const binding = await findBinding(context, controller.windowId);
-    if (binding === undefined || binding.hostId !== context.facade.hostId)
-        return null;
-    return read(context.workspaceRoot, controller.windowId, binding.bindingId, context.options.signal);
-}
-/**
  * 接收窗口自己的桌面会话 id（X29）：只有本宿主的绑定、且组合根注入了读取端时才读；tmux 定位器读出 null。
  * 许可的 hostAction 带着它，Agent 发送时不必再去翻登记结果。
  */
@@ -589,14 +573,13 @@ function testContractSection(taskPackage, attempt) {
         rerunStepIds: attempt.mode === "rerun" ? attempt.rerunSource.stepIds : null,
     });
 }
-function renderPrompt(context, input, sources, pointer, controllerDesktopSessionId) {
+function renderPrompt(context, input, sources, pointer) {
     const { taskPackage, route } = sources;
     const instructionFile = context.facade.resourceProfile.instructionFileName;
     const repositoryId = taskPackage.workType === "implementation" ? taskPackage.assignment.repositoryId : null;
     return renderDeliveryPortablePrompt({
         language: input.language,
         displayTitle: route.displayTitle,
-        controllerDesktopSessionId,
         taskPackage,
         authored: {
             goal: input.authored.goal,
@@ -714,7 +697,6 @@ async function executePrepare(context, input, binding) {
     const claimId = deriveWorkClaimId("prepare-delivery", demandId, binding.idempotencyKey);
     const now = nowFrom(options);
     const sources = await prepareSources(context, repository, target, taskPackage, route, binding);
-    const controllerDesktopSessionId = await controllerDesktopSessionIdFor(context, route);
     const taken = await takeClaim(context, route, { demandId, targetTaskId: target.targetTaskId, deliveryId, generation: 1 }, claimId, now);
     let envelope;
     let commandResult;
@@ -723,7 +705,7 @@ async function executePrepare(context, input, binding) {
             deliveryId,
             claimDigest: taken.claim.claimDigest,
             generation: 1,
-        }, controllerDesktopSessionId);
+        });
         envelope = createEnvelope(input, sources, taken.claim, {
             deliveryId,
             taskPackage,

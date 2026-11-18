@@ -47,6 +47,11 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 你确认过的需求，不会有人开始动手。拿不准时问 Controller"下一步是什么"；空闲的
 工作区会回答：去 Design 窗口，提一个新需求。
 
+不问任何人也读得到状态。`.wakeflow-active/index.md` 列出进行中的 Demand，开头是
+正在等你的事项。每个做完的 Demand 在 ledger 里它的归档旁边留下一页——要求了什么、
+改了什么、验证了什么、还剩什么——ledger 根上的 `history.md` 把它们全部列出，新的
+在前。这些页面由记录生成：手改会被覆盖，权威仍是记录本身。
+
 ## 入口
 
 `/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:pod` 创建或关闭 pod。Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。

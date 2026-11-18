@@ -105,7 +105,7 @@ export function unmergedAcceptedFacts(observation) {
         : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "archived")]);
     return Object.freeze([...active, ...archived]);
 }
-function demandFacts(demand, podName) {
+function demandFacts(demand, podName, windowTitles) {
     if (demand.loaded === null || demand.route === null || demand.reviewSnapshot === null)
         return null;
     const state = demand.loaded.aggregate.state;
@@ -134,6 +134,7 @@ function demandFacts(demand, podName) {
             phase: target.phase,
             repositoryId: target.workType === "test" ? null : target.repositoryId,
             windowId: target.windowId,
+            windowTitle: windowTitles.get(target.windowId) ?? null,
         }))),
         lastEventId: demand.reviewSnapshot.eventStream.lastEventId,
         awaitingDecision: state.awaitingDecision?.issue ?? null,
@@ -219,6 +220,11 @@ export function buildActiveProjectionFacts(input) {
     const podNames = new Map();
     for (const pod of model.pods)
         podNames.set(pod.podId, pod.name);
+    // 窗口的显示名来自配置：两种传输下都是使用者看得到的名字，不依赖绑定（投影作用域看不到绑定）。
+    const windowTitles = new Map();
+    for (const window of model.topology.windows) {
+        windowTitles.set(window.windowId, window.displayName);
+    }
     const pods = observation.pods.value ?? [];
     const evidence = demandEvidenceOf(observation);
     return Object.freeze({
@@ -255,7 +261,7 @@ export function buildActiveProjectionFacts(input) {
             commit: fact.commit,
         }))),
         demands: Object.freeze((observation.demands.value ?? [])
-            .map((demand) => demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?"))
+            .map((demand) => demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?", windowTitles))
             .filter((facts) => facts !== null)
             .sort((left, right) => left.demandId.localeCompare(right.demandId))),
         // 读不出的 Demand 不进列表，但页面必须说出"可能缺项"，不能看起来像 idle（§13.129）。

@@ -64,6 +64,13 @@ the task plan when the package asks for it. Nothing is built off a requirement
 you did not confirm. Ask the Controller what is next whenever you are unsure;
 an idle workspace answers with the Design window and a new requirement.
 
+You can also read the state without asking anyone. `.wakeflow-active/index.md`
+lists the Demands in progress and opens with what is waiting on you. Every
+finished Demand leaves one page beside its archive in the ledger - what was
+asked, what changed, what was verified, what remains - and `history.md` at the
+ledger root lists them all, newest first. These pages are generated from the
+records: an edit is overwritten, and the records stay the authority.
+
 ## Entry points
 
 `/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.

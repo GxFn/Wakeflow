@@ -109,6 +109,41 @@ export const WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG = Object.freeze([
     LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
     LEDGER_ARCHIVES_ROOT_RESOURCE_DECLARATION,
 ]);
+/**
+ * 账本里的人读投影（1.4 第 3 段）：根上的历史索引与每个归档修订目录旁边的 Demand 页。它们由归档确定地
+ * 重写、随时可以重建，所以是 `derived-projection`；tracked、0644，与归档包一起进版本库。
+ * 它们不进静态目录：静态目录是三个固定容器的布局权威，它的摘要绑定着维护计划的步骤目标；这两类文件
+ * 由拥有者（`ledger-reading-pages`）在写入时取用自己的声明。
+ */
+export function createLedgerReadingPageResourceDeclaration(declarationId, relativePath) {
+    return parseWakeflowWorkspaceResourceDeclaration({
+        kind: "WakeflowWorkspaceResourceDeclaration",
+        declarationId,
+        family: "ledger",
+        ownerId: "ledger-reading-pages",
+        scope: "host-neutral",
+        placement: {
+            root: { kind: "ledger" },
+            relativePath,
+        },
+        tracking: {
+            disposition: "tracked",
+            privacy: "shareable",
+        },
+        nodePolicy: {
+            kind: "file",
+            mode: "0644",
+            linkPolicy: "single-link",
+            executablePolicy: "forbidden",
+        },
+        processing: {
+            kind: "resource",
+            role: "derived-projection",
+            allowedMutationRecipes: ["exclusive-create", "deterministic-rewrite"],
+            recoveryStrategy: "rebuild-from-authority",
+        },
+    });
+}
 function memberDeclarationId(record, memberPath) {
     const digest = computeSha256Digest(encodeUtf8(`${record.requirementId}\u0000${memberPath}`));
     return `member-${digest.slice("sha256:".length)}`;

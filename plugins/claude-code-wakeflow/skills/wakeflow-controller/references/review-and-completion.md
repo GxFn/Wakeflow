@@ -156,6 +156,17 @@ stop before applying only when something is left for the user to decide. The
 steps the user gates - merging and pushing - are outside Wakeflow, and an
 archived Demand can be reopened with `wakeflow_continue_demand`.
 
+Completing or cancelling also writes what people read afterwards, into the
+ledger: one page per archived Demand beside its sealed archive, at the
+result's `archive.archiveRef` plus `.md` (what was asked, what changed, what
+was verified, what each target declared it was told outside its task package,
+what remains, and the measures), and the index `history.md` at the ledger
+root. When you report an archive, name that page instead of
+retelling it. Both are projections re-rendered from the archives: never edit
+them and never cite them as evidence - the archive is the record. While a
+Demand runs, `.wakeflow-active/index.md` opens with what is waiting on the
+user; that list is the same route `wakeflow_status` gives you.
+
 The `requirement-coverage` gate checks every item in the frozen acceptance list.
 Controller-only work needs an accepted implementation anchor for each item.
 Real-environment work needs coverage by the accepted current test contract for

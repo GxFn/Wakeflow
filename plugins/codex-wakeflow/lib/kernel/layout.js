@@ -68,6 +68,15 @@ export function demandArchiveRef(demandId, streamRevision) {
     }
     return parsePortableResourcePath(`${LEDGER_ARCHIVES_ROOT_REF}/${parseDemandIdText(demandId)}/${String(streamRevision).padStart(10, "0")}`, "$layout");
 }
+/**
+ * 一个归档包旁边的人读页面：`<ledger>/archives/<demandId>/<修订号>.md`（1.4 第 3 段）。它在修订目录的旁边
+ * 而不是里面——归档包的负载是封存的，多一个文件就是漂移；找归档的两处枚举只认十位数字的目录名。
+ */
+export function demandArchivePageRef(archiveRef) {
+    return parsePortableResourcePath(`${archiveRef}.md`, "$layout");
+}
+/** Ledger 根的历史索引：每个归档过的 Demand 一行，从 `archives/` 确定地重写（1.4 第 3 段）。 */
+export const LEDGER_HISTORY_INDEX_REF = parsePortableResourcePath("history.md", "$layout");
 /** 一个 Demand 的全部归档包所在目录。 */
 export function demandArchivesRootRef(demandId) {
     return parsePortableResourcePath(`${LEDGER_ARCHIVES_ROOT_REF}/${parseDemandIdText(demandId)}`, "$layout");

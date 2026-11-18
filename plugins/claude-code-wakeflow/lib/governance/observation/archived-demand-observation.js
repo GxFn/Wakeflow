@@ -35,7 +35,8 @@ function newestFirst(left, right) {
         return left.archivedAt < right.archivedAt ? 1 : -1;
     return left.demandId < right.demandId ? -1 : left.demandId > right.demandId ? 1 : 0;
 }
-async function readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal) {
+/** 从一个归档包的 `payload/` 读评审快照；人读页面（`ledger-reading-pages.ts`）也用这一个读法。 */
+export async function readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal) {
     const payload = await RootedDirectory.open(path.join(ledgerRoot.absolutePath, ...`${archiveRef}/payload`.split("/")), "$archive/payload", { durability: ledgerRoot.durability });
     try {
         return await readArchivedDemandResultReviewSnapshot(payload, signal === undefined ? {} : { signal });

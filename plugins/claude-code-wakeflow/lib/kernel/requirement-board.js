@@ -451,6 +451,29 @@ function escapeCell(value) {
 const REQUIREMENT_BOARD_INDEX_MARKER = "<!-- wakeflow:board-projection:v2 -->";
 /** Parked 列只给触发词的开头：整段触发词在状态文件与 `wakeflow_inspect_board` 里。 */
 const PARKED_CELL_MAXIMUM_CODE_POINTS = 40;
+/**
+ * 两种语言的固定文字（1.4 第 3 段）。英文的字节与此前完全相同，所以英文工作区的索引不因这次改动变陈旧，
+ * Fresh 初始化绑定的空索引摘要也不变；中文的标记多一段语言，索引的语言因此能从它自己读回来。
+ * 状态与类型两列是机器取值，不翻译。
+ */
+const BOARD_INDEX_TEXT = Object.freeze({
+    en: Object.freeze({
+        title: "# Requirement Board",
+        marker: REQUIREMENT_BOARD_INDEX_MARKER,
+        notice: "This file is a deterministic projection of the claim states under `board/`; do not edit it by hand.",
+        header: "| Priority | Status | Requirement | Title | Type | Testing | Parked | Published | Demand |",
+    }),
+    "zh-Hans": Object.freeze({
+        title: "# 需求看板",
+        marker: "<!-- wakeflow:board-projection:v2:zh-Hans -->",
+        notice: "本文件是 `board/` 下认领状态的确定性投影；请勿手改。",
+        header: "| 优先级 | 状态 | 需求包 | 标题 | 类型 | 测试 | 搁置 | 发布时间 | Demand |",
+    }),
+});
+/** 一份已有索引是用哪种语言渲染的：只认它自己的标记，认不出即英文。 */
+export function requirementBoardIndexLanguageOf(document) {
+    return document.includes(BOARD_INDEX_TEXT["zh-Hans"].marker) ? "zh-Hans" : "en";
+}
 function parkedCell(state) {
     if (state.parked === null)
         return "—";
@@ -460,20 +483,21 @@ function parkedCell(state) {
     const shown = truncateToCodePoints(trigger, PARKED_CELL_MAXIMUM_CODE_POINTS, { ellipsis: "" });
     return escapeCell(shown === trigger ? shown : `${shown}…`);
 }
-/** 人读索引：只列 pending、parked、claimed；已撤回与已归档留在状态文件里。 */
-export function renderRequirementBoardIndex(states) {
+/** 人读索引：只列 pending、parked、claimed；已撤回与已归档留在状态文件里（做完的在账本的历史索引里）。 */
+export function renderRequirementBoardIndex(states, language = "en") {
+    const text = BOARD_INDEX_TEXT[language];
     const rows = [...states]
         .filter((state) => state.status !== "withdrawn" && state.status !== "archived")
         .sort(compareRequirementClaimStates)
         .map((state) => `| ${state.priority} | ${state.status} | \`${state.requirementId}\` | ${escapeCell(state.title)} | ${state.demandType} | ${state.testingMode ?? "—"} | ${parkedCell(state)} | ${state.publishedAt} | ${state.claim === null ? "—" : `\`${state.claim.demandId}\``} |`);
     const lines = [
-        "# Requirement Board",
+        text.title,
         "",
-        REQUIREMENT_BOARD_INDEX_MARKER,
+        text.marker,
         "",
-        "This file is a deterministic projection of the claim states under `board/`; do not edit it by hand.",
+        text.notice,
         "",
-        "| Priority | Status | Requirement | Title | Type | Testing | Parked | Published | Demand |",
+        text.header,
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ...rows,
     ];
@@ -489,11 +513,13 @@ export const REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST = computeCanonica
     indexRef: REQUIREMENT_BOARD_INDEX_REF,
     emptyIndexDigest: REQUIREMENT_BOARD_EMPTY_INDEX_DIGEST,
 });
-/** 让磁盘上的索引等于当前状态的投影；已相等则不写。 */
-export async function publishRequirementBoardIndex(root, states, signal) {
+/**
+ * 让磁盘上的索引等于当前状态的投影；已相等则不写。给了 `language` 就按它渲染（维护 apply 与初始化知道配置）；
+ * 没给就沿用磁盘上那份索引自己的语言——认领、撤回、归档这些调用方不读配置，语言不该因它们的一次刷新而变。
+ * 配置的语言与索引不一致时由 verify 的 board-consistency 报 `index-stale`，下一次维护 apply 重写。
+ */
+export async function publishRequirementBoardIndex(root, states, signal, language) {
     await materializeRequirementBoardRoot(root, signal);
-    const document = renderRequirementBoardIndex(states);
-    const bytes = encodeUtf8(document, "$boardIndex");
     let current = null;
     try {
         current = await readStrictTextFile(root, REQUIREMENT_BOARD_INDEX_REF, {
@@ -512,6 +538,8 @@ export async function publishRequirementBoardIndex(root, states, signal) {
             throw error;
         }
     }
+    const document = renderRequirementBoardIndex(states, language ?? (current === null ? "en" : requirementBoardIndexLanguageOf(current.text)));
+    const bytes = encodeUtf8(document, "$boardIndex");
     try {
         if (current === null) {
             await createFileAtomically(root, REQUIREMENT_BOARD_INDEX_REF, bytes, {
@@ -552,15 +580,15 @@ function isIndexRace(error) {
  * 可以在 withdrawn 的新刷新之后发布，把索引写回 pending；现在它要么先拿到锁先发布，要么在锁内才列举、
  * 看到的已是新状态。与锁外写者相撞就重列重写，几次后仍撞即报可重试的失败，权威状态已提交不受影响。
  */
-export async function refreshRequirementBoardIndex(root, signal) {
-    return withIndexLock(root, signal, () => publishCurrentRequirementBoardIndex(root, signal));
+export async function refreshRequirementBoardIndex(root, signal, language) {
+    return withIndexLock(root, signal, () => publishCurrentRequirementBoardIndex(root, signal, language));
 }
 /** 索引锁内的一步：列举当前状态并发布它们的投影；与锁外写者相撞就重列重写。 */
-async function publishCurrentRequirementBoardIndex(root, signal) {
+async function publishCurrentRequirementBoardIndex(root, signal, language) {
     for (let attempt = 1;; attempt += 1) {
         const listing = await listRequirementClaimStates(root, signal);
         try {
-            return await publishRequirementBoardIndex(root, listing.states, signal);
+            return await publishRequirementBoardIndex(root, listing.states, signal, language);
         }
         catch (error) {
             if (!isIndexRace(error) || attempt >= INDEX_REFRESH_ATTEMPTS) {

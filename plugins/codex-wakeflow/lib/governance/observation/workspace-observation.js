@@ -82,7 +82,7 @@ async function observeDomain(name, read) {
     }
 }
 // ---- 各域 ----------------------------------------------------------------------
-async function observeBoard(root, signal) {
+async function observeBoard(root, language, signal) {
     const listing = await listRequirementClaimStates(root, signal);
     const counts = { pending: 0, parked: 0, claimed: 0, withdrawn: 0, archived: 0 };
     for (const state of listing.states)
@@ -103,7 +103,9 @@ async function observeBoard(root, signal) {
         skipped: listing.skipped,
         counts: Object.freeze(counts),
         indexDigest,
-        expectedIndexDigest: computeSha256Digest(encodeUtf8(renderRequirementBoardIndex(listing.states), "$boardIndex"), "$boardIndex"),
+        expectedIndexDigest: computeSha256Digest(
+        // 期望的索引按配置的语言渲染：语言与磁盘上的不一致就是陈旧，维护 apply 重写（1.4 第 3 段）。
+        encodeUtf8(renderRequirementBoardIndex(listing.states, language), "$boardIndex"), "$boardIndex"),
     });
 }
 async function listActiveDemandIds(root, signal) {
@@ -726,7 +728,7 @@ export async function observeWorkspace(root, snapshot, ledgerRoot, options) {
     const { signal, scope } = options;
     const observedAt = observedAtOf(options.clock);
     const layout = await observeDomain("layout", () => inspectActiveLayout(root, signalOptions(signal)));
-    const board = await observeDomain("board", () => observeBoard(root, signal));
+    const board = await observeDomain("board", () => observeBoard(root, snapshot.model.presentation.language, signal));
     const demands = await observeDomain("demands", () => observeDemands(root, ledgerRoot, signal));
     const claims = await observeDomain("claims", () => observeClaims(root, signal));
     const bindings = [];

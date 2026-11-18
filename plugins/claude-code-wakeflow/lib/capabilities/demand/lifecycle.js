@@ -19,6 +19,7 @@ import { createDemandCompletion, DemandCompletionError, } from "../../governance
 import { buildDemandPostAcceptanceRoute, DemandPostAcceptanceRouteError, } from "../../governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { refreshLedgerReadingPagesQuietly } from "../../governance/observation/ledger-reading-pages.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, demandArchiveRef, demandLifecycleJournalRef, } from "../../kernel/layout.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
@@ -147,7 +148,7 @@ async function deleteJournal(context, demandId) {
 /** 索引是自愈的投影：五步都已提交，与并发写者的争用不能让终态事务报失败。 */
 async function refreshBoardIndexQuietly(context) {
     try {
-        await refreshRequirementBoardIndex(context.root, context.signal);
+        await refreshRequirementBoardIndex(context.root, context.signal, context.snapshot.model.presentation.language);
     }
     catch (error) {
         if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended")
@@ -586,6 +587,12 @@ async function applyTerminalLocked(context, plan, verify, disposition) {
     await retireDemandRoot(context.root, plan.demandId, settled.archive.payloadTreeDigest, context.signal, { residual: settled.residual });
     await deleteJournal(context, plan.demandId);
     await refreshBoardIndexQuietly(context);
+    // 账本里的人读页面（历史索引与这个 Demand 的一页，1.4 第 3 段）也是自愈的投影：归档已封，写不成不报失败。
+    await refreshLedgerReadingPagesQuietly(context.ledgerRoot, {
+        language: context.snapshot.model.presentation.language,
+        preferDemandId: plan.demandId,
+        ...signalOptions(context.signal),
+    });
     return Object.freeze({
         disposition: disposition === "recover"
             ? "recovered"

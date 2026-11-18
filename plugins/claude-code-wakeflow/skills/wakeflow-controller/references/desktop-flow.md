@@ -121,11 +121,12 @@ when a delivery stays silent.
 A product, Design or Test window returns its wake-controller callback by
 sending the callback permit's prompt to the Controller's desktop session id
 with the `SendMessage` tool, once, and passes that tool's return unchanged as
-`attempt.sendReturn`. The delivery prompt's return section names that id as
-`- controller desktop session: local_<id>`; Wakeflow renders it, so your
-three paragraphs carry no desktop id, and you never derive one from a hook
-session id. The hook record still decides landing: a callback sent elsewhere
-never lands in the Controller session.
+`attempt.sendReturn`. That id is the callback permit's
+`hostAction.desktopSessionId`, read from your current binding when the result
+is imported. The delivery prompt carries no desktop id - it is archived with
+the Demand - so your three paragraphs carry none either, and nobody derives
+one from a hook session id. The hook record still decides landing: a callback
+sent elsewhere never lands in the Controller session.
 
 A callback to a busy Controller is queued and opens a new turn when the
 current one ends; to an idle Controller it starts the turn at once. That is

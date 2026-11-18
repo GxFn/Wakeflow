@@ -37,6 +37,8 @@ function completedContent() {
         verdict: "pass" as const,
       },
     ],
+    // 记录版本 2（ADR-0030）：没有收到任务包之外的指示也要写空数组。
+    outsideInstructions: [],
   };
 }
 
@@ -143,6 +145,7 @@ test("TestTargetResultReport允许blocked部分结果但拒绝空completed结果
       verification: [],
       risks: ["需要Controller确认环境事实。"],
       steps: [],
+      outsideInstructions: [],
     },
     { clock: () => REPORTED_AT },
   );

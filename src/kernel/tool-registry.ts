@@ -51,8 +51,13 @@ const SLICE_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
 const EXECUTOR_PATTERN = /^[a-z][A-Za-z0-9]{0,63}$/u;
 const SCHEMA_ID_PATTERN = /^urn:wakeflow:entrypoints:([a-z0-9-]+)-(request|result):v1$/u;
 const TITLE_MAXIMUM_LENGTH = 80;
-/** ADR-0004：描述压到一到两句工作流描述；边界说明进 server instructions 或技能。 */
-export const WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES = 640;
+/**
+ * 一个工具的描述的上限。原来是 640 字节（ADR-0004：描述压到一到两句），放不下的话被挤进请求 Schema 的根
+ * 描述与 `$comment`，同一件事分三处说、改一处漏两处（gate-log §13.263 余项 ⑧）。1.4 第 3 段起对 Agent
+ * 说话的只留这一层，上限相应提到 1,024 字节（用户 2026-11-18：预算可以酌情放宽，避免压缩导致语义问题）；
+ * 目录的总预算没有放宽，那两层不再发布之后总量是下降的。
+ */
+export const WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES = 1024;
 const WAKEFLOW_TOOL_CATALOG_MAXIMUM_TOOLS = 32;
 
 function schemaStem(
@@ -160,6 +165,25 @@ export function createWakeflowToolCatalog(
   return Object.freeze({ tools: Object.freeze(tools) });
 }
 
+/**
+ * 请求 Schema 的公开形状：根上的 `description`、`$comment` 与代码生成用的导出标记不随目录发布。
+ *
+ * 一个工具原来有三层说明——工具描述、请求 Schema 的根描述、`$comment`——说的是同一件事，改一处漏两处
+ * （gate-log §13.263 的余项 ⑧）。对 Agent 说话的只留工具描述一层；Schema 里各成员自己的 `description` 不动。
+ * 这三个成员不参与校验，去掉之后公开的 Schema 接受与拒绝的请求和原来完全一样。
+ */
+function publicInputSchema(
+  schema: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const {
+    description: _description,
+    $comment: _comment,
+    "x-wakeflow-runtime-export": _runtimeExport,
+    ...published
+  } = schema;
+  return Object.freeze(published);
+}
+
 /** 公开投影：只带请求 Schema；结果 Schema 由服务端校验，不进 `tools/list`。 */
 export function publicToolDefinition(
   registration: Readonly<WakeflowToolRegistration>,
@@ -168,7 +192,7 @@ export function publicToolDefinition(
     name: registration.name,
     title: registration.title,
     description: registration.description,
-    inputSchema: registration.requestSchema,
+    inputSchema: publicInputSchema(registration.requestSchema),
     annotations: registration.annotations,
   });
 }

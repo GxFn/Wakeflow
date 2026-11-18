@@ -309,6 +309,11 @@ test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
   for (const expected of PUBLIC_TOOL_CATALOG) {
     const actual = actualByName.get(expected.name);
     equal(actual?.inputSchema.$id, expected.inputId);
+    // 对 Agent 说话的只留工具描述一层：请求 Schema 根上的说明与代码生成用的导出标记不随目录发布；
+    // 各成员自己的说明照旧在。
+    for (const member of ["description", "$comment", "x-wakeflow-runtime-export"]) {
+      equal(Object.hasOwn(actual?.inputSchema ?? {}, member), false, `${expected.name}: ${member}`);
+    }
     // ADR-0004 选项 A：结果 Schema 只在服务端校验，不进 tools/list。
     equal(actual?.outputSchema, undefined);
     equal(

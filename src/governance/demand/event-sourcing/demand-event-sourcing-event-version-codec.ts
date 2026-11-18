@@ -34,14 +34,19 @@ import type { WakeflowProductDefectRemediationAuthorizedEventDataV1 } from "../.
 import { WAKEFLOW_PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/product-defect-remediation-authorized-event-data-v1.generated.js";
 import type { WakeflowTargetResultRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v1.generated.js";
+import type { WakeflowTargetResultRecordedEventDataV2 } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v2.generated.js";
+import { WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V2_SCHEMA } from "../../../contracts/generated/governance/demand/target-result-recorded-event-data-v2.generated.js";
 import type { WakeflowTargetTaskPlannedEventDataV1 } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
 import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report-v2.generated.js";
 import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../../contracts/generated/governance/result/target-result.generated.js";
+import { WAKEFLOW_TARGET_RESULT_V2_SCHEMA } from "../../../contracts/generated/governance/result/target-result-v2.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report-v2.generated.js";
 import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-implementation-review-decision.generated.js";
 import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA } from "../../../contracts/generated/governance/review/controller-product-defect-remediation-authorization.generated.js";
 import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA } from "../../../contracts/generated/governance/review/controller-test-review-decision.generated.js";
@@ -102,7 +107,8 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "lifecycle.demand-escalated": 1,
   "publication.demand-published": 1,
   "result.callback-reissued": 1,
-  "result.target-result-recorded": 1,
+  // ADR-0030：报告升到记录版本 2 的那一次；1.4 里不再对这个事件做第二次形状改动。
+  "result.target-result-recorded": 2,
   "review.product-defect-remediation-authorized": 1,
   "review.target-result-decided": 1,
   "tasking.target-task-planned": 1,
@@ -340,6 +346,45 @@ function parseTargetResultRecordedV1(value: Readonly<JsonValue>): Readonly<JsonV
   return parseJsonValue(result.value, "$data");
 }
 
+const validateTargetResultRecordedV2 =
+  createRuntimeJsonSchemaValidator<WakeflowTargetResultRecordedEventDataV2>(
+    WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V2_SCHEMA,
+    [
+      WAKEFLOW_TARGET_RESULT_V2_SCHEMA,
+      WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA,
+      WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA,
+      WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
+      WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA,
+      WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
+      WAKEFLOW_TASK_PACKAGE_SCHEMA,
+      WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+      WAKEFLOW_SHA256_DIGEST_SCHEMA,
+      WAKEFLOW_UTC_INSTANT_SCHEMA,
+      WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
+    ],
+  );
+
+function parseTargetResultRecordedV2(value: Readonly<JsonValue>): Readonly<JsonValue> {
+  const result = validateTargetResultRecordedV2(value);
+  if (!result.ok) {
+    throw new TypeError("Target result recorded v2 data is invalid.");
+  }
+  return parseJsonValue(result.value, "$data");
+}
+
+/**
+ * `result.target-result-recorded` 的第一步升级（ADR-0030 决定 4）：版本 1 → 版本 2。
+ *
+ * 版本 2 的事件数据允许报告是记录版本 2（带逐条锚点的结论与任务包之外收到的指示）。版本 1 的事件里报告
+ * 一律是记录版本 1；升级不动它的任何字节：报告的摘要、结果的摘要、评审单元与决定里引用它们的摘要都是在
+ * 原来的字节上算出来的，替旧报告补成员就得重算这一串摘要，等于改写历史。"未记录"由报告自己的记录版本
+ * 表达——读它的代码看到版本 1 就知道那两项没有记录，不补造结论。
+ */
+function upcastTargetResultRecordedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
+  return value;
+}
+
 function parseControllerTargetReviewDecidedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
   const result = validateControllerTargetReviewDecidedV1(value);
   if (!result.ok) {
@@ -433,8 +478,11 @@ const DELIVERY_REARMED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
 });
 const TARGET_RESULT_RECORDED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   currentVersion: DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["result.target-result-recorded"],
-  codecs: [{ version: 1, parse: parseTargetResultRecordedV1 }],
-  steps: [],
+  codecs: [
+    { version: 1, parse: parseTargetResultRecordedV1 },
+    { version: 2, parse: parseTargetResultRecordedV2 },
+  ],
+  steps: [{ fromVersion: 1, toVersion: 2, upcast: upcastTargetResultRecordedV1 }],
 });
 const CONTROLLER_TARGET_REVIEW_DECIDED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   currentVersion: DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["review.target-result-decided"],

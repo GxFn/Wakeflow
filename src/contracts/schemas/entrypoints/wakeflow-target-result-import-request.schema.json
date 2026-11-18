@@ -87,7 +87,9 @@
         "evidenceLocators",
         "verification",
         "risks",
-        "anchorEvidence"
+        "anchorEvidence",
+        "anchorResults",
+        "outsideInstructions"
       ],
       "properties": {
         "outcome": {
@@ -115,13 +117,37 @@
           "items": {
             "$ref": "#/$defs/anchorEvidence"
           }
+        },
+        "anchorResults": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/anchorResult"
+          },
+          "description": "One entry per acceptance anchor of the task package, no more and no fewer: passed (checked, holds), failed (checked, does not hold), blocked (could not check) or not-run (did not check), with what you actually observed. Never passed for something you did not check."
+        },
+        "outsideInstructions": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/outsideInstruction"
+          },
+          "description": "Instructions received outside the task package (the user typing in your window, another session): who, what, and whether you followed, declined or escalated. An empty array when there were none."
         }
       }
     },
     "testReportContent": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["outcome", "summary", "evidenceLocators", "verification", "risks", "steps"],
+      "required": [
+        "outcome",
+        "summary",
+        "evidenceLocators",
+        "verification",
+        "risks",
+        "steps",
+        "outsideInstructions"
+      ],
       "properties": {
         "outcome": {
           "$ref": "#/$defs/resultOutcome"
@@ -144,6 +170,14 @@
           "items": {
             "$ref": "#/$defs/step"
           }
+        },
+        "outsideInstructions": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/outsideInstruction"
+          },
+          "description": "Instructions received outside the task package; an empty array when there were none."
         }
       },
       "allOf": [
@@ -460,6 +494,38 @@
           }
         }
       ]
+    },
+    "anchorResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchorId", "status", "observed"],
+      "properties": {
+        "anchorId": {
+          "$ref": "#/$defs/token"
+        },
+        "status": {
+          "enum": ["passed", "failed", "blocked", "not-run"]
+        },
+        "observed": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "outsideInstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "summary", "handling"],
+      "properties": {
+        "source": {
+          "enum": ["user", "other-session", "unknown"]
+        },
+        "summary": {
+          "$ref": "#/$defs/humanText"
+        },
+        "handling": {
+          "enum": ["followed", "declined", "escalated"]
+        }
+      }
     }
   }
 }

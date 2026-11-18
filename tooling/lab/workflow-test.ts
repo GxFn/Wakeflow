@@ -104,6 +104,7 @@ export async function testLabProducts(
         evidence: { ref, digest },
         verdict: "pass",
       })),
+      outsideInstructions: [],
     },
   });
   for (const [index, item] of evidence.entries()) {

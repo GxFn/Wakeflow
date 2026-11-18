@@ -16,12 +16,12 @@ import type { TestTargetResultStep } from "../../governance/result/test-target-r
 import type { ControllerReviewDecision } from "../../governance/review/controller-review-decision.js";
 import type { ControllerIndependentCheckOutcome } from "../../governance/review/controller-review-decision-contract.js";
 import type { TestContractStep } from "../../governance/tasking/task-package.js";
-import { findPromptLanding } from "../../kernel/prompt-digest.js";
 import {
   CREDENTIAL_PRIVACY_FINDING_KINDS,
   type PrivacyScanPolicy,
   scanPrivacy,
 } from "../../kernel/privacy-scan.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
@@ -176,9 +176,15 @@ export interface ReportTextView {
     readonly observed: string;
     readonly failure?: Readonly<{ readonly recommendedAction: string }>;
   }>[];
+  /** 记录版本 2（ADR-0030）：逐条锚点观察到的事实，与任务包之外收到的指示的概述。 */
+  readonly anchorResults?: readonly Readonly<{ readonly observed: string }>[];
+  readonly outsideInstructions?: readonly Readonly<{ readonly summary: string }>[];
 }
 
-/** 报告的自由文本：摘要、验证、风险、逐步观察与建议动作；锚点与定位符是引用不是文本。 */
+/**
+ * 报告的自由文本：摘要、验证、风险、逐步观察与建议动作，以及记录版本 2 的逐条锚点观察与任务包之外的指示；
+ * 锚点与定位符是引用不是文本。
+ */
 export function reportTexts(report: Readonly<ReportTextView>): readonly string[] {
   return Object.freeze([
     report.summary,
@@ -189,6 +195,26 @@ export function reportTexts(report: Readonly<ReportTextView>): readonly string[]
         ? [step.observed]
         : [step.observed, step.failure.recommendedAction],
     ),
+    ...(report.anchorResults ?? []).map((entry) => entry.observed),
+    ...(report.outsideInstructions ?? []).map((entry) => entry.summary),
+  ]);
+}
+
+/**
+ * 逐条锚点的结论要与任务包的验收锚点一一对应（ADR-0030 决定 2）：缺的、多出的各点名，没有问题返回空。
+ * 每个锚点重复给出的情况由报告自己的解析拒绝。
+ */
+export function deriveAnchorResultBlockers(
+  expectedAnchorIds: readonly string[],
+  answeredAnchorIds: readonly string[],
+): readonly string[] {
+  return Object.freeze([
+    ...expectedAnchorIds
+      .filter((anchorId) => !answeredAnchorIds.includes(anchorId))
+      .map((anchorId) => `anchor-result-missing:${anchorId}`),
+    ...answeredAnchorIds
+      .filter((anchorId) => !expectedAnchorIds.includes(anchorId))
+      .map((anchorId) => `anchor-result-unknown:${anchorId}`),
   ]);
 }
 

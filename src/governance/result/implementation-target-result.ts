@@ -81,6 +81,16 @@ function assertReportMatchesTaskPackage(
     fail("relation");
   }
   const expectedAnchors = taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId);
+  // 记录版本 2：任务包里的每条验收锚点恰好一项结论，不多不少（ADR-0030 决定 2）。版本 1 的报告没有这一项。
+  if (report.anchorResults !== undefined) {
+    const answered = report.anchorResults.map((entry) => entry.anchorId);
+    if (
+      answered.length !== expectedAnchors.length ||
+      expectedAnchors.some((anchorId) => !answered.includes(anchorId))
+    ) {
+      fail("relation");
+    }
+  }
   const actualAnchors = report.anchorEvidence.map((entry) => entry.anchorId);
   if (
     actualAnchors.some((anchorId) => !expectedAnchors.includes(anchorId)) ||

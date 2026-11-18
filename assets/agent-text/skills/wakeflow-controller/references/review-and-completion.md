@@ -22,7 +22,11 @@ decision advances the workflow. Then do the work inspection cannot do:
 1. Read the actual diff and the actual evidence. The report's self-assessment
    is a claim, not a finding. Reported commits are already recorded: the unit's `reportedCommits` gives each one's `evidenceId` and changed paths (`references/evidence.md`).
 2. Check each acceptance anchor against what you observed, not against what
-   the report says about it.
+   the report says about it. The report's `anchorResults` is the target's own
+   conclusion per anchor and `outsideInstructions` is what it says it was told
+   outside the package: read both, then record in `independentChecks` only the
+   anchors you re-checked or disagree with, not a retelling of every one. A
+   result without them was written before they existed, not hiding them.
 3. Notice what is missing. An anchor answered with a confident sentence and no
    evidence is the most common failure you will see.
 

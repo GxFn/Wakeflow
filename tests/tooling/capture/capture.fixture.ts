@@ -385,6 +385,7 @@ export function rerunFixture(f: ReturnType<typeof captureFixture>) {
           },
         },
       ],
+      outsideInstructions: [],
     },
     { clock: () => parseUtcInstant("2026-08-29T11:00:00.000Z") },
   );

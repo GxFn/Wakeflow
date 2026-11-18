@@ -118,6 +118,8 @@ export function testResultReportContent(
     verification: ["逐项复验 Evidence ref 与 digest。"],
     risks: ["结果仍需 Controller 独立审查。"],
     steps: steps.map((step) => ({ ...step })),
+    // 记录版本 2（ADR-0030）：没有收到任务包之外的指示也要写空数组。
+    outsideInstructions: [],
   };
 }
 

@@ -2689,6 +2689,7 @@ async function importAndAcceptTest(
         verification: ["逐项复验 Evidence ref 与 digest。"],
         risks: ["结果仍需 Controller 独立审查。"],
         steps,
+        outsideInstructions: [],
       },
     },
   });
@@ -5804,6 +5805,7 @@ async function importTestResult(
         verification: ["逐项复验 Evidence ref 与 digest。"],
         risks: ["结果仍需 Controller 独立审查。"],
         steps,
+        outsideInstructions: [],
       },
     },
   });

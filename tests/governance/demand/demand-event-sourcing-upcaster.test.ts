@@ -259,15 +259,25 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
 
   const targetResult = createTargetResultFixture({ claim, envelope, outcome });
   const callback = createTargetResultCallbackFixture(targetResult);
-  const resultEvent = upcastDemandEventSourcingStoredEvent({
+  // ADR-0030：结果事件的当前版本是 2，它的报告是记录版本 2。版本 1 的事件数据是冻结的——带着版本 2 的
+  // 报告却自称版本 1 的事件读不进来。
+  const storedResultEvent = {
     ...EVENT,
+    eventVersion: 2,
     eventId: targetResultRecordedEventIdFromResult(targetResult),
     demandId: targetResult.demandId,
     streamRevision: 6,
     recordedAt: targetResult.report.reportedAt,
     eventType: "result.target-result-recorded",
     data: { result: targetResult, callback, evidenceResolution: [] },
-  });
+  };
+  equal(targetResult.report.schemaVersion, 2);
+  throws(
+    () => upcastDemandEventSourcingStoredEvent({ ...storedResultEvent, eventVersion: 1 }),
+    (error: unknown) =>
+      error instanceof DemandEventSourcingUpcasterError && error.reason === "codec",
+  );
+  const resultEvent = upcastDemandEventSourcingStoredEvent(storedResultEvent);
   equal(resultEvent.eventType, "result.target-result-recorded");
   if (resultEvent.eventType === "result.target-result-recorded") {
     equal(resultEvent.data.result.resultDigest, targetResult.resultDigest);

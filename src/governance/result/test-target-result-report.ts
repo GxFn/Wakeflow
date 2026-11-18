@@ -3,6 +3,8 @@ import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundat
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import type { WakeflowTestTargetResultReport as ReportWire } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import type { WakeflowTestTargetResultReportV2 as ReportWireV2 } from "../../contracts/generated/governance/result/test-target-result-report-v2.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report-v2.generated.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   isTestFailureClassification,
@@ -45,6 +47,10 @@ import {
   type UtcWallClock,
   UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
+import {
+  parseTargetResultOutsideInstructions,
+  type TargetResultOutsideInstruction,
+} from "./target-result-outside-instructions.js";
 import type {
   TargetResultEvidenceLocator,
   TargetResultOutcome,
@@ -60,7 +66,12 @@ import type {
  */
 
 const REPORT_KIND = "WakeflowTestTargetResultReport" as const;
-const REPORT_SCHEMA_VERSION = 1 as const;
+/**
+ * 记录版本（ADR-0030）。版本 2 多了任务包之外收到的指示；测试报告已有逐步的 verdict，不加逐条锚点的结论。
+ * 版本 1 的记录原样读入、原样参与摘要，没有那一项就是"未记录"。新报告一律写版本 2。
+ */
+const LEGACY_REPORT_SCHEMA_VERSION = 1 as const;
+const REPORT_SCHEMA_VERSION = 2 as const;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const MAXIMUM_EVIDENCE_LOCATORS = 64;
@@ -85,7 +96,8 @@ export interface TestTargetResultStep {
   readonly failure?: Readonly<TestTargetResultStepFailure>;
 }
 
-export interface TestTargetResultReportContent {
+/** 两个记录版本共有的内容。 */
+interface TestTargetResultReportCommonContent {
   readonly outcome: TargetResultOutcome;
   readonly summary: string;
   readonly evidenceLocators: readonly Readonly<TargetResultEvidenceLocator>[];
@@ -94,9 +106,16 @@ export interface TestTargetResultReportContent {
   readonly steps: readonly Readonly<TestTargetResultStep>[];
 }
 
-export interface TestTargetResultReport extends TestTargetResultReportContent {
+/** 一份新报告的内容（记录版本 2）。 */
+export interface TestTargetResultReportContent extends TestTargetResultReportCommonContent {
+  readonly outsideInstructions: readonly Readonly<TargetResultOutsideInstruction>[];
+}
+
+/** 读回来的报告：`schemaVersion` 为 2 时 `outsideInstructions` 一定在，为 1 时一定不在（未记录）。 */
+export interface TestTargetResultReport extends TestTargetResultReportCommonContent {
   readonly kind: typeof REPORT_KIND;
-  readonly schemaVersion: typeof REPORT_SCHEMA_VERSION;
+  readonly schemaVersion: typeof LEGACY_REPORT_SCHEMA_VERSION | typeof REPORT_SCHEMA_VERSION;
+  readonly outsideInstructions?: readonly Readonly<TargetResultOutsideInstruction>[];
   /** 由步骤派生：含 fail 即 fail，否则含 blocked 即 blocked，否则含 cannot-conclude 即 cannot-conclude，否则 pass；无步骤为 cannot-conclude。 */
   readonly verdict: TestStepVerdict;
   readonly reportedAt: UtcInstant;
@@ -142,13 +161,18 @@ export class TestTargetResultReportError extends Error {
   }
 }
 
-const validateWire = createRuntimeJsonSchemaValidator<ReportWire>(
+const REPORT_SCHEMA_DEPENDENCIES = [
+  WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+  WAKEFLOW_SHA256_DIGEST_SCHEMA,
+  WAKEFLOW_UTC_INSTANT_SCHEMA,
+];
+const validateLegacyWire = createRuntimeJsonSchemaValidator<ReportWire>(
   WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
-  [
-    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
-    WAKEFLOW_SHA256_DIGEST_SCHEMA,
-    WAKEFLOW_UTC_INSTANT_SCHEMA,
-  ],
+  REPORT_SCHEMA_DEPENDENCIES,
+);
+const validateWire = createRuntimeJsonSchemaValidator<ReportWireV2>(
+  WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA,
+  REPORT_SCHEMA_DEPENDENCIES,
 );
 
 function fail(reason: TestTargetResultReportErrorReason, path: string, cause?: unknown): never {
@@ -318,15 +342,33 @@ function parseSteps(
   return Object.freeze(steps);
 }
 
-/** 准入不含时钟和摘要的Test Agent业务陈述。 */
+const COMMON_CONTENT_FIELDS = Object.freeze([
+  "evidenceLocators",
+  "outcome",
+  "risks",
+  "steps",
+  "summary",
+  "verification",
+]);
+
+/** 准入不含时钟和摘要的Test Agent业务陈述（记录版本 2：共有的六项加任务包之外收到的指示）。 */
 export function parseTestTargetResultReportContent(
   value: unknown,
 ): Readonly<TestTargetResultReportContent> {
-  const record = exactRecord(
-    value,
-    ["evidenceLocators", "outcome", "risks", "steps", "summary", "verification"],
-    "$content",
-  );
+  const record = exactRecord(value, [...COMMON_CONTENT_FIELDS, "outsideInstructions"], "$content");
+  const { outsideInstructions, ...common } = record;
+  return Object.freeze({
+    ...parseCommonContent(common),
+    outsideInstructions: parseTargetResultOutsideInstructions(
+      outsideInstructions,
+      "$/outsideInstructions",
+      { record: exactRecord, text: humanText, fail: (path) => fail("input", path) },
+    ),
+  });
+}
+
+function parseCommonContent(value: unknown): Readonly<TestTargetResultReportCommonContent> {
+  const record = exactRecord(value, COMMON_CONTENT_FIELDS, "$content");
   if (
     record.outcome !== "completed" &&
     record.outcome !== "blocked" &&
@@ -353,12 +395,12 @@ export function parseTestTargetResultReportContent(
   });
 }
 
+/** 摘要的基：每个记录版本恰好是它自己的成员，版本 1 的摘要因此一个字节不变。 */
 function reportBasis(
   value: Omit<TestTargetResultReport, "reportDigest">,
 ): Omit<TestTargetResultReport, "reportDigest"> {
-  return {
+  const common = {
     kind: REPORT_KIND,
-    schemaVersion: REPORT_SCHEMA_VERSION,
     outcome: value.outcome,
     summary: value.summary,
     evidenceLocators: value.evidenceLocators,
@@ -367,6 +409,15 @@ function reportBasis(
     steps: value.steps,
     verdict: value.verdict,
     reportedAt: value.reportedAt,
+  };
+  if (value.schemaVersion === LEGACY_REPORT_SCHEMA_VERSION) {
+    return { ...common, schemaVersion: LEGACY_REPORT_SCHEMA_VERSION };
+  }
+  if (value.outsideInstructions === undefined) fail("relation", "$/schemaVersion");
+  return {
+    ...common,
+    schemaVersion: REPORT_SCHEMA_VERSION,
+    outsideInstructions: value.outsideInstructions,
   };
 }
 
@@ -379,21 +430,35 @@ export function parseTestTargetResultReport(value: unknown): Readonly<TestTarget
     if (error instanceof JsonValueError) fail("input", error.path, error);
     throw error;
   }
-  const validated = validateWire(json);
+  const legacy =
+    json !== null &&
+    typeof json === "object" &&
+    !Array.isArray(json) &&
+    (json as JsonObject).schemaVersion === LEGACY_REPORT_SCHEMA_VERSION;
+  const validated = legacy ? validateLegacyWire(json) : validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
-  const content = parseTestTargetResultReportContent({
+  const common = {
     outcome: wire.outcome,
     summary: wire.summary,
     evidenceLocators: wire.evidenceLocators,
     verification: wire.verification,
     risks: wire.risks,
     steps: wire.steps,
-  });
+  };
+  const content =
+    wire.schemaVersion === LEGACY_REPORT_SCHEMA_VERSION
+      ? { schemaVersion: LEGACY_REPORT_SCHEMA_VERSION, ...parseCommonContent(common) }
+      : {
+          schemaVersion: REPORT_SCHEMA_VERSION,
+          ...parseTestTargetResultReportContent({
+            ...common,
+            outsideInstructions: wire.outsideInstructions,
+          }),
+        };
   if (wire.verdict !== deriveTestVerdict(content.steps)) fail("relation", "$/verdict");
   const basis = reportBasis({
     kind: REPORT_KIND,
-    schemaVersion: REPORT_SCHEMA_VERSION,
     ...content,
     verdict: wire.verdict,
     reportedAt: instant(wire.reportedAt, "$/reportedAt"),

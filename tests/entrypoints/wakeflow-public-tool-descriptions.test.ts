@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../src/contracts/generated/governance/result/test-target-result-report.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../src/contracts/generated/governance/result/test-target-result-report-v2.generated.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import { WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES } from "../../src/kernel/tool-registry.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
@@ -16,7 +16,7 @@ useDisposableDurability();
  * verify 的描述从 §13.111 起把门数停在 "thirteen" 两轮没人发现；§13.129 只给那一个数字加了
  * 决定测试。这里把同类检查推广到整张目录：每个工具的请求 Schema 里的主判别枚举（顶层的
  * `mode` / `action` / `operation` / `decision`，以及 `intent` 各分支的 `kind`）必须逐字出现在
- * 描述里；描述不超过 640 字节；只读注解与 "Reads only" 的措辞一致，写工具则必须说出它写什么。
+ * 描述里；描述不超过上限（1,024 字节）；只读注解与 "Reads only" 的措辞一致，写工具则必须说出它写什么。
  * 最后一条把 Test 技能列出的判定、失败分类与归属词汇对着拥有它们的报告 Schema 核对：
  * 少一个值是撒谎，多一个 Schema 里没有的词也是撒谎。
  *
@@ -153,7 +153,7 @@ test("每个公共工具的描述逐字点名其请求判别枚举的每一个�
   deepEqual(observed, EXPECTED_DISCRIMINATORS);
 });
 
-test("每个公共工具的描述不超过 640 字节（§13.130：目录构造已拒绝，这里让上限在测试里可见）", () => {
+test("每个公共工具的描述不超过上限（§13.130：目录构造已拒绝，这里让上限在测试里可见）", () => {
   equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 20);
   for (const tool of WAKEFLOW_PUBLIC_TOOL_CATALOG.tools) {
     const bytes = Buffer.byteLength(tool.description, "utf8");
@@ -265,12 +265,17 @@ function vocabularyTokens(text: string): ReadonlySet<string> {
 }
 
 test("Test 技能列出的判定、失败分类与归属词汇与报告 Schema 的枚举完全一致（§13.130）", () => {
-  const schema: SchemaNode = WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA;
+  // 技能教的是当前的记录版本（ADR-0030：版本 2，多了任务包之外收到的指示）。
+  const schema: SchemaNode = WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA;
   const failure = schemaDefinition(schema, "#/$defs/failure/properties");
   const named: Readonly<Record<string, readonly string[]>> = Object.freeze({
     verdict: literalValues(schema, schemaDefinition(schema, "#/$defs/verdict")),
     classification: literalValues(schema, failure.classification),
     likelyOwner: literalValues(schema, failure.likelyOwner),
+    outsideHandling: literalValues(
+      schema,
+      schemaDefinition(schema, "#/$defs/outsideInstruction/properties").handling,
+    ),
   });
   for (const [name, values] of Object.entries(named)) {
     ok(values.length >= 2, `${name}: the report schema no longer carries this vocabulary`);

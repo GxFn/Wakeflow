@@ -423,11 +423,12 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     );
   }
 
+  // 目标提交的内容对着当前的记录版本（ADR-0030：版本 2）核对；版本 1 的文档冻结，只用来读旧记录。
   const implementationReport = readSchema(
-    "src/contracts/schemas/governance/result/implementation-target-result-report.schema.json",
+    "src/contracts/schemas/governance/result/implementation-target-result-report-v2.schema.json",
   );
   const testReport = readSchema(
-    "src/contracts/schemas/governance/result/test-target-result-report.schema.json",
+    "src/contracts/schemas/governance/result/test-target-result-report-v2.schema.json",
   );
   const implementationContent = definition(resultImportRequest, "implementationReportContent");
   const testContent = definition(resultImportRequest, "testReportContent");

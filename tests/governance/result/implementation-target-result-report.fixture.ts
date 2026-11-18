@@ -49,6 +49,17 @@ export function createImplementationTargetResultReportContentFixture(
         }),
       ),
     ),
+    // 记录版本 2（ADR-0030）：每条验收锚点恰好一项结论；没有收到任务包之外的指示也要写空数组。
+    anchorResults: Object.freeze(
+      taskPackage.acceptanceAnchors.map((anchor) =>
+        Object.freeze({
+          anchorId: anchor.anchorId,
+          status: "passed" as const,
+          observed: "聚焦验证输出与该锚点的要求一致。",
+        }),
+      ),
+    ),
+    outsideInstructions: Object.freeze([]),
   });
 }
 

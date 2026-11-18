@@ -13,7 +13,8 @@ import {
 
 const PACKAGE = "urn:wakeflow:governance:tasking:task-package:v1";
 const ENVELOPE = "urn:wakeflow:governance:delivery:delivery-envelope:v1";
-const RESULT = "urn:wakeflow:governance:result:target-result:v1";
+// 结果的文档版本 2：内嵌的报告可以是记录版本 1 或 2（ADR-0030），旧归档里的结果照样准入。
+const RESULT = "urn:wakeflow:governance:result:target-result:v2";
 
 export function captureSchemas(repository: string) {
   const catalog = loadSchemaCatalog(repository);

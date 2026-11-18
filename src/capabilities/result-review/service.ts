@@ -197,6 +197,7 @@ import {
 } from "./contract.js";
 import {
   collectEvidenceReferences,
+  deriveAnchorResultBlockers,
   deriveCallbackLanding,
   deriveCredentialBlockers,
   deriveImplementationAllowedDecisions,
@@ -1016,6 +1017,14 @@ function buildResult(
       fail("precondition-failed", "work-type", "$request.report.workType");
     }
     const report = createImplementationTargetResultReport(input.report.content, clock);
+    // 逐条锚点的结论与任务包不一致时点名是哪一条；结果的合成另有同一条不变量，这里先给出可操作的拒绝。
+    const anchorBlockers = deriveAnchorResultBlockers(
+      taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId),
+      (report.anchorResults ?? []).map((entry) => entry.anchorId),
+    );
+    if (anchorBlockers.length > 0) {
+      rejectWith(anchorBlockers, "$request.report.content.anchorResults");
+    }
     return createImplementationTargetResult({
       taskPackage,
       envelope,

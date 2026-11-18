@@ -79,6 +79,7 @@ test("TestTargetResult闭合测试合同、attempt与投递结局并携带派生
         verification: [],
         risks: ["合同步骤尚未全部执行。"],
         steps: steps.slice(0, 1),
+        outsideInstructions: [],
       },
       { clock: () => TEST_RESULT_REPORTED_AT },
     );

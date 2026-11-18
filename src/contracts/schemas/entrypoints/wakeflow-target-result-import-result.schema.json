@@ -264,7 +264,7 @@
           "const": "WakeflowImplementationTargetResultReport"
         },
         "schemaVersion": {
-          "const": 1
+          "enum": [1, 2]
         },
         "outcome": {
           "$ref": "#/$defs/resultOutcome"
@@ -297,6 +297,22 @@
         },
         "reportDigest": {
           "$ref": "#/$defs/sha256Digest"
+        },
+        "outsideInstructions": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/outsideInstruction"
+          },
+          "description": "Record version 2 only; absent on a version 1 report, which did not record it."
+        },
+        "anchorResults": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/anchorResult"
+          },
+          "description": "Record version 2 only: the target's own conclusion per acceptance anchor; absent on a version 1 report."
         }
       }
     },
@@ -321,7 +337,7 @@
           "const": "WakeflowTestTargetResultReport"
         },
         "schemaVersion": {
-          "const": 1
+          "enum": [1, 2]
         },
         "outcome": {
           "$ref": "#/$defs/resultOutcome"
@@ -353,6 +369,14 @@
         },
         "verdict": {
           "enum": ["pass", "fail", "blocked", "cannot-conclude"]
+        },
+        "outsideInstructions": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/outsideInstruction"
+          },
+          "description": "Record version 2 only; absent on a version 1 report, which did not record it."
         }
       },
       "allOf": [
@@ -902,7 +926,10 @@
               "type": "string",
               "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
             },
-            "streamRevision": { "type": "integer", "minimum": 1 },
+            "streamRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
             "targetTaskId": {
               "type": "string",
               "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -948,6 +975,38 @@
             "minLength": 1,
             "maxLength": 256
           }
+        }
+      }
+    },
+    "anchorResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchorId", "status", "observed"],
+      "properties": {
+        "anchorId": {
+          "$ref": "#/$defs/token"
+        },
+        "status": {
+          "enum": ["passed", "failed", "blocked", "not-run"]
+        },
+        "observed": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "outsideInstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "summary", "handling"],
+      "properties": {
+        "source": {
+          "enum": ["user", "other-session", "unknown"]
+        },
+        "summary": {
+          "$ref": "#/$defs/humanText"
+        },
+        "handling": {
+          "enum": ["followed", "declined", "escalated"]
         }
       }
     }

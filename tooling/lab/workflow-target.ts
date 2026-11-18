@@ -294,6 +294,14 @@ export async function implementLabProduct(
       verification: ["Node executed the fixed arithmetic sample."],
       risks: ["Synthetic host observations do not prove native host operation."],
       anchorEvidence: [{ anchorId, evidenceRefs: [locator] }],
+      anchorResults: [
+        {
+          anchorId,
+          status: "passed",
+          observed: "The fixed arithmetic sample printed the expected count and total.",
+        },
+      ],
+      outsideInstructions: [],
     },
   });
   recheckProduct(context, evidence);

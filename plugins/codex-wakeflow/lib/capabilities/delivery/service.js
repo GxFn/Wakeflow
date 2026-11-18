@@ -32,6 +32,7 @@ import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, Tes
 import { runAppendCommand, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { readHelperObservationFile, } from "../../kernel/helper-observation-file.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
@@ -1005,6 +1006,7 @@ function permitBody(envelope, outcome, nextProjection) {
             owner: nextProjection.owner,
             suggestedTool: nextProjection.suggestedTool,
             blockers: [...nextProjection.blockers],
+            ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
         },
     };
 }
@@ -1064,6 +1066,7 @@ function callbackPermitBody(envelope, outcome, nextProjection) {
             owner: nextProjection.owner,
             suggestedTool: nextProjection.suggestedTool,
             blockers: [...nextProjection.blockers],
+            ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
         },
     };
 }
@@ -1133,7 +1136,6 @@ const ATTEMPT_FAILURE_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
     allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
 });
-/** 复审 D6：failure 只随没送出去的尝试记录，summary 走凭证扫描（与归档、终态文本同一策略）。 */
 function normalizeAttemptFailure(attempt) {
     if (attempt.failure === undefined)
         return {};
@@ -1179,6 +1181,61 @@ function normalizeOutcomeAttempt(attempt) {
         rejectWith(["send-return-digest-mismatch"], "$request.attempt.evidenceDigest");
     }
     return Object.freeze({ status: attempt.status, evidenceDigest: computed, ...failure });
+}
+/** 结局观察文件里允许出现的成员。 */
+const OUTCOME_FILE_MEMBERS = Object.freeze([
+    "attempt",
+    "readback",
+    "observedAt",
+]);
+function inlineOutcomeObservation(request, path) {
+    if (request.attempt === undefined || request.observedAt === undefined) {
+        fail("invalid-request", "outcome-observation-required", path);
+    }
+    return Object.freeze({
+        attempt: normalizeOutcomeAttempt(request.attempt),
+        readback: request.readback,
+        observedAt: parseInstant(request.observedAt, `${path}.observedAt`),
+    });
+}
+/** 结局观察从请求里取：给了 `outcome` 引用就不能再内联任何一项，免得两处说法不一。 */
+function outcomeObservationInput(request) {
+    if (request.outcome === undefined)
+        return inlineOutcomeObservation(request, "$request");
+    if (request.attempt !== undefined ||
+        request.readback !== undefined ||
+        request.observedAt !== undefined) {
+        fail("invalid-request", "outcome-file-and-inline", "$request.outcome");
+    }
+    const { outcome, ...rest } = request;
+    return Object.freeze({ outcomeFile: outcome, rest });
+}
+/**
+ * 按引用读回助手落盘的结局观察，再用同一份请求 Schema 里那三项的规则准入：文件里只能有 `attempt`、
+ * `readback`、`observedAt`。读回来的仍是 Agent 转报的观察（attempt 是自述），处置照旧由 hook 记录定。
+ */
+async function resolveOutcomeObservation(context, observation) {
+    if (!("outcomeFile" in observation))
+        return observation;
+    const path = "$request.outcome";
+    const content = await readHelperObservationFile(context.workspaceRoot, context.facade.hostId, observation.outcomeFile, path, context.options.signal);
+    if (content === null ||
+        typeof content !== "object" ||
+        Array.isArray(content) ||
+        Object.keys(content).some((member) => !OUTCOME_FILE_MEMBERS.includes(member))) {
+        fail("precondition-failed", "observation-file-content", `${path}.file`);
+    }
+    let admitted;
+    try {
+        admitted = parseRecordDeliveryOutcomeRequest({ ...observation.rest, ...content });
+    }
+    catch (error) {
+        if (isWakeflowError(error) && error.code === "invalid-request") {
+            fail("precondition-failed", "observation-file-content", `${path}.file`, { cause: error });
+        }
+        throw error;
+    }
+    return inlineOutcomeObservation(admitted, path);
 }
 async function sessionRecords(context, sessionId, since) {
     // A session's retained records easily exceed the default page: query the full bound, and
@@ -1371,13 +1428,13 @@ async function observedOutcomeDecision(context, input, envelope, sessionId, curr
         throw error;
     }
 }
-async function executeOutcome(context, input, binding) {
+async function executeOutcome(context, requested, binding) {
     const { authority, options } = context;
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
     const bound = await boundCommit(repository, binding, options.signal);
     if (bound !== null) {
         // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
-        const replayedEnvelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+        const replayedEnvelope = await loadEnvelope(repository, requested.deliveryId, options.signal);
         const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
         const replayed = Object.freeze({
             ...recorded,
@@ -1389,6 +1446,13 @@ async function executeOutcome(context, input, binding) {
         }
         return replayed;
     }
+    // 重放不读观察文件（它只为紧接着的那一次调用存在）；第一次落账才按引用读回。
+    const input = Object.freeze({
+        deliveryId: requested.deliveryId,
+        claimDigest: requested.claimDigest,
+        resolution: requested.resolution,
+        ...(await resolveOutcomeObservation(context, requested.observation)),
+    });
     const target = deliveryTargetOf(context, input.deliveryId);
     assertFreshRevision(context, binding);
     const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
@@ -1494,6 +1558,7 @@ function outcomeResult(envelope, outcome, nextProjection) {
             owner: nextProjection.owner,
             suggestedTool: nextProjection.suggestedTool,
             blockers,
+            ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
         },
     });
 }
@@ -1513,10 +1578,8 @@ export async function executeRecordDeliveryOutcomeRequest(facade, value, options
                 input: Object.freeze({
                     deliveryId: request.deliveryId,
                     claimDigest: request.claimDigest,
-                    attempt: normalizeOutcomeAttempt(request.attempt),
-                    readback: request.readback,
                     resolution: request.resolution,
-                    observedAt: parseInstant(request.observedAt, "$request.observedAt"),
+                    observation: outcomeObservationInput(request),
                 }),
             });
         },

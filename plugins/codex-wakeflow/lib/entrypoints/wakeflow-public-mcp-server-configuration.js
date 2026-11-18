@@ -1,4 +1,5 @@
 import { types } from "node:util";
+import { WAKEFLOW_ROLE_TOOL_ACCESS, } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 const CONFIGURATION_ERROR_MESSAGES = {
     options: "Wakeflow MCP server options are invalid.",
@@ -27,6 +28,13 @@ function nonEmptyText(value, reason) {
         fail(reason);
     return value;
 }
+/** 可以省略的选项：给了才算进期望的键集合。 */
+const OPTIONAL_OPTION_KEYS = Object.freeze([
+    "beforeMutation",
+    "writer",
+    "authorizeCall",
+    "listedRole",
+]);
 /** 严格准入组合根元数据与登记表要求的全部 executor，不接受 Proxy 或扩展字段。 */
 export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
     let record;
@@ -43,9 +51,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         ...executorFields,
         "serverName",
         "serverVersion",
-        ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
-        ...(record.writer === undefined ? [] : ["writer"]),
-        ...(record.authorizeCall === undefined ? [] : ["authorizeCall"]),
+        ...OPTIONAL_OPTION_KEYS.filter((key) => record[key] !== undefined),
     ].sort();
     const keys = Object.keys(record).sort();
     if (keys.length !== expectedKeys.length ||
@@ -56,6 +62,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
     const beforeMutation = admitBeforeMutation(record.beforeMutation);
     const writer = admitWriter(record.writer);
     const authorizeCall = admitAuthorizeCall(record.authorizeCall);
+    const listedRole = admitListedRole(record.listedRole);
     for (const field of executorFields) {
         const executor = record[field];
         if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -70,7 +77,17 @@ export function parseCreateWakeflowPublicMcpServerOptions(value, catalog) {
         ...(beforeMutation === undefined ? {} : { beforeMutation }),
         ...(writer === undefined ? {} : { writer }),
         ...(authorizeCall === undefined ? {} : { authorizeCall }),
+        ...(listedRole === undefined ? {} : { listedRole }),
     });
+}
+/** `listedRole` 省略即 undefined；否则是 null 或归属表里的一个角色名。 */
+function admitListedRole(value) {
+    if (value === undefined || value === null)
+        return value;
+    if (typeof value !== "string" || !Object.hasOwn(WAKEFLOW_ROLE_TOOL_ACCESS, value)) {
+        fail("options");
+    }
+    return value;
 }
 /** `authorizeCall` 省略即 undefined，否则必须是非 Proxy 的函数。 */
 function admitAuthorizeCall(value) {

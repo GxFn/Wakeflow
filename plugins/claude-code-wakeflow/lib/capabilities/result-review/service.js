@@ -185,6 +185,20 @@ function assertFreshRevision(context, binding) {
         });
     }
 }
+/**
+ * 这次追加用的绑定（H11、ADR-0029 决定 3）：请求没有给流修订时按当前修订追加——守住它的是导入的投递身份
+ * 与围栏、决定的评审单元摘要，流在检查之后被证据或别的目标推进不该让它失败；给了修订仍照旧核对。
+ */
+function appendBindingAt(context, binding, observedStreamRevision) {
+    const appendBinding = observedStreamRevision === null
+        ? Object.freeze({
+            ...binding,
+            expectedStreamRevision: context.authority.loaded.aggregate.streamRevision,
+        })
+        : binding;
+    assertFreshRevision(context, appendBinding);
+    return appendBinding;
+}
 /** Demand 所在 pod 的作用域：回调落到该 pod 的 Controller（ADR-0010 D2）。 */
 function demandPodScope(context) {
     const podId = context.authority.loaded.identity.podId;
@@ -342,7 +356,7 @@ function receipts(commandResult) {
         stateDigest: last.resultingStateDigest,
     };
 }
-/** 信封里"未断言流修订"的占位：导入请求 Schema 的下限是 1，0 不会是调用方给出的值。 */
+/** 信封里"未断言流修订"的占位：导入与评审决定的请求 Schema 下限都是 1，0 不会是调用方给出的值。 */
 const UNOBSERVED_STREAM_REVISION = 0;
 /** 回调许可一经签发（含重放），prompt 就以文件落在 Demand 根下，目标侧助手按 `promptRef` 读取并核对摘要（K6）。 */
 async function materializedCallbackPermit(context, outcome) {
@@ -721,13 +735,7 @@ async function executeImport(context, input, binding) {
     if (bound !== null) {
         return replayImport(context, { commit: bound, aggregate: authority.loaded.aggregate });
     }
-    const appendBinding = input.observedStreamRevision === null
-        ? Object.freeze({
-            ...binding,
-            expectedStreamRevision: authority.loaded.aggregate.streamRevision,
-        })
-        : binding;
-    assertFreshRevision(context, appendBinding);
+    const appendBinding = appendBindingAt(context, binding, input.observedStreamRevision);
     const target = deliveryTargetOf(context, input.deliveryId);
     if (input.supersedes === undefined) {
         if (!IMPORTABLE_PHASES.includes(target.phase)) {
@@ -1227,9 +1235,11 @@ export async function executeTargetResultReviewInspectionRequest(facade, value, 
 async function loadDecisionSources(context, request, workType) {
     const repository = new DemandEventSourcingRepository(context.authority.demandRoot);
     const history = await loadHistory(repository, context.options.signal);
+    // ADR-0029 决定 3：决定只凭评审单元摘要把关。整条 Demand 的快照摘要随任何一次追加而变（记一条证据、
+    // 别的目标的进展），不再要求它与检查时相同；其余条件都按落账这一刻的状态重新算。
     const snapshot = buildDemandResultReviewSnapshotFromHistory(history);
-    if (snapshot.snapshotDigest !== request.snapshotDigest) {
-        fail("precondition-failed", "snapshot-stale", "$request.snapshotDigest");
+    if (snapshot.demand.lifecycle !== "active") {
+        fail("precondition-failed", `lifecycle-${snapshot.demand.lifecycle}`, "$request.demandId");
     }
     const target = snapshot.targets.find((entry) => entry.status !== "awaiting-result" &&
         entry.targetResult.targetResultId === request.targetResultId);
@@ -1248,7 +1258,13 @@ async function loadDecisionSources(context, request, workType) {
     if (resumptionBlockers.length > 0)
         rejectWith(resumptionBlockers, "$request.resumption");
     const evidence = await loadReviewEvidence(context, unit);
-    return Object.freeze({ repository, history, unit, evidence });
+    return Object.freeze({
+        repository,
+        history,
+        unit,
+        evidence,
+        snapshotDigest: snapshot.snapshotDigest,
+    });
 }
 function resumptionSource(unit) {
     return Object.freeze({
@@ -1261,7 +1277,7 @@ function resumptionSource(unit) {
 function reviewedOf(sources, request) {
     const { target } = sources.unit;
     return Object.freeze({
-        snapshotDigest: request.snapshotDigest,
+        snapshotDigest: sources.snapshotDigest,
         reviewUnitDigest: request.reviewUnitDigest,
         stateDigest: sources.history.aggregate.stateDigest,
         streamRevision: sources.history.aggregate.streamRevision,
@@ -1341,7 +1357,7 @@ async function executeImplementationDecision(context, input, binding) {
     if (bound !== null) {
         return replayDecision({ commit: bound, aggregate: authority.loaded.aggregate }, "WakeflowControllerImplementationReviewDecision");
     }
-    assertFreshRevision(context, binding);
+    const appendBinding = appendBindingAt(context, binding, request.expectedStreamRevision ?? null);
     const sources = await loadDecisionSources(context, request, "implementation");
     assertControllerAuthority(context, sources);
     // 记录时未给绑定就是 null（缺失）；undefined 只留给允许集推导（§13.121 D7）。
@@ -1390,7 +1406,7 @@ async function executeImplementationDecision(context, input, binding) {
         commandVersion: 1,
         decision,
     });
-    const commandResult = await appendCommand(repository, command, binding, options);
+    const commandResult = await appendCommand(repository, command, appendBinding, options);
     if (commandResult.disposition === "idempotent") {
         return replayDecision(commandResult, "WakeflowControllerImplementationReviewDecision");
     }
@@ -1434,7 +1450,7 @@ export async function executeImplementationReviewDecisionRequest(facade, value, 
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({ request }),
             });
@@ -1499,7 +1515,7 @@ async function executeTestDecision(context, input, binding) {
     if (bound !== null) {
         return replayDecision({ commit: bound, aggregate: authority.loaded.aggregate }, "WakeflowControllerTestReviewDecision");
     }
-    assertFreshRevision(context, binding);
+    const appendBinding = appendBindingAt(context, binding, request.expectedStreamRevision ?? null);
     const sources = await loadDecisionSources(context, request, "test");
     assertControllerAuthority(context, sources);
     const testView = testUnitView(sources.history, sources.unit, sources.evidence.targetCompletion);
@@ -1556,7 +1572,7 @@ async function executeTestDecision(context, input, binding) {
         decision,
         ...(authorization === undefined ? {} : { authorization }),
     });
-    const commandResult = await appendCommand(repository, command, binding, options);
+    const commandResult = await appendCommand(repository, command, appendBinding, options);
     if (commandResult.disposition === "idempotent") {
         return replayDecision(commandResult, "WakeflowControllerTestReviewDecision");
     }
@@ -1600,7 +1616,7 @@ export async function executeTestReviewDecisionRequest(facade, value, options = 
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({ request }),
             });

@@ -1,10 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/contract.js";
+import { wakeflowRoleToolAccess } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
+import { setRootedExclusiveFileLockReleaseFailureReporter } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
 import { parseCreateWakeflowPublicMcpServerOptions, } from "./wakeflow-public-mcp-server-configuration.js";
 import { registerWakeflowPublicMcpCatalog, } from "./wakeflow-public-mcp-tool.js";
-import { setRootedExclusiveFileLockReleaseFailureReporter } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { createIncidentId, recordIncident } from "../kernel/incident.js";
 export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp-server-configuration.js";
 /**
  * Wakeflow公共MCP的唯一组合根。
@@ -43,7 +44,7 @@ export function createWakeflowPublicMcpServer(options) {
             "Each tool description and Schema defines its exact input, effect, recovery, and disclosure boundary.",
         ].join(" "),
     });
-    const { serverName: _serverName, serverVersion: _serverVersion, beforeMutation, writer, authorizeCall, ...executors } = admitted;
-    registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors, beforeMutation, writer ?? null, authorizeCall);
+    const { serverName: _serverName, serverVersion: _serverVersion, beforeMutation, writer, authorizeCall, listedRole, ...executors } = admitted;
+    registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors, beforeMutation, writer ?? null, authorizeCall, listedRole === undefined || listedRole === null ? null : wakeflowRoleToolAccess(listedRole));
     return server;
 }

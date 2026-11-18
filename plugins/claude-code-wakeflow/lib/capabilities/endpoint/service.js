@@ -8,17 +8,18 @@ import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomicall
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
-import { readStableFile, StableFileReadError, } from "../../foundation/filesystem/stable-file-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock } from "../../foundation/time/wall-clock.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
+import { isHelperObservationFileReference, readHelperObservationFile, } from "../../kernel/helper-observation-file.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservations, } from "../../kernel/hook-observations.js";
-import { hostHelperObservationsRootRef, hostRuntimeRootRef, parseWakeflowHostId, } from "../../kernel/layout.js";
+import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
 import { admitPodWorktreeObservation, candidateWorktreePaths, createPodWorktreeReceipt, findPodWorktreeReceiptByPath, listPodWorktreeReceipts, writePodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
 import { inspectWorkClaim, releaseWorkClaim, WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS, } from "../../kernel/work-claims.js";
 import { selectWakeflowWindowTransportPort, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
@@ -908,13 +909,8 @@ function mutationResult(context, request, outcome) {
         next: outcome.next,
     });
 }
-/** 助手一次观察的上限：16 个 pane 的两份清单加 git worktree 原文远小于它。 */
-const OBSERVATION_FILE_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$observationFile.maximumBytes");
 function isObservationFileReference(value) {
-    return (typeof value === "object" &&
-        value !== null &&
-        typeof value.file === "string" &&
-        typeof value.digest === "string");
+    return isHelperObservationFileReference(value);
 }
 /** 请求里按引用给出的那一项观察在哪里：字段路径、引用本身，以及换成内联值之后的请求。 */
 function observationFileSlot(request) {
@@ -952,34 +948,7 @@ async function resolveObservationFiles(context, request) {
     const slot = observationFileSlot(request);
     if (slot === null)
         return request;
-    const directory = `${hostHelperObservationsRootRef(context.facade.hostId)}/`;
-    if (!slot.reference.file.startsWith(directory)) {
-        fail("invalid-request", "observation-file-host", `${slot.path}.file`);
-    }
-    let read;
-    try {
-        read = await readStableFile(context.root, parsePortableResourcePath(slot.reference.file, `${slot.path}.file`), { maximumBytes: OBSERVATION_FILE_MAXIMUM_BYTES, ...signalOptions(context.signal) });
-    }
-    catch (error) {
-        if (error instanceof StableFileReadError) {
-            if (error.reason === "aborted")
-                fail("io-failure", "aborted", "$signal", { cause: error });
-            fail("precondition-failed", `observation-file-${error.reason}`, `${slot.path}.file`, {
-                cause: error,
-            });
-        }
-        throw error;
-    }
-    if (read.digest !== slot.reference.digest) {
-        fail("precondition-failed", "observation-file-digest", `${slot.path}.digest`);
-    }
-    let content;
-    try {
-        content = parseJsonValue(JSON.parse(decodeUtf8(read.bytes, slot.path)), slot.path);
-    }
-    catch {
-        fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
-    }
+    const content = await readHelperObservationFile(context.root, context.facade.hostId, slot.reference, slot.path, context.signal);
     // 文件里不许再是一个引用：内联之后重新准入的请求必须已经没有引用。
     const resolved = parseWindowBindingRequest(slot.inline(content));
     if (observationFileSlot(resolved) !== null) {

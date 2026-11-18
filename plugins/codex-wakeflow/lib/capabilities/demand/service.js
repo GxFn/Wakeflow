@@ -340,6 +340,7 @@ export async function executeDemandCreationRequest(value, options = {}) {
     const facts = { demandId: null };
     return runPublicationTransaction({
         mutationScope: "shared",
+        directApply: true,
         tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
         parseRequest: (raw) => {
             const request = parseDemandCreationRequest(raw);

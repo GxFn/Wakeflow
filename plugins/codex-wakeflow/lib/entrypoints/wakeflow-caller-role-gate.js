@@ -4,6 +4,7 @@ import { readWakeflowConfigAuthoritySnapshot } from "../configuration/wakeflow-c
 import { WAKEFLOW_ROLE_TOOL_ACCESS, } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { fail } from "../kernel/error.js";
+import { matchingWorkspaces, resolveSubject } from "./wakeflow-hook-workspaces.js";
 function realpathOrNull(target) {
     try {
         return realpathSync(target);
@@ -33,6 +34,45 @@ function roleAt(cwd, root, entries) {
             roles.add(entry.role);
     }
     return roles.size === 1 ? ([...roles][0] ?? null) : null;
+}
+/**
+ * 服务进程启动时认得出的窗口角色（ADR-0029：按角色的工具子集）。工具目录在连接建立时列一次，那时还没有
+ * 任何请求带来工作区根，所以用 hook 的定位规则从工作目录找它所属的工作区，再问每个工作区的配置："执行根
+ * 恰好是这个目录的窗口是什么角色"。
+ *
+ * 只在毫无歧义时收窄：找到的每个工作区都把这个目录认作同一种非 Controller 角色。找不到工作区、工作目录
+ * 就是某个工作区的根、任何一个工作区认不出、或两个工作区说法不同，都返回 null——目录照旧列全部工具。
+ * 这与 `createWakeflowCallerRoleGate` 是同一条规则的两个时刻：这里隐藏的工具，调用时本来也会被拒绝。
+ */
+export async function resolveWakeflowListedRole(options) {
+    const cwd = realpathOrNull(options.cwd);
+    if (cwd === null)
+        return null;
+    let roots;
+    try {
+        const subject = await resolveSubject(options.cwd, options.env);
+        roots = subject === null ? [] : await matchingWorkspaces(subject);
+    }
+    catch {
+        return null;
+    }
+    const roles = new Set();
+    for (const root of roots) {
+        if (root === cwd)
+            return null;
+        const model = await readModel(root, undefined);
+        try {
+            roles.add(model === null ? null : roleAt(cwd, root, options.executionRoots(model)));
+        }
+        catch {
+            roles.add(null);
+        }
+    }
+    const [role, ...others] = [...roles];
+    if (role === undefined || role === null || role === "controller" || others.length > 0) {
+        return null;
+    }
+    return role;
 }
 function requestRoot(request) {
     if (request === null || typeof request !== "object" || !("root" in request))

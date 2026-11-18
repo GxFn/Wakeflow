@@ -18,7 +18,7 @@ import { selectWakeflowWorkspaceHostResourceProfile } from "../workspace/host-ru
 import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { executeClaudeCodeWakeflowMaintenance } from "./claude-code-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
-import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
+import { createWakeflowCallerRoleGate, resolveWakeflowListedRole, } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -134,19 +134,27 @@ const CLAUDE_CODE_OBSERVATION_FACADE = Object.freeze({
         }),
     ]),
 });
-/** 创建按登记表发布全部公共工具的 Claude Code MCP server。 */
-export function createClaudeCodeWakeflowMcpServer(serverVersion) {
+/** 这份配置里每个窗口的角色与执行根：调用时的门与启动时的工具子集认的是同一份。 */
+function claudeCodeWindowExecutionRoots(model) {
+    return compileWakeflowWindowLaunchIntents(model, selectWakeflowWorkspaceHostResourceProfile(CLAUDE_CODE_HOST_FACADE, model)).intents.map((intent) => ({
+        role: intent.role,
+        placement: claudeCodeWindowExecutionPlacement(intent),
+    }));
+}
+/**
+ * 创建 Claude Code MCP server。`listedRole` 是启动时认出的窗口角色（ADR-0029）：给了就只发布归属表里它
+ * 用得到的工具，缺省发布全部。
+ */
+export function createClaudeCodeWakeflowMcpServer(serverVersion, listedRole = null) {
     return createWakeflowPublicMcpServer({
         serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
+        listedRole,
         beforeMutation: CLAUDE_CODE_OBSERVATION_FACADE.artifact.assertUnchanged,
         // ADR-0020 决定 3（F1）：服务进程的工作目录是某一种角色的窗口的执行根时，归属表之外的工具被拒绝。
         authorizeCall: createWakeflowCallerRoleGate({
             cwd: process.cwd(),
-            executionRoots: (model) => compileWakeflowWindowLaunchIntents(model, selectWakeflowWorkspaceHostResourceProfile(CLAUDE_CODE_HOST_FACADE, model)).intents.map((intent) => ({
-                role: intent.role,
-                placement: claudeCodeWindowExecutionPlacement(intent),
-            })),
+            executionRoots: claudeCodeWindowExecutionRoots,
         }),
         // C11：每次调用的执行上下文带本进程的写者戳；没有 manifest 的构建为 null。
         writer: wakeflowArtifactWriterOf(CLAUDE_CODE_ARTIFACT),
@@ -167,5 +175,11 @@ export function createClaudeCodeWakeflowMcpServer(serverVersion) {
 }
 /** 通过官方 stdio transport 运行 Claude Code MCP composition root。 */
 export function runClaudeCodeWakeflowMcpStdio(serverVersion) {
-    return runWakeflowMcpStdio(() => createClaudeCodeWakeflowMcpServer(serverVersion));
+    // 角色在进程的一生里不变：认一次，每个连接的工具目录都按它列。
+    const listedRole = resolveWakeflowListedRole({
+        cwd: process.cwd(),
+        env: process.env,
+        executionRoots: claudeCodeWindowExecutionRoots,
+    });
+    return runWakeflowMcpStdio(async () => createClaudeCodeWakeflowMcpServer(serverVersion, await listedRole));
 }

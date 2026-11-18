@@ -95,6 +95,18 @@ export const NEXT_FRONTIER_TABLE = Object.freeze({
     "pod-window-decommission": { owner: "controller", tool: "wakeflow_register_window_binding" },
     "pod-worktree-disposal": { owner: "controller", tool: null },
 });
+function subjectOf(route, first) {
+    if (route.demandId === undefined || route.observedEventStream === undefined)
+        return {};
+    return {
+        subject: Object.freeze({
+            demandId: route.demandId,
+            streamRevision: route.observedEventStream.streamRevision,
+            ...(first.target === undefined ? {} : { targetTaskId: first.target.targetTaskId }),
+            ...(first.deliveryId === undefined ? {} : { deliveryId: first.deliveryId }),
+        }),
+    };
+}
 export function deriveNextProjection(route) {
     const blockers = Object.freeze(route.blockers.map((blocker) => blocker.kind));
     const first = route.frontiers[0];
@@ -107,12 +119,14 @@ export function deriveNextProjection(route) {
         });
     }
     const mapped = NEXT_FRONTIER_TABLE[first.kind];
+    const subject = subjectOf(route, first);
     if (route.disposition === "awaiting-decision") {
         return Object.freeze({
             frontier: first.kind,
             owner: "user",
             suggestedTool: mapped?.tool ?? null,
             blockers,
+            ...subject,
         });
     }
     if (route.disposition === "blocked") {
@@ -121,6 +135,7 @@ export function deriveNextProjection(route) {
             owner: mapped?.owner ?? "user",
             suggestedTool: null,
             blockers,
+            ...subject,
         });
     }
     return Object.freeze({
@@ -128,5 +143,6 @@ export function deriveNextProjection(route) {
         owner: mapped?.owner ?? "controller",
         suggestedTool: mapped?.tool ?? null,
         blockers,
+        ...subject,
     });
 }

@@ -66,11 +66,15 @@ record them (a `diff` record is for material git does not hold; a committed
 change is its commit record). A record cites that path, so a file moved later
 is a file Wakeflow can no longer re-read.
 
-1. Preview. It derives the plan and writes nothing, and it tells you whether
-   this exact content is already recorded.
-2. Read what the preview says about privacy and about opaque members before
-   you decide anything.
-3. Apply with exactly what preview returned.
+1. Record with one `apply` call and no `planDigest`: Wakeflow derives the
+   plan and records it, or reports that this exact content is already
+   recorded.
+2. A blocked plan writes nothing and comes back as the preview. Read what it
+   says about privacy and about opaque members before you decide anything,
+   then call `apply` again with the content review you chose.
+3. A `preview` call alone still derives the plan without writing - use it
+   when you want to look first. An `apply` that carries that preview's
+   `planDigest` is refused if the plan changed in between.
 4. If an apply is interrupted, finish it with recover.
 
 Because identity derives from content, recording the same content twice is not

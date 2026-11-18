@@ -56,6 +56,13 @@ acceptance anchor naming the managed evidence you recorded for this Demand.
 An accept that leaves an anchor unbound, or names evidence this Demand does
 not hold, is refused.
 
+A decision is guarded by the unit's `reviewUnitDigest` alone. Evidence you
+record after inspecting, or another target moving, does not make it stale:
+decide with the digest you read and leave `expectedStreamRevision` out - do
+not inspect again just because the stream moved. `review-unit-stale` means
+the unit itself changed (a newer or superseding result, or a decision already
+recorded on it): then inspect again.
+
 `blockingReasons` belong to `blocked` alone: accept and rework carry none, and
 rework keeps `requirementAlignment: aligned`. Rework names at least one
 `failed` independent check. A refused decision record (`record-schema`, `record-relation`) names the field in `path`, e.g. `$request/decision/blockingReasons`: fix that field, do not guess. The failed checks are
@@ -138,6 +145,12 @@ writing, then applies as one transaction: the completion event, the sealed
 archive under the ledger with its verify report, the requirement package marked
 archived, and the active root deleted. Run the preview early enough that the
 blockers are still cheap to fix.
+
+Completion is not a confirmation point. When the preview reports no blocker
+and the completion definition holds, apply, then report what was archived;
+stop before applying only when something is left for the user to decide. The
+steps the user gates - merging and pushing - are outside Wakeflow, and an
+archived Demand can be reopened with `wakeflow_continue_demand`.
 
 The `requirement-coverage` gate checks every item in the frozen acceptance list.
 Controller-only work needs an accepted implementation anchor for each item.

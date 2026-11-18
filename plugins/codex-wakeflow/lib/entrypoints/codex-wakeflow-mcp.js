@@ -12,7 +12,7 @@ import { codexWorkspaceHostResourceProfile } from "../hosts/codex/wakeflow-works
 import { compileWakeflowWindowLaunchIntents } from "../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { executeCodexWakeflowMaintenance } from "./codex-wakeflow-maintenance.js";
 import { resolveWakeflowArtifactIdentity, wakeflowArtifactWriterOf, } from "./wakeflow-artifact-identity.js";
-import { createWakeflowCallerRoleGate } from "./wakeflow-caller-role-gate.js";
+import { createWakeflowCallerRoleGate, resolveWakeflowListedRole, } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
@@ -89,16 +89,24 @@ const CODEX_OBSERVATION_FACADE = Object.freeze({
         }),
     ]),
 });
-/** 创建按登记表发布全部公共工具的 Codex MCP server。 */
-export function createCodexWakeflowMcpServer(serverVersion) {
+/** 这份配置里每个窗口的角色与执行根：Codex 的窗口都从项目根启动，所以每个窗口的执行根都是根。 */
+function codexWindowExecutionRoots(model) {
+    return compileWakeflowWindowLaunchIntents(model, codexWorkspaceHostResourceProfile).intents.map((intent) => ({ role: intent.role, placement: codexWindowExecutionPlacement() }));
+}
+/**
+ * 创建 Codex MCP server。`listedRole` 是启动时认出的窗口角色（ADR-0029）：给了就只发布归属表里它用得到的
+ * 工具，缺省发布全部。Codex 的窗口都从项目根启动，所以实际运行里它总是认不出、发布全部。
+ */
+export function createCodexWakeflowMcpServer(serverVersion, listedRole = null) {
     return createWakeflowPublicMcpServer({
         serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
         serverVersion,
+        listedRole,
         beforeMutation: CODEX_OBSERVATION_FACADE.artifact.assertUnchanged,
         // ADR-0020 决定 3（F1）：同一道门；Codex 的窗口都从项目根启动，所以它在这里认不出角色、不收窄。
         authorizeCall: createWakeflowCallerRoleGate({
             cwd: process.cwd(),
-            executionRoots: (model) => compileWakeflowWindowLaunchIntents(model, codexWorkspaceHostResourceProfile).intents.map((intent) => ({ role: intent.role, placement: codexWindowExecutionPlacement() })),
+            executionRoots: codexWindowExecutionRoots,
         }),
         // C11：每次调用的执行上下文带本进程的写者戳；没有 manifest 的构建为 null。
         writer: wakeflowArtifactWriterOf(CODEX_ARTIFACT),
@@ -119,5 +127,11 @@ export function createCodexWakeflowMcpServer(serverVersion) {
 }
 /** 通过官方 stdio transport 运行 Codex MCP composition root。 */
 export function runCodexWakeflowMcpStdio(serverVersion) {
-    return runWakeflowMcpStdio(() => createCodexWakeflowMcpServer(serverVersion));
+    // 两个宿主同一条规则；Codex 的窗口执行根都是项目根，所以这里总是 null。
+    const listedRole = resolveWakeflowListedRole({
+        cwd: process.cwd(),
+        env: process.env,
+        executionRoots: codexWindowExecutionRoots,
+    });
+    return runWakeflowMcpStdio(async () => createCodexWakeflowMcpServer(serverVersion, await listedRole));
 }

@@ -6,9 +6,9 @@ const NO_NEXT = Object.freeze({
     suggestedTool: null,
     blockers: Object.freeze([]),
 });
-function admitEnvelope(binding) {
+function admitEnvelope(binding, directApply) {
     const { mode, planDigest, operationId } = binding.envelope;
-    if (mode === "apply" && planDigest === null) {
+    if (mode === "apply" && planDigest === null && !directApply) {
         fail("invalid-request", "plan-digest-required", "$request.planDigest");
     }
     if (mode !== "apply" && planDigest !== null) {
@@ -26,7 +26,7 @@ export async function runPublicationTransaction(spec, value, options = {}) {
     return runCommandShell({
         ...spec,
         scope: ({ envelope }) => (envelope.mode === "preview" ? "read" : spec.mutationScope),
-    }, value, admitEnvelope, async (context, binding) => {
+    }, value, (binding) => admitEnvelope(binding, spec.directApply === true), async (context, binding) => {
         const { envelope, input } = binding;
         const phase = await runPhase(spec, context, envelope, input);
         const next = spec.next === undefined ? NO_NEXT : await spec.next(context, phase);
@@ -43,10 +43,15 @@ async function runPhase(spec, context, envelope, input) {
     if (envelope.mode === "preview") {
         return Object.freeze({ mode: "preview", planned });
     }
+    const ready = planned.status === "ready" && planned.plan !== null && planned.digest !== null;
+    // 一次调用即应用：准入已保证只有声明了 directApply 的命令走到这里。阻塞时不写，交回 preview。
+    if (envelope.planDigest === null && !ready) {
+        return Object.freeze({ mode: "preview", planned });
+    }
     if (planned.status !== "ready" || planned.plan === null || planned.digest === null) {
         fail("precondition-failed", "plan-blocked", "$request.planDigest");
     }
-    if (planned.digest !== envelope.planDigest) {
+    if (envelope.planDigest !== null && planned.digest !== envelope.planDigest) {
         fail("precondition-failed", "plan-drift", "$request.planDigest");
     }
     const outcome = await spec.apply(context, input, planned.plan);

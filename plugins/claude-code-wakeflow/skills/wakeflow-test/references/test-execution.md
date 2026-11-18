@@ -118,8 +118,9 @@ You make that record yourself, because the Controller did not watch the run:
 write the step's exact output to a file under the Test surface (for example
 `fixtures/<demandId>/<stepId>.txt`), then call `wakeflow_record_evidence` for
 this Demand with kind `test-output` and a managed-path source naming that
-surface and file. Preview shows the privacy scan; apply returns the record's
-`evidenceId`. Cite it as `artifacts/managed-evidence/<evidenceId>/payload/content`
+surface and file. A single apply call, with no plan digest, records it and
+returns the record's `evidenceId`; if the privacy scan finds something,
+nothing is written and the preview comes back with the blockers. Cite it as `artifacts/managed-evidence/<evidenceId>/payload/content`
 with the `sha256:` digest of the file you saved (step 3 of the skill shows the
 exact pair). One record per step keeps the citation exact.
 

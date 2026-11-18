@@ -1,155 +1,11 @@
-# Workspace, windows and pods
+# Windows and pods
 
-Read this when you are initializing, reconfiguring or detaching the workspace
-(step 0), launching or retiring a window (step 1), refreshing windows after a
+Read this when you are launching or retiring a window (step 1), refreshing windows after a
 plugin update, or creating or closing a pod (step 13). It is Controller depth;
 the immediate goal, the reading order and the boundaries are in `SKILL.md`.
 On Claude Code the window transport decides the host steps: the steps below
-name both, and `references/desktop-transport.md` details desktop sessions.
-
-## What the workspace is
-
-A Wakeflow workspace is a controller directory that must not be a product
-repository root. It holds the config, the active state, the local runtime and
-the managed block inside `CLAUDE.md`; the ledger is the durable record
-root, the Design and Test surfaces are where drafts and harnesses live, and
-the product repositories are only pointed at. A repository or externally owned
-surface whose config entry says `instructionManagement: managed-block` also
-carries a Wakeflow managed block in its own `CLAUDE.md`; reconcile
-maintains that block and refuses to overwrite one edited by hand.
-
-Config authority is total: `wakeflow.config.json` belongs to Wakeflow as a whole
-file. Never hand-edit it or trust a remembered value; read it back through a tool.
-
-## Step 0 - Maintenance
-
-`wakeflow_maintain_workspace` runs one transaction in one of five intents:
-
-- **fresh-initialize** - a new workspace in an empty or non-workspace directory
-  that is itself a Git repository (when it is not, run `git init` there yourself
-  once the user agrees; the preview reports `gitignore-git-repository` until it
-  is). The `selection` you send has six parts: `program` (identity and display),
-  `presentation` (language), `topology` (repositories with their
-  `instructionManagement`, support surfaces, windows), `storage` (ledger root),
-  `governance`, `hosts` (launch preferences by host; on Claude Code also
-  `windowTransport`, `tmux` or `desktop`, the window transport chosen with the
-  user at this first run - one per workspace); its exact shape, `hosts`
-  included, is the tool's input schema in your tool list, so build the request
-  from that schema and never from plugin files on disk or another workspace's
-  config. A refusal names the failing path and the rule in `details.schema`
-  (`required:storage`, `additional:foo`, `type:string`, `enum`): fix that field
-  and preview again. Default repositories to `owner-managed`; offer
-  `managed-block` only when the user wants Wakeflow's bounded block in the
-  repository's instruction file, and tell them a committed block is seen by
-  every clone. `filesystem-unsupported:<type>` / `ledger-filesystem-unsupported:<type>` means the workspace root or the ledger root is not on a local macOS volume (APFS or HFS+): locks and atomic publication are not safe there, so tell the user to choose a local path - never work around it. `fresh-legacy-residue-present` means the scan found 0.9.x
-  leftovers; the codes `fresh-legacy-residue-<kind>` say which (`scope-block`,
-  `broad-permission`, `additional-directories`, `root-marker`,
-  `ledger-directory`). Residue is cleaned by the user, never by you; a sibling
-  `../wakeflow-ledger` directory that is another workspace's live ledger (it
-  carries `archives/`, `requirements/`, `transactions/`) is not residue and is
-  not reported.
-- **reconfigure** - a declared difference against an existing config. Layout
-  identity is immutable: the program id and the ledger root cannot move, the
-  support surfaces cannot change, and a change to the pod set is not a
-  reconfigure. These refusals are structural: route the user to the right
-  operation instead of retrying. What does change here: the display name,
-  description and language, the host launch preferences under `hosts` - the
-  model and reasoning effort by role, Claude Code's permission mode, and its
-  tmux session name - which the next launch intents pick up without touching any
-  window (the window transport is chosen at the first run; a later `reconfigure`
-  can switch the transport when no Demand is active and no worktree pod is open,
-  then every window is unregistered: relaunch and register each with the new
-  transport's helper), and one kind of layout change: adding a product
-  repository. Send the current config with the new repository entry and one new
-  `product` window for it in the primary pod appended, each with a fresh id
-  (`repository_` or `window_` followed by a new lowercase UUID v4). The
-  repository's root must already exist and be its own Git repository: a linked
-  worktree of another repository is refused as
-  `reconfigure-repository-root-worktree`, a path that is, contains or sits
-  inside an already configured repository (a symlink alias included) as
-  `reconfigure-repository-root-duplicate`, and more than one new window for it
-  as `reconfigure-window-addition-unsupported`. The apply writes the config, the
-  new window's runtime projection and the managed blocks in one transaction;
-  then launch and register the new window as in step 1. Changing an existing
-  repository or window is refused; removing one is the detach intent below.
-  Adding a repository while a worktree pod is open is refused too, because that
-  pod would lack it: an `invalid-request` error with reason `desired-config`,
-  `details.configReason: topology` and a path into the pod's entry - tell the
-  user to close the pod first rather than rewriting the config.
-- **reconcile** - bring a workspace back to what its descriptor implies. On a
-  healthy workspace it is a no-op that writes nothing, so it is safe to run
-  when unsure. It repairs only what Wakeflow owns: a missing active layout or
-  board, missing ledger containers, missing host capability directories, a
-  missing support surface root or its `drafts/`, `harnesses/` and `fixtures/`
-  scaffold, Wakeflow's managed blocks and memory files, a missing or stale
-  window runtime projection (recomputed from the config and the window's
-  current binding), and a missing host runtime or maintenance protocol root,
-  even when the whole `.wakeflow-local` directory is gone. It also takes back
-  private modes: when something under `.wakeflow-local` or `.wakeflow-active` has only drifted
-  wider than 0700 / 0600 in a safe way (a `chmod -R go+rX`, a Finder `.DS_Store`), the preview's plan
-  is a `WakeflowPrivateModeConvergencePlan` (counts and areas) and `next` names you as its owner: it only
-  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan. The same holds for a reconcile whose plan only reinstalls Wakeflow's own published files (every step a `statusline-asset`, `tmux-asset` or `desktop-asset`, the plan after a plugin update): `next.owner` is `controller`, apply it without asking and say afterwards what was reinstalled. Any other step in the plan puts the apply back with the user.
-  A private node another user owns, that group or others can write, or that
-  is a symlink is reported as `private-mode-unsafe:<area>` and never touched,
-  and the other intents refuse with `private-mode-drift` until reconcile has
-  run; `wakeflow_verify` names the same areas in its `local-layout` gate. A
-  hand-edited block, a foreign file where a Wakeflow directory belongs, or an
-  unreadable projection is reported as a blocker and never overwritten.
-- **detach-repository** `{repositoryId}` / **detach-workspace** - the exit
-  path (ADR-0024). "Take repository X out of Wakeflow" or "stop using Wakeflow
-  here" is this intent, never a hand deletion of Wakeflow's files; both run
-  the same preview, apply and recover transaction. A repository detach removes
-  Wakeflow's block from that repository's `CLAUDE.md` (only a block
-  whose body is a render Wakeflow wrote), retires its window projections and
-  publishes the config without it and its primary-pod window. A workspace
-  detach does that for every repository, removes the workspace `.gitignore`
-  and instruction-file blocks and, where the host has settings (Claude Code), Wakeflow's allow rules
-  and its own `statusLine` entry at the program root and the managed surfaces
-  (the user's own stay), then renames `wakeflow.config.json` to
-  `wakeflow.detached.json`. Both block while a worktree pod is open
-  (`detach-pod-open:<podId>`) or a Demand is active
-  (`detach-demand-active:<demandId>`): close or finish those first. A block
-  whose body is unknown blocks as `detach-unknown-managed-body:<targetKey>`,
-  an unreadable settings file as `detach-settings-unreadable:<root>`. Not
-  touched, and listed in the result's `leftBehind`: `.wakeflow-active`,
-  `.wakeflow-local`, the ledger, the support surfaces, worktree checkouts,
-  branches and the plugin's hooks. Afterwards `wakeflow_status` reports
-  `overall: detached` with no owner in `next`, `wakeflow_verify` does not
-  fail, reconcile and reconfigure block as `workspace-detached`, and a fresh
-  initialize blocks as `detached-file-present`; re-enable = rename it back and reconcile.
-
-Procedure, every time:
-
-1. Gather the user's choices in plain conversation first. Repositories, the
-   surfaces, the storage root and the program's own description are decisions,
-   not defaults for you to pick. A model or reasoning effort the user wants
-   for a role belongs in the selection's `hosts` block, keyed by host and
-   role: `hosts.<host>.launch.modelByRole.<role or default>`, and
-   `reasoningEffortByRole` likewise. Claude Code windows launch in Claude
-   Code's `auto` permission mode by default; one value,
-   `hosts.claude-code.launch.permissionMode`, covers every window. A window
-   may still ask a one-time question the first time, for example whether to
-   allow reads outside its working directories: tell the user which window is
-   asking and let them answer it there. When the user's account has no auto
-   mode, set that value to `acceptEdits` with a reconfigure; the next launch
-   intents carry it, and those windows then stop for permission prompts on
-   commands, which the user answers the same way.
-2. Preview. It writes nothing and returns the plan, its blockers and the launch
-   intents the plan would produce.
-3. Show the user the plan and every blocker. A blocker is a fact about their
-   directory, so quote it rather than paraphrasing it away. On Claude Code,
-   `settings-blocked:<root kind>:<root id>:<reason>` means that root's
-   `.claude/settings.json` could not be read or merged safely (for example it
-   is not mode 0644, is a link, or is larger than 1 MiB); the file is the
-   user's, so tell them what to change instead of editing it.
-4. Apply with exactly what that preview returned. If anything changed in
-   between, preview again - a re-derived plan that no longer matches is refused
-   on purpose.
-5. If an apply is interrupted, finish it with recover and the operation it
-   reported. Do not start a second apply over a half-finished one. `maintenance-recovery-artifact-mismatch` means the interrupted apply was written by another plugin version (`details.writerVersion`) and this one cannot finish it: tell the user to run recover once from that version, then update again - do not delete the transaction files.
-
-After a fresh-initialize you have a config, a ledger, the surfaces, the managed
-instruction block, and the main pod's window set - but no running windows.
+name both, and `references/desktop-transport.md` details desktop sessions;
+their steps are in `references/desktop-flow.md`.
 
 ## Step 1 - Windows and bindings
 
@@ -172,7 +28,7 @@ Launching and registering:
    `wakeflow_register_window_binding` with `inspect` for its current launch
    intent and execution instructions. Its role root is the assigned work
    location; the host instructions separately determine the chat's startup root.
-2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the published helper's `launch`, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>` under the tmux transport, `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/desktop.mjs launch --window <windowId>` under desktop sessions. The workspace's transport is `hosts.claude-code.windowTransport` (`tmux` unless the config says `desktop`); maintenance publishes only that transport's helper and `wakeflow_status` lists it under `hostAssets`. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer. Either helper starts `claude` with the intent's parameters, waits for the session-start hook record of the session it started and prints the creation observation with `observationFile`, a reference to it: pass that object as the registration's `observation` instead of copying the observation out (a helper result's `closureFile` and a liveness `observationFile` go the same way into `closure` and `evidence.liveness`). The window starts with `--allowedTools` for its role's Wakeflow tools and the helper, in the permission mode from step 0. A Design, Test or product window also starts with deny rules (`--disallowedTools`) for edits to the paths Wakeflow manages - `.wakeflow-local`, `.wakeflow-active`, `wakeflow.config.json`, the root's two Claude settings files and the ledger - and the result's `writeDeny` counts them: `unexpressed` above 0 means that many of those paths got no rule (the path has characters a rule cannot spell, or the config names no ledger root), so tell the user. The rules stop the host's edit tools and the file commands it recognizes, not every process, and under desktop sessions they do not outlive the takeover into the app (the desktop helper's result says `afterTakeover: "not-carried"`). On both transports the plugin's own `PreToolUse` hook also refuses the edit tools (`Edit`, `Write`, `NotebookEdit`) on those paths once the session is bound as a Design, Test or product window; it does not read shell commands and lets a call through whenever it cannot tell (an unbound session, an unreadable config): never tell the user a window cannot write there. The workspace root's `.claude/settings.json` carries those two rules, Design and Test carry only their role's tools, and a product repository's `.claude/settings.json` is never written, so a trust dialog for a Wakeflow-written root lists only those rules. Entries it lists beyond them - `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)`, a `..` directory - are 0.9.x residue (`broad-permission`, `additional-directories`) or the repository's own settings: accepting activates them, so the user deletes or confirms them before you launch, never you. Under the tmux transport the helper opens the window in the tmux session the intent names and generates the session id itself. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation and `close --window <windowId>` the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive (`locator-live`; a live window on an older plugin is restarted with `resume --in-place`, as the plugin-update steps say), and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with a live pane leaves startup unproven: inspect hook execution, keep the observation, register or relocate with it once the record exists, and pass a longer `--wait` next time. Under desktop sessions the helper starts the session in the background with `claude --bg` (the host assigns the session id; the intent carries no `--session-id`), lets its first turn finish, stops it and reopens it in the desktop app's Code tab with `claude --desktop --resume`, waits for that session's session-start record and prints the observation with `desktop.sessionId` (`local_` plus the session id) for registration; it waits `--wait <seconds>` (default 120) for the first turn and `--wait-session-start <seconds>` (default 30) for the record, refuses `locator-live` while the window's recorded session is still in the sidebar and `not-trusted` for a folder without Claude Code's trust record (the refusal's `trustRoot` is the folder that needs it: collect the distinct ones, ask the user once, and with their agreement run `trust --window <windowId> --user-agreed` once per `trustRoot` and `launch` the refused windows again; a user who declines opens that folder in the desktop app or runs `claude` there and accepts the trust dialog). After each registration set the session's permission mode with the desktop `set_session_permission_mode` tool to `"auto"` (the app reapplies the folder's remembered mode when it takes the session over; the user approves its card once per folder) and its title with the desktop `set_session_title` tool; liveness is the desktop-sessions observation built from the desktop `list_sessions` tool, the helper's `sessions` is only the process view; a session is resumed by sending it a message, so relocate does not apply, and it is closed with the desktop `archive_session` tool only on the user's authorization - never with `claude rm`. The steps, refusal codes and what to tell the user for that transport are in `references/desktop-transport.md`. A helper refusal this text does not explain - an unfamiliar `reason`, or `reason: unexpected` with an `errorName` - is relayed to the user verbatim with its `hint`, `detail` and `causeCode`; then stop: do not retry it, do not edit files, do not read the helper's source.
+2. Launch it by host means: pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect returns, or the maintenance result's entry for that window) into the published helper's `launch`, run from the workspace root: `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs launch --window <windowId>` under the tmux transport, `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/desktop.mjs launch --window <windowId>` under desktop sessions. The workspace's transport is `hosts.claude-code.windowTransport` (`tmux` unless the config says `desktop`); maintenance publishes only that transport's helper and `wakeflow_status` lists it under `hostAssets`. Make every helper call its own Bash command with literal arguments - no shell loop, variable or chain of helper calls: only such a plain call matches the helper's allow rule, and anything else stops at a permission prompt the user has to answer. Either helper starts `claude` with the intent's parameters, waits for the session-start hook record of the session it started and prints the creation observation with `observationFile`, a reference to it: pass that object as the registration's `observation` instead of copying the observation out (a helper result's `closureFile` and a liveness `observationFile` go the same way into `closure` and `evidence.liveness`). The window starts with `--allowedTools` for its role's Wakeflow tools and the helper, in the permission mode from step 0. A Design, Test or product window also starts with deny rules (`--disallowedTools`) for edits to the paths Wakeflow manages - `.wakeflow-local`, `.wakeflow-active`, `wakeflow.config.json`, the root's two Claude settings files and the ledger - and the result's `writeDeny` counts them: `unexpressed` above 0 means that many of those paths got no rule (the path has characters a rule cannot spell, or the config names no ledger root), so tell the user. The rules stop the host's edit tools and the file commands it recognizes, not every process, and under desktop sessions they do not outlive the takeover into the app (the desktop helper's result says `afterTakeover: "not-carried"`). On both transports the plugin's own `PreToolUse` hook also refuses the edit tools (`Edit`, `Write`, `NotebookEdit`) on those paths once the session is bound as a Design, Test or product window; it does not read shell commands and lets a call through whenever it cannot tell (an unbound session, an unreadable config): never tell the user a window cannot write there. The workspace root's `.claude/settings.json` carries those two rules, Design and Test carry only their role's tools, and a product repository's `.claude/settings.json` is never written, so a trust dialog for a Wakeflow-written root lists only those rules. Entries it lists beyond them - `Bash(git *)`, `Bash(node *)`, `Bash(tmux *)`, a `..` directory - are 0.9.x residue (`broad-permission`, `additional-directories`) or the repository's own settings: accepting activates them, so the user deletes or confirms them before you launch, never you. Under the tmux transport the helper opens the window in the tmux session the intent names and generates the session id itself. After each registration run `mark --window <windowId>` so the tmux window carries the five Wakeflow options; `panes` prints the tmux-panes observation and `close --window <windowId>` the closure evidence a decommission needs. When a registered window's pane is gone but its session should continue (tmux restarted, pane closed by mistake), pipe the inspect result into `resume --window <windowId>`: it starts `claude --resume` with the bound session in a new pane and prints the observation for the binding tool's `relocate`, which keeps the binding and records the new pane; then `mark` again. `launch` and `resume` refuse while the located pane is still alive (`locator-live`; a live window on an older plugin is restarted with `resume --in-place`, as the plugin-update steps say), and report `resume-exited` / `launch-exited` when `claude` quit before its SessionStart hook: a session that never held a conversation cannot be resumed, so launch a fresh window instead. Both wait up to `--wait <seconds>` (default 20, at most 120) for that hook record; `hook.sessionStart: pending` with a live pane leaves startup unproven: inspect hook execution, keep the observation, register or relocate with it once the record exists, and pass a longer `--wait` next time. Under desktop sessions the helper starts the session in the background with `claude --bg` (the host assigns the session id; the intent carries no `--session-id`), lets its first turn finish, stops it and reopens it in the desktop app's Code tab with `claude --desktop --resume`, waits for that session's session-start record and prints the observation with `desktop.sessionId` (`local_` plus the session id) for registration; it waits `--wait <seconds>` (default 120) for the first turn and `--wait-session-start <seconds>` (default 30) for the record, refuses `locator-live` while the window's recorded session is still in the sidebar and `not-trusted` for a folder without Claude Code's trust record (the refusal's `trustRoot` is the folder that needs it: collect the distinct ones, ask the user once, and with their agreement run `trust --window <windowId> --user-agreed` once per `trustRoot` and `launch` the refused windows again; a user who declines opens that folder in the desktop app or runs `claude` there and accepts the trust dialog). After each registration set the session's permission mode with the desktop `set_session_permission_mode` tool to `"auto"` (the app reapplies the folder's remembered mode when it takes the session over; the user approves its card once per folder) and its title with the desktop `set_session_title` tool; liveness is the desktop-sessions observation built from the desktop `list_sessions` tool, the helper's `sessions` is only the process view; a session is resumed by sending it a message, so relocate does not apply, and it is closed with the desktop `archive_session` tool only on the user's authorization - never with `claude rm`. The steps for that transport are in `references/desktop-flow.md`; the refusal codes and what to tell the user are in `references/desktop-transport.md`. A helper refusal this text does not explain - an unfamiliar `reason`, or `reason: unexpected` with an `errorName` - is relayed to the user verbatim with its `hint`, `detail` and `causeCode`; then stop: do not retry it, do not edit files, do not read the helper's source.
 3. Observe the handle the host reports for the window you just started.
 4. Call `wakeflow_register_window_binding` to register it. Registration needs
    a real `session-start` hook record for that session at the startup root the
@@ -202,7 +58,7 @@ Other actions on the same tool:
   nothing when the pane no longer carries its Wakeflow marks (after a tmux
   server restart, say) and reports `closeResult: unknown`; decommission then
   goes to the manual host gate. Under desktop sessions the close is the
-  user-authorized `archive_session` (`references/desktop-transport.md`).
+  user-authorized `archive_session` (`references/desktop-flow.md`).
 - **release-claim** force-releases an expired or orphaned work claim. Use it
   only when you have established that the holding window is gone. A live claim
   is protecting someone's work.
@@ -220,17 +76,6 @@ directory races and unreadable partitions mean unavailable, not an empty
 channel. Unknown entries stay visible as skipped; a damaged shard can need
 manual diagnosis. Retirement is best effort in bounded batches, never drops
 records to fit a count limit, and keeps the 30-day age boundary.
-
-## Workspace format baseline
-
-The current workspace format is the first supported baseline: earlier
-development builds' local formats are neither read nor migrated. `reconfigure`,
-`reconcile` and `recover` work within the current format; none is a
-format-upgrade or data-conversion tool. A root with an unsupported
-configuration or layout is preserved as it is - choose a separate fresh
-workspace, and never edit version headers, delete old authority or reuse old
-bindings to make it look initialized. `config-version-unsupported` (on reads; `details.found` and `details.supported` name the two versions, and a maintenance preview lists `config-version-unsupported:<found>`) and `writer-protocol-unsupported` (on writes) both mean this
-runtime does not handle that format and offers no upgrade path: tell the user to use the plugin version that wrote it, or to keep that root and its ledger as history and initialize a fresh workspace elsewhere with a ledger root of its own.
 
 ## After a plugin update
 
@@ -285,24 +130,6 @@ Order: this server first, then the published host assets, then the peer windows.
 Restart the stale windows with the host's procedure: under the tmux transport, if this serving MCP is outdated, first tell the user in one sentence that this window will restart in place in a few seconds and carry on by itself, then pipe your own inspect result into `node .wakeflow-local/runtime/hosts/claude-code/operations/assets/tmux.mjs resume --window <this windowId> --in-place` and end your turn. It returns at once (`self: true`, `scheduled: true`); about two seconds later this session restarts with the updated plugin and a fresh Wakeflow server - no `/mcp` reconnect is needed - and resumes by itself with a prompt to load this skill again (the copy in your context predates the update), call `wakeflow_verify` and continue where you left off. A helper installed before in-place restarts existed refuses `--in-place` as `argument-unknown`: then ask the user to run `/mcp` in this window and reconnect `wakeflow`, run a reconcile as in step 0, which installs the current helper, and start this section again. If this server is already current, skip its restart. For peer windows that verify reports as `stale` (`windows-stale:<n>`: each such session started under an older artifact), `wakeflow_status` lists one action per window: take the `stale-window-resume` ones one at a time, each only while it sits idle at an empty prompt, and pipe each one's inspect result into `resume --window <windowId> --in-place`, one helper call per Bash command. The session restarts inside its own pane on the updated plugin; the binding, coordinates and marks stay, so there is nothing to relocate or mark, and `hook.sessionStart: pending` means startup is unproven; inspect hook execution. `window-busy` means that window is working, shows a dialog or menu, or holds typed input, and `--force` does not override it: go on with the next window and retry this one once its turn has ended - a dialog, a menu or typed input waits for the user, so tell them which window it is. `resume-exited` means the process exited before startup evidence; read the refusal's `hint` and that pane before retrying. `panes-unavailable`, `pane-missing` or `pane-dead` means that window is not running at all - tmux was restarted or the pane was closed - so there is nothing to restart in place: bring it back yourself with `resume --window <windowId>` without `--in-place`, register the printed observation with `relocate` and `mark` it, as for any window whose pane is gone; it starts on the updated plugin. A `stale-window-relaunch` window (its session never conversed, so `resume` would refuse with `resume-never-conversed`) is not probed or resumed: close the old one, launch it again, register it with `replace` and `mark` it - four calls, one helper call per Bash command, each printed result kept verbatim: `close --window <windowId>` (the binding stays; this is not a decommission), `launch --window <windowId> --wait 60` with that window's current inspect result piped in, `wakeflow_register_window_binding` with `operation: "replace"`, the printed `observation` and the `expectedBindingId` / `expectedBindingDigest` the inspect returned, then `mark --window <windowId>`; never reconstruct those calls from your own session transcript or from the plugin's source. Under desktop sessions nothing restarts in place: an outdated server refuses writes (`runtime-artifact-outdated`), and the desktop app reloads the MCP server on its own within a few turns, so tell the user in one sentence that the update is being picked up, check `wakeflow_status` on your next turns until it shows the runtime artifact current, then call `wakeflow_verify` and preview and apply reconcile; if it has not reloaded after a few turns, ask the user to archive and unarchive this Controller session and message it: the message restarts its process on the current artifact. Peer windows reported `stale` are `windows-refresh-pending` on a passing gate there: the app ends an idle session's process and its next message starts it on the current artifact, so restart none and send none a message for it; a session is resumed by sending it a message, so nothing is relocated. A session that is gone (`absent` in the desktop-sessions observation: archived or deleted) is replaced, not resumed: with the user's authorization pipe its inspect result into `launch` again, register the printed observation with `replace` and set its permission mode and title; relocate does not apply on this transport. Afterwards
 preview and apply reconcile for repairable workspace gates that remain. A peer's `unverified` state remains
 separate from those repairs and from Controller acceptance of returned work.
-
-## Interrupted writes and cancellation
-
-`reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
-event append residues: its preview is read-only, its apply rechecks the plan and
-owner facts, retires uncommitted candidates or settles already linked commits,
-and preserves committed event bytes; re-preview afterwards for ordinary layout
-maintenance. Two more first plans work the same way. A `WakeflowMaintenanceGateResiduePlan` appears when `maintenance.protocol` is `recovery-required` and no residue is recoverable: a maintenance process died holding the gate before it recorded an operation, so there is nothing to recover; apply retires the dead gate lock and the orphan stage files, and refuses with `maintenance-gate-residue` when an owner may still be alive - wait and preview again. A `WakeflowHookStageResiduePlan` appears when verify reports `<host>:stage-residue-<n>` on the hook evidence gate: apply removes the stale stage files it counted as retirable; the directories and links it only counts as kept are the user's to remove. `<host>:write-failures-<n>:last-<UTC time>` on the same gate is information, not a failure: the hook observer could not write n records in the last seven days, most recently at that time; the incident files under `.wakeflow-local/runtime/incidents/` name the failing check (`chain[].reason` and `path`), and the code clears by itself after seven days without a new one - report it once, do not chase it every step. `demand-candidates-busy:<demandId>` means the writer may still be
-active - wait and inspect again. Unknown owners, unknown files and changed
-resources are not permission to force cleanup. Board and projection writers
-retire a proven inactive lock before retrying; a lock with a live or unknown
-owner stays protected. A pending Demand publication or lifecycle journal keeps
-reserving its pod after the process exits: finish that operation's documented
-recovery before claiming another requirement or closing the pod. Cancelling a
-tool call stops work before its next commit point, and a disconnected or
-cancelled response does not prove that nothing was committed: inspect the stored
-outcome and reuse the original idempotency key for an append retry; never resend
-a host delivery only because its response was interrupted.
 
 ## Pods
 

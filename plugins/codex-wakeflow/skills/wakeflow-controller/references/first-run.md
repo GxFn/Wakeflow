@@ -69,7 +69,7 @@ and preview again instead of asking the user to interpret it.
 ## The bootstrap
 
 After apply there are windows but nothing running. Follow "Step 1 - Windows
-and bindings" in `references/workspace-and-windows.md`; its bootstrap paragraph
+and bindings" in `references/windows-and-pods.md`; its bootstrap paragraph
 is the host procedure and names the host's own steps and prompts. In a first
 run the setup session is never proven, so you start the Controller window
 first and every other window after it, then register each window from the

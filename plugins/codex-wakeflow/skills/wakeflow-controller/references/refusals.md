@@ -6,8 +6,8 @@ A refusal is the tool telling you why it did nothing. Act on its `code` first; t
 `reason` narrows it and `path` names the field or the state concerned. `invalid-request`
 is not listed: its `path` and `details.schema` already name the field to fix. `io-failure`
 and `unexpected` are failures, not refusals - the skill's rule for them applies. Preview
-`blockerCodes` are explained where their tool is (`workspace-and-windows.md`,
-`delivery-and-review.md`). A reason written `<like-this>` carries a value in that place.
+`blockerCodes` are explained where their tool is (`workspace-maintenance.md`, `windows-and-pods.md`,
+`planning-and-delivery.md`, `review-and-completion.md`). A reason written `<like-this>` carries a value in that place.
 
 ## `concurrency-conflict` - something changed between your read and this call
 
@@ -73,7 +73,7 @@ Reduce what the request carries, or tell the user which bound was reached; do no
 
 ## `recovery-required` - an earlier write was interrupted
 
-Finish that operation's recovery before anything else. For maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; the Demand, requirement, evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-and-windows.md`.
+Finish that operation's recovery before anything else. For maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; the Demand, requirement, evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-maintenance.md`.
 
 - **demand**: `claim-state-vanished`, `demand-publication`, `demand-root-and-archive-absent`, `demand-root-restore`, `demand-root-vanished`, `journal-invalid`, `journal-verify-missing`
 - **endpoint**: `binding-store`

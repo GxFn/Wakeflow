@@ -1,0 +1,205 @@
+# Planning and delivery
+
+Read this when you reach step 6, 7 or 8. It is Controller depth;
+the boundaries are in `SKILL.md`.
+
+## Step 6 - Writing a task package
+
+A task package is an immutable contract between you and one target window. It
+is appended, never edited: a changed mind is a new package with declared
+lineage, not a correction.
+
+`wakeflow_plan_target_task` appends one package. What you write:
+
+- **Assignment** - which repository and which work type.
+- **Goal** - one paragraph a target can restate in a sentence. If you cannot
+  write it that way, the task is still two tasks.
+- **Boundary** - what is explicitly out of scope. This is the most valuable
+  paragraph you write, because it is what stops a target from "improving"
+  code no one reviewed.
+- **Completion expectation** - what must be true and observable when the work
+  is done: the end state (content, files touched, branch), never a commit
+  count. The package cannot be edited and targets never rewrite history, so a
+  rework lands as one more commit on top and "exactly one commit" turns false.
+- **Acceptance anchors** - each one bound to an acceptance-criteria item that
+  exists in the requirement package. An invented anchor is refused; that
+  refusal is protecting the trace from requirement to result.
+
+What Wakeflow derives and you must not restate: the window, the environment,
+the baselines. What you must state when it is true: an environment prerequisite
+the checkout cannot satisfy alone - a sibling repository's build output, a
+service, a credential - and who provides it; a product window must not build or
+change another repository to get it.
+
+Lineage rules that decide which call you make:
+
+- First package for a repository in this Demand: no lineage.
+- After an escalation whose recorded answer changes what the target must do: a
+  replacement package. The old target and package become superseded. Only a target with nothing in
+  flight can be replaced - planned, rework-requested, escalated, review-blocked,
+  or rejected before send with its outcome recorded. A prepared delivery that
+  was never sent is recorded as `failed-before-send` first, so the window's
+  work claim is released before the replacement is planned.
+- Follow-up work on a repository whose target was accepted: a continuation
+  package - later in the same Demand, or on a finished Demand reached through
+  `wakeflow_continue_demand` first (`lineage-continuation-required` names the
+  target to continue).
+- Re-testing after remediation: a retest package.
+
+One active lineage per repository. A second unfinished target in the same
+repository is refused - finish or supersede the first.
+
+A test package additionally carries the frozen test contract: the approved
+steps bound to acceptance-criteria items, the allowed skills, the setup, the
+attempt budget and the stop conditions. Freeze it deliberately, because the
+test window is not allowed to revise it. The contract must carry one step for
+every acceptance criterion - planning refuses `test-contract-uncovered:<item>`
+and `step-item-unknown` names the real count as `acceptance-items:<n>` -
+because a Demand gets one test contract per generation and completion requires
+that contract to cover the whole list.
+
+Writing a test step: one question with a named object boundary, checked at
+the lowest layer that can prove that criterion, with an observable signal and
+a stated meaning for pass and for fail. "Run the suite" is not a step. A
+flaky step is degraded evidence, never a pass. An exclusive environment is a
+serial resource across pods: say so in the setup so two Demands do not race
+for it.
+
+A landing that is only a connection, an empty API, a mock or a consumer
+nobody wired is not complete: rework it and name the missing consumer. What a
+target discovered on the way becomes work only through a supplement package,
+a confirmed bug inside the completion definition or an optimization the user
+authorized - never through its diff, and never through a task you add to make
+the discovery go away.
+
+When the requirement package asks for user review of the task plan, show the
+plan to the user and get their answer before applying. That is the flow's
+second confirmation point.
+
+## Step 7 - Preparing a delivery
+
+`wakeflow_prepare_delivery` does the whole preparation in one call: it takes
+the window work claim, renders the prompt skeleton around your three
+paragraphs, appends the envelope with its fence token, and returns a one-shot
+permit.
+
+Your three paragraphs are the only part a target reads first, so write them as
+instructions to a competent colleague who has not been in this conversation:
+what to achieve, where to focus, what not to touch. Do not restate the package
+- the target reads it - and do not put an absolute local path or a handle in
+them, nor a host session id: under desktop sessions on Claude Code the
+rendered prompt's return section already names the Controller's desktop
+session as the callback's destination (`references/desktop-flow.md`,
+"The callback").
+
+A target is preparable when it is planned; for an implementation target, when
+a rework or a product-defect rework was requested; for a test target, when
+another attempt was requested; and for either, when its re-arms are exhausted
+and it needs a fresh envelope, which carries the rejected envelope's rework
+basis or resends the same test attempt. Anything else is refused because the
+target already has work in flight.
+
+Replaying the same preparation key returns the first permit and the same
+fence. That is the correct response to "did my last call go through" - replay,
+do not prepare a second delivery.
+
+## Step 8 - The host effect and its evidence
+
+This is the one place where a confident report is most likely to be wrong, so
+the rule is blunt: performing the send is not evidence that it landed.
+
+Wakeflow derives the disposition itself:
+
+- **accepted** - the target session produced a `user-prompt-submit` hook
+  record whose prompt digest matches the envelope's (`hook-record`) or that carries the permit id while the digest differs (`hook-record-identity`: the prompt arrived, the host altered its text - tell the user; the target works from the task package), or, on Codex only, the
+  host's own send call returned success. Nothing else accepts.
+- **rejected-before-send** - the send call itself failed without touching the
+  session. Only then is the work claim released and only then may the delivery
+  be re-armed.
+- **indeterminate** - everything else, including a readback that failed. The
+  claim is retained; the delivery is not resent on a hunch - it waits for the
+  landing evidence or for your explicit resolution (below).
+
+Under the tmux transport on Claude Code the helper's `deliver` output carries
+that lookup for you as `landing`: `observed` with the record id means the prompt was submitted in the
+bound session and the outcome will be accepted; `pending` means no record
+appeared within the wait after a real send - a late hook, or the wrong or a
+dead window; record the outcome as the helper reported it and let Wakeflow
+decide. Before it pastes, the helper captures the pane and refuses with
+`target-not-at-prompt` (a `failed-before-send` attempt whose `observed` is
+`menu-cursor`, `input-box-unseen` or `input-not-empty`) when the window shows a
+dialog or menu instead of its input box, or that box holds typed text - a draft
+on any of its lines; `--force` does not bypass this. Nothing was sent and
+nothing is recorded yet: tell the user which window it is and let them answer
+the dialog or clear the draft there - never send keys to it yourself - then send
+the same permit again. Record a refusal and re-arm only when the window cannot be
+brought back to its prompt; the helper's `attempt` then goes in unchanged, its
+`failure {code, summary}` being the host's own reason in the outcome record.
+Readback is only screen text and never proves landing. Under desktop sessions
+the send is your own `send_message` call: its return value is
+`attempt.sendReturn` with `status: "sent"`, your report of the send
+(`host-send-return`), and the desktop helper's `landing` carries the same
+lookup before you record it - `landed: true` with the record id, or
+`landed: false`; `references/desktop-flow.md` has the steps. A session
+that holds the message behind a permission prompt is waiting for the user,
+not failed.
+
+An indeterminate delivery is not a dead end. When the landing evidence arrives
+later, call `wakeflow_record_delivery_outcome` again with a new idempotency
+key and the same delivery; it will accept then.
+
+Resolving an indeterminate delivery whose evidence never comes: a later
+`wakeflow_record_delivery_outcome` is refused with `landing-evidence-missing`,
+and once the silence window has passed the refusal also lists
+`landing-silence-exceeded`. That, or a host that shows the window is dead or is
+not the bound session, is the signal to establish where the prompt went before
+you act - on Claude Code the helper's landing lookup and `panes` or
+`sessions`, on Codex the receiving thread. Then record the outcome again with a new idempotency key and
+a `resolution`: `{"disposition": "rejected-before-send", "rationale": ...}`
+when the prompt provably never reached the bound session - the claim is
+released and `wakeflow_rearm_delivery` issues a fresh permit, which is the one
+sanctioned way to send again - or `{"disposition": "accepted", "hookRecordId":
+..., "rationale": ...}` when a matching `user-prompt-submit` record exists and
+was merely missed. A resolution is your decision and is recorded as such; it is
+refused while the delivery is not indeterminate.
+
+`wakeflow_rearm_delivery` (its `deliveryId` is on the route's rearm frontier in `wakeflow_status` with the Demand id - never search Wakeflow's files for it) re-issues the permit for a rejected-before-send
+delivery with a fresh claim and fence, at most three times per envelope. After
+that, prepare the target again for a new envelope. A window replaced since the permit was issued is the exception: its old envelope cannot be re-armed (`binding-changed`), so prepare the target again at once - `rearm-available` does not block that, and the new prompt names the current binding and Controller. On a transport where a window's session can be gone, check that the target's and the Controller's sessions still exist before you prepare, not after. Given the callback delivery
+of a result-reported target instead, it re-issues the wake-controller callback
+permit against the current Controller binding, with no claim or fence. A
+re-armed target permit carries the first generation's prompt byte for byte -
+landing is proven by that prompt's digest - so its dispatch record still names
+generation 1 and that claim digest; the target imports with it, and Wakeflow
+accepts an earlier generation's fence of the same delivery.
+
+Every recorded outcome names its evidence kind (`evidenceKind`, also shown by
+`wakeflow_inspect_target_result_review`): `hook-record` is what the host
+observed (a `user-prompt-submit` record whose digest matches the permit);
+`host-send-return` and `agent-declaration` are your own report of the send,
+which Wakeflow stores only as a digest; `controller-resolution` is your
+explicit resolution. Treat a self-reported landing as weaker than an observed
+one when you weigh a silent window. `wakeflow_prepare_delivery` itself refuses
+with `host-asset-<status>` when the published helper's bytes are not the
+artifact's (see `hostAssets` in `wakeflow_status`): reconcile first. Right after a plugin update that drift is the update itself - the workspace still holds the previous version's helper - and needs no remark; otherwise tell
+the user that something rewrote the file.
+
+Never resend a prompt by hand because a window "looks idle". Duplicate work in
+a target window is expensive and invisible until the results disagree. After
+a turn was cut between the send and recording its outcome, check the receiving window's landing record before any second send - the tmux helper's `deliver` does it itself and refuses with `already-landed`, printing that landing; under desktop sessions run the helper's `landing` first - and record or report that landing instead of sending again (tmux `--force` is only for a prompt you have established never reached the window).
+
+A delivered window's turn can also be cut by the host itself - on Claude Code
+an `API Error` line such as "Connection lost mid-response" in the pane - and a
+cut turn does not resume on its own. On Claude Code under the tmux transport,
+when the landing was observed, no callback came and the window looks stopped,
+run the tmux helper's `nudge --window <windowId>` once (add `--text <phrase>` to use the workspace
+language). It pastes one short continue phrase only when that error line is
+the last transcript line above the input box (no later reply, rendered user
+message such as an earlier "Continue.", or other output), the pane is idle and
+the input box is empty; otherwise it reports `not-needed` or `busy` and sends
+nothing. A nudge is not a second delivery - the task package is already in
+that session; under desktop sessions there is no nudge, so tell the user which
+session stopped mid-turn. If the window stays silent after it,
+follow the next action `wakeflow_status` names. When that status shows the
+window's `attention` as `needed`, the window is waiting for the user, not for
+a nudge: tell them what it asks for (a permission, a login, their input).

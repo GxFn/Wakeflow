@@ -45,11 +45,14 @@ import {
 const AGENT_TEXT_ROOT = path.join(process.cwd(), "assets", "agent-text");
 
 const CONTROLLER = "skills/wakeflow-controller/SKILL.md";
-const WINDOWS = "skills/wakeflow-controller/references/workspace-and-windows.md";
+const MAINTENANCE = "skills/wakeflow-controller/references/workspace-maintenance.md";
+const WINDOWS = "skills/wakeflow-controller/references/windows-and-pods.md";
 const EVIDENCE = "skills/wakeflow-controller/references/evidence.md";
 const FIRST_RUN = "skills/wakeflow-controller/references/first-run.md";
-const DELIVERY = "skills/wakeflow-controller/references/delivery-and-review.md";
+const DELIVERY = "skills/wakeflow-controller/references/planning-and-delivery.md";
+const REVIEW = "skills/wakeflow-controller/references/review-and-completion.md";
 const DESKTOP = "skills/wakeflow-controller/references/desktop-transport.md";
+const DESKTOP_FLOW = "skills/wakeflow-controller/references/desktop-flow.md";
 const TARGET = "skills/wakeflow-target/SKILL.md";
 const TEST = "skills/wakeflow-test/SKILL.md";
 const TEST_EXECUTION = "skills/wakeflow-test/references/test-execution.md";
@@ -73,6 +76,22 @@ function claude(relative: string, language: "en" | "zh" = "en"): string {
 
 function codex(relative: string): string {
   return flat(renderCodexAgentText(source(relative), "en"));
+}
+
+/**
+ * 1.4 把三份顶格的参考各拆成两份（gate-log §13.262）。原来对一整份参考下的断言，关心的是那句话还在
+ * Controller 的这一组参考里，不是它落在哪一半：这类断言把两半合起来看。
+ */
+const WORKSPACE_REFERENCES = [MAINTENANCE, WINDOWS] as const;
+const DELIVERY_REFERENCES = [DELIVERY, REVIEW] as const;
+const DESKTOP_REFERENCES = [DESKTOP, DESKTOP_FLOW] as const;
+
+function claudeAll(files: readonly string[]): string {
+  return files.map((file) => claude(file)).join(" ");
+}
+
+function sourceAll(files: readonly string[]): string {
+  return files.map(source).join("\n");
 }
 
 /** 源目录里的全部出厂文本（与构建器同一条规则：隐藏项不算），路径相对源根。 */
@@ -145,7 +164,7 @@ test("C16：Controller 技能把 server-outdated 与 windows-stale 直接路由�
       [
         "`server-outdated` (`runtime-artifact-outdated` in `next`)",
         "`window-runtime-unverified:<n>` means peer runtime evidence is missing",
-        'Follow "After a plugin update" in `references/workspace-and-windows.md`',
+        'Follow "After a plugin update" in `references/windows-and-pods.md`',
         "do not loop restarts or read plugin implementation",
       ],
       CONTROLLER,
@@ -415,7 +434,7 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
   ok(flat(source(TARGET)).includes("never write into the workspace root or another repository"));
   ok(flat(source(TEST_EXECUTION)).includes("names each case in the output"));
   ok(
-    flat(source("skills/wakeflow-controller/references/delivery-and-review.md")).includes(
+    flat(source(DELIVERY)).includes(
       "an environment prerequisite the checkout cannot satisfy alone",
     ),
   );
@@ -506,16 +525,16 @@ test("Q4：窗口缺省以 auto 权限模式启动；没有 auto 的账号经维
     "Claude README.zh-CN",
   );
   includesAll(
-    claude(WINDOWS),
+    claudeAll(WORKSPACE_REFERENCES),
     [
       "launch in Claude Code's `auto` permission mode by default",
       "tell the user which window is asking",
       "set that value to `acceptEdits` with a reconfigure",
     ],
-    WINDOWS,
+    WORKSPACE_REFERENCES.join(" + "),
   );
   const defaultAcceptEdits = /acceptEdits`? (?:is|as) (?:the )?default|default[^.]*`acceptEdits`/iu;
-  for (const text of [claude("README.md"), claude(WINDOWS), claude(CONTROLLER)]) {
+  for (const text of [claude("README.md"), claudeAll(WORKSPACE_REFERENCES), claude(CONTROLLER)]) {
     equal(defaultAcceptEdits.test(text), false, "no shipped text may call acceptEdits the default");
   }
 });
@@ -666,7 +685,9 @@ test("§13.190 I12/I13：引导会话先登记、按 hook-evidence-missing 判�
     }
   }
   ok(
-    claude(WINDOWS).includes("never from plugin files on disk or another workspace's config"),
+    claudeAll(WORKSPACE_REFERENCES).includes(
+      "never from plugin files on disk or another workspace's config",
+    ),
     "the daily reference forbids reading another workspace's config too",
   );
 });
@@ -872,7 +893,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
     ),
   );
   ok(flat(update.zh ?? "").includes("桌面 app 会在几个回合内自行重载各会话的 Wakeflow 服务"));
-  for (const text of [flat(update.en), flat(resume), flat(source(DESKTOP))]) {
+  for (const text of [flat(update.en), flat(resume), flat(sourceAll(DESKTOP_REFERENCES))]) {
     equal(
       text.includes("quit and reopen"),
       false,
@@ -921,7 +942,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
   }
 
   includesAll(
-    claude(WINDOWS),
+    claudeAll(WORKSPACE_REFERENCES),
     [
       "the steps below name both, and `references/desktop-transport.md` details desktop sessions",
       "on Claude Code also `windowTransport`, `tmux` or `desktop`",
@@ -929,13 +950,13 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "`tmux.mjs` or `desktop.mjs`, and under tmux the status line",
       "the desktop helper returns once the session has started",
     ],
-    WINDOWS,
+    WORKSPACE_REFERENCES.join(" + "),
   );
   // 四步换代序列从共享参考移进 tmux 取值：共享源里不再有它，Codex 渲染也就不再读到 tmux 的分步。
   equal(source(WINDOWS).includes("the complete sequence on Claude Code is four calls"), false);
   equal(codex(WINDOWS).includes("--wait 60"), false);
 
-  const desktop = source(DESKTOP);
+  const desktop = sourceAll(DESKTOP_REFERENCES);
   for (const heading of [
     "## What the transport is",
     "## One-time prerequisites (the user's)",
@@ -989,7 +1010,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "the two transports are equals",
       "asks the session to load nothing and reply only `ok`; the first real prompt is yours, sent later",
     ],
-    DESKTOP,
+    DESKTOP_REFERENCES.join(" + "),
   );
   // 每个子命令一节，标题即用法：子命令名与旗标逐字对齐 desktop.mjs 的解析器（ADR-0025 D4）。
   for (const usage of [
@@ -1049,7 +1070,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
   );
 
   includesAll(
-    claude(DELIVERY),
+    claudeAll(DELIVERY_REFERENCES),
     [
       "Under the tmux transport on Claude Code the helper's `deliver` output carries that lookup",
       "Under desktop sessions the send is your own `send_message` call: its return value is `attempt.sendReturn`",
@@ -1057,7 +1078,7 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "the helper's landing lookup and `panes` or `sessions`",
       "under desktop sessions there is no nudge",
     ],
-    DELIVERY,
+    DELIVERY_REFERENCES.join(" + "),
   );
   ok(
     flat(source(TARGET)).includes("not a messaging tool the permit's host action did not name"),

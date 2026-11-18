@@ -76,7 +76,7 @@ const HOST_EFFECT_RULE =
  * 开窗（ADR-0025 D7）：共同部分（管道喂意图、单次调用、`--allowedTools` 与信任对话框只列 Wakeflow 的规则、
  * 不认识的拒绝原样转述）之后，tmux 与桌面各一段。tmux 段压缩自 §13.134 的原文（mark/panes/close、
  * resume 加 relocate、locator-live、resume-exited、--wait）；桌面段只写三步开窗的结果形状与桌面工具的
- * 对应动作，分步、拒绝码与给用户的话在 `references/desktop-transport.md`。
+ * 对应动作，分步在 `references/desktop-flow.md`，拒绝码与给用户的话在 `references/desktop-transport.md`。
  */
 const WINDOW_LAUNCH =
   "pipe the intent (the `launchIntent` that `wakeflow_register_window_binding` inspect " +
@@ -147,7 +147,7 @@ const WINDOW_LAUNCH =
   "`sessions` is only the process view; a " +
   "session is resumed by sending it a message, so relocate does not apply, and it is closed " +
   "with the desktop `archive_session` tool only on the user's authorization - never with " +
-  "`claude rm`. The steps, refusal codes and what to tell the user for that transport are in " +
+  "`claude rm`. The steps for that transport are in `references/desktop-flow.md`; the refusal codes and what to tell the user are in " +
   "`references/desktop-transport.md`. A helper refusal this text does not explain - an " +
   "unfamiliar `reason`, or `reason: unexpected` with an `errorName` - is relayed to the user " +
   "verbatim with its `hint`, `detail` and `causeCode`; then stop: do not retry it, do not edit " +

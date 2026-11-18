@@ -11,7 +11,7 @@ becomes the Controller; it ends with the handover card.
 
 Load the `wakeflow-controller` skill and follow its "Step 0 - Initialize or
 maintain the workspace" section; the depth is in its
-`references/workspace-and-windows.md`.
+`references/workspace-maintenance.md`.
 
 First tool call: `wakeflow_maintain_workspace` in preview, after you have asked
 the user for the choices the intent needs (program identity, repositories,

@@ -7,7 +7,7 @@ Advance the active Demand through the steps that belong to the Controller.
 
 Load the `wakeflow-controller` skill and follow the "Main flow" section for
 whichever step the workspace names; the planning, delivery and review depth is
-in its `references/delivery-and-review.md`. Load it again whenever
+in its `references/planning-and-delivery.md` and `references/review-and-completion.md`. Load it again whenever
 `wakeflow_status` shows a `runtime.artifactVersion` new to this session: the
 plugin was updated and the copy in your context predates it.
 

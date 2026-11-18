@@ -22,11 +22,11 @@ for the user: {{commandSurface}}
 3. The step section below that matches what `status` named.
 4. `references/first-run.md` - a fresh workspace only: step 0's
    fresh-initialize and the step 1 after it; never in daily use.
-5. `references/workspace-and-windows.md` - only for workspace maintenance,
-   windows, pods, or refreshing windows after a plugin update; when your host
-   has desktop sessions, also `references/desktop-transport.md`.
-6. `references/delivery-and-review.md` - only when planning a task, preparing
-   a delivery, or deciding on a returned result.
+5. `references/workspace-maintenance.md` - maintenance only;
+   `references/windows-and-pods.md` - windows, pods, a plugin update; with
+   desktop sessions also `references/desktop-transport.md`, `references/desktop-flow.md`.
+6. `references/planning-and-delivery.md` - steps 6 to 8 only;
+   `references/review-and-completion.md` - steps 10 to 12 only.
 7. `references/evidence.md` - only before you record managed evidence.
 
 Never read the host's own session transcripts or the plugin implementation for
@@ -63,13 +63,13 @@ command syntax: the references and the tool descriptions hold it.
 Collect the user's choices (program identity, repositories as owner-managed
 unless they opt in, surfaces, storage root), build the selection from the tool's
 input schema - never from plugin files - preview `wakeflow_maintain_workspace`,
-show the plan and blockers, apply only after they confirm. Depth: `references/workspace-and-windows.md`; a fresh workspace starts with `references/first-run.md`.
+show the plan and blockers, apply only after they confirm. Depth: `references/workspace-maintenance.md`; a fresh workspace starts with `references/first-run.md`.
 
 ### Step 1 - Open windows and register their bindings
 
 Inspect each returned window with `wakeflow_register_window_binding` for its
 current host launch instructions, open it exactly as "Step 1 - Windows and
-bindings" in `references/workspace-and-windows.md` says (bootstrap once, one
+bindings" in `references/windows-and-pods.md` says (bootstrap once, one
 launch per window), then register the handle you observed with the same tool: it
 needs a real `session-start` at the host startup root; a refusal names the missing evidence. {{hostEffectRule}}
 
@@ -86,7 +86,7 @@ Call `wakeflow_plan_target_task`. You write the goal, the boundary, the
 completion expectation and the acceptance anchors; Wakeflow derives the window,
 the environment and the baselines. Anchors must point at acceptance-criteria
 items that exist in the package - an invented one is refused. When the package
-asks for user review of the plan, show it before apply. Depth: `references/delivery-and-review.md`.
+asks for user review of the plan, show it before apply. Depth: `references/planning-and-delivery.md`.
 
 ### Step 7 - Prepare the delivery
 
@@ -122,7 +122,7 @@ for an implementation result or `wakeflow_record_test_review_decision` for a
 test result. On escalate, hand the user the issue, options and recommendation,
 then bring their answer back through `wakeflow_continue_demand`; a
 product-defect escalation instead returns to implementation delivery planning.
-A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you. Depth: `references/delivery-and-review.md`.
+A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you. Depth: `references/review-and-completion.md`.
 
 ### Step 12 - Complete and archive
 
@@ -137,7 +137,7 @@ holds the coverage rules and exclusions.
 ### Step 13 - Close the pod
 
 After the user has merged or abandoned the pod's branch and its Demand is archived, close the pod
-with `wakeflow_pod`: record the branch dispositions, then remove it once its windows are retired and its checkouts are gone. Depth: `references/workspace-and-windows.md`.
+with `wakeflow_pod`: record the branch dispositions, then remove it once its windows are retired and its checkouts are gone. Depth: `references/windows-and-pods.md`.
 
 ## Checking the workspace
 
@@ -155,13 +155,13 @@ unavailable gate is unchecked, not passing.
 
 For Demand inventory errors after an interrupted write, preview `reconcile`;
 follow "Interrupted writes and cancellation" in
-`references/workspace-and-windows.md` without deleting files by hand.
+`references/workspace-maintenance.md` without deleting files by hand.
 
 `server-outdated` (`runtime-artifact-outdated` in `next`) concerns this MCP
 server; `windows-stale:<n>` names peer sessions started under an older artifact;
 `window-runtime-unverified:<n>` means peer runtime evidence is missing, not an
 old or new MCP proven by a hook. Follow "After a plugin update" in
-`references/workspace-and-windows.md`; do not loop restarts or read plugin
+`references/windows-and-pods.md`; do not loop restarts or read plugin
 implementation to interpret missing host evidence.
 
 Every step boundary is a safe place to hand over to a fresh Controller session:
@@ -188,7 +188,7 @@ report it, or it did not and you replay the same call with the same
 idempotency key or plan digest - Wakeflow returns the existing record instead
 of a second one. A host send is the one effect Wakeflow cannot replay for you:
 {{resendGuard}} A turn cut in a window you delivered to is a different case:
-see the nudge rule in `references/delivery-and-review.md`. When the host says
+see the nudge rule in `references/planning-and-delivery.md`. When the host says
 its login expired, only the user can sign in again: tell them; once they have,
 the host may resume the cut turn on its own - look first.
 

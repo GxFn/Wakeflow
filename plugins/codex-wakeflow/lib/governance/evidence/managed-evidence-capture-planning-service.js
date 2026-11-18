@@ -20,11 +20,13 @@ import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContex
 import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { createManagedEvidenceCapturePlan, ManagedEvidenceCapturePlanError, } from "./managed-evidence-capture-plan.js";
+import { managedEvidenceCommitObservationOf, observeConfiguredRepositoryCommit, } from "./managed-evidence-commit-observation.js";
 import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidenceSourceRoot, } from "./managed-evidence-configured-source-root.js";
 import { createManagedEvidenceManifest, MANAGED_EVIDENCE_PAYLOAD_LIMITS, MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import { assertManagedEvidenceKindMatchesSource, ManagedEvidenceSourceSelectionError, managedEvidenceSourceKey, parseManagedEvidenceSourceSelection, } from "./managed-evidence-source-selection.js";
 import { ownString } from "../../foundation/data/own-string.js";
+import { GitCommitObservationError, } from "../../foundation/git/git-commit-observation.js";
 const ERROR_MESSAGES = {
     input: "Managed evidence capture planning input is invalid.",
     config: "Managed evidence capture planning Config is invalid.",
@@ -480,6 +482,37 @@ function captureProjection(source, policy) {
         review: reviewOf([{ ref: CAPTURED_FILE_REF, content: { opaque: false, findings } }]),
     });
 }
+/** 只读地观察仓库里的这个提交（ADR-0028）；拿不到结论返回 null，记录照旧只带引用。 */
+async function observeCommit(config, source, signal) {
+    try {
+        return await observeConfiguredRepositoryCommit(config, source, signal);
+    }
+    catch (error) {
+        if (error instanceof ManagedEvidenceConfiguredSourceRootError)
+            fail("source-root", error);
+        if (error instanceof GitCommitObservationError)
+            fail("aborted", error);
+        throw error;
+    }
+}
+/**
+ * 提交来源：仓库里没有这个对象、或它不是提交时给出阻塞项；观察到了就把事实并进来源，负载仍是来源
+ * 投影（由清单的来源字段完整重建）。
+ */
+async function captureCommit(config, source, policy, signal) {
+    if (config.indexes.repositoryById[source.repositoryId] === undefined)
+        fail("source-root");
+    const observed = await observeCommit(config, source, signal);
+    if (observed === null)
+        return captureProjection(source, policy);
+    if (observed.status !== "observed") {
+        const blocker = observed.status === "missing"
+            ? `commit-unknown:${source.commitOid}`
+            : `commit-not-a-commit:${source.commitOid}`;
+        return Object.freeze({ ...captureProjection(source, policy), blockers: [blocker] });
+    }
+    return captureProjection(Object.freeze({ ...source, observation: managedEvidenceCommitObservationOf(observed) }), policy);
+}
 async function captureObservation(workspaceRoot, selection, source, policy, signal) {
     const read = await readKernelSource(() => readHostHookObservationRecord(workspaceRoot, source.hostId, source.recordId, signal === undefined ? {} : { signal }), signal);
     if (read === null)
@@ -518,9 +551,7 @@ async function captureSelectedSource(workspaceRoot, config, selection, worktreeP
         case "link":
             return captureProjection(source, policy);
         case "commit":
-            if (config.indexes.repositoryById[source.repositoryId] === undefined)
-                fail("source-root");
-            return captureProjection(source, policy);
+            return captureCommit(config, source, policy, signal);
         default: {
             const exhaustive = source;
             return exhaustive;
@@ -643,7 +674,10 @@ export class ManagedEvidenceCapturePlanningService {
             const podId = context.loaded.identity.podId;
             const worktreePaths = (await readKernelSource(() => listPodWorktreeReceiptsAnyHost(workspaceRoot, podId, options.signal === undefined ? {} : { signal: options.signal }), options.signal)).map((receipt) => receipt.path);
             const captured = await captureSelectedSource(this.#workspaceRoot, context.config, selection, worktreePaths, options.signal);
-            const blockers = deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview);
+            const blockers = [
+                ...(captured.blockers ?? []),
+                ...deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview),
+            ];
             if (blockers.length > 0) {
                 result = Object.freeze({ status: "blocked", blockers, review: captured.review });
             }

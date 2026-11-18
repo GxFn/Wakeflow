@@ -6,6 +6,8 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { PortableResourcePathError, parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { HOST_HOOK_EVENTS } from "../../kernel/hook-observations.js";
+/** 清单里保留的改动路径条数上限。 */
+export const MANAGED_EVIDENCE_COMMIT_CHANGED_PATHS_MAXIMUM = 500;
 const ERROR_MESSAGES = {
     input: "Managed evidence source selection input is invalid.",
     identifier: "Managed evidence source selection contains an invalid typed identity.",
@@ -48,6 +50,31 @@ const OBSERVATION_SOURCE_FIELDS = Object.freeze([
 const LINK_SELECTION_FIELDS = Object.freeze(["kind", "url"]);
 const LINK_SOURCE_FIELDS = Object.freeze(["digest", "kind", "url"]);
 const COMMIT_FIELDS = Object.freeze(["commitOid", "kind", "repositoryId"]);
+const COMMIT_OBSERVED_FIELDS = Object.freeze([
+    "commitOid",
+    "kind",
+    "observation",
+    "repositoryId",
+]);
+const COMMIT_OBSERVATION_FIELDS = Object.freeze([
+    "changedPathCount",
+    "changedPaths",
+    "changedPathsTruncated",
+    "parents",
+    "patch",
+    "treeOid",
+]);
+const CHANGED_PATH_FIELDS = Object.freeze(["path", "status"]);
+const PATCH_FIELDS = Object.freeze(["bytes", "digest"]);
+const CHANGED_PATH_STATUSES = Object.freeze([
+    "added",
+    "modified",
+    "deleted",
+    "type-changed",
+    "other",
+]);
+const COMMIT_PARENTS_MAXIMUM = 64;
+const CHANGED_PATH_MAXIMUM_LENGTH = 4096;
 const REPOSITORY_ROOT_FIELDS = Object.freeze(["kind", "repositoryId"]);
 const SUPPORT_ROOT_FIELDS = Object.freeze(["kind", "surfaceId"]);
 const POD_WORKTREE_ROOT_FIELDS = Object.freeze(["kind", "podId", "repositoryId"]);
@@ -255,15 +282,75 @@ function parseLink(value, path, fields) {
             : null,
     });
 }
+function parseObjectId(value, path) {
+    if (typeof value !== "string" || !COMMIT_OID_PATTERN.test(value))
+        fail("commit", path);
+    return value;
+}
+function parseCount(value, path) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        fail("commit", path);
+    }
+    return value;
+}
+function parseList(value, maximum, path) {
+    if (!Array.isArray(value) || value.length > maximum)
+        fail("commit", path);
+    return value;
+}
+function parseChangedPath(value, path) {
+    const record = exactRecord(value, CHANGED_PATH_FIELDS, path, "source");
+    if (typeof record.status !== "string" ||
+        !CHANGED_PATH_STATUSES.includes(record.status) ||
+        typeof record.path !== "string" ||
+        record.path.length === 0 ||
+        record.path.length > CHANGED_PATH_MAXIMUM_LENGTH) {
+        fail("commit", path);
+    }
+    return Object.freeze({
+        status: record.status,
+        path: record.path,
+    });
+}
+function parseCommitObservation(value, path) {
+    const record = exactRecord(value, COMMIT_OBSERVATION_FIELDS, path, "source");
+    const patch = exactRecord(record.patch, PATCH_FIELDS, `${path}/patch`, "source");
+    const changedPaths = parseList(record.changedPaths, MANAGED_EVIDENCE_COMMIT_CHANGED_PATHS_MAXIMUM, `${path}/changedPaths`).map((entry, index) => parseChangedPath(entry, `${path}/changedPaths/${index}`));
+    const changedPathCount = parseCount(record.changedPathCount, `${path}/changedPathCount`);
+    if (typeof record.changedPathsTruncated !== "boolean" ||
+        record.changedPathsTruncated !== changedPathCount > changedPaths.length) {
+        fail("commit", `${path}/changedPathsTruncated`);
+    }
+    return Object.freeze({
+        treeOid: parseObjectId(record.treeOid, `${path}/treeOid`),
+        parents: Object.freeze(parseList(record.parents, COMMIT_PARENTS_MAXIMUM, `${path}/parents`).map((parent, index) => parseObjectId(parent, `${path}/parents/${index}`))),
+        changedPathCount,
+        changedPathsTruncated: record.changedPathsTruncated,
+        changedPaths: Object.freeze(changedPaths),
+        patch: Object.freeze({
+            digest: parseDigest(patch.digest, `${path}/patch/digest`),
+            bytes: parseCount(patch.bytes, `${path}/patch/bytes`),
+        }),
+    });
+}
 function parseCommit(value, path) {
     const record = exactRecord(value, COMMIT_FIELDS, path, "source");
-    if (typeof record.commitOid !== "string" || !COMMIT_OID_PATTERN.test(record.commitOid)) {
-        fail("commit", `${path}/commitOid`);
-    }
     return Object.freeze({
         kind: "commit",
         repositoryId: parseId(record.repositoryId, "repository", `${path}/repositoryId`),
-        commitOid: record.commitOid,
+        commitOid: parseObjectId(record.commitOid, `${path}/commitOid`),
+    });
+}
+/** 清单里的提交来源：`observation` 可以没有（拿不到结论时登记的记录，以及 1.4 之前的记录）。 */
+function parseCommitSource(value, path) {
+    if (!Object.hasOwn(value, "observation"))
+        return parseCommit(value, path);
+    const record = exactRecord(value, COMMIT_OBSERVED_FIELDS, path, "source");
+    return Object.freeze({
+        kind: "commit",
+        repositoryId: parseId(record.repositoryId, "repository", `${path}/repositoryId`),
+        commitOid: parseObjectId(record.commitOid, `${path}/commitOid`),
+        observation: parseCommitObservation(record.observation, `${path}/observation`),
     });
 }
 function sourceKindOf(value, path) {
@@ -309,7 +396,7 @@ export function parseManagedEvidenceSourceDescriptor(value, path = "$/source") {
         case "link":
             return parseLink(value, path, LINK_SOURCE_FIELDS);
         case "commit":
-            return parseCommit(value, path);
+            return parseCommitSource(value, path);
         default:
             fail("source", `${path}/kind`);
     }

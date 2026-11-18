@@ -81,6 +81,32 @@ async function openPodWorktreeRoot(workspaceRoot, config, root, signal) {
         throw error;
     }
 }
+/** 打开并持有一个已配置仓库的主检出根（提交观察用；同一仓库的 worktree 检出共用它的对象库）。 */
+export async function openConfiguredRepositoryRoot(config, repositoryId) {
+    const placement = sourcePlacement(config, { kind: "repository", repositoryId });
+    let root;
+    try {
+        root = await RootedDirectory.open(placement.absolutePath, "$sourceRoot");
+        if (root.absolutePath !== placement.realPath)
+            fail("root-scope");
+        return root;
+    }
+    catch (error) {
+        if (root !== undefined) {
+            try {
+                await root.close();
+            }
+            catch {
+                // 首个placement或根关系错误优先。
+            }
+        }
+        if (error instanceof ManagedEvidenceConfiguredSourceRootError)
+            throw error;
+        if (error instanceof RootedDirectoryError)
+            fail("root-scope");
+        throw error;
+    }
+}
 /** 打开并持有Manifest逻辑source对应的当前Config物理根。 */
 export async function openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source, options = {}) {
     if (source.root.kind === "pod-worktree") {

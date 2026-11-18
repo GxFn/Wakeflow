@@ -58,9 +58,11 @@ export const LEGACY_ERROR_CODE_FAMILIES = Object.freeze({
     "wakeflow-strict-text-file": "io-failure",
     "wakeflow-whole-file-content-transition": "io-failure",
     // ---- foundation/git ----
+    "wakeflow-git-commit-observation": "io-failure",
     "wakeflow-git-ignore-candidate-observation": "io-failure",
     "wakeflow-git-ignore-observation": "io-failure",
     "wakeflow-git-object-id": "io-failure",
+    "wakeflow-git-read-only-process": "io-failure",
     // ---- foundation/identity ----
     "wakeflow-uuid-v4": "unexpected",
     // ---- foundation/numeric ----

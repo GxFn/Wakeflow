@@ -1,6 +1,6 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { deriveManagedEvidenceEventIdentity } from "../../governance/evidence/managed-evidence-event-identity.js";
 import { MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, } from "../../governance/evidence/managed-evidence-manifest.js";
-import { deriveDurableId } from "../../kernel/ids.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "./contract.js";
 /** 计划摘要不含 `capturedAt` 与 CAS 预期：时间在 apply 时取钟，流位置在 apply 时取当前聚合。 */
@@ -17,12 +17,7 @@ export function deriveEvidencePlanDigest(plan) {
     return computeCanonicalJsonSha256Digest(basis, "$plan");
 }
 /** 同一 Evidence 永远得到同一 Event 与 Commit 身份：重复 apply 在事件流上自然幂等。 */
-export function deriveEvidenceEventIdentity(evidenceId) {
-    return Object.freeze({
-        eventId: deriveDurableId("demand-event", "managed-evidence-recorded", evidenceId),
-        commitId: deriveDurableId("demand-event-commit", "managed-evidence-recorded", evidenceId),
-    });
-}
+export const deriveEvidenceEventIdentity = deriveManagedEvidenceEventIdentity;
 /** preview 结果里的计划投影：身份、来源投影、负载摘要与计数，不回显整棵 tree manifest。 */
 export function evidencePlanSummary(plan, recorded) {
     const manifest = plan.manifest;

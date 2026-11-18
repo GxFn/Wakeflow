@@ -3,6 +3,7 @@ import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generate
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report-v2.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -14,6 +15,7 @@ import { GitObjectIdError, parseGitObjectId, } from "../../foundation/git/git-ob
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { parseUtcInstant, UtcInstantError, } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall-clock.js";
+import { parseTargetResultOutsideInstructions, } from "./target-result-outside-instructions.js";
 /**
  * Wakeflow Governance / Result：目标 Agent 提交的单仓库 implementation 结果陈述。
  *
@@ -22,11 +24,30 @@ import { readUtcWallClock, UtcWallClockError, } from "../../foundation/time/wall
  * authority补齐这些事实后再生成TargetResult。
  */
 const REPORT_KIND = "WakeflowImplementationTargetResultReport";
-const REPORT_SCHEMA_VERSION = 1;
+/**
+ * 记录版本（ADR-0030）。版本 1 是 1.4 之前写下的报告；版本 2 多了逐条锚点的结论与任务包之外收到的指示。
+ * 旧记录原样读入、原样参与摘要——它没有这两项就是"未记录"，这里不替它补任何东西。新报告一律写版本 2。
+ */
+const LEGACY_REPORT_SCHEMA_VERSION = 1;
+const REPORT_SCHEMA_VERSION = 2;
+export const IMPLEMENTATION_ANCHOR_RESULT_STATUSES = Object.freeze([
+    "passed",
+    "failed",
+    "blocked",
+    "not-run",
+]);
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/u;
+/** 逐条锚点的结论；版本 1 的报告没有记录，返回 null。 */
+export function implementationReportAnchorResults(report) {
+    return report.anchorResults ?? null;
+}
+/** 任务包之外收到的指示；版本 1 的报告没有记录，返回 null（与"记录了、一条也没有"的空数组不同）。 */
+export function implementationReportOutsideInstructions(report) {
+    return report.outsideInstructions ?? null;
+}
 const ERROR_MESSAGES = {
     input: "Implementation Target Result Report is not passive closed JSON data.",
     schema: "Implementation Target Result Report does not satisfy its Schema.",
@@ -50,12 +71,14 @@ export class ImplementationTargetResultReportError extends Error {
         this.path = path;
     }
 }
-const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA, [
+const REPORT_SCHEMA_DEPENDENCIES = [
     WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
-]);
+];
+const validateLegacyWire = createRuntimeJsonSchemaValidator(WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA, REPORT_SCHEMA_DEPENDENCIES);
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA, REPORT_SCHEMA_DEPENDENCIES);
 function fail(reason, path, cause) {
     throw new ImplementationTargetResultReportError(reason, path, cause === undefined ? undefined : { cause });
 }
@@ -188,16 +211,54 @@ function parseRepositoryChangeFields(value) {
     };
 }
 /** 准入不含时钟和摘要的Agent业务陈述，并返回独立冻结快照。 */
+const COMMON_CONTENT_FIELDS = Object.freeze([
+    "anchorEvidence",
+    "evidenceLocators",
+    "outcome",
+    "repositoryChange",
+    "risks",
+    "summary",
+    "verification",
+]);
+function parseAnchorResults(value) {
+    if (!Array.isArray(value) || value.length > 32)
+        fail("input", "$/anchorResults");
+    const seen = new Set();
+    return Object.freeze(value.map((entry, index) => {
+        const path = `$/anchorResults/${index}`;
+        const record = jsonRecord(entry, ["anchorId", "observed", "status"], path);
+        const anchorId = token(record.anchorId, `${path}/anchorId`);
+        if (seen.has(anchorId))
+            fail("relation", `${path}/anchorId`);
+        seen.add(anchorId);
+        const status = record.status;
+        if (typeof status !== "string" ||
+            !IMPLEMENTATION_ANCHOR_RESULT_STATUSES.includes(status)) {
+            fail("input", `${path}/status`);
+        }
+        return Object.freeze({
+            anchorId,
+            status: status,
+            observed: text(record.observed, `${path}/observed`),
+        });
+    }));
+}
+/** 一份新报告的内容（记录版本 2）：共有的七项，加上逐条锚点的结论与任务包之外收到的指示。 */
 function parseImplementationTargetResultReportContent(value) {
-    const record = jsonRecord(value, [
-        "anchorEvidence",
-        "evidenceLocators",
-        "outcome",
-        "repositoryChange",
-        "risks",
-        "summary",
-        "verification",
-    ], "$content");
+    const record = jsonRecord(value, [...COMMON_CONTENT_FIELDS, "anchorResults", "outsideInstructions"], "$content");
+    const { anchorResults, outsideInstructions, ...common } = record;
+    return Object.freeze({
+        ...parseCommonContent(common),
+        anchorResults: parseAnchorResults(anchorResults),
+        outsideInstructions: parseTargetResultOutsideInstructions(outsideInstructions, "$/outsideInstructions", {
+            record: jsonRecord,
+            text,
+            fail: (path) => fail("input", path),
+        }),
+    });
+}
+function parseCommonContent(value) {
+    const record = jsonRecord(value, COMMON_CONTENT_FIELDS, "$content");
     if (record.outcome !== "completed" &&
         record.outcome !== "blocked" &&
         record.outcome !== "needs-review") {
@@ -275,10 +336,13 @@ function parseImplementationTargetResultReportContent(value) {
         anchorEvidence: Object.freeze(anchorEvidence),
     });
 }
+/**
+ * 摘要的基：每个记录版本恰好是它自己的成员。版本 1 的基里没有新加的两项，所以 1.4 之前写下的报告摘要
+ * 一个字节不变——结果、评审单元与决定里引用它的摘要也都不变。
+ */
 function reportBasis(value) {
-    return {
+    const common = {
         kind: REPORT_KIND,
-        schemaVersion: REPORT_SCHEMA_VERSION,
         outcome: value.outcome,
         summary: value.summary,
         repositoryChange: value.repositoryChange,
@@ -287,6 +351,18 @@ function reportBasis(value) {
         risks: value.risks,
         anchorEvidence: value.anchorEvidence,
         reportedAt: value.reportedAt,
+    };
+    if (value.schemaVersion === LEGACY_REPORT_SCHEMA_VERSION) {
+        return { ...common, schemaVersion: LEGACY_REPORT_SCHEMA_VERSION };
+    }
+    if (value.anchorResults === undefined || value.outsideInstructions === undefined) {
+        fail("relation", "$/schemaVersion");
+    }
+    return {
+        ...common,
+        schemaVersion: REPORT_SCHEMA_VERSION,
+        anchorResults: value.anchorResults,
+        outsideInstructions: value.outsideInstructions,
     };
 }
 export function parseImplementationTargetResultReport(value) {
@@ -299,11 +375,15 @@ export function parseImplementationTargetResultReport(value) {
             fail("input", error.path, error);
         throw error;
     }
-    const validated = validateWire(json);
+    const legacy = json !== null &&
+        typeof json === "object" &&
+        !Array.isArray(json) &&
+        json.schemaVersion === LEGACY_REPORT_SCHEMA_VERSION;
+    const validated = legacy ? validateLegacyWire(json) : validateWire(json);
     if (!validated.ok)
         fail("schema", validated.path);
     const wire = validated.value;
-    const content = parseImplementationTargetResultReportContent({
+    const common = {
         outcome: wire.outcome,
         summary: wire.summary,
         repositoryChange: wire.repositoryChange,
@@ -311,13 +391,25 @@ export function parseImplementationTargetResultReport(value) {
         verification: wire.verification,
         risks: wire.risks,
         anchorEvidence: wire.anchorEvidence,
-    });
-    const basis = reportBasis({
-        kind: REPORT_KIND,
-        schemaVersion: REPORT_SCHEMA_VERSION,
-        ...content,
-        reportedAt: instant(wire.reportedAt, "$/reportedAt"),
-    });
+    };
+    const reportedAt = instant(wire.reportedAt, "$/reportedAt");
+    const basis = wire.schemaVersion === LEGACY_REPORT_SCHEMA_VERSION
+        ? reportBasis({
+            kind: REPORT_KIND,
+            schemaVersion: LEGACY_REPORT_SCHEMA_VERSION,
+            ...parseCommonContent(common),
+            reportedAt,
+        })
+        : reportBasis({
+            kind: REPORT_KIND,
+            schemaVersion: REPORT_SCHEMA_VERSION,
+            ...parseImplementationTargetResultReportContent({
+                ...common,
+                anchorResults: wire.anchorResults,
+                outsideInstructions: wire.outsideInstructions,
+            }),
+            reportedAt,
+        });
     const reportDigest = digest(wire.reportDigest, "$/reportDigest");
     if (computeCanonicalJsonSha256Digest(basis) !== reportDigest) {
         fail("digest", "$/reportDigest");

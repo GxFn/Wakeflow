@@ -1,7 +1,7 @@
 import { RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS, } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import { findPromptLanding } from "../../kernel/prompt-digest.js";
 import { CREDENTIAL_PRIVACY_FINDING_KINDS, scanPrivacy, } from "../../kernel/privacy-scan.js";
+import { findPromptLanding } from "../../kernel/prompt-digest.js";
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
  *
@@ -97,7 +97,10 @@ export function locateEvidenceReference(report, reference) {
         ? REPORT_CONTENT_PATH
         : `${REPORT_CONTENT_PATH}.steps[${stepIndex}].evidence`;
 }
-/** 报告的自由文本：摘要、验证、风险、逐步观察与建议动作；锚点与定位符是引用不是文本。 */
+/**
+ * 报告的自由文本：摘要、验证、风险、逐步观察与建议动作，以及记录版本 2 的逐条锚点观察与任务包之外的指示；
+ * 锚点与定位符是引用不是文本。
+ */
 export function reportTexts(report) {
     return Object.freeze([
         report.summary,
@@ -106,6 +109,22 @@ export function reportTexts(report) {
         ...(report.steps ?? []).flatMap((step) => step.failure === undefined
             ? [step.observed]
             : [step.observed, step.failure.recommendedAction]),
+        ...(report.anchorResults ?? []).map((entry) => entry.observed),
+        ...(report.outsideInstructions ?? []).map((entry) => entry.summary),
+    ]);
+}
+/**
+ * 逐条锚点的结论要与任务包的验收锚点一一对应（ADR-0030 决定 2）：缺的、多出的各点名，没有问题返回空。
+ * 每个锚点重复给出的情况由报告自己的解析拒绝。
+ */
+export function deriveAnchorResultBlockers(expectedAnchorIds, answeredAnchorIds) {
+    return Object.freeze([
+        ...expectedAnchorIds
+            .filter((anchorId) => !answeredAnchorIds.includes(anchorId))
+            .map((anchorId) => `anchor-result-missing:${anchorId}`),
+        ...answeredAnchorIds
+            .filter((anchorId) => !expectedAnchorIds.includes(anchorId))
+            .map((anchorId) => `anchor-result-unknown:${anchorId}`),
     ]);
 }
 /** Controller 写进事件流的决定文本只拒凭证类命中（复审 G3）：rationale、阻塞理由、残余风险、升级的问题/选项/建议。 */

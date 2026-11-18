@@ -50,7 +50,7 @@ import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingSto
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
-import { collectEvidenceReferences, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
+import { collectEvidenceReferences, deriveAnchorResultBlockers, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
 const REPORT_PRIVACY_POLICY = Object.freeze({
     allowedPathRoots: Object.freeze([]),
@@ -560,6 +560,11 @@ function buildResult(input, target, envelope, taskPackage, options) {
             fail("precondition-failed", "work-type", "$request.report.workType");
         }
         const report = createImplementationTargetResultReport(input.report.content, clock);
+        // 逐条锚点的结论与任务包不一致时点名是哪一条；结果的合成另有同一条不变量，这里先给出可操作的拒绝。
+        const anchorBlockers = deriveAnchorResultBlockers(taskPackage.acceptanceAnchors.map((anchor) => anchor.anchorId), (report.anchorResults ?? []).map((entry) => entry.anchorId));
+        if (anchorBlockers.length > 0) {
+            rejectWith(anchorBlockers, "$request.report.content.anchorResults");
+        }
         return createImplementationTargetResult({
             taskPackage,
             envelope,

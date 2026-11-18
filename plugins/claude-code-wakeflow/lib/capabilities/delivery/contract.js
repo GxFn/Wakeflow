@@ -90,7 +90,7 @@ export const RECORD_DELIVERY_OUTCOME_TOOL_REGISTRATION = Object.freeze({
     shape: "append",
     executor: "recordDeliveryOutcome",
     title: "Record Wakeflow Delivery Outcome",
-    description: "Record the outcome of one delivery generation identified by deliveryId and its fence claimDigest. Wakeflow derives the disposition from evidence: accepted only from the target session's user-prompt-submit hook record with the envelope's prompt digest, a Codex host send-call return, or a Controller resolution of an indeterminate delivery; rejected-before-send only from a send call that failed without touching the session or a Controller resolution as not landed (the claim is released); everything else stays indeterminate with the claim retained. Call again with a new idempotency key when landing evidence arrives later.",
+    description: "Record the outcome of one delivery generation identified by deliveryId and its fence claimDigest. Pass the helper's outcomeFile as outcome, or give attempt and observedAt yourself. Wakeflow derives the disposition from evidence: accepted only from the target session's user-prompt-submit hook record with the envelope's prompt digest, a Codex host send-call return, or a Controller resolution of an indeterminate delivery; rejected-before-send only from a send call that failed without touching the session or a Controller resolution as not landed (the claim is released); everything else stays indeterminate with the claim retained. Call again with a new idempotency key when landing evidence arrives later.",
     requestSchema: WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_RECORD_DELIVERY_OUTCOME_RESULT_SCHEMA,
     annotations: Object.freeze({

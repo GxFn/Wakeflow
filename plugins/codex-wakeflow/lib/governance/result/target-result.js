@@ -4,8 +4,10 @@ import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundat
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
-import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../contracts/generated/governance/result/target-result.generated.js";
+import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../contracts/generated/governance/result/implementation-target-result-report-v2.generated.js";
+import { WAKEFLOW_TARGET_RESULT_V2_SCHEMA } from "../../contracts/generated/governance/result/target-result-v2.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report.generated.js";
+import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA } from "../../contracts/generated/governance/result/test-target-result-report-v2.generated.js";
 import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA } from "../../contracts/generated/workspace/window-host-binding.generated.js";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../contracts/identity/wakeflow-durable-id.js";
@@ -51,13 +53,16 @@ export class TargetResultError extends Error {
         this.path = path;
     }
 }
-const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TARGET_RESULT_SCHEMA, [
+// 结果的文档版本 2：结果自己的记录形状没有变，它内嵌的报告可以是记录版本 1 或 2（ADR-0030）。
+const validateWire = createRuntimeJsonSchemaValidator(WAKEFLOW_TARGET_RESULT_V2_SCHEMA, [
     WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
     WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
     WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
     WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA,
+    WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA,
     WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA,
+    WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA,
     WAKEFLOW_TASK_PACKAGE_SCHEMA,
     WAKEFLOW_UTC_INSTANT_SCHEMA,
     WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,

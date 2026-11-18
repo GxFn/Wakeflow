@@ -70,7 +70,7 @@ export const DEMAND_CREATION_TOOL_REGISTRATION = Object.freeze({
     shape: "effect",
     executor: "createDemand",
     title: "Create Wakeflow Demand",
-    description: "Claim one pending requirement package and create its Demand: preview derives a deterministic plan (demandId from the package and its board claim state, no write), apply publishes the Demand root with revision 1 and moves the package to claimed in one transaction, recover finishes an interrupted apply from the demandId. Only one active Demand per pod (podId defaults to the primary pod); the pod must be open; the Demand type, testing decision, and authority members come from the package.",
+    description: "Claim one pending requirement package and create its Demand. apply publishes the Demand root with revision 1 and moves the package to claimed in one transaction; with no planDigest it plans and applies in one call, and a blocked plan writes nothing and returns the preview with its blockers. preview alone derives the deterministic plan (demandId from the package and its board claim state) without writing, and an apply that carries that preview's planDigest is refused if the plan changed; recover finishes an interrupted apply from the demandId. Only one active Demand per pod (podId defaults to the primary pod); the pod must be open; the Demand type, testing decision, and authority members come from the package.",
     requestSchema: WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
     annotations: EFFECT_ANNOTATIONS,

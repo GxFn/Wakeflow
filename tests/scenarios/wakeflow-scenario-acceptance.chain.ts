@@ -2144,9 +2144,27 @@ async function scenarioRecordEvidence(context: ScenarioContext): Promise<string>
     source: { kind: "link", url: "https://example.com/ci/runs/42" },
     contentReview: "reject",
   });
+  // 提交证据由 Wakeflow 只读地核实（ADR-0028）：产品仓库是真实仓库，所以先有一个真实的提交；仓库里
+  // 没有的提交号在 preview 被拦下。
+  gitInProduct(context, "commit", "--quiet", "--allow-empty", "-m", "evidence baseline");
+  const commitOid = gitInProduct(context, "rev-parse", "HEAD").trim();
+  const unknownCommit = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "preview",
+    demandId: context.demandId,
+    selection: {
+      kind: "commit",
+      source: { kind: "commit", repositoryId: context.repositoryId, commitOid: "c".repeat(40) },
+      contentReview: "reject",
+    },
+  });
+  deepEqual(
+    (unknownCommit.structuredContent as { readonly blockers: readonly string[] }).blockers,
+    [`commit-unknown:${"c".repeat(40)}`],
+  );
   const commit = await recordEvidenceSelection(context, {
     kind: "commit",
-    source: { kind: "commit", repositoryId: context.repositoryId, commitOid: "c".repeat(40) },
+    source: { kind: "commit", repositoryId: context.repositoryId, commitOid },
     contentReview: "reject",
   });
   const recovered = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {

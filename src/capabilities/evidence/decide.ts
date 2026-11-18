@@ -2,11 +2,11 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { ManagedEvidenceCapturePlan } from "../../governance/evidence/managed-evidence-capture-plan.js";
+import { deriveManagedEvidenceEventIdentity } from "../../governance/evidence/managed-evidence-event-identity.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   type ManagedEvidenceManifest,
 } from "../../governance/evidence/managed-evidence-manifest.js";
-import { deriveDurableId } from "../../kernel/ids.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import { WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME } from "./contract.js";
@@ -42,20 +42,8 @@ export function deriveEvidencePlanDigest(plan: Readonly<ManagedEvidenceCapturePl
   return computeCanonicalJsonSha256Digest(basis, "$plan");
 }
 
-export interface EvidenceEventIdentity {
-  readonly eventId: WakeflowDurableId<"demand-event">;
-  readonly commitId: WakeflowDurableId<"demand-event-commit">;
-}
-
 /** 同一 Evidence 永远得到同一 Event 与 Commit 身份：重复 apply 在事件流上自然幂等。 */
-export function deriveEvidenceEventIdentity(
-  evidenceId: WakeflowDurableId<"evidence">,
-): EvidenceEventIdentity {
-  return Object.freeze({
-    eventId: deriveDurableId("demand-event", "managed-evidence-recorded", evidenceId),
-    commitId: deriveDurableId("demand-event-commit", "managed-evidence-recorded", evidenceId),
-  });
-}
+export const deriveEvidenceEventIdentity = deriveManagedEvidenceEventIdentity;
 
 /** preview 结果里的计划投影：身份、来源投影、负载摘要与计数，不回显整棵 tree manifest。 */
 export function evidencePlanSummary(

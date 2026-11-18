@@ -23,7 +23,9 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { GitCommitObservationError } from "../../foundation/git/git-commit-observation.js";
 import { deriveUuidV4, type UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -67,6 +69,9 @@ import {
   type DemandTargetTaskState,
   decideTargetResultReviewInDemandAggregateState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
+import { observeConfiguredRepositoryCommitKind } from "../../governance/evidence/managed-evidence-commit-observation.js";
+import { recordManagedCommitEvidence } from "../../governance/evidence/managed-evidence-commit-recording.js";
+import { ManagedEvidenceConfiguredSourceRootError } from "../../governance/evidence/managed-evidence-configured-source-root.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
@@ -77,6 +82,7 @@ import {
   readManagedEvidencePayloadMember,
 } from "../../governance/evidence/managed-evidence-record-reader.js";
 import { managedEvidenceRecordAddress } from "../../governance/evidence/managed-evidence-resource-paths.js";
+import type { ManagedEvidenceCommitObservation } from "../../governance/evidence/managed-evidence-source-selection.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import {
   createImplementationTargetResult,
@@ -153,6 +159,10 @@ import {
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { DEFAULT_ALLOWED_ID_PREFIXES, type PrivacyScanPolicy } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
+import {
+  selectWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostTransportTable,
+} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -160,10 +170,6 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import {
-  selectWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostTransportTable,
-} from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
@@ -221,7 +227,6 @@ import {
   testPhaseForDecision,
 } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Result Review：四个执行器（能力卡 7 修订，ADR-0012 D1 D4 D5，§13.87）。
@@ -282,6 +287,11 @@ interface CommandOutcome {
   readonly commandResult: Readonly<
     Pick<DemandEventSourcingCommandResult, "disposition" | "commit" | "aggregate">
   >;
+  /**
+   * 命令落账之后同一次调用又追加了事件（导入自动登记的提交证据）时的当前聚合：`next` 按它算，
+   * 回执仍是命令自己那次提交的。
+   */
+  readonly currentAggregate?: DemandEventSourcingCommandResult["aggregate"];
 }
 
 const REPORT_PRIVACY_POLICY = Object.freeze({
@@ -650,7 +660,10 @@ async function next(context: SliceContext, outcome: CommandOutcome): Promise<Nex
     signalOptions(context.options.signal),
   );
   const route = buildDemandControllerRoute(
-    { ...context.authority.loaded, aggregate: outcome.commandResult.aggregate },
+    {
+      ...context.authority.loaded,
+      aggregate: outcome.currentAggregate ?? outcome.commandResult.aggregate,
+    },
     snapshot,
   );
   return deriveNextProjection(route);
@@ -1066,6 +1079,117 @@ type ReplayableCommandResult = Readonly<
   Pick<DemandEventSourcingCommandResult, "commit" | "aggregate">
 >;
 
+/**
+ * 每次导入自动记成证据的提交条数上限（ADR-0028 决定 4）。一条提交证据只给 Demand 根增加固定的几个
+ * 成员，这里不做累计容量的预检，用条数封顶；超出的提交在评审单元里显示为未核实。
+ */
+const AUTO_COMMIT_EVIDENCE_MAXIMUM = 8;
+
+interface ReportedCommits {
+  readonly repositoryId: WakeflowDurableId<"repository">;
+  readonly commitOids: readonly string[];
+}
+
+/** 实现结果上报的提交；测试结果没有。 */
+function reportedCommitsOf(result: Readonly<TargetResult>): Readonly<ReportedCommits> | null {
+  if (result.workType !== "implementation") return null;
+  const change = result.report.repositoryChange;
+  return Object.freeze({
+    repositoryId: change.repositoryId,
+    commitOids: change.commits.map((commit) => commit.value),
+  });
+}
+
+/** 一个对象号在仓库里是不是提交；拿不到结论（Git 不可用、仓库的根不在配置记录的位置）返回 null。 */
+async function reportedCommitKind(
+  context: SliceContext,
+  repositoryId: WakeflowDurableId<"repository">,
+  commitOid: string,
+) {
+  try {
+    return await observeConfiguredRepositoryCommitKind(
+      context.authority.config,
+      { repositoryId, commitOid },
+      context.options.signal,
+    );
+  } catch (error: unknown) {
+    if (error instanceof GitCommitObservationError) {
+      fail("io-failure", "aborted", "$signal", { cause: error });
+    }
+    if (error instanceof ManagedEvidenceConfiguredSourceRootError) return null;
+    throw error;
+  }
+}
+
+/**
+ * 上报的提交必须是仓库里的提交（ADR-0028 决定 6）：仓库里没有它、或它不是提交对象，导入被拒并点名，
+ * 目标改正报告后重交。拿不到结论不拦——那一个提交之后在评审单元里显示为未核实。
+ */
+async function assertReportedCommitsKnown(
+  context: SliceContext,
+  result: Readonly<TargetResult>,
+): Promise<void> {
+  const reported = reportedCommitsOf(result);
+  if (reported === null) return;
+  const unknown: string[] = [];
+  for (const commitOid of reported.commitOids) {
+    const kind = await reportedCommitKind(context, reported.repositoryId, commitOid);
+    if (kind === "missing" || kind === "not-a-commit") unknown.push(`commit-unknown:${commitOid}`);
+  }
+  if (unknown.length > 0) {
+    rejectWith(unknown, "$request.report.content.repositoryChange.commits");
+  }
+}
+
+/**
+ * 结果落账之后，把上报的提交各记成一条受管证据（ADR-0028 决定 4）：Controller 被回调唤醒时证据已经在，
+ * 不必再导出 diff、预览、应用。记不下来不影响已经落账的结果——那个提交在评审单元里显示为未核实，
+ * Controller 照旧可以自己登记；只有取消原样抛出。同一个提交重放时是 already-recorded。返回这一次有没有
+ * 新登记：有的话事件流比导入那次提交多走了几格。
+ */
+async function recordReportedCommitEvidence(
+  context: SliceContext,
+  result: Readonly<TargetResult>,
+): Promise<boolean> {
+  const reported = reportedCommitsOf(result);
+  if (reported === null) return false;
+  const { clock, signal, writer } = context.options;
+  let appended = false;
+  for (const commitOid of reported.commitOids.slice(0, AUTO_COMMIT_EVIDENCE_MAXIMUM)) {
+    try {
+      const recording = await recordManagedCommitEvidence(
+        context.workspaceRoot,
+        result.demandId,
+        { repositoryId: reported.repositoryId, commitOid },
+        {
+          ...(clock === undefined ? {} : { clock }),
+          ...(signal === undefined ? {} : { signal }),
+          writer: writer ?? null,
+        },
+      );
+      appended ||= recording.status === "recorded";
+    } catch (error: unknown) {
+      if (signal?.aborted === true) throw error;
+      return appended;
+    }
+  }
+  return appended;
+}
+
+/** 导入之后又登记了证据：重读当前聚合，让 `next` 与磁盘上的评审快照对得上。 */
+async function withCurrentAggregate(
+  context: SliceContext,
+  outcome: ImportOutcome,
+): Promise<ImportOutcome> {
+  const repository = new DemandEventSourcingRepository(context.authority.demandRoot);
+  try {
+    const loaded = await repository.load(signalOptions(context.options.signal));
+    return loaded === null ? outcome : { ...outcome, currentAggregate: loaded.aggregate };
+  } catch (error: unknown) {
+    mapRepositoryError(error);
+  }
+}
+
 async function replayImport(
   context: SliceContext,
   commandResult: ReplayableCommandResult,
@@ -1149,6 +1273,7 @@ async function executeImport(
   const evidenceResolution = await resolveEvidence(context, input.report.content);
   const result = buildResult(input, target, envelope, taskPackage, options);
   assertWorktreeBranch(context, result);
+  await assertReportedCommitsKnown(context, result);
   const now = nowFrom(options);
   const issued = await issueCallback(
     context,
@@ -1245,9 +1370,14 @@ export async function executeTargetResultImportRequest(
       close: closeContext,
       privateValues: (context) => [context.authority.ledgerRoot.absolutePath],
       execute: (context, input, binding) =>
-        afterMutationRefresh(context.workspaceRoot, context.options.signal, async () =>
-          materializedCallbackPermit(context, await executeImport(context, input, binding)),
-        ),
+        afterMutationRefresh(context.workspaceRoot, context.options.signal, async () => {
+          const outcome = await executeImport(context, input, binding);
+          const appended = await recordReportedCommitEvidence(context, outcome.result);
+          return materializedCallbackPermit(
+            context,
+            appended ? await withCurrentAggregate(context, outcome) : outcome,
+          );
+        }),
       next,
       result: importResult,
     },
@@ -1549,6 +1679,71 @@ function managedEvidenceIdsOf(context: SliceContext): readonly string[] {
   );
 }
 
+/** 评审单元里每个提交列出的改动路径条数上限；全量在那条证据的清单里。 */
+const REPORTED_COMMIT_VIEW_PATHS_MAXIMUM = 50;
+
+interface RecordedCommitSource {
+  readonly evidenceId: WakeflowDurableId<"evidence">;
+  readonly observation: Readonly<ManagedEvidenceCommitObservation> | null;
+}
+
+/** 一条提交类证据登记的提交与观察；清单读不出来（非取消）当作没有这条。 */
+async function recordedCommitSource(
+  context: SliceContext,
+  evidenceId: WakeflowDurableId<"evidence">,
+  repositoryId: WakeflowDurableId<"repository">,
+): Promise<readonly [string, Readonly<RecordedCommitSource>] | null> {
+  try {
+    const { manifest } = await loadManagedEvidenceRecord(
+      context.authority.demandRoot,
+      evidenceId,
+      signalOptions(context.options.signal),
+    );
+    const { source } = manifest;
+    if (source.kind !== "commit" || source.repositoryId !== repositoryId) return null;
+    return [source.commitOid, { evidenceId, observation: source.observation ?? null }];
+  } catch (error: unknown) {
+    if (!(error instanceof ManagedEvidenceRecordReaderError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    return null;
+  }
+}
+
+/**
+ * 上报提交的核实情况（ADR-0028 决定 5）：逐个对上本 Demand 已登记的提交类证据。带着 Wakeflow 自己
+ * 观察结果的那条算已核实，评审时可以直接引用它的证据 id；没有对上的提交照旧由 Controller 自己核对。
+ * 同一个提交有两条证据时取带观察的那条。结果没有上报提交时返回 null，单元里不出现这一项。
+ */
+async function reportedCommitViews(context: SliceContext, result: Readonly<TargetResult>) {
+  const reported = reportedCommitsOf(result);
+  if (reported === null || reported.commitOids.length === 0) return null;
+  const recorded = new Map<string, Readonly<RecordedCommitSource>>();
+  for (const entry of context.authority.loaded.aggregate.state.managedEvidence ?? []) {
+    if (entry.kind !== "commit") continue;
+    const found = await recordedCommitSource(context, entry.evidenceId, reported.repositoryId);
+    if (found === null) continue;
+    const [commitOid, source] = found;
+    if (recorded.get(commitOid)?.observation == null) recorded.set(commitOid, source);
+  }
+  return Object.freeze(
+    reported.commitOids.map((commitOid) => {
+      const source = recorded.get(commitOid);
+      const observation = source?.observation ?? null;
+      return Object.freeze({
+        commitOid,
+        verified: observation !== null,
+        evidenceId: source?.evidenceId ?? null,
+        changedPathCount: observation?.changedPathCount ?? null,
+        changedPaths: (observation?.changedPaths ?? []).slice(
+          0,
+          REPORTED_COMMIT_VIEW_PATHS_MAXIMUM,
+        ),
+        patchBytes: observation?.patch.bytes ?? null,
+      });
+    }),
+  );
+}
+
 function implementationAdmissionView(
   unit: ReviewUnit,
   targetCompletion: ReviewEvidence["targetCompletion"],
@@ -1619,6 +1814,7 @@ async function inspectReview(
   });
   const testView = testUnitView(history, unit, evidence.targetCompletion);
   const resumptionBasis = resumptionBasisView(unit);
+  const reportedCommits = await reportedCommitViews(context, unit.target.targetResult);
   // K5：Controller 规划时自己写过任务包，复审时常常只需要锚点；summary 把整个包换成身份、目标与锚点。
   const detail = request.detail ?? "full";
   return admitTargetResultReviewInspectionResult({
@@ -1657,6 +1853,7 @@ async function inspectReview(
       ...(unit.target.supersededResults === undefined
         ? {}
         : { supersededResults: unit.target.supersededResults }),
+      ...(reportedCommits === null ? {} : { reportedCommits }),
       reviewUnitDigest: unit.reviewUnitDigest,
       currentDecision:
         unit.currentDecision === null || unit.currentDecisionSourceEvent === null

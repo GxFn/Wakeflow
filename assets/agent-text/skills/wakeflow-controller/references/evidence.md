@@ -36,13 +36,35 @@ that record carries a transcript; a link is `link`; a commit is `commit`. Any
 other pairing is refused as `kind-source-mismatch` - change the kind, not the
 source.
 
+## Commits are observed, and reported ones are recorded for you
+
+A commit record is not a pointer you vouch for. Wakeflow reads the commit in
+the configured repository, read-only, and stores what it saw: tree, parents,
+changed paths, and the digest and size of the patch. A commit the repository
+does not hold blocks the preview as `commit-unknown`; an object that is not a
+commit, as `commit-not-a-commit`.
+
+When an implementation result reports commits, the import records each one
+this way, so the evidence exists before the callback wakes you. The review
+unit lists them under `reportedCommits`: `verified: true` with an `evidenceId`
+means Wakeflow observed that commit - cite that id in `anchorEvidence`, and do
+not export the diff to a file to record it. `verified: false` means Wakeflow
+could not observe or record it (the checkout is not where the config says,
+git is unavailable, the privacy scan blocked the record, or the report named
+more than eight commits): check that commit yourself and record it with
+`wakeflow_record_evidence`.
+
+The record holds the paths and the patch digest, not the patch text. Reading
+the change is still yours to do, in the repository, at that commit.
+
 ## The procedure
 
-Before the preview, put the file where it stays: your own check outputs,
-diffs and probes go under the Test surface at `controller-checks/<demandId>/`,
-one file per check, with absolute paths replaced by `<workspace root>` before
-you record them. A record cites that path, so a file moved later is a file
-Wakeflow can no longer re-read.
+Before the preview, put the file where it stays: your own check outputs and
+probes go under the Test surface at `controller-checks/<demandId>/`, one file
+per check, with absolute paths replaced by `<workspace root>` before you
+record them (a `diff` record is for material git does not hold; a committed
+change is its commit record). A record cites that path, so a file moved later
+is a file Wakeflow can no longer re-read.
 
 1. Preview. It derives the plan and writes nothing, and it tells you whether
    this exact content is already recorded.
@@ -90,7 +112,8 @@ independently:
 - The command output that shows the run, not a summary of it.
 - The file whose content is in question, at the revision in question.
 - The hook observation that proves a window did what it was said to have done.
-- The commit that carries the change.
+- The commit that carries the change - already recorded when the result
+  reported it.
 
 Do not record an entire repository tree because it is easier than choosing.
 Large opaque trees push the confirmation decision onto you for members you
@@ -109,8 +132,9 @@ At import, Wakeflow resolves each locator inside this Demand's records and
 checks the digest; an unresolved locator or a mismatched digest refuses the
 import. A test
 step's observation is bound to its evidence the same way. Who records differs:
-an implementation target never records evidence - it imports `needs-review`
-and you record what you verified - while a test window records its own step
+an implementation target never records evidence - it imports `needs-review`,
+Wakeflow records the commits it reported and you record what else you
+verified - while a test window records its own step
 outputs as `test-output` before it imports, because nobody else observed its
 run. Your independent checks on a test result are still yours to run.
 

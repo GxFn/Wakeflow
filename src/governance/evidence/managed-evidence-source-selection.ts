@@ -86,17 +86,49 @@ export interface ManagedEvidenceLinkSource {
   readonly digest: Sha256Digest | null;
 }
 
-export interface ManagedEvidenceCommitSource {
+/** 调用方选择里的提交来源：只有仓库与完整的提交号。 */
+export interface ManagedEvidenceCommitSelection {
   readonly kind: "commit";
   readonly repositoryId: WakeflowDurableId<"repository">;
   readonly commitOid: string;
 }
 
+export type ManagedEvidenceChangedPathStatus =
+  | "added"
+  | "modified"
+  | "deleted"
+  | "type-changed"
+  | "other";
+
+/**
+ * Wakeflow 只读地从仓库里观察到的提交事实（ADR-0028）：树、父提交、相对第一父提交改动的路径、补丁的
+ * 摘要与字节数。清单里保留的路径有条数上限，`changedPathCount` 始终是总数。
+ */
+export interface ManagedEvidenceCommitObservation {
+  readonly treeOid: string;
+  readonly parents: readonly string[];
+  readonly changedPathCount: number;
+  readonly changedPathsTruncated: boolean;
+  readonly changedPaths: readonly Readonly<{
+    readonly status: ManagedEvidenceChangedPathStatus;
+    readonly path: string;
+  }>[];
+  readonly patch: Readonly<{ readonly digest: Sha256Digest; readonly bytes: number }>;
+}
+
+/** 清单里的提交来源：登记时观察到了就带 `observation`，拿不到结论时与调用方的选择同形。 */
+export interface ManagedEvidenceCommitSource extends ManagedEvidenceCommitSelection {
+  readonly observation?: Readonly<ManagedEvidenceCommitObservation>;
+}
+
+/** 清单里保留的改动路径条数上限。 */
+export const MANAGED_EVIDENCE_COMMIT_CHANGED_PATHS_MAXIMUM = 500;
+
 export type ManagedEvidenceSelectionSource =
   | Readonly<ManagedEvidenceManagedPathSource>
   | Readonly<ManagedEvidenceObservationSelection>
   | Readonly<ManagedEvidenceLinkSource>
-  | Readonly<ManagedEvidenceCommitSource>;
+  | Readonly<ManagedEvidenceCommitSelection>;
 
 export type ManagedEvidenceSource =
   | Readonly<ManagedEvidenceManagedPathSource>
@@ -172,6 +204,31 @@ const OBSERVATION_SOURCE_FIELDS = Object.freeze([
 const LINK_SELECTION_FIELDS = Object.freeze(["kind", "url"] as const);
 const LINK_SOURCE_FIELDS = Object.freeze(["digest", "kind", "url"] as const);
 const COMMIT_FIELDS = Object.freeze(["commitOid", "kind", "repositoryId"] as const);
+const COMMIT_OBSERVED_FIELDS = Object.freeze([
+  "commitOid",
+  "kind",
+  "observation",
+  "repositoryId",
+] as const);
+const COMMIT_OBSERVATION_FIELDS = Object.freeze([
+  "changedPathCount",
+  "changedPaths",
+  "changedPathsTruncated",
+  "parents",
+  "patch",
+  "treeOid",
+] as const);
+const CHANGED_PATH_FIELDS = Object.freeze(["path", "status"] as const);
+const PATCH_FIELDS = Object.freeze(["bytes", "digest"] as const);
+const CHANGED_PATH_STATUSES: readonly string[] = Object.freeze([
+  "added",
+  "modified",
+  "deleted",
+  "type-changed",
+  "other",
+]);
+const COMMIT_PARENTS_MAXIMUM = 64;
+const CHANGED_PATH_MAXIMUM_LENGTH = 4096;
 const REPOSITORY_ROOT_FIELDS = Object.freeze(["kind", "repositoryId"] as const);
 const SUPPORT_ROOT_FIELDS = Object.freeze(["kind", "surfaceId"] as const);
 const POD_WORKTREE_ROOT_FIELDS = Object.freeze(["kind", "podId", "repositoryId"] as const);
@@ -421,15 +478,96 @@ function parseLink(
   });
 }
 
-function parseCommit(value: unknown, path: string): Readonly<ManagedEvidenceCommitSource> {
-  const record = exactRecord(value, COMMIT_FIELDS, path, "source");
-  if (typeof record.commitOid !== "string" || !COMMIT_OID_PATTERN.test(record.commitOid)) {
-    fail("commit", `${path}/commitOid`);
+function parseObjectId(value: unknown, path: string): string {
+  if (typeof value !== "string" || !COMMIT_OID_PATTERN.test(value)) fail("commit", path);
+  return value;
+}
+
+function parseCount(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    fail("commit", path);
   }
+  return value;
+}
+
+function parseList(value: unknown, maximum: number, path: string): readonly unknown[] {
+  if (!Array.isArray(value) || value.length > maximum) fail("commit", path);
+  return value as readonly unknown[];
+}
+
+function parseChangedPath(
+  value: unknown,
+  path: string,
+): ManagedEvidenceCommitObservation["changedPaths"][number] {
+  const record = exactRecord(value, CHANGED_PATH_FIELDS, path, "source");
+  if (
+    typeof record.status !== "string" ||
+    !CHANGED_PATH_STATUSES.includes(record.status) ||
+    typeof record.path !== "string" ||
+    record.path.length === 0 ||
+    record.path.length > CHANGED_PATH_MAXIMUM_LENGTH
+  ) {
+    fail("commit", path);
+  }
+  return Object.freeze({
+    status: record.status as ManagedEvidenceChangedPathStatus,
+    path: record.path,
+  });
+}
+
+function parseCommitObservation(
+  value: unknown,
+  path: string,
+): Readonly<ManagedEvidenceCommitObservation> {
+  const record = exactRecord(value, COMMIT_OBSERVATION_FIELDS, path, "source");
+  const patch = exactRecord(record.patch, PATCH_FIELDS, `${path}/patch`, "source");
+  const changedPaths = parseList(
+    record.changedPaths,
+    MANAGED_EVIDENCE_COMMIT_CHANGED_PATHS_MAXIMUM,
+    `${path}/changedPaths`,
+  ).map((entry, index) => parseChangedPath(entry, `${path}/changedPaths/${index}`));
+  const changedPathCount = parseCount(record.changedPathCount, `${path}/changedPathCount`);
+  if (
+    typeof record.changedPathsTruncated !== "boolean" ||
+    record.changedPathsTruncated !== changedPathCount > changedPaths.length
+  ) {
+    fail("commit", `${path}/changedPathsTruncated`);
+  }
+  return Object.freeze({
+    treeOid: parseObjectId(record.treeOid, `${path}/treeOid`),
+    parents: Object.freeze(
+      parseList(record.parents, COMMIT_PARENTS_MAXIMUM, `${path}/parents`).map((parent, index) =>
+        parseObjectId(parent, `${path}/parents/${index}`),
+      ),
+    ),
+    changedPathCount,
+    changedPathsTruncated: record.changedPathsTruncated,
+    changedPaths: Object.freeze(changedPaths),
+    patch: Object.freeze({
+      digest: parseDigest(patch.digest, `${path}/patch/digest`),
+      bytes: parseCount(patch.bytes, `${path}/patch/bytes`),
+    }),
+  });
+}
+
+function parseCommit(value: unknown, path: string): Readonly<ManagedEvidenceCommitSelection> {
+  const record = exactRecord(value, COMMIT_FIELDS, path, "source");
   return Object.freeze({
     kind: "commit" as const,
     repositoryId: parseId(record.repositoryId, "repository", `${path}/repositoryId`),
-    commitOid: record.commitOid,
+    commitOid: parseObjectId(record.commitOid, `${path}/commitOid`),
+  });
+}
+
+/** 清单里的提交来源：`observation` 可以没有（拿不到结论时登记的记录，以及 1.4 之前的记录）。 */
+function parseCommitSource(value: unknown, path: string): Readonly<ManagedEvidenceCommitSource> {
+  if (!Object.hasOwn(value as object, "observation")) return parseCommit(value, path);
+  const record = exactRecord(value, COMMIT_OBSERVED_FIELDS, path, "source");
+  return Object.freeze({
+    kind: "commit" as const,
+    repositoryId: parseId(record.repositoryId, "repository", `${path}/repositoryId`),
+    commitOid: parseObjectId(record.commitOid, `${path}/commitOid`),
+    observation: parseCommitObservation(record.observation, `${path}/observation`),
   });
 }
 
@@ -481,7 +619,7 @@ export function parseManagedEvidenceSourceDescriptor(
     case "link":
       return parseLink(value, path, LINK_SOURCE_FIELDS);
     case "commit":
-      return parseCommit(value, path);
+      return parseCommitSource(value, path);
     default:
       fail("source", `${path}/kind`);
   }

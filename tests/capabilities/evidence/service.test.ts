@@ -1,4 +1,5 @@
-import { deepEqual, equal, rejects } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -618,6 +619,77 @@ test("累计容量的计数基础（open-items W10）：一条单文件记录给
     equal(eventFiles.length, event.files);
     await apply(fixture, selection, previewed.planDigest as string);
     equal((await readDemandTree(fixture)).entries.length, after.entries.length);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("提交证据由 Wakeflow 核实（ADR-0028）：真实仓库里的提交记下树、改动路径与补丁摘要，payload 由清单重建；仓库里没有的提交在 preview 被拦下", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const git = (...args: readonly string[]): string => {
+      const result = spawnSync(
+        "git",
+        ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", ...args],
+        {
+          cwd: fixture.repositoryRoot,
+          encoding: "utf8",
+          shell: false,
+          env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+        },
+      );
+      if (result.status !== 0) throw new Error(`fixture git ${args[0]} failed`);
+      return result.stdout.trim();
+    };
+    git("init", "--quiet", "--initial-branch=main");
+    writeFileSync(path.join(fixture.repositoryRoot, "feature.txt"), "feature\n", { mode: 0o644 });
+    git("add", "feature.txt");
+    git("commit", "--quiet", "--message", "feature");
+    const commitOid = git("rev-parse", "HEAD");
+    const selection = {
+      kind: "commit",
+      source: { kind: "commit", repositoryId: EVIDENCE_REPOSITORY_ID, commitOid },
+      contentReview: "reject",
+    };
+
+    const previewed = await preview(fixture, selection);
+    equal(previewed.status, "ready", previewed.blockers.join(","));
+    const recorded = await apply(fixture, selection, previewed.planDigest as string);
+    equal(recorded.disposition, "recorded");
+    const evidenceId = recorded.publication?.evidenceId as string;
+    const manifest = JSON.parse(readFileSync(evidenceManifestPath(fixture, evidenceId), "utf8"));
+    equal(manifest.source.commitOid, commitOid);
+    deepEqual(manifest.source.observation.changedPaths, [{ status: "added", path: "feature.txt" }]);
+    equal(manifest.source.observation.treeOid, git("rev-parse", "HEAD^{tree}"));
+    ok(/^sha256:[0-9a-f]{64}$/u.test(manifest.source.observation.patch.digest));
+    // payload 是来源投影，带着同一份观察到的事实；由清单的来源字段重建，不再读仓库。
+    const content = JSON.parse(
+      readFileSync(
+        path.join(
+          demandRootPath(fixture),
+          "artifacts",
+          "managed-evidence",
+          evidenceId,
+          "payload",
+          "content",
+        ),
+        "utf8",
+      ),
+    );
+    deepEqual(content.source, manifest.source);
+    // 同一个提交再记一次是 already-recorded：观察是确定的。
+    const again = await preview(fixture, selection);
+    equal(
+      (await apply(fixture, selection, again.planDigest as string)).disposition,
+      "already-recorded",
+    );
+
+    const missing = await preview(fixture, {
+      ...selection,
+      source: { ...selection.source, commitOid: "d".repeat(40) },
+    });
+    equal(missing.status, "blocked");
+    deepEqual(missing.blockers, [`commit-unknown:${"d".repeat(40)}`]);
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }

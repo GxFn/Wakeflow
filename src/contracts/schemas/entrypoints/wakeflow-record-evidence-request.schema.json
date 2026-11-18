@@ -148,7 +148,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "repositoryId", "commitOid"],
-      "description": "Reference one commit of a configured repository by object id; Wakeflow never reads git objects.",
+      "description": "Reference one commit of a configured repository by object id. Wakeflow reads it read-only and records tree, parents, changed paths and the patch digest; a commit the repository does not hold is blocked as commit-unknown.",
       "properties": {
         "kind": {
           "const": "commit"

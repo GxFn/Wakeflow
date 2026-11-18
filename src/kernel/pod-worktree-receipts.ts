@@ -76,7 +76,7 @@ import {
  * 并交回原文；这里解析 porcelain，取 path 等于宿主合同提供的执行根的那一条，然后用
  * 文件系统事实核对：common dir 是配置仓库根下的 `.git`，检出不是主检出，`<path>/.git` 是
  * 指向 `<common>/worktrees/<name>` 的指针文件，admin 目录的 `gitdir` 指回检出，`HEAD` 与
- * 回执的分支或提交一致。Wakeflow 不 spawn git。回执是私有权威：目录 0700、文件 0600，
+ * 回执的分支或提交一致。这里不 spawn git（读仓库对象只经 `foundation/git` 的封闭只读能力，ADR-0028）。回执是私有权威：目录 0700、文件 0600，
  * 绝对路径只在回执文件里出现，公共结果只回 head、branch 与 detached。
  */
 

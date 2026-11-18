@@ -153,7 +153,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "repositoryId", "commitOid"],
-      "description": "Reference one commit of a configured repository by object id; Wakeflow never reads git objects.",
+      "description": "One commit of a configured repository by object id; observation carries what Wakeflow read from the repository when it could observe the commit.",
       "properties": {
         "kind": {
           "const": "commit"
@@ -163,6 +163,74 @@
         },
         "commitOid": {
           "$ref": "#/$defs/commitOid"
+        },
+        "observation": {
+          "$ref": "#/$defs/commitObservation"
+        }
+      }
+    },
+    "commitObservation": {
+      "description": "Wakeflow 只读地从仓库里观察到的提交事实（ADR-0028）：树、父提交、相对第一父提交改动的路径与补丁的摘要；由登记时的观察得出，调用方不能提供。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "treeOid",
+        "parents",
+        "changedPathCount",
+        "changedPathsTruncated",
+        "changedPaths",
+        "patch"
+      ],
+      "properties": {
+        "treeOid": {
+          "$ref": "#/$defs/commitOid"
+        },
+        "parents": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/commitOid"
+          }
+        },
+        "changedPathCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changedPathsTruncated": {
+          "type": "boolean"
+        },
+        "changedPaths": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "path"],
+            "properties": {
+              "status": {
+                "enum": ["added", "modified", "deleted", "type-changed", "other"]
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
+          }
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["digest", "bytes"],
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/sha256Digest"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },

@@ -44,6 +44,10 @@ type ConfiguredRoot = Exclude<
   ManagedEvidenceManagedPathSource["root"],
   { readonly kind: "pod-worktree" }
 >;
+type ConfiguredRepositoryId = Extract<
+  ConfiguredRoot,
+  { readonly kind: "repository" }
+>["repositoryId"];
 
 function selectedRootKey(root: ConfiguredRoot): string {
   return root.kind === "repository"
@@ -115,6 +119,31 @@ async function openPodWorktreeRoot(
         await opened.close();
       } catch {
         // 首个根关系错误优先。
+      }
+    }
+    if (error instanceof ManagedEvidenceConfiguredSourceRootError) throw error;
+    if (error instanceof RootedDirectoryError) fail("root-scope");
+    throw error;
+  }
+}
+
+/** 打开并持有一个已配置仓库的主检出根（提交观察用；同一仓库的 worktree 检出共用它的对象库）。 */
+export async function openConfiguredRepositoryRoot(
+  config: Readonly<WakeflowConfigAuthoritySnapshot>,
+  repositoryId: ConfiguredRepositoryId,
+): Promise<RootedDirectory> {
+  const placement = sourcePlacement(config, { kind: "repository", repositoryId });
+  let root: RootedDirectory | undefined;
+  try {
+    root = await RootedDirectory.open(placement.absolutePath, "$sourceRoot");
+    if (root.absolutePath !== placement.realPath) fail("root-scope");
+    return root;
+  } catch (error: unknown) {
+    if (root !== undefined) {
+      try {
+        await root.close();
+      } catch {
+        // 首个placement或根关系错误优先。
       }
     }
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) throw error;

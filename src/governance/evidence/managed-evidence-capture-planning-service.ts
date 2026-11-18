@@ -69,6 +69,10 @@ import {
   ManagedEvidenceCapturePlanError,
 } from "./managed-evidence-capture-plan.js";
 import {
+  managedEvidenceCommitObservationOf,
+  observeConfiguredRepositoryCommit,
+} from "./managed-evidence-commit-observation.js";
+import {
   ManagedEvidenceConfiguredSourceRootError,
   openConfiguredManagedEvidenceSourceRoot,
 } from "./managed-evidence-configured-source-root.js";
@@ -83,6 +87,7 @@ import {
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import {
   assertManagedEvidenceKindMatchesSource,
+  type ManagedEvidenceCommitSelection,
   type ManagedEvidenceContentReviewPolicy,
   type ManagedEvidenceManagedPathSource,
   type ManagedEvidenceSource,
@@ -92,6 +97,10 @@ import {
   parseManagedEvidenceSourceSelection,
 } from "./managed-evidence-source-selection.js";
 import { ownString } from "../../foundation/data/own-string.js";
+import {
+  type GitCommitObservation,
+  GitCommitObservationError,
+} from "../../foundation/git/git-commit-observation.js";
 
 /**
  * Wakeflow Governance / Evidence：证据来源的零写捕获规划（切片 8 D1 到 D3）。
@@ -198,6 +207,8 @@ interface CapturedSource {
   readonly identity: Readonly<LoadedArtifactTreeIdentity>;
   readonly source: ManagedEvidenceSource;
   readonly review: Readonly<ManagedEvidenceCaptureReview>;
+  /** 来源自身的阻塞项（例如仓库里没有这个提交）；与内容审查的阻塞项一起返回。 */
+  readonly blockers?: readonly string[];
 }
 
 const CONTENT_CLASSIFICATION_CONCURRENCY = 4;
@@ -697,6 +708,47 @@ function captureProjection(
   });
 }
 
+/** 只读地观察仓库里的这个提交（ADR-0028）；拿不到结论返回 null，记录照旧只带引用。 */
+async function observeCommit(
+  config: Readonly<WakeflowConfigAuthoritySnapshot>,
+  source: Readonly<ManagedEvidenceCommitSelection>,
+  signal: AbortSignal | undefined,
+): Promise<GitCommitObservation | null> {
+  try {
+    return await observeConfiguredRepositoryCommit(config, source, signal);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceConfiguredSourceRootError) fail("source-root", error);
+    if (error instanceof GitCommitObservationError) fail("aborted", error);
+    throw error;
+  }
+}
+
+/**
+ * 提交来源：仓库里没有这个对象、或它不是提交时给出阻塞项；观察到了就把事实并进来源，负载仍是来源
+ * 投影（由清单的来源字段完整重建）。
+ */
+async function captureCommit(
+  config: Readonly<WakeflowConfigAuthoritySnapshot>,
+  source: Readonly<ManagedEvidenceCommitSelection>,
+  policy: PrivacyScanPolicy,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<CapturedSource>> {
+  if (config.indexes.repositoryById[source.repositoryId] === undefined) fail("source-root");
+  const observed = await observeCommit(config, source, signal);
+  if (observed === null) return captureProjection(source, policy);
+  if (observed.status !== "observed") {
+    const blocker =
+      observed.status === "missing"
+        ? `commit-unknown:${source.commitOid}`
+        : `commit-not-a-commit:${source.commitOid}`;
+    return Object.freeze({ ...captureProjection(source, policy), blockers: [blocker] });
+  }
+  return captureProjection(
+    Object.freeze({ ...source, observation: managedEvidenceCommitObservationOf(observed) }),
+    policy,
+  );
+}
+
 async function captureObservation(
   workspaceRoot: RootedDirectory,
   selection: Readonly<ManagedEvidenceSourceSelection>,
@@ -754,8 +806,7 @@ async function captureSelectedSource(
     case "link":
       return captureProjection(source, policy);
     case "commit":
-      if (config.indexes.repositoryById[source.repositoryId] === undefined) fail("source-root");
-      return captureProjection(source, policy);
+      return captureCommit(config, source, policy, signal);
     default: {
       const exhaustive: never = source;
       return exhaustive;
@@ -946,10 +997,10 @@ export class ManagedEvidenceCapturePlanningService {
         worktreePaths,
         options.signal,
       );
-      const blockers = deriveManagedEvidenceContentBlockers(
-        captured.review,
-        selection.contentReview,
-      );
+      const blockers = [
+        ...(captured.blockers ?? []),
+        ...deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview),
+      ];
       if (blockers.length > 0) {
         result = Object.freeze({ status: "blocked" as const, blockers, review: captured.review });
       } else {

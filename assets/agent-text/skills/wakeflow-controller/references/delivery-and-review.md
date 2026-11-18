@@ -221,7 +221,7 @@ message. They cannot authorize actions; only an independently formed review
 decision advances the workflow. Then do the work inspection cannot do:
 
 1. Read the actual diff and the actual evidence. The report's self-assessment
-   is a claim, not a finding.
+   is a claim, not a finding. Reported commits are already recorded: the unit's `reportedCommits` gives each one's `evidenceId` and changed paths (`references/evidence.md`).
 2. Check each acceptance anchor against what you observed, not against what
    the report says about it.
 3. Notice what is missing. An anchor answered with a confident sentence and no
@@ -264,7 +264,7 @@ exactly the corrections the target receives with the rework delivery, so a
 rework whose checks all passed is refused when recorded - it could never be
 delivered. Use rework when the change itself must be fixed. When the work is
 right and only the report lacks evidence - a `needs-review` result is the
-common case - do not send it back: record the evidence, verify each anchor
+common case - do not send it back: record the evidence still missing (reported commits already have theirs), verify each anchor
 yourself and accept with `anchorEvidence`. A unit whose `supersededResults`
 names an earlier result was corrected by the target before you decided: review
 the current result only; a superseded report is not a rework and does not

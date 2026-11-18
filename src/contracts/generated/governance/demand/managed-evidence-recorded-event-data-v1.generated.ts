@@ -110,6 +110,30 @@ export interface CommitSource {
 kind: "commit"
 repositoryId: string
 commitOid: string
+observation?: CommitObservation
+}
+/**
+ * Wakeflow 只读地从仓库里观察到的提交事实（ADR-0028）：树、父提交、相对第一父提交改动的路径与补丁的摘要；由登记时的观察得出，调用方不能提供。
+ */
+export interface CommitObservation {
+treeOid: string
+/**
+ * @maxItems 64
+ */
+parents: string[]
+changedPathCount: number
+changedPathsTruncated: boolean
+/**
+ * @maxItems 500
+ */
+changedPaths: {
+status: ("added" | "modified" | "deleted" | "type-changed" | "other")
+path: string
+}[]
+patch: {
+digest: WakeflowSha256DigestText
+bytes: number
+}
 }
 export interface Payload {
 artifactDigest: WakeflowSha256DigestText

@@ -1420,6 +1420,80 @@
         }
       }
     },
+    "reportedCommit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commitOid",
+        "verified",
+        "evidenceId",
+        "changedPathCount",
+        "changedPaths",
+        "patchBytes"
+      ],
+      "description": "One commit the target reported. verified is true when a managed commit evidence for it carries Wakeflow's own read-only observation of the commit; evidenceId is that evidence (or a commit evidence recorded without observation), null when none is recorded. changedPaths lists at most 50 of changedPathCount paths.",
+      "properties": {
+        "commitOid": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "evidenceId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ]
+        },
+        "changedPathCount": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        },
+        "changedPaths": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "path"],
+            "properties": {
+              "status": {
+                "enum": ["added", "modified", "deleted", "type-changed", "other"]
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
+          }
+        },
+        "patchBytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      }
+    },
     "reviewUnit": {
       "type": "object",
       "additionalProperties": false,
@@ -1568,6 +1642,14 @@
             "$ref": "#/$defs/targetResultId"
           },
           "description": "Results of this target replaced by a supersedes import before any decision; absent when none."
+        },
+        "reportedCommits": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/reportedCommit"
+          },
+          "description": "Present when an implementation result reports commits: one entry per reported commit, in report order, with the managed commit evidence Wakeflow recorded for it (ADR-0028)."
         }
       },
       "allOf": [

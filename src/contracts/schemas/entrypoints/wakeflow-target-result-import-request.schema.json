@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-result-import-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_IMPORT_REQUEST_SCHEMA",
   "title": "WakeflowTargetResultImportRequestV1",
-  "description": "Import one target-authored implementation or test Report as a TargetResult: evidence locators must resolve to this Demand's managed evidence, text passes the privacy scan, steps carry observed/evidence/verdict; the same key and body replays.",
+  "description": "Import one target-authored implementation or test Report as a TargetResult: evidence locators must resolve to this Demand's managed evidence, reported commits must exist in the repository (each is recorded as commit evidence), text passes the privacy scan, steps carry observed/evidence/verdict; the same key and body replays.",
   "$comment": "The stored Claim and Observation derive work type, Task, Delivery, Host, repository/window, Test lineage, Result identity, and Event identity. report.workType only discriminates the external Agent Report grammar and is rechecked against stored authority.",
   "type": "object",
   "additionalProperties": false,

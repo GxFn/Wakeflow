@@ -1,4 +1,5 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -519,6 +520,102 @@ test("目录树来源深 25 层超出能归档的深度：preview 以 capacity �
         }),
       "capacity",
     );
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+/** 把夹具里的产品仓库目录变成真实的 git 仓库并提交当前内容；返回提交号与它的树号。 */
+function initializeProductRepository(repositoryRoot: string): { commit: string; tree: string } {
+  const git = (...args: readonly string[]): string => {
+    const result = spawnSync(
+      "git",
+      ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", ...args],
+      {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+        shell: false,
+        env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+      },
+    );
+    if (result.status !== 0) throw new Error(`fixture git ${args[0]} failed`);
+    return result.stdout.trim();
+  };
+  git("init", "--quiet", "--initial-branch=main");
+  writeFileSync(path.join(repositoryRoot, "feature.txt"), "feature\n", { mode: 0o644 });
+  git("add", "feature.txt");
+  git("commit", "--quiet", "--message", "feature");
+  return { commit: git("rev-parse", "HEAD"), tree: git("rev-parse", "HEAD^{tree}") };
+}
+
+test("commit 来源由 Wakeflow 只读地观察（ADR-0028）：仓库里有这个提交时清单带上观察到的事实，没有或不是提交时给出阻塞项", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const { commit, tree } = initializeProductRepository(fixture.repositoryRoot);
+    const selectionFor = (commitOid: string) => ({
+      kind: "commit" as const,
+      source: { kind: "commit" as const, repositoryId: EVIDENCE_REPOSITORY_ID, commitOid },
+      contentReview: "reject" as const,
+    });
+    const options = { clock: () => EVIDENCE_CAPTURED_AT };
+
+    const plan = readyCapturePlan(
+      await service(fixture).preview(fixture.demandId, selectionFor(commit), options),
+    );
+    const source = plan.manifest.source;
+    ok(source.kind === "commit" && source.observation !== undefined);
+    equal(source.observation.treeOid, tree);
+    deepEqual(source.observation.parents, []);
+    deepEqual(source.observation.changedPaths, [{ status: "added", path: "feature.txt" }]);
+    equal(source.observation.changedPathCount, 1);
+    equal(source.observation.changedPathsTruncated, false);
+    ok(/^sha256:[0-9a-f]{64}$/u.test(source.observation.patch.digest));
+    ok(source.observation.patch.bytes > 0);
+    // 同一个提交再规划一次：观察是确定的，身份与清单摘要都不变。
+    const again = readyCapturePlan(
+      await service(fixture).preview(fixture.demandId, selectionFor(commit), options),
+    );
+    equal(again.manifest.evidenceId, plan.manifest.evidenceId);
+    equal(again.manifest.manifestDigest, plan.manifest.manifestDigest);
+
+    const missingOid = "b".repeat(40);
+    const missing = await service(fixture).preview(fixture.demandId, selectionFor(missingOid));
+    equal(missing.status, "blocked");
+    deepEqual(missing.status === "blocked" ? missing.blockers : [], [
+      `commit-unknown:${missingOid}`,
+    ]);
+    const notCommit = await service(fixture).preview(fixture.demandId, selectionFor(tree));
+    deepEqual(notCommit.status === "blocked" ? notCommit.blockers : [], [
+      `commit-not-a-commit:${tree}`,
+    ]);
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("commit 来源拿不到结论时照旧只记引用：产品仓库目录不是 git 仓库，清单里没有 observation", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const plan = readyCapturePlan(
+      await service(fixture).preview(
+        fixture.demandId,
+        {
+          kind: "commit",
+          source: {
+            kind: "commit",
+            repositoryId: EVIDENCE_REPOSITORY_ID,
+            commitOid: "c".repeat(40),
+          },
+          contentReview: "reject",
+        },
+        { clock: () => EVIDENCE_CAPTURED_AT },
+      ),
+    );
+    deepEqual(plan.manifest.source, {
+      kind: "commit",
+      repositoryId: EVIDENCE_REPOSITORY_ID,
+      commitOid: "c".repeat(40),
+    });
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }

@@ -506,6 +506,7 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       "currentDecision",
       "outcome",
       "priorReviewHistory",
+      "reportedCommits",
       "resumptionBasis",
       "reviewUnitDigest",
       "status",

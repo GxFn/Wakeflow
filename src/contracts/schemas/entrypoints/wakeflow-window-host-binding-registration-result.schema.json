@@ -53,6 +53,27 @@
       "additionalProperties": false,
       "required": ["frontier", "owner", "suggestedTool", "blockers"],
       "properties": {
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["demandId", "streamRevision"],
+          "description": "Identifiers the suggested call needs, so the next step does not begin with another status read. Absent when no Demand route applies.",
+          "properties": {
+            "demandId": {
+              "type": "string",
+              "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "streamRevision": { "type": "integer", "minimum": 1 },
+            "targetTaskId": {
+              "type": "string",
+              "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "deliveryId": {
+              "type": "string",
+              "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          }
+        },
         "frontier": {
           "oneOf": [
             {

@@ -19,17 +19,19 @@ lists only the windows that need handling and counts the others in
 
 Before each step, say in one sentence which safe operation you are about to
 perform; the urge to act is a hard stop until that sentence exists. Then do the
-step, and read `wakeflow_status` again before the next one: each step produces
-state that the next one has to read.
+step and continue from the `next` its result returned: it names the following
+tool and `next.subject` carries the identifiers that call needs. Read
+`wakeflow_status` again only when you were woken, hold no identifier for what
+comes next, or a call was refused.
 
 Keep going while the owner of `next` is the Controller. Stop and report at the
 first of these: the owner changes and nothing you own is ready (after the last
 pending delivery lands it is the target windows; before a claim it is Design or
 the user); the skill asks for the user's confirmation or decision; a preview
 reports a blocker you cannot resolve. A recorded decision or a recorded
-delivery outcome is a step boundary, not a stop: read `wakeflow_status` again
-and go on while it names you - the next target to plan or deliver, a review
-unit that landed meanwhile, the completion preview. A fresh Controller session
+delivery outcome is a step boundary, not a stop: go on from its `next`
+while it names you - the next target to plan or deliver, a review unit that
+landed meanwhile, the completion (apply when nothing blocks). A fresh Controller session
 may take over at any step boundary: the state is in Wakeflow, not in this chat;
 the user can queue a message at any time and you read it at the next boundary.
 

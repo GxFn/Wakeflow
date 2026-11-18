@@ -12,6 +12,8 @@ import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
   PLANNING_RECORDED_AT,
+  PLANNING_REPOSITORY_ID,
+  PLANNING_WINDOW_ID,
   planFixtureTargetTask,
   type TargetTaskPlanningWorkspaceFixture,
 } from "../../governance/tasking/target-task-planning-service.fixture.js";
@@ -186,11 +188,43 @@ test("发明的锚点、错误的记录摘要、未知章节锚点、错误拓�
       }),
       rejectedWith("window-unknown"),
     );
+    // 不点名窗口时由仓库推出（ADR-0029 决定 5）；配置里没有的仓库推不出窗口。
+    await rejects(
+      planFixtureTargetTask(fixture, {
+        taskPackage: {
+          ...draft,
+          assignment: { repositoryId: "repository_00000000-0000-4000-8000-000000000000" },
+        },
+      }),
+      rejectedWith("repository-unknown"),
+    );
     await rejects(
       planFixtureTargetTask(fixture, { planReview: { confirmedAt: "2026-09-09T10:00:00.000Z" } }),
       rejectedWith("task-plan-review-not-requested"),
     );
     equal(await commitCount(fixture), before);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("实现任务的窗口由仓库推出（ADR-0029 决定 5）：请求只给仓库，任务包的指派是本 pod 里根为该仓库的 product 窗口；next 带上新目标的标识", async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const draft = fixture.request.taskPackage;
+    if (draft.workType !== "implementation") throw new Error("Expected an implementation draft.");
+    const planned = await planFixtureTargetTask(fixture, {
+      taskPackage: { ...draft, assignment: { repositoryId: draft.assignment.repositoryId } },
+    });
+    equal(planned.status, "committed");
+    if (planned.targetTask.workType !== "implementation")
+      throw new Error("Expected implementation.");
+    equal(planned.targetTask.repositoryId, PLANNING_REPOSITORY_ID);
+    equal(planned.targetTask.windowId, PLANNING_WINDOW_ID);
+    // 规划的结果直接给出下一步要用的标识：准备投递不必先读一遍 status。
+    equal(planned.next.suggestedTool, "wakeflow_prepare_delivery");
+    equal(planned.next.subject?.targetTaskId, planned.targetTask.targetTaskId);
+    equal(planned.next.subject?.streamRevision, planned.event.streamRevision);
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

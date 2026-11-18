@@ -2047,7 +2047,6 @@ function implementationDecisionRequest(
     idempotencyKey,
     expectedStreamRevision,
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
     ...implementationReviewJudgmentWire(decision),
   };
@@ -2162,11 +2161,24 @@ async function scenarioRecordEvidence(context: ScenarioContext): Promise<string>
     (unknownCommit.structuredContent as { readonly blockers: readonly string[] }).blockers,
     [`commit-unknown:${"c".repeat(40)}`],
   );
-  const commit = await recordEvidenceSelection(context, {
-    kind: "commit",
-    source: { kind: "commit", repositoryId: context.repositoryId, commitOid },
-    contentReview: "reject",
+  // 一次调用即记下（ADR-0029 决定 2）：真实的提交经公共工具不带 planDigest 直接 apply。
+  const commitApplied = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
+    root,
+    mode: "apply",
+    demandId: context.demandId,
+    selection: {
+      kind: "commit",
+      source: { kind: "commit", repositoryId: context.repositoryId, commitOid },
+      contentReview: "reject",
+    },
   });
+  assertNoPrivatePath(context, commitApplied);
+  const commit = commitApplied.structuredContent as {
+    readonly kind: string;
+    readonly disposition: string;
+  };
+  equal(commit.kind, "WakeflowRecordEvidenceMutation");
+  equal(commit.disposition, "recorded");
   const recovered = await call(context, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, {
     root,
     mode: "recover",
@@ -2696,7 +2708,6 @@ async function importAndAcceptTest(
     idempotencyKey: `scenario-test-decision-${keySuffix}`,
     expectedStreamRevision: await currentStreamRevision(context),
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
     decision: "accept",
     assessment: { conclusion: "satisfied", evidenceSufficiency: "sufficient" },
@@ -5828,7 +5839,6 @@ function testDecisionRequest(
     idempotencyKey,
     expectedStreamRevision,
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
     decision: judgment.decision,
     assessment: judgment.assessment,

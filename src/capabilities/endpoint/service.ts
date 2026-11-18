@@ -37,28 +37,25 @@ import type {
   RootedDirectory,
   RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  readStableFile,
-  StableFileReadError,
-} from "../../foundation/filesystem/stable-file-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import {
+  isHelperObservationFileReference,
+  readHelperObservationFile,
+} from "../../kernel/helper-observation-file.js";
+import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
-import {
-  hostHelperObservationsRootRef,
-  hostRuntimeRootRef,
-  parseWakeflowHostId,
-} from "../../kernel/layout.js";
+import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   type AdmittedPodWorktree,
@@ -1544,16 +1541,8 @@ function mutationResult(
   });
 }
 
-/** 助手一次观察的上限：16 个 pane 的两份清单加 git worktree 原文远小于它。 */
-const OBSERVATION_FILE_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$observationFile.maximumBytes");
-
 function isObservationFileReference(value: unknown): value is ObservationFileReference {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { file?: unknown }).file === "string" &&
-    typeof (value as { digest?: unknown }).digest === "string"
-  );
+  return isHelperObservationFileReference(value);
 }
 
 /** 请求里按引用给出的那一项观察在哪里：字段路径、引用本身，以及换成内联值之后的请求。 */
@@ -1599,35 +1588,13 @@ async function resolveObservationFiles(
 ): Promise<ResolvedWindowBindingRequest> {
   const slot = observationFileSlot(request);
   if (slot === null) return request as ResolvedWindowBindingRequest;
-  const directory = `${hostHelperObservationsRootRef(context.facade.hostId)}/`;
-  if (!slot.reference.file.startsWith(directory)) {
-    fail("invalid-request", "observation-file-host", `${slot.path}.file`);
-  }
-  let read: Awaited<ReturnType<typeof readStableFile>>;
-  try {
-    read = await readStableFile(
-      context.root,
-      parsePortableResourcePath(slot.reference.file, `${slot.path}.file`),
-      { maximumBytes: OBSERVATION_FILE_MAXIMUM_BYTES, ...signalOptions(context.signal) },
-    );
-  } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      fail("precondition-failed", `observation-file-${error.reason}`, `${slot.path}.file`, {
-        cause: error,
-      });
-    }
-    throw error;
-  }
-  if (read.digest !== slot.reference.digest) {
-    fail("precondition-failed", "observation-file-digest", `${slot.path}.digest`);
-  }
-  let content: JsonValue;
-  try {
-    content = parseJsonValue(JSON.parse(decodeUtf8(read.bytes, slot.path)), slot.path);
-  } catch {
-    fail("precondition-failed", "observation-file-content", `${slot.path}.file`);
-  }
+  const content = await readHelperObservationFile(
+    context.root,
+    context.facade.hostId,
+    slot.reference,
+    slot.path,
+    context.signal,
+  );
   // 文件里不许再是一个引用：内联之后重新准入的请求必须已经没有引用。
   const resolved = parseWindowBindingRequest(slot.inline(content));
   if (observationFileSlot(resolved) !== null) {

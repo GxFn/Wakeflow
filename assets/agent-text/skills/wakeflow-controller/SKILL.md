@@ -52,8 +52,8 @@ command syntax: the references and the tool descriptions hold it.
   `ENOSPC` is the operating-system error they must fix). Edit nothing.
 - Never invent an identifier, a digest, a revision or an acceptance anchor.
   Carry back exactly what the previous call returned.
-- A preview writes nothing. Apply only with what that same preview returned; if
-  anything changed in between, preview again.
+- A preview writes nothing; apply only with what it returned. Claiming and
+  recording evidence are one `apply` call, no `planDigest`.
 - Product repository and workspace `{{instructionFile}}` files bind you.
 
 ## Main flow
@@ -122,7 +122,7 @@ for an implementation result or `wakeflow_record_test_review_decision` for a
 test result. On escalate, hand the user the issue, options and recommendation,
 then bring their answer back through `wakeflow_continue_demand`; a
 product-defect escalation instead returns to implementation delivery planning.
-A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you. Depth: `references/review-and-completion.md`.
+A recorded decision is a step boundary, not a stop: go on from its `next` while it names you. Depth: `references/review-and-completion.md`.
 
 ### Step 12 - Complete and archive
 

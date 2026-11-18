@@ -290,7 +290,6 @@ export function fixtureImplementationDecisionRequest(
     idempotencyKey,
     expectedStreamRevision,
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
     ...implementationReviewJudgmentWire(decision),
   });

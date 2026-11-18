@@ -67,10 +67,8 @@ const REASON_NOTES: Readonly<Record<string, string>> = Object.freeze({
     'the key was used with a different request body. Replay the original unchanged, or read the stored outcome; never "fix" it with a fresh key.',
   "stream-advanced":
     "the Demand's event stream moved while you worked. Read status with the Demand id and continue from what it names.",
-  "snapshot-stale":
-    "the review snapshot you inspected is no longer current. Inspect the review again and decide on that result.",
   "review-unit-stale":
-    "the review unit changed after your inspection (a newer result landed). Inspect again; the decision must cite the current digests.",
+    "the review unit changed after your inspection (a newer or superseding result landed, or it was already decided). Inspect again; the decision must cite the current `reviewUnitDigest`. Recording evidence or another target moving does not cause this.",
   "fence-mismatch":
     "the report carries a claim digest that no recorded outcome of this delivery has: it was written for another delivery. The target imports with the digest from its own delivery prompt - never edit the digest to make it pass.",
   "window-claimed":

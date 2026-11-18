@@ -7,17 +7,36 @@
 
 type NextOwner = "controller" | "target" | "test" | "user" | "none";
 
+/**
+ * 建议的那一次调用要用的标识（ADR-0029 决定 6）：Demand、当前流修订，以及前沿指向的目标与投递。有了它，
+ * Controller 做完一步可以直接做下一步，不必为了拿标识再读一遍 status。
+ */
+export interface NextProjectionSubject {
+  readonly demandId: string;
+  readonly streamRevision: number;
+  readonly targetTaskId?: string;
+  readonly deliveryId?: string;
+}
+
 export interface NextProjection {
   readonly frontier: string | null;
   readonly owner: NextOwner;
   readonly suggestedTool: string | null;
   readonly blockers: readonly string[];
+  /** 路由来自一个 Demand 且还有前沿时给出；终态、没有前沿与非 Demand 的路由没有。 */
+  readonly subject?: Readonly<NextProjectionSubject>;
 }
 
 export interface NextProjectionRouteShape {
   readonly disposition: string;
-  readonly frontiers: readonly Readonly<{ readonly kind: string }>[];
+  readonly frontiers: readonly Readonly<{
+    readonly kind: string;
+    readonly target?: Readonly<{ readonly targetTaskId: string }>;
+    readonly deliveryId?: string;
+  }>[];
   readonly blockers: readonly Readonly<{ readonly kind: string }>[];
+  readonly demandId?: string;
+  readonly observedEventStream?: Readonly<{ readonly streamRevision: number }>;
 }
 
 interface FrontierRoute {
@@ -117,6 +136,21 @@ export const NEXT_FRONTIER_TABLE: Readonly<Record<string, FrontierRoute>> = Obje
   "pod-worktree-disposal": { owner: "controller", tool: null },
 });
 
+function subjectOf(
+  route: Readonly<NextProjectionRouteShape>,
+  first: NextProjectionRouteShape["frontiers"][number],
+): Readonly<{ subject?: Readonly<NextProjectionSubject> }> {
+  if (route.demandId === undefined || route.observedEventStream === undefined) return {};
+  return {
+    subject: Object.freeze({
+      demandId: route.demandId,
+      streamRevision: route.observedEventStream.streamRevision,
+      ...(first.target === undefined ? {} : { targetTaskId: first.target.targetTaskId }),
+      ...(first.deliveryId === undefined ? {} : { deliveryId: first.deliveryId }),
+    }),
+  };
+}
+
 export function deriveNextProjection(
   route: Readonly<NextProjectionRouteShape>,
 ): Readonly<NextProjection> {
@@ -131,12 +165,14 @@ export function deriveNextProjection(
     });
   }
   const mapped = NEXT_FRONTIER_TABLE[first.kind];
+  const subject = subjectOf(route, first);
   if (route.disposition === "awaiting-decision") {
     return Object.freeze({
       frontier: first.kind,
       owner: "user",
       suggestedTool: mapped?.tool ?? null,
       blockers,
+      ...subject,
     });
   }
   if (route.disposition === "blocked") {
@@ -145,6 +181,7 @@ export function deriveNextProjection(
       owner: mapped?.owner ?? "user",
       suggestedTool: null,
       blockers,
+      ...subject,
     });
   }
   return Object.freeze({
@@ -152,5 +189,6 @@ export function deriveNextProjection(
     owner: mapped?.owner ?? "controller",
     suggestedTool: mapped?.tool ?? null,
     blockers,
+    ...subject,
   });
 }

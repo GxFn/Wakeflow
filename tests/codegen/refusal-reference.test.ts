@@ -77,7 +77,6 @@ test("参考按 code 给出处理办法与各切片的 reason；注记点名的 
       text: [
         "request-digest",
         "stream-advanced",
-        "snapshot-stale",
         "review-unit-stale",
         "fence-mismatch",
         "window-claimed",

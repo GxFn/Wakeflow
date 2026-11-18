@@ -545,6 +545,7 @@ export async function executeDemandCreationRequest(
   >(
     {
       mutationScope: "shared",
+      directApply: true,
       tool: WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseDemandCreationRequest(raw);

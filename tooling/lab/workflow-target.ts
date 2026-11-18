@@ -5,9 +5,9 @@ import { sha256 } from "../verification/files.js";
 import { snapshotLabTree, type TreeEntry } from "./inventory.js";
 import { observeSyntheticHook, type SyntheticHost } from "./synthetic-host.js";
 import {
+  applyDirect,
   assertLab,
   type LabWindow,
-  previewApply,
   recordAt,
   revision,
   textAt,
@@ -92,7 +92,7 @@ async function recordProductEvidence(
   const observed = runArithmetic(context, product);
   writeFileSync(path.join(product.cwd, "verification.json"), observed, { flag: "wx", mode: 0o600 });
   const checkoutInventory = product.branch === null ? null : snapshotLabTree(product.cwd);
-  const recorded = await previewApply(context, "wakeflow_record_evidence", {
+  const recorded = await applyDirect(context, "wakeflow_record_evidence", {
     demandId: context.demandId,
     selection: {
       kind: "test-output",
@@ -208,7 +208,6 @@ export async function importLabResult(
   );
   return {
     targetResultId: textAt(unit, "targetResult", "targetResultId"),
-    snapshotDigest: textAt(inspection, "snapshotDigest"),
     reviewUnitDigest: textAt(unit, "reviewUnitDigest"),
   };
 }

@@ -1,12 +1,10 @@
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { test } from "node:test";
-
-import { isWakeflowError } from "../../../src/kernel/error.js";
-
 import type { TargetResultReviewInspectionResult } from "../../../src/capabilities/result-review/contract.js";
 import { executeImplementationReviewDecisionRequest } from "../../../src/capabilities/result-review/service.js";
 import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
   createWorkClaim,
   inspectWorkClaim,
@@ -105,10 +103,6 @@ test("落地后的回调不再重发；过期基线被拒；blocked 之后只有
     equal(landed.reviewUnit.resumptionBasis, null);
     equal(landed.reviewUnit.currentDecision, null);
 
-    await rejects(
-      decideFixtureImplementation(fixture, { snapshotDigest: `sha256:${"0".repeat(64)}` }),
-      rejectedWith("snapshot-stale"),
-    );
     await rejects(
       decideFixtureImplementation(fixture, { reviewUnitDigest: `sha256:${"0".repeat(64)}` }),
       rejectedWith("review-unit-stale"),
@@ -217,7 +211,7 @@ test("落地后的回调不再重发；过期基线被拒；blocked 之后只有
     equal(replay.status, "idempotent");
     equal(replay.decision.targetReviewDecisionId, accepted.decision.targetReviewDecisionId);
     equal(replay.event.eventId, accepted.event.eventId);
-    // 接受后的再决定：修订对得上，但检查投影已经过期。
+    // 接受后的再决定：修订对得上，但目标已经不在待评审的 phase。
     await rejects(
       executeImplementationReviewDecisionRequest(
         CODEX_REVIEW_FACADE,
@@ -229,8 +223,55 @@ test("落地后的回调不再重发；过期基线被拒；blocked 之后只有
         },
         options,
       ),
-      rejectedWith("snapshot-stale"),
+      rejectedWith("target-phase"),
     );
+  } finally {
+    await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
+  }
+});
+
+test("ADR-0029 决定 3：检查之后记下的证据不让决定作废——不带流修订的决定凭评审单元摘要按当前修订落账；给了过期修订仍被拒", async () => {
+  const fixture = await createControllerImplementationReviewDecisionServiceFixture();
+  try {
+    // 检查之后 Controller 又记了一条自己的核对输出：流前进了，整条 Demand 的快照摘要变了，评审单元一个字没变。
+    await recordFixtureEvidence(
+      fixture,
+      "artifacts/review/controller-check.txt",
+      "controller check passed\n",
+    );
+    const after = await inspectFixtureReview(fixture, fixture.targetTaskId);
+    equal(after.reviewUnit.reviewUnitDigest, fixture.inspection.reviewUnit.reviewUnitDigest);
+    equal(after.snapshotDigest === fixture.inspection.snapshotDigest, false);
+    ok(after.eventStream.streamRevision > fixture.inspection.eventStream.streamRevision);
+
+    // 夹具里的请求带着记证据之前的流修订：给了修订就照旧核对。
+    await rejects(
+      decideFixtureImplementation(fixture, { idempotencyKey: "fixture-decision-stale-revision" }),
+      rejectedWith("stream-revision", "concurrency-conflict"),
+    );
+    // 不带流修订：凭第一次检查时的评审单元摘要直接落账，不必再检查一遍。
+    const { expectedStreamRevision: _observed, ...request } = fixture.decisionRequest;
+    const accepted = await executeImplementationReviewDecisionRequest(
+      CODEX_REVIEW_FACADE,
+      { ...request, idempotencyKey: "fixture-decision-after-evidence" },
+      decisionOptions(at("12:15:00"), "c4c4c4c4-c4c4-4c4c-8c4c-c4c4c4c4c4c4"),
+    );
+    equal(accepted.status, "committed");
+    equal(accepted.target.phase, "accepted");
+    equal(accepted.event.streamRevision, after.eventStream.streamRevision + 1);
+    // 结果里的 next 带着后续调用要用的标识（ADR-0029 决定 6）：不必为了它们再读一遍 status。
+    deepEqual(plain(accepted.next.subject), {
+      demandId: fixture.demandId,
+      streamRevision: accepted.event.streamRevision,
+    });
+    // 同一个键与同一份请求体重放得到同一条记录。
+    const replay = await executeImplementationReviewDecisionRequest(
+      CODEX_REVIEW_FACADE,
+      { ...request, idempotencyKey: "fixture-decision-after-evidence" },
+      decisionOptions(at("12:15:00"), "c4c4c4c4-c4c4-4c4c-8c4c-c4c4c4c4c4c4"),
+    );
+    equal(replay.status, "idempotent");
+    equal(replay.decision.targetReviewDecisionId, accepted.decision.targetReviewDecisionId);
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
   }

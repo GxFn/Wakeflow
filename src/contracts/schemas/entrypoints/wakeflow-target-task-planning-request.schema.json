@@ -200,7 +200,7 @@
     "implementationAssignment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repositoryId", "windowId"],
+      "required": ["repositoryId"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"

@@ -408,6 +408,10 @@ test("research Demand 路由：无 document 证据为 not-ready/research-evidenc
     owner: "controller",
     suggestedTool: null,
     blockers: ["research-evidence-missing"],
+    subject: {
+      demandId: fixture.demandId,
+      streamRevision: blocked.observedEventStream.streamRevision,
+    },
   });
 
   const recorded = await recordDocumentEvidence(fixture);
@@ -429,7 +433,16 @@ test("research Demand 路由：无 document 证据为 not-ready/research-evidenc
     owner: "controller",
     suggestedTool: "wakeflow_complete_demand",
     blockers: [],
+    subject: {
+      demandId: fixture.demandId,
+      streamRevision: available.observedEventStream.streamRevision,
+    },
   });
+  // 记下证据之后流前进了：标识里的流修订跟着当前路由走。
+  equal(
+    available.observedEventStream.streamRevision > blocked.observedEventStream.streamRevision,
+    true,
+  );
 });
 
 test("research Demand 带未接受的实现目标：证据在场也先 targets-not-accepted，完成预检被路由阻塞", async (t) => {

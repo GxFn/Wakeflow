@@ -371,7 +371,6 @@ test("Codex MCP完成真实投递准备、结局记录、TargetResult、Controll
       idempotencyKey: "mcp-decision-1",
       expectedStreamRevision: imported.event.streamRevision,
       targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-      snapshotDigest: inspection.snapshotDigest,
       reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
       ...implementationReviewJudgmentWire("accept"),
     };

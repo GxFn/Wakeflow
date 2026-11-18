@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { sha256 } from "../verification/files.js";
 import {
+  applyDirect,
   assertLab,
   previewApply,
   readLabConfig,
@@ -65,7 +66,7 @@ export async function publishLabDemand(context: WorkflowContext) {
   context.members = ["requirement.md", "landing.md"].map(
     (name) => `requirements/${context.requirementId}/${name}`,
   );
-  const created = await previewApply(context, "wakeflow_create_demand", {
+  const created = await applyDirect(context, "wakeflow_create_demand", {
     requirementId: context.requirementId,
     podId: context.podId,
     demand: {

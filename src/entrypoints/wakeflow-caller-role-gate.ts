@@ -5,10 +5,12 @@ import type { WakeflowConfigModel } from "../configuration/wakeflow-config.js";
 import { readWakeflowConfigAuthoritySnapshot } from "../configuration/wakeflow-config-authority-snapshot.js";
 import {
   WAKEFLOW_ROLE_TOOL_ACCESS,
+  type WakeflowNarrowedWindowRole,
   type WakeflowWindowRole,
 } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { fail } from "../kernel/error.js";
+import { matchingWorkspaces, resolveSubject } from "./wakeflow-hook-workspaces.js";
 
 /**
  * Wakeflow Entrypoints：按窗口角色的运行时工具校验（ADR-0020 决定 3 与 6，open-items F1）。
@@ -81,6 +83,49 @@ function roleAt(
     if (realpathOrNull(path.resolve(root, entry.placement)) === cwd) roles.add(entry.role);
   }
   return roles.size === 1 ? ([...roles][0] ?? null) : null;
+}
+
+export interface WakeflowListedRoleOptions extends WakeflowCallerRoleGateOptions {
+  /** 进程环境：工作目录已被删除时，定位规则用它里面的项目目录兜底。 */
+  readonly env: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * 服务进程启动时认得出的窗口角色（ADR-0029：按角色的工具子集）。工具目录在连接建立时列一次，那时还没有
+ * 任何请求带来工作区根，所以用 hook 的定位规则从工作目录找它所属的工作区，再问每个工作区的配置："执行根
+ * 恰好是这个目录的窗口是什么角色"。
+ *
+ * 只在毫无歧义时收窄：找到的每个工作区都把这个目录认作同一种非 Controller 角色。找不到工作区、工作目录
+ * 就是某个工作区的根、任何一个工作区认不出、或两个工作区说法不同，都返回 null——目录照旧列全部工具。
+ * 这与 `createWakeflowCallerRoleGate` 是同一条规则的两个时刻：这里隐藏的工具，调用时本来也会被拒绝。
+ */
+export async function resolveWakeflowListedRole(
+  options: Readonly<WakeflowListedRoleOptions>,
+): Promise<WakeflowNarrowedWindowRole | null> {
+  const cwd = realpathOrNull(options.cwd);
+  if (cwd === null) return null;
+  let roots: readonly string[];
+  try {
+    const subject = await resolveSubject(options.cwd, options.env);
+    roots = subject === null ? [] : await matchingWorkspaces(subject);
+  } catch {
+    return null;
+  }
+  const roles = new Set<WakeflowWindowRole | null>();
+  for (const root of roots) {
+    if (root === cwd) return null;
+    const model = await readModel(root, undefined);
+    try {
+      roles.add(model === null ? null : roleAt(cwd, root, options.executionRoots(model)));
+    } catch {
+      roles.add(null);
+    }
+  }
+  const [role, ...others] = [...roles];
+  if (role === undefined || role === null || role === "controller" || others.length > 0) {
+    return null;
+  }
+  return role;
 }
 
 function requestRoot(request: unknown): string | null {

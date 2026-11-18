@@ -97,6 +97,8 @@ settings rules maintenance writes are unchanged, and a product repository's `.cl
    without the permit id: when its `recordedAt` is your send, the text
    arrived cut short or mangled - never send it again, resolve on that
    record. No screen readback here: the outcome carries no `readback`.
+   With `landed: true` the helper also prints `outcomeFile`: pass it as
+   `outcome` when you record, in place of `attempt` and `observedAt`.
 4. A session that shows a permission prompt or a dialog holds the message
    until the user answers there (a mode other than `auto` is the usual
    cause). That is not a failed send: the message lands when they answer.

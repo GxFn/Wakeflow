@@ -3,8 +3,8 @@ import path from "node:path";
 import { sha256 } from "../verification/files.js";
 import type { SyntheticHost } from "./synthetic-host.js";
 import {
+  applyDirect,
   assertLab,
-  previewApply,
   readLabConfig,
   recordAt,
   revision,
@@ -69,7 +69,7 @@ export async function testLabProducts(
     const bytes =
       JSON.stringify({ phase: "independent-test", actual: JSON.parse(product.observed) }) + "\n";
     writeFileSync(path.join(window.cwd, file), bytes, { flag: "wx", mode: 0o600 });
-    const recorded = await previewApply(context, "wakeflow_record_evidence", {
+    const recorded = await applyDirect(context, "wakeflow_record_evidence", {
       demandId: context.demandId,
       selection: {
         kind: "test-output",

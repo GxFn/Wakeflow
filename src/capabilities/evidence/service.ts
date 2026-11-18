@@ -659,6 +659,7 @@ export async function executeRecordEvidenceRequest(
   >(
     {
       mutationScope: "shared",
+      directApply: true,
       tool: WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
         const request = parseRecordEvidenceRequest(raw);

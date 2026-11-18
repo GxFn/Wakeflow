@@ -209,7 +209,8 @@ test("a rejection carries a token-shaped detail: the failing keyword plus the pr
     [{}, "$", "required:storage"],
     [{ storage: "x", extra: 1 }, "$", "additional:extra"],
     [{ storage: 1 }, "$/storage", "type:string"],
-    [{ storage: "x", mode: "c" }, "$/mode", "enum"],
+    // 枚举带上允许的取值（ADR-0029：拒绝要可操作）。
+    [{ storage: "x", mode: "c" }, "$/mode", "enum:a.b"],
   ];
   for (const [value, expectedPath, expectedDetail] of cases) {
     const rejected = validate(parseJsonValue(value));
@@ -220,4 +221,79 @@ test("a rejection carries a token-shaped detail: the failing keyword plus the pr
       equal(/^[A-Za-z0-9_.:-]{1,128}$/u.test(rejected.detail), true);
     }
   }
+});
+
+test("判别联合的拒绝说的是实例选中的那一支（ADR-0029）：按取值固定的成员认出那一支，报它的规则；哪一支都不认时说出区分成员该取什么", () => {
+  const validate = createRuntimeJsonSchemaValidator<unknown>({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:union:v1",
+    oneOf: [{ $ref: "#/$defs/effect" }, { $ref: "#/$defs/recover" }],
+    $defs: {
+      effect: {
+        type: "object",
+        additionalProperties: false,
+        required: ["mode", "source"],
+        properties: {
+          mode: { enum: ["preview", "apply"] },
+          source: { oneOf: [{ $ref: "#/$defs/path" }, { $ref: "#/$defs/commit" }] },
+          items: { type: "array", items: { $ref: "#/$defs/commit" } },
+        },
+      },
+      recover: {
+        type: "object",
+        additionalProperties: false,
+        required: ["mode", "operationId"],
+        properties: { mode: { const: "recover" }, operationId: { type: "string" } },
+      },
+      path: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "root", "path"],
+        properties: { kind: { const: "path" }, root: { type: "string" }, path: { type: "string" } },
+      },
+      commit: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "commitOid"],
+        properties: { kind: { const: "commit" }, commitOid: { type: "string" } },
+      },
+    },
+  });
+  const cases: ReadonlyArray<readonly [unknown, string, string]> = [
+    // 第一支（path）排在前面，Ajv 的第一条错误是它的"缺 root"；实例选的是 commit 那一支。
+    [{ mode: "apply", source: { kind: "commit" } }, "$/source", "required:commitOid"],
+    [
+      { mode: "apply", source: { kind: "commit", commitOid: 1 } },
+      "$/source/commitOid",
+      "type:string",
+    ],
+    // 外层联合：实例是 recover 那一支，多带了一个成员。
+    [{ mode: "recover", operationId: "x", source: {} }, "$", "additional:source"],
+    [{ mode: "recover" }, "$", "required:operationId"],
+    // 哪一支都不认：说出区分成员该取什么。
+    [{ mode: "apply", source: { kind: "git" } }, "$/source/kind", "enum:path.commit"],
+    [{ mode: "apply", source: {} }, "$/source/kind", "required:kind"],
+    [{ mode: "delete" }, "$/mode", "enum:preview.apply.recover"],
+    // 联合之外的规则照旧。
+    [
+      { mode: "apply", source: { kind: "commit", commitOid: "a" }, items: [{ kind: "commit" }] },
+      "$/items/0",
+      "required:commitOid",
+    ],
+    // 实例根本不是对象：没有可认的那一支，照旧报 Ajv 的第一条。
+    [[], "$", "type:object"],
+  ];
+  for (const [value, expectedPath, expectedDetail] of cases) {
+    const rejected = validate(parseJsonValue(value));
+    equal(rejected.ok, false, JSON.stringify(value));
+    if (!rejected.ok) {
+      equal(rejected.path, expectedPath, JSON.stringify(value));
+      equal(rejected.detail, expectedDetail, JSON.stringify(value));
+      equal(/^[A-Za-z0-9_.:-]{1,128}$/u.test(rejected.detail), true);
+    }
+  }
+  equal(
+    validate(parseJsonValue({ mode: "apply", source: { kind: "commit", commitOid: "a" } })).ok,
+    true,
+  );
 });

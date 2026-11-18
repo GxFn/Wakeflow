@@ -393,6 +393,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       "expectedStreamRevision",
       "idempotencyKey",
       "observedAt",
+      // outcome：助手落盘的结局文件的引用，代替 attempt、readback 与 observedAt（ADR-0029 决定 4）。
+      "outcome",
       "readback",
       "resolution",
       "root",
@@ -552,9 +554,12 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "idempotencyKey",
     "expectedStreamRevision",
     "targetResultId",
-    "snapshotDigest",
     "reviewUnitDigest",
   ];
+  // ADR-0029 决定 3：流修订是可选的，守住决定的是评审单元摘要；整条 Demand 的快照摘要不再由调用方带回。
+  const requiredAppendEnvelopeFields = appendEnvelopeFields.filter(
+    (field) => field !== "expectedStreamRevision",
+  );
   const judgmentFields = [
     "assessment",
     "blockingReasons",
@@ -572,11 +577,17 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "Public Implementation Decision request carries exactly the Controller judgment plus anchor evidence, escalation and resumption",
   );
   equal(
-    appendEnvelopeFields.every((field) =>
+    requiredAppendEnvelopeFields.every((field) =>
       (implementationDecisionRequest.required as readonly string[]).includes(field),
     ),
     true,
-    "Implementation Decision request must require the whole append envelope",
+    "Implementation Decision request must require the append envelope except the optional revision",
+  );
+  equal(
+    (implementationDecisionRequest.required as readonly string[]).includes(
+      "expectedStreamRevision",
+    ),
+    false,
   );
   deepEqual((implementationDecisionRequest.properties as JsonObject).decision, {
     enum: ["accept", "rework", "blocked", "escalate"],
@@ -601,11 +612,15 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
     "Public Test Decision request adds the rerun step scope to the Controller judgment",
   );
   equal(
-    appendEnvelopeFields.every((field) =>
+    requiredAppendEnvelopeFields.every((field) =>
       (testDecisionRequest.required as readonly string[]).includes(field),
     ),
     true,
-    "Test Decision request must require the whole append envelope",
+    "Test Decision request must require the append envelope except the optional revision",
+  );
+  equal(
+    (testDecisionRequest.required as readonly string[]).includes("expectedStreamRevision"),
+    false,
   );
   deepEqual((testDecisionRequest.properties as JsonObject).decision, {
     enum: ["accept", "request-another-attempt", "blocked", "escalate"],

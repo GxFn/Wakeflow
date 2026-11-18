@@ -177,3 +177,42 @@ test("publication transaction 拒绝摘要漂移、阻塞计划与不匹配模�
     );
   }
 });
+
+test("一次调用即应用（ADR-0029 决定 2）：声明了 directApply 的命令不带摘要就地推导并执行；阻塞时不执行、交回 preview；带了摘要仍核对漂移", async (t) => {
+  const root = fixture(t);
+  const trace: string[] = [];
+  const direct = (planStatus: "ready" | "blocked" = "ready") => ({
+    ...spec(trace, planStatus),
+    directApply: true,
+  });
+
+  const applied = await runPublicationTransaction(direct(), { root, mode: "apply" });
+  equal(applied.status, "completed");
+  deepEqual(trace, ["plan", "apply:ab", "close"]);
+
+  // 阻塞的计划：什么都不执行，结果是 preview 的形状（状态与阻塞项来自计划）。
+  const blocked = await runPublicationTransaction(direct("blocked"), { root, mode: "apply" });
+  equal(blocked.status, "blocked");
+  equal(blocked.planDigest, null);
+  deepEqual(trace.slice(3), ["plan", "close"]);
+
+  // 带了摘要的 apply 不变：漂移与阻塞仍是拒绝。
+  await rejects(
+    runPublicationTransaction(direct(), {
+      root,
+      mode: "apply",
+      planDigest: `sha256:${"b".repeat(64)}`,
+    }),
+    (error: unknown) => isWakeflowError(error) && error.reason === "plan-drift",
+  );
+  await rejects(
+    runPublicationTransaction(direct("blocked"), { root, mode: "apply", planDigest: READY_DIGEST }),
+    (error: unknown) => isWakeflowError(error) && error.reason === "plan-blocked",
+  );
+  equal(trace.filter((entry) => entry === "apply:ab").length, 1);
+  // 其余信封规则不变：preview 不带摘要。
+  await rejects(
+    runPublicationTransaction(direct(), { root, mode: "preview", planDigest: READY_DIGEST }),
+    (error: unknown) => isWakeflowError(error) && error.reason === "plan-digest-unexpected",
+  );
+});

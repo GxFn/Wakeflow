@@ -234,6 +234,30 @@ function lookup<Value>(record: Readonly<Record<string, Value>>, key: string): Va
   return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
+/**
+ * 实现任务的窗口由仓库推出（ADR-0029 决定 5）：本 pod 里根是这个仓库的 product 窗口。恰好一个就是它；
+ * 没有时返回 `repository-window-missing`，不止一个时返回 `repository-window-ambiguous`（那时由调用方点名）。
+ * 请求里给了窗口就不走这里，照旧由 `deriveTopologyBlockers` 核对。
+ */
+export function deriveImplementationWindow(
+  input: Readonly<Omit<TopologyInput, "windowId">>,
+): Readonly<{ windowId: string }> | Readonly<{ blocker: string }> {
+  if (lookup(input.config.indexes.repositoryById, input.repositoryId) === undefined) {
+    return Object.freeze({ blocker: "repository-unknown" });
+  }
+  const candidates = Object.values(input.config.indexes.windowById).filter(
+    (window) =>
+      window.role === "product" &&
+      window.podId === input.podId &&
+      window.root.kind === "repository" &&
+      window.root.repositoryId === input.repositoryId,
+  );
+  const [only, ...others] = candidates;
+  if (only === undefined) return Object.freeze({ blocker: "repository-window-missing" });
+  if (others.length > 0) return Object.freeze({ blocker: "repository-window-ambiguous" });
+  return Object.freeze({ windowId: only.windowId });
+}
+
 /** 实现任务只派给本 pod 的 product 窗口，且窗口根仓库必须等于任务仓库（能力卡 5 角色门）。 */
 export function deriveTopologyBlockers(input: Readonly<TopologyInput>): readonly string[] {
   const repository = lookup(input.config.indexes.repositoryById, input.repositoryId);

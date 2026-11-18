@@ -27,22 +27,29 @@ idempotencyKey: string
 expectedStreamRevision: number
 deliveryId: DeliveryId
 claimDigest: Sha256Digest
-attempt: Attempt
+attempt?: Attempt
 readback?: Readback
 resolution?: Resolution
-observedAt: UtcInstant
+observedAt?: UtcInstant
+/**
+ * A helper's outcomeFile, in place of attempt, readback and observedAt.
+ */
+outcome?: {
+file: string
+digest: Sha256Digest
+}
 }
 /**
- * Agent 对发送调用本身的声明：sent 已送出、failed-before-send 调用失败且未触碰目标会话、unknown 结果未知。这是 Agent 自述（ADR-0020 证据分级 agent-reported），不是宿主观察。
+ * The Agent's own statement about the send call (agent-reported, not a host observation): sent, failed-before-send (the call failed without touching the target session) or unknown.
  */
 export interface Attempt {
 status: ("sent" | "failed-before-send" | "unknown")
 /**
- * 发送返回值规范 JSON（键排序、无空白、UTF-8）的 sha256。给了 sendReturn 时由 Wakeflow 计算并核对一致；只给摘要时按原样记录。
+ * sha256 of the send return's canonical JSON. Computed and checked when sendReturn is given; recorded as given otherwise.
  */
 evidenceDigest?: string
 /**
- * 宿主发送调用的原样返回值（Codex 线程工具的返回对象），规范 JSON 至多 16 KiB。Wakeflow 只保存它的 sha256 作为 evidenceDigest，不保存内容；它是 Agent 自述，不是宿主观察。
+ * The host send call's return value as returned (at most 16 KiB of canonical JSON). Only its sha256 is kept, as evidenceDigest.
  */
 sendReturn?: {
 [k: string]: unknown | undefined
@@ -53,14 +60,14 @@ summary: (string | null)
 }
 }
 /**
- * 补充回读观察：缺失或超时不降级。
+ * Supplementary readback; its absence never downgrades.
  */
 export interface Readback {
 status: ("confirmed" | "pending" | "unavailable")
 evidenceDigest?: Sha256Digest
 }
 /**
- * Controller 对 indeterminate 投递的显式解决（能力卡 6 Q3）：accepted 必须引用目标会话 issuedAt 之后的一条 hook 记录。
+ * The Controller's explicit resolution of an indeterminate delivery; accepted must cite a hook record of the target session after issuedAt.
  */
 export interface Resolution {
 disposition: ("accepted" | "rejected-before-send")
@@ -89,4 +96,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:record-delivery-outcome-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA\",\"title\":\"WakeflowRecordDeliveryOutcomeRequestV1\",\"description\":\"Record the outcome of one delivery generation: Wakeflow derives accepted, indeterminate, or rejected-before-send from host hook records and the Agent declaration.\",\"$comment\":\"accepted comes only from the target session user-prompt-submit hook record whose prompt digest matches the envelope, a Codex host send-call success return, or an explicit Controller resolution; rejected-before-send only when the send call failed without touching the session.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\",\"idempotencyKey\",\"expectedStreamRevision\",\"deliveryId\",\"claimDigest\",\"attempt\",\"observedAt\"],\"properties\":{\"root\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"idempotencyKey\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9._:-]+$\",\"description\":\"Client-generated key binding this request to at most one commit.\"},\"expectedStreamRevision\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991,\"description\":\"Demand stream revision the caller observed; a stale value is rejected.\"},\"deliveryId\":{\"$ref\":\"#/$defs/deliveryId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"attempt\":{\"$ref\":\"#/$defs/attempt\"},\"readback\":{\"$ref\":\"#/$defs/readback\"},\"resolution\":{\"$ref\":\"#/$defs/resolution\"},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"}},\"$defs\":{\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"deliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"attempt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\"],\"description\":\"Agent 对发送调用本身的声明：sent 已送出、failed-before-send 调用失败且未触碰目标会话、unknown 结果未知。这是 Agent 自述（ADR-0020 证据分级 agent-reported），不是宿主观察。\",\"properties\":{\"status\":{\"enum\":[\"sent\",\"failed-before-send\",\"unknown\"]},\"evidenceDigest\":{\"$ref\":\"#/$defs/sha256Digest\",\"description\":\"发送返回值规范 JSON（键排序、无空白、UTF-8）的 sha256。给了 sendReturn 时由 Wakeflow 计算并核对一致；只给摘要时按原样记录。\"},\"sendReturn\":{\"type\":\"object\",\"description\":\"宿主发送调用的原样返回值（Codex 线程工具的返回对象），规范 JSON 至多 16 KiB。Wakeflow 只保存它的 sha256 作为 evidenceDigest，不保存内容；它是 Agent 自述，不是宿主观察。\"},\"failure\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"code\",\"summary\"],\"properties\":{\"code\":{\"type\":\"string\",\"pattern\":\"^[a-z][a-z0-9-]{0,63}$\"},\"summary\":{\"oneOf\":[{\"type\":\"string\",\"minLength\":1,\"maxLength\":256},{\"type\":\"null\"}]}}}}},\"readback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\"],\"description\":\"补充回读观察：缺失或超时不降级。\",\"properties\":{\"status\":{\"enum\":[\"confirmed\",\"pending\",\"unavailable\"]},\"evidenceDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"resolution\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"disposition\",\"rationale\"],\"description\":\"Controller 对 indeterminate 投递的显式解决（能力卡 6 Q3）：accepted 必须引用目标会话 issuedAt 之后的一条 hook 记录。\",\"if\":{\"properties\":{\"disposition\":{\"const\":\"accepted\"}},\"required\":[\"disposition\"]},\"then\":{\"required\":[\"hookRecordId\"],\"properties\":{\"hookRecordId\":true}},\"properties\":{\"disposition\":{\"enum\":[\"accepted\",\"rejected-before-send\"]},\"hookRecordId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^[A-Za-z0-9._:-]{1,256}$\"},\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":2048,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"}}}}}");
+export const WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:record-delivery-outcome-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA\",\"title\":\"WakeflowRecordDeliveryOutcomeRequestV1\",\"description\":\"Record the outcome of one delivery generation: Wakeflow derives accepted, indeterminate, or rejected-before-send from host hook records and the Agent declaration.\",\"$comment\":\"accepted needs the target session's user-prompt-submit hook record matching the envelope's prompt digest, a Codex send-call success return, or an explicit resolution; rejected-before-send only when the send failed without touching the session.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\",\"idempotencyKey\",\"expectedStreamRevision\",\"deliveryId\",\"claimDigest\"],\"properties\":{\"root\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"idempotencyKey\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9._:-]+$\",\"description\":\"Client-generated key binding this request to at most one commit.\"},\"expectedStreamRevision\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991,\"description\":\"Demand stream revision the caller observed; a stale value is rejected.\"},\"deliveryId\":{\"$ref\":\"#/$defs/deliveryId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"attempt\":{\"$ref\":\"#/$defs/attempt\"},\"readback\":{\"$ref\":\"#/$defs/readback\"},\"resolution\":{\"$ref\":\"#/$defs/resolution\"},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"outcome\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"file\",\"digest\"],\"description\":\"A helper's outcomeFile, in place of attempt, readback and observedAt.\",\"properties\":{\"file\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":512},\"digest\":{\"$ref\":\"#/$defs/sha256Digest\"}}}},\"$defs\":{\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"deliveryId\":{\"type\":\"string\",\"pattern\":\"^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"attempt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\"],\"description\":\"The Agent's own statement about the send call (agent-reported, not a host observation): sent, failed-before-send (the call failed without touching the target session) or unknown.\",\"properties\":{\"status\":{\"enum\":[\"sent\",\"failed-before-send\",\"unknown\"]},\"evidenceDigest\":{\"$ref\":\"#/$defs/sha256Digest\",\"description\":\"sha256 of the send return's canonical JSON. Computed and checked when sendReturn is given; recorded as given otherwise.\"},\"sendReturn\":{\"type\":\"object\",\"description\":\"The host send call's return value as returned (at most 16 KiB of canonical JSON). Only its sha256 is kept, as evidenceDigest.\"},\"failure\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"code\",\"summary\"],\"properties\":{\"code\":{\"type\":\"string\",\"pattern\":\"^[a-z][a-z0-9-]{0,63}$\"},\"summary\":{\"oneOf\":[{\"type\":\"string\",\"minLength\":1,\"maxLength\":256},{\"type\":\"null\"}]}}}}},\"readback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\"],\"description\":\"Supplementary readback; its absence never downgrades.\",\"properties\":{\"status\":{\"enum\":[\"confirmed\",\"pending\",\"unavailable\"]},\"evidenceDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"resolution\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"disposition\",\"rationale\"],\"description\":\"The Controller's explicit resolution of an indeterminate delivery; accepted must cite a hook record of the target session after issuedAt.\",\"if\":{\"properties\":{\"disposition\":{\"const\":\"accepted\"}},\"required\":[\"disposition\"]},\"then\":{\"required\":[\"hookRecordId\"],\"properties\":{\"hookRecordId\":true}},\"properties\":{\"disposition\":{\"enum\":[\"accepted\",\"rejected-before-send\"]},\"hookRecordId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":256,\"pattern\":\"^[A-Za-z0-9._:-]{1,256}$\"},\"rationale\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":2048,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"}}}}}");

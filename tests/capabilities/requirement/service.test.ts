@@ -547,20 +547,12 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
     goal: "验证认领修订链。",
     completionDefinition: "回执带修订 3。",
   };
-  const demandPreview = await executeDemandCreationRequest({
-    root,
-    mode: "preview",
-    requirementId: parked.package.requirementId,
-    demand,
-  });
-  if (demandPreview.kind !== "WakeflowDemandCreationPreview" || demandPreview.planDigest === null)
-    throw new Error("Expected a ready Demand plan.");
+  // 认领一次调用即应用（ADR-0029 决定 2）：不带 planDigest 的 apply 就地推导计划并认领。
   const applied = await executeDemandCreationRequest({
     root,
     mode: "apply",
     requirementId: parked.package.requirementId,
     demand,
-    planDigest: demandPreview.planDigest,
   });
   if (applied.kind !== "WakeflowDemandCreationMutation") throw new Error("Expected a mutation.");
   equal(applied.publication.claim.requirementId, parked.package.requirementId);
@@ -612,6 +604,23 @@ test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回
     true,
     secondDemandPreview.blockers.join(","),
   );
+  // 被阻塞的一次调用认领什么都不写：结果就是那份 preview，包仍然待领。
+  const blockedClaim = await executeDemandCreationRequest({
+    root,
+    mode: "apply",
+    requirementId: second.package.requirementId,
+    demand,
+  });
+  if (blockedClaim.kind !== "WakeflowDemandCreationPreview")
+    throw new Error("Expected the blocked plan back.");
+  deepEqual(blockedClaim.blockers, secondDemandPreview.blockers);
+  const stillPending = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: second.package.requirementId,
+  });
+  if (stillPending.kind !== "WakeflowBoardPackage") throw new Error("Expected a package view.");
+  equal(stillPending.package.status, "pending");
 });
 
 test("预览边界：日历上不存在的确认时刻是请求错误；头部隐私命中不回显摘要；长附件路径的阻塞项被截断", {

@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 
 import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/contract.js";
+import { wakeflowRoleToolAccess } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
+import { setRootedExclusiveFileLockReleaseFailureReporter } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { createIncidentId, recordIncident } from "../kernel/incident.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
 import {
   type CreateWakeflowPublicMcpServerOptions,
@@ -10,8 +13,6 @@ import {
   registerWakeflowPublicMcpCatalog,
   type WakeflowPublicMcpExecutor,
 } from "./wakeflow-public-mcp-tool.js";
-import { setRootedExclusiveFileLockReleaseFailureReporter } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { createIncidentId, recordIncident } from "../kernel/incident.js";
 
 export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp-server-configuration.js";
 
@@ -64,6 +65,7 @@ export function createWakeflowPublicMcpServer(
     beforeMutation,
     writer,
     authorizeCall,
+    listedRole,
     ...executors
   } = admitted;
   registerWakeflowPublicMcpCatalog(
@@ -73,6 +75,7 @@ export function createWakeflowPublicMcpServer(
     beforeMutation,
     writer ?? null,
     authorizeCall,
+    listedRole === undefined || listedRole === null ? null : wakeflowRoleToolAccess(listedRole),
   );
   return server;
 }

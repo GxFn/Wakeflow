@@ -129,6 +129,10 @@ import {
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import {
+  type HelperObservationFileReference,
+  readHelperObservationFile,
+} from "../../kernel/helper-observation-file.js";
+import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservationRecord,
   readHostHookObservations,
@@ -1735,6 +1739,7 @@ function permitBody(
       owner: nextProjection.owner,
       suggestedTool: nextProjection.suggestedTool,
       blockers: [...nextProjection.blockers],
+      ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
     },
   };
 }
@@ -1803,6 +1808,7 @@ function callbackPermitBody(
       owner: nextProjection.owner,
       suggestedTool: nextProjection.suggestedTool,
       blockers: [...nextProjection.blockers],
+      ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
     },
   };
 }
@@ -1894,8 +1900,11 @@ const ATTEMPT_FAILURE_PRIVACY_POLICY = Object.freeze({
 });
 
 /** 复审 D6：failure 只随没送出去的尝试记录，summary 走凭证扫描（与归档、终态文本同一策略）。 */
-function normalizeAttemptFailure(attempt: RecordDeliveryOutcomeRequest["attempt"]): {
-  readonly failure?: NonNullable<RecordDeliveryOutcomeRequest["attempt"]["failure"]>;
+/** 请求里的 attempt：给了 `outcome` 引用时请求里没有它，所以成员是可选的；这里是给出时的形状。 */
+type OutcomeAttempt = NonNullable<RecordDeliveryOutcomeRequest["attempt"]>;
+
+function normalizeAttemptFailure(attempt: OutcomeAttempt): {
+  readonly failure?: NonNullable<OutcomeAttempt["failure"]>;
 } {
   if (attempt.failure === undefined) return {};
   if (attempt.status === "sent") {
@@ -1912,9 +1921,7 @@ function normalizeAttemptFailure(attempt: RecordDeliveryOutcomeRequest["attempt"
   return { failure: { code: attempt.failure.code, summary: attempt.failure.summary } };
 }
 
-function normalizeOutcomeAttempt(
-  attempt: RecordDeliveryOutcomeRequest["attempt"],
-): RecordDeliveryOutcomeRequest["attempt"] {
+function normalizeOutcomeAttempt(attempt: OutcomeAttempt): OutcomeAttempt {
   const failure = normalizeAttemptFailure(attempt);
   if (attempt.sendReturn === undefined) {
     return Object.freeze({
@@ -1945,10 +1952,100 @@ function normalizeOutcomeAttempt(
 interface OutcomeInput {
   readonly deliveryId: string;
   readonly claimDigest: string;
-  readonly attempt: RecordDeliveryOutcomeRequest["attempt"];
+  readonly attempt: OutcomeAttempt;
   readonly readback: RecordDeliveryOutcomeRequest["readback"] | undefined;
   readonly resolution: RecordDeliveryOutcomeRequest["resolution"] | undefined;
   readonly observedAt: UtcInstant;
+}
+
+/** 请求里的结局观察：内联给出的三项，或助手落盘的那份文件的引用（ADR-0029 决定 4）。 */
+type OutcomeObservationInput =
+  | Readonly<Pick<OutcomeInput, "attempt" | "readback" | "observedAt">>
+  | Readonly<{
+      outcomeFile: Readonly<HelperObservationFileReference>;
+      /** 请求里观察之外的成员：读回文件之后与它的内容拼成一份内联请求，用同一份 Schema 重新准入。 */
+      rest: Readonly<Omit<RecordDeliveryOutcomeRequest, "outcome">>;
+    }>;
+
+/** 结局观察文件里允许出现的成员。 */
+const OUTCOME_FILE_MEMBERS: readonly string[] = Object.freeze([
+  "attempt",
+  "readback",
+  "observedAt",
+]);
+
+type OutcomeRequestInput = Readonly<
+  Pick<OutcomeInput, "deliveryId" | "claimDigest" | "resolution">
+> &
+  Readonly<{ observation: OutcomeObservationInput }>;
+
+function inlineOutcomeObservation(
+  request: Readonly<
+    Pick<RecordDeliveryOutcomeRequest, "attempt" | "readback" | "observedAt" | "outcome">
+  >,
+  path: string,
+): Readonly<Pick<OutcomeInput, "attempt" | "readback" | "observedAt">> {
+  if (request.attempt === undefined || request.observedAt === undefined) {
+    fail("invalid-request", "outcome-observation-required", path);
+  }
+  return Object.freeze({
+    attempt: normalizeOutcomeAttempt(request.attempt),
+    readback: request.readback,
+    observedAt: parseInstant(request.observedAt, `${path}.observedAt`),
+  });
+}
+
+/** 结局观察从请求里取：给了 `outcome` 引用就不能再内联任何一项，免得两处说法不一。 */
+function outcomeObservationInput(
+  request: Readonly<RecordDeliveryOutcomeRequest>,
+): OutcomeObservationInput {
+  if (request.outcome === undefined) return inlineOutcomeObservation(request, "$request");
+  if (
+    request.attempt !== undefined ||
+    request.readback !== undefined ||
+    request.observedAt !== undefined
+  ) {
+    fail("invalid-request", "outcome-file-and-inline", "$request.outcome");
+  }
+  const { outcome, ...rest } = request;
+  return Object.freeze({ outcomeFile: outcome, rest });
+}
+
+/**
+ * 按引用读回助手落盘的结局观察，再用同一份请求 Schema 里那三项的规则准入：文件里只能有 `attempt`、
+ * `readback`、`observedAt`。读回来的仍是 Agent 转报的观察（attempt 是自述），处置照旧由 hook 记录定。
+ */
+async function resolveOutcomeObservation(
+  context: SliceContext,
+  observation: OutcomeObservationInput,
+): Promise<Readonly<Pick<OutcomeInput, "attempt" | "readback" | "observedAt">>> {
+  if (!("outcomeFile" in observation)) return observation;
+  const path = "$request.outcome";
+  const content = await readHelperObservationFile(
+    context.workspaceRoot,
+    context.facade.hostId,
+    observation.outcomeFile,
+    path,
+    context.options.signal,
+  );
+  if (
+    content === null ||
+    typeof content !== "object" ||
+    Array.isArray(content) ||
+    Object.keys(content).some((member) => !OUTCOME_FILE_MEMBERS.includes(member))
+  ) {
+    fail("precondition-failed", "observation-file-content", `${path}.file`);
+  }
+  let admitted: RecordDeliveryOutcomeRequest;
+  try {
+    admitted = parseRecordDeliveryOutcomeRequest({ ...observation.rest, ...content });
+  } catch (error: unknown) {
+    if (isWakeflowError(error) && error.code === "invalid-request") {
+      fail("precondition-failed", "observation-file-content", `${path}.file`, { cause: error });
+    }
+    throw error;
+  }
+  return inlineOutcomeObservation(admitted, path);
 }
 
 async function sessionRecords(
@@ -2217,7 +2314,7 @@ async function observedOutcomeDecision(
 
 async function executeOutcome(
   context: SliceContext,
-  input: OutcomeInput,
+  requested: OutcomeRequestInput,
   binding: Readonly<AppendCommandBinding>,
 ): Promise<OutcomeOutcome> {
   const { authority, options } = context;
@@ -2225,7 +2322,7 @@ async function executeOutcome(
   const bound = await boundCommit(repository, binding, options.signal);
   if (bound !== null) {
     // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
-    const replayedEnvelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+    const replayedEnvelope = await loadEnvelope(repository, requested.deliveryId, options.signal);
     const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
     const replayed: OutcomeOutcome = Object.freeze({
       ...recorded,
@@ -2242,6 +2339,13 @@ async function executeOutcome(
     }
     return replayed;
   }
+  // 重放不读观察文件（它只为紧接着的那一次调用存在）；第一次落账才按引用读回。
+  const input: OutcomeInput = Object.freeze({
+    deliveryId: requested.deliveryId,
+    claimDigest: requested.claimDigest,
+    resolution: requested.resolution,
+    ...(await resolveOutcomeObservation(context, requested.observation)),
+  });
   const target = deliveryTargetOf(context, input.deliveryId);
   assertFreshRevision(context, binding);
   const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
@@ -2391,6 +2495,7 @@ function outcomeResult(
       owner: nextProjection.owner,
       suggestedTool: nextProjection.suggestedTool,
       blockers,
+      ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
     },
   });
 }
@@ -2401,7 +2506,12 @@ export async function executeRecordDeliveryOutcomeRequest(
   value: unknown,
   options: ExecuteDeliveryOptions = {},
 ): Promise<RecordDeliveryOutcomeResult> {
-  return runAppendCommand<OutcomeInput, SliceContext, OutcomeOutcome, RecordDeliveryOutcomeResult>(
+  return runAppendCommand<
+    OutcomeRequestInput,
+    SliceContext,
+    OutcomeOutcome,
+    RecordDeliveryOutcomeResult
+  >(
     {
       tool: WAKEFLOW_RECORD_DELIVERY_OUTCOME_PUBLIC_TOOL_NAME,
       parseRequest: (raw) => {
@@ -2416,10 +2526,8 @@ export async function executeRecordDeliveryOutcomeRequest(
           input: Object.freeze({
             deliveryId: request.deliveryId,
             claimDigest: request.claimDigest,
-            attempt: normalizeOutcomeAttempt(request.attempt),
-            readback: request.readback,
             resolution: request.resolution,
-            observedAt: parseInstant(request.observedAt, "$request.observedAt"),
+            observation: outcomeObservationInput(request),
           }),
         });
       },

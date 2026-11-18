@@ -4,15 +4,19 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { executeRearmDeliveryRequest } from "../../../src/capabilities/delivery/service.js";
+import {
+  executeRearmDeliveryRequest,
+  executeRecordDeliveryOutcomeRequest,
+} from "../../../src/capabilities/delivery/service.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { computeSha256Digest, parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -201,6 +205,9 @@ test("prepare_delivery 一次追加、取得声明并返回可移植许可；重
     equal(prepared.next.frontier, "implementation-host-effect-execution");
     equal(prepared.next.owner, "controller");
     equal(prepared.next.suggestedTool, "wakeflow_record_delivery_outcome");
+    // next 带着记结局要用的标识（ADR-0029 决定 6）：目标与当前流修订，不必再读 status。
+    equal(prepared.next.subject?.targetTaskId, prepared.delivery.targetTaskId);
+    equal(prepared.next.subject?.streamRevision, prepared.event.streamRevision);
     const prompt = prepared.permit.prompt;
     equal(prompt.includes(fixture.workspacePath), false, "prompt leaked the workspace root");
     // K6：同一段 prompt 由 Wakeflow 落在 Demand 根下，结果只给工作区相对的 promptRef 与去空白摘要。
@@ -504,6 +511,8 @@ test("Codex 发送返回摘要直接 accepted；发送前失败释放声明并�
     equal(rejected.target.phase, "host-effect-rejected");
     equal(rejected.next.frontier, "implementation-host-effect-rearm");
     equal(rejected.next.suggestedTool, "wakeflow_rearm_delivery");
+    // 被拒之后的重发前沿直接给出要 rearm 的那一份投递。
+    equal(rejected.next.subject?.deliveryId, rejected.outcome.deliveryId);
     equal(existsSync(claimPath(fixture)), false, "rejected outcome must release the claim");
     await rejects(
       prepareFixtureDelivery(fixture, {
@@ -923,6 +932,77 @@ test("投递查询不完整不能作未落地判断；独立宿主回执仍可�
     equal(result.outcome.hookRecordId, null);
     equal(existsSync(unknown), true);
     equal(result.event.streamRevision, prepared.event.streamRevision + 1);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
+test("结局按文件引用交回（ADR-0029 决定 4）：助手落盘的 attempt、readback 与观察时刻由引用读回并照常定处置；引用与内联并用、文件内容不合、摘要不符各被拒", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    const prepared = await prepareFixtureDelivery(fixture);
+    await landFixturePrompt(fixture, fixture.route, prepared.permit.prompt);
+    const writeOutcomeFile = (name: string, value: unknown) => {
+      const file = `.wakeflow-local/runtime/hosts/codex/observations/helper/${name}.json`;
+      const absolute = path.join(fixture.workspacePath, ...file.split("/"));
+      mkdirSync(path.dirname(absolute), { recursive: true, mode: 0o700 });
+      const text = `${JSON.stringify(value)}\n`;
+      writeFileSync(absolute, text, { mode: 0o600 });
+      return { file, digest: computeSha256Digest(Buffer.from(text, "utf8")) };
+    };
+    const request = (outcome: unknown, extra: Record<string, unknown> = {}) =>
+      executeRecordDeliveryOutcomeRequest(
+        CODEX_DELIVERY_FACADE,
+        {
+          root: fixture.workspacePath,
+          demandId: fixture.demandId,
+          idempotencyKey: "fixture-outcome-by-file",
+          expectedStreamRevision: prepared.event.streamRevision,
+          deliveryId: prepared.delivery.deliveryId,
+          claimDigest: prepared.permit.fence.claimDigest,
+          outcome,
+          ...extra,
+        },
+        { clock: () => parseUtcInstant("2026-08-29T12:06:00.000Z") },
+      );
+    const good = writeOutcomeFile("outcome-good", {
+      attempt: { status: "sent" },
+      readback: { status: "pending" },
+      observedAt: "2026-08-29T12:05:00.000Z",
+    });
+    // 给了引用就不能再内联任何一项。
+    await rejects(
+      request(good, { attempt: { status: "sent" } }),
+      (error: unknown) => isWakeflowError(error) && error.reason === "outcome-file-and-inline",
+    );
+    // 文件里只能有那三项，且要合请求 Schema。
+    await rejects(
+      request(writeOutcomeFile("outcome-extra", { attempt: { status: "sent" }, extra: true })),
+      (error: unknown) => isWakeflowError(error) && error.reason === "observation-file-content",
+    );
+    await rejects(
+      request(writeOutcomeFile("outcome-shape", { attempt: { status: "delivered" } })),
+      (error: unknown) => isWakeflowError(error) && error.reason === "observation-file-content",
+    );
+    await rejects(
+      request({ ...good, digest: `sha256:${"0".repeat(64)}` }),
+      (error: unknown) => isWakeflowError(error) && error.reason === "observation-file-digest",
+    );
+    // 文件必须直接放在本宿主的助手观察目录里。
+    await rejects(
+      request({
+        ...good,
+        file: ".wakeflow-local/runtime/hosts/codex/observations/helper/a/b.json",
+      }),
+      (error: unknown) => isWakeflowError(error) && error.reason === "observation-file-host",
+    );
+    const recorded = await request(good);
+    equal(recorded.status, "recorded");
+    equal(recorded.outcome.disposition, "accepted");
+    equal(recorded.outcome.observedAt, "2026-08-29T12:05:00.000Z");
+    // 重放不再读文件：同一个键与同一份请求体得到同一条记录。
+    rmSync(path.join(fixture.workspacePath, ...good.file.split("/")));
+    equal((await request(good)).status, "idempotent");
   } finally {
     await cleanupDeliveryWorkspaceFixture(fixture);
   }

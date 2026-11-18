@@ -416,6 +416,8 @@ function assertFailedBeforeSend(json: Readonly<Record<string, unknown>>): void {
   equal(attempt.status, "failed-before-send");
   equal(attempt.failure.code, json.reason);
   ok(attempt.failure.summary === null || typeof attempt.failure.summary === "string");
+  // 没送出去的尝试也是可记的结局：照样给出引用。
+  ok(typeof (json.outcomeFile as { file?: unknown } | undefined)?.file === "string");
 }
 
 function assertUnknownAttempt(json: Readonly<Record<string, unknown>>): void {
@@ -1625,6 +1627,15 @@ test("deliver pastes once, presses Return once, reads back once, and never sends
   const readback = sent.json.readback as { status: string; evidenceDigest: string };
   equal(readback.status, "confirmed");
   match(readback.evidenceDigest, /^sha256:[0-9a-f]{64}$/u);
+  // 结局落盘并给出引用（ADR-0029 决定 4）：文件里就是结局工具要的那三项，原样传过去即可。
+  const outcomeFile = sent.json.outcomeFile as { readonly file: string; readonly digest: string };
+  const outcomeBytes = readFileSync(path.join(current.root, ...outcomeFile.file.split("/")));
+  equal(computeSha256Digest(outcomeBytes), outcomeFile.digest);
+  const outcome = JSON.parse(outcomeBytes.toString("utf8")) as Record<string, unknown>;
+  deepEqual(Object.keys(outcome).sort(), ["attempt", "observedAt", "readback"]);
+  deepEqual(outcome.attempt, attempt);
+  deepEqual(outcome.readback, readback);
+  match(String(outcome.observedAt), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), prompt);
   const log = tmuxLog(current);
   // 送前带属性截屏一次（看输入框，暗色提示不算已打的字），粘贴、回车，再回读一次。

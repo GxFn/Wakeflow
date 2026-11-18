@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_RECORD_DELIVERY_OUTCOME_REQUEST_SCHEMA",
   "title": "WakeflowRecordDeliveryOutcomeRequestV1",
   "description": "Record the outcome of one delivery generation: Wakeflow derives accepted, indeterminate, or rejected-before-send from host hook records and the Agent declaration.",
-  "$comment": "accepted comes only from the target session user-prompt-submit hook record whose prompt digest matches the envelope, a Codex host send-call success return, or an explicit Controller resolution; rejected-before-send only when the send call failed without touching the session.",
+  "$comment": "accepted needs the target session's user-prompt-submit hook record matching the envelope's prompt digest, a Codex send-call success return, or an explicit resolution; rejected-before-send only when the send failed without touching the session.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,9 +13,7 @@
     "idempotencyKey",
     "expectedStreamRevision",
     "deliveryId",
-    "claimDigest",
-    "attempt",
-    "observedAt"
+    "claimDigest"
   ],
   "properties": {
     "root": {
@@ -56,6 +54,22 @@
     },
     "observedAt": {
       "$ref": "#/$defs/utcInstant"
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "digest"],
+      "description": "A helper's outcomeFile, in place of attempt, readback and observedAt.",
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
     }
   },
   "$defs": {
@@ -81,18 +95,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
-      "description": "Agent 对发送调用本身的声明：sent 已送出、failed-before-send 调用失败且未触碰目标会话、unknown 结果未知。这是 Agent 自述（ADR-0020 证据分级 agent-reported），不是宿主观察。",
+      "description": "The Agent's own statement about the send call (agent-reported, not a host observation): sent, failed-before-send (the call failed without touching the target session) or unknown.",
       "properties": {
         "status": {
           "enum": ["sent", "failed-before-send", "unknown"]
         },
         "evidenceDigest": {
           "$ref": "#/$defs/sha256Digest",
-          "description": "发送返回值规范 JSON（键排序、无空白、UTF-8）的 sha256。给了 sendReturn 时由 Wakeflow 计算并核对一致；只给摘要时按原样记录。"
+          "description": "sha256 of the send return's canonical JSON. Computed and checked when sendReturn is given; recorded as given otherwise."
         },
         "sendReturn": {
           "type": "object",
-          "description": "宿主发送调用的原样返回值（Codex 线程工具的返回对象），规范 JSON 至多 16 KiB。Wakeflow 只保存它的 sha256 作为 evidenceDigest，不保存内容；它是 Agent 自述，不是宿主观察。"
+          "description": "The host send call's return value as returned (at most 16 KiB of canonical JSON). Only its sha256 is kept, as evidenceDigest."
         },
         "failure": {
           "type": "object",
@@ -123,7 +137,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
-      "description": "补充回读观察：缺失或超时不降级。",
+      "description": "Supplementary readback; its absence never downgrades.",
       "properties": {
         "status": {
           "enum": ["confirmed", "pending", "unavailable"]
@@ -137,7 +151,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["disposition", "rationale"],
-      "description": "Controller 对 indeterminate 投递的显式解决（能力卡 6 Q3）：accepted 必须引用目标会话 issuedAt 之后的一条 hook 记录。",
+      "description": "The Controller's explicit resolution of an indeterminate delivery; accepted must cite a hook record of the target session after issuedAt.",
       "if": {
         "properties": {
           "disposition": {

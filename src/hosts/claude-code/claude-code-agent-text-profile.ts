@@ -344,8 +344,8 @@ const DELIVERY_ACTION =
   "`target-not-at-prompt` when the pane shows a dialog or menu instead of its input box, or " +
   "that box holds typed text (nothing was sent: the user answers or clears it in that window, " +
   "then you send the same permit again; never send keys there yourself), otherwise pastes the prompt, presses Return once, " +
-  "waits a few seconds for the target session's prompt-submit record and prints the " +
-  "`attempt`, `readback` and `landing` to record verbatim; `readback` is screen text only, " +
+  "waits a few seconds for the target session's prompt-submit record and prints " +
+  "`outcomeFile` (your `outcome`) and `landing`; " +
   "landing is proven by the hook record alone. `desktop-session`: send the `promptRef` " +
   "file's text, unchanged and once, with the desktop `send_message` tool to the permit's " +
   "`hostAction.desktopSessionId` (a callback goes with `SendMessage`), keep the " +
@@ -353,7 +353,7 @@ const DELIVERY_ACTION =
   '`"failed-before-send"` when nothing was sent), then, before recording the outcome, run ' +
   `\`${DESKTOP_HELPER} landing --window <windowId> --prompt-ref <the permit's promptRef>\` ` +
   "(`--wait-landing <seconds>` after `queued`): only the target's `user-prompt-submit` " +
-  "record proves landing.";
+  "record proves landing; `landed: true` prints your `outcome` as `outcomeFile`.";
 
 /**
  * worktree pod 的窗口（§13.130 H4、§13.186；ADR-0025 D4）：检出由助手 `launch` 从 `local-head` 意图准备，

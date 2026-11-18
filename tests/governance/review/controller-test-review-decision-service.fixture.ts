@@ -172,7 +172,6 @@ export function fixtureTestDecisionRequest(
     idempotencyKey,
     expectedStreamRevision,
     targetResultId: inspection.reviewUnit.targetResult.targetResultId,
-    snapshotDigest: inspection.snapshotDigest,
     reviewUnitDigest: inspection.reviewUnit.reviewUnitDigest,
     decision: "accept" as const,
     assessment: Object.freeze({

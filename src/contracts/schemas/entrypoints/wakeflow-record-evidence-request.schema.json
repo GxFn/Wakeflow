@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:record-evidence-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_RECORD_EVIDENCE_REQUEST_SCHEMA",
   "title": "WakeflowRecordEvidenceRequestV1",
-  "description": "Record one immutable managed evidence record for an active Demand: preview derives the plan, apply executes it when the plan digest matches, recover finishes an interrupted publication by demandId.",
+  "description": "Record one immutable managed evidence record for an active Demand. apply plans and records in one call; a blocked plan (content-review finding, capacity) writes nothing and returns the preview with its blockers. preview only plans; recover finishes an interrupted publication by demandId.",
   "$comment": "The selection names a kind from the closed vocabulary and one of four sources: managed-path copies bytes from a configured root; observation projects one host hook record without its session handle or working directory; link and commit are reference-only. contentReview=controller-confirmed lets opaque members and non-credential privacy findings through; credential findings always block.",
   "type": "object",
   "oneOf": [
@@ -148,7 +148,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "repositoryId", "commitOid"],
-      "description": "Reference one commit of a configured repository by object id. Wakeflow reads it read-only and records tree, parents, changed paths and the patch digest; a commit the repository does not hold is blocked as commit-unknown.",
+      "description": "One commit of a configured repository by object id. Wakeflow observes it read-only; one the repository does not hold is blocked (commit-unknown).",
       "properties": {
         "kind": {
           "const": "commit"
@@ -193,7 +193,6 @@
             "required": ["mode"]
           },
           "then": {
-            "required": ["planDigest"],
             "properties": {
               "planDigest": true
             }

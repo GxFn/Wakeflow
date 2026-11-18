@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:demand-publication-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA",
   "title": "WakeflowDemandPublicationRequestV1",
-  "description": "wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。preview 零写，apply 带 planDigest，recover 带 operationId（demandId）。podId 缺省 primary；同一 pod 同时只推进一个 Demand。",
+  "description": "wakeflow_create_demand 的请求：认领一个 pending 需求包即创建 Demand。apply 一次调用即认领，阻塞时不写并返回 preview；preview 零写；recover 带 operationId（demandId）。podId 缺省 primary；同一 pod 同时只推进一个 Demand。",
   "type": "object",
   "oneOf": [
     {

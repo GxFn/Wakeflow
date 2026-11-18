@@ -91,3 +91,60 @@ test("next frontier 表只指向登记的公共工具名或 null", () => {
     equal(["controller", "target", "test", "user", "none"].includes(route.owner), true, kind);
   }
 });
+
+test("next 带上后续调用要用的标识（ADR-0029 决定 6）：Demand 路由给出 demandId 与流修订，目标前沿加上目标与投递；终态与非 Demand 路由没有", () => {
+  const route = {
+    demandId: "demand_11111111-1111-4111-8111-111111111111",
+    observedEventStream: { streamRevision: 7 },
+    blockers: [],
+  };
+  deepEqual(
+    deriveNextProjection({
+      ...route,
+      disposition: "work-available",
+      frontiers: [
+        {
+          kind: "implementation-host-effect-rearm",
+          target: { targetTaskId: "target-task_22222222-2222-4222-8222-222222222222" },
+          deliveryId: "target-delivery_33333333-3333-4333-8333-333333333333",
+        },
+      ],
+    }).subject,
+    {
+      demandId: route.demandId,
+      streamRevision: 7,
+      targetTaskId: "target-task_22222222-2222-4222-8222-222222222222",
+      deliveryId: "target-delivery_33333333-3333-4333-8333-333333333333",
+    },
+  );
+  // Demand 级前沿只有 Demand 与流修订；阻塞与等待用户时标识仍在。
+  for (const disposition of ["work-available", "blocked", "awaiting-decision"]) {
+    deepEqual(
+      deriveNextProjection({
+        ...route,
+        disposition,
+        frontiers: [{ kind: "demand-completion-preflight" }],
+      }).subject,
+      { demandId: route.demandId, streamRevision: 7 },
+      disposition,
+    );
+  }
+  equal(
+    "subject" in
+      deriveNextProjection({
+        ...route,
+        disposition: "terminal",
+        frontiers: [{ kind: "demand-completion-preflight" }],
+      }),
+    false,
+  );
+  equal(
+    "subject" in
+      deriveNextProjection({
+        disposition: "work-available",
+        frontiers: [{ kind: "pod-window-registration" }],
+        blockers: [],
+      }),
+    false,
+  );
+});

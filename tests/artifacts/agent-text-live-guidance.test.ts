@@ -427,7 +427,7 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
   // 技能正文宿主中立（R3，W18）：停点那句不点名 `/wakeflow:next`，两个宿主渲染出同一句。
   ok(
     flat(source("skills/wakeflow-controller/SKILL.md")).includes(
-      "A recorded decision is a step boundary, not a stop: re-read `wakeflow_status` and go on while it names you",
+      "A recorded decision is a step boundary, not a stop: go on from its `next` while it names you",
     ),
   );
   // Agent 侧的四条引导：临时文件、逐条列出用例、环境前置、Controller 核对文件的位置。

@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:implementation-review-decision-request:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_REQUEST_SCHEMA",
   "title": "WakeflowImplementationReviewDecisionRequestV1",
-  "description": "Single-call Controller command recording one implementation TargetResult review decision (accept, rework, blocked, escalate) against an inspected Snapshot baseline; the same idempotency key and body replays the first result.",
+  "description": "Single-call Controller command recording one implementation TargetResult review decision (accept, rework, blocked, escalate) against the inspected review unit; the same idempotency key and body replays the first result.",
   "$comment": "The caller supplies the inspected identity, the judgment, an escalation when deciding escalate, and a resumption when deciding again on a blocked or escalated result. Wakeflow derives the target task, Controller window, callback landing, target completion evidence, decision/event/commit identity, and decision time.",
   "type": "object",
   "additionalProperties": false,
@@ -11,9 +11,7 @@
     "root",
     "demandId",
     "idempotencyKey",
-    "expectedStreamRevision",
     "targetResultId",
-    "snapshotDigest",
     "reviewUnitDigest",
     "decision",
     "assessment",
@@ -48,16 +46,14 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out. When given it must equal the current revision."
     },
     "targetResultId": {
       "$ref": "#/$defs/targetResultId"
     },
-    "snapshotDigest": {
-      "$ref": "#/$defs/sha256Digest"
-    },
     "reviewUnitDigest": {
-      "$ref": "#/$defs/sha256Digest"
+      "$ref": "#/$defs/sha256Digest",
+      "description": "The inspected unit's reviewUnitDigest: the one guard of this decision."
     },
     "decision": {
       "enum": ["accept", "rework", "blocked", "escalate"]

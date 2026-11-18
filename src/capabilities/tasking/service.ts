@@ -7,6 +7,7 @@ import type {
   RootedDirectoryDurability,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   parseUtcInstant,
@@ -85,6 +86,7 @@ import {
   deriveDependencyBlockers,
   deriveImplementationBaselines,
   deriveImplementationPlanningBlockers,
+  deriveImplementationWindow,
   deriveLineageBlockers,
   deriveLineageExpectation,
   derivePlanReview,
@@ -96,7 +98,6 @@ import {
   parseAcceptanceCriteria,
   type SupplementCriteria,
 } from "./decide.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Capabilities / Tasking：`wakeflow_plan_target_task` 的效果。
@@ -305,6 +306,25 @@ function resolveAuthorityReferences(
 
 // ---- 任务包草稿 -------------------------------------------------------------
 
+/** 实现任务的指派：仓库来自请求；窗口给了就用给的（之后照旧核对），没给就由仓库推出。 */
+function implementationAssignment(
+  context: SliceContext,
+  requested: ImplementationRequest["assignment"],
+): Readonly<{ repositoryId: string; windowId: string }> {
+  if (requested.windowId !== undefined) {
+    return Object.freeze({ repositoryId: requested.repositoryId, windowId: requested.windowId });
+  }
+  const derived = deriveImplementationWindow({
+    config: context.authority.config,
+    repositoryId: requested.repositoryId,
+    podId: context.authority.loaded.identity.podId,
+  });
+  if ("blocker" in derived) {
+    rejectWith([derived.blocker], "$request.taskPackage.assignment.repositoryId");
+  }
+  return Object.freeze({ repositoryId: requested.repositoryId, windowId: derived.windowId });
+}
+
 async function buildImplementationPackage(
   context: SliceContext,
   input: SliceInput,
@@ -328,12 +348,14 @@ async function buildImplementationPackage(
   if (review.blocker !== null || review.planReview === null) {
     rejectWith([review.blocker ?? "task-plan-review-required"], "$request.planReview");
   }
+  // 实现任务的窗口由仓库推出（ADR-0029 决定 5）：请求没有点名窗口时取本 pod 里根是这个仓库的 product 窗口。
+  const assignment = implementationAssignment(context, requested.assignment);
   const blockers = [
     ...deriveImplementationPlanningBlockers(authority.loaded.aggregate.state),
     ...deriveTopologyBlockers({
       config: authority.config,
-      repositoryId: requested.assignment.repositoryId,
-      windowId: requested.assignment.windowId,
+      repositoryId: assignment.repositoryId,
+      windowId: assignment.windowId,
       podId: identity.podId,
     }),
     ...deriveSectionAnchorBlockers(
@@ -372,7 +394,7 @@ async function buildImplementationPackage(
         demandAuthorityDigest: authority.loaded.authorityDigest,
         taskPackageId,
         targetTaskId,
-        assignment: requested.assignment,
+        assignment,
         workType: "implementation",
         objective: requested.objective,
         confirmedContext: requested.confirmedContext,
@@ -740,6 +762,7 @@ function assembleResult(
       owner: nextProjection.owner,
       suggestedTool: nextProjection.suggestedTool,
       blockers: [...nextProjection.blockers],
+      ...(nextProjection.subject === undefined ? {} : { subject: nextProjection.subject }),
     },
   });
 }

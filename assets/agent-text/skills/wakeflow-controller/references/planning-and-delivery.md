@@ -135,12 +135,16 @@ the dialog or clear the draft there - never send keys to it yourself - then send
 the same permit again. Record a refusal and re-arm only when the window cannot be
 brought back to its prompt; the helper's `attempt` then goes in unchanged, its
 `failure {code, summary}` being the host's own reason in the outcome record.
-Readback is only screen text and never proves landing. Under desktop sessions
+Readback is only screen text and never proves landing. Every `deliver` output
+that has an `attempt` also prints `outcomeFile`: pass that object as `outcome`
+to `wakeflow_record_delivery_outcome` in place of `attempt`, `readback` and
+`observedAt` - nothing to copy, no time to write. Under desktop sessions
 the send is your own `send_message` call: its return value is
 `attempt.sendReturn` with `status: "sent"`, your report of the send
 (`host-send-return`), and the desktop helper's `landing` carries the same
-lookup before you record it - `landed: true` with the record id, or
-`landed: false`; `references/desktop-flow.md` has the steps. A session
+lookup before you record it - `landed: true` with the record id and an
+`outcomeFile` to pass as `outcome`, or `landed: false`, where you record
+`attempt` yourself; `references/desktop-flow.md` has the steps. A session
 that holds the message behind a permission prompt is waiting for the user,
 not failed.
 

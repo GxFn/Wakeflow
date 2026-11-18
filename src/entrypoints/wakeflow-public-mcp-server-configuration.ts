@@ -1,5 +1,9 @@
 import { types } from "node:util";
 
+import {
+  WAKEFLOW_ROLE_TOOL_ACCESS,
+  type WakeflowNarrowedWindowRole,
+} from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import type { DemandEventStreamCommitWriter } from "../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import type { WakeflowToolCatalog } from "../kernel/tool-registry.js";
@@ -21,6 +25,11 @@ export interface CreateWakeflowPublicMcpServerOptions extends WakeflowPublicMcpE
    * （测试与没有窗口身份可认的构建）。
    */
   readonly authorizeCall?: WakeflowCallAuthorizer;
+  /**
+   * 启动时认出的窗口角色（ADR-0029）：给了就只登记归属表里它用得到的工具；省略或 null 登记全部
+   * （Controller、认不出角色的进程、测试）。
+   */
+  readonly listedRole?: WakeflowNarrowedWindowRole | null;
 }
 
 export type WakeflowPublicMcpServerConfigurationErrorReason =
@@ -66,6 +75,14 @@ function nonEmptyText(value: unknown, reason: "server-name" | "server-version"):
   return value;
 }
 
+/** 可以省略的选项：给了才算进期望的键集合。 */
+const OPTIONAL_OPTION_KEYS: readonly string[] = Object.freeze([
+  "beforeMutation",
+  "writer",
+  "authorizeCall",
+  "listedRole",
+]);
+
 /** 严格准入组合根元数据与登记表要求的全部 executor，不接受 Proxy 或扩展字段。 */
 export function parseCreateWakeflowPublicMcpServerOptions(
   value: unknown,
@@ -83,9 +100,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     ...executorFields,
     "serverName",
     "serverVersion",
-    ...(record.beforeMutation === undefined ? [] : ["beforeMutation"]),
-    ...(record.writer === undefined ? [] : ["writer"]),
-    ...(record.authorizeCall === undefined ? [] : ["authorizeCall"]),
+    ...OPTIONAL_OPTION_KEYS.filter((key) => record[key] !== undefined),
   ].sort();
   const keys = Object.keys(record).sort();
   if (
@@ -98,6 +113,7 @@ export function parseCreateWakeflowPublicMcpServerOptions(
   const beforeMutation = admitBeforeMutation(record.beforeMutation);
   const writer = admitWriter(record.writer);
   const authorizeCall = admitAuthorizeCall(record.authorizeCall);
+  const listedRole = admitListedRole(record.listedRole);
   for (const field of executorFields) {
     const executor = record[field];
     if (typeof executor !== "function" || types.isProxy(executor)) {
@@ -112,7 +128,17 @@ export function parseCreateWakeflowPublicMcpServerOptions(
     ...(beforeMutation === undefined ? {} : { beforeMutation }),
     ...(writer === undefined ? {} : { writer }),
     ...(authorizeCall === undefined ? {} : { authorizeCall }),
+    ...(listedRole === undefined ? {} : { listedRole }),
   });
+}
+
+/** `listedRole` 省略即 undefined；否则是 null 或归属表里的一个角色名。 */
+function admitListedRole(value: unknown): WakeflowNarrowedWindowRole | null | undefined {
+  if (value === undefined || value === null) return value;
+  if (typeof value !== "string" || !Object.hasOwn(WAKEFLOW_ROLE_TOOL_ACCESS, value)) {
+    fail("options");
+  }
+  return value as WakeflowNarrowedWindowRole;
 }
 
 /** `authorizeCall` 省略即 undefined，否则必须是非 Proxy 的函数。 */

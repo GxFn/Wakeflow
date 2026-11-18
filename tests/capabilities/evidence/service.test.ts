@@ -175,6 +175,45 @@ test("preview 零写返回计划投影与摘要；apply 重算计划落账；同
   }
 });
 
+test("一次调用即记下（ADR-0029 决定 2）：不带 planDigest 的 apply 就地推导并记录；内容审查有发现时不写、交回 preview，确认后一次调用记下", async () => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  try {
+    const direct = (selection: unknown) =>
+      executeRecordEvidenceRequest(request(fixture, { mode: "apply", selection }), CLOCK);
+    const file = fileSelection("artifacts/test-run/logs/report.txt");
+    const recorded = await direct(file);
+    if (recorded.kind !== "WakeflowRecordEvidenceMutation") throw new Error("Expected a mutation.");
+    equal(recorded.disposition, "recorded");
+    const again = await direct(file);
+    if (again.kind !== "WakeflowRecordEvidenceMutation") throw new Error("Expected a mutation.");
+    equal(again.disposition, "already-recorded");
+    equal(again.publication?.evidenceId, recorded.publication?.evidenceId);
+
+    const tree = (contentReview: "reject" | "controller-confirmed") => ({
+      kind: "test-output",
+      source: {
+        kind: "managed-path",
+        root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID },
+        path: "artifacts/test-run",
+        resourceType: "tree",
+      },
+      contentReview,
+    });
+    const before = await readDemandTree(fixture);
+    const blocked = await direct(tree("reject"));
+    if (blocked.kind !== "WakeflowRecordEvidencePreview") throw new Error("Expected the preview.");
+    equal(blocked.status, "blocked");
+    deepEqual(blocked.blockers, ["opaque-content:screenshots/result.bin"]);
+    deepEqual((await readDemandTree(fixture)).entries, before.entries, "a blocked plan wrote");
+    const confirmed = await direct(tree("controller-confirmed"));
+    if (confirmed.kind !== "WakeflowRecordEvidenceMutation")
+      throw new Error("Expected a mutation.");
+    equal(confirmed.disposition, "recorded");
+  } finally {
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
 test("内容阻塞：opaque 与非凭证命中在 reject 下阻塞、确认后进入记录；凭证命中永远阻塞", async () => {
   const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
   try {

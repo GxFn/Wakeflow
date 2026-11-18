@@ -132,6 +132,17 @@ export async function previewApply(
   });
 }
 
+/** 认领与记证据一次调用即应用（ADR-0029 决定 2）：不带 planDigest 的 apply。 */
+export async function applyDirect(
+  context: Pick<WorkflowContext, "call" | "root">,
+  tool: string,
+  args: Record<string, unknown>,
+) {
+  const applied = await context.call(tool, { root: context.root, ...args, mode: "apply" });
+  assertLab(applied.mode === "apply", "lab-scenario-direct-apply-blocked");
+  return applied;
+}
+
 export function windowByRole(context: WorkflowContext, role: string): LabWindow {
   const window = context.windows.find((entry) => entry.role === role);
   assertLab(window !== undefined, "lab-scenario-window-missing");

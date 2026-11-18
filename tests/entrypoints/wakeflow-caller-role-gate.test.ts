@@ -9,8 +9,10 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/wo
 import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { WAKEFLOW_ROLE_TOOL_ACCESS } from "../../src/contracts/vocabulary/wakeflow-role-tool-access.js";
+import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import {
   createWakeflowCallerRoleGate,
+  resolveWakeflowListedRole,
   type WakeflowWindowExecutionRoot,
 } from "../../src/entrypoints/wakeflow-caller-role-gate.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
@@ -21,6 +23,7 @@ import { fail, isWakeflowError } from "../../src/kernel/error.js";
 import { compileWakeflowWindowLaunchIntents } from "../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 import {
+  connectWakeflowMcpServerForTest,
   connectWakeflowMcpTestClient,
   wakeflowMcpTextContent,
 } from "./wakeflow-public-mcp-server.fixture.js";
@@ -274,4 +277,53 @@ test("公共 MCP 入口先过这道门：被拒的调用拿到带角色与工具
   equal(executed, 0);
   equal(guarded, 0, "a refused call never reaches beforeMutation");
   deepEqual(seen, [`${WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME}:/workspace/private-gate`]);
+});
+
+test("按角色的工具子集（ADR-0029）：启动时从工作目录认出角色，产品、Design、Test 窗口的目录只列归属表里的工具；工作区根、无关目录、Codex 的根启动与两个工作区说法不一都列全部", async (t) => {
+  const current = fixture(t);
+  const listed = (cwd: string, executionRoots = claudeExecutionRoots) =>
+    resolveWakeflowListedRole({ cwd, env: {}, executionRoots });
+  equal(await listed(current.product), "product");
+  equal(await listed(current.design), "design");
+  equal(await listed(current.test), "test");
+  equal(await listed(current.root), null);
+  equal(await listed(current.elsewhere), null);
+  equal(
+    await listed(current.product, (model) =>
+      compileWakeflowWindowLaunchIntents(model, claudeCodeWorkspaceHostResourceProfile).intents.map(
+        (intent) => ({ role: intent.role, placement: codexWindowExecutionPlacement() }),
+      ),
+    ),
+    null,
+    "a host whose windows all start at the root has no role to narrow to",
+  );
+  // 同一个产品目录还属于第二个工作区，而那里的配置读不出来：认不出就不收窄。
+  const second = path.join(current.parent, "second");
+  mkdirSync(second, { recursive: true });
+  writeFileSync(
+    path.join(second, "wakeflow.config.json"),
+    JSON.stringify({
+      kind: "WakeflowConfig",
+      schemaVersion: 2,
+      topology: { repositories: [{ path: "../ProductA" }], supportSurfaces: [] },
+    }),
+  );
+  equal(await listed(current.product), null);
+  rmSync(second, { recursive: true, force: true });
+  equal(await listed(current.product), "product");
+
+  // 服务按认出的角色发布目录：产品窗口只看得到它用的两个工具，缺省发布全部二十个。
+  for (const [role, expected] of [
+    ["product", [...WAKEFLOW_ROLE_TOOL_ACCESS.product].sort()],
+    [null, [...TOOLS].sort()],
+  ] as const) {
+    const { client, close } = await connectWakeflowMcpServerForTest(
+      createClaudeCodeWakeflowMcpServer("1.0.0-test", role),
+    );
+    try {
+      deepEqual((await client.listTools()).tools.map((tool) => tool.name).sort(), expected);
+    } finally {
+      await close();
+    }
+  }
 });

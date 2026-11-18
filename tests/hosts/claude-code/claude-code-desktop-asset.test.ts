@@ -1322,7 +1322,11 @@ test("landing --prompt-ref reads the permit file: a record with the same digest 
       promptCharacters: prompt.length,
     },
   );
-  deepEqual(landing(["--prompt-ref", promptRef]).json, {
+  const { outcomeFile: _identityOutcome, ...identityLanding } = landing([
+    "--prompt-ref",
+    promptRef,
+  ]).json;
+  deepEqual(identityLanding, {
     ok: true,
     command: "landing",
     windowId: PRODUCT_WINDOW_ID,
@@ -1429,7 +1433,8 @@ test("landing reports the bound session's user-prompt-submit record for the give
       promptDigest: PROMPT_DIGEST,
     },
   );
-  deepEqual(landing(["--prompt-digest", PROMPT_DIGEST]).json, {
+  const { outcomeFile, ...landed } = landing(["--prompt-digest", PROMPT_DIGEST]).json;
+  deepEqual(landed, {
     ok: true,
     command: "landing",
     windowId: PRODUCT_WINDOW_ID,
@@ -1438,6 +1443,18 @@ test("landing reports the bound session's user-prompt-submit record for the give
     recordId: "abababab-abab-4aba-8aba-abababababab",
     recordedAt: "2026-09-24T00:00:04.000Z",
   });
+  // 查到落地记录时把结局落盘并给出引用（ADR-0029 决定 4）：发送发生过，记的是 sent；文件原样交给结局工具。
+  const reference = outcomeFile as { readonly file: string; readonly digest: string };
+  ok(
+    /^\.wakeflow-local\/runtime\/hosts\/claude-code\/observations\/helper\//u.test(reference.file),
+  );
+  const outcomeBytes = readFileSync(path.join(current.root, ...reference.file.split("/")));
+  equal(computeSha256Digest(outcomeBytes), reference.digest);
+  const outcome = JSON.parse(outcomeBytes.toString("utf8")) as Record<string, unknown>;
+  deepEqual(Object.keys(outcome).sort(), ["attempt", "observedAt"]);
+  deepEqual(outcome.attempt, { status: "sent" });
+  // 没查到落地时不落盘：结局由 Controller 自己内联给出。
+  equal("outcomeFile" in pending.json, false);
   // 摘要是必填且要合文法；landing 从不调用任何宿主命令。
   equal(landing([]).json.reason, "prompt-digest-required");
   equal(landing(["--prompt-digest", "sha256:nope"]).json.reason, "prompt-digest-invalid");

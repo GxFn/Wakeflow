@@ -72,12 +72,13 @@ test("I12：写错的 hosts 键在请求 Schema 这一层就被拒，并点名�
     [
       { "claude-code": { launch: { permissionMode: "yolo" } } },
       "$/request/selection/hosts/claude-code/launch/permissionMode",
-      "enum",
+      // 枚举带上允许的取值（ADR-0029：拒绝要可操作）。
+      "enum:auto.acceptEdits.bypassPermissions",
     ],
     [
       { "claude-code": { windowTransport: "screen" } },
       "$/request/selection/hosts/claude-code/windowTransport",
-      "enum",
+      "enum:tmux.desktop",
     ],
   ] as const;
   for (const [hosts, path, detail] of cases) {

@@ -1,9 +1,9 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
-  runCommandShell,
   type CommandShellBinding,
   type CommandShellExecutionOptions,
+  runCommandShell,
 } from "./command-shell.js";
 import { fail } from "./error.js";
 import type { NextProjection } from "./next-projection.js";
@@ -17,6 +17,11 @@ import type { NextProjection } from "./next-projection.js";
  * 只凭操作标识完成被中断的事务。摘要不是授权令牌：apply 从不信任客户端回显的
  * 计划，计划永远由服务端在当前工作区状态上重算。`planRef` 在这里就是原请求本身，
  * 因此 preview 不需要为了 apply 而写任何文件。
+ *
+ * 一次调用即应用（ADR-0029 决定 2）：声明了 `directApply` 的命令，`apply` 可以不带 `planDigest`——就地推导
+ * 计划并执行；计划阻塞时什么都不写，以 preview 的形状把阻塞项交回。它只给没有人在两步之间确认的内部
+ * 追加用（认领、记证据）：摘要防的是"预览之后状态变了"，而这类调用的调用方没有在预览与应用之间做判断。
+ * 带了摘要的 apply 仍照旧核对漂移。
  */
 
 type PublicationTransactionMode = "preview" | "apply" | "recover";
@@ -88,6 +93,8 @@ export interface PublicationTransactionSpec<Input, Context, Plan, Outcome, Resul
     next: Readonly<NextProjection>,
   ) => Result;
   readonly privateValues?: (context: Context) => Iterable<string>;
+  /** `apply` 不带 `planDigest` 时就地推导并执行；阻塞时返回 preview 形状的结果。缺省不允许。 */
+  readonly directApply?: boolean;
 }
 
 const NO_NEXT: Readonly<NextProjection> = Object.freeze({
@@ -99,9 +106,10 @@ const NO_NEXT: Readonly<NextProjection> = Object.freeze({
 
 function admitEnvelope(
   binding: Readonly<CommandShellBinding<PublicationTransactionEnvelope, unknown>>,
+  directApply: boolean,
 ): void {
   const { mode, planDigest, operationId } = binding.envelope;
-  if (mode === "apply" && planDigest === null) {
+  if (mode === "apply" && planDigest === null && !directApply) {
     fail("invalid-request", "plan-digest-required", "$request.planDigest");
   }
   if (mode !== "apply" && planDigest !== null) {
@@ -127,7 +135,7 @@ export async function runPublicationTransaction<Input, Context, Plan, Outcome, R
       scope: ({ envelope }) => (envelope.mode === "preview" ? "read" : spec.mutationScope),
     },
     value,
-    admitEnvelope,
+    (binding) => admitEnvelope(binding, spec.directApply === true),
     async (context, binding) => {
       const { envelope, input } = binding;
       const phase = await runPhase(spec, context, envelope, input);
@@ -153,10 +161,15 @@ async function runPhase<Input, Context, Plan, Outcome, Result>(
   if (envelope.mode === "preview") {
     return Object.freeze({ mode: "preview" as const, planned });
   }
+  const ready = planned.status === "ready" && planned.plan !== null && planned.digest !== null;
+  // 一次调用即应用：准入已保证只有声明了 directApply 的命令走到这里。阻塞时不写，交回 preview。
+  if (envelope.planDigest === null && !ready) {
+    return Object.freeze({ mode: "preview" as const, planned });
+  }
   if (planned.status !== "ready" || planned.plan === null || planned.digest === null) {
     fail("precondition-failed", "plan-blocked", "$request.planDigest");
   }
-  if (planned.digest !== envelope.planDigest) {
+  if (envelope.planDigest !== null && planned.digest !== envelope.planDigest) {
     fail("precondition-failed", "plan-drift", "$request.planDigest");
   }
   const outcome = await spec.apply(context, input, planned.plan);

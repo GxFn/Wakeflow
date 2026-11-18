@@ -14,8 +14,8 @@ import { deliverFixtureTarget } from "../../governance/delivery/delivery-workspa
 import { implementationReviewJudgmentWire } from "../../governance/review/controller-implementation-review-decision.fixture.js";
 import {
   CODEX_REVIEW_FACADE,
-  cleanupControllerImplementationReviewDecisionServiceFixture,
   type ControllerImplementationReviewDecisionServiceFixture,
+  cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
   currentFixtureStreamRevision,
   decideFixtureImplementation,

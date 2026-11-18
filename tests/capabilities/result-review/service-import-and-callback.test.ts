@@ -572,10 +572,7 @@ test("R5（§13.210）：评审前一次 supersedes 导入换新身份与新回�
       decideFixtureImplementation(fixture, {
         expectedStreamRevision: await currentFixtureStreamRevision(fixture),
       }),
-      (error: unknown) =>
-        isWakeflowError(error) &&
-        error.code === "precondition-failed" &&
-        (error.reason === "snapshot-stale" || error.reason === "result-unknown"),
+      rejectedWith("result-unknown", "not-found"),
     );
 
     await landFixtureTargetCompletion(fixture, fixture.route, at("12:21:00"));

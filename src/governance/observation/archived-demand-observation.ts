@@ -68,7 +68,8 @@ function newestFirst(
   return left.demandId < right.demandId ? -1 : left.demandId > right.demandId ? 1 : 0;
 }
 
-async function readArchivedReviewSnapshot(
+/** 从一个归档包的 `payload/` 读评审快照；人读页面（`ledger-reading-pages.ts`）也用这一个读法。 */
+export async function readArchivedReviewSnapshot(
   ledgerRoot: RootedDirectory,
   archiveRef: string,
   signal: AbortSignal | undefined,

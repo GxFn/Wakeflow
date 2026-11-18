@@ -980,8 +980,9 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
       "**Close** is `archive_session`, only when the user authorizes retiring that window",
       "`relocate` does not apply on this transport",
       "with the `SendMessage` tool, once",
-      "The delivery prompt's return section names that id as `- controller desktop session: local_<id>`",
-      "your three paragraphs carry no desktop id",
+      // X15（1.4 第 3 段）：回调的去处在回调许可里，投递 prompt 随 Demand 归档、不带会话 id。
+      "That id is the callback permit's `hostAction.desktopSessionId`",
+      "The delivery prompt carries no desktop id - it is archived with the Demand",
       "Liveness is the `desktop-sessions` observation you build from the desktop `list_sessions` tool",
       "A session whose process ended after its turn is still in the sidebar and still present",
       "The helper's `sessions` is only the process view",
@@ -1074,7 +1075,8 @@ test("ADR-0025：两种传输并列——取值表各写 tmux 与桌面两段，
     [
       "Under the tmux transport on Claude Code the helper's `deliver` output carries that lookup",
       "Under desktop sessions the send is your own `send_message` call: its return value is `attempt.sendReturn`",
-      "the rendered prompt's return section already names the Controller's desktop session as the callback's destination",
+      // X15（1.4 第 3 段）：三段文字不带会话 id，回调的去处由导入结果返回的许可给出。
+      "the target takes the callback's destination from the callback permit its import returns, not from the prompt",
       "the helper's landing lookup and `panes` or `sessions`",
       "under desktop sessions there is no nudge",
     ],

@@ -1,9 +1,21 @@
 // 级别 4（维护者工具）：纯文件读取，临时目录里的合成归档与合成会话记录，不起子进程。
 import { deepEqual, equal } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import {
+  type DemandArchiveEvent,
+  measureDemandArchiveEvents,
+} from "../../../src/governance/observation/demand-archive-measures.js";
 import { runToolingCli } from "../../../tooling/cli.js";
 import {
   measureArchivedDemand,
@@ -98,6 +110,30 @@ test("归档的度量：手写字节数只数 Controller 写的文字，两段�
   deepEqual(metrics.authoredBytes, { total: 27, taskPackages: 16, decisions: 11, perTarget: 27 });
   deepEqual(metrics.targetWorkSeconds, { values: [90, 40], median: 65 });
   deepEqual(metrics.reviewSeconds, { values: [240, 120], median: 180 });
+});
+
+test("归档的度量：每个 Demand 页面上的数（运行时自己算的）与这条命令量出来的是同一个口径", (t) => {
+  // 1.4 第 3 段：归档后的页面带着同样的度量。两边各有一份实现（工具不依赖运行时），用同一份归档对一遍。
+  const revision = writeArchive(temporaryRoot(t));
+  const commits = path.join(revision, "payload", "event-sourcing", "commits");
+  const names = readdirSync(commits)
+    .filter((name) => name.endsWith(".json"))
+    .sort();
+  const events = names.flatMap(
+    (name) =>
+      (
+        JSON.parse(readFileSync(path.join(commits, name), "utf8")) as {
+          events: DemandArchiveEvent[];
+        }
+      ).events,
+  );
+  const page = measureDemandArchiveEvents(events, names.length);
+  const tool = measureArchivedDemand(revision);
+  deepEqual(page.authoredBytes, tool.authoredBytes);
+  deepEqual(page.reviewSeconds, tool.reviewSeconds);
+  equal(page.targets, tool.targets);
+  equal(page.eventCommits, 13);
+  equal(page.resultImports, tool.events.byType["result.target-result-recorded"]);
 });
 
 test("归档的度量：没有目标、没有决定时字节与中位数都有定义", (t) => {

@@ -777,7 +777,11 @@ async function pendingWork(context: RequirementContext): Promise<Readonly<Pendin
 /** 索引是自愈的投影：权威状态已提交，与并发写者的争用不能让本次调用报失败。 */
 async function refreshBoardIndexQuietly(context: RequirementContext): Promise<void> {
   try {
-    await refreshRequirementBoardIndex(context.root, context.signal);
+    await refreshRequirementBoardIndex(
+      context.root,
+      context.signal,
+      context.snapshot.model.presentation.language,
+    );
   } catch (error: unknown) {
     if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended") throw error;
   }

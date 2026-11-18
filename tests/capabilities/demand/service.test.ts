@@ -54,6 +54,13 @@ import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixt
 
 useDisposableDurability();
 
+/** 一个 Demand 的归档修订目录（十位数字）；旁边的 `<修订号>.md` 是人读页面，不是归档。 */
+function archiveRevisions(directory: string): readonly string[] {
+  return readdirSync(directory)
+    .filter((name) => /^[0-9]{10}$/u.test(name))
+    .sort();
+}
+
 /**
  * demand 切片效果：升级后路由 awaiting-decision 且完成被阻塞；记录决定后完成即归档
  * （终态事件、归档包、需求包 archived、活动根删除、日志清理、recover）；continue 从归档
@@ -253,7 +260,12 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
       false,
       "journal survived",
     );
-    equal(readdirSync(ledgerArchives).length, 1);
+    // 一份封存的归档，旁边是它的人读页面（1.4 第 3 段）；页面不算归档。
+    deepEqual(archiveRevisions(ledgerArchives).length, 1);
+    deepEqual(
+      readdirSync(ledgerArchives).sort(),
+      archiveRevisions(ledgerArchives).flatMap((revision) => [revision, `${revision}.md`]),
+    );
     const archiveDirectory = path.join(
       fixture.fixtureRoot,
       "wakeflow-ledger",
@@ -382,7 +394,7 @@ test("升级阻塞完成；记录决定后完成即归档、recover 幂等、con
       `demand-cancelled:${demandId}: The optimization is no longer wanted.`,
     );
     equal(demandRootExists(root, demandId), false);
-    equal(readdirSync(ledgerArchives).length, 2);
+    equal(archiveRevisions(ledgerArchives).length, 2);
 
     const afterCancel = await executeDemandContinuationRequest({
       root,
@@ -534,7 +546,7 @@ async function interruptAndRecover(
     const recovered = await execute({ root, mode: "recover", operationId: demandId });
     if (!("archive" in recovered)) throw new Error("Expected a mutation.");
     equal(recovered.disposition, "recovered");
-    equal(readdirSync(occupied).length, 1);
+    equal(archiveRevisions(occupied).length, 1);
     equal(demandRootExists(root, demandId), false, "active root survived");
     equal(existsSync(journal), false, "journal survived");
     const claim = await readRequirementClaimState(fixture.workspaceRoot, PLANNING_REQUIREMENT_ID);
@@ -622,7 +634,7 @@ test("删根中断留下的残根：recover 以日志与已封归档为权威完
       equal(again.archive.manifestDigest, recovered.archive.manifestDigest, missing);
       equal(demandRootExists(root, demandId), false, `residual root survived without ${missing}`);
       equal(existsSync(journal), false, `journal survived without ${missing}`);
-      equal(readdirSync(path.join(archives, demandId)).length, 1, missing);
+      equal(archiveRevisions(path.join(archives, demandId)).length, 1, missing);
     }
     const claim = await readRequirementClaimState(fixture.workspaceRoot, PLANNING_REQUIREMENT_ID);
     equal(claim?.state.status, "archived");

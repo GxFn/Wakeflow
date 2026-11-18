@@ -57,6 +57,7 @@ import {
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
+  type RequirementBoardIndexLanguage,
   renderRequirementBoardIndex,
 } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
@@ -424,6 +425,7 @@ async function observeDomain<Value>(
 
 async function observeBoard(
   root: RootedDirectory,
+  language: RequirementBoardIndexLanguage,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedBoard>> {
   const listing = await listRequirementClaimStates(root, signal);
@@ -446,7 +448,8 @@ async function observeBoard(
     counts: Object.freeze(counts),
     indexDigest,
     expectedIndexDigest: computeSha256Digest(
-      encodeUtf8(renderRequirementBoardIndex(listing.states), "$boardIndex"),
+      // 期望的索引按配置的语言渲染：语言与磁盘上的不一致就是陈旧，维护 apply 重写（1.4 第 3 段）。
+      encodeUtf8(renderRequirementBoardIndex(listing.states, language), "$boardIndex"),
       "$boardIndex",
     ),
   });
@@ -1238,7 +1241,9 @@ export async function observeWorkspace(
   const layout = await observeDomain("layout", () =>
     inspectActiveLayout(root, signalOptions(signal)),
   );
-  const board = await observeDomain("board", () => observeBoard(root, signal));
+  const board = await observeDomain("board", () =>
+    observeBoard(root, snapshot.model.presentation.language, signal),
+  );
   const demands = await observeDomain("demands", () => observeDemands(root, ledgerRoot, signal));
   const claims = await observeDomain("claims", () => observeClaims(root, signal));
   const bindings: Readonly<ObservedHostBindings>[] = [];

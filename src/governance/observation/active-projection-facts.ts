@@ -189,6 +189,7 @@ export function unmergedAcceptedFacts(
 function demandFacts(
   demand: Readonly<ObservedDemand>,
   podName: string,
+  windowTitles: ReadonlyMap<string, string>,
 ): Readonly<ActiveProjectionDemandFacts> | null {
   if (demand.loaded === null || demand.route === null || demand.reviewSnapshot === null)
     return null;
@@ -220,6 +221,7 @@ function demandFacts(
           phase: target.phase,
           repositoryId: target.workType === "test" ? null : target.repositoryId,
           windowId: target.windowId,
+          windowTitle: windowTitles.get(target.windowId) ?? null,
         }),
       ),
     ),
@@ -324,6 +326,11 @@ export function buildActiveProjectionFacts(
   }
   const podNames = new Map<string, string>();
   for (const pod of model.pods) podNames.set(pod.podId, pod.name);
+  // 窗口的显示名来自配置：两种传输下都是使用者看得到的名字，不依赖绑定（投影作用域看不到绑定）。
+  const windowTitles = new Map<string, string>();
+  for (const window of model.topology.windows) {
+    windowTitles.set(window.windowId, window.displayName);
+  }
   const pods = observation.pods.value ?? [];
   const evidence = demandEvidenceOf(observation);
   return Object.freeze({
@@ -372,7 +379,11 @@ export function buildActiveProjectionFacts(
     demands: Object.freeze(
       (observation.demands.value ?? [])
         .map((demand) =>
-          demandFacts(demand, podNames.get(demand.loaded?.identity.podId ?? "") ?? "?"),
+          demandFacts(
+            demand,
+            podNames.get(demand.loaded?.identity.podId ?? "") ?? "?",
+            windowTitles,
+          ),
         )
         .filter((facts): facts is Readonly<ActiveProjectionDemandFacts> => facts !== null)
         .sort((left, right) => left.demandId.localeCompare(right.demandId)),

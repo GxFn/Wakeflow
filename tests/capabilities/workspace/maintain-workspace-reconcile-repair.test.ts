@@ -2,6 +2,7 @@ import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -481,4 +482,68 @@ test("a zero-step reconcile rewrites a stale board index so an upgraded renderer
   equal(readFileSync(boardIndex, "utf8"), current);
   const healthy = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root });
   equal(healthy.gates.find((entry) => entry.name === "board-consistency")?.status, "pass");
+});
+
+test("a reconcile apply backfills the ledger's reading pages for archives that have none (I22, 1.4 stage 3): the history index and the page beside the archive", async (t) => {
+  const root = await fixture(t);
+  const fresh = { root, action: "fresh-initialize", request: { selection: selection() } } as const;
+  const preview = await executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" });
+  await executeCodexWakeflowMaintenance({
+    ...fresh,
+    mode: "apply",
+    planDigest: preview.planDigest as string,
+  });
+  const ledger = path.join(root, "Ledger");
+  // Fresh 初始化不在空账本里凭空放一份历史索引。
+  equal(existsSync(path.join(ledger, "history.md")), false);
+
+  // 一份升级前封存的归档：只有清单与身份，旁边没有页面。
+  const demandId = "demand_abababab-abab-4bab-8bab-abababababab";
+  const archive = path.join(ledger, "archives", demandId, "0000000007");
+  mkdirSync(path.join(archive, "payload"), { recursive: true });
+  writeFileSync(
+    path.join(archive, "manifest.json"),
+    `${JSON.stringify(
+      {
+        archivedAt: "2026-09-18T04:05:06Z",
+        manifestDigest: `sha256:${"a".repeat(64)}`,
+        outcome: "completed",
+        terminalEvent: {
+          eventId: "demand-event_cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd",
+          streamRevision: 7,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(
+    path.join(archive, "payload", "identity.json"),
+    `${JSON.stringify({ demandType: "requirement", title: "Archived before the upgrade" }, null, 2)}\n`,
+  );
+
+  const reconcile = await reconcilePreview(root);
+  equal(existsSync(path.join(ledger, "history.md")), false, "preview writes nothing");
+  await executeCodexWakeflowMaintenance({
+    root,
+    action: "reconcile",
+    mode: "apply",
+    request: {},
+    planDigest: reconcile.planDigest as string,
+  });
+  const history = readFileSync(path.join(ledger, "history.md"), "utf8");
+  equal(
+    history.includes(
+      `| 2026-09-18T04:05:06Z | Archived before the upgrade | requirement | completed | [\`${demandId}\`](archives/${demandId}/0000000007.md) |`,
+    ),
+    true,
+    history,
+  );
+  const page = readFileSync(path.join(ledger, "archives", demandId, "0000000007.md"), "utf8");
+  equal(page.startsWith("# Demand: Archived before the upgrade\n"), true, page);
+  // 这份合成归档没有事件提交：页面照样出，并说出读不出的部分。
+  equal(page.includes("The review history in this archive could not be read"), true);
+  // 页面与索引不让校验变红：账本布局的门只看三个固定容器。
+  const verified = await executeVerifyRequest(CODEX_OBSERVATION_FACADE, { root });
+  equal(verified.gates.find((entry) => entry.name === "ledger-layout")?.status, "pass");
 });

@@ -117,6 +117,7 @@ function demandFacts(
         phase: "planned",
         repositoryId: REPOSITORY_ID,
         windowId: "window_88888888-8888-4888-8888-888888888888",
+        windowTitle: "ProductA",
       },
     ],
     lastEventId: null,
@@ -703,6 +704,95 @@ test("状态页：已接受分支段只声称投影真看得到的东西（§13.
       true,
     );
   }
+});
+
+test("正在等使用者的事项（1.4 第 3 段）：索引页列出停在使用者这里的 Demand 与未合并的已接受分支；没有时写无；目标行给窗口的显示名", () => {
+  const idle = renderActiveProjectionFiles(facts())[0]?.content ?? "";
+  // 这一栏在 Demand 列表之前，没有等的事项时明说没有。
+  const heading = idle.indexOf("## Waiting on the user");
+  equal(heading !== -1 && heading < idle.indexOf("## Active demands"), true);
+  equal(idle.slice(heading, idle.indexOf("## Active demands")).includes("\nnone\n"), true);
+
+  const escalated = demandFacts(DEMAND_A, {
+    title: "Escalated one",
+    awaitingDecision: "Keep the old endpoint or remove it?",
+    route: {
+      disposition: "awaiting-decision",
+      frontier: "decision-required",
+      owner: "user",
+      suggestedTool: "wakeflow_continue_demand",
+      blockers: [],
+    },
+  });
+  const blocked = demandFacts(DEMAND_B, {
+    title: "Blocked one",
+    route: {
+      disposition: "blocked",
+      frontier: "implementation-delivery-planning",
+      owner: "user",
+      suggestedTool: null,
+      blockers: ["repository-window-missing"],
+    },
+  });
+  const unmergedAccepted = [
+    {
+      demandId: DEMAND_A,
+      targetTaskId: "target-task_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      repositoryId: REPOSITORY_ID,
+      branch: "wakeflow/demand-a",
+      commit: "1111111111111111111111111111111111111111",
+    },
+  ];
+  const busy = facts({ unmergedAccepted }, [escalated, blocked]);
+  const en = renderActiveProjectionFiles(busy)[0]?.content ?? "";
+  equal(
+    en.includes(
+      `- [Escalated one](projections/${DEMAND_A}/index.md) · \`${DEMAND_A}\` · your decision: Keep the old endpoint or remove it?`,
+    ),
+    true,
+    en,
+  );
+  equal(
+    en.includes(
+      `- [Blocked one](projections/${DEMAND_B}/index.md) · \`${DEMAND_B}\` · your step: implementation-delivery-planning (repository-window-missing)`,
+    ),
+    true,
+    en,
+  );
+  equal(
+    en.includes(
+      "- [1 accepted branch recorded as not merged yet: merge or discard](current/workspace-current-status.md)",
+    ),
+    true,
+    en,
+  );
+  // 轮到 Controller 的 Demand 不在这一栏里。
+  const controllerTurn = renderActiveProjectionFiles(facts())[0]?.content ?? "";
+  equal(
+    controllerTurn
+      .slice(controllerTurn.indexOf("## Waiting"), controllerTurn.indexOf("## Active demands"))
+      .includes(DEMAND_A),
+    false,
+  );
+  const zh = renderActiveProjectionFiles({ ...busy, language: "zh-Hans" })[0]?.content ?? "";
+  equal(zh.includes("## 正在等使用者的事项"), true);
+  equal(zh.includes("等你决定: Keep the old endpoint or remove it?"), true);
+  equal(zh.includes("有 1 个已接受的分支记录为尚未合并：合并或放弃"), true);
+
+  // 目标行：窗口的显示名在标识之前；配置里已没有这个窗口时只给标识。
+  const page = renderActiveProjectionFiles(facts())[2]?.content ?? "";
+  equal(page.includes("| ProductA `window_88888888-8888-4888-8888-888888888888` |"), true, page);
+  const first = demandFacts(DEMAND_A).targets[0];
+  if (first === undefined) throw new Error("fixture has no target");
+  const untitled = renderActiveProjectionFiles(
+    facts({}, [demandFacts(DEMAND_A, { targets: [{ ...first, windowTitle: null }] })]),
+  );
+  equal(untitled[2]?.content.includes("| `window_88888888-8888-4888-8888-888888888888` |"), true);
+  notEqual(
+    demandFingerprint(untitled),
+    demandFingerprint(renderActiveProjectionFiles(facts())),
+    "the window title is part of what the Demand page shows",
+  );
 });
 
 test("覆盖提示（§13.129）：incomplete 在两份工作区页的 Demand 列表前加提示并改工作区指纹；complete 与 unobserved 同字节、不加提示", () => {

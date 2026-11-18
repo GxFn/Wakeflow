@@ -30,6 +30,7 @@ import {
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   renderRequirementBoardIndex,
+  requirementBoardIndexLanguageOf,
   replaceRequirementClaimStateFile,
   supplementAttachTarget,
   withdrawRequirementClaim,
@@ -369,4 +370,50 @@ test("并发：两个 Demand 凭同一快照认领恰有一个成功，同一状
     ),
     (error: unknown) => error instanceof WakeflowError && error.reason === "claim-state-changed",
   );
+});
+
+test("索引跟随工作区语言（1.4 第 3 段）：英文字节不变；中文有自己的标题、说明、表头与标记；不给语言的刷新沿用磁盘上的语言，给了就换", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const states = (await listRequirementClaimStates(root)).states;
+
+  const en = renderRequirementBoardIndex(states);
+  equal(
+    renderRequirementBoardIndex(states, "en"),
+    en,
+    "English is the default and keeps its bytes",
+  );
+  equal(requirementBoardIndexLanguageOf(en), "en");
+  const zh = renderRequirementBoardIndex(states, "zh-Hans");
+  equal(zh.startsWith("# 需求看板\n\n<!-- wakeflow:board-projection:v2:zh-Hans -->\n"), true, zh);
+  equal(zh.includes("本文件是 `board/` 下认领状态的确定性投影；请勿手改。"), true);
+  equal(
+    zh.includes("| 优先级 | 状态 | 需求包 | 标题 | 类型 | 测试 | 搁置 | 发布时间 | Demand |"),
+    true,
+  );
+  equal(requirementBoardIndexLanguageOf(zh), "zh-Hans");
+  // 行是同一批：状态与类型是机器取值，不翻译。
+  deepEqual(
+    zh.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)),
+    en.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)),
+  );
+
+  // 没有索引、也没给语言：英文（Fresh 初始化绑定的就是这一份）。
+  await refreshRequirementBoardIndex(root);
+  equal(readFileSync(indexPath(root), "utf8"), en);
+  // 知道配置的调用方给了语言：换成中文。
+  await refreshRequirementBoardIndex(root, undefined, "zh-Hans");
+  equal(readFileSync(indexPath(root), "utf8"), zh);
+  // 不读配置的调用方刷新：状态变了，语言不变。
+  await createRequirementClaimStateFile(root, pending(OTHER, "P0"));
+  await refreshRequirementBoardIndex(root);
+  const next = readFileSync(indexPath(root), "utf8");
+  equal(
+    next,
+    renderRequirementBoardIndex((await listRequirementClaimStates(root)).states, "zh-Hans"),
+  );
+  equal(next.includes(OTHER), true);
+  // 配置换回英文：下一次带语言的刷新换回来。
+  await refreshRequirementBoardIndex(root, undefined, "en");
+  equal(requirementBoardIndexLanguageOf(readFileSync(indexPath(root), "utf8")), "en");
 });

@@ -25,6 +25,8 @@ import {
 } from "../../foundation/time/utc-instant.js";
 import { fail } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
+import { LEDGER_ARCHIVES_ROOT_REF } from "../ledger/ledger-authority-paths.js";
+import type { DemandArchiveEvent } from "./demand-archive-measures.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
@@ -78,6 +80,11 @@ const PAYLOAD_JSON_MAXIMUM_BYTES = parseByteCount(
   16 * 1024 * 1024,
   "$archive.payload.maximumBytes",
 );
+const DEMAND_ID_PATTERN =
+  /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const REQUIREMENT_ID_PATTERN =
+  /^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const MAXIMUM_ARCHIVED_DEMANDS = 4096;
 const TITLE_MAXIMUM_CHARACTERS = 256;
 const GOAL_MAXIMUM_CHARACTERS = 512;
 const SUMMARY_MAXIMUM_CHARACTERS = 280;
@@ -300,6 +307,140 @@ function foldCommitEvents(commit: unknown, landings: Map<string, TargetLanding>)
   }
 }
 
+/** 归档负载里受管证据记录的条数（受管证据目录下 `evidence_` 开头的条目）。 */
+export async function countDemandArchiveEvidence(
+  ledgerRoot: RootedDirectory,
+  archiveRef: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<number> {
+  const entries = await listPayloadDirectory(
+    ledgerRoot,
+    archiveRef,
+    "artifacts/managed-evidence",
+    MAXIMUM_EVIDENCE_ENTRIES,
+    signal,
+  );
+  return entries.filter((name) => name.startsWith("evidence_")).length;
+}
+
+/** 负载里的事件提交文件名，按序号升序。 */
+async function commitNamesOf(
+  ledgerRoot: RootedDirectory,
+  archiveRef: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<readonly string[]> {
+  return (
+    await listPayloadDirectory(
+      ledgerRoot,
+      archiveRef,
+      "event-sourcing/commits",
+      MAXIMUM_COMMITS,
+      signal,
+    )
+  )
+    .filter((name) => name.endsWith(".json") && COMMIT_NAME_PATTERN.test(name.slice(0, -5)))
+    .sort();
+}
+
+function archiveEventOf(value: unknown): Readonly<DemandArchiveEvent> | null {
+  const envelope = recordOrNull(value);
+  const data = recordOrNull(envelope?.data);
+  if (envelope === null || data === null || typeof envelope.eventType !== "string") return null;
+  return Object.freeze({
+    eventType: envelope.eventType,
+    recordedAt: typeof envelope.recordedAt === "string" ? envelope.recordedAt : "",
+    data,
+  });
+}
+
+/** 归档负载里的全部事件与事件提交的个数（人读页面的度量用）；读不出的提交跳过，不让页面失败。 */
+export async function readDemandArchiveEvents(
+  ledgerRoot: RootedDirectory,
+  archiveRef: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<
+  Readonly<{ readonly eventCommits: number; readonly events: readonly DemandArchiveEvent[] }>
+> {
+  const names = await commitNamesOf(ledgerRoot, archiveRef, signal);
+  const events: Readonly<DemandArchiveEvent>[] = [];
+  for (const name of names) {
+    const commit = recordOrNull(
+      await readPayloadJson(ledgerRoot, archiveRef, `event-sourcing/commits/${name}`, signal),
+    );
+    const members: readonly unknown[] = Array.isArray(commit?.events) ? commit.events : [];
+    for (const member of members) {
+      const event = archiveEventOf(member);
+      if (event !== null) events.push(event);
+    }
+  }
+  return Object.freeze({ eventCommits: names.length, events: Object.freeze(events) });
+}
+
+/** 人读页面开头要的那几项身份：都来自 `payload/identity.json`，读不到的成员为空串或 null。 */
+export interface DemandArchiveIdentityReadback {
+  readonly title: string;
+  readonly goal: string;
+  readonly completionDefinition: string;
+  readonly demandType: string | null;
+  readonly requirementId: string | null;
+}
+
+const COMPLETION_MAXIMUM_CHARACTERS = 1024;
+const DEMAND_TYPE_PATTERN = /^[a-z][a-z-]{0,39}$/u;
+
+export async function readDemandArchiveIdentity(
+  ledgerRoot: RootedDirectory,
+  archiveRef: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DemandArchiveIdentityReadback>> {
+  const identity = recordOrNull(
+    await readPayloadJson(ledgerRoot, archiveRef, "identity.json", signal),
+  );
+  const requirementId = recordOrNull(identity?.source)?.requirementId;
+  const demandType = identity?.demandType;
+  return Object.freeze({
+    title: boundedText(identity?.title, TITLE_MAXIMUM_CHARACTERS) ?? "",
+    goal: boundedText(identity?.goal, GOAL_MAXIMUM_CHARACTERS) ?? "",
+    completionDefinition:
+      boundedText(identity?.completionDefinition, COMPLETION_MAXIMUM_CHARACTERS) ?? "",
+    demandType:
+      typeof demandType === "string" && DEMAND_TYPE_PATTERN.test(demandType) ? demandType : null,
+    requirementId:
+      typeof requirementId === "string" && REQUIREMENT_ID_PATTERN.test(requirementId)
+        ? requirementId
+        : null,
+  });
+}
+
+/**
+ * 归档过的 Demand：`archives/` 下名字是 Demand 标识的目录，按标识排序。容器不在即没有归档；别的名字
+ * （封档中的候选目录、手放的文件）不算。读不出时带稳定原因失败，由调用方决定要不要吞掉。
+ */
+export async function listArchivedDemandIds(
+  ledgerRoot: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<readonly string[]> {
+  try {
+    const listing = await readStableResourceDirectory(ledgerRoot, LEDGER_ARCHIVES_ROOT_REF, {
+      maximumEntries: MAXIMUM_ARCHIVED_DEMANDS,
+      ...signalOptions(signal),
+    });
+    return Object.freeze(
+      listing.entries
+        .filter((entry) => entry.node.kind === "directory" && DEMAND_ID_PATTERN.test(entry.name))
+        .map((entry) => entry.name)
+        .sort(),
+    );
+  } catch (error: unknown) {
+    if (error instanceof StableDirectoryReadError) {
+      if (error.reason === "not-found") return Object.freeze([]);
+      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+      fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
+    }
+    throw error;
+  }
+}
+
 /** 读回一份已归档 Demand 的业务摘要（裁决 R8）；只读负载，读不到的部分变空而不是失败。 */
 export async function describeDemandArchive(
   ledgerRoot: RootedDirectory,
@@ -313,24 +454,8 @@ export async function describeDemandArchive(
     await readPayloadJson(ledgerRoot, summary.archiveRef, "authority.json", signal),
   );
   const testing = recordOrNull(authority?.testingDecision);
-  const evidenceEntries = await listPayloadDirectory(
-    ledgerRoot,
-    summary.archiveRef,
-    "artifacts/managed-evidence",
-    MAXIMUM_EVIDENCE_ENTRIES,
-    signal,
-  );
-  const commitNames = (
-    await listPayloadDirectory(
-      ledgerRoot,
-      summary.archiveRef,
-      "event-sourcing/commits",
-      MAXIMUM_COMMITS,
-      signal,
-    )
-  )
-    .filter((name) => name.endsWith(".json") && COMMIT_NAME_PATTERN.test(name.slice(0, -5)))
-    .sort();
+  const evidenceCount = await countDemandArchiveEvidence(ledgerRoot, summary.archiveRef, signal);
+  const commitNames = await commitNamesOf(ledgerRoot, summary.archiveRef, signal);
   const landings = new Map<string, TargetLanding>();
   for (const name of commitNames) {
     foldCommitEvents(
@@ -359,7 +484,7 @@ export async function describeDemandArchive(
     title: boundedText(identity?.title, TITLE_MAXIMUM_CHARACTERS) ?? "",
     goal: boundedText(identity?.goal, GOAL_MAXIMUM_CHARACTERS) ?? "",
     testingMode: typeof testing?.mode === "string" ? testing.mode : null,
-    evidenceCount: evidenceEntries.filter((name) => name.startsWith("evidence_")).length,
+    evidenceCount,
     acceptedTargets: Object.freeze(acceptedTargets),
   });
 }

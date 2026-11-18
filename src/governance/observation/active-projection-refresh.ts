@@ -16,6 +16,10 @@ import {
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
+import {
+  LEDGER_READING_PAGES_MAINTENANCE_RENDER_LIMIT,
+  refreshLedgerReadingPagesQuietly,
+} from "./ledger-reading-pages.js";
 import { observeWorkspace } from "./workspace-observation.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 
@@ -165,4 +169,30 @@ export async function afterMutationRefresh<Result>(
     if (!(error instanceof WakeflowError) || error.reason !== "aborted") throw error;
   }
   return result;
+}
+
+/**
+ * 维护 apply 之后重算账本里的人读页面（历史索引与缺失或过期的 Demand 页，1.4 第 3 段）。语言取 apply
+ * 之后的配置——reconfigure 可能刚换了语言；升级后的第一次维护在这里把旧归档的页面补齐。与看板索引的
+ * 那一步同样静默：配置或账本根一时读不出、页面写不成都不让维护报失败，下一次维护或下一次归档再补。
+ */
+export async function refreshLedgerReadingPagesAfterMaintenance(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    const snapshot = await readSnapshot(root, signal);
+    const ledgerRoot = await openLedgerRoot(root, snapshot);
+    try {
+      await refreshLedgerReadingPagesQuietly(ledgerRoot, {
+        language: snapshot.model.presentation.language,
+        renderLimit: LEDGER_READING_PAGES_MAINTENANCE_RENDER_LIMIT,
+        ...signalOptions(signal),
+      });
+    } finally {
+      await ledgerRoot.close();
+    }
+  } catch (error: unknown) {
+    if (!(error instanceof WakeflowError) || error.code === "unexpected") throw error;
+  }
 }

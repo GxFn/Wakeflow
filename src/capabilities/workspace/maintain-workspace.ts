@@ -69,7 +69,10 @@ import {
 import { loadDemandEventSourcingRootAuthority } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { DemandFileEventStoreError } from "../../governance/demand/event-sourcing/demand-file-event-store.js";
 import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import {
+  afterMutationRefresh,
+  refreshLedgerReadingPagesAfterMaintenance,
+} from "../../governance/observation/active-projection-refresh.js";
 import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
 import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import {
@@ -1663,13 +1666,14 @@ function parseRequest(value: unknown): Readonly<{
 }
 
 /** 使用宿主 entrypoint 固定提供的 facade 执行一个公共 Maintenance 请求。 */
-/** 看板索引重写失败不让维护失败：索引是投影，陈旧由 verify 的 board-consistency 报出（G11）。 */
-async function refreshRequirementBoardIndexQuietly(
-  root: RootedDirectory,
-  signal?: AbortSignal,
-): Promise<void> {
+/**
+ * 看板索引重写失败不让维护失败：索引是投影，陈旧由 verify 的 board-consistency 报出（G11）。语言取 apply
+ * 之后的配置（reconfigure 可能刚换了语言）；配置读不出时不给语言，索引沿用它自己的。
+ */
+async function refreshRequirementBoardIndexQuietly(context: SliceContext): Promise<void> {
   try {
-    await refreshRequirementBoardIndex(root, signal);
+    const language = (await currentSnapshotOrNull(context))?.model.presentation.language;
+    await refreshRequirementBoardIndex(context.root, context.options.signal, language);
   } catch (error: unknown) {
     if (!(error instanceof WakeflowError)) throw error;
   }
@@ -1754,7 +1758,9 @@ export async function executeWakeflowMaintenancePublicRequest(
           );
           // 看板索引是认领状态的投影：渲染器升级后现存工作区的索引陈旧（board-consistency 报 index-stale），
           // 任何一次维护 apply——含零步的 reconcile——之后按当前渲染重写一次；写不动留给 verify（G11，§13.209）。
-          await refreshRequirementBoardIndexQuietly(context.root, options.signal);
+          await refreshRequirementBoardIndexQuietly(context);
+          // 账本里的人读页面同理（1.4 第 3 段）：升级后第一次维护把旧归档的页面与历史索引补齐。
+          await refreshLedgerReadingPagesAfterMaintenance(context.root, options.signal);
           return applied;
         } catch (error: unknown) {
           mapTransactionError(error);

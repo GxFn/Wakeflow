@@ -332,6 +332,11 @@ export interface ActiveProjectionTargetFacts {
   readonly phase: string;
   readonly repositoryId: string | null;
   readonly windowId: string;
+  /**
+   * 窗口在配置里的显示名（两种传输下都是使用者看得到的那个名字：tmux 的窗口名、桌面侧栏里的会话标题）；
+   * 配置里已没有这个窗口时为 null，页面只给标识。会话标识是本地运行时状态，不进投影。
+   */
+  readonly windowTitle: string | null;
 }
 
 export interface ActiveProjectionProgressFacts {
@@ -431,6 +436,13 @@ const TEXT = Object.freeze({
     status: "Current status",
     board: "Requirement board",
     demands: "Active demands",
+    waiting: "Waiting on the user",
+    waitingNote:
+      "What this workspace cannot move past without you; everything else is the Controller's or a target's turn.",
+    waitingDecision: "your decision",
+    waitingRoute: "your step",
+    waitingBranches: (count: number) =>
+      `${count} accepted branch${count === 1 ? "" : "es"} recorded as not merged yet: merge or discard`,
     noDemands: "No active Demand.",
     coverageIncomplete:
       "Demand coverage is incomplete this round: at least one active Demand could not be read, so this list may be missing Demands; wakeflow_status names the unreadable ones.",
@@ -479,6 +491,11 @@ const TEXT = Object.freeze({
     status: "当前状态",
     board: "需求看板",
     demands: "活动 Demand",
+    waiting: "正在等使用者的事项",
+    waitingNote: "这个工作区没有你就过不去的事；其余的都轮到 Controller 或目标窗口。",
+    waitingDecision: "等你决定",
+    waitingRoute: "等你处理",
+    waitingBranches: (count: number) => `有 ${count} 个已接受的分支记录为尚未合并：合并或放弃`,
     noDemands: "当前没有活动 Demand。",
     coverageIncomplete:
       "本轮活动 Demand 未看全：至少一个活动 Demand 读不出，此列表可能缺项；读不出的由 wakeflow_status 报告。",
@@ -606,11 +623,57 @@ function demandFingerprint(
     route: { ...demand.route, blockers: [...demand.route.blockers] },
     awaitingDecision: demand.awaitingDecision,
     evidenceCount: demand.evidenceCount,
+    windowTitles: demand.targets.map((target) => target.windowTitle),
   });
 }
 
 function relativeFromActive(resourcePath: PortableResourcePath): string {
   return resourcePath.slice(`${WAKEFLOW_ACTIVE_ROOT_REF}/`.length);
+}
+
+/** 一个活动 Demand 是否停在使用者这里：路由的责任方是使用者，或有一个升级给使用者的决定还没有回答。 */
+function waitsOnUser(demand: Readonly<ActiveProjectionDemandFacts>): boolean {
+  return demand.route.owner === "user" || demand.awaitingDecision !== null;
+}
+
+/** 等的是什么：升级的问题原文优先；没有就给前沿与阻塞原因。 */
+function waitingSubject(
+  demand: Readonly<ActiveProjectionDemandFacts>,
+  text: Readonly<{ readonly waitingDecision: string; readonly waitingRoute: string }>,
+): string {
+  if (demand.awaitingDecision !== null) {
+    return `${text.waitingDecision}: ${inline(demand.awaitingDecision)}`;
+  }
+  const blockers =
+    demand.route.blockers.length === 0 ? "" : ` (${demand.route.blockers.map(inline).join(", ")})`;
+  return `${text.waitingRoute}: ${demand.route.frontier ?? demand.route.disposition}${blockers}`;
+}
+
+/**
+ * "正在等使用者的事项"（1.4 第 3 段）：停在使用者这里的活动 Demand，加上记录为尚未合并的已接受分支。
+ * 只用投影作用域已有的事实，所以不改指纹；看板上等确认的需求包不在其中（它们在看板页上）。
+ */
+function waitingLines(facts: Readonly<ActiveProjectionFacts>): readonly string[] {
+  const text = TEXT[facts.language];
+  const lines = facts.demands
+    .filter(waitsOnUser)
+    .map(
+      (demand) =>
+        `- [${inline(demand.title)}](${relativeFromActive(demandProjectionIndexRef(demand.demandId))}) · ${code(demand.demandId)} · ${waitingSubject(demand, text)}`,
+    );
+  if (facts.unmergedAccepted.length > 0) {
+    lines.push(
+      `- [${text.waitingBranches(facts.unmergedAccepted.length)}](${relativeFromActive(WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF)})`,
+    );
+  }
+  return [
+    `## ${text.waiting}`,
+    "",
+    `> ${text.waitingNote}`,
+    "",
+    ...(lines.length === 0 ? [text.none] : lines),
+    "",
+  ];
 }
 
 function renderIndex(facts: Readonly<ActiveProjectionFacts>, fingerprint: Sha256Digest): string {
@@ -634,6 +697,7 @@ function renderIndex(facts: Readonly<ActiveProjectionFacts>, fingerprint: Sha256
     `- [${text.status}](${relativeFromActive(WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF)})`,
     `- [${text.board}](current/board/index.md)`,
     "",
+    ...waitingLines(facts),
     `## ${text.demands}`,
     "",
     ...coverageNotice(facts, text),
@@ -706,7 +770,7 @@ function renderDemandIndex(
   const text = TEXT[language];
   const targets = demand.targets.map(
     (target) =>
-      `| ${code(target.targetTaskId)} | ${target.workType} | ${target.phase} | ${target.repositoryId === null ? "—" : code(target.repositoryId)} | ${code(target.windowId)} |`,
+      `| ${code(target.targetTaskId)} | ${target.workType} | ${target.phase} | ${target.repositoryId === null ? "—" : code(target.repositoryId)} | ${target.windowTitle === null ? "" : `${inline(target.windowTitle)} `}${code(target.windowId)} |`,
   );
   return `${[
     `# ${text.demandIndex}: ${inline(demand.title)}`,

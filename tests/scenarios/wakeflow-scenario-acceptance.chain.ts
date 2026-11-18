@@ -208,7 +208,11 @@ interface ImportResult {
       readonly promptDigest: string;
       readonly generation: number;
       readonly issuedAt: string;
-      readonly hostAction: { readonly effect: string; readonly windowId: string };
+      readonly hostAction: {
+        readonly effect: string;
+        readonly windowId: string;
+        readonly desktopSessionId: string | null;
+      };
     };
   };
   readonly event: { readonly streamRevision: number };
@@ -1759,11 +1763,11 @@ async function scenarioDeliveryChain(context: ScenarioContext): Promise<string> 
   equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
   equal(prepared.permit.prompt.includes(prepared.permit.deliveryId), true);
   equal(prepared.permit.prompt.includes(prepared.permit.claimDigest), true);
-  // X15：此时 Controller 窗口尚未登记（card-07 才握手），任何传输的回传段都没有 Controller 桌面会话行。
+  // X15（1.4 第 3 段）：投递 prompt 随 Demand 归档，任何传输下都不带 Controller 的桌面会话。
   equal(
-    prepared.permit.prompt.includes("- controller desktop session:"),
+    prepared.permit.prompt.includes("controller desktop session"),
     false,
-    "no Controller binding, no Controller desktop session line",
+    "an archived prompt carries no desktop session",
   );
   // K6：许可 prompt 由 Wakeflow 落在 Demand 根下，助手按 promptRef 读取并核对 promptDigest，Agent 不再重打。
   equal(
@@ -2697,6 +2701,12 @@ async function importAndAcceptTest(
   const importResult = imported.structuredContent as ImportResult;
   equal(importResult.status, "committed");
   equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
+  // X15（1.4 第 3 段）：回调的去处只在许可里——桌面会话传输给出 Controller 当前绑定的会话，其余传输为 null。
+  equal(
+    importResult.callback.permit.hostAction.desktopSessionId,
+    context.driver.windowTransport === "desktop" ? `local_${context.controllerHandle ?? ""}` : null,
+    "the callback permit names the Controller's desktop session only under desktop sessions",
+  );
   // 测试会话留下 Stop 记录后，accept 才进入允许集合。
   await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
   const inspection = await inspectReview(context, targetTaskId);
@@ -2825,13 +2835,11 @@ async function scenarioTestContract(context: ScenarioContext): Promise<string> {
   );
   equal(prepared.status, "committed");
   equal(prepared.permit.prompt.includes("ts-1"), true, "prompt must carry the contract steps");
-  // X15：Controller 已登记；只有桌面会话传输的回传段带它的桌面会话 id（服务端从定位器渲染，tmux 与 Codex 没有这一行）。
+  // X15（1.4 第 3 段）：Controller 已登记，prompt 仍不带它的桌面会话——回调的去处在导入结果返回的许可里。
   equal(
-    prepared.permit.prompt.includes(
-      `- controller desktop session: local_${context.controllerHandle ?? ""}`,
-    ),
-    context.driver.windowTransport === "desktop",
-    "the Controller desktop session line follows the window transport",
+    prepared.permit.prompt.includes(`local_${context.controllerHandle ?? ""}`),
+    false,
+    "an archived prompt carries no desktop session id on any transport",
   );
   equal(prepared.permit.prompt.includes(context.workspace.fixtureRoot), false);
   await landPrompt(context, prepared.permit.prompt, context.testWindowId, context.testHandle);
@@ -2903,6 +2911,21 @@ async function scenarioCompleteAndArchive(context: ScenarioContext): Promise<str
     true,
   );
   equal(await boardPackageStatus(context), "archived");
+  // 阅读面（I22，1.4 第 3 段）：归档修订目录的旁边有这个 Demand 的一页，账本根的历史索引里有它的一行；
+  // 页面不带本机路径。它们是投影，不进完成工具的结果。
+  const archivePage = readFileSync(
+    path.join(root, "Ledger", ...`${completed.archive.archiveRef}.md`.split("/")),
+    "utf8",
+  );
+  equal(archivePage.includes(`- Demand: \`${context.demandId}\``), true, archivePage);
+  equal(archivePage.includes(context.workspace.fixtureRoot), false);
+  equal(
+    readFileSync(path.join(root, "Ledger", "history.md"), "utf8").includes(
+      `](${completed.archive.archiveRef}.md)`,
+    ),
+    true,
+    "the history index links the archived Demand's page",
+  );
   const archived = await inspectRoute(context);
   equal(archived.route, null);
   equal(archived.archive?.outcome, "completed");
@@ -3502,7 +3525,12 @@ async function scenarioSupplementContinuation(context: ScenarioContext): Promise
   equal((await boardPackage(context, supplement.requirementId)).status, "archived");
   // 场景工作区的账本根是工作区内的 Ledger（fresh-initialize 的选择）。
   const archives = path.join(root, "Ledger", "archives", parent.demandId);
-  const latest = readdirSync(archives).sort().at(-1) ?? "";
+  // 修订目录是十位数字；旁边的 `<修订号>.md` 是人读页面（1.4 第 3 段），不是归档。
+  const latest =
+    readdirSync(archives)
+      .filter((name) => /^[0-9]{10}$/u.test(name))
+      .sort()
+      .at(-1) ?? "";
   const manifest = JSON.parse(
     readFileSync(path.join(archives, latest, "manifest.json"), "utf8"),
   ) as {

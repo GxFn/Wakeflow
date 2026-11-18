@@ -14,6 +14,9 @@ import { test } from "node:test";
  *
  * 1.3.1（gate-log §13.254）：endpoint 切片按观察种类与传输名分派的四个文件出了清单——定位的取出与解析、
  * 存活的分类、能否 relocate 都由宿主层实现的窗口传输端口给出，切片只调用。清单从 14 个文件降到 10 个。
+ *
+ * 1.4 第 3 段（gate-log §13.265）：投递 prompt 的渲染器出了清单——它唯一的一处是渲染 Controller 桌面会话号
+ * 时的拒绝原因；prompt 不再带会话号（X15），渲染器里已没有任何宿主专属的词。清单降到 9 个文件。
  */
 
 const VOCABULARY =
@@ -23,7 +26,6 @@ const INVENTORY: Readonly<Record<string, readonly [count: number, why: string]>>
   // 公共合同的文字说明里点名了坐标与会话 id 不进结果：合同词汇。endpoint 切片的其余四处（决定、服务、定位
   // 存储、pane 分类，合计 120 处）在 1.3.1 搬到了窗口传输端口之后（gate-log §13.254）：切片不再点名传输。
   "src/capabilities/endpoint/contract.ts": [3, "wire observation kinds"],
-  "src/capabilities/delivery/prompt.ts": [1, "prompt text names the host action"],
   // 配置文档的 hosts 段以宿主标识为键：配置合同。
   "src/configuration/wakeflow-config-document.ts": [13, "config keys under hosts"],
   // 组合根：每个制品在这里固定自己的宿主，本来就该点名。

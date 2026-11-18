@@ -1,4 +1,4 @@
-import { equal, ok, throws } from "node:assert/strict";
+import { equal, ok } from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -22,7 +22,6 @@ import {
   claudeCodeDesktopSessionIdOf,
   claudeCodeDesktopWindowTransportPort,
 } from "../../../src/hosts/claude-code/claude-code-window-transport-ports.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
 import type { WakeflowWindowLocatorTarget } from "../../../src/workspace/host-runtime/wakeflow-window-transport-port.js";
 import {
   TASKING_CREATED_AT,
@@ -33,11 +32,10 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 useDisposableDurability();
 
 /**
- * 1 级（组件）：投递回传段里 Controller 的桌面会话（open-items X15）。Controller 窗口的定位器记录在一次性根上写入，
+ * 1 级（组件）：Controller 的桌面会话与投递 prompt（open-items X15）。Controller 窗口的定位器记录在一次性根上写入，
  * 组合根的读法（按当前绑定读定位器，再由宿主取出桌面会话 id）只在记录是桌面 provider 且绑定代际相同时给出
- * `local_<uuid>`；prompt 渲染器只在拿到
- * 这个值时于回传段加一行 `- controller desktop session: …`，tmux 记录、缺席与旧绑定都不出这一行，所以 tmux
- * 投递的 prompt 字节不变；这一行在渲染文本里，prompt 摘要随之不同；形状不对的值不进 prompt。
+ * `local_<uuid>`——回调许可的 `hostAction.desktopSessionId` 用的就是这个读法。投递 prompt 随 Demand 归档，
+ * 所以渲染器不接收、也不渲染任何会话 id（1.4 第 3 段）：回传段在两种传输下是同样的字节。
  */
 
 const CONTROLLER_WINDOW_ID = "window_55555555-5555-4555-8555-555555555555";
@@ -49,9 +47,7 @@ const TASK_PACKAGE = createTaskPackage(
   { clock: () => TASKING_CREATED_AT },
 );
 
-function renderInput(
-  controllerDesktopSessionId?: string | null,
-): Readonly<RenderDeliveryPromptInput> {
+function renderInput(): Readonly<RenderDeliveryPromptInput> {
   return {
     language: "en",
     displayTitle: "ProductA",
@@ -87,7 +83,6 @@ function renderInput(
     rework: null,
     productDefectRemediation: null,
     testContract: null,
-    ...(controllerDesktopSessionId === undefined ? {} : { controllerDesktopSessionId }),
   };
 }
 
@@ -167,21 +162,14 @@ test("the Controller's desktop session is read only from a desktop locator of th
   equal(await read(root), DESKTOP_SESSION_ID);
 });
 
-test("the return section names the Controller's desktop session only when one is given; tmux prompts keep their bytes", () => {
-  const tmux = renderDeliveryPortablePrompt(renderInput());
-  equal(renderDeliveryPortablePrompt(renderInput(null)), tmux);
-  equal(tmux.includes("controller desktop session"), false);
-  const desktop = renderDeliveryPortablePrompt(renderInput(DESKTOP_SESSION_ID));
-  const section = returnSection(desktop);
-  equal(section.at(-2), `- controller desktop session: ${DESKTOP_SESSION_ID}`);
+test("the delivery prompt carries no desktop session id: the return section ends with the tool pointer and the no-forward line", () => {
+  const prompt = renderDeliveryPortablePrompt(renderInput());
+  equal(prompt.includes("controller desktop session"), false);
+  equal(/local_[0-9a-f]{8}-/u.test(prompt), false, "no desktop session id in an archived prompt");
+  const section = returnSection(prompt);
+  equal(section.at(-2), `- claimDigest: sha256:${"1".repeat(64)}`);
   equal(section.at(-1), "Never send this prompt onward to another window.");
-  // 这一行是渲染文本的一部分：去掉它即是 tmux 的字节，所以 prompt 摘要（permit）覆盖它。
-  equal(desktop.replace(`\n- controller desktop session: ${DESKTOP_SESSION_ID}`, ""), tmux);
-  throws(
-    () => renderDeliveryPortablePrompt(renderInput("local_not-a-session")),
-    (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "unexpected" &&
-      error.reason === "controller-desktop-session",
-  );
+  // 渲染器的输入里没有这个成员：多给的值在类型上就过不去，运行时也不会被读到。
+  const withStray = { ...renderInput(), controllerDesktopSessionId: DESKTOP_SESSION_ID };
+  equal(renderDeliveryPortablePrompt(withStray), prompt);
 });

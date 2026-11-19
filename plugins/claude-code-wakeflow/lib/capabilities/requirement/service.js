@@ -1,10 +1,11 @@
 import { failWakeflowConfigAuthority, readWakeflowConfigAuthoritySnapshot, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
-import { readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
+import { assertStrictTextContent, readStrictTextFile, StrictTextFileError, } from "../../foundation/filesystem/strict-text-file.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -92,6 +93,7 @@ async function openContext(root, options) {
         store: new LedgerAuthorityStore(ledgerRoot),
         clock: options.clock,
         signal: options.signal,
+        inlineDocuments: options.inlineDocuments,
     });
 }
 function mediaTypeOf(path) {
@@ -131,6 +133,34 @@ async function readSurfaceDocument(surface, role, sourcePath, recordPath, reques
         throw error;
     }
 }
+/** 直接给出的一份文档：与从设计面读到的同一套严格文本规则，摘要按同样的字节算。 */
+function inlineDocument(role, text, requestPath) {
+    try {
+        assertStrictTextContent(text);
+    }
+    catch (error) {
+        if (error instanceof StrictTextFileError) {
+            fail("invalid-request", `package-document-${error.reason}`, requestPath, { cause: error });
+        }
+        throw error;
+    }
+    const bytes = encodeUtf8(text, requestPath);
+    if (bytes.byteLength > MEMBER_MAXIMUM_BYTES) {
+        fail("invalid-request", "package-document-capacity", requestPath);
+    }
+    return Object.freeze({
+        role,
+        path: parsePortableResourcePath(`${role}.md`, "$request.package"),
+        text,
+        digest: computeSha256Digest(bytes, requestPath),
+    });
+}
+function inlinePackageDocuments(documents) {
+    return Object.freeze([
+        inlineDocument("requirement", documents.requirement, "$request.package.requirementPath"),
+        inlineDocument("landing", documents.landing, "$request.package.landingPath"),
+    ]);
+}
 function attachmentRecordPath(sourcePath) {
     const name = sourcePath.slice(sourcePath.lastIndexOf("/") + 1);
     return `attachments/${name}`;
@@ -140,6 +170,8 @@ async function readPackageDocuments(context, input) {
     const surface = context.snapshot.model.topology.supportSurfaces.find((entry) => entry.surfaceId === input.designSurfaceId && entry.capability === "design");
     if (surface === undefined)
         fail("not-found", "design-surface", "$request.package.designSurfaceId");
+    if (context.inlineDocuments !== undefined)
+        return inlinePackageDocuments(context.inlineDocuments);
     const placement = context.snapshot.placements.roots.find((entry) => entry.key === `support.${input.designSurfaceId}.root`);
     if (placement === undefined || placement.state !== "present" || placement.realPath === null) {
         fail("precondition-failed", "design-surface-root", "$request.package.designSurfaceId");

@@ -11,6 +11,7 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, } from "../capabilities/workspac
 import { WAKEFLOW_MAINTENANCE_PUBLIC_REQUEST_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-request.generated.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import { createWakeflowToolCatalog, } from "../kernel/tool-registry.js";
+import { QUICK_DEMAND_TOOL_REGISTRATION, } from "./wakeflow-public-mcp-quick-demand-contract.js";
 const REGISTRATIONS = Object.freeze([
     {
         name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
@@ -32,6 +33,7 @@ const REGISTRATIONS = Object.freeze([
     REQUIREMENT_PUBLICATION_TOOL_REGISTRATION,
     BOARD_INSPECTION_TOOL_REGISTRATION,
     DEMAND_CREATION_TOOL_REGISTRATION,
+    QUICK_DEMAND_TOOL_REGISTRATION,
     DEMAND_COMPLETION_TOOL_REGISTRATION,
     DEMAND_CANCELLATION_TOOL_REGISTRATION,
     DEMAND_CONTINUATION_TOOL_REGISTRATION,

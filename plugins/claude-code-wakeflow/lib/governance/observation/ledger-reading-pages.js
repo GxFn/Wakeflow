@@ -11,7 +11,7 @@ import { createLedgerReadingPageResourceDeclaration } from "../ledger/ledger-res
 import { readArchivedReviewSnapshot } from "./archived-demand-observation.js";
 import { countDemandArchiveEvidence, listArchivedDemandIds, locateLatestDemandArchive, readDemandArchiveEvents, readDemandArchiveIdentity, } from "./demand-archive-locator.js";
 import { measureDemandArchiveEvents } from "./demand-archive-measures.js";
-import { buildDemandArchivePageFacts, DEMAND_ARCHIVE_PAGE_COMPACT_LIMITS, demandArchivePageHistoryOf, demandArchivePageLine, demandArchivePageMarker, renderDemandArchivePage, } from "./demand-archive-page.js";
+import { buildDemandArchivePageFacts, DEMAND_ARCHIVE_PAGE_COMPACT_LIMITS, demandArchivePageHistoryOf, demandArchiveSessionPromptsOf, demandArchivePageLine, demandArchivePageMarker, renderDemandArchivePage, } from "./demand-archive-page.js";
 function readingPageTarget(declarationId, resourcePath) {
     const declaration = createLedgerReadingPageResourceDeclaration(declarationId, resourcePath);
     if (declaration.nodePolicy.kind !== "file") {
@@ -171,9 +171,9 @@ function isAborted(error) {
     return error instanceof WakeflowError && error.reason === "aborted";
 }
 /** 归档里的评审历史；读不出为 null（页面照样渲染，只说明这一部分读不出）。中止上抛。 */
-async function readHistoryOrNull(ledgerRoot, archiveRef, signal) {
+async function readHistoryOrNull(ledgerRoot, archiveRef, events, signal) {
     try {
-        return demandArchivePageHistoryOf(await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal));
+        return demandArchivePageHistoryOf(await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal), demandArchiveSessionPromptsOf(events));
     }
     catch (error) {
         const reason = typeof error === "object" && error !== null
@@ -196,7 +196,7 @@ async function renderArchivePage(ledgerRoot, summary, language, signal) {
         summary,
         identity: await readDemandArchiveIdentity(ledgerRoot, summary.archiveRef, signal),
         evidenceCount: await countDemandArchiveEvidence(ledgerRoot, summary.archiveRef, signal),
-        history: await readHistoryOrNull(ledgerRoot, summary.archiveRef, signal),
+        history: await readHistoryOrNull(ledgerRoot, summary.archiveRef, read.events, signal),
         measures: read.eventCommits === 0 ? null : measureDemandArchiveEvents(read.events, read.eventCommits),
     });
     const full = renderDemandArchivePage(facts, language);

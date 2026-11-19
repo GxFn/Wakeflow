@@ -13,6 +13,7 @@ import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../
 import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
 import { parseTargetResult, TargetResultError, targetResultRecordedEventIdFromResult, } from "../../result/target-result.js";
 import { parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, parseTargetResultEvidenceResolutions, TargetResultCallbackError, } from "../../result/target-result-callback.js";
+import { parseTargetSessionPromptObservation, TargetSessionPromptObservationError, } from "../../result/target-session-prompts.js";
 import { ControllerImplementationReviewDecisionError, parseControllerImplementationReviewDecision, } from "../../review/controller-implementation-review-decision.js";
 import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, } from "../../review/controller-product-defect-remediation-authorization.js";
 import { ControllerReviewDecisionError, controllerReviewDecisionEventId, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
@@ -148,6 +149,14 @@ const RECORD_TARGET_RESULT_FIELDS = Object.freeze([
     "commandVersion",
     "evidenceResolution",
     "result",
+]);
+const RECORD_OBSERVED_TARGET_RESULT_FIELDS = Object.freeze([
+    "callback",
+    "commandType",
+    "commandVersion",
+    "evidenceResolution",
+    "result",
+    "sessionPrompts",
 ]);
 const REISSUE_CALLBACK_FIELDS = Object.freeze([
     "commandType",
@@ -648,7 +657,19 @@ function parseRearmDeliveryCommand(base) {
     });
 }
 function parseRecordTargetResultCommand(base) {
-    const command = exactCommand(base, RECORD_TARGET_RESULT_FIELDS);
+    const observed = Object.hasOwn(base, "sessionPrompts");
+    const command = exactCommand(base, observed ? RECORD_OBSERVED_TARGET_RESULT_FIELDS : RECORD_TARGET_RESULT_FIELDS);
+    let sessionPrompts;
+    if (observed) {
+        try {
+            sessionPrompts = parseTargetSessionPromptObservation(command.sessionPrompts, "$/sessionPrompts");
+        }
+        catch (error) {
+            if (error instanceof TargetSessionPromptObservationError)
+                fail("input", error.path, error);
+            throw error;
+        }
+    }
     let result;
     try {
         result = parseTargetResult(command.result);
@@ -677,6 +698,7 @@ function parseRecordTargetResultCommand(base) {
         result,
         callback,
         evidenceResolution,
+        ...(sessionPrompts === undefined ? {} : { sessionPrompts }),
     });
 }
 function parseReissueCallbackCommand(base) {
@@ -884,6 +906,7 @@ function decideRecordTargetResult(state, command) {
             result: command.result,
             callback: command.callback,
             evidenceResolution: command.evidenceResolution,
+            ...(command.sessionPrompts === undefined ? {} : { sessionPrompts: command.sessionPrompts }),
         },
     }));
 }

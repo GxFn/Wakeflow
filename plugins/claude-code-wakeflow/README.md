@@ -73,7 +73,7 @@ records: an edit is overwritten, and the records stay the authority.
 
 ## Entry points
 
-`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.
+`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, `/wakeflow:quick` turns one sentence into a small Demand for one repository, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.
 
 Plain language works everywhere: "initialize a workspace here", "what is the
 status", "keep going", "open a pod for this".

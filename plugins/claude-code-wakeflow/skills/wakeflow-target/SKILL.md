@@ -123,6 +123,9 @@ report, return the callback. You own no other step and no Controller authority.
    acceptance anchors are not all bound.
    A `needs-review` import is then a normal ending: the Controller records the
    evidence, verifies every anchor itself and accepts your report directly.
+   Wakeflow also counts, on its own, the prompts that reached this session
+   between the delivery and your import, and shows the count to the reviewer
+   beside what you declared - so declare what you were told.
 6. The import returns a wake-controller callback permit. Send its prompt to the
    Controller window the permit's host action names, by the one route that
    host action gives - its `transport`, never a guess from the prompt's

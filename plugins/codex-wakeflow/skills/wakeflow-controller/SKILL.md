@@ -79,6 +79,8 @@ Call `wakeflow_inspect_board` to list what Design has published. With exactly
 one pending package, claim it and say which; with several, choose with the
 user. Then call `wakeflow_create_demand` on it (one with `supplements` joins its completed Demand instead - reference). The Demand type, testing
 decision and authority members come from the package; you do not restate them.
+A small one-repository change the user asks you for directly skips steps 3 to
+7: `wakeflow_quick_demand` ("Quick Demand" in `references/planning-and-delivery.md`).
 
 ### Step 6 - Plan the target task
 

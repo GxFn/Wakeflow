@@ -17,6 +17,7 @@ import { ManagedEvidenceManifestError, parseManagedEvidenceManifest, } from "../
 import { DemandCompletionError, parseDemandCompletion, } from "../../lifecycle/demand-completion.js";
 import { parseTargetResult, TargetResultError, targetResultRecordedEventIdFromResult, } from "../../result/target-result.js";
 import { deriveTargetResultCallbackId, parseTargetResultCallbackRecord, parseTargetResultCallbackReissue, parseTargetResultEvidenceResolutions, TargetResultCallbackError, } from "../../result/target-result-callback.js";
+import { parseTargetSessionPromptObservation, TargetSessionPromptObservationError, } from "../../result/target-session-prompts.js";
 import { ControllerProductDefectRemediationAuthorizationError, parseControllerProductDefectRemediationAuthorization, productDefectRemediationAuthorizedEventId, } from "../../review/controller-product-defect-remediation-authorization.js";
 import { ControllerReviewDecisionError, controllerReviewDecisionEventId, parseControllerReviewDecision, } from "../../review/controller-review-decision.js";
 import { parseTaskPackage, TaskPackageError, } from "../../tasking/task-package.js";
@@ -106,6 +107,13 @@ const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze([
     "callback",
     "evidenceResolution",
     "result",
+]);
+/** 带着越级观察的同一事件：多一个可选成员。 */
+const TARGET_RESULT_RECORDED_OBSERVED_DATA_FIELDS = Object.freeze([
+    "callback",
+    "evidenceResolution",
+    "result",
+    "sessionPrompts",
 ]);
 const CALLBACK_REISSUED_DATA_FIELDS = Object.freeze(["reissue"]);
 const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"]);
@@ -381,7 +389,11 @@ function parseDeliveryRearmedEvent(record, { eventId, demandId, recordedAt }) {
     });
 }
 function parseTargetResultRecordedEvent(record, { eventId, demandId, recordedAt }) {
-    const data = exactRecord(record.data, TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
+    const observed = hasOwnMember(record.data, "sessionPrompts");
+    const data = exactRecord(record.data, observed ? TARGET_RESULT_RECORDED_OBSERVED_DATA_FIELDS : TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
+    const sessionPrompts = observed
+        ? parseSessionPrompts(data.sessionPrompts, "$/data/sessionPrompts")
+        : undefined;
     let result;
     try {
         result = parseTargetResult(data.result);
@@ -406,6 +418,7 @@ function parseTargetResultRecordedEvent(record, { eventId, demandId, recordedAt 
     }
     if (result.demandId !== demandId ||
         result.report.reportedAt !== recordedAt ||
+        (sessionPrompts !== undefined && sessionPrompts.until !== recordedAt) ||
         targetResultRecordedEventIdFromResult(result) !== eventId ||
         callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)) {
         fail("relation", "$event");
@@ -415,8 +428,27 @@ function parseTargetResultRecordedEvent(record, { eventId, demandId, recordedAt 
         demandId,
         recordedAt,
         eventType: "result.target-result-recorded",
-        data: Object.freeze({ result, callback, evidenceResolution }),
+        data: Object.freeze({
+            result,
+            callback,
+            evidenceResolution,
+            ...(sessionPrompts === undefined ? {} : { sessionPrompts }),
+        }),
     });
+}
+function hasOwnMember(value, key) {
+    return typeof value === "object" && value !== null && Object.hasOwn(value, key);
+}
+/** 越级观察的严格解析；它的终点必须就是结果导入的时刻，由调用处的关系检查保证。 */
+function parseSessionPrompts(value, path) {
+    try {
+        return parseTargetSessionPromptObservation(value, path);
+    }
+    catch (error) {
+        if (error instanceof TargetSessionPromptObservationError)
+            fail("input", error.path, error);
+        throw error;
+    }
 }
 function parseCallbackReissuedEvent(record, { eventId, demandId, recordedAt }) {
     const data = exactRecord(record.data, CALLBACK_REISSUED_DATA_FIELDS, "$/data");

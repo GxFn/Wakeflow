@@ -54,7 +54,7 @@ Wakeflow 把"我想做这个"变成一条可追溯的工作线：需求包、Dem
 
 ## 入口
 
-`/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:pod` 创建或关闭 pod。Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。
+`/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:quick` 把一句话变成一个仓库里的小 Demand，`/wakeflow:pod` 创建或关闭 pod。Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。
 
 任何时候直接说人话都可以："在这里初始化工作区"、"现在什么状态"、"继续"、
 "开一个 pod"。

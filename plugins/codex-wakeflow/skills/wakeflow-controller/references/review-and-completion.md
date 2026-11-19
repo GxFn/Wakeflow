@@ -27,6 +27,14 @@ decision advances the workflow. Then do the work inspection cannot do:
    outside the package: read both, then record in `independentChecks` only the
    anchors you re-checked or disagree with, not a retelling of every one. A
    result without them was written before they existed, not hiding them.
+   The unit's `sessionPrompts` is Wakeflow's own count beside that account:
+   prompts submitted in the target session between the delivery's landing and
+   the import - `permitPrompts` carried a Wakeflow permit, `nudgePrompts`
+   matched a continue phrase you pushed, `outsidePrompts` are the rest, with
+   their times. It holds no content. Outside prompts the report does not
+   declare are a question for the user ("did you speak to that window?"), not
+   a finding against the target; `unobserved` means there was no landing
+   record to count from, not zero.
 3. Notice what is missing. An anchor answered with a confident sentence and no
    evidence is the most common failure you will see.
 
@@ -225,3 +233,26 @@ corrected package.
 
 All three take preview, apply and recover, and all three delete or restore an
 active root. Read the preview to the user before you apply any of them.
+
+## One call after an accept
+
+An accept can carry the step that follows it, so it does not cost another turn:
+
+- `thenPlan: { taskPackage, planReview? }` - "accept this one and start the
+  next": once the accept is recorded Wakeflow plans that task package, exactly
+  as `wakeflow_plan_target_task` would (same lineage rule: the next package in
+  the same repository declares `continuation` of the accepted target). The
+  result's `thenPlan` is `planned` with the planning result, and `next`
+  continues from it; `refused` carries the planner's error - the accept
+  stands, fix the package and plan it with the planning tool.
+- `thenComplete: true` - "accept and archive": once the accept is recorded
+  Wakeflow runs the completion preview and applies it when nothing blocks.
+  `completed` carries the completion result (name the archived page as usual);
+  `blocked` lists the completion preview's blockers and the accept stands.
+  Use it when this accept is the last thing the Demand needs - a quick Demand
+  always ends this way. If the call is cut after the archive was sealed, a
+  retry is refused because the Demand is no longer active: read
+  `wakeflow_status` with the Demand id, it shows the archive.
+
+Both need `decision: "accept"`; they do not combine, and neither changes what
+the accept itself requires.

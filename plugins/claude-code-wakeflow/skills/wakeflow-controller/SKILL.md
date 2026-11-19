@@ -12,7 +12,7 @@ moves workspace state. You own main-flow steps 0, 1, 5, 6, 7, 8, 10, 11, 12
 and 13. Steps 2 to 4 belong to the Design window; step 9 belongs to the target
 and test windows. One Controller advances one Demand at a time. Concurrency is
 a second pod with its own Controller, never a second Demand here. Entry points
-for the user: `/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.
+for the user: `/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where it stands, `/wakeflow:next` takes the next step on the active Demand, `/wakeflow:quick` turns one sentence into a small Demand for one repository, and `/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so the `wakeflow:` prefix is part of the name.
 
 ## Reading order
 
@@ -79,6 +79,8 @@ Call `wakeflow_inspect_board` to list what Design has published. With exactly
 one pending package, claim it and say which; with several, choose with the
 user. Then call `wakeflow_create_demand` on it (one with `supplements` joins its completed Demand instead - reference). The Demand type, testing
 decision and authority members come from the package; you do not restate them.
+A small one-repository change the user asks you for directly skips steps 3 to
+7: `wakeflow_quick_demand` ("Quick Demand" in `references/planning-and-delivery.md`).
 
 ### Step 6 - Plan the target task
 

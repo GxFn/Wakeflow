@@ -1,5 +1,6 @@
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { implementationReportAnchorResults, implementationReportOutsideInstructions, } from "../result/implementation-target-result-report.js";
+import { parseTargetSessionPromptObservation, TargetSessionPromptObservationError, } from "../result/target-session-prompts.js";
 /** 页面渲染器的版本：改渲染就加一，现存页面的标记随之失配，下一次刷新重写。 */
 const DEMAND_ARCHIVE_PAGE_VERSION = 1;
 // ---- 事实的整理 ----------------------------------------------------------------
@@ -59,7 +60,7 @@ function anchorsOf(taskPackage, result) {
 function repositoryIdOf(taskPackage) {
     return taskPackage.workType === "implementation" ? taskPackage.assignment.repositoryId : null;
 }
-function targetOf(target) {
+function targetOf(target, observations) {
     // 还在等结果的目标只带任务包的标识与摘要，没有正文：页面在"还剩什么"里按标识列出它。
     if (target.status === "awaiting-result")
         return null;
@@ -77,14 +78,15 @@ function targetOf(target) {
         anchors: anchorsOf(target.taskPackage, target.targetResult),
         report: reportOf(target.targetResult),
         decisions: Object.freeze(decisions),
+        sessionPrompts: observations.get(target.targetResult.targetResultId) ?? null,
     });
 }
 /** 把归档里读出的评审快照整理成页面用的目标清单。 */
-export function demandArchivePageHistoryOf(snapshot) {
+export function demandArchivePageHistoryOf(snapshot, observations = new Map()) {
     const targets = [];
     const pending = [];
     for (const target of snapshot.targets) {
-        const shaped = targetOf(target);
+        const shaped = targetOf(target, observations);
         if (shaped !== null) {
             targets.push(shaped);
             continue;
@@ -155,8 +157,12 @@ const TEXT = Object.freeze({
         residual: "Residual risk",
         risk: "Risk the target reported",
         interventions: "Instructions outside the task package",
-        interventionsNote: "What each target declared it was told to do outside its task package, and what it did about it. This is the target's own account.",
+        interventionsNote: "Two accounts side by side: what each target declared it was told to do outside its task package, and what Wakeflow itself counted in the target's session. Neither replaces the other.",
         interventionsNone: "None was declared.",
+        declared: "declared by the target",
+        observed: (outside, permit, nudge) => `observed by Wakeflow between landing and result import: ${outside} prompt${outside === 1 ? "" : "s"} from outside the delivery, ${permit} carrying a Wakeflow permit, ${nudge} matching a continue phrase the Controller pushed`,
+        observedAt: "at",
+        unobserved: (reason) => `Wakeflow could not observe the target session (${reason}); this is not a count of zero`,
         outsideNotRecorded: "not recorded (report record version 1)",
         notAccepted: "Not accepted when archived",
         noResult: "No result when archived",
@@ -205,8 +211,12 @@ const TEXT = Object.freeze({
         residual: "剩余风险",
         risk: "目标报告的风险",
         interventions: "任务包之外的指示",
-        interventionsNote: "每个目标申报的、在任务包之外被要求做的事，以及它怎么处理的。这是目标自己的说法。",
+        interventionsNote: "两份说法并排：每个目标申报的、在任务包之外被要求做的事，以及 Wakeflow 自己在目标会话里数到的。谁也不替代谁。",
         interventionsNone: "没有申报。",
+        declared: "目标申报",
+        observed: (outside, permit, nudge) => `Wakeflow 在落地到结果导入之间观察到：${outside} 条投递之外的 prompt，${permit} 条带 Wakeflow 的许可，${nudge} 条与 Controller 推过的续跑短句相符`,
+        observedAt: "时刻",
+        unobserved: (reason) => `Wakeflow 没能观察目标会话（${reason}）；这不是零条`,
         outsideNotRecorded: "未记录（报告的记录版本为 1）",
         notAccepted: "归档时未被接受",
         noResult: "归档时没有结果",
@@ -412,19 +422,38 @@ function outsideLines(context, label, report) {
         return [`- ${label}: ${text.outsideNotRecorded}`];
     return report.outsideInstructions
         .slice(0, limits.list)
-        .map((entry) => `- ${label}: ${entry.source}, ${entry.handling} — ${demandArchivePageLine(entry.summary, limits.cell)}`);
+        .map((entry) => `- ${label}: ${text.declared} (${entry.source}, ${entry.handling}) — ${demandArchivePageLine(entry.summary, limits.cell)}`);
 }
 /**
  * "任务包之外的指示"（ADR-0030 决定 7 的"直接干预"一栏）：现在只有目标自己的申报；Wakeflow 自己的越级
  * 观察在 1.4 第 4 段加进这一栏。
  */
+/** Wakeflow 自己的观察：只有条数与时刻。1.4 之前的结果没有观察，不出这一行。 */
+function observedLines(context, label, observation) {
+    const { text } = context;
+    if (observation === null)
+        return [];
+    if (observation.status === "unobserved") {
+        return [`- ${label}: ${text.unobserved(observation.reason ?? "unobserved")}`];
+    }
+    const times = observation.outsideAt.length === 0
+        ? ""
+        : ` (${text.observedAt} ${observation.outsideAt.join(", ")})`;
+    return [
+        `- ${label}: ${text.observed(observation.outsidePrompts, observation.permitPrompts, observation.nudgePrompts)}${times}`,
+    ];
+}
 function interventionsSection(context, facts) {
     const { text, limits } = context;
     const lines = facts.targets === null
         ? [text.notRecorded]
-        : capped(facts.targets, limits.targets, text, (target, index) => target.report === null
-            ? []
-            : outsideLines(context, `${text.target} ${index + 1}`, target.report));
+        : capped(facts.targets, limits.targets, text, (target, index) => {
+            const label = `${text.target} ${index + 1}`;
+            return [
+                ...(target.report === null ? [] : outsideLines(context, label, target.report)),
+                ...observedLines(context, label, target.sessionPrompts),
+            ];
+        });
     return [
         `## ${text.interventions}`,
         "",
@@ -516,4 +545,28 @@ export function renderDemandArchivePage(facts, language, limits = DEMAND_ARCHIVE
     ]
         .join("\n")
         .trimEnd()}\n`;
+}
+/**
+ * 归档事件里各份结果的越级观察，按结果标识取。形状不对的那一条当作没有——页面是投影，不为一条旁证失败。
+ */
+export function demandArchiveSessionPromptsOf(events) {
+    const observations = new Map();
+    for (const event of events) {
+        if (event.eventType !== "result.target-result-recorded")
+            continue;
+        const result = event.data.result;
+        const resultId = typeof result === "object" && result !== null
+            ? result.targetResultId
+            : undefined;
+        if (typeof resultId !== "string" || event.data.sessionPrompts === undefined)
+            continue;
+        try {
+            observations.set(resultId, parseTargetSessionPromptObservation(event.data.sessionPrompts));
+        }
+        catch (error) {
+            if (!(error instanceof TargetSessionPromptObservationError))
+                throw error;
+        }
+    }
+    return observations;
 }

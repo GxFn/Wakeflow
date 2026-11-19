@@ -348,6 +348,7 @@ export class DemandEventSourcingRepository {
                         result,
                         callback: event.data.callback,
                         evidenceResolution: event.data.evidenceResolution,
+                        sessionPrompts: event.data.sessionPrompts ?? null,
                     }));
                     continue;
                 }

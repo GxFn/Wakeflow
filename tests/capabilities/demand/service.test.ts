@@ -556,6 +556,48 @@ async function interruptAndRecover(
   }
 }
 
+test("完成可以一次调用（1.4 第 5 段 5b）：应用不带 planDigest 就地过门并归档；门不过时什么都不写、交回预览；取消仍然要先预览", async () => {
+  const planning = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const root = planning.workspacePath;
+    const demandId = planning.request.demandId;
+    const before = snapshotTree(path.join(root, ...demandFinalRootRef(demandId).split("/")));
+    const blocked = await executeDemandCompletionRequest({ root, mode: "apply", demandId });
+    if (blocked.kind !== "WakeflowDemandCompletionPreview")
+      throw new Error("Expected the blocked preview.");
+    equal(blocked.status, "blocked");
+    equal(blocked.blockers.includes("route:not-ready"), true);
+    equal(blocked.planDigest, null);
+    deepEqual(snapshotTree(path.join(root, ...demandFinalRootRef(demandId).split("/"))), before);
+    // 取消是使用者的决定：不带 planDigest 的应用照旧被拒。
+    await rejects(
+      executeDemandCancellationRequest({ root, mode: "apply", demandId, reason: "No preview." }),
+      (error: unknown) => error instanceof WakeflowError && error.reason === "plan-digest-required",
+    );
+    equal(demandRootExists(root, demandId), true);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(planning);
+  }
+
+  const fixture = await createAcceptedDemandCompletionWorkspaceFixture();
+  try {
+    const root = fixture.workspacePath;
+    const demandId = fixture.demandId;
+    const completed = await executeDemandCompletionRequest({ root, mode: "apply", demandId });
+    if (completed.kind !== "WakeflowDemandCompletionMutation")
+      throw new Error("Expected the completion.");
+    equal(completed.disposition, "completed");
+    equal(demandRootExists(root, demandId), false);
+    equal(
+      archiveRevisions(path.join(fixture.fixtureRoot, "wakeflow-ledger", "archives", demandId))
+        .length,
+      1,
+    );
+  } finally {
+    await cleanupAcceptedDemandCompletionWorkspaceFixture(fixture);
+  }
+});
+
 test("完成的 apply 在日志之后中断：recover 按日志重放出与正常 apply 相同的归档与看板状态", async () => {
   await interruptAndRecover("complete");
 });

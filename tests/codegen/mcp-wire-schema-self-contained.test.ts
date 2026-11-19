@@ -179,14 +179,16 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       `Planning wire definition ${sharedDefinition} must not drift`,
     );
   }
-  // ADR-0012 D2：单次追加信封，幂等键与观察到的流修订随请求一起到达。
-  deepEqual(planningRequest.required, [
-    "root",
-    "demandId",
-    "idempotencyKey",
-    "expectedStreamRevision",
-    "taskPackage",
-  ]);
+  // ADR-0012 D2：单次追加信封，幂等键随请求一起到达。观察到的流修订是可选的（1.4 第 5 段 5b）：
+  // 不给就按当前修订追加，给了照旧核对。
+  deepEqual(planningRequest.required, ["root", "demandId", "idempotencyKey", "taskPackage"]);
+  deepEqual((planningRequest.properties as JsonObject).expectedStreamRevision, {
+    type: "integer",
+    minimum: 1,
+    maximum: 9007199254740991,
+    description:
+      "Optional; leave it out to append at the current revision. When given it must equal the current revision.",
+  });
   deepEqual((planningRequest.properties as JsonObject).taskPackage, {
     $ref: "#/$defs/requestedTaskPackage",
   });
@@ -218,7 +220,11 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   );
   // 能力卡 5 D3：plan review 是请求级可选回显，只携带用户确认时刻。
   deepEqual(Object.keys(planningRequest.properties as JsonObject), [
-    ...(planningRequest.required as string[]),
+    "root",
+    "demandId",
+    "idempotencyKey",
+    "expectedStreamRevision",
+    "taskPackage",
     "planReview",
   ]);
   const planReviewEcho = (planningRequest.properties as JsonObject).planReview as JsonObject;

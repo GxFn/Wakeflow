@@ -90,7 +90,8 @@ test("plan_target_task 一次调用追加规划事件并返回 next；重放、�
     await rejects(
       planFixtureTargetTask(fixture, {
         idempotencyKey: "plan-stale",
-        expectedStreamRevision: before - 1,
+        // 给了就照旧核对：不是当前修订即拒绝。
+        expectedStreamRevision: before + 1,
       }),
       (error: unknown) =>
         isWakeflowError(error) &&
@@ -133,6 +134,29 @@ test("plan_target_task 一次调用追加规划事件并返回 next；重放、�
       (error: unknown) => isWakeflowError(error) && error.code === "invalid-request",
     );
     equal(await commitCount(fixture), before + 1);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("不给流修订就按当前修订追加，原样重放命中同一条提交（1.4 第 5 段 5b，ADR-0031）", async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const before = await commitCount(fixture);
+    const unobserved = { idempotencyKey: "plan-unobserved", expectedStreamRevision: null };
+    const committed = await planFixtureTargetTask(fixture, unobserved);
+    equal(committed.status, "committed");
+    equal(committed.event.streamRevision, before + 1);
+    // 重放时流已经往前走了一步；请求里仍然没有修订，命中的是幂等键下的那一条提交。
+    const replayed = await planFixtureTargetTask(fixture, unobserved);
+    equal(replayed.status, "idempotent");
+    equal(replayed.event.eventId, committed.event.eventId);
+    equal(await commitCount(fixture), before + 1);
+    // 0 不是一次真实的观察（已发布的 Demand 从修订 1 起），请求 Schema 不收。
+    await rejects(
+      planFixtureTargetTask(fixture, { idempotencyKey: "plan-zero", expectedStreamRevision: 0 }),
+      (error: unknown) => isWakeflowError(error) && error.code === "invalid-request",
+    );
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

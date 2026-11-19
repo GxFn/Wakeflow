@@ -147,6 +147,56 @@ function rejectedWith(reason: string, code = "precondition-failed") {
     isWakeflowError(error) && error.code === code && error.reason === reason;
 }
 
+test("准备投递、记结局与重发都可以不给流修订：按当前修订追加；给了过期的照旧拒绝（1.4 第 5 段 5b，ADR-0031）", async () => {
+  const fixture = await createDeliveryWorkspaceFixture();
+  try {
+    await rejects(
+      prepareFixtureDelivery(fixture, {
+        idempotencyKey: "fixture-prepare-stale",
+        expectedStreamRevision: 9,
+      }),
+      (error: unknown) => isWakeflowError(error) && error.code === "concurrency-conflict",
+    );
+    const unobserved = {
+      idempotencyKey: "fixture-prepare-unobserved",
+      expectedStreamRevision: null,
+    };
+    const prepared = await prepareFixtureDelivery(fixture, unobserved);
+    equal(prepared.status, "committed");
+    equal(prepared.event.streamRevision, 3);
+    // 原样重放（仍然不给）命中幂等键下的那一条提交，流没有再动。
+    const replayed = await prepareFixtureDelivery(fixture, unobserved);
+    equal(replayed.delivery.deliveryId, prepared.delivery.deliveryId);
+    equal(replayed.event.streamRevision, 3);
+
+    const rejected = await recordFixtureDeliveryOutcome(fixture, prepared, {
+      expectedStreamRevision: null,
+      attempt: {
+        status: "failed-before-send",
+        failure: { code: "session-absent", summary: "the bound session no longer exists" },
+      },
+      readback: { status: "unavailable" },
+    });
+    equal(rejected.outcome.disposition, "rejected-before-send");
+    equal(rejected.event.streamRevision, 4);
+
+    const rearmed = await executeRearmDeliveryRequest(
+      CODEX_DELIVERY_FACADE,
+      {
+        root: fixture.workspacePath,
+        demandId: fixture.demandId,
+        idempotencyKey: "fixture-rearm-unobserved",
+        deliveryId: prepared.delivery.deliveryId,
+      },
+      { clock: () => parseUtcInstant("2026-08-29T12:20:00.000Z") },
+    );
+    equal(rearmed.status, "rearmed");
+    equal(rearmed.event.streamRevision, 5);
+  } finally {
+    await cleanupDeliveryWorkspaceFixture(fixture);
+  }
+});
+
 function claimPath(fixture: Readonly<DeliveryWorkspaceFixture>): string {
   return path.join(fixture.workspacePath, ...workClaimRef(fixture.route.windowId).split("/"));
 }

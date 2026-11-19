@@ -166,7 +166,7 @@ export const DEMAND_COMPLETION_TOOL_REGISTRATION = Object.freeze({
   executor: "completeDemand",
   title: "Complete Wakeflow Demand",
   description:
-    "Complete a Demand and archive it in one transaction: preview runs the verify gates (config, ledger layout, root audit, board claim, work claims, append candidates, evidence, payload privacy) and lists blockers without writing; apply appends the completion event, seals the archive package under the ledger with the verify report, marks the requirement package archived, and deletes the active root; recover replays the journaled steps.",
+    "Complete a Demand and archive it in one transaction: apply appends the completion event, seals the archive package under the ledger with the verify report, marks the requirement package archived, and deletes the active root. With no planDigest it plans and applies in one call - the verify gates (config, ledger layout, root audit, board claim, work claims, evidence, payload privacy) run first, and a blocked plan writes nothing and returns the preview with its blockers. preview runs the same gates without writing; recover replays the journaled steps.",
   requestSchema: WAKEFLOW_DEMAND_COMPLETION_REQUEST_SCHEMA,
   resultSchema: WAKEFLOW_DEMAND_COMPLETION_RESULT_SCHEMA,
   annotations: EFFECT_ANNOTATIONS,

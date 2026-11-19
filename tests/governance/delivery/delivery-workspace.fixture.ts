@@ -373,7 +373,8 @@ export async function cleanupDeliveryWorkspaceFixture(
 
 export interface PrepareFixtureDeliveryOverrides {
   readonly idempotencyKey?: string;
-  readonly expectedStreamRevision?: number;
+  /** `null`：请求里不带这一项（按当前修订追加）。 */
+  readonly expectedStreamRevision?: number | null;
   readonly targetTaskId?: string;
   readonly authored?: Readonly<{
     readonly goal: string;
@@ -399,7 +400,9 @@ export async function prepareFixtureDelivery(
       root: fixture.workspacePath,
       demandId: fixture.demandId,
       idempotencyKey: overrides.idempotencyKey ?? "fixture-prepare-1",
-      expectedStreamRevision: overrides.expectedStreamRevision ?? 2,
+      ...(overrides.expectedStreamRevision === null
+        ? {}
+        : { expectedStreamRevision: overrides.expectedStreamRevision ?? 2 }),
       targetTaskId: overrides.targetTaskId ?? fixture.targetTaskId,
       authored: overrides.authored ?? DELIVERY_AUTHORED,
       language: overrides.language ?? "zh-Hans",
@@ -443,7 +446,8 @@ export async function landFixturePrompt(
 
 export interface RecordFixtureOutcomeOverrides {
   readonly idempotencyKey?: string;
-  readonly expectedStreamRevision?: number;
+  /** `null`：请求里不带这一项。 */
+  readonly expectedStreamRevision?: number | null;
   readonly attempt?: Readonly<{
     readonly status: "sent" | "failed-before-send" | "unknown";
     readonly evidenceDigest?: string;
@@ -477,7 +481,12 @@ export async function recordFixtureDeliveryOutcome(
       root: fixture.workspacePath,
       demandId: fixture.demandId,
       idempotencyKey: overrides.idempotencyKey ?? `fixture-outcome-${prepared.delivery.generation}`,
-      expectedStreamRevision: overrides.expectedStreamRevision ?? prepared.event.streamRevision,
+      ...(overrides.expectedStreamRevision === null
+        ? {}
+        : {
+            expectedStreamRevision:
+              overrides.expectedStreamRevision ?? prepared.event.streamRevision,
+          }),
       deliveryId: prepared.delivery.deliveryId,
       claimDigest: prepared.permit.fence.claimDigest,
       attempt: overrides.attempt ?? { status: "sent" },

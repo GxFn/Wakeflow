@@ -7,14 +7,7 @@
   "$comment": "accepted needs the target session's user-prompt-submit hook record matching the envelope's prompt digest, a Codex send-call success return, or an explicit resolution; rejected-before-send only when the send failed without touching the session.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "idempotencyKey",
-    "expectedStreamRevision",
-    "deliveryId",
-    "claimDigest"
-  ],
+  "required": ["root", "demandId", "idempotencyKey", "deliveryId", "claimDigest"],
   "properties": {
     "root": {
       "type": "string",
@@ -33,9 +26,9 @@
     },
     "expectedStreamRevision": {
       "type": "integer",
-      "minimum": 0,
+      "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out to append at the current revision. When given it must equal the current revision."
     },
     "deliveryId": {
       "$ref": "#/$defs/deliveryId"

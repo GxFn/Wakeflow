@@ -67,7 +67,9 @@ import {
 import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
+  bindAppendAtCurrentRevision,
   runAppendCommand,
+  UNOBSERVED_STREAM_REVISION,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
@@ -631,9 +633,10 @@ async function boundCommit(
 async function execute(
   context: SliceContext,
   input: SliceInput,
-  binding: Readonly<AppendCommandBinding>,
+  requested: Readonly<AppendCommandBinding>,
 ): Promise<SliceOutcome> {
   const { authority, options } = context;
+  const binding = bindAppendAtCurrentRevision(requested, authority.loaded.aggregate.streamRevision);
   const repository = new DemandEventSourcingRepository(authority.demandRoot);
   // 幂等键先于任何领域校验解析：重试不该因为"已有活动谱系"之类的后置条件被误拒。
   const bound = await boundCommit(repository, binding, options.signal);
@@ -796,7 +799,7 @@ export async function executeTargetTaskPlanningPublicRequest(
             root: request.root,
             demandId: request.demandId,
             idempotencyKey: request.idempotencyKey,
-            expectedStreamRevision: request.expectedStreamRevision,
+            expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
           }),
           input: Object.freeze({
             taskPackage: request.taskPackage,

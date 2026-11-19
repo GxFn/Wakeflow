@@ -7,7 +7,7 @@
   "$comment": "At most three target-mode rearms per envelope; beyond that the target must be prepared again with a new envelope.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["root", "demandId", "idempotencyKey", "expectedStreamRevision", "deliveryId"],
+  "required": ["root", "demandId", "idempotencyKey", "deliveryId"],
   "properties": {
     "root": {
       "type": "string",
@@ -26,9 +26,9 @@
     },
     "expectedStreamRevision": {
       "type": "integer",
-      "minimum": 0,
+      "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out to append at the current revision. When given it must equal the current revision."
     },
     "deliveryId": {
       "$ref": "#/$defs/deliveryId"

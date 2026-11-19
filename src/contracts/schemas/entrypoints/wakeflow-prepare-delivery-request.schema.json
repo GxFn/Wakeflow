@@ -7,14 +7,7 @@
   "$comment": "Append shape (ADR-0012 D2): idempotencyKey plus expectedStreamRevision. Implementation and test targets share the tool; Wakeflow derives the work type, the rework or remediation context, and the test attempt from the Demand state.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "root",
-    "demandId",
-    "idempotencyKey",
-    "expectedStreamRevision",
-    "targetTaskId",
-    "authored"
-  ],
+  "required": ["root", "demandId", "idempotencyKey", "targetTaskId", "authored"],
   "properties": {
     "root": {
       "type": "string",
@@ -33,9 +26,9 @@
     },
     "expectedStreamRevision": {
       "type": "integer",
-      "minimum": 0,
+      "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out to append at the current revision. When given it must equal the current revision."
     },
     "targetTaskId": {
       "$ref": "#/$defs/targetTaskId"

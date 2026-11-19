@@ -154,6 +154,7 @@ import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,
   runAppendCommand,
+  UNOBSERVED_STREAM_REVISION,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
@@ -710,7 +711,6 @@ interface ImportInput {
 }
 
 /** 信封里"未断言流修订"的占位：导入与评审决定的请求 Schema 下限都是 1，0 不会是调用方给出的值。 */
-const UNOBSERVED_STREAM_REVISION = 0;
 
 interface ImportOutcome extends CommandOutcome {
   readonly result: Readonly<TargetResult>;

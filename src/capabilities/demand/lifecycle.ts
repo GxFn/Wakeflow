@@ -1170,6 +1170,9 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
       result: (envelope, input, phase, next) =>
         admit(assembleTerminalResult(action, envelope, input, phase, next, facts)),
       privateValues: (context) => [context.snapshot.ledgerRoot, context.ledgerRoot.absolutePath],
+      // 完成可以一次调用（1.4 第 5 段 5b；用户 2026-11-16：归档之前不另作确认）：应用不带 planDigest 时就地
+      // 推导计划、过完成的门，门不过什么都不写、以 preview 的形状交回阻塞项。取消是使用者的决定，照旧先预览。
+      directApply: action === "complete",
     },
     value,
     commandShellExecutionOptions(options.durability, options.signal),

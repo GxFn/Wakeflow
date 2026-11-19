@@ -371,7 +371,8 @@ export async function planFixtureTargetTask(
   }>,
   overrides: Readonly<{
     readonly idempotencyKey?: string;
-    readonly expectedStreamRevision?: number;
+    /** `null`：请求里不带这一项（按当前修订追加）。 */
+    readonly expectedStreamRevision?: number | null;
     readonly taskPackage?: WakeflowTargetTaskPlanningRequestV1["taskPackage"];
     readonly planReview?: { readonly confirmedAt: string };
   }> = {},
@@ -382,7 +383,9 @@ export async function planFixtureTargetTask(
       root: fixture.workspacePath,
       demandId: fixture.request.demandId,
       idempotencyKey: overrides.idempotencyKey ?? "fixture-plan-1",
-      expectedStreamRevision: overrides.expectedStreamRevision ?? 1,
+      ...(overrides.expectedStreamRevision === null
+        ? {}
+        : { expectedStreamRevision: overrides.expectedStreamRevision ?? 1 }),
       taskPackage: overrides.taskPackage ?? fixture.request.taskPackage,
       ...(overrides.planReview === undefined ? {} : { planReview: overrides.planReview }),
     },

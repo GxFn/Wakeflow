@@ -430,7 +430,7 @@
     }
   },
   "additionalProperties": false,
-  "required": ["root", "demandId", "idempotencyKey", "expectedStreamRevision", "taskPackage"],
+  "required": ["root", "demandId", "idempotencyKey", "taskPackage"],
   "properties": {
     "root": {
       "type": "string",
@@ -449,9 +449,9 @@
     },
     "expectedStreamRevision": {
       "type": "integer",
-      "minimum": 0,
+      "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "Demand stream revision the caller observed; a stale value is rejected."
+      "description": "Optional; leave it out to append at the current revision. When given it must equal the current revision."
     },
     "taskPackage": {
       "$ref": "#/$defs/requestedTaskPackage"

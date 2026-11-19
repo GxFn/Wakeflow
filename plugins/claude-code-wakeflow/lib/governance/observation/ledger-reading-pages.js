@@ -11,7 +11,7 @@ import { createLedgerReadingPageResourceDeclaration } from "../ledger/ledger-res
 import { readArchivedReviewSnapshot } from "./archived-demand-observation.js";
 import { countDemandArchiveEvidence, listArchivedDemandIds, locateLatestDemandArchive, readDemandArchiveEvents, readDemandArchiveIdentity, } from "./demand-archive-locator.js";
 import { measureDemandArchiveEvents } from "./demand-archive-measures.js";
-import { buildDemandArchivePageFacts, DEMAND_ARCHIVE_PAGE_COMPACT_LIMITS, demandArchivePageHistoryOf, demandArchiveSessionPromptsOf, demandArchivePageLine, demandArchivePageMarker, renderDemandArchivePage, } from "./demand-archive-page.js";
+import { buildDemandArchivePageFacts, DEMAND_ARCHIVE_PAGE_COMPACT_LIMITS, demandArchivePageHistoryOf, demandArchiveResultAccountsOf, demandArchiveSessionPromptsOf, demandArchivePageLine, demandArchivePageMarker, renderDemandArchivePage, } from "./demand-archive-page.js";
 function readingPageTarget(declarationId, resourcePath) {
     const declaration = createLedgerReadingPageResourceDeclaration(declarationId, resourcePath);
     if (declaration.nodePolicy.kind !== "file") {
@@ -173,7 +173,7 @@ function isAborted(error) {
 /** 归档里的评审历史；读不出为 null（页面照样渲染，只说明这一部分读不出）。中止上抛。 */
 async function readHistoryOrNull(ledgerRoot, archiveRef, events, signal) {
     try {
-        return demandArchivePageHistoryOf(await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal), demandArchiveSessionPromptsOf(events));
+        return demandArchivePageHistoryOf(await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal), demandArchiveSessionPromptsOf(events), demandArchiveResultAccountsOf(events));
     }
     catch (error) {
         const reason = typeof error === "object" && error !== null

@@ -1,8 +1,9 @@
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { implementationReportAnchorResults, implementationReportOutsideInstructions, } from "../result/implementation-target-result-report.js";
+import { parseTargetResultOutsideInstructions, } from "../result/target-result-outside-instructions.js";
 import { parseTargetSessionPromptObservation, TargetSessionPromptObservationError, } from "../result/target-session-prompts.js";
 /** 页面渲染器的版本：改渲染就加一，现存页面的标记随之失配，下一次刷新重写。 */
-const DEMAND_ARCHIVE_PAGE_VERSION = 1;
+const DEMAND_ARCHIVE_PAGE_VERSION = 2;
 // ---- 事实的整理 ----------------------------------------------------------------
 function decisionOf(decision) {
     return Object.freeze({
@@ -60,7 +61,7 @@ function anchorsOf(taskPackage, result) {
 function repositoryIdOf(taskPackage) {
     return taskPackage.workType === "implementation" ? taskPackage.assignment.repositoryId : null;
 }
-function targetOf(target, observations) {
+function targetOf(target, observations, accounts) {
     // 还在等结果的目标只带任务包的标识与摘要，没有正文：页面在"还剩什么"里按标识列出它。
     if (target.status === "awaiting-result")
         return null;
@@ -79,14 +80,21 @@ function targetOf(target, observations) {
         report: reportOf(target.targetResult),
         decisions: Object.freeze(decisions),
         sessionPrompts: observations.get(target.targetResult.targetResultId) ?? null,
+        earlierResults: Object.freeze(accounts
+            .filter((account) => account.targetTaskId === target.targetTaskId &&
+            account.targetResultId !== target.targetResult.targetResultId)
+            .map((account) => Object.freeze({
+            outsideInstructions: account.outsideInstructions,
+            sessionPrompts: observations.get(account.targetResultId) ?? null,
+        }))),
     });
 }
 /** 把归档里读出的评审快照整理成页面用的目标清单。 */
-export function demandArchivePageHistoryOf(snapshot, observations = new Map()) {
+export function demandArchivePageHistoryOf(snapshot, observations = new Map(), accounts = []) {
     const targets = [];
     const pending = [];
     for (const target of snapshot.targets) {
-        const shaped = targetOf(target, observations);
+        const shaped = targetOf(target, observations, accounts);
         if (shaped !== null) {
             targets.push(shaped);
             continue;
@@ -164,6 +172,7 @@ const TEXT = Object.freeze({
         observedAt: "at",
         unobserved: (reason) => `Wakeflow could not observe the target session (${reason}); this is not a count of zero`,
         outsideNotRecorded: "not recorded (report record version 1)",
+        resultNumber: (position) => `result ${position}`,
         notAccepted: "Not accepted when archived",
         noResult: "No result when archived",
         branchLeft: (branch) => `Branch \`${branch}\` was recorded by the accepted result; this page cannot tell whether it has been merged`,
@@ -218,6 +227,7 @@ const TEXT = Object.freeze({
         observedAt: "时刻",
         unobserved: (reason) => `Wakeflow 没能观察目标会话（${reason}）；这不是零条`,
         outsideNotRecorded: "未记录（报告的记录版本为 1）",
+        resultNumber: (position) => `第 ${position} 份结果`,
         notAccepted: "归档时未被接受",
         noResult: "归档时没有结果",
         branchLeft: (branch) => `被接受的结果记录了分支 \`${branch}\`；本页无法得知它是否已经合并`,
@@ -415,12 +425,12 @@ function verifiedSection(context, facts) {
         "",
     ];
 }
-/** 一个目标申报的任务包之外的指示：记录版本 1 的报告没有记录，明说未记录。 */
-function outsideLines(context, label, report) {
+/** 一份结果申报的任务包之外的指示：记录版本 1 的报告没有记录，明说未记录。 */
+function outsideLines(context, label, outsideInstructions) {
     const { text, limits } = context;
-    if (report.outsideInstructions === null)
+    if (outsideInstructions === null)
         return [`- ${label}: ${text.outsideNotRecorded}`];
-    return report.outsideInstructions
+    return outsideInstructions
         .slice(0, limits.list)
         .map((entry) => `- ${label}: ${text.declared} (${entry.source}, ${entry.handling}) — ${demandArchivePageLine(entry.summary, limits.cell)}`);
 }
@@ -449,9 +459,20 @@ function interventionsSection(context, facts) {
         ? [text.notRecorded]
         : capped(facts.targets, limits.targets, text, (target, index) => {
             const label = `${text.target} ${index + 1}`;
+            // 返工之前的结果先列，各自带上是第几份；只有一份结果的目标照旧只写目标的序号。
+            const earlier = target.earlierResults.slice(-limits.list);
+            const first = target.earlierResults.length - earlier.length;
+            const numbered = (position) => `${label} · ${text.resultNumber(position)}`;
+            const current = target.earlierResults.length === 0 ? label : numbered(target.earlierResults.length + 1);
             return [
-                ...(target.report === null ? [] : outsideLines(context, label, target.report)),
-                ...observedLines(context, label, target.sessionPrompts),
+                ...earlier.flatMap((entry, position) => [
+                    ...outsideLines(context, numbered(first + position + 1), entry.outsideInstructions),
+                    ...observedLines(context, numbered(first + position + 1), entry.sessionPrompts),
+                ]),
+                ...(target.report === null
+                    ? []
+                    : outsideLines(context, current, target.report.outsideInstructions)),
+                ...observedLines(context, current, target.sessionPrompts),
             ];
         });
     return [
@@ -545,6 +566,61 @@ export function renderDemandArchivePage(facts, language, limits = DEMAND_ARCHIVE
     ]
         .join("\n")
         .trimEnd()}\n`;
+}
+class OutsideInstructionShapeError extends Error {
+}
+/** 一份结果里申报的任务包之外的指示；没有这一项（记录版本 1）或形状不对都当作没有记录。 */
+function outsideInstructionsOrNull(value) {
+    if (value === undefined)
+        return null;
+    try {
+        return parseTargetResultOutsideInstructions(value, "$", {
+            record: (entry) => {
+                if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+                    throw new OutsideInstructionShapeError();
+                }
+                return entry;
+            },
+            text: (entry) => {
+                if (typeof entry !== "string")
+                    throw new OutsideInstructionShapeError();
+                return entry;
+            },
+            fail: () => {
+                throw new OutsideInstructionShapeError();
+            },
+        });
+    }
+    catch (error) {
+        if (error instanceof OutsideInstructionShapeError)
+            return null;
+        throw error;
+    }
+}
+/**
+ * 归档事件里每一份导入过的结果各自申报了什么，按事件先后。页面用它把返工之前那几次的申报也列出来；
+ * 读的是事件原文，认不出的那一条跳过——页面是投影，不为一条旁证失败。
+ */
+export function demandArchiveResultAccountsOf(events) {
+    const accounts = [];
+    for (const event of events) {
+        if (event.eventType !== "result.target-result-recorded")
+            continue;
+        const result = event.data.result;
+        if (typeof result !== "object" || result === null)
+            continue;
+        const { targetTaskId, targetResultId, report } = result;
+        if (typeof targetTaskId !== "string" || typeof targetResultId !== "string")
+            continue;
+        accounts.push(Object.freeze({
+            targetTaskId,
+            targetResultId,
+            outsideInstructions: typeof report === "object" && report !== null
+                ? outsideInstructionsOrNull(report.outsideInstructions)
+                : null,
+        }));
+    }
+    return Object.freeze(accounts);
 }
 /**
  * 归档事件里各份结果的越级观察，按结果标识取。形状不对的那一条当作没有——页面是投影，不为一条旁证失败。

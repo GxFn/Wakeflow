@@ -205,6 +205,10 @@ Peer windows that started under the older plugin show `runtime: stale`, and
 gate: the app ends an idle session's process after about half an hour, and the
 session's next message then starts it on the current artifact. Restart none of
 them and send none a message to clear the state; status lists no action for
-them. Before a delivery to such a window, run `sessions`: when its process is
-still listed, tell the user and, with their authorization, archive and
-unarchive that session so the delivery starts a fresh process.
+them. Before a delivery, look for the delivery's own `windowId` among the
+`stale` windows of the status you read for this step - by `windowId`, never by
+role or from an earlier read: two product windows share a role, and a window
+leaves that list once its session has taken a message. Only when it is there,
+run `sessions`: when its process is still listed, tell the user and, with
+their authorization, archive and unarchive that session so the delivery
+starts a fresh process.

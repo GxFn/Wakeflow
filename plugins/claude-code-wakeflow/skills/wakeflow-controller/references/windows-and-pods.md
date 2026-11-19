@@ -91,6 +91,13 @@ These checks do not identify the host-selected sibling installation.
 The serving MCP rejects mutations while its own manifest has changed or is
 unavailable; reads and previews remain available.
 
+A session may keep the tool definitions it loaded before the update, in this
+window and in any peer window, and loading a tool again may not replace
+them; a fresh or compacted session holds the new ones. The server checks the
+current contract, so go by the skill and references you read again: a refusal
+naming a member you sent (`additional:<member>`) or a member your definition
+lacks is this mismatch, not a fault in the workspace.
+
 A window's `lastObservation.observerManifestDigest` identifies the hook observer
 only. SessionStart can occur on resume or compaction; Stop also does not prove
 that the window's MCP or instructions reloaded. Each bound window's `runtime`

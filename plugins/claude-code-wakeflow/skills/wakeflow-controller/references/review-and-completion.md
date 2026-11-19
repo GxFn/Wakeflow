@@ -76,6 +76,12 @@ not inspect again just because the stream moved. `review-unit-stale` means
 the unit itself changed (a newer or superseding result, or a decision already
 recorded on it): then inspect again.
 
+A session that used this tool before a plugin update may still hold the old
+definition, and loading it again may not replace it. The server checks the
+current contract: send no `snapshotDigest` (removed in 1.4, refused as
+`additional:snapshotDigest`), and when your definition has no `thenPlan` or
+`thenComplete`, record the accept alone and make the following call yourself.
+
 `blockingReasons` belong to `blocked` alone: accept and rework carry none, and
 rework keeps `requirementAlignment: aligned`. Rework names at least one
 `failed` independent check. A refused decision record (`record-schema`, `record-relation`) names the field in `path`, e.g. `$request/decision/blockingReasons`: fix that field, do not guess. The failed checks are

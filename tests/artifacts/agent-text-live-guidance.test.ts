@@ -412,8 +412,18 @@ test("§13.188 首次引导与日常使用分开：first-run 参考只在新工�
   for (const command of ["commands/next.md", "commands/pod.md", "commands/status.md"]) {
     const text = flat(source(command));
     ok(text.includes("a `runtime.artifactVersion` new to this session"), command);
-    ok(/the copy in your context predates it|your copy predates the update/u.test(text), command);
+    ok(
+      /the cop(?:y|ies) in your context predates? it|your copy predates the update/u.test(text),
+      command,
+    );
   }
+  // 1.4 第 6 段现场：就地重启之后 Controller 只重读了技能，更新前读过的 reference 仍留在上下文里，
+  // 改过的参考文本到不了它；`/next` 写明参考也要重读（tmux 助手的重启提示同样写了）。
+  ok(
+    flat(source("commands/next.md")).includes(
+      "the references too, so read them again before you use them",
+    ),
+  );
   // 连续 `/next`（V3，§13.208；I21，2026-11-09 用户裁决）：owner 是 Controller 就连续；停点只剩 owner 变化
   // 且无自有工作、用户决定点、阻塞；记录决定与投递结局是步骤边界不是停点。旧的"一步即停"与"每次决定停一次"
   // 的措辞都不再出现。

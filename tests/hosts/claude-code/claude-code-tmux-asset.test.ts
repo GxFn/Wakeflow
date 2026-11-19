@@ -2685,7 +2685,7 @@ test("launch prepares a local-head worktree itself: created from HEAD, reused on
 
 /** Controller 在原 pane 里重启自己时，重启后的会话收到的固定首条 prompt（§13.134）。 */
 const SELF_RESTART_PROMPT =
-  "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
+  "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again and read its references again before you use them - the copies in your context predate the update - then call wakeflow_verify and continue where you left off.";
 
 /** 脱离的子进程晚一点才调用 tmux：只看已写完整的日志行，等到某个子命令出现或超时。 */
 async function waitForTmuxCall(

@@ -145,7 +145,7 @@ const MENU_CURSOR_PATTERN = /^[❯>]\s?[0-9]+[.)]\s/u;
 const SELF_RESTART_DELAY_SECONDS = 2;
 
 const SELF_RESTART_PROMPT =
-  "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again, since its text may have changed, then call wakeflow_verify and continue where you left off.";
+  "Wakeflow: this Controller session restarted in place to load the updated plugin. Load the wakeflow-controller skill again and read its references again before you use them - the copies in your context predate the update - then call wakeflow_verify and continue where you left off.";
 
 // 收养时读 claude 进程 argv 的上限（ps 的 args 列）。
 const MAX_PROCESS_ARGUMENTS = 8192;

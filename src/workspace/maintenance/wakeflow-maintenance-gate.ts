@@ -44,7 +44,7 @@ import {
  *
  * 本模块只建立 `.wakeflow-local/runtime` 空协议前缀、取得唯一 gate，并在 gate 内补齐
  * `maintenance/transactions`。operation ID与gate token复用同一UUID，使intent写入前的
- * 孤立gate仍可被精确关联。它不创建intent/journal、不执行领域step，也不决定action。
+ * 孤立gate仍可被精确关联。它不创建intent、不执行领域step，也不决定action。
  * exact lock取得后会重验Active与Local bootstrap边界，并把pre-gate Core观察仅绑定到
  * 当前callback context，供Intent发布前的完整plan再次推导。
  *
@@ -385,7 +385,7 @@ async function runCorrelatedGate<Result>(
 }
 
 /**
- * 在调用方已经验证 prepared journal / recovery evidence 后，以原 operation ID 取得 gate。
+ * 在调用方已经验证磁盘上的 intent（恢复依据）之后，以原 operation ID 取得 gate。
  */
 function parseWakeflowExistingMaintenanceGateOptions(
   value: unknown,

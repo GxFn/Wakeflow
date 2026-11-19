@@ -40,7 +40,7 @@ import {
  * 本模块只分类 Active 两级共享布局和 Local maintenance 协议，不清理、不创建目录，也不解释
  * transaction 文件内容。Local 的 freshCompatible 仅在路径是 `local → runtime →
  * maintenance → transactions` 的任意空前缀、所有已有目录均为当前用户 `0700`，且无
- * gate/stage/journal/其他条目时为 true。
+ * gate/stage/intent/其他条目时为 true。
  *
  * 已安装 workspace 可以在 Local/Runtime 中包含其他领域 owner 的资源；这些资源不会
  * 被 fresh 采用，但在完整 maintenance protocol 为 idle 时不构成运行期冲突。
@@ -57,14 +57,14 @@ type WakeflowLocalProtocolStatus =
   | "conflict";
 
 /**
- * `transactions` 目录里的一个条目（§13.130）：按 intent / journal 的命名约定
- * （`<operationId>.intent.json`、`<operationId>.journal.json`）分类；名字不合约定、或
- * operation ID 不是 `maintenance_operation_<uuid>` 的都是 `unknown`，维护 recover 按
- * operation ID 找不到它们。本检查不读条目内容。
+ * `transactions` 目录里的一个条目（§13.130）：按 intent 的命名约定（`<operationId>.intent.json`）
+ * 分类；名字不合约定、或 operation ID 不是 `maintenance_operation_<uuid>` 的都是 `unknown`，维护
+ * recover 按 operation ID 找不到它们。1.4 起一次维护只有 intent 这一个文件（ADR-0031，5a 的 C 行）；
+ * 1.3 留下的 `<operationId>.journal.json` 因此也是 `unknown`。本检查不读条目内容。
  */
 export interface WakeflowMaintenanceResidue {
   readonly name: string;
-  readonly kind: "intent" | "journal" | "unknown";
+  readonly kind: "intent" | "unknown";
   readonly operationId: string | null;
 }
 
@@ -275,17 +275,16 @@ function entryNamed(read: Readonly<StableDirectoryReadResult>, name: string) {
 }
 
 const NO_MAINTENANCE_RESIDUES: readonly Readonly<WakeflowMaintenanceResidue>[] = Object.freeze([]);
-const RESIDUE_NAME_PATTERN = /^(.+)\.(intent|journal)\.json$/u;
+const RESIDUE_NAME_PATTERN = /^(.+)\.intent\.json$/u;
 
 function maintenanceResidue(name: string): Readonly<WakeflowMaintenanceResidue> {
   const match = RESIDUE_NAME_PATTERN.exec(name);
   const candidate = match?.[1];
-  const kind = match?.[2];
-  if (candidate !== undefined && (kind === "intent" || kind === "journal")) {
+  if (candidate !== undefined) {
     try {
       return Object.freeze({
         name,
-        kind,
+        kind: "intent" as const,
         operationId: parseWakeflowMaintenanceOperationId(candidate),
       });
     } catch (error: unknown) {

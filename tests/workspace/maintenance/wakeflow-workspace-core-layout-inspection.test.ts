@@ -159,7 +159,7 @@ test("core layout distinguishes busy, recovery residue and conflicts", async (t)
   equal(conflicting.issueCodes.includes("maintenance-root-unknown-entry"), true);
 });
 
-test("transactions 里的残留按名字分类（§13.130）：合法的 intent / journal 带 operationId，其余是 unknown；idle 时为空", async (t) => {
+test("transactions 里的残留按名字分类（§13.130）：合法的 intent 带 operationId，其余是 unknown（含 1.3 留下的 journal）；idle 时为空", async (t) => {
   const idle = await fixture(t);
   materializeProtocol(idle.absolutePath, 4);
   deepEqual((await inspectWakeflowWorkspaceCoreLayout(idle.root)).local.residues, []);
@@ -182,7 +182,8 @@ test("transactions 里的残留按名字分类（§13.130）：合法的 intent 
     inspected.local.residues.map((residue) => ({ ...residue })),
     [
       { name: `${operationId}.intent.json`, kind: "intent", operationId },
-      { name: `${operationId}.journal.json`, kind: "journal", operationId },
+      // 1.4 起一次维护只有 intent 这一个文件；1.3 的检查点日志不再被认（ADR-0031，5a 的 C 行）。
+      { name: `${operationId}.journal.json`, kind: "unknown", operationId: null },
       { name: "notes.txt", kind: "unknown", operationId: null },
       {
         name: "operation_00000000-0000-4000-8000-000000000000.intent.json",

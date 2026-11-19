@@ -15,7 +15,7 @@ import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenan
 /**
  * Wakeflow Workspace / Maintenance：单次 maintenance operation 的短生命周期身份。
  *
- * 该身份只关联 gate、immutable intent、journal checkpoint 与显式恢复，不是业务实体，
+ * 该身份只关联 gate、intent（含做到第几步的计数）与显式恢复，不是业务实体，
  * 也不进入全局 durable ID kind。规范文本由固定前缀和小写 UUIDv4 组成，不从路径、
  * 时间或计划摘要派生。
  */
@@ -106,18 +106,10 @@ export function createWakeflowMaintenanceOperationId(
   }
 }
 
-/** 从operation ID派生唯一immutable intent引用。 */
+/** 从operation ID派生这次维护唯一的事务文件（intent）的引用。 */
 export function wakeflowMaintenanceIntentRef(value: unknown): PortableResourcePath {
   const operationId = parseWakeflowMaintenanceOperationId(value);
   return parsePortableResourcePath(
     `${WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF}/${operationId}.intent.json`,
-  );
-}
-
-/** 从operation ID派生唯一mutable journal引用。 */
-export function wakeflowMaintenanceJournalRef(value: unknown): PortableResourcePath {
-  const operationId = parseWakeflowMaintenanceOperationId(value);
-  return parsePortableResourcePath(
-    `${WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF}/${operationId}.journal.json`,
   );
 }

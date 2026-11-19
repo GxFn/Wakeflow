@@ -40,7 +40,7 @@ export async function executeCodexMaintenanceExecution(
   );
 }
 
-/** 只凭 operation ID 与私有 intent/journal 恢复同一 Codex 维护事务。 */
+/** 只凭 operation ID 与私有 intent 恢复同一 Codex 维护事务。 */
 export async function recoverCodexMaintenanceExecution(
   root: RootedDirectory,
   operationId: unknown,

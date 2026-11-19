@@ -22,8 +22,8 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
+  checkpointWakeflowMaintenanceExecutionIntent,
   publishWakeflowMaintenanceExecutionIntent,
-  retireWakeflowMaintenanceExecutionIntent,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
@@ -33,15 +33,6 @@ import {
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-  terminalizeWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
@@ -140,7 +131,7 @@ async function recoverSharedMaintenanceTransaction(
 
 async function publishPreparedSharedTransaction(
   root: RootedDirectory,
-  context: Parameters<typeof publishPreparedWakeflowMaintenanceJournal>[1],
+  context: Parameters<typeof publishWakeflowMaintenanceExecutionIntent>[1],
   preview: unknown,
   input: ReturnType<typeof request>,
   desired: ReturnType<typeof desiredConfig>,
@@ -153,16 +144,10 @@ async function publishPreparedSharedTransaction(
     desired,
   );
   const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
-  const journalSource = await publishPreparedWakeflowMaintenanceJournal(
-    root,
-    context,
-    intentSource,
-    plan,
-  );
-  return Object.freeze({ intentSource, journalSource });
+  return Object.freeze({ intentSource });
 }
 
-test("shared maintenance transaction executes all steps and retires terminal journal", async (t) => {
+test("shared maintenance transaction executes all steps and retires its intent", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -469,31 +454,21 @@ test("recovery replays an affected whole-owned root after effect-before-checkpoi
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of plan.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
-          equal(source.journal.affectedStepId, step.stepId);
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
             preview,
             input,
-            source.journal.affectedStepId,
+            step.stepId,
             { sourceConfig: null, recoveringAffectedStep: false },
           );
           if (step.stepId === "core:active-layout") throw privateError;
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected the Active layout step.");
@@ -513,7 +488,7 @@ test("recovery replays an affected whole-owned root after effect-before-checkpoi
   equal(core.active.status, "present");
 });
 
-test("recovery creates the journal from an intent-only durable prefix", async (t) => {
+test("recovery runs every step from an intent whose counter is still zero", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -543,8 +518,8 @@ test("recovery creates the journal from an intent-only durable prefix", async (t
     workspace.absolutePath,
     ".wakeflow-local/runtime/maintenance/transactions",
   );
-  equal(existsSync(path.join(transactionRoot, `${OPERATION_ID}.intent.json`)), true);
-  equal(existsSync(path.join(transactionRoot, `${OPERATION_ID}.journal.json`)), false);
+  // intent 是一次维护在事务目录里唯一的文件（ADR-0031，5a 的 C 行）。
+  deepEqual(readdirSync(transactionRoot), [`${OPERATION_ID}.intent.json`]);
 
   const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");
@@ -574,15 +549,8 @@ test("recovery reuses the exact empty requirement board after effect-before-chec
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -592,12 +560,10 @@ test("recovery reuses the exact empty requirement board after effect-before-chec
             { sourceConfig: null, recoveringAffectedStep: false },
           );
           if (step.kind === "initialize-requirement-board") throw privateError;
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected requirement board initialization step.");
@@ -643,15 +609,8 @@ test("recovery reuses published Active workspace projection without replacement"
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -663,12 +622,10 @@ test("recovery reuses published Active workspace projection without replacement"
           if (step.kind === "publish-fresh-active-workspace-projection") {
             throw privateError;
           }
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected Active workspace projection step.");
@@ -716,15 +673,8 @@ test("recovery reuses the exact Ledger layout after effect-before-checkpoint", a
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -734,12 +684,10 @@ test("recovery reuses the exact Ledger layout after effect-before-checkpoint", a
             { sourceConfig: null, recoveringAffectedStep: false },
           );
           if (step.kind === "materialize-ledger-layout") throw privateError;
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected Ledger step.");
@@ -779,15 +727,8 @@ test("recovery reuses unregistered Window Runtime after effect-before-checkpoint
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -799,12 +740,10 @@ test("recovery reuses unregistered Window Runtime after effect-before-checkpoint
           if (step.kind === "publish-unregistered-window-runtime") {
             throw privateError;
           }
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected Window Runtime step.");
@@ -854,15 +793,8 @@ test("recovery reuses exact Host capability layout after effect-before-checkpoin
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -874,12 +806,10 @@ test("recovery reuses exact Host capability layout after effect-before-checkpoin
           if (step.kind === "materialize-host-capability-layout") {
             throw privateError;
           }
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected Host capability layout step.");
@@ -926,15 +856,8 @@ test("recovery checkpoints an already-published Config without replacing it", as
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -944,12 +867,10 @@ test("recovery checkpoints an already-published Config without replacing it", as
             { sourceConfig: null, recoveringAffectedStep: false },
           );
           if (step.kind === "publish-config") throw privateError;
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected Config step.");
@@ -970,12 +891,12 @@ test("recovery checkpoints an already-published Config without replacing it", as
   equal(core.local.status, "idle");
 });
 
-test("recovery retires a terminal journal after intent retirement", async (t) => {
+test("recovery retires an intent whose steps are all counted without running any of them again", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
   const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
-  const privateError = new Error("interrupt after intent retirement");
+  const privateError = new Error("interrupt before intent retirement");
   try {
     await withWakeflowMaintenanceGate(
       workspace.root,
@@ -991,15 +912,8 @@ test("recovery retires a terminal journal after intent retirement", async (t) =>
           input,
           desired,
         );
-        let source = prepared.journalSource;
+        let source = prepared.intentSource;
         for (const step of preview.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            prepared.intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -1008,33 +922,23 @@ test("recovery retires a terminal journal after intent retirement", async (t) =>
             step.stepId,
             { sourceConfig: null, recoveringAffectedStep: false },
           );
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            prepared.intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
-        source = await checkpointWakeflowMaintenanceJournal(
-          workspace.root,
-          context,
-          prepared.intentSource,
-          source,
-          terminalizeWakeflowMaintenanceJournal(source.journal),
-        );
-        equal(source.journal.state, "terminal");
-        await retireWakeflowMaintenanceExecutionIntent(
-          workspace.root,
-          context,
-          prepared.intentSource,
-        );
+        equal(source.intent.completedSteps, preview.steps.length);
         throw privateError;
       },
     );
   } catch (error: unknown) {
     equal(error, privateError);
   }
+  equal(
+    (await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status,
+    "recovery-required",
+  );
 
   const recovered = await recoverSharedMaintenanceTransaction(workspace.root, OPERATION_ID);
   equal(recovered.status, "recovered");

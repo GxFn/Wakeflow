@@ -125,7 +125,6 @@
         "src/workspace/maintenance/wakeflow-maintenance-execution-preview.ts",
         "src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts",
         "src/workspace/maintenance/wakeflow-maintenance-gate.ts",
-        "src/workspace/maintenance/wakeflow-maintenance-journal-store.ts",
         "src/workspace/maintenance/wakeflow-private-mode-census.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-preview-contract.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",

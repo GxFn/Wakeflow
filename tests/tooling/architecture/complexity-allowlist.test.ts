@@ -11,7 +11,7 @@ import { test } from "node:test";
  * 撤掉并把这里的数字降下来；新文件不进清单，超限就拆。
  */
 
-const ALLOWLIST_CEILING = 68;
+const ALLOWLIST_CEILING = 67;
 
 interface BiomeOverride {
   readonly includes?: readonly string[];

@@ -14,9 +14,12 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
+  checkpointWakeflowMaintenanceExecutionIntent,
   publishWakeflowMaintenanceExecutionIntent,
   readWakeflowMaintenanceExecutionIntent,
   retireWakeflowMaintenanceExecutionIntent,
+  type WakeflowMaintenanceExecutionIntentSource,
+  WakeflowMaintenanceExecutionIntentStoreError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
@@ -24,20 +27,6 @@ import {
   WakeflowMaintenanceGateError,
   withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-  terminalizeWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournal,
-  retirePreparedWakeflowMaintenanceJournal,
-  retireTerminalWakeflowMaintenanceJournal,
-  type WakeflowMaintenanceJournalSource,
-  WakeflowMaintenanceJournalStoreError,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { wakeflowMaintenanceIntentRef } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
@@ -51,6 +40,11 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
+/**
+ * 维护门与 intent 的物理 store：门的引导与关联，intent 的发布、做完一步之后的计数改写与退役。
+ * intent 是一次维护在事务目录里唯一的文件（ADR-0031，5a 的 C 行）。级别 1（组件）。
+ */
+
 const UUID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = `maintenance_operation_${UUID}`;
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
@@ -63,7 +57,7 @@ const PROFILES = Object.freeze([
 
 async function fixture(t: TestContext) {
   const absolutePath = realpathSync(
-    mkdtempSync(path.join(os.tmpdir(), "wakeflow-maintenance-gate-journal-")),
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-maintenance-gate-intent-")),
   );
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
@@ -116,40 +110,39 @@ const REQUEST = Object.freeze({
   hostProfiles: PROFILES,
 });
 
-async function publishPreparedTransaction(
+async function publishIntent(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   plan: ReturnType<typeof preview>,
+  writer?: unknown,
 ) {
   const intent = createWakeflowMaintenanceExecutionIntent(
     context.operationId,
     plan,
     REQUEST,
     DESIRED_CONFIG,
+    writer,
   );
-  const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
-  const journalSource = await publishPreparedWakeflowMaintenanceJournal(
-    root,
-    context,
-    intentSource,
-    plan,
-  );
-  return Object.freeze({ intentSource, journalSource });
+  return publishWakeflowMaintenanceExecutionIntent(root, context, intent);
 }
 
-test("maintenance gate bootstraps, correlates operation and retires prepared journal", async (t) => {
+function gateOptions(inspectionDigest: typeof DIGEST) {
+  return { expectedCoreLayoutInspectionDigest: inspectionDigest, uuidFactory: () => UUID };
+}
+
+const isStoreError = (reason: string) => (error: unknown) =>
+  error instanceof WakeflowMaintenanceExecutionIntentStoreError && error.reason === reason;
+
+test("maintenance gate bootstraps, correlates operation and retires the published intent", async (t) => {
   const workspace = await fixture(t);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   const plan = preview(core.inspectionDigest);
   let expiredContext: Readonly<WakeflowMaintenanceGateContext> | undefined;
-  let retiredSource: Readonly<WakeflowMaintenanceJournalSource> | undefined;
+  let retiredSource: Readonly<WakeflowMaintenanceExecutionIntentSource> | undefined;
 
   await withWakeflowMaintenanceGate(
     workspace.root,
-    {
-      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-      uuidFactory: () => UUID,
-    },
+    gateOptions(core.inspectionDigest),
     async (context) => {
       expiredContext = context;
       equal(context.operationId, OPERATION_ID);
@@ -161,24 +154,22 @@ test("maintenance gate bootstraps, correlates operation and retires prepared jou
       if (lock.status === "held") {
         equal(lock.record.token.endsWith(`-${UUID}`), true);
       }
-      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
-      const prepared = transaction.journalSource;
-      retiredSource = prepared;
-      equal(prepared.journal.operationId, OPERATION_ID);
-      equal(prepared.journal.planDigest, plan.planDigest);
-      const reread = await readWakeflowMaintenanceJournal(workspace.root, context.operationId);
-      equal(reread.digest, prepared.digest);
-      await retireWakeflowMaintenanceExecutionIntent(
+      const published = await publishIntent(workspace.root, context, plan);
+      retiredSource = published;
+      equal(published.intent.operationId, OPERATION_ID);
+      equal(published.intent.planDigest, plan.planDigest);
+      equal(published.intent.completedSteps, 0);
+      const reread = await readWakeflowMaintenanceExecutionIntent(
+        workspace.root,
+        context.operationId,
+      );
+      equal(reread.digest, published.digest);
+      const retired = await retireWakeflowMaintenanceExecutionIntent(
         workspace.root,
         context,
-        transaction.intentSource,
+        published,
       );
-      const retired = await retirePreparedWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        prepared,
-      );
-      equal(retired.disposition, "retired-prepared");
+      equal(retired.disposition, "retired-intent");
     },
   );
 
@@ -190,36 +181,32 @@ test("maintenance gate bootstraps, correlates operation and retires prepared jou
     false,
   );
 
-  let outsideError: unknown;
-  try {
-    if (expiredContext === undefined || retiredSource === undefined) {
-      throw new Error("Expected issued scope.");
-    }
-    await retirePreparedWakeflowMaintenanceJournal(workspace.root, expiredContext, retiredSource);
-  } catch (error: unknown) {
-    outsideError = error;
+  if (expiredContext === undefined || retiredSource === undefined) {
+    throw new Error("Expected issued scope.");
   }
-  equal(outsideError instanceof WakeflowMaintenanceJournalStoreError, true);
-  if (outsideError instanceof WakeflowMaintenanceJournalStoreError) {
-    equal(outsideError.reason, "gate");
-  }
+  // 门已经放掉：拿着过期的上下文什么都改不了。
+  await rejects(
+    retireWakeflowMaintenanceExecutionIntent(workspace.root, expiredContext, retiredSource),
+    isStoreError("gate"),
+  );
+  await rejects(
+    checkpointWakeflowMaintenanceExecutionIntent(workspace.root, expiredContext, retiredSource),
+    isStoreError("gate"),
+  );
 });
 
-test("prepared journal survives operation failure while gate releases", async (t) => {
+test("a published intent survives operation failure while the gate releases", async (t) => {
   const workspace = await fixture(t);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   const plan = preview(core.inspectionDigest);
-  const privateError = new Error("stop after journal");
+  const privateError = new Error("stop after intent");
   let caught: unknown;
   try {
     await withWakeflowMaintenanceGate(
       workspace.root,
-      {
-        expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-        uuidFactory: () => UUID,
-      },
+      gateOptions(core.inspectionDigest),
       async (context) => {
-        await publishPreparedTransaction(workspace.root, context, plan);
+        await publishIntent(workspace.root, context, plan);
         throw privateError;
       },
     );
@@ -227,99 +214,89 @@ test("prepared journal survives operation failure while gate releases", async (t
     caught = error;
   }
   equal(caught, privateError);
-  const journal = await readWakeflowMaintenanceJournal(workspace.root, OPERATION_ID);
-  equal(journal.journal.state, "prepared");
+  const stored = await readWakeflowMaintenanceExecutionIntent(workspace.root, OPERATION_ID);
+  equal(stored.intent.completedSteps, 0);
   const after = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(after.local.status, "recovery-required");
+  deepEqual(
+    after.local.residues.map((residue) => [residue.kind, residue.operationId]),
+    [["intent", OPERATION_ID]],
+  );
   equal(
     existsSync(path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"))),
     false,
   );
-  // Q12（2026-10-18）：prepared 事务的独立恢复模块随 L3 删除；恢复由 wakeflow_maintain_workspace recover 承担。
 });
 
-test("journal store CAS advances affected, checkpoint and terminal states", async (t) => {
+test("the intent store advances the completed-steps counter by exact replacement and keeps the intent digest", async (t) => {
   const workspace = await fixture(t);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   const plan = preview(core.inspectionDigest);
   await withWakeflowMaintenanceGate(
     workspace.root,
-    {
-      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-      uuidFactory: () => UUID,
-    },
+    gateOptions(core.inspectionDigest),
     async (context) => {
-      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
-      let source = transaction.journalSource;
-      source = await checkpointWakeflowMaintenanceJournal(
+      const published = await publishIntent(workspace.root, context, plan);
+      const advanced = await checkpointWakeflowMaintenanceExecutionIntent(
         workspace.root,
         context,
-        transaction.intentSource,
-        source,
-        beginWakeflowMaintenanceJournalStep(source.journal),
+        published,
       );
-      equal(source.journal.affectedStepId, "authority:config");
-      source = await checkpointWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        transaction.intentSource,
-        source,
-        completeWakeflowMaintenanceJournalStep(source.journal),
+      equal(advanced.intent.completedSteps, 1);
+      // 计数不进意图摘要：文件的字节变了，"这次要做成什么样"没有变。
+      equal(advanced.intentDigest, published.intentDigest);
+      equal(advanced.digest === published.digest, false);
+      equal(
+        (await readWakeflowMaintenanceExecutionIntent(workspace.root, context.operationId)).intent
+          .completedSteps,
+        1,
       );
-      equal(source.journal.checkpoint, 1);
-      source = await checkpointWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        transaction.intentSource,
-        source,
-        terminalizeWakeflowMaintenanceJournal(source.journal),
+      // 读到时的那一份已经被替换：拿旧的再记一步是冲突，不是再加一。
+      await rejects(
+        checkpointWakeflowMaintenanceExecutionIntent(workspace.root, context, published),
+        isStoreError("conflict"),
       );
-      equal(source.journal.state, "terminal");
-      await retireWakeflowMaintenanceExecutionIntent(
-        workspace.root,
-        context,
-        transaction.intentSource,
+      // 计划只有一步：全部做完的意图没有后继。
+      await rejects(
+        checkpointWakeflowMaintenanceExecutionIntent(workspace.root, context, advanced),
+        isStoreError("input"),
       );
-      await retireTerminalWakeflowMaintenanceJournal(workspace.root, context, source);
+      await rejects(
+        retireWakeflowMaintenanceExecutionIntent(workspace.root, context, published),
+        isStoreError("conflict"),
+      );
+      await retireWakeflowMaintenanceExecutionIntent(workspace.root, context, advanced);
     },
   );
   const idle = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(idle.local.status, "idle");
 });
 
-test("journal checkpoint rejects immutable intent drift", async (t) => {
+test("the counter write rejects an intent that changed underneath it and a stray transaction entry", async (t) => {
   const workspace = await fixture(t);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   const plan = preview(core.inspectionDigest);
   await withWakeflowMaintenanceGate(
     workspace.root,
-    {
-      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-      uuidFactory: () => UUID,
-    },
+    gateOptions(core.inspectionDigest),
     async (context) => {
-      const transaction = await publishPreparedTransaction(workspace.root, context, plan);
-      writeFileSync(
-        path.join(workspace.absolutePath, ...wakeflowMaintenanceIntentRef(OPERATION_ID).split("/")),
-        "{}\n",
-        { mode: 0o600 },
+      const published = await publishIntent(workspace.root, context, plan);
+      const intentPath = path.join(
+        workspace.absolutePath,
+        ...wakeflowMaintenanceIntentRef(OPERATION_ID).split("/"),
       );
-      let caught: unknown;
-      try {
-        await checkpointWakeflowMaintenanceJournal(
-          workspace.root,
-          context,
-          transaction.intentSource,
-          transaction.journalSource,
-          beginWakeflowMaintenanceJournalStep(transaction.journalSource.journal),
-        );
-      } catch (error: unknown) {
-        caught = error;
-      }
-      equal(caught instanceof WakeflowMaintenanceJournalStoreError, true);
-      if (caught instanceof WakeflowMaintenanceJournalStoreError) {
-        equal(caught.reason, "conflict");
-      }
+      const stray = path.join(path.dirname(intentPath), "stray.json");
+      writeFileSync(stray, "{}\n", { mode: 0o600 });
+      await rejects(
+        checkpointWakeflowMaintenanceExecutionIntent(workspace.root, context, published),
+        isStoreError("transactions-shape"),
+      );
+      rmSync(stray);
+      writeFileSync(intentPath, "{}\n", { mode: 0o600 });
+      await rejects(
+        checkpointWakeflowMaintenanceExecutionIntent(workspace.root, context, published),
+        (error: unknown) => error instanceof WakeflowMaintenanceExecutionIntentStoreError,
+      );
     },
   );
 });
@@ -373,86 +350,27 @@ const WRITER = Object.freeze({
   version: "1.2.0",
   manifestDigest: parseSha256Digest(`sha256:${"5".repeat(64)}`),
 });
-const OTHER_WRITER = Object.freeze({
-  version: "1.3.0",
-  manifestDigest: parseSha256Digest(`sha256:${"6".repeat(64)}`),
-});
-
-test("journal store persists the writer stamp on intent and prepared journal, keeps it across checkpoints and rejects a swapped stamp (C11)", async (t) => {
+test("the intent keeps its writer stamp across counter writes (C11)", async (t) => {
   const workspace = await fixture(t);
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   const plan = preview(core.inspectionDigest);
   await withWakeflowMaintenanceGate(
     workspace.root,
-    {
-      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-      uuidFactory: () => UUID,
-    },
+    gateOptions(core.inspectionDigest),
     async (context) => {
-      const intent = createWakeflowMaintenanceExecutionIntent(
-        context.operationId,
-        plan,
-        REQUEST,
-        DESIRED_CONFIG,
-        WRITER,
-      );
-      const intentSource = await publishWakeflowMaintenanceExecutionIntent(
+      const published = await publishIntent(workspace.root, context, plan, WRITER);
+      deepEqual(published.intent.writer, WRITER);
+      const advanced = await checkpointWakeflowMaintenanceExecutionIntent(
         workspace.root,
         context,
-        intent,
+        published,
       );
       deepEqual(
         (await readWakeflowMaintenanceExecutionIntent(workspace.root, context.operationId)).intent
           .writer,
         WRITER,
       );
-      let source = await publishPreparedWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        intentSource,
-        plan,
-        WRITER,
-      );
-      deepEqual(
-        (await readWakeflowMaintenanceJournal(workspace.root, context.operationId)).journal.writer,
-        WRITER,
-      );
-      await rejects(
-        checkpointWakeflowMaintenanceJournal(workspace.root, context, intentSource, source, {
-          ...beginWakeflowMaintenanceJournalStep(source.journal),
-          writer: OTHER_WRITER,
-        }),
-        (error: unknown) =>
-          error instanceof WakeflowMaintenanceJournalStoreError && error.reason === "input",
-      );
-      source = await checkpointWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        intentSource,
-        source,
-        beginWakeflowMaintenanceJournalStep(source.journal),
-      );
-      source = await checkpointWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        intentSource,
-        source,
-        completeWakeflowMaintenanceJournalStep(source.journal),
-      );
-      source = await checkpointWakeflowMaintenanceJournal(
-        workspace.root,
-        context,
-        intentSource,
-        source,
-        terminalizeWakeflowMaintenanceJournal(source.journal),
-      );
-      equal(source.journal.state, "terminal");
-      deepEqual(
-        (await readWakeflowMaintenanceJournal(workspace.root, context.operationId)).journal.writer,
-        WRITER,
-      );
-      await retireWakeflowMaintenanceExecutionIntent(workspace.root, context, intentSource);
-      await retireTerminalWakeflowMaintenanceJournal(workspace.root, context, source);
+      await retireWakeflowMaintenanceExecutionIntent(workspace.root, context, advanced);
     },
   );
   equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");

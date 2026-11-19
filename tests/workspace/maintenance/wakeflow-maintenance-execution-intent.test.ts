@@ -10,6 +10,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowHostMaintenanceContribution } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
+  advanceWakeflowMaintenanceExecutionIntent,
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceExecutionIntent,
   createWakeflowMaintenanceIntentResourceDeclaration,
@@ -117,6 +118,52 @@ test("compact intent reconstructs the exact plan and request after restart", () 
   equal(text.includes("lockToken"), false);
 });
 
+test("the completed-steps counter starts at zero, advances by one, stays outside the intent digest and stops at the plan's length", () => {
+  const value = fixture();
+  const intent = createWakeflowMaintenanceExecutionIntent(
+    OPERATION_ID,
+    value.plan,
+    value.request,
+    value.config,
+  );
+  equal(intent.completedSteps, 0);
+  equal(reconstructWakeflowMaintenanceExecutionFromIntent(intent).completedSteps, 0);
+
+  const advanced = advanceWakeflowMaintenanceExecutionIntent(intent);
+  equal(advanced.completedSteps, 1);
+  // 计数说的是"做到哪了"，摘要认的是"这次要做成什么样"（ADR-0031，5a 的 C 行）。
+  equal(
+    computeWakeflowMaintenanceExecutionIntentDigest(advanced),
+    computeWakeflowMaintenanceExecutionIntentDigest(intent),
+  );
+  equal(
+    renderWakeflowMaintenanceExecutionIntent(advanced) ===
+      renderWakeflowMaintenanceExecutionIntent(intent),
+    false,
+  );
+  deepEqual(
+    parseWakeflowMaintenanceExecutionIntentDocument(
+      renderWakeflowMaintenanceExecutionIntent(advanced),
+    ),
+    advanced,
+  );
+
+  // 计划只有一步：做完之后没有后继；超过计划长度的计数、缺了计数的旧文件都不被准入。
+  const isIntentError = (reason: string) => (error: unknown) =>
+    error instanceof WakeflowMaintenanceExecutionIntentError && error.reason === reason;
+  throws(() => advanceWakeflowMaintenanceExecutionIntent(advanced), isIntentError("relation"));
+  const wire = JSON.parse(renderWakeflowMaintenanceExecutionIntent(intent)) as Record<
+    string,
+    unknown
+  >;
+  throws(
+    () => parseWakeflowMaintenanceExecutionIntent({ ...wire, completedSteps: 2 }),
+    isIntentError("relation"),
+  );
+  const { completedSteps: _completedSteps, ...withoutCounter } = wire;
+  throws(() => parseWakeflowMaintenanceExecutionIntent(withoutCounter), isIntentError("schema"));
+});
+
 test("intent rejects desired Config or plan relation drift", () => {
   const value = fixture();
   const intent = createWakeflowMaintenanceExecutionIntent(
@@ -148,7 +195,7 @@ test("intent rejects desired Config or plan relation drift", () => {
   }
 });
 
-test("intent resource is a private immutable transaction artifact", () => {
+test("intent resource is a private transaction artifact: created once, replaced exactly, retired exactly", () => {
   deepEqual(createWakeflowMaintenanceIntentResourceDeclaration(OPERATION_ID), {
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: `maintenance.transaction-intent.${OPERATION_ID}`,
@@ -169,7 +216,7 @@ test("intent resource is a private immutable transaction artifact", () => {
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });

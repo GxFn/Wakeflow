@@ -32,15 +32,14 @@ import {
   WakeflowHostMaintenanceCapabilityError,
 } from "./wakeflow-host-maintenance-capability.js";
 import {
-  computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceExecutionIntent,
   reconstructWakeflowMaintenanceExecutionFromIntent,
   WakeflowMaintenanceExecutionIntentError,
 } from "./wakeflow-maintenance-execution-intent.js";
 import {
   assertWakeflowMaintenanceExecutionIntentCapacity,
-  assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction,
-  assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix,
+  assertWakeflowMaintenanceIntentIsOnlyTransaction,
+  checkpointWakeflowMaintenanceExecutionIntent,
   peekWakeflowMaintenanceIntentWriter,
   publishWakeflowMaintenanceExecutionIntent,
   readWakeflowMaintenanceExecutionIntent,
@@ -65,28 +64,11 @@ import {
   withWakeflowMaintenanceGate,
 } from "./wakeflow-maintenance-gate.js";
 import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-  terminalizeWakeflowMaintenanceJournal,
-} from "./wakeflow-maintenance-journal.js";
-import {
-  assertWakeflowMaintenanceJournalIsOnlyTransaction,
-  assertWakeflowPreparedMaintenanceJournalCapacity,
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournal,
-  readWakeflowMaintenanceJournalOrNull,
-  retireTerminalWakeflowMaintenanceJournal,
-  type WakeflowMaintenanceJournalSource,
-  WakeflowMaintenanceJournalStoreError,
-} from "./wakeflow-maintenance-journal-store.js";
-import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
   type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
-  wakeflowMaintenanceJournalRef,
   wakeflowMaintenanceOperationUuid,
 } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
@@ -110,10 +92,14 @@ import {
  * Wakeflow Workspace / Maintenance：唯一 maintenance execution transaction。
  *
  * Normal execution 在gate前及取得exact gate后各重推一次完整聚合计划；gate内只存在
- * 一份 journal，并以 affected → exact owner effect → checkpoint 单调推进。shared step
- * 使用闭合 dispatcher，
+ * 一份 intent，每做完一步把它的 `completedSteps` 加一。shared step 使用闭合 dispatcher，
  * host step 只能交给与计划身份一致的单个 capability。Recovery 消费 exact plan，不根据
- * 已受影响的宿主文件重建 source operation。
+ * 已受影响的宿主文件重建 source operation：从计数指着的那一步接着做，并把那一步当作"可能
+ * 只做了一半"来重做（步骤自己接受这个标记）。
+ *
+ * 1.4 第 5 段 5a 的 C 行（ADR-0031）：此前"做到哪了"记在另一个文件（检查点日志）里，每一步之前
+ * 先记"要动它"、之后再记"做完了"，并与意图按摘要和文件节点互相印证。现在只有一个文件、每步之后
+ * 记一次；少掉的是"下一步还没开始、目标却已经变了"与"下一步做了一半"的区分。
  */
 
 export interface WakeflowMaintenanceExecutionTransactionOptions {
@@ -123,7 +109,7 @@ export interface WakeflowMaintenanceExecutionTransactionOptions {
   readonly uuidFactory?: UuidV4Factory;
   /**
    * 写者戳：本进程制品身份的发布版本与 manifest 摘要，由组合根注入，盖在本次事务写出的
-   * intent 与 journal 上。省略或 `null` 即不盖戳（测试构建没有 manifest）。
+   * intent 上。省略或 `null` 即不盖戳（测试构建没有 manifest）。
    */
   readonly writer?: Readonly<WakeflowMaintenanceWriter> | null;
 }
@@ -173,7 +159,6 @@ export type WakeflowMaintenanceExecutionTransactionErrorReason =
   | "gate"
   | "intent"
   | "transaction"
-  | "journal"
   | "step"
   | "terminal-closure"
   | "aborted"
@@ -189,7 +174,6 @@ const ERROR_MESSAGES = {
   gate: "Wakeflow maintenance execution gate failed.",
   intent: "Wakeflow maintenance execution recovery intent failed.",
   transaction: "Wakeflow maintenance execution transaction resources have an invalid shape.",
-  journal: "Wakeflow maintenance execution journal failed.",
   step: "Wakeflow maintenance execution step failed.",
   "terminal-closure": "Wakeflow maintenance execution terminal closure failed.",
   aborted: "Wakeflow maintenance execution was aborted.",
@@ -434,26 +418,6 @@ function assertRequestMatchesPlan(
   }
 }
 
-function validateJournalPlan(
-  source: Readonly<WakeflowMaintenanceJournalSource>,
-  intentSource: Readonly<WakeflowMaintenanceExecutionIntentSource>,
-  plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-): void {
-  const preview = plan.sharedPreview;
-  if (
-    source.journal.intentDigest !== intentSource.intentDigest ||
-    source.journal.planDigest !== plan.planDigest ||
-    source.journal.action !== preview.action ||
-    source.journal.matrixDigest !== preview.matrixDigest ||
-    source.journal.currentConfigDigest !== preview.currentConfigDigest ||
-    source.journal.desiredConfigDigest !== preview.desiredConfigDigest ||
-    source.journal.stepIds.length !== plan.steps.length ||
-    source.journal.stepIds.some((stepId, index) => stepId !== plan.steps[index]?.stepId)
-  ) {
-    fail("journal", "$journal", source.operationId);
-  }
-}
-
 /** 退役配置记录（ADR-0024 终态）：不在为 null；读不出即源 Config 不可信。 */
 async function detachedConfigRecord(
   root: RootedDirectory,
@@ -605,11 +569,14 @@ async function executeStep(
   }
 }
 
-async function advanceJournal(
+/**
+ * 从意图的计数接着把步骤做完：做一步、记一次。`recovery` 时计数指着的那一步可能已经开始，按
+ * "可能只做了一半"重做；其后的步骤照常。
+ */
+async function advanceIntent(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
-  intentSource: Readonly<WakeflowMaintenanceExecutionIntentSource>,
-  sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
+  sourceValue: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
@@ -620,31 +587,11 @@ async function advanceJournal(
 ) {
   let source = sourceValue;
   const receipts: Readonly<WakeflowMaintenanceExecutionStepReceipt>[] = [];
-  let replayingAffected = recovery && source.journal.affectedStepId !== null;
-  while (source.journal.state !== "terminal") {
+  let replayingAffected = recovery;
+  while (source.intent.completedSteps < plan.steps.length) {
     assertNotAborted(signal, context.operationId);
-    if (source.journal.affectedStepId === null) {
-      if (source.journal.checkpoint === source.journal.stepIds.length) {
-        source = await checkpointWakeflowMaintenanceJournal(
-          root,
-          context,
-          intentSource,
-          source,
-          terminalizeWakeflowMaintenanceJournal(source.journal),
-        );
-        continue;
-      }
-      source = await checkpointWakeflowMaintenanceJournal(
-        root,
-        context,
-        intentSource,
-        source,
-        beginWakeflowMaintenanceJournalStep(source.journal),
-      );
-      replayingAffected = false;
-    }
-    const stepId = source.journal.affectedStepId;
-    if (stepId === null) fail("journal", "$journal", context.operationId);
+    const stepId = plan.steps[source.intent.completedSteps]?.stepId;
+    if (stepId === undefined) fail("intent", "$intent", context.operationId);
     receipts.push(
       await executeStep(
         root,
@@ -659,15 +606,12 @@ async function advanceJournal(
         signal,
       ),
     );
-    source = await checkpointWakeflowMaintenanceJournal(
-      root,
-      context,
-      intentSource,
-      source,
-      completeWakeflowMaintenanceJournalStep(source.journal),
-    );
+    source = await checkpointWakeflowMaintenanceExecutionIntent(root, context, source);
     replayingAffected = false;
   }
+  // 最后一步记下之后、收尾之前仍然认一次取消：与此前在"记为终态"之前认取消的位置相同，留下的是
+  // 一份全部做完的 intent，由恢复退役。
+  assertNotAborted(signal, context.operationId);
   return Object.freeze({
     terminalSource: source,
     receipts: Object.freeze(receipts),
@@ -744,15 +688,6 @@ function intentStoreFailureReason(
     : "intent";
 }
 
-function journalStoreFailureReason(
-  error: WakeflowMaintenanceJournalStoreError,
-): "journal" | "recovery-required" | "transaction" {
-  if (error.reason === "transactions-shape") return "transaction";
-  return error.reason === "commit-uncertain" || error.reason === "recovery-required"
-    ? "recovery-required"
-    : "journal";
-}
-
 /** 执行一份重新验证后的聚合维护计划；尚不暴露为公共 maintenance apply。 */
 export async function executeWakeflowMaintenanceExecutionTransaction(
   root: RootedDirectory,
@@ -812,21 +747,12 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
       options.writer,
     );
     assertWakeflowMaintenanceExecutionIntentCapacity(intent);
-    assertWakeflowPreparedMaintenanceJournalCapacity(
-      operationId,
-      computeWakeflowMaintenanceExecutionIntentDigest(intent),
-      plan,
-      options.writer,
-    );
   } catch (error: unknown) {
     if (
       error instanceof WakeflowMaintenanceExecutionIntentError ||
       error instanceof WakeflowMaintenanceExecutionIntentStoreError
     ) {
       fail("intent", "$intent", null);
-    }
-    if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      fail("journal", "$journal", null);
     }
     throw error;
   }
@@ -863,18 +789,10 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           fail("plan-stale", "$plan.planDigest", null);
         }
         const intentSource = await publishWakeflowMaintenanceExecutionIntent(root, context, intent);
-        const prepared = await publishPreparedWakeflowMaintenanceJournal(
+        const advanced = await advanceIntent(
           root,
           context,
           intentSource,
-          intentPlan,
-          options.writer,
-        );
-        const advanced = await advanceJournal(
-          root,
-          context,
-          intentSource,
-          prepared,
           intentPlan,
           intentRequestValue,
           intentRequest,
@@ -884,8 +802,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           signal,
         );
         await assertTerminalConfig(root, intentPlan, operationId);
-        await retireWakeflowMaintenanceExecutionIntent(root, context, intentSource);
-        await retireTerminalWakeflowMaintenanceJournal(root, context, advanced.terminalSource);
+        await retireWakeflowMaintenanceExecutionIntent(root, context, advanced.terminalSource);
         return Object.freeze({
           status: "completed" as const,
           operationId,
@@ -903,72 +820,17 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
       const reason = intentStoreFailureReason(error);
       fail(reason, reason === "transaction" ? "$transactions" : "$intent", operationId);
     }
-    if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      const reason = journalStoreFailureReason(error);
-      fail(reason, reason === "transaction" ? "$transactions" : "$journal", operationId);
-    }
     throw error;
   }
 }
 
-async function recoverTerminalJournalWithoutIntent(
-  root: RootedDirectory,
-  operationId: WakeflowMaintenanceOperationId,
-  initial: Readonly<WakeflowMaintenanceJournalSource>,
-  options: Readonly<ParsedOptions>,
-): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
-  if (
-    initial.journal.state !== "terminal" ||
-    initial.journal.affectedStepId !== null ||
-    initial.journal.checkpoint !== initial.journal.stepIds.length
-  ) {
-    fail("intent", "$intent", operationId);
-  }
-  assertNotAborted(options.signal, operationId);
-  const current = await currentConfigSnapshot(root, options.signal, operationId);
-  if (initial.journal.action === "detach-workspace") {
-    // 终态是退役文件带同一摘要、配置文件不在（ADR-0024）。
-    const retired = await detachedConfigRecord(root, options.signal, operationId);
-    if (current !== null || retired?.configDigest !== initial.journal.desiredConfigDigest) {
-      fail("terminal-closure", "$config", operationId);
-    }
-  } else if (current?.configDigest !== initial.journal.desiredConfigDigest) {
-    fail("terminal-closure", "$config", operationId);
-  }
-  await assertWakeflowMaintenanceJournalIsOnlyTransaction(root, initial);
-  await retireInactiveCorrelatedGate(root, operationId);
-  return withExistingWakeflowMaintenanceGate(
-    root,
-    operationId,
-    async (context) => {
-      const source = await readWakeflowMaintenanceJournal(root, operationId);
-      if (
-        source.digest !== initial.digest ||
-        source.journalDigest !== initial.journalDigest ||
-        source.node.deviceId !== initial.node.deviceId ||
-        source.node.inodeId !== initial.node.inodeId
-      ) {
-        fail("journal", "$journal", operationId);
-      }
-      await retireTerminalWakeflowMaintenanceJournal(root, context, source);
-      return Object.freeze({
-        status: "recovered" as const,
-        operationId,
-        planDigest: source.journal.planDigest,
-        stepReceipts: Object.freeze([]),
-      });
-    },
-    gateOptions(options),
-  );
-}
-
 /**
- * detach-workspace 的恢复源 Config（ADR-0024）：配置文件还在即它（退役步必未完成）；配置文件不在则
- * 退役文件必须带同一摘要且退役步已开始，源 Config 就是退役文件里的那份。
+ * detach-workspace 的恢复源 Config（ADR-0024）：配置文件还在即它（退役步必未做完）；配置文件不在则
+ * 退役文件必须带同一摘要，并且退役步已经做完或正是计数指着的那一步，源 Config 就是退役文件里的那份。
  */
 function detachRecoveryConfigState(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  journal: Readonly<WakeflowMaintenanceJournalSource> | null,
+  completedSteps: number,
   current: Readonly<WakeflowConfigAuthoritySnapshot> | null,
   retired: Readonly<WakeflowDetachedConfigRecord> | null,
   operationId: WakeflowMaintenanceOperationId,
@@ -978,12 +840,8 @@ function detachRecoveryConfigState(
   const retireIndex = plan.steps.findIndex(
     (entry) => entry.boundary === "shared-static" && entry.stepKind === "retire-config",
   );
-  const retireStepId = plan.steps[retireIndex]?.stepId;
   if (current !== null) {
-    if (
-      current.configDigest !== expected ||
-      (journal !== null && retireIndex >= 0 && journal.journal.checkpoint > retireIndex)
-    ) {
+    if (current.configDigest !== expected || (retireIndex >= 0 && completedSteps > retireIndex)) {
       fail("source-config", "$config", operationId);
     }
     return current.model;
@@ -991,48 +849,42 @@ function detachRecoveryConfigState(
   if (
     retired === null ||
     retired.configDigest !== expected ||
-    journal === null ||
-    (retireIndex >= 0 &&
-      journal.journal.checkpoint <= retireIndex &&
-      journal.journal.affectedStepId !== retireStepId)
+    (retireIndex >= 0 && completedSteps < retireIndex)
   ) {
     fail("source-config", "$config", operationId);
   }
   return retired.model;
 }
 
+/**
+ * 恢复时磁盘上的 Config 必须与计数说得通：发布配置的那一步还没轮到，配置就不该已经是新的；那一步
+ * 已经记为做完，配置就不该还是旧的。计数正指着那一步时两种都可能——它可能只做了一半。
+ */
 function assertRecoveryConfigState(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  journal: Readonly<WakeflowMaintenanceJournalSource> | null,
+  completedSteps: number,
   current: Readonly<WakeflowConfigAuthoritySnapshot> | null,
   retired: Readonly<WakeflowDetachedConfigRecord> | null,
   operationId: WakeflowMaintenanceOperationId,
 ): WakeflowConfigModel | null {
   if (plan.sharedPreview.action === "detach-workspace") {
-    return detachRecoveryConfigState(plan, journal, current, retired, operationId);
-  }
-  if (journal === null) {
-    if ((current?.configDigest ?? null) !== plan.sharedPreview.currentConfigDigest) {
-      fail("source-config", "$config", operationId);
-    }
-    return current?.model ?? null;
+    return detachRecoveryConfigState(plan, completedSteps, current, retired, operationId);
   }
   const configIndex = plan.steps.findIndex(
     (entry) => entry.boundary === "shared-static" && entry.stepKind === "publish-config",
   );
-  if (configIndex >= 0 && current?.configDigest === plan.sharedPreview.desiredConfigDigest) {
-    const configStepId = plan.steps[configIndex]?.stepId;
-    if (
-      journal.journal.checkpoint <= configIndex &&
-      journal.journal.affectedStepId !== configStepId
-    ) {
-      fail("source-config", "$config", operationId);
-    }
+  const currentDigest = current?.configDigest ?? null;
+  if (
+    configIndex >= 0 &&
+    currentDigest === plan.sharedPreview.desiredConfigDigest &&
+    completedSteps < configIndex
+  ) {
+    fail("source-config", "$config", operationId);
   }
   if (
     configIndex >= 0 &&
-    current?.configDigest === plan.sharedPreview.currentConfigDigest &&
-    journal.journal.checkpoint > configIndex
+    currentDigest === plan.sharedPreview.currentConfigDigest &&
+    completedSteps > configIndex
   ) {
     fail("source-config", "$config", operationId);
   }
@@ -1043,20 +895,16 @@ function assertRecoveryConfigState(
     return null;
   }
   if (
-    current?.configDigest === plan.sharedPreview.currentConfigDigest ||
-    current?.configDigest === plan.sharedPreview.desiredConfigDigest
+    current !== null &&
+    (current.configDigest === plan.sharedPreview.currentConfigDigest ||
+      current.configDigest === plan.sharedPreview.desiredConfigDigest)
   ) {
     return current.model;
   }
   fail("source-config", "$config", operationId);
 }
 
-/**
- * 一个操作的 intent 与 journal 同在 `transactions` 目录，恢复它们的暂存时是同一个闭合目标集合
- * （open-items B9，§13.242）。此前两个目标各自闭合：进程死在 journal 的暂存已链接、尚未退役的那一刻，
- * intent 的恢复就把这份暂存当成集合外的条目拒绝，这个操作再也恢复不了。别的目标的暂存仍在集合之外，
- * 照旧拒绝；属主还活着或说不清的暂存不动，恢复不往下走。
- */
+/** 回收这次操作的 intent 自己留下的、写者已经不在的原子写暂存；属主还活着或说不清的不动，恢复不往下走。 */
 async function recoverOperationStages(
   root: RootedDirectory,
   operationId: WakeflowMaintenanceOperationId,
@@ -1064,10 +912,7 @@ async function recoverOperationStages(
   try {
     const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
-      Object.freeze([
-        wakeflowMaintenanceIntentRef(operationId),
-        wakeflowMaintenanceJournalRef(operationId),
-      ]),
+      Object.freeze([wakeflowMaintenanceIntentRef(operationId)]),
     );
     if (receipt.activeStageCount === 0 && receipt.unknownStageCount === 0) return;
   } catch (error: unknown) {
@@ -1077,7 +922,7 @@ async function recoverOperationStages(
 }
 
 /**
- * 只凭operation ID、磁盘intent/journal和固定宿主capability恢复同一事务。
+ * 只凭operation ID、磁盘intent和固定宿主capability恢复同一事务。
  */
 export async function recoverWakeflowMaintenanceExecutionTransaction(
   root: RootedDirectory,
@@ -1093,11 +938,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
     await recoverOperationStages(root, operationId);
     assertNotAborted(options.signal, operationId);
     const intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
-    const initialJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
-    if (intentSource === null) {
-      if (initialJournal === null) fail("intent", "$intent", operationId);
-      return await recoverTerminalJournalWithoutIntent(root, operationId, initialJournal, options);
-    }
+    if (intentSource === null) fail("intent", "$intent", operationId);
     let reconstructed: ReturnType<typeof reconstructWakeflowMaintenanceExecutionFromIntent>;
     try {
       reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
@@ -1116,12 +957,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
     const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
     assertRequestMatchesPlan(plan, request);
     const capability = parseCapability(plan, capabilityValue);
-    if (initialJournal === null) {
-      await assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix(root, intentSource);
-    } else {
-      validateJournalPlan(initialJournal, intentSource, plan);
-      await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, intentSource);
-    }
+    await assertWakeflowMaintenanceIntentIsOnlyTransaction(root, intentSource);
     const current = await currentConfigSnapshot(root, options.signal, operationId);
     const retired =
       plan.sharedPreview.action === "detach-workspace"
@@ -1129,7 +965,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         : null;
     const sourceConfig = assertRecoveryConfigState(
       plan,
-      initialJournal,
+      reconstructed.completedSteps,
       current,
       retired,
       operationId,
@@ -1148,22 +984,10 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         ) {
           fail("intent", "$intent", operationId);
         }
-        const existingJournal = await readWakeflowMaintenanceJournalOrNull(root, operationId);
-        const source =
-          existingJournal ??
-          (await publishPreparedWakeflowMaintenanceJournal(
-            root,
-            context,
-            currentIntent,
-            plan,
-            options.writer,
-          ));
-        validateJournalPlan(source, currentIntent, plan);
-        const advanced = await advanceJournal(
+        const advanced = await advanceIntent(
           root,
           context,
           currentIntent,
-          source,
           plan,
           requestValue,
           request,
@@ -1173,8 +997,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
           options.signal,
         );
         await assertTerminalConfig(root, plan, operationId);
-        await retireWakeflowMaintenanceExecutionIntent(root, context, currentIntent);
-        await retireTerminalWakeflowMaintenanceJournal(root, context, advanced.terminalSource);
+        await retireWakeflowMaintenanceExecutionIntent(root, context, advanced.terminalSource);
         return Object.freeze({
           status: "recovered" as const,
           operationId,
@@ -1200,10 +1023,6 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         );
       }
       fail(reason, reason === "transaction" ? "$transactions" : "$intent", operationId);
-    }
-    if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      const reason = journalStoreFailureReason(error);
-      fail(reason, reason === "transaction" ? "$transactions" : "$journal", operationId);
     }
     throw error;
   }

@@ -6,7 +6,6 @@ import {
   parseWakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
-  wakeflowMaintenanceJournalRef,
   wakeflowMaintenanceOperationUuid,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 
@@ -20,10 +19,6 @@ test("maintenance operation ID is domain-local UUID identity", () => {
   equal(
     wakeflowMaintenanceIntentRef(operationId),
     `.wakeflow-local/runtime/maintenance/transactions/${operationId}.intent.json`,
-  );
-  equal(
-    wakeflowMaintenanceJournalRef(operationId),
-    `.wakeflow-local/runtime/maintenance/transactions/${operationId}.journal.json`,
   );
 });
 

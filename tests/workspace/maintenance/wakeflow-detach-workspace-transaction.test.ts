@@ -17,7 +17,10 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import { publishWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import {
+  checkpointWakeflowMaintenanceExecutionIntent,
+  publishWakeflowMaintenanceExecutionIntent,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
   executeWakeflowMaintenanceExecutionTransaction,
@@ -25,14 +28,6 @@ import {
   WakeflowMaintenanceExecutionTransactionError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
@@ -185,7 +180,7 @@ test("detach-workspace 的共享计划按托管块、窗口投影、retire-confi
   deepEqual([...after.blockerCodes], ["current-config-unavailable"]);
 });
 
-test("retire-config 落盘后、checkpoint 之前中断，recover 从退役文件读回源 Config 并收尾", async (t) => {
+test("retire-config 落盘后、记下这一步之前中断，recover 从退役文件读回源 Config 并收尾", async (t) => {
   const workspace = await initializedWorkspace(t);
   const preview = await previewWakeflowStaticMaterialization(workspace.root, DETACH_REQUEST);
   const plan = createWakeflowMaintenanceExecutionPlan(
@@ -208,25 +203,12 @@ test("retire-config 落盘后、checkpoint 之前中断，recover 从退役文�
           DETACH_REQUEST,
           workspace.desired,
         );
-        const intentSource = await publishWakeflowMaintenanceExecutionIntent(
+        let source = await publishWakeflowMaintenanceExecutionIntent(
           workspace.root,
           context,
           intent,
         );
-        let source = await publishPreparedWakeflowMaintenanceJournal(
-          workspace.root,
-          context,
-          intentSource,
-          plan,
-        );
         for (const step of plan.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           await executeWakeflowStaticMaterializationStep(
             workspace.root,
             context,
@@ -236,12 +218,10 @@ test("retire-config 落盘后、checkpoint 之前中断，recover 从退役文�
             { sourceConfig: workspace.desired, recoveringAffectedStep: false },
           );
           if (step.stepId === "authority:retire-config") throw interrupt;
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected the retire-config step.");

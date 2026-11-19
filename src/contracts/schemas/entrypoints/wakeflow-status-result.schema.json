@@ -582,7 +582,7 @@
                 "$ref": "#/$defs/singleLineText"
               },
               "kind": {
-                "enum": ["intent", "journal", "unknown"]
+                "enum": ["intent", "unknown"]
               },
               "operationId": {
                 "oneOf": [

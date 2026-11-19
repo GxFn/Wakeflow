@@ -62,18 +62,13 @@ import {
 } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import { publishWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import {
+  checkpointWakeflowMaintenanceExecutionIntent,
+  publishWakeflowMaintenanceExecutionIntent,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { WakeflowMaintenanceExecutionPreviewError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceExecutionTransactionError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  beginWakeflowMaintenanceJournalStep,
-  completeWakeflowMaintenanceJournalStep,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
-import {
-  checkpointWakeflowMaintenanceJournal,
-  publishPreparedWakeflowMaintenanceJournal,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -390,7 +385,7 @@ test("reconcile rebuilds a deleted managed Design root and writes Claude's rules
   equal(verified.steps.length, 0);
 });
 
-test("recovery replays only the affected Claude operation from the exact journal", async (t) => {
+test("recovery replays only the affected Claude operation from the intent's step counter", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
@@ -410,25 +405,12 @@ test("recovery replays only the affected Claude operation from the exact journal
           input,
           desired,
         );
-        const intentSource = await publishWakeflowMaintenanceExecutionIntent(
+        let source = await publishWakeflowMaintenanceExecutionIntent(
           workspace.root,
           context,
           intent,
         );
-        let source = await publishPreparedWakeflowMaintenanceJournal(
-          workspace.root,
-          context,
-          intentSource,
-          plan,
-        );
         for (const step of plan.steps) {
-          source = await checkpointWakeflowMaintenanceJournal(
-            workspace.root,
-            context,
-            intentSource,
-            source,
-            beginWakeflowMaintenanceJournalStep(source.journal),
-          );
           if (step.boundary === "shared-static") {
             await executeWakeflowStaticMaterializationStep(
               workspace.root,
@@ -453,12 +435,10 @@ test("recovery replays only the affected Claude operation from the exact journal
             });
             throw privateError;
           }
-          source = await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceExecutionIntent(
             workspace.root,
             context,
-            intentSource,
             source,
-            completeWakeflowMaintenanceJournalStep(source.journal),
           );
         }
         throw new Error("Expected a Claude host operation.");

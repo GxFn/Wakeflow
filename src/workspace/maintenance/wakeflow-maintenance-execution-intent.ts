@@ -61,12 +61,16 @@ import {
 } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
- * Wakeflow Workspace / Maintenance：可在进程重启后重建 exact execution 的不可变意图。
+ * Wakeflow Workspace / Maintenance：可在进程重启后重建 exact execution 的意图，一次维护唯一落盘的记录。
  *
  * Intent 保存规范化 desired Config、完整 Host Profile 集合、shared preview 与宿主
  * contribution；聚合 steps 始终重新推导，不重复持久化。它不保存源文件正文、绝对
- * 路径、凭据、PID、锁 token、时间戳或可变 checkpoint。可选的 `writer` 是写出意图的构建
- * 的写者戳（C11）；盖戳之前的意图没有它。
+ * 路径、凭据、PID、锁 token 或时间戳。可选的 `writer` 是写出意图的构建的写者戳（C11）；
+ * 盖戳之前的意图没有它。
+ *
+ * 唯一会变的成员是 `completedSteps`：计划里已经做完的前几步。它不进意图摘要——摘要认的是
+ * "这次要做成什么样"，计数说的是"做到哪了"。此前计数在另一个文件（检查点日志）里，两个文件
+ * 互相印证；1.4 第 5 段把它并进来（ADR-0031，5a 的 C 行）。
  */
 
 export const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND =
@@ -86,6 +90,8 @@ export interface WakeflowMaintenanceExecutionIntent {
   readonly sharedPreview: Readonly<WakeflowStaticMaterializationPreview>;
   readonly hostContribution: Readonly<WakeflowHostMaintenanceContribution> | null;
   readonly planDigest: Sha256Digest;
+  /** 计划里已经做完的前几步；下标等于它的那一步可能已经开始。 */
+  readonly completedSteps: number;
   readonly writer?: Readonly<WakeflowMaintenanceWriter>;
 }
 
@@ -283,7 +289,8 @@ function normalize(
     plan.status !== "ready" ||
     plan.steps.length === 0 ||
     plan.planDigest !== wire.planDigest ||
-    sharedPreview.desiredConfigDigest !== computeWakeflowConfigDigest(desiredConfig)
+    sharedPreview.desiredConfigDigest !== computeWakeflowConfigDigest(desiredConfig) ||
+    wire.completedSteps > plan.steps.length
   ) {
     fail("relation", "$intent");
   }
@@ -297,11 +304,13 @@ function normalize(
     sharedPreview,
     hostContribution,
     planDigest: plan.planDigest,
+    completedSteps: wire.completedSteps,
     ...(writer === null ? {} : { writer }),
   });
   return Object.freeze({ intent, plan });
 }
 
+/** 文件里的表示：不变的部分加上计数。 */
 function intentRepresentation(intent: Readonly<WakeflowMaintenanceExecutionIntent>): JsonValue {
   return parseJsonValue(
     {
@@ -314,6 +323,7 @@ function intentRepresentation(intent: Readonly<WakeflowMaintenanceExecutionInten
       sharedPreview: intent.sharedPreview,
       hostContribution: intent.hostContribution,
       planDigest: intent.planDigest,
+      completedSteps: intent.completedSteps,
       ...(intent.writer === undefined ? {} : { writer: intent.writer }),
     },
     "$intent",
@@ -392,19 +402,36 @@ export function createWakeflowMaintenanceExecutionIntent(
     sharedPreview: plan.sharedPreview,
     hostContribution: plan.hostContribution,
     planDigest: plan.planDigest,
+    completedSteps: 0,
     ...(writer === null ? {} : { writer }),
   });
 }
 
-/** 一次准入并重建恢复执行所需的exact plan与无signal request。 */
+/**
+ * 做完一步之后的意图：计数加一，其余一字不动。全部做完的意图没有后继。
+ */
+export function advanceWakeflowMaintenanceExecutionIntent(
+  value: unknown,
+): Readonly<WakeflowMaintenanceExecutionIntent> {
+  const { intent, plan } = parseWakeflowMaintenanceExecutionIntentWithPlan(value);
+  if (intent.completedSteps >= plan.steps.length) fail("relation", "$/completedSteps");
+  return parseWakeflowMaintenanceExecutionIntent({
+    ...(intentRepresentation(intent) as Record<string, JsonValue>),
+    completedSteps: intent.completedSteps + 1,
+  });
+}
+
+/** 一次准入并重建恢复执行所需的exact plan、无signal request与做到第几步。 */
 export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown): Readonly<{
   readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
   readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
+  readonly completedSteps: number;
 }> {
   const normalized = parseWakeflowMaintenanceExecutionIntentWithPlan(value);
   const intent = normalized.intent;
   return Object.freeze({
     plan: normalized.plan,
+    completedSteps: intent.completedSteps,
     request: Object.freeze({
       action: intent.sharedPreview.action,
       // reconcile 与 detach-workspace 的请求不带期望 Config；意图里存的是当前 Config。
@@ -419,11 +446,12 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown
   });
 }
 
-/** 计算immutable intent的语义摘要，供mutable journal绑定。 */
+/** 意图里不变部分的语义摘要：计数不进摘要，所以一次维护从头到尾是同一个值。 */
 export function computeWakeflowMaintenanceExecutionIntentDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    intentRepresentation(parseWakeflowMaintenanceExecutionIntent(value)),
-  );
+  const { completedSteps: _completedSteps, ...immutable } = intentRepresentation(
+    parseWakeflowMaintenanceExecutionIntent(value),
+  ) as Record<string, JsonValue>;
+  return computeCanonicalJsonSha256Digest(immutable);
 }
 
 /** 渲染唯一确定性格式化JSON表示。 */
@@ -479,7 +507,7 @@ export function createWakeflowMaintenanceIntentResourceDeclaration(
     processing: {
       kind: "resource",
       role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
+      allowedMutationRecipes: ["exclusive-create", "exact-source-replace", "exact-retire"],
       recoveryStrategy: "owner-transaction-recovery",
     },
   });

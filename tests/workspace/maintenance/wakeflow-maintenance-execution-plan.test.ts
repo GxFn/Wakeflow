@@ -14,7 +14,6 @@ import {
   parseWakeflowMaintenanceExecutionPlan,
   WakeflowMaintenanceExecutionPlanError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
-import { createPreparedWakeflowMaintenanceJournal } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
@@ -23,7 +22,6 @@ import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/worksp
 
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
-const OPERATION_ID = "maintenance_operation_11111111-1111-4111-8111-111111111111";
 
 function sharedPreview() {
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
@@ -99,7 +97,7 @@ function hostOperation(
   };
 }
 
-test("aggregate plan inserts exact host operation before Config and binds one journal", () => {
+test("aggregate plan inserts exact host operation before Config", () => {
   const plan = createWakeflowMaintenanceExecutionPlan(
     sharedPreview(),
     claudeCodeWorkspaceHostResourceProfile,
@@ -119,13 +117,6 @@ test("aggregate plan inserts exact host operation before Config and binds one jo
     "host-effect:claude-portable-settings:program:program_11111111-1111-4111-8111-111111111111",
   ]);
   deepEqual(parseWakeflowMaintenanceExecutionPlan(plan), plan);
-
-  const journal = createPreparedWakeflowMaintenanceJournal(OPERATION_ID, OTHER_DIGEST, plan);
-  equal(journal.planDigest, plan.planDigest);
-  deepEqual(
-    journal.stepIds,
-    plan.steps.map((entry) => entry.stepId),
-  );
 });
 
 test("aggregate plan represents ordered host operations as a linear dependency chain", () => {

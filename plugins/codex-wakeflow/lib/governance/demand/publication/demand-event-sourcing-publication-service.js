@@ -1,6 +1,7 @@
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/ledger-authority-store.js";
@@ -9,15 +10,18 @@ import { assertNoActiveDemand } from "./demand-active-guard.js";
 import { DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, DemandEventSourcingPublicationServiceError, failDemandEventSourcingPublication as fail, } from "./demand-event-sourcing-publication-contract.js";
 import { assertPendingPackage, claimPackageForDemandPublication, exactClaimedPackage, inspectPackageForDemandPublication, } from "./demand-event-sourcing-publication-package.js";
 import { loadFinalDemandPublication, materializeDemandPublicationStage, publishDemandStage, } from "./demand-event-sourcing-publication-stage.js";
-import { assertPrivatePublicationNode, ensurePublicationTransaction, initializePublicationStorage, publicationNodeOrNull, readPublicationTransactionAt, recoverPublicationTransactionStages, retirePublicationFile, samePublicationTransaction, } from "./demand-event-sourcing-publication-storage.js";
+import { assertPrivatePublicationNode, initializePublicationStorage, publicationNodeOrNull, readPublicationTransactionAt, recoverPublicationTransactionStages, retirePublicationFile, samePublicationTransaction, } from "./demand-event-sourcing-publication-storage.js";
 import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "./demand-event-sourcing-publication-transaction.js";
-import { DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalPublicationMarkerRef, demandPublicationLockRef, demandPublicationTransactionRef, } from "./demand-publication-paths.js";
+import { demandFinalPublicationMarkerRef, demandPublicationLockRef, demandStagePublicationMarkerRef, } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源发布流程编排。
  *
- * 本模块只负责同级发布意图文件、Demand 根目录和看板认领的提交顺序，以及流程锁和
- * 公开入口。根作用域存储、认领关系验证和暂存根目录构建分别由相邻模块负责；纯事件
- * 追加不使用该流程锁或发布事务。
+ * 本模块只负责暂存根、Demand 根目录和看板认领的提交顺序，以及流程锁和公开入口。根作用域存储、
+ * 认领关系验证和暂存根目录构建分别由相邻模块负责；纯事件追加不使用该流程锁或发布事务。
+ *
+ * 这次创建落盘的记录只有一份：暂存根（改名之后是 Demand 根）里的发布标记，它带着完整的事务
+ *（1.4 第 5 段 5a 的 B 行，ADR-0031）。被打断的创建由 `recover` 凭它续做；同一个创建请求再发一次时，
+ * 调用方先读它、沿用它记下的时间，得到同一份事务，于是每一步都按"已经做过"重入。
  */
 function assertRoot(value) {
     if (typeof value !== "object" ||
@@ -63,8 +67,7 @@ export async function initializeDemandEventSourcingPublication(root, options) {
     assertRoot(root);
     await initializePublicationStorage(root, parseSignal(options));
 }
-async function applyPublication(root, ledgerStore, storedSidecar, signal) {
-    const transaction = storedSidecar.transaction;
+async function applyPublication(root, ledgerStore, transaction, signal) {
     const before = await inspectPackageForDemandPublication(root, transaction, signal);
     const alreadyClaimed = exactClaimedPackage(before, transaction);
     if (alreadyClaimed === null)
@@ -108,15 +111,6 @@ async function applyPublication(root, ledgerStore, storedSidecar, signal) {
     const claim = exactClaimedPackage(await inspectPackageForDemandPublication(root, transaction, signal), transaction);
     if (claim === null)
         fail("conflict", "$board");
-    const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
-    const sidecarNode = await publicationNodeOrNull(root, sidecarRef);
-    if (sidecarNode === null)
-        fail("recovery-required", "$transaction");
-    const freshSidecar = await readPublicationTransactionAt(root, sidecarRef, sidecarNode, signal);
-    if (!samePublicationTransaction(freshSidecar.transaction, transaction)) {
-        fail("conflict", "$transaction");
-    }
-    await retirePublicationFile(root, transaction, sidecarRef, freshSidecar.source.node, signal);
     return Object.freeze({
         publicationAuthority: "current",
         wroteDemandRoot,
@@ -182,11 +176,9 @@ function rethrowWithPublicationAuthority(error, publicationAuthority) {
 /** 失败后只读观察exact transaction，不把残留、冲突或观察失败猜成成功。 */
 async function classifyPublicationAuthority(root, ledgerStore, transaction, signal) {
     try {
-        const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
-        const sidecarNode = await publicationNodeOrNull(root, sidecarRef);
-        if (sidecarNode !== null) {
-            const stored = await readPublicationTransactionAt(root, sidecarRef, sidecarNode, signal);
-            return samePublicationTransaction(stored.transaction, transaction)
+        const pending = await readPendingPublication(root, transaction.demandId, signal, false);
+        if (pending !== null) {
+            return samePublicationTransaction(pending.transaction, transaction)
                 ? "recoverable"
                 : "unknown";
         }
@@ -248,17 +240,21 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
     let publicationIntentWriteAttempted = false;
     try {
         await initializePublicationStorage(root, signal);
+        await retireInactivePublicationLock(root, transaction.demandId, signal);
         return await runLocked(root, transaction, signal, async () => {
-            const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
-            if ((await publicationNodeOrNull(root, sidecarRef)) === null) {
-                const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
-                if (idempotent !== null)
-                    return idempotent;
+            const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
+            if (idempotent !== null)
+                return idempotent;
+            // 上一次被打断留下的标记必须就是这一份事务：调用方沿用了它的时间才会相同；不同就是另一次创建。
+            const pending = await readPendingPublication(root, transaction.demandId, signal, true);
+            if (pending !== null && !samePublicationTransaction(pending.transaction, transaction)) {
+                fail("conflict", "$transaction");
+            }
+            if (pending === null) {
                 assertPendingPackage(await inspectPackageForDemandPublication(root, transaction, signal), transaction);
             }
             publicationIntentWriteAttempted = true;
-            const stored = await ensurePublicationTransaction(root, sidecarRef, transaction, signal);
-            return applyPublication(root, ledgerStore, stored, signal);
+            return applyPublication(root, ledgerStore, transaction, signal);
         });
     }
     catch (error) {
@@ -269,14 +265,10 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
         rethrowWithPublicationAuthority(error, publicationAuthority);
     }
 }
-async function prepareLockRecovery(root, stored, signal) {
+/** 流程锁的持有者确实不在了就收掉它（与看板、投影的正常入口同一做法，ADR-0014 决定 2）。 */
+async function retireInactivePublicationLock(root, demandId, signal) {
     assertNotAborted(signal);
-    // 只有指定的同级意图源文件，以及由事务派生的 Demand 和路径，才能授权退休崩溃锁。
-    const current = await readPublicationTransactionAt(root, stored.source.resourcePath, stored.source.node, signal);
-    if (!samePublicationTransaction(current.transaction, stored.transaction)) {
-        fail("conflict", "$transaction");
-    }
-    const lockRef = demandPublicationLockRef(stored.transaction.demandId);
+    const lockRef = demandPublicationLockRef(demandId);
     let observation;
     try {
         observation = await inspectRootedExclusiveFileLock(root, lockRef);
@@ -301,7 +293,52 @@ async function prepareLockRecovery(root, stored, signal) {
         throw error;
     }
 }
-/** 根据自包含的同级发布意图文件，前向完成已经开始的发布流程。 */
+function parentOf(ref) {
+    return parsePortableResourcePath(ref.slice(0, ref.lastIndexOf("/")));
+}
+/**
+ * 读一次还没有收尾的创建留下的标记：Demand 根已经生效就读根里的，否则读暂存根里的；都没有即 null。
+ * `settleStages` 只给写路径（发布与恢复）：先回收标记自己的、写者已经不在的原子写暂存。只读路径
+ *（预览、守卫、失败之后的观察）不回收任何东西——预览零写。
+ */
+async function readPendingPublication(root, demandId, signal, settleStages) {
+    for (const ref of [
+        demandFinalPublicationMarkerRef(demandId),
+        demandStagePublicationMarkerRef(demandId),
+    ]) {
+        // 标记所在的目录都不在，就没有什么可读、也没有什么可回收的；只读路径不为此建任何目录。
+        if ((await publicationNodeOrNull(root, parentOf(ref))) === null)
+            continue;
+        if (settleStages)
+            await recoverPublicationTransactionStages(root, ref, signal);
+        const node = await publicationNodeOrNull(root, ref);
+        if (node === null)
+            continue;
+        const stored = await readPublicationTransactionAt(root, ref, node, signal);
+        if (stored.transaction.demandId !== demandId)
+            fail("conflict", "$transaction/demandId");
+        return stored;
+    }
+    return null;
+}
+/** 只读：这个 Demand 有没有一次还没收尾的创建；有就交回它的事务（调用方据此沿用原来的时间）。 */
+export async function readPendingDemandPublication(root, demandIdValue, options) {
+    assertRoot(root);
+    let signal;
+    try {
+        signal = parseSignal(options);
+        const demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
+        assertNotAborted(signal);
+        return (await readPendingPublication(root, demandId, signal, false))?.transaction ?? null;
+    }
+    catch (error) {
+        if (error instanceof WakeflowDurableIdError) {
+            fail("input", "$demandId", "unchanged");
+        }
+        rethrowWithPublicationAuthority(error, "unknown");
+    }
+}
+/** 根据暂存根或 Demand 根里自带的发布标记，前向完成已经开始的发布流程。 */
 export async function recoverDemandPublication(root, ledgerStore, demandIdValue, options) {
     assertRoot(root);
     assertLedgerStore(ledgerStore);
@@ -320,31 +357,20 @@ export async function recoverDemandPublication(root, ledgerStore, demandIdValue,
     }
     let transaction = null;
     try {
-        const ref = demandPublicationTransactionRef(demandId);
-        const transactionsRootNode = await publicationNodeOrNull(root, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF);
-        if (transactionsRootNode === null)
+        const stored = await readPendingPublication(root, demandId, signal, true);
+        if (stored === null)
             fail("not-found", "$transaction");
-        assertPrivatePublicationNode(transactionsRootNode, "directory", "$transactions");
-        await recoverPublicationTransactionStages(root, ref, signal);
-        const node = await publicationNodeOrNull(root, ref);
-        if (node === null)
-            fail("not-found", "$transaction");
-        const stored = await readPublicationTransactionAt(root, ref, node, signal);
-        if (stored.transaction.demandId !== demandId) {
-            fail("conflict", "$transaction/demandId");
-        }
         transaction = stored.transaction;
         await initializePublicationStorage(root, signal);
-        await prepareLockRecovery(root, stored, signal);
+        await retireInactivePublicationLock(root, demandId, signal);
         return await runLocked(root, stored.transaction, signal, async () => {
-            const freshNode = await publicationNodeOrNull(root, ref);
-            if (freshNode === null)
+            const fresh = await readPendingPublication(root, demandId, signal, true);
+            if (fresh === null)
                 fail("not-found", "$transaction");
-            const fresh = await readPublicationTransactionAt(root, ref, freshNode, signal);
             if (!samePublicationTransaction(fresh.transaction, stored.transaction)) {
                 fail("conflict", "$transaction");
             }
-            return applyPublication(root, ledgerStore, fresh, signal);
+            return applyPublication(root, ledgerStore, fresh.transaction, signal);
         });
     }
     catch (error) {

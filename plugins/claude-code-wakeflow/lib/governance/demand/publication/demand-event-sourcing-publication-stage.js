@@ -35,10 +35,18 @@ function mapStageError(error) {
     throw error;
 }
 /**
- * 在暂存根里把一个新 Demand 的全部初始内容建出来：事件存储与三个目录、身份与权威文本、发布标记、
+ * 在暂存根里把一个新 Demand 的全部初始内容建出来：发布标记、事件存储与三个目录、身份与权威文本、
  * 初始提交与它的快照，最后按"发布中"的口径清点一遍。每一步都可重入。
+ *
+ * 标记最先写（1.4 第 5 段 5a 的 B 行，ADR-0031）：它带着完整的事务，是这次创建唯一落盘的记录——
+ * 暂存里只要有别的内容，就读得到它，被打断的创建据此续做。此前根外面另有一份同样的副本，已经删掉。
  */
 async function populateDemandPublicationStage(stageRoot, transaction, signal) {
+    await materializeDirectoryPath(stageRoot, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, {
+        mode: DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
+        ...(signal === undefined ? {} : { signal }),
+    });
+    await ensurePublicationTransaction(stageRoot, DEMAND_PUBLICATION_MARKER_REF, transaction, signal);
     const eventStore = new DemandFileEventStore(stageRoot);
     await eventStore.initialize(signal === undefined ? undefined : { signal });
     for (const ref of [
@@ -53,7 +61,6 @@ async function populateDemandPublicationStage(stageRoot, transaction, signal) {
     }
     await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_IDENTITY_REF, renderDemandIdentity(transaction.identity), 512 * 1024, signal);
     await ensureExactPublicationTextFile(stageRoot, DEMAND_EVENT_SOURCING_AUTHORITY_REF, renderDemandAuthority(transaction.authority), 1024 * 1024, signal);
-    await ensurePublicationTransaction(stageRoot, DEMAND_PUBLICATION_MARKER_REF, transaction, signal);
     await eventStore.recoverAppendCandidates(signal === undefined ? undefined : { signal });
     const snapshotStore = new DemandFileEventSnapshotStore(stageRoot);
     await snapshotStore.recoverPublicationStages(signal === undefined ? undefined : { signal });

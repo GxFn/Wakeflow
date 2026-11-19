@@ -1,7 +1,7 @@
 import { parseWakeflowDurableIdOfKind, } from "../../contracts/identity/wakeflow-durable-id.js";
 import { parsePortableResourcePath, } from "../../foundation/filesystem/portable-resource-path.js";
 /**
- * Wakeflow Governance / Ledger：需求包记录和精简发布意图记录的固定可移植路径词汇。
+ * Wakeflow Governance / Ledger：需求包记录与它的发布暂存、逐记录锁的固定可移植路径词汇。
  *
  * 所有路径只从已经验证的类型化标识和成员路径派生。本模块不探测文件、不创建目录，
  * 也不把物理路径当作业务身份。
@@ -24,21 +24,11 @@ export function ledgerAuthorityRecordRef(record) {
 export function ledgerAuthorityMemberRef(record, memberPath) {
     return parsePortableResourcePath(`${ledgerAuthorityRootRef(record)}/${parsePortableResourcePath(memberPath)}`);
 }
-export function ledgerRecordPublicationIntentRefForIdentity(recordIdValue) {
-    const recordId = parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
-    return parsePortableResourcePath(`${LEDGER_TRANSACTIONS_ROOT_REF}/${recordId}.intent.json`);
-}
-export function ledgerRecordPublicationLockRefForIdentity(recordIdValue) {
-    const recordId = parseWakeflowDurableIdOfKind(recordIdValue, "requirement", "$recordId");
+export function ledgerRecordPublicationLockRef(record) {
+    const recordId = parseWakeflowDurableIdOfKind(record.requirementId, "requirement", "$recordId");
     return parsePortableResourcePath(`${LEDGER_TRANSACTIONS_ROOT_REF}/${recordId}.lock`);
 }
-export function ledgerRecordPublicationIntentRef(record) {
-    return ledgerRecordPublicationIntentRefForIdentity(record.requirementId);
-}
-export function ledgerRecordPublicationLockRef(record) {
-    return ledgerRecordPublicationLockRefForIdentity(record.requirementId);
-}
-/** 每个类型化记录标识只对应一个私有暂存路径；发布意图记录负责绑定目录树摘要。 */
+/** 每个类型化记录标识只对应一个私有暂存路径；标识由内容推出，所以同一路径下只可能是同样的字节。 */
 export function ledgerRecordPublicationStageRef(record) {
     return parsePortableResourcePath(`${LEDGER_TRANSACTIONS_ROOT_REF}/.${record.requirementId}.stage`);
 }

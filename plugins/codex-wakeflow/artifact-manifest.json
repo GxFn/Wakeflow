@@ -140,8 +140,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/refusals.md",
-      "bytes": 11169,
-      "sha256": "sha256:cda3d587943c5d16bd42eb693efd16a904a0d5eea9f5db9e8978f8988770cbc8"
+      "bytes": 11373,
+      "sha256": "sha256:634c995efe3af9daa9d3dca0617fdf61f4765dc316e64889e87b2bdf9cb50b8d"
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
@@ -318,8 +318,8 @@
     },
     {
       "path": "lib/capabilities/demand/service.js",
-      "bytes": 17251,
-      "sha256": "sha256:8599665ee8ada039f5dc21ec46fc62f76fd02b577fca75eb4f9389694255b2c2",
+      "bytes": 18503,
+      "sha256": "sha256:d4a887e3a3ee2afba10383daa5cff86d0f05f1534fcf9bc190108bcd5687a580",
       "mode": "0644",
       "scope": "shared"
     },
@@ -451,8 +451,8 @@
     },
     {
       "path": "lib/capabilities/requirement/service.js",
-      "bytes": 35369,
-      "sha256": "sha256:fed478ca90dbe53a340d723ccbb7053aafe52b8eeef999476b2b6227cbdd8f75",
+      "bytes": 35254,
+      "sha256": "sha256:ed573bd455da6b83164702c607b3467f2632616cd19d0055a33ffff425fd400b",
       "mode": "0644",
       "scope": "shared"
     },
@@ -891,13 +891,6 @@
       "scope": "shared"
     },
     {
-      "path": "lib/contracts/generated/foundation/directory-tree-candidate-plan.generated.js",
-      "bytes": 2955,
-      "sha256": "sha256:c2b0775e9e845f3aa22ca226e3561d6c393fa5126164b0e96cafba5741288400",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
       "path": "lib/contracts/generated/foundation/git-object-id.generated.js",
       "bytes": 2034,
       "sha256": "sha256:bf416e700f6efaee744f86772471046d0f1999f4a9a14d86b4c438e22e1dba8e",
@@ -1146,13 +1139,6 @@
       "path": "lib/contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js",
       "bytes": 2640,
       "sha256": "sha256:33d05af4bcd1ff04a9396624ccb1dfe03eef5d1c214076b49483f91fc683dfe9",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
-      "path": "lib/contracts/generated/governance/ledger/ledger-record-publication-intent.generated.js",
-      "bytes": 2536,
-      "sha256": "sha256:b8b9c1ae77eb9999e16eabe1612a8cae71f5199e53bf9e0b15a37b74e90193e6",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2061,8 +2047,8 @@
     },
     {
       "path": "lib/governance/demand/demand-resource-catalog.js",
-      "bytes": 11670,
-      "sha256": "sha256:37e66af0365f8dddcaa646811e153f3f023110dc542e43c6a8d91e0478b59c0b",
+      "bytes": 11689,
+      "sha256": "sha256:8af5babe936c47975acfd524b420c52da56fac27bec95b869531df33cc450b20",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2299,8 +2285,8 @@
     },
     {
       "path": "lib/governance/demand/publication/demand-active-guard.js",
-      "bytes": 11508,
-      "sha256": "sha256:894af7570d5642e42bd947c8fbcb2a72200abe52241549588d5b598ace9d9350",
+      "bytes": 12225,
+      "sha256": "sha256:d9a7eb465bca5d6c9d98dedba36c66461a204a431a10626424fecd2bbd2b4433",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2320,22 +2306,22 @@
     },
     {
       "path": "lib/governance/demand/publication/demand-event-sourcing-publication-service.js",
-      "bytes": 17454,
-      "sha256": "sha256:ac4bb66e92fe965c9760b8fa498c45586721e2af49bf2394369f8e51a9cddc71",
+      "bytes": 18572,
+      "sha256": "sha256:34664d3cc06224f085bbd6c374c0cffeb0d5eaa7383071ca1fed687904254c68",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/demand/publication/demand-event-sourcing-publication-stage.js",
-      "bytes": 9832,
-      "sha256": "sha256:c5575ce70db95254bd0e5582feca20541fcf75635011a494c83617efa1f8d297",
+      "bytes": 10335,
+      "sha256": "sha256:2aa4d91697556c63b7719f731be5dce05f036935392bbed76c36d8899e896914",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/demand/publication/demand-event-sourcing-publication-storage.js",
-      "bytes": 12668,
-      "sha256": "sha256:03fafcd548edddfb36ff1213c83c63e7ca1df704ae396b39455e4675edfad56a",
+      "bytes": 12765,
+      "sha256": "sha256:775da2050ade88d405260cb73da73a59d21ee9baa9c4569ef881c4079131a1b9",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2348,8 +2334,8 @@
     },
     {
       "path": "lib/governance/demand/publication/demand-publication-paths.js",
-      "bytes": 2057,
-      "sha256": "sha256:b2c397572c2d5793a899d45aa04913ca6ef061f40e023e7611b4e749b026c53a",
+      "bytes": 2130,
+      "sha256": "sha256:be96fd70bba04374af208b8cfb9d1afcc1c519a71a79ec7955aca13945d7bef8",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2509,8 +2495,8 @@
     },
     {
       "path": "lib/governance/ledger/ledger-authority-paths.js",
-      "bytes": 2644,
-      "sha256": "sha256:3168d3a5c10553fd310542be248a1d7b107865704f895140b706ddb7af24b9cc",
+      "bytes": 2125,
+      "sha256": "sha256:8cf7a4458248bd6e31707e5d9d74d288d974c35c691dce9ec556ceea5218345c",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2530,57 +2516,43 @@
     },
     {
       "path": "lib/governance/ledger/ledger-authority-storage-policy.js",
-      "bytes": 1656,
-      "sha256": "sha256:816a634fd5f8fc36b297078e6a21aa035ee4dd6000d3c9d61d51b7c46b404631",
+      "bytes": 1485,
+      "sha256": "sha256:18d31b19d23f564268b5720d71416974f0a993b3ae9675bda51cbbf418ad4664",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-authority-store-contract.js",
-      "bytes": 3137,
-      "sha256": "sha256:1e01c4b21ba1fbd5415900107bbe96243df9b770911d3f05d91b94a210f082f9",
+      "bytes": 3031,
+      "sha256": "sha256:7b836fa25615c93a13a992daf9d4e0ce178b7c3098e64730fc7a612913b75d90",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-authority-store.js",
-      "bytes": 7476,
-      "sha256": "sha256:9db2bea6716fa2f080dcaea1566683351d365064984d85de4d3e16112ded46b7",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
-      "path": "lib/governance/ledger/ledger-record-publication-intent.js",
-      "bytes": 9672,
-      "sha256": "sha256:014a8020ab5692c9aa1b18702f8ff4e515d8ba4da230faf6e6cf891b33dbbcf3",
-      "mode": "0644",
-      "scope": "shared"
-    },
-    {
-      "path": "lib/governance/ledger/ledger-record-publication-recovery.js",
-      "bytes": 6112,
-      "sha256": "sha256:a0ad699436f42004452c37507abfac8afd40bfb7e78a41de4db219ec24567c7b",
+      "bytes": 6633,
+      "sha256": "sha256:cb699227896038be6a162e8c3bb63d64935c787bff55c9f0b495a01e3043deb6",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-record-publication-storage.js",
-      "bytes": 13434,
-      "sha256": "sha256:967fcf7d8e5716fdf58cf5f5eec1179b7cfba3974d757e77f1669f77e85affe4",
+      "bytes": 6758,
+      "sha256": "sha256:a051bd39e51477a78772ed9ca7e7f0939692a3b155917ec895aa997e93ae14d3",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-record-publisher.js",
-      "bytes": 10116,
-      "sha256": "sha256:ac34d21f926ac86daaf69a3ce319e425ca2c32731bac8000a89948440abbb22c",
+      "bytes": 8204,
+      "sha256": "sha256:9d5e5ba8822380bfa9e3b40b36d5887d3004aa252f219df7e087fb167ea843bc",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/governance/ledger/ledger-resource-catalog.js",
-      "bytes": 8510,
-      "sha256": "sha256:9ec012e1c5427722b16073773754db6b49ba12cc0a934eed502c8d3d807e42dd",
+      "bytes": 8363,
+      "sha256": "sha256:83eea3dcff0a6fdc0120cb9fb42e7327650ca2f1a59007a1c686f47501267867",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2943,8 +2915,8 @@
     },
     {
       "path": "lib/kernel/legacy-error-families.js",
-      "bytes": 14505,
-      "sha256": "sha256:ec59083236a6ca4573ec0793a59fde9c3c9c373b59bc72aad178dedb2ca7a1c5",
+      "bytes": 14433,
+      "sha256": "sha256:f89174e2f4e866b51f11de21537ac7b0830ff7af1af66cb6544a15af5e1d834e",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6870,8 +6842,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/refusals.md",
-      "bytes": 11169,
-      "sha256": "sha256:cda3d587943c5d16bd42eb693efd16a904a0d5eea9f5db9e8978f8988770cbc8",
+      "bytes": 11373,
+      "sha256": "sha256:634c995efe3af9daa9d3dca0617fdf61f4765dc316e64889e87b2bdf9cb50b8d",
       "mode": "0644",
       "scope": "agent-text"
     },

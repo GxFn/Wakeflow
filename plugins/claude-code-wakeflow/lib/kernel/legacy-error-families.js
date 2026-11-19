@@ -185,7 +185,6 @@ export const LEGACY_ERROR_CODE_FAMILIES = Object.freeze({
     "wakeflow-implementation-target-result-report": "precondition-failed",
     "wakeflow-ledger-authority-record": "precondition-failed",
     "wakeflow-ledger-authority-store": "precondition-failed",
-    "wakeflow-ledger-record-publication-intent": "precondition-failed",
     "wakeflow-managed-evidence-capture-plan": "precondition-failed",
     "wakeflow-managed-evidence-capture-planning-service": "precondition-failed",
     "wakeflow-managed-evidence-configured-source-root": "precondition-failed",

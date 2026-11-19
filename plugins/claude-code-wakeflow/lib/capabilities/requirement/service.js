@@ -43,7 +43,6 @@ function mapStoreError(error) {
                 fail("not-found", "record-absent", "$request.requirementId", { cause: error });
                 break;
             case "recovery-required":
-            case "recovery-input-required":
                 fail("recovery-required", "ledger-publication", "$ledger", { cause: error });
                 break;
             case "aborted":
@@ -575,15 +574,11 @@ async function applyClaimTransition(context, plan) {
         pending: await pendingWork(context),
     });
 }
-/** recover：记录是权威，看板可由记录补齐；被替代包若仍待认领则撤回。 */
+/**
+ * recover：记录是权威，看板可由记录补齐；被替代包若仍待认领则撤回。记录还没有生效时没有东西可恢复
+ *（`record-absent`）——把同一个发布请求再发一次，它会接着上一次留下的暂存做完（1.4 第 5 段 5a，ADR-0031）。
+ */
 async function recoverPublish(context, requirementId) {
-    try {
-        await context.store.recoverRecordPublication(requirementId, signalOptions(context.signal));
-    }
-    catch (error) {
-        if (!(error instanceof LedgerAuthorityStoreError && error.reason === "not-found"))
-            mapStoreError(error);
-    }
     const loaded = await loadExistingRecord(context, requirementId);
     if (loaded === null)
         fail("not-found", "record-absent", "$request.operationId");

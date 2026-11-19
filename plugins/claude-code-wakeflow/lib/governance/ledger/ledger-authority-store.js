@@ -5,7 +5,6 @@ import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js
 import { inspectLedgerAuthorityLayout, materializeLedgerAuthorityLayout, } from "./ledger-authority-layout.js";
 import { createLedgerAuthorityMemberReference, loadLedgerAuthorityRecord, parseLedgerAuthorityMemberReference, resolveLoadedLedgerAuthorityMemberReference, } from "./ledger-authority-reader.js";
 import { throwLedgerAuthorityStoreError as fail, isLedgerAbortSignal, LedgerAuthorityStoreError, parseLedgerAuthorityStoreOptions, } from "./ledger-authority-store-contract.js";
-import { recoverExactLedgerAuthorityRecordPublication, recoverLedgerAuthorityRecordPublication, } from "./ledger-record-publication-recovery.js";
 import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
 const LEDGER_MEMBER_REFERENCE_BATCH_MAXIMUM = 32;
 const LEDGER_MEMBER_READ_CONCURRENCY = 8;
@@ -75,18 +74,6 @@ export class LedgerAuthorityStore {
     async publish(recordValue, membersValue, options) {
         const { signal } = parseLedgerAuthorityStoreOptions(options);
         return publishLedgerAuthorityRecord(this.#root, recordValue, membersValue, signal);
-    }
-    /** 按类型化记录标识恢复由精简意图记录描述的发布操作。 */
-    async recoverRecordPublication(recordIdValue, options) {
-        const { signal } = parseLedgerAuthorityStoreOptions(options);
-        return recoverLedgerAuthorityRecordPublication(this.#root, recordIdValue, signal);
-    }
-    /**
-     * 按调用方已经确认的exact Intent恢复同一发布；任何持久Intent差异都在提交前拒绝。
-     */
-    async recoverExactRecordPublication(expectedIntentValue, options) {
-        const { signal } = parseLedgerAuthorityStoreOptions(options);
-        return recoverExactLedgerAuthorityRecordPublication(this.#root, expectedIntentValue, signal);
     }
     async resolveMemberReference(referenceValue, options) {
         const { signal } = parseLedgerAuthorityStoreOptions(options);

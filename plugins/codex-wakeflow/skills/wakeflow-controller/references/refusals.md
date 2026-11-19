@@ -73,7 +73,7 @@ Reduce what the request carries, or tell the user which bound was reached; do no
 
 ## `recovery-required` - an earlier write was interrupted
 
-Finish that operation's recovery before anything else. For maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; the Demand, requirement, evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-maintenance.md`.
+Finish that operation's recovery before anything else. For maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; a requirement publish or a Demand create that was cut short is finished by sending the same request again (once the package shows as claimed, by `mode: recover` with the id of that Demand instead); the other Demand tools and the evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-maintenance.md`.
 
 - **demand**: `claim-state-vanished`, `demand-publication`, `demand-root-and-archive-absent`, `demand-root-restore`, `demand-root-vanished`, `journal-invalid`, `journal-verify-missing`
 - **endpoint**: `binding-store`

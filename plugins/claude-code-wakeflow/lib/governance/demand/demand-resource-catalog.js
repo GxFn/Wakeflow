@@ -4,7 +4,7 @@ import { parseWakeflowWorkspaceResourceDeclaration, } from "../../workspace/work
 import { TASK_PACKAGE_PROJECTIONS_ROOT_REF, taskPackageProjectionRef, } from "../tasking/task-package-projection-paths.js";
 import { DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_AUTHORITY_REF, DEMAND_EVENT_SOURCING_IDENTITY_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, demandEventSourcingSnapshotRef, demandEventStreamCommitRef, } from "./event-sourcing/demand-event-sourcing-paths.js";
 import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
-import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, DEMAND_PUBLICATION_ROOT_REF, DEMAND_PUBLICATION_STAGES_ROOT_REF, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalPublicationMarkerRef, demandFinalRootRef, demandPublicationLockRef, demandPublicationTransactionRef, } from "./publication/demand-publication-paths.js";
+import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, DEMAND_PUBLICATION_ROOT_REF, DEMAND_PUBLICATION_STAGES_ROOT_REF, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF, demandFinalPublicationMarkerRef, demandFinalRootRef, demandPublicationLockRef, } from "./publication/demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
  *
@@ -108,6 +108,8 @@ function exactAggregateRootDeclaration(declarationId, relativePath) {
 }
 const DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration("demand.publication.root", DEMAND_PUBLICATION_OWNER_ID, DEMAND_PUBLICATION_ROOT_REF);
 const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration("demand.publication.stages-root", DEMAND_PUBLICATION_OWNER_ID, DEMAND_PUBLICATION_STAGES_ROOT_REF);
+// 1.4 起这个目录不再写入任何东西（根外的事务副本删掉了，5a 的 B 行）；声明留着，是因为已有工作区里
+// 它已经在，活动布局的检查仍把它当作认识的目录。
 const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration("demand.publication.transactions-root", DEMAND_PUBLICATION_OWNER_ID, DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF);
 const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration("demand.publication.locks-root", DEMAND_PUBLICATION_OWNER_ID, DEMAND_PUBLICATION_LOCKS_ROOT_REF);
 /** Demand 发布职责所有者的确定性静态资源目录。 */
@@ -158,7 +160,6 @@ export function createDemandEventSourcingResourceCatalog(value) {
         privateDirectoryDeclaration(`${prefix}.task-packages-root`, DEMAND_TASKING_PROJECTION_OWNER_ID, demandChildRef(demandId, TASK_PACKAGE_PROJECTIONS_ROOT_REF)),
         privateDirectoryDeclaration(`${prefix}.transactions-root`, DEMAND_EVENT_SOURCING_OWNER_ID, demandChildRef(demandId, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF)),
         privateFileDeclaration(`${prefix}.publication-marker`, DEMAND_PUBLICATION_OWNER_ID, demandFinalPublicationMarkerRef(demandId), publishedMarkerProcessing),
-        privateFileDeclaration(`${prefix}.publication-transaction`, DEMAND_PUBLICATION_OWNER_ID, demandPublicationTransactionRef(demandId), transactionProcessing),
         privateFileDeclaration(`${prefix}.publication-lock`, DEMAND_PUBLICATION_OWNER_ID, demandPublicationLockRef(demandId), transactionProcessing),
     ]);
 }

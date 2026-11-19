@@ -160,9 +160,9 @@ export async function ensureExactPublicationTextFile(root, ref, text, maximumByt
     return read;
 }
 export async function ensurePublicationTransaction(root, ref, transaction, signal) {
-    if (ref !== DEMAND_PUBLICATION_MARKER_REF) {
-        admitDemandPublicationResourceOperation(transaction, ref, "exclusive-create");
-    }
+    // 事务只落成一份：暂存根（改名之后是 Demand 根）里的发布标记，引用相对那个根（5a 的 B 行，ADR-0031）。
+    if (ref !== DEMAND_PUBLICATION_MARKER_REF)
+        fail("operation-failure", "$catalog");
     const text = renderDemandEventSourcingPublicationTransaction(transaction);
     const source = await ensureExactPublicationTextFile(root, ref, text, TRANSACTION_MAXIMUM_BYTES, signal);
     const stored = await readPublicationTransactionAt(root, ref, source.node, signal);
@@ -226,7 +226,7 @@ export async function initializePublicationStorage(root, signal) {
         throw error;
     }
 }
-/** 显式恢复 Workspace 发布事务中不再活动的原子暂存文件。 */
+/** 回收发布标记自己的、写者已经不在的原子暂存文件。 */
 export async function recoverPublicationTransactionStages(root, transactionRef, signal) {
     try {
         const receipt = await recoverDurableAtomicFileStagesMatchingTargets(root, Object.freeze([transactionRef]), signal === undefined ? undefined : { signal });

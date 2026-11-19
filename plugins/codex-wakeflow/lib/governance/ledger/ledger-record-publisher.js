@@ -4,10 +4,10 @@ import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../f
 import { createDirectoryTreeCandidateDurably, DurableDirectoryTreeCandidateError, planDirectoryTreeCandidate, settleDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { LedgerAuthorityRecordError, parseLedgerAuthorityRecord, renderLedgerAuthorityRecord, } from "./ledger-authority-record.js";
-import { LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES, } from "./ledger-authority-storage-policy.js";
+import { LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, } from "./ledger-authority-storage-policy.js";
+import { ledgerAuthorityRootRef, ledgerRecordPublicationLockRef, ledgerRecordPublicationStageRef, } from "./ledger-authority-paths.js";
 import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
-import { createLedgerRecordPublicationIntent, LedgerRecordPublicationIntentError, renderLedgerRecordPublicationIntent, sameLedgerRecordPublicationIntent, } from "./ledger-record-publication-intent.js";
-import { ensureLedgerRecordPublicationIntent, existingLedgerRecordPublicationIntentOrNull, inspectLedgerRecordPublicationResidues, ledgerPublicationResourceNodeOrNull, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, recoverLedgerIntentAtomicStages, retireLedgerRecordPublicationIntent, settleCommittedLedgerIntent, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
+import { ledgerPublicationResourceNodeOrNull, ledgerRecordPublicationStageNodeOrNull, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
 function parseMembers(value, record) {
     let entries;
     try {
@@ -99,16 +99,17 @@ function preparePublication(recordValue, membersValue, signal) {
         })),
     ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)));
     try {
-        const plan = planDirectoryTreeCandidate(candidateFiles, candidateOptions(signal));
-        const intent = createLedgerRecordPublicationIntent(record, plan);
-        if (encodeUtf8(renderLedgerRecordPublicationIntent(intent)).byteLength >
-            LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES) {
-            fail("capacity", "$intent");
-        }
+        const treePlan = planDirectoryTreeCandidate(candidateFiles, candidateOptions(signal));
         return Object.freeze({
             record,
             candidateFiles,
-            intent,
+            plan: Object.freeze({
+                record,
+                finalRootRef: ledgerAuthorityRootRef(record),
+                lockRef: ledgerRecordPublicationLockRef(record),
+                stageRef: ledgerRecordPublicationStageRef(record),
+                treePlan,
+            }),
         });
     }
     catch (error) {
@@ -120,17 +121,14 @@ function preparePublication(recordValue, membersValue, signal) {
                 fail("capacity", "$members", error);
             fail("member", "$members", error);
         }
-        if (error instanceof LedgerRecordPublicationIntentError) {
-            fail("operation-failure", "$intent", error);
-        }
         throw error;
     }
 }
 async function createOrSettleStage(root, prepared, stageNodePresent, signal) {
     try {
         return stageNodePresent
-            ? await settleDirectoryTreeCandidateDurably(root, prepared.intent.stageRef, prepared.candidateFiles, candidateOptions(signal))
-            : await createDirectoryTreeCandidateDurably(root, prepared.intent.stageRef, prepared.candidateFiles, candidateOptions(signal));
+            ? await settleDirectoryTreeCandidateDurably(root, prepared.plan.stageRef, prepared.candidateFiles, candidateOptions(signal))
+            : await createDirectoryTreeCandidateDurably(root, prepared.plan.stageRef, prepared.candidateFiles, candidateOptions(signal));
     }
     catch (error) {
         if (error instanceof DurableDirectoryTreeCandidateError) {
@@ -144,48 +142,23 @@ async function createOrSettleStage(root, prepared, stageNodePresent, signal) {
     }
 }
 /**
- * final 已经在了：有意图记录就按"已提交"收尾（清掉意图）；没有意图记录而暂存目录还在，是需要恢复的残留；
- * 两者都没有，就是之前已经发布完的同一份记录，读回来核对。
+ * 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。
+ *
+ * 不记日志：final 在就逐字节核对后复用；不在就把暂存补齐（上一次被打断留下的同一份内容）或新建，
+ * 然后改名生效。被打断的发布由同一个请求再发一次续上。
  */
-async function loadAlreadyPublished(root, prepared, storedBefore, residuesBefore, signal) {
-    if (storedBefore !== null) {
-        return settleCommittedLedgerIntent(root, storedBefore, residuesBefore, signal);
-    }
-    if (residuesBefore.stageNode !== null) {
-        fail("recovery-required", "$stage");
-    }
-    return loadExactPublishedLedgerRecord(root, prepared.intent, signal);
-}
-/** 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。 */
 export async function publishLedgerAuthorityRecord(root, recordValue, membersValue, signal) {
     const prepared = preparePublication(recordValue, membersValue, signal);
-    await prepareLedgerRecordPublicationLockRecovery(root, prepared.intent.lockRef);
-    return withLedgerRecordPublicationLock(root, prepared.intent.lockRef, signal, async () => {
-        await recoverLedgerIntentAtomicStages(root, prepared.intent.intentRef, signal);
-        const storedBefore = await existingLedgerRecordPublicationIntentOrNull(root, prepared.intent.intentRef, signal);
-        if (storedBefore !== null &&
-            !sameLedgerRecordPublicationIntent(storedBefore.intent, prepared.intent)) {
-            fail("conflict", "$intent");
-        }
-        const residuesBefore = await inspectLedgerRecordPublicationResidues(root, prepared.intent);
-        const finalNode = await ledgerPublicationResourceNodeOrNull(root, prepared.intent.finalRootRef);
-        if (finalNode !== null) {
-            const loaded = await loadAlreadyPublished(root, prepared, storedBefore, residuesBefore, signal);
+    await prepareLedgerRecordPublicationLockRecovery(root, prepared.plan.lockRef);
+    return withLedgerRecordPublicationLock(root, prepared.plan.lockRef, signal, async () => {
+        if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
+            const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
             return Object.freeze({ wroteAuthority: false, loaded });
         }
-        if (storedBefore === null && residuesBefore.stageNode !== null) {
-            fail("recovery-required", "$stage");
-        }
-        const stored = storedBefore ?? (await ensureLedgerRecordPublicationIntent(root, prepared.intent, signal));
-        const candidate = await createOrSettleStage(root, prepared, residuesBefore.stageNode !== null, signal);
-        await publishLedgerRecordStage(root, prepared.intent, candidate, signal);
-        const loaded = await loadExactPublishedLedgerRecord(root, prepared.intent, signal);
-        const freshStored = await existingLedgerRecordPublicationIntentOrNull(root, prepared.intent.intentRef, signal);
-        if (freshStored === null ||
-            !sameLedgerRecordPublicationIntent(freshStored.intent, stored.intent)) {
-            fail("recovery-required", "$intent");
-        }
-        await retireLedgerRecordPublicationIntent(root, freshStored, signal);
+        const stageNode = await ledgerRecordPublicationStageNodeOrNull(root, prepared.plan);
+        const candidate = await createOrSettleStage(root, prepared, stageNode !== null, signal);
+        await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
+        const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
         return Object.freeze({ wroteAuthority: true, loaded });
     });
 }

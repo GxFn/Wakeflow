@@ -145,8 +145,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
-      "bytes": 17418,
-      "sha256": "sha256:743a7708d7b482a98c0625f9bdfa4cfc84c6433fe8507160013b896607e7558d"
+      "bytes": 17522,
+      "sha256": "sha256:40f01ae6cee17a5e0ffdbbe46cee008f27dddca825874f2f14f5d104b7d18638"
     },
     {
       "path": "skills/wakeflow-controller/references/windows-and-pods.md",
@@ -6828,8 +6828,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
-      "bytes": 17418,
-      "sha256": "sha256:743a7708d7b482a98c0625f9bdfa4cfc84c6433fe8507160013b896607e7558d",
+      "bytes": 17522,
+      "sha256": "sha256:40f01ae6cee17a5e0ffdbbe46cee008f27dddca825874f2f14f5d104b7d18638",
       "mode": "0644",
       "scope": "agent-text"
     },

@@ -132,8 +132,8 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 2386,
-      "sha256": "sha256:2a34f19192c4ed05ff7f32a2115a3149c267c15987d507b3164fe1ef989e4740"
+      "bytes": 2448,
+      "sha256": "sha256:0cf5cddb750c1f80bfba618d30ce2a873dd0a06c646f8a1cf7104e3cd9d9a8e2"
     },
     {
       "path": "commands/pod.md",
@@ -187,8 +187,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
-      "bytes": 17418,
-      "sha256": "sha256:743a7708d7b482a98c0625f9bdfa4cfc84c6433fe8507160013b896607e7558d"
+      "bytes": 17522,
+      "sha256": "sha256:40f01ae6cee17a5e0ffdbbe46cee008f27dddca825874f2f14f5d104b7d18638"
     },
     {
       "path": "skills/wakeflow-controller/references/windows-and-pods.md",
@@ -290,8 +290,8 @@
     },
     {
       "path": "commands/next.md",
-      "bytes": 2386,
-      "sha256": "sha256:2a34f19192c4ed05ff7f32a2115a3149c267c15987d507b3164fe1ef989e4740",
+      "bytes": 2448,
+      "sha256": "sha256:0cf5cddb750c1f80bfba618d30ce2a873dd0a06c646f8a1cf7104e3cd9d9a8e2",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -3027,8 +3027,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-tmux-helper.generated.js",
-      "bytes": 154452,
-      "sha256": "sha256:16809d503bba70c4cebf850e203e4299b4383856357ae404178e1655e8c610d6",
+      "bytes": 154518,
+      "sha256": "sha256:5089278ad53079df2e8d99eca5698230f4df82cc23a4122f0c9b772b9a5801c1",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -7164,8 +7164,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
-      "bytes": 17418,
-      "sha256": "sha256:743a7708d7b482a98c0625f9bdfa4cfc84c6433fe8507160013b896607e7558d",
+      "bytes": 17522,
+      "sha256": "sha256:40f01ae6cee17a5e0ffdbbe46cee008f27dddca825874f2f14f5d104b7d18638",
       "mode": "0644",
       "scope": "agent-text"
     },

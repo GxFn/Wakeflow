@@ -38,12 +38,6 @@ export function demandPublicationStageRef(value: unknown): PortableResourcePath 
   return parsePortableResourcePath(`${DEMAND_PUBLICATION_STAGES_ROOT_REF}/${parseDemandId(value)}`);
 }
 
-export function demandPublicationTransactionRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF}/${parseDemandId(value)}.json`,
-  );
-}
-
 export function demandPublicationLockRef(value: unknown): PortableResourcePath {
   return parsePortableResourcePath(
     `${DEMAND_PUBLICATION_LOCKS_ROOT_REF}/${parseDemandId(value)}.lock`,
@@ -57,4 +51,11 @@ export const DEMAND_PUBLICATION_MARKER_REF = parsePortableResourcePath(
 
 export function demandFinalPublicationMarkerRef(value: unknown): PortableResourcePath {
   return parsePortableResourcePath(`${demandFinalRootRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`);
+}
+
+/** 还没有改名生效时，同一份标记在暂存根里的位置。 */
+export function demandStagePublicationMarkerRef(value: unknown): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${demandPublicationStageRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`,
+  );
 }

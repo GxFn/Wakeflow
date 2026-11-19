@@ -27,7 +27,10 @@ import {
   StrictTextFileError,
 } from "../../../foundation/filesystem/strict-text-file.js";
 import { fail } from "../../../kernel/error.js";
-import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../../kernel/layout.js";
+import {
+  DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
+  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+} from "../../../kernel/layout.js";
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
@@ -45,9 +48,13 @@ import {
 } from "../event-sourcing/demand-event-sourcing-repository.js";
 import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
 import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
-import { readPublicationTransactionAt } from "./demand-event-sourcing-publication-storage.js";
 import {
-  DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  publicationNodeOrNull,
+  readPublicationTransactionAt,
+} from "./demand-event-sourcing-publication-storage.js";
+import {
+  DEMAND_PUBLICATION_MARKER_REF,
+  DEMAND_PUBLICATION_STAGES_ROOT_REF,
   demandFinalRootRef,
 } from "./demand-publication-paths.js";
 
@@ -265,29 +272,47 @@ function isDeadWriterStage(
   return owner === "inactive";
 }
 
-/** 崩溃释放进程锁不代表业务已结清：已有发布意图和生命周期日志继续保留 pod 占用。 */
+const DEMAND_DIRECTORY_NAME = /^demand_[0-9a-f-]+$/u;
+
+/**
+ * 一次还没收尾的创建占着的 pod：暂存根或已经改名的 Demand 根里还留着发布标记（标记带着完整的事务，
+ * 认领做完才退役）。没有标记的暂存根什么都没有记下，不占 pod。
+ */
+async function pendingPublicationPodId(
+  root: RootedDirectory,
+  containerRef: string,
+  name: string,
+  signal: AbortSignal | undefined,
+): Promise<string | null> {
+  const id = parseWakeflowDurableIdOfKind(name, "demand");
+  const markerRef = parsePortableResourcePath(
+    `${containerRef}/${id}/${DEMAND_PUBLICATION_MARKER_REF}`,
+  );
+  const node = await publicationNodeOrNull(root, markerRef);
+  if (node === null) return null;
+  const stored = await readPublicationTransactionAt(root, markerRef, node, signal);
+  if (stored.transaction.demandId !== id)
+    fail("precondition-failed", "pod-publication-residue", "$pod");
+  return stored.transaction.identity.podId;
+}
+
+/** 崩溃释放进程锁不代表业务已结清：还没收尾的创建和生命周期日志继续保留 pod 占用。 */
 async function assertNoPendingPodMutation(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   excluding: string | null,
   podId: string | null,
 ) {
-  for (const entry of await pendingEntries(
-    root,
-    DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
-    signal,
-  )) {
-    if (!/^demand_[0-9a-f-]+\.json$/u.test(entry.name)) {
-      if (isDeadWriterStage(entry, "pod-publication")) continue;
-      fail("precondition-failed", "pod-publication-residue", "$pod");
-    }
-    const id = parseWakeflowDurableIdOfKind(entry.name.slice(0, -5), "demand");
-    if (id === excluding) continue;
-    const stored = await readPublicationTransactionAt(root, entry.resourcePath, entry.node, signal);
-    if (stored.transaction.demandId !== id)
-      fail("precondition-failed", "pod-publication-residue", "$pod");
-    if (podId === null || stored.transaction.identity.podId === podId) {
-      fail("precondition-failed", "pod-busy", "$board", { details: { demandId: id } });
+  for (const containerRef of [
+    DEMAND_PUBLICATION_STAGES_ROOT_REF,
+    WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+  ]) {
+    for (const entry of await pendingEntries(root, containerRef, signal)) {
+      if (!DEMAND_DIRECTORY_NAME.test(entry.name) || entry.name === excluding) continue;
+      const owner = await pendingPublicationPodId(root, containerRef, entry.name, signal);
+      if (owner !== null && (podId === null || owner === podId)) {
+        fail("precondition-failed", "pod-busy", "$board", { details: { demandId: entry.name } });
+      }
     }
   }
   for (const entry of await pendingEntries(root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, signal)) {

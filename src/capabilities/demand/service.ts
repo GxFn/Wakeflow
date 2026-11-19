@@ -19,15 +19,11 @@ import {
 } from "../../governance/demand/model/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
-import {
-  readPublicationTransactionAt,
-  publicationNodeOrNull,
-} from "../../governance/demand/publication/demand-event-sourcing-publication-storage.js";
-import { demandPublicationTransactionRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
 import { DemandEventSourcingPublicationServiceError } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import {
   publishDemandFromPackage,
+  readPendingDemandPublication,
   recoverDemandPublication,
 } from "../../governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
@@ -241,6 +237,35 @@ function blocked(blockers: readonly string[]): PublicationTransactionPlan<Create
   return Object.freeze({ status: "blocked", blockers, plan: null, digest: null });
 }
 
+/**
+ * 这份计划自己上一次被打断留下的创建：它不算"别的活动 Demand"，也不算"根已经在"——同一个请求再发
+ * 一次就是把它做完（1.4 第 5 段 5a 的 B 行，ADR-0031）。标识由需求包与它的看板状态推出，所以认得出是
+ * 不是自己的。没有就是 null。
+ */
+async function ownPendingCreation(
+  context: DemandSliceContext,
+  ids: ReturnType<typeof creationIdsOf>,
+): Promise<string | null> {
+  if (ids === null) return null;
+  return (await pendingPublicationOf(context, ids.demandId)) === null ? null : ids.demandId;
+}
+
+function creationIdsOf(
+  requirementId: string,
+  claim: Awaited<ReturnType<typeof readRequirementClaimState>>,
+) {
+  return claim === null ? null : deriveDemandCreationIds(requirementId, claim.digest);
+}
+
+/** Demand 根已经在、而它不是这份计划自己没做完的那一次创建。 */
+async function foreignDemandRootExists(
+  context: DemandSliceContext,
+  demandId: string,
+  ownPendingDemandId: string | null,
+): Promise<boolean> {
+  return ownPendingDemandId === null && (await demandRootExists(context.root, demandId));
+}
+
 async function planCreate(
   context: DemandSliceContext,
   input: CreateRequest,
@@ -250,6 +275,8 @@ async function planCreate(
   const loaded = claim === null ? null : await loadPackage(context, input.requirementId);
   const programId = context.snapshot.model.program.programId;
   const { requestedPodId, pod } = requestedPod(context, input.podId);
+  const ids = creationIdsOf(input.requirementId, claim);
+  const ownPendingDemandId = await ownPendingCreation(context, ids);
   const blockers = [
     ...deriveCreationBlockers({
       claim: claim?.state ?? null,
@@ -266,13 +293,12 @@ async function planCreate(
           : {
               podId: pod.podId,
               lifecycle: pod.lifecycle,
-              activeDemandId: await activeDemandOnPod(context, pod.podId, null),
+              activeDemandId: await activeDemandOnPod(context, pod.podId, ownPendingDemandId),
             },
       requestedPodId,
     }),
   ];
-  if (claim === null || loaded === null) return blocked(blockers);
-  const ids = deriveDemandCreationIds(input.requirementId, claim.digest);
+  if (claim === null || loaded === null || ids === null) return blocked(blockers);
   facts.demandId = ids.demandId;
   const demand = Object.freeze({
     title: input.demand.title,
@@ -285,7 +311,9 @@ async function planCreate(
     if (error instanceof WakeflowError) blockers.push(error.reason);
     else throw error;
   }
-  if (await demandRootExists(context.root, ids.demandId)) blockers.push("demand-root-exists");
+  if (await foreignDemandRootExists(context, ids.demandId, ownPendingDemandId)) {
+    blockers.push("demand-root-exists");
+  }
   if (blockers.length > 0) return blocked(Object.freeze(blockers));
   const plan: CreatePlan = Object.freeze({
     action: "create",
@@ -393,7 +421,9 @@ async function applyCreateLocked(
 ): Promise<CreateOutcome> {
   const loaded = await loadPackage(context, plan.requirementId);
   if (loaded === null) fail("precondition-failed", "package-record-absent", "$ledger");
-  const at = now(context);
+  // 上一次创建被打断时留下的标记带着当时的时间：沿用它，同一份计划就得到同一份事务，各步按"做过"重入。
+  const pending = await pendingPublicationOf(context, plan.demandId);
+  const at = pending === null ? now(context) : pending.identity.createdAt;
   const { identity, authority } = buildIdentityAndAuthority(
     context,
     plan.demand,
@@ -437,30 +467,36 @@ async function applyCreateLocked(
   });
 }
 
+/** 这个 Demand 有没有一次还没收尾的创建（暂存根或 Demand 根里的发布标记）。 */
+async function pendingPublicationOf(context: DemandSliceContext, demandId: string) {
+  try {
+    return await readPendingDemandPublication(
+      context.root,
+      demandId,
+      signalOptions(context.signal),
+    );
+  } catch (error: unknown) {
+    mapPublicationError(error);
+  }
+}
+
 async function recoverCreate(
   context: DemandSliceContext,
   operationId: string,
 ): Promise<CreateOutcome> {
   const demandId = parseDemandId(operationId, "$request.operationId");
-  const ref = demandPublicationTransactionRef(demandId);
-  const node = await publicationNodeOrNull(context.root, ref);
-  if (node === null) return recoverCreateLocked(context, operationId);
-  const stored = await readPublicationTransactionAt(context.root, ref, node, context.signal);
+  const pending = await pendingPublicationOf(context, demandId);
+  if (pending === null) return recoverCreateLocked(context, operationId);
   return withPodMutation(
     context.root,
-    stored.transaction.identity.podId,
+    pending.identity.podId,
     async () => {
       await assertDemandOperationConfigCurrentOrFail(
         context.root,
         context.snapshot,
         context.signal,
       );
-      await assertNoActiveDemand(
-        context.root,
-        context.signal,
-        demandId,
-        stored.transaction.identity.podId,
-      );
+      await assertNoActiveDemand(context.root, context.signal, demandId, pending.identity.podId);
       return recoverCreateLocked(context, operationId);
     },
     context.signal,

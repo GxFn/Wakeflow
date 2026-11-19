@@ -61,8 +61,8 @@ import {
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  demandFinalPublicationMarkerRef,
   demandFinalRootRef,
-  demandPublicationTransactionRef,
 } from "../../../../src/governance/demand/publication/demand-publication-paths.js";
 import { parseLedgerAuthorityMemberReference } from "../../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../../src/kernel/active-projection.js";
@@ -100,7 +100,8 @@ const COMMIT_ID = parseWakeflowDurableIdOfKind(
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
 const STATE_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
-const SIDECAR_REF = demandPublicationTransactionRef(DEMAND_ID);
+/** Demand 根里的发布标记：这次创建唯一落盘的事务文件（5a 的 B 行）。 */
+const FINAL_MARKER_REF = demandFinalPublicationMarkerRef(DEMAND_ID);
 const IDENTITY_REF = parsePortableResourcePath(
   `${demandFinalRootRef(DEMAND_ID)}/${DEMAND_EVENT_SOURCING_IDENTITY_REF}`,
 );
@@ -219,8 +220,6 @@ test("admitDemandPublicationResourceOperation 只准入目录登记资源声明�
   const markerRef = parsePortableResourcePath(
     `${transaction.finalRootRef}/${DEMAND_PUBLICATION_MARKER_REF}`,
   );
-  admitOperation(transaction, SIDECAR_REF, "exclusive-create");
-  admitOperation(transaction, SIDECAR_REF, "exact-retire");
   admitOperation(transaction, transaction.finalRootRef, "exact-directory-publish");
   admitOperation(transaction, IDENTITY_REF, "exclusive-create");
   admitOperation(transaction, markerRef, "exact-retire");
@@ -318,7 +317,7 @@ test("ensureExactPublicationTextFile 独占创建私有文本并以精确文本�
   equal(existsSync(factsFile("aborted.json")), false);
 });
 
-test("ensurePublicationTransaction 按目录准入写入并回读与计划一致的事务", async (t) => {
+test("ensurePublicationTransaction 只写发布标记，并回读与计划一致的事务", async (t) => {
   const { workspacePath, root, physical } = await openWorkspace(
     t,
     "wakeflow-publication-transaction-",
@@ -326,15 +325,18 @@ test("ensurePublicationTransaction 按目录准入写入并回读与计划一致
   await initializeStorage(root, undefined);
   const transaction = transactionFixture();
   const text = render(transaction);
+  // 标记的引用相对它所在的根（暂存根或 Demand 根）；这里拿工作区根当那个根。
+  mkdirSync(path.join(workspacePath, "transactions"), { mode: 0o700 });
+  const ref = DEMAND_PUBLICATION_MARKER_REF;
 
-  const stored = await ensureTransaction(root, SIDECAR_REF, transaction, undefined);
+  const stored = await ensureTransaction(root, ref, transaction, undefined);
   deepEqual(stored.transaction, transaction);
-  equal(stored.source.resourcePath, SIDECAR_REF);
+  equal(stored.source.resourcePath, ref);
   equal(stored.source.text, text);
-  equal(statSync(physical(SIDECAR_REF)).mode & 0o777, 0o600);
-  const again = await ensureTransaction(root, SIDECAR_REF, transaction, undefined);
+  equal(statSync(physical(ref)).mode & 0o777, 0o600);
+  const again = await ensureTransaction(root, ref, transaction, undefined);
   equal(again.source.node.inodeId, stored.source.node.inodeId);
-  const read = await readTransactionAt(root, SIDECAR_REF, stored.source.node, undefined);
+  const read = await readTransactionAt(root, ref, stored.source.node, undefined);
   deepEqual(read.transaction, transaction);
   equal(read.source.digest, stored.source.digest);
   equal(samePublicationTransaction(read.transaction, transaction), true);
@@ -342,23 +344,23 @@ test("ensurePublicationTransaction 按目录准入写入并回读与计划一致
   const other = transactionFixture("Demand publication with a longer title");
   equal(samePublicationTransaction(other, transaction), false);
   await rejects(
-    ensureTransaction(root, SIDECAR_REF, other, undefined),
+    ensureTransaction(root, ref, other, undefined),
     isServiceError("conflict", "$write"),
   );
-  equal(readFileSync(physical(SIDECAR_REF), "utf8"), text);
+  equal(readFileSync(physical(ref), "utf8"), text);
+  // 别的位置一律不写：事务没有第二份副本。
   const strayRef = parsePortableResourcePath("stray.json");
   await rejects(ensureTransaction(root, strayRef, transaction, undefined), catalogFailure);
   equal(existsSync(path.join(workspacePath, "stray.json")), false);
-  // Demand 根内相对的标记引用跳过 Workspace 目录准入。
-  mkdirSync(path.join(workspacePath, "transactions"), { mode: 0o700 });
-  const marker = await ensureTransaction(
-    root,
-    DEMAND_PUBLICATION_MARKER_REF,
-    transaction,
-    undefined,
+  await rejects(
+    ensureTransaction(
+      root,
+      parsePortableResourcePath(`${DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF}/${DEMAND_ID}.json`),
+      transaction,
+      undefined,
+    ),
+    catalogFailure,
   );
-  deepEqual(marker.transaction, transaction);
-  equal(statSync(physical(DEMAND_PUBLICATION_MARKER_REF)).mode & 0o777, 0o600);
 });
 
 test("readPublicationTransactionAt 把节点、表示与解析失败都归为 conflict", async (t) => {
@@ -392,28 +394,31 @@ test("retirePublicationFile 只按目录准入精确退休事务文件", async (
   const { root, physical } = await openWorkspace(t, "wakeflow-publication-retire-");
   await initializeStorage(root, undefined);
   const transaction = transactionFixture();
-  const stored = await ensureTransaction(root, SIDECAR_REF, transaction, undefined);
-  const file = physical(SIDECAR_REF);
+  const file = physical(FINAL_MARKER_REF);
+  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  writeFileSync(file, render(transaction), { mode: 0o600 });
+  const storedNode = await nodeOf(root, FINAL_MARKER_REF);
   const recoveryRequired = isServiceError("recovery-required", "$transaction");
 
+  await rejects(retireFile(root, transaction, IDENTITY_REF, storedNode, undefined), catalogFailure);
   await rejects(
-    retireFile(root, transaction, IDENTITY_REF, stored.source.node, undefined),
-    catalogFailure,
-  );
-  await rejects(
-    retireFile(root, transaction, SIDECAR_REF, stored.source.node, abortedSignal()),
+    retireFile(root, transaction, FINAL_MARKER_REF, storedNode, abortedSignal()),
     aborted,
   );
-  writeFileSync(file, render(transactionFixture("Replaced publication plan")));
+  rmSync(file);
+  writeFileSync(file, render(transactionFixture("Replaced publication plan")), { mode: 0o600 });
   await rejects(
-    retireFile(root, transaction, SIDECAR_REF, stored.source.node, undefined),
+    retireFile(root, transaction, FINAL_MARKER_REF, storedNode, undefined),
     recoveryRequired,
   );
   equal(existsSync(file), true);
-  const current = await nodeOf(root, SIDECAR_REF);
-  await retireFile(root, transaction, SIDECAR_REF, current, undefined);
+  const current = await nodeOf(root, FINAL_MARKER_REF);
+  await retireFile(root, transaction, FINAL_MARKER_REF, current, undefined);
   equal(existsSync(file), false);
-  await rejects(retireFile(root, transaction, SIDECAR_REF, current, undefined), recoveryRequired);
+  await rejects(
+    retireFile(root, transaction, FINAL_MARKER_REF, current, undefined),
+    recoveryRequired,
+  );
 });
 
 test("initializePublicationStorage 只在当前活动布局下幂等建立私有目录", async (t) => {
@@ -454,9 +459,13 @@ test("initializePublicationStorage 只在当前活动布局下幂等建立私有
 test("recoverPublicationTransactionStages 只回滚本事务不再活动的原子暂存", async (t) => {
   const { root, physical } = await openWorkspace(t, "wakeflow-publication-stages-");
   const recoveryRequired = isServiceError("recovery-required", "$transaction/stage");
-  await rejects(recoverStages(root, SIDECAR_REF, undefined), recoveryRequired);
+  await rejects(recoverStages(root, FINAL_MARKER_REF, undefined), recoveryRequired);
   await initializeStorage(root, undefined);
-  await recoverStages(root, SIDECAR_REF, undefined);
+  const otherMarkerRef = demandFinalPublicationMarkerRef(OTHER_DEMAND_ID);
+  for (const ref of [FINAL_MARKER_REF, otherMarkerRef]) {
+    mkdirSync(path.dirname(physical(ref)), { recursive: true, mode: 0o700 });
+  }
+  await recoverStages(root, FINAL_MARKER_REF, undefined);
 
   const stage = async (target: PortableResourcePath, text: string) => {
     const bytes = encodeUtf8(text);
@@ -470,18 +479,18 @@ test("recoverPublicationTransactionStages 只回滚本事务不再活动的原�
     await createFileCandidateDurably(root, stageRef, bytes, { mode: 0o600 });
     return { address, stageRef };
   };
-  const own = await stage(SIDECAR_REF, "partial");
+  const own = await stage(FINAL_MARKER_REF, "partial");
   try {
     // 本进程仍持有暂存地址：活写者不得被回滚。
-    await rejects(recoverStages(root, SIDECAR_REF, undefined), recoveryRequired);
+    await rejects(recoverStages(root, FINAL_MARKER_REF, undefined), recoveryRequired);
     equal(existsSync(physical(own.stageRef)), true);
   } finally {
     releaseDurableAtomicFileStageAddress(own.address);
   }
-  const foreign = await stage(demandPublicationTransactionRef(OTHER_DEMAND_ID), "foreign");
+  const foreign = await stage(otherMarkerRef, "foreign");
   releaseDurableAtomicFileStageAddress(foreign.address);
-  await rejects(recoverStages(root, SIDECAR_REF, abortedSignal()), aborted);
-  await recoverStages(root, SIDECAR_REF, undefined);
+  await rejects(recoverStages(root, FINAL_MARKER_REF, abortedSignal()), aborted);
+  await recoverStages(root, FINAL_MARKER_REF, undefined);
   equal(existsSync(physical(own.stageRef)), false);
   equal(existsSync(physical(foreign.stageRef)), true);
 });

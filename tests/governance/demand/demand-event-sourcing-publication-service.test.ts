@@ -1,5 +1,13 @@
-import { equal, rejects } from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { deepEqual, equal, rejects } from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -34,6 +42,7 @@ import {
   DemandEventSourcingPublicationServiceError,
   initializeDemandEventSourcingPublication,
   publishDemandFromPackage,
+  readPendingDemandPublication,
   recoverDemandPublication,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
@@ -43,7 +52,8 @@ import {
 import {
   demandFinalRootRef,
   demandPublicationLockRef,
-  demandPublicationTransactionRef,
+  demandPublicationStageRef,
+  demandStagePublicationMarkerRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   createLedgerAuthorityMemberReference,
@@ -197,16 +207,25 @@ test("publication uses Command Handler and binds exact package predecessor", asy
   }
 });
 
-test("sidecar-only publication recovers without an event append journal", async () => {
+/** 进程死在标记刚写完时留下的样子：暂存根里只有 `transactions/publication.json`。 */
+function writeStageMarker(value: Awaited<ReturnType<typeof fixture>>, text: string): string {
+  const stagePath = workspaceFile(value, demandPublicationStageRef(DEMAND_ID));
+  mkdirSync(path.join(stagePath, "transactions"), { recursive: true, mode: 0o700 });
+  const markerPath = workspaceFile(value, demandStagePublicationMarkerRef(DEMAND_ID));
+  writeFileSync(markerPath, text, { mode: 0o600 });
+  return markerPath;
+}
+
+test("a stage that holds only the marker keeps its pod busy and recovers without any other record", async () => {
   const value = await fixture();
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
-    const ref = demandPublicationTransactionRef(DEMAND_ID);
-    const file = workspaceFile(value, ref);
-    writeFileSync(file, renderDemandEventSourcingPublicationTransaction(transaction), {
-      mode: 0o600,
-    });
+    // 标记是这次创建唯一落盘的记录（ADR-0031，5a 的 B 行）：根外面没有副本。
+    const markerPath = writeStageMarker(
+      value,
+      renderDemandEventSourcingPublicationTransaction(transaction),
+    );
     const lockRef = demandPublicationLockRef(DEMAND_ID);
     const lockPath = workspaceFile(value, lockRef);
     writeFileSync(
@@ -232,22 +251,10 @@ test("sidecar-only publication recovers without an event append journal", async 
       null,
       "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     );
-    const foreignTarget = demandPublicationTransactionRef(OTHER_DEMAND_ID);
-    const foreignBytes = encodeUtf8("foreign-intent");
-    const foreignAddress = issueDurableAtomicFileStageAddress(
-      "create",
-      foreignTarget,
-      computeSha256Digest(foreignBytes),
-      0o600,
+    equal(
+      (await readPendingDemandPublication(value.workspaceRoot, DEMAND_ID))?.identity.createdAt,
+      transaction.identity.createdAt,
     );
-    const foreignStage = durableAtomicFileStageRefForTest(foreignTarget, foreignAddress);
-    try {
-      await createFileCandidateDurably(value.workspaceRoot, foreignStage, encodeUtf8("partial"), {
-        mode: 0o600,
-      });
-    } finally {
-      releaseDurableAtomicFileStageAddress(foreignAddress);
-    }
 
     const recovered = await recoverDemandPublication(
       value.workspaceRoot,
@@ -258,20 +265,69 @@ test("sidecar-only publication recovers without an event append journal", async 
     equal(recovered.wroteDemandRoot, true);
     equal(recovered.loaded.firstCommit.commitId, COMMIT_ID);
     equal(recovered.claim.state.status, "claimed");
-    equal(existsSync(file), false);
+    equal(existsSync(markerPath), false);
     equal(existsSync(lockPath), false);
-    equal(existsSync(workspaceFile(value, foreignStage)), true);
+    equal(await readPendingDemandPublication(value.workspaceRoot, DEMAND_ID), null);
+    deepEqual(
+      readdirSync(
+        path.join(value.workspacePath, ".wakeflow-active/current/demand-publication/transactions"),
+      ),
+      [],
+    );
   } finally {
     await cleanup(value);
   }
 });
 
-test("publication recovery 回滚 canonical sidecar 之前的 inactive partial stage", async () => {
+test("the same request replayed over its own interrupted stage completes it; a different one is refused", async () => {
   const value = await fixture();
   try {
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
-    const targetRef = demandPublicationTransactionRef(DEMAND_ID);
+    const markerPath = writeStageMarker(
+      value,
+      renderDemandEventSourcingPublicationTransaction(transaction),
+    );
+    // 另一份事务（提交标识不同）撞上同一个 Demand 的暂存：不是同一次创建，拒绝并且不动暂存。
+    let caught: unknown;
+    try {
+      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
+        ...publishInput(value),
+        commitId: COMMIT_ID.replace(/.$/u, COMMIT_ID.endsWith("0") ? "1" : "0"),
+      });
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
+    if (caught instanceof DemandEventSourcingPublicationServiceError) {
+      equal(caught.reason, "conflict");
+    }
+    equal(existsSync(markerPath), true);
+
+    const replayed = await publishDemandFromPackage(
+      value.workspaceRoot,
+      value.ledgerStore,
+      publishInput(value),
+    );
+    equal(replayed.publicationAuthority, "current");
+    equal(replayed.wroteDemandRoot, true);
+    equal(replayed.claim.state.status, "claimed");
+    equal(existsSync(markerPath), false);
+  } finally {
+    await cleanup(value);
+  }
+});
+
+test("publication recovery 回收标记自己留下的 inactive 原子暂存，没有标记即没有可恢复的创建", async () => {
+  const value = await fixture();
+  try {
+    await initializeDemandEventSourcingPublication(value.workspaceRoot);
+    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
+    mkdirSync(
+      path.join(workspaceFile(value, demandPublicationStageRef(DEMAND_ID)), "transactions"),
+      { recursive: true, mode: 0o700 },
+    );
+    const targetRef = demandStagePublicationMarkerRef(DEMAND_ID);
     const intendedBytes = encodeUtf8(renderDemandEventSourcingPublicationTransaction(transaction));
     const address = issueDurableAtomicFileStageAddress(
       "create",
@@ -287,6 +343,8 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
     } finally {
       releaseDurableAtomicFileStageAddress(address);
     }
+    // 没有标记的暂存根什么都没有记下：不占 pod。
+    await assertNoActiveDemand(value.workspaceRoot, undefined, null, transaction.identity.podId);
 
     let caught: unknown;
     try {
@@ -337,9 +395,6 @@ test("published root marker is settled before normal authority load", async () =
     await initializeDemandEventSourcingPublication(value.workspaceRoot);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const text = renderDemandEventSourcingPublicationTransaction(transaction);
-    const sidecarRef = demandPublicationTransactionRef(DEMAND_ID);
-    const sidecarPath = workspaceFile(value, sidecarRef);
-    writeFileSync(sidecarPath, text, { mode: 0o600 });
 
     const finalRef = demandFinalRootRef(DEMAND_ID);
     const finalPath = workspaceFile(value, finalRef);
@@ -389,7 +444,6 @@ test("published root marker is settled before normal authority load", async () =
     equal(recovered.wroteDemandRoot, false);
     equal(recovered.claim.state.status, "claimed");
     equal(existsSync(path.join(finalPath, "transactions", "publication.json")), false);
-    equal(existsSync(sidecarPath), false);
   } finally {
     await cleanup(value);
   }

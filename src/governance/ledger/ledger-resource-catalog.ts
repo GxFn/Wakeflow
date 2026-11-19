@@ -12,7 +12,6 @@ import {
   ledgerAuthorityMemberRef,
   ledgerAuthorityRecordRef,
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationIntentRef,
   ledgerRecordPublicationLockRef,
 } from "./ledger-authority-paths.js";
 import {
@@ -252,10 +251,6 @@ export function createLedgerAuthorityResourceCatalog(
       ledgerAuthorityMemberRef(record, document.path),
     ),
   );
-  const intent = transactionDeclaration(
-    `${prefix}.intent`,
-    ledgerRecordPublicationIntentRef(record),
-  );
   const lock = transactionDeclaration(`${prefix}.lock`, ledgerRecordPublicationLockRef(record));
-  return Object.freeze([root, manifest, ...members, intent, lock]);
+  return Object.freeze([root, manifest, ...members, lock]);
 }

@@ -82,7 +82,6 @@ export type LedgerAuthorityStoreErrorReason =
   | "root-scope"
   | "not-found"
   | "recovery-required"
-  | "recovery-input-required"
   | "conflict"
   | "record"
   | "member"
@@ -98,8 +97,6 @@ const ERROR_MESSAGES = {
   "root-scope": "Ledger authority root changed during the operation.",
   "not-found": "Ledger authority record does not exist.",
   "recovery-required": "Ledger authority record has an unresolved publication residue.",
-  "recovery-input-required":
-    "Ledger publication stage is incomplete and requires exact caller bytes.",
   conflict: "Ledger authority bytes conflict with an immutable identity.",
   record: "Ledger authority record is invalid.",
   member: "Ledger authority member inventory or bytes are invalid.",

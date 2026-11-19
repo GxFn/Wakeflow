@@ -36,7 +36,6 @@ import {
   demandFinalPublicationMarkerRef,
   demandFinalRootRef,
   demandPublicationLockRef,
-  demandPublicationTransactionRef,
 } from "./publication/demand-publication-paths.js";
 
 /**
@@ -174,6 +173,8 @@ const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION = privateDirectoryDecl
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
 );
 
+// 1.4 起这个目录不再写入任何东西（根外的事务副本删掉了，5a 的 B 行）；声明留着，是因为已有工作区里
+// 它已经在，活动布局的检查仍把它当作认识的目录。
 const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
   "demand.publication.transactions-root",
   DEMAND_PUBLICATION_OWNER_ID,
@@ -195,7 +196,6 @@ export const WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG = Object.freeze([
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
 type DemandEventSourcingResourceCatalog = readonly [
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
@@ -301,12 +301,6 @@ export function createDemandEventSourcingResourceCatalog(
       DEMAND_PUBLICATION_OWNER_ID,
       demandFinalPublicationMarkerRef(demandId),
       publishedMarkerProcessing,
-    ),
-    privateFileDeclaration(
-      `${prefix}.publication-transaction`,
-      DEMAND_PUBLICATION_OWNER_ID,
-      demandPublicationTransactionRef(demandId),
-      transactionProcessing,
     ),
     privateFileDeclaration(
       `${prefix}.publication-lock`,

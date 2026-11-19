@@ -1,14 +1,5 @@
-import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesMatchingTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
-  createFileAtomically,
-  DurableAtomicFileWriteError,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
-import {
+  type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateResult,
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
@@ -17,10 +8,6 @@ import {
   DurableDirectoryTreePublicationError,
   publishDirectoryTreeCandidateDurably,
 } from "../../foundation/filesystem/durable-directory-tree-publication.js";
-import {
-  ExactRegularFileUnlinkError,
-  unlinkRegularFileExactly,
-} from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
@@ -33,8 +20,6 @@ import {
   retireRootedExclusiveFileLockResidue,
   withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -42,51 +27,47 @@ import {
   type WakeflowResourceMutationRecipe,
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
-import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
+import {
+  computeLedgerAuthorityRecordDigest,
+  type RequirementRecord,
+} from "./ledger-authority-record.js";
 import {
   LEDGER_DURABLE_DIRECTORY_MODE,
-  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
   LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-  LEDGER_TRANSACTION_FILE_MODE,
 } from "./ledger-authority-storage-policy.js";
 import {
   throwLedgerAuthorityStoreError as fail,
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "./ledger-authority-store-contract.js";
-import {
-  type LedgerRecordPublicationIntent,
-  LedgerRecordPublicationIntentError,
-  parseLedgerRecordPublicationIntentDocument,
-  renderLedgerRecordPublicationIntent,
-  sameLedgerRecordPublicationIntent,
-} from "./ledger-record-publication-intent.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 
 /**
  * Wakeflow Governance / Ledger：逐记录发布流程的私有存储与协调边界。
  *
- * 本模块负责发布意图记录、暂存残留、逐记录锁和最终目标回读校验。它不解析调用方
- * 提供的成员输入，也不决定使用正常发布入口还是恢复入口。
+ * 本模块负责暂存目录、逐记录锁和最终目标回读校验，不解析调用方提供的成员输入。
+ *
+ * 发布不记日志（1.4 第 5 段 5a 的 A 行，ADR-0031）：需求包的身份由内容推出，同一个标识的暂存目录
+ * 只可能装着同样的字节，所以被打断的发布由同一个请求再发一次续上——暂存补齐，改名生效。此前另有
+ * 一份发布意图文件和一套不带原文档的恢复函数，现场里一次都没有用上，已经删掉。
  */
 
-export interface StoredLedgerRecordPublicationIntent {
-  readonly intent: Readonly<LedgerRecordPublicationIntent>;
-  readonly node: Readonly<FileNodeSnapshot>;
-}
-
-export interface LedgerRecordPublicationResidues {
-  readonly stageNode: Readonly<FileNodeSnapshot> | null;
+/** 一次发布在内存里的计划：记录、它的三个路径与目录树的精确清单。不落盘。 */
+export interface LedgerRecordPublicationPlan {
+  readonly record: Readonly<RequirementRecord>;
+  readonly finalRootRef: PortableResourcePath;
+  readonly lockRef: PortableResourcePath;
+  readonly stageRef: PortableResourcePath;
+  readonly treePlan: Readonly<DirectoryTreeCandidatePlan>;
 }
 
 function admitLedgerResourceOperation(
-  intent: Readonly<LedgerRecordPublicationIntent>,
+  plan: Readonly<LedgerRecordPublicationPlan>,
   resourcePath: PortableResourcePath,
   recipe: WakeflowResourceMutationRecipe | WakeflowDirectoryContainerRecipe,
 ): void {
-  const declaration = createLedgerAuthorityResourceCatalog(intent.record).find(
+  const declaration = createLedgerAuthorityResourceCatalog(plan.record).find(
     (entry) => entry.placement.relativePath === resourcePath,
   );
   if (declaration === undefined) fail("operation-failure", "$catalog");
@@ -115,18 +96,6 @@ export async function ledgerPublicationResourceNodeOrNull(
   }
 }
 
-function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserIdOrNull();
-  if (
-    node.kind !== "file" ||
-    node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE ||
-    node.linkCount !== 1n ||
-    (userId !== null && node.userId !== userId)
-  ) {
-    fail("conflict", "$intent");
-  }
-}
-
 function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
   const userId = currentUserIdOrNull();
   if (
@@ -138,163 +107,14 @@ function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
   }
 }
 
-async function readStoredIntent(
+/** 这条记录的暂存目录；不在即 null。它只可能是同一份内容被打断的发布留下的。 */
+export async function ledgerRecordPublicationStageNodeOrNull(
   root: RootedDirectory,
-  intentRef: PortableResourcePath,
-  expectedNode: Readonly<FileNodeSnapshot>,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<StoredLedgerRecordPublicationIntent>> {
-  assertTransactionFileNode(expectedNode);
-  let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
-  try {
-    read = await readDeterministicJsonFile(root, intentRef, {
-      maximumBytes: LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
-      expectedNode,
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "too-large") fail("capacity", "$intent", error);
-      fail("conflict", "$intent", error);
-    }
-    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-      fail("conflict", "$intent", error);
-    }
-    throw error;
-  }
-  let intent: ReturnType<typeof parseLedgerRecordPublicationIntentDocument>;
-  try {
-    intent = parseLedgerRecordPublicationIntentDocument(read.text);
-  } catch (error: unknown) {
-    if (error instanceof LedgerRecordPublicationIntentError) {
-      fail("conflict", "$intent", error);
-    }
-    throw error;
-  }
-  return Object.freeze({ intent, node: read.node });
-}
-
-export async function existingLedgerRecordPublicationIntentOrNull(
-  root: RootedDirectory,
-  intentRef: PortableResourcePath,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<StoredLedgerRecordPublicationIntent> | null> {
-  const node = await ledgerPublicationResourceNodeOrNull(root, intentRef);
-  return node === null ? null : readStoredIntent(root, intentRef, node, signal);
-}
-
-export async function ensureLedgerRecordPublicationIntent(
-  root: RootedDirectory,
-  expected: Readonly<LedgerRecordPublicationIntent>,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<StoredLedgerRecordPublicationIntent>> {
-  admitLedgerResourceOperation(expected, expected.intentRef, "exclusive-create");
-  const existing = await existingLedgerRecordPublicationIntentOrNull(
-    root,
-    expected.intentRef,
-    signal,
-  );
-  if (existing !== null) {
-    if (!sameLedgerRecordPublicationIntent(existing.intent, expected)) {
-      fail("conflict", "$intent");
-    }
-    return existing;
-  }
-  const bytes = encodeUtf8(renderLedgerRecordPublicationIntent(expected));
-  if (bytes.byteLength > LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES) {
-    fail("capacity", "$intent");
-  }
-  try {
-    await createFileAtomically(root, expected.intentRef, bytes, {
-      mode: LEDGER_TRANSACTION_FILE_MODE,
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "capacity") fail("capacity", "$intent", error);
-      if (error.reason === "root-scope") fail("root-scope", "$root", error);
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "stage-cleanup-failure" ||
-        error.reason === "stage-recovery-required" ||
-        error.reason === "close-failure"
-      ) {
-        fail("recovery-required", "$intent", error);
-      }
-      if (error.reason !== "target-exists") {
-        fail("operation-failure", "$intent", error);
-      }
-    } else {
-      throw error;
-    }
-  }
-  const stored = await existingLedgerRecordPublicationIntentOrNull(
-    root,
-    expected.intentRef,
-    signal,
-  );
-  if (stored === null || !sameLedgerRecordPublicationIntent(stored.intent, expected)) {
-    fail("conflict", "$intent");
-  }
-  return stored;
-}
-
-export async function retireLedgerRecordPublicationIntent(
-  root: RootedDirectory,
-  stored: Readonly<StoredLedgerRecordPublicationIntent>,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  admitLedgerResourceOperation(stored.intent, stored.intent.intentRef, "exact-retire");
-  try {
-    await unlinkRegularFileExactly(root, stored.intent.intentRef, {
-      expectedNode: stored.node,
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      fail("recovery-required", "$intent", error);
-    }
-    throw error;
-  }
-}
-
-export async function inspectLedgerRecordPublicationResidues(
-  root: RootedDirectory,
-  intent: Readonly<LedgerRecordPublicationIntent>,
-): Promise<Readonly<LedgerRecordPublicationResidues>> {
-  const stageNode = await ledgerPublicationResourceNodeOrNull(root, intent.stageRef);
+  plan: Readonly<LedgerRecordPublicationPlan>,
+): Promise<Readonly<FileNodeSnapshot> | null> {
+  const stageNode = await ledgerPublicationResourceNodeOrNull(root, plan.stageRef);
   if (stageNode !== null) assertTransactionStageNode(stageNode);
-  return Object.freeze({
-    stageNode,
-  });
-}
-
-export async function recoverLedgerIntentAtomicStages(
-  root: RootedDirectory,
-  intentRef: PortableResourcePath,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  try {
-    const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
-      root,
-      Object.freeze([intentRef]),
-      signal === undefined ? undefined : { signal },
-    );
-    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-      fail("recovery-required", "$intent/stage");
-    }
-  } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityStoreError) throw error;
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      fail("recovery-required", "$intent/stage", error);
-    }
-    throw error;
-  }
+  return stageNode;
 }
 
 export async function prepareLedgerRecordPublicationLockRecovery(
@@ -356,14 +176,14 @@ export async function withLedgerRecordPublicationLock<Result>(
 
 export async function loadExactPublishedLedgerRecord(
   root: RootedDirectory,
-  intent: Readonly<LedgerRecordPublicationIntent>,
+  plan: Readonly<LedgerRecordPublicationPlan>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
-  const finalNode = await ledgerPublicationResourceNodeOrNull(root, intent.finalRootRef);
+  const finalNode = await ledgerPublicationResourceNodeOrNull(root, plan.finalRootRef);
   if (finalNode === null) fail("not-found", "$record");
   if (finalNode.kind !== "directory") fail("conflict", "$record");
   try {
-    await inspectDirectoryTreeCandidate(root, intent.finalRootRef, intent.treePlan, {
+    await inspectDirectoryTreeCandidate(root, plan.finalRootRef, plan.treePlan, {
       expectedRootNode: finalNode,
       ...(signal === undefined ? {} : { signal }),
     });
@@ -374,12 +194,12 @@ export async function loadExactPublishedLedgerRecord(
     }
     throw error;
   }
-  const loaded = await loadLedgerAuthorityRecord(root, intent.record.requirementId, signal);
+  const loaded = await loadLedgerAuthorityRecord(root, plan.record.requirementId, signal);
   if (
-    loaded.recordDigest !== computeLedgerAuthorityRecordDigest(intent.record) ||
-    loaded.documents.length !== intent.record.documents.length ||
+    loaded.recordDigest !== computeLedgerAuthorityRecordDigest(plan.record) ||
+    loaded.documents.length !== plan.record.documents.length ||
     loaded.documents.some(
-      (document, index) => document.digest !== intent.record.documents[index]?.digest,
+      (document, index) => document.digest !== plan.record.documents[index]?.digest,
     )
   ) {
     fail("conflict", "$record");
@@ -389,16 +209,16 @@ export async function loadExactPublishedLedgerRecord(
 
 export async function publishLedgerRecordStage(
   root: RootedDirectory,
-  intent: Readonly<LedgerRecordPublicationIntent>,
+  plan: Readonly<LedgerRecordPublicationPlan>,
   candidate: Readonly<DirectoryTreeCandidateResult>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  admitLedgerResourceOperation(intent, intent.finalRootRef, "exact-directory-publish");
+  admitLedgerResourceOperation(plan, plan.finalRootRef, "exact-directory-publish");
   try {
     await publishDirectoryTreeCandidateDurably(
       root,
       candidate,
-      intent.finalRootRef,
+      plan.finalRootRef,
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
@@ -412,18 +232,4 @@ export async function publishLedgerRecordStage(
     }
     throw error;
   }
-}
-
-export async function settleCommittedLedgerIntent(
-  root: RootedDirectory,
-  stored: Readonly<StoredLedgerRecordPublicationIntent>,
-  residues: Readonly<LedgerRecordPublicationResidues>,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<LoadedLedgerAuthorityRecord>> {
-  if (residues.stageNode !== null) {
-    fail("recovery-required", "$stage");
-  }
-  const loaded = await loadExactPublishedLedgerRecord(root, stored.intent, signal);
-  await retireLedgerRecordPublicationIntent(root, stored, signal);
-  return loaded;
 }

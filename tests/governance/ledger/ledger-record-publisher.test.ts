@@ -24,6 +24,11 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import { acquireRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
+import {
+  ledgerAuthorityRootRef,
+  ledgerRecordPublicationLockRef,
+  ledgerRecordPublicationStageRef,
+} from "../../../src/governance/ledger/ledger-authority-paths.js";
 import { loadLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-authority-reader.js";
 import {
   createRequirementRecord,
@@ -38,22 +43,15 @@ import {
   LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_DURABLE_FILE_MODE,
-  LEDGER_TRANSACTION_FILE_MODE,
 } from "../../../src/governance/ledger/ledger-authority-storage-policy.js";
 import {
   LedgerAuthorityStoreError,
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
-import {
-  createLedgerRecordPublicationIntent,
-  type LedgerRecordPublicationIntent,
-  renderLedgerRecordPublicationIntent,
-} from "../../../src/governance/ledger/ledger-record-publication-intent.js";
 import { publishLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-record-publisher.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
-import { writeTextFile } from "../../support/write-tree.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_RECORDED_AT,
@@ -65,7 +63,7 @@ import {
 
 useDisposableDurability();
 
-/** 直接覆盖单记录暂存发布编排：输入准入、首次提交、幂等复用、残留处理与锁门控。 */
+/** 直接覆盖单记录暂存发布编排：输入准入、首次提交、幂等复用、被打断之后的续做与锁门控。级别 1（组件）。 */
 
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const MEMBERS = requirementMembers();
@@ -130,22 +128,16 @@ function publication(record: Readonly<RequirementRecord>) {
       mode: LEDGER_DURABLE_FILE_MODE,
     },
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
-  return { record, files, intent: createLedgerRecordPublicationIntent(record, plan) };
-}
-
-function writeIntentFile(
-  rootPath: string,
-  intent: Readonly<LedgerRecordPublicationIntent>,
-): string {
-  const file = writeTextFile(
-    rootPath,
-    intent.intentRef,
-    renderLedgerRecordPublicationIntent(intent),
-    LEDGER_TRANSACTION_FILE_MODE,
-  );
-  chmodSync(file, LEDGER_TRANSACTION_FILE_MODE);
-  return file;
+  planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
+  return {
+    record,
+    files,
+    refs: {
+      finalRootRef: ledgerAuthorityRootRef(record),
+      lockRef: ledgerRecordPublicationLockRef(record),
+      stageRef: ledgerRecordPublicationStageRef(record),
+    },
+  };
 }
 
 test("publishes one requirement tree and idempotently reuses the exact committed record", async (t) => {
@@ -317,120 +309,80 @@ test("rejects malformed records and members before touching the ledger", async (
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
 });
 
-test("settles a pending intent against an incomplete stage or a committed final", async (t) => {
+test("an interrupted publication is resumed from its stage by the same request, and a committed final is reused", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
+  // 进程死在暂存写到一半：没有任何日志，同一个请求再发一次把暂存补齐并改名生效（ADR-0031，5a 的 A 行）。
   const partial = publication(requirementRecord("Resume staged authority"));
-  writeIntentFile(rootPath, partial.intent);
-  await createDirectoryAtomically(root, partial.intent.stageRef, {
+  await createDirectoryAtomically(root, partial.refs.stageRef, {
     mode: LEDGER_DURABLE_DIRECTORY_MODE,
   });
   await createFileCandidateDurably(
     root,
-    parsePortableResourcePath(`${partial.intent.stageRef}/record.json`),
+    parsePortableResourcePath(`${partial.refs.stageRef}/record.json`),
     encodeUtf8(renderLedgerAuthorityRecord(partial.record)),
     { mode: LEDGER_DURABLE_FILE_MODE },
   );
   const resumed = await publishLedgerAuthorityRecord(root, partial.record, MEMBERS, undefined);
   equal(resumed.wroteAuthority, true);
   deepEqual(resumed.loaded.record, partial.record);
-  equal(existsSync(physical(rootPath, partial.intent.stageRef)), false);
-  equal(existsSync(physical(rootPath, partial.intent.intentRef)), false);
+  equal(existsSync(physical(rootPath, partial.refs.stageRef)), false);
   equal(
-    readFileSync(physical(rootPath, `${partial.intent.finalRootRef}/landing.md`), "utf8"),
+    readFileSync(physical(rootPath, `${partial.refs.finalRootRef}/landing.md`), "utf8"),
     FIXTURE_LANDING_MARKDOWN,
   );
 
+  // 进程死在改名之后：final 已经生效，再发一次只是逐字节核对后复用。
   const committed = publication(requirementRecord("Post-rename recovery", OTHER_REQUIREMENT_ID));
-  writeIntentFile(rootPath, committed.intent);
   const candidate = await createDirectoryTreeCandidateDurably(
     root,
-    committed.intent.stageRef,
+    committed.refs.stageRef,
     committed.files,
     CANDIDATE_OPTIONS,
   );
-  await publishDirectoryTreeCandidateDurably(root, candidate, committed.intent.finalRootRef);
+  await publishDirectoryTreeCandidateDurably(root, candidate, committed.refs.finalRootRef);
   const settled = await publishLedgerAuthorityRecord(root, committed.record, MEMBERS, undefined);
   equal(settled.wroteAuthority, false);
   deepEqual(settled.loaded.record, committed.record);
-  equal(existsSync(physical(rootPath, committed.intent.intentRef)), false);
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
 });
 
-test("fails closed on residues it cannot own and on a drifted pending intent", async (t) => {
+test("fails closed on a stage it cannot complete, and a stray stage beside a committed final does not block", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { record, intent } = publication(requirementRecord("示例需求"));
-  const stagePath = physical(rootPath, intent.stageRef);
-  const intentPath = physical(rootPath, intent.intentRef);
+  const { record, refs } = publication(requirementRecord("示例需求"));
+  const stagePath = physical(rootPath, refs.stageRef);
+  const publish = () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined);
 
-  await createDirectoryAtomically(root, intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "recovery-required",
-    "$stage",
-  );
-  equal(existsSync(stagePath), true);
-  equal(existsSync(intentPath), false);
-  rmSync(stagePath, { recursive: true });
-
-  const drifted = publication(requirementRecord("Drifted title")).intent;
-  writeIntentFile(rootPath, drifted);
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "conflict",
-    "$intent",
-  );
-  equal(readFileSync(intentPath, "utf8"), renderLedgerRecordPublicationIntent(drifted));
-  equal(existsSync(physical(rootPath, intent.finalRootRef)), false);
-  rmSync(intentPath);
-
-  // A pending intent whose stage already holds different bytes cannot be settled from new input.
-  writeIntentFile(rootPath, intent);
-  await createDirectoryAtomically(root, intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
+  // 暂存里已经是别的字节：不拿新输入去补，拒绝并且什么都不动。公共路径上走不到这里（标识由内容推出）。
+  await createDirectoryAtomically(root, refs.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
   await createFileCandidateDurably(
     root,
-    parsePortableResourcePath(`${intent.stageRef}/record.json`),
+    parsePortableResourcePath(`${refs.stageRef}/record.json`),
     encodeUtf8(renderLedgerAuthorityRecord(requirementRecord("Drifted title"))),
     { mode: LEDGER_DURABLE_FILE_MODE },
   );
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "conflict",
-    "$stage",
-  );
-  equal(existsSync(intentPath), true);
+  await expectStoreError(publish, "conflict", "$stage");
+  equal(existsSync(stagePath), true);
+  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
   rmSync(stagePath, { recursive: true });
-  rmSync(intentPath);
 
-  chmodSync(writeIntentFile(rootPath, intent), 0o644);
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "conflict",
-    "$intent",
-  );
-  rmSync(intentPath);
-
-  equal(
-    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
-    true,
-  );
-  await createDirectoryAtomically(root, intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "recovery-required",
-    "$stage",
-  );
+  // 形状不对的暂存（权限位不是持久目录的）同样拒绝。
+  await createDirectoryAtomically(root, refs.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
+  chmodSync(stagePath, 0o700);
+  await expectStoreError(publish, "conflict", "$stage");
   rmSync(stagePath, { recursive: true });
-  equal(
-    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
-    false,
-  );
+
+  equal((await publish()).wroteAuthority, true);
+  // final 生效之后旁边多出一个同名暂存：它不属于任何进行中的发布，不挡住复用，也不被这里清理。
+  await createDirectoryAtomically(root, refs.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
+  equal((await publish()).wroteAuthority, false);
+  equal(existsSync(stagePath), true);
 });
 
 test("the record lock gates publication and inactive lock residues are retired first", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { record, intent } = publication(requirementRecord("示例需求"));
-  const lockPath = physical(rootPath, intent.lockRef);
-  const lease = await acquireRootedExclusiveFileLock(root, intent.lockRef);
+  const { record, refs } = publication(requirementRecord("示例需求"));
+  const lockPath = physical(rootPath, refs.lockRef);
+  const lease = await acquireRootedExclusiveFileLock(root, refs.lockRef);
   try {
     await expectStoreError(
       () => publishLedgerAuthorityRecord(root, record, MEMBERS, AbortSignal.timeout(100)),
@@ -440,8 +392,7 @@ test("the record lock gates publication and inactive lock residues are retired f
   } finally {
     await lease.release();
   }
-  equal(existsSync(physical(rootPath, intent.intentRef)), false);
-  equal(existsSync(physical(rootPath, intent.finalRootRef)), false);
+  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
 
   writeFileSync(
     lockPath,
@@ -466,14 +417,13 @@ test("the record lock gates publication and inactive lock residues are retired f
 
 test("an already aborted signal is reported as aborted before any admission write", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { record, intent } = publication(requirementRecord("示例需求"));
+  const { record, refs } = publication(requirementRecord("示例需求"));
   // 候选树规划先核对信号；§13.169 前这里被映射成 member $members。
   await expectStoreError(
     () => publishLedgerAuthorityRecord(root, record, MEMBERS, AbortSignal.abort()),
     "aborted",
     "$signal",
   );
-  equal(existsSync(physical(rootPath, intent.intentRef)), false);
-  equal(existsSync(physical(rootPath, intent.finalRootRef)), false);
-  equal(existsSync(physical(rootPath, intent.lockRef)), false);
+  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
+  equal(existsSync(physical(rootPath, refs.lockRef)), false);
 });

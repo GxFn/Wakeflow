@@ -1,14 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -41,9 +32,10 @@ import {
   parseLedgerAuthorityMemberReference,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
-  createLedgerRecordPublicationIntent,
-  renderLedgerRecordPublicationIntent,
-} from "../../../src/governance/ledger/ledger-record-publication-intent.js";
+  ledgerAuthorityRootRef,
+  ledgerRecordPublicationLockRef,
+  ledgerRecordPublicationStageRef,
+} from "../../../src/governance/ledger/ledger-authority-paths.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -120,23 +112,15 @@ function publicationPlan(record: Readonly<RequirementRecord>) {
       mode: 0o644,
     },
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
+  planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
   return {
     files,
-    plan,
-    intent: createLedgerRecordPublicationIntent(record, plan),
+    refs: {
+      finalRootRef: ledgerAuthorityRootRef(record),
+      lockRef: ledgerRecordPublicationLockRef(record),
+      stageRef: ledgerRecordPublicationStageRef(record),
+    },
   };
-}
-
-function writeIntent(
-  rootPath: string,
-  intent: ReturnType<typeof createLedgerRecordPublicationIntent>,
-): void {
-  const target = path.join(rootPath, ...intent.intentRef.split("/"));
-  writeFileSync(target, renderLedgerRecordPublicationIntent(intent), {
-    mode: 0o600,
-  });
-  chmodSync(target, 0o600);
 }
 
 test("Ledger publishes one requirement package tree and idempotently reuses it", async () => {
@@ -249,19 +233,18 @@ test("Ledger publishes one requirement package tree and idempotently reuses it",
   }
 });
 
-test("complete private stage recovers from exact compact intent without member payload", async () => {
+test("a complete stage left by a dead writer is published by the same publish call, and its lock residue is retired", async () => {
   const { rootPath, root, store } = await fixture();
   try {
     const record = requirementRecord(REQUIREMENT_ID, "Recover staged authority");
     const publication = publicationPlan(record);
-    writeIntent(rootPath, publication.intent);
     await createDirectoryTreeCandidateDurably(
       root,
-      publication.intent.stageRef,
+      publication.refs.stageRef,
       publication.files,
       CANDIDATE_OPTIONS,
     );
-    const lockPath = path.join(rootPath, ...publication.intent.lockRef.split("/"));
+    const lockPath = path.join(rootPath, ...publication.refs.lockRef.split("/"));
     writeFileSync(
       lockPath,
       rootedExclusiveFileLockRecordTextForTest({
@@ -270,101 +253,12 @@ test("complete private stage recovers from exact compact intent without member p
       { mode: 0o600 },
     );
 
-    const recovered = await store.recoverExactRecordPublication(publication.intent);
-    equal(recovered.wroteAuthority, true);
-    equal(recovered.loaded.recordDigest.length, 71);
-    equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
-    equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), false);
-    equal(existsSync(lockPath), false);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("exact recovery rejects a different intent before lock or publication", async () => {
-  const { rootPath, root, store } = await fixture();
-  try {
-    const record = requirementRecord(REQUIREMENT_ID, "Exact recovery source");
-    const publication = publicationPlan(record);
-    writeIntent(rootPath, publication.intent);
-    await createDirectoryTreeCandidateDurably(
-      root,
-      publication.intent.stageRef,
-      publication.files,
-      CANDIDATE_OPTIONS,
-    );
-    const conflicting = publicationPlan(
-      requirementRecord(REQUIREMENT_ID, "Conflicting recovery source"),
-    );
-    // A foreign lock record proves the rejection happens before the lock is recovered or taken.
-    const lockPath = path.join(rootPath, ...publication.intent.lockRef.split("/"));
-    const foreignLock = rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "99999999-9999-4999-8999-999999999999",
-    });
-    writeFileSync(lockPath, foreignLock, { mode: 0o600 });
-
-    await expectStoreError(
-      () => store.recoverExactRecordPublication(conflicting.intent),
-      "conflict",
-    );
-    equal(readFileSync(lockPath, "utf8"), foreignLock);
-    equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), true);
-    equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), true);
-    equal(existsSync(path.join(rootPath, ...publication.intent.finalRootRef.split("/"))), false);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("recovery without an exact intent preserves an inactive lock residue", async () => {
-  const { rootPath, root, store } = await fixture();
-  try {
-    const record = requirementRecord(REQUIREMENT_ID, "Missing recovery intent");
-    const lockRef = publicationPlan(record).intent.lockRef;
-    const lockPath = path.join(rootPath, ...lockRef.split("/"));
-    writeFileSync(
-      lockPath,
-      rootedExclusiveFileLockRecordTextForTest({
-        tokenUuid: "77777777-7777-4777-8777-777777777777",
-      }),
-      { mode: 0o600 },
-    );
-
-    await expectStoreError(() => store.recoverRecordPublication(REQUIREMENT_ID), "not-found");
-    equal(existsSync(lockPath), true);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("incomplete stage requests exact input and publish retry fills only missing bytes", async () => {
-  const { rootPath, root, store } = await fixture();
-  try {
-    const record = requirementRecord(REQUIREMENT_ID, "Resume staged authority");
-    const publication = publicationPlan(record);
-    writeIntent(rootPath, publication.intent);
-    await createDirectoryAtomically(root, parsePortableResourcePath(publication.intent.stageRef), {
-      mode: 0o755,
-    });
-    await createFileCandidateDurably(
-      root,
-      parsePortableResourcePath(`${publication.intent.stageRef}/record.json`),
-      encodeUtf8(renderLedgerAuthorityRecord(record)),
-      { mode: 0o644 },
-    );
-
-    await expectStoreError(
-      () => store.recoverExactRecordPublication(publication.intent),
-      "recovery-input-required",
-    );
-    equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), true);
-
+    // 没有日志：同一个发布请求再发一次就是恢复（ADR-0031，5a 的 A 行）。
     const resumed = await store.publish(record, MEMBERS);
     equal(resumed.wroteAuthority, true);
-    equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
+    equal(resumed.loaded.recordDigest.length, 71);
+    equal(existsSync(path.join(rootPath, ...publication.refs.stageRef.split("/"))), false);
+    equal(existsSync(lockPath), false);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();
@@ -372,16 +266,53 @@ test("incomplete stage requests exact input and publish retry fills only missing
   }
 });
 
-test("one pending record intent does not block unrelated reads or publications", async () => {
+test("an incomplete stage is filled by the publish retry, which writes only the missing bytes", async () => {
+  const { rootPath, root, store } = await fixture();
+  try {
+    const record = requirementRecord(REQUIREMENT_ID, "Resume staged authority");
+    const publication = publicationPlan(record);
+    await createDirectoryAtomically(root, parsePortableResourcePath(publication.refs.stageRef), {
+      mode: 0o755,
+    });
+    await createFileCandidateDurably(
+      root,
+      parsePortableResourcePath(`${publication.refs.stageRef}/record.json`),
+      encodeUtf8(renderLedgerAuthorityRecord(record)),
+      { mode: 0o644 },
+    );
+    const recordNode = statSync(
+      path.join(rootPath, ...publication.refs.stageRef.split("/"), "record.json"),
+    ).ino;
+
+    const resumed = await store.publish(record, MEMBERS);
+    equal(resumed.wroteAuthority, true);
+    equal(existsSync(path.join(rootPath, ...publication.refs.stageRef.split("/"))), false);
+    equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
+    // 已经写好的那个成员原样随目录改名过去，没有被重写。
+    equal(
+      statSync(path.join(rootPath, ...publication.refs.finalRootRef.split("/"), "record.json")).ino,
+      recordNode,
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("one record's pending stage does not block unrelated reads or publications", async () => {
   const { rootPath, root, store } = await fixture();
   try {
     const first = requirementRecord(REQUIREMENT_ID, "Committed record");
     await store.publish(first, MEMBERS);
 
     const pending = requirementRecord(OTHER_REQUIREMENT_ID, "Pending record");
-    writeIntent(rootPath, publicationPlan(pending).intent);
+    await createDirectoryAtomically(
+      root,
+      parsePortableResourcePath(publicationPlan(pending).refs.stageRef),
+      { mode: 0o755 },
+    );
     const unrelatedTarget = parsePortableResourcePath(
-      `transactions/${UNRELATED_REQUIREMENT_ID}.intent.json`,
+      `transactions/${UNRELATED_REQUIREMENT_ID}.lock`,
     );
     const intendedBytes = encodeUtf8("unrelated-intent");
     const address = issueDurableAtomicFileStageAddress(
@@ -428,24 +359,22 @@ test("same record concurrent publication has one commit and one idempotent resul
   }
 });
 
-test("published final with remaining exact intent settles forward", async () => {
+test("a final that was already published is reused by the same publish call", async () => {
   const { rootPath, root, store } = await fixture();
   try {
     const record = requirementRecord(REQUIREMENT_ID, "Post-rename recovery");
     const publication = publicationPlan(record);
-    writeIntent(rootPath, publication.intent);
     const candidate = await createDirectoryTreeCandidateDurably(
       root,
-      publication.intent.stageRef,
+      publication.refs.stageRef,
       publication.files,
       CANDIDATE_OPTIONS,
     );
-    await publishDirectoryTreeCandidateDurably(root, candidate, publication.intent.finalRootRef);
+    await publishDirectoryTreeCandidateDurably(root, candidate, publication.refs.finalRootRef);
 
-    const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
-    equal(recovered.wroteAuthority, false);
-    equal(recovered.loaded.record.requirementId, REQUIREMENT_ID);
-    equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), false);
+    const reused = await store.publish(record, MEMBERS);
+    equal(reused.wroteAuthority, false);
+    equal(reused.loaded.record.requirementId, REQUIREMENT_ID);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();

@@ -233,9 +233,8 @@ export async function ensurePublicationTransaction(
   transaction: Readonly<DemandEventSourcingPublicationTransaction>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredDemandEventSourcingPublicationTransaction>> {
-  if (ref !== DEMAND_PUBLICATION_MARKER_REF) {
-    admitDemandPublicationResourceOperation(transaction, ref, "exclusive-create");
-  }
+  // 事务只落成一份：暂存根（改名之后是 Demand 根）里的发布标记，引用相对那个根（5a 的 B 行，ADR-0031）。
+  if (ref !== DEMAND_PUBLICATION_MARKER_REF) fail("operation-failure", "$catalog");
   const text = renderDemandEventSourcingPublicationTransaction(transaction);
   const source = await ensureExactPublicationTextFile(
     root,
@@ -317,7 +316,7 @@ export async function initializePublicationStorage(
   }
 }
 
-/** 显式恢复 Workspace 发布事务中不再活动的原子暂存文件。 */
+/** 回收发布标记自己的、写者已经不在的原子暂存文件。 */
 export async function recoverPublicationTransactionStages(
   root: RootedDirectory,
   transactionRef: PortableResourcePath,

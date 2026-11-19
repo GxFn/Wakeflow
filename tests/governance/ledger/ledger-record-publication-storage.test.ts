@@ -2,9 +2,7 @@ import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
-  mkdirSync,
   readdirSync,
-  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -13,22 +11,21 @@ import {
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import {
-  issueDurableAtomicFileStageAddress,
-  releaseDurableAtomicFileStageAddress,
-} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
   createDirectoryTreeCandidateDurably,
   planDirectoryTreeCandidate,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
-import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { acquireRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
+import {
+  ledgerAuthorityRootRef,
+  ledgerRecordPublicationLockRef,
+  ledgerRecordPublicationStageRef,
+} from "../../../src/governance/ledger/ledger-authority-paths.js";
 import {
   computeLedgerAuthorityRecordDigest,
   createRequirementRecord,
@@ -43,33 +40,20 @@ import {
   LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_DURABLE_FILE_MODE,
-  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
-  LEDGER_TRANSACTION_FILE_MODE,
 } from "../../../src/governance/ledger/ledger-authority-storage-policy.js";
 import {
   LedgerAuthorityStoreError,
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
 import {
-  createLedgerRecordPublicationIntent,
-  type LedgerRecordPublicationIntent,
-  renderLedgerRecordPublicationIntent,
-  sameLedgerRecordPublicationIntent,
-} from "../../../src/governance/ledger/ledger-record-publication-intent.js";
-import {
-  ensureLedgerRecordPublicationIntent,
-  existingLedgerRecordPublicationIntentOrNull,
-  inspectLedgerRecordPublicationResidues,
+  type LedgerRecordPublicationPlan,
   ledgerPublicationResourceNodeOrNull,
+  ledgerRecordPublicationStageNodeOrNull,
   loadExactPublishedLedgerRecord,
   prepareLedgerRecordPublicationLockRecovery,
   publishLedgerRecordStage,
-  recoverLedgerIntentAtomicStages,
-  retireLedgerRecordPublicationIntent,
-  settleCommittedLedgerIntent,
   withLedgerRecordPublicationLock,
 } from "../../../src/governance/ledger/ledger-record-publication-storage.js";
-import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
@@ -83,7 +67,7 @@ import {
 
 useDisposableDurability();
 
-/** 直接覆盖逐记录发布流程的私有存储边界：意图记录、残留、锁、暂存发布与精确回读。 */
+/** 直接覆盖逐记录发布流程的私有存储边界：暂存目录、锁、暂存发布与精确回读。级别 1（组件）。 */
 
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const MEMBERS = requirementMembers();
@@ -150,34 +134,31 @@ function publication(record: Readonly<RequirementRecord>) {
       mode: LEDGER_DURABLE_FILE_MODE,
     },
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const plan = planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS);
-  return { record, files, intent: createLedgerRecordPublicationIntent(record, plan) };
-}
-
-function writeIntentFile(
-  rootPath: string,
-  intent: Readonly<LedgerRecordPublicationIntent>,
-): string {
-  const text = renderLedgerRecordPublicationIntent(intent);
-  const file = writeTextFile(rootPath, intent.intentRef, text, LEDGER_TRANSACTION_FILE_MODE);
-  chmodSync(file, LEDGER_TRANSACTION_FILE_MODE);
-  return file;
+  const plan: LedgerRecordPublicationPlan = {
+    record,
+    finalRootRef: ledgerAuthorityRootRef(record),
+    lockRef: ledgerRecordPublicationLockRef(record),
+    stageRef: ledgerRecordPublicationStageRef(record),
+    treePlan: planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS),
+  };
+  return { record, files, plan };
 }
 
 test("resource node lookup reports absence, the exact node, and unsafe ancestors", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  equal(await ledgerPublicationResourceNodeOrNull(root, intent.intentRef), null);
-  equal(await ledgerPublicationResourceNodeOrNull(root, intent.finalRootRef), null);
+  const { plan } = publication(requirementRecord("示例需求"));
+  const fileRef = parsePortableResourcePath("transactions/plain.txt");
+  equal(await ledgerPublicationResourceNodeOrNull(root, fileRef), null);
+  equal(await ledgerPublicationResourceNodeOrNull(root, plan.finalRootRef), null);
 
-  writeIntentFile(rootPath, intent);
-  const node = await ledgerPublicationResourceNodeOrNull(root, intent.intentRef);
+  chmodSync(writeTextFile(rootPath, fileRef, "plain", 0o600), 0o600);
+  const node = await ledgerPublicationResourceNodeOrNull(root, fileRef);
   ok(node !== null);
   equal(node.kind, "file");
-  equal(node.permissionBits, LEDGER_TRANSACTION_FILE_MODE);
+  equal(node.permissionBits, 0o600);
   equal(node.linkCount, 1n);
 
-  const throughFile = parsePortableResourcePath(`${intent.intentRef}/child`);
+  const throughFile = parsePortableResourcePath(`${fileRef}/child`);
   await expectStoreError(
     () => ledgerPublicationResourceNodeOrNull(root, throughFile),
     "root-scope",
@@ -192,189 +173,59 @@ test("resource node lookup reports absence, the exact node, and unsafe ancestors
   );
 });
 
-test("publication intent is created once, read back exactly, and rejects foreign nodes", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const intentPath = physical(rootPath, intent.intentRef);
-  const text = renderLedgerRecordPublicationIntent(intent);
-  const read = (signal?: AbortSignal) =>
-    existingLedgerRecordPublicationIntentOrNull(root, intent.intentRef, signal);
-  equal(await read(), null);
-
-  const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  equal(statSync(intentPath).mode & 0o777, LEDGER_TRANSACTION_FILE_MODE);
-  equal(readFileSync(intentPath, "utf8"), text);
-  equal(sameLedgerRecordPublicationIntent(stored.intent, intent), true);
-  equal(stored.node.kind, "file");
-  equal(Object.isFrozen(stored), true);
-
-  const again = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  equal(again.node.inodeId, stored.node.inodeId);
-  const existing = await read();
-  ok(existing !== null);
-  equal(existing.node.inodeId, stored.node.inodeId);
-  equal(sameLedgerRecordPublicationIntent(existing.intent, intent), true);
-
-  const conflicting = publication(requirementRecord("Conflicting title")).intent;
-  await expectStoreError(
-    () => ensureLedgerRecordPublicationIntent(root, conflicting, undefined),
-    "conflict",
-    "$intent",
-  );
-  equal(readFileSync(intentPath, "utf8"), text);
-  await expectStoreError(() => read(ABORTED), "aborted", "$signal");
-
-  chmodSync(intentPath, 0o644);
-  await expectStoreError(read, "conflict", "$intent");
-  chmodSync(intentPath, LEDGER_TRANSACTION_FILE_MODE);
-
-  // Same JSON, non-deterministic representation: the bytes are no longer the admitted render,
-  // and ensure must not silently overwrite them.
-  writeFileSync(intentPath, `${text}\n`);
-  await expectStoreError(read, "conflict", "$intent");
-  await expectStoreError(
-    () => ensureLedgerRecordPublicationIntent(root, intent, undefined),
-    "conflict",
-    "$intent",
-  );
-  writeFileSync(intentPath, "x".repeat(LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES + 1));
-  await expectStoreError(read, "capacity", "$intent");
-  rmSync(intentPath);
-  mkdirSync(intentPath);
-  await expectStoreError(read, "conflict", "$intent");
-});
-
 test("a bare root without the ledger layout fails closed for every transaction resource", async (t) => {
   const { rootPath, root } = await ledgerRoot(t, false);
-  const { intent } = publication(requirementRecord("示例需求"));
+  const { plan } = publication(requirementRecord("示例需求"));
   const noop = async () => undefined;
+  equal(await ledgerRecordPublicationStageNodeOrNull(root, plan), null);
+  await prepareLedgerRecordPublicationLockRecovery(root, plan.lockRef);
   await expectStoreError(
-    () => ensureLedgerRecordPublicationIntent(root, intent, undefined),
-    "operation-failure",
-    "$intent",
-  );
-  await expectStoreError(
-    () => recoverLedgerIntentAtomicStages(root, intent.intentRef, undefined),
-    "recovery-required",
-    "$intent/stage",
-  );
-  await prepareLedgerRecordPublicationLockRecovery(root, intent.lockRef);
-  await expectStoreError(
-    () => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop),
+    () => withLedgerRecordPublicationLock(root, plan.lockRef, undefined, noop),
     "lock-unsafe",
     "$lock",
   );
-
-  await materializeLedgerAuthorityLayout(root);
   await expectStoreError(
-    () => ensureLedgerRecordPublicationIntent(root, intent, ABORTED),
-    "aborted",
-    "$signal",
+    () => loadExactPublishedLedgerRecord(root, plan, undefined),
+    "not-found",
+    "$record",
   );
-  equal(existsSync(physical(rootPath, intent.intentRef)), false);
+  deepEqual(readdirSync(rootPath), []);
 });
 
-test("intent retirement unlinks only the exact stored node", async (t) => {
+test("the stage lookup admits only a durable stage directory", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const intentPath = physical(rootPath, intent.intentRef);
-  const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  await expectStoreError(
-    () => retireLedgerRecordPublicationIntent(root, stored, ABORTED),
-    "aborted",
-    "$signal",
-  );
-  equal(existsSync(intentPath), true);
-  await retireLedgerRecordPublicationIntent(root, stored, undefined);
-  equal(existsSync(intentPath), false);
-  await expectStoreError(
-    () => retireLedgerRecordPublicationIntent(root, stored, undefined),
-    "recovery-required",
-    "$intent",
-  );
+  const { plan } = publication(requirementRecord("示例需求"));
+  const stagePath = physical(rootPath, plan.stageRef);
+  equal(await ledgerRecordPublicationStageNodeOrNull(root, plan), null);
 
-  const stale = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  rmSync(intentPath);
-  writeIntentFile(rootPath, intent);
-  await expectStoreError(
-    () => retireLedgerRecordPublicationIntent(root, stale, undefined),
-    "recovery-required",
-    "$intent",
-  );
-  equal(existsSync(intentPath), true);
-  const fresh = await existingLedgerRecordPublicationIntentOrNull(
-    root,
-    intent.intentRef,
-    undefined,
-  );
-  ok(fresh !== null);
-  await retireLedgerRecordPublicationIntent(root, fresh, undefined);
-  deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
-});
-
-test("residue inspection admits only a durable stage directory", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const stagePath = physical(rootPath, intent.stageRef);
-  deepEqual(await inspectLedgerRecordPublicationResidues(root, intent), { stageNode: null });
-
-  await createDirectoryAtomically(root, intent.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  const residues = await inspectLedgerRecordPublicationResidues(root, intent);
-  ok(residues.stageNode !== null);
-  equal(residues.stageNode.kind, "directory");
-  equal(residues.stageNode.permissionBits, LEDGER_DURABLE_DIRECTORY_MODE);
+  await createDirectoryAtomically(root, plan.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
+  const stageNode = await ledgerRecordPublicationStageNodeOrNull(root, plan);
+  ok(stageNode !== null);
+  equal(stageNode.kind, "directory");
+  equal(stageNode.permissionBits, LEDGER_DURABLE_DIRECTORY_MODE);
 
   chmodSync(stagePath, 0o700);
   await expectStoreError(
-    () => inspectLedgerRecordPublicationResidues(root, intent),
+    () => ledgerRecordPublicationStageNodeOrNull(root, plan),
     "conflict",
     "$stage",
   );
   rmSync(stagePath, { recursive: true });
-  writeTextFile(rootPath, intent.stageRef, "not a stage");
+  writeTextFile(rootPath, plan.stageRef, "not a stage");
   await expectStoreError(
-    () => inspectLedgerRecordPublicationResidues(root, intent),
+    () => ledgerRecordPublicationStageNodeOrNull(root, plan),
     "conflict",
     "$stage",
   );
 });
 
-test("atomic intent stages are retired when stale and preserved while active", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const recover = (signal?: AbortSignal) =>
-    recoverLedgerIntentAtomicStages(root, intent.intentRef, signal);
-  await recover();
-  const digest = computeSha256Digest(encodeUtf8(renderLedgerRecordPublicationIntent(intent)));
-  const mode = LEDGER_TRANSACTION_FILE_MODE;
-
-  const stale = issueDurableAtomicFileStageAddress("create", intent.intentRef, digest, mode);
-  const staleRef = durableAtomicFileStageRefForTest(intent.intentRef, stale);
-  await createFileCandidateDurably(root, staleRef, encodeUtf8("partial"), { mode });
-  releaseDurableAtomicFileStageAddress(stale);
-  await recover();
-  equal(existsSync(physical(rootPath, staleRef)), false);
-  equal(existsSync(physical(rootPath, intent.intentRef)), false);
-
-  const active = issueDurableAtomicFileStageAddress("create", intent.intentRef, digest, mode);
-  const activeRef = durableAtomicFileStageRefForTest(intent.intentRef, active);
-  try {
-    await createFileCandidateDurably(root, activeRef, encodeUtf8("partial"), { mode });
-    await expectStoreError(recover, "recovery-required", "$intent/stage");
-    equal(existsSync(physical(rootPath, activeRef)), true);
-    await expectStoreError(() => recover(ABORTED), "aborted", "$signal");
-  } finally {
-    releaseDurableAtomicFileStageAddress(active);
-  }
-});
-
 test("lock recovery retires inactive residues and leaves live or unsafe locks alone", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const lockPath = physical(rootPath, intent.lockRef);
-  const prepare = () => prepareLedgerRecordPublicationLockRecovery(root, intent.lockRef);
+  const { plan } = publication(requirementRecord("示例需求"));
+  const lockPath = physical(rootPath, plan.lockRef);
+  const prepare = () => prepareLedgerRecordPublicationLockRecovery(root, plan.lockRef);
   const locked = <Result>(action: () => Promise<Result>, signal?: AbortSignal) =>
-    withLedgerRecordPublicationLock(root, intent.lockRef, signal, action);
+    withLedgerRecordPublicationLock(root, plan.lockRef, signal, action);
   await prepare();
   equal(existsSync(lockPath), false);
 
@@ -400,7 +251,7 @@ test("lock recovery retires inactive residues and leaves live or unsafe locks al
   await rejects(() => locked(() => Promise.reject(new RangeError("private"))), RangeError);
   equal(existsSync(lockPath), false);
 
-  const lease = await acquireRootedExclusiveFileLock(root, intent.lockRef);
+  const lease = await acquireRootedExclusiveFileLock(root, plan.lockRef);
   try {
     await prepare();
     equal(existsSync(lockPath), true);
@@ -422,13 +273,13 @@ test("lock recovery retires inactive residues and leaves live or unsafe locks al
 
 test("a lock held by another owner times out at the publication deadline", async (t) => {
   const { root } = await ledgerRoot(t);
-  const { intent } = publication(requirementRecord("示例需求"));
-  const lease = await acquireRootedExclusiveFileLock(root, intent.lockRef);
+  const { plan } = publication(requirementRecord("示例需求"));
+  const lease = await acquireRootedExclusiveFileLock(root, plan.lockRef);
   try {
     const startedAt = performance.now();
     const noop = async () => undefined;
     await expectStoreError(
-      () => withLedgerRecordPublicationLock(root, intent.lockRef, undefined, noop),
+      () => withLedgerRecordPublicationLock(root, plan.lockRef, undefined, noop),
       "lock-timeout",
       "$lock",
     );
@@ -440,24 +291,24 @@ test("a lock held by another owner times out at the publication deadline", async
 
 test("stage publication commits the tree and exact loading proves it", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
-  const { record, files, intent } = publication(requirementRecord("示例需求"));
-  const finalPath = physical(rootPath, intent.finalRootRef);
-  const stagePath = physical(rootPath, intent.stageRef);
-  const load = (signal?: AbortSignal) => loadExactPublishedLedgerRecord(root, intent, signal);
+  const { record, files, plan } = publication(requirementRecord("示例需求"));
+  const finalPath = physical(rootPath, plan.finalRootRef);
+  const stagePath = physical(rootPath, plan.stageRef);
+  const load = (signal?: AbortSignal) => loadExactPublishedLedgerRecord(root, plan, signal);
   await expectStoreError(load, "not-found", "$record");
 
   const candidate = await createDirectoryTreeCandidateDurably(
     root,
-    intent.stageRef,
+    plan.stageRef,
     files,
     CANDIDATE_OPTIONS,
   );
   await expectStoreError(
-    () => publishLedgerRecordStage(root, intent, candidate, ABORTED),
+    () => publishLedgerRecordStage(root, plan, candidate, ABORTED),
     "aborted",
     "$signal",
   );
-  await publishLedgerRecordStage(root, intent, candidate, undefined);
+  await publishLedgerRecordStage(root, plan, candidate, undefined);
   equal(existsSync(stagePath), false);
   equal(statSync(finalPath).mode & 0o777, LEDGER_DURABLE_DIRECTORY_MODE);
   equal(statSync(path.join(finalPath, "record.json")).mode & 0o777, LEDGER_DURABLE_FILE_MODE);
@@ -474,59 +325,34 @@ test("stage publication commits the tree and exact loading proves it", async (t)
 
   // The stage was renamed away: neither the stale candidate nor a fresh one may publish again.
   await expectStoreError(
-    () => publishLedgerRecordStage(root, intent, candidate, undefined),
+    () => publishLedgerRecordStage(root, plan, candidate, undefined),
     "conflict",
     "$stage",
   );
   const second = await createDirectoryTreeCandidateDurably(
     root,
-    intent.stageRef,
+    plan.stageRef,
     files,
     CANDIDATE_OPTIONS,
   );
   await expectStoreError(
-    () => publishLedgerRecordStage(root, intent, second, undefined),
+    () => publishLedgerRecordStage(root, plan, second, undefined),
     "conflict",
     "$stage",
   );
   equal(existsSync(stagePath), true);
   rmSync(stagePath, { recursive: true });
 
-  writeTextFile(rootPath, `${intent.finalRootRef}/extra.md`, "# extra\n", LEDGER_DURABLE_FILE_MODE);
+  writeTextFile(rootPath, `${plan.finalRootRef}/extra.md`, "# extra\n", LEDGER_DURABLE_FILE_MODE);
   await expectStoreError(load, "conflict", "$record");
   rmSync(path.join(finalPath, "extra.md"));
   deepEqual((await load()).record, record);
 
-  const other = publication(requirementRecord("Other", OTHER_REQUIREMENT_ID)).intent;
+  const other = publication(requirementRecord("Other", OTHER_REQUIREMENT_ID)).plan;
   writeTextFile(rootPath, other.finalRootRef, "not a tree");
   await expectStoreError(
     () => loadExactPublishedLedgerRecord(root, other, undefined),
     "conflict",
     "$record",
   );
-});
-
-test("settling a committed intent retires it only when no stage residue remains", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { record, files, intent } = publication(requirementRecord("示例需求"));
-  const intentPath = physical(rootPath, intent.intentRef);
-  const stored = await ensureLedgerRecordPublicationIntent(root, intent, undefined);
-  const settle = (stageNode: typeof stored.node | null) =>
-    settleCommittedLedgerIntent(root, stored, { stageNode }, undefined);
-  await expectStoreError(() => settle(null), "not-found", "$record");
-  equal(existsSync(intentPath), true);
-
-  const candidate = await createDirectoryTreeCandidateDurably(
-    root,
-    intent.stageRef,
-    files,
-    CANDIDATE_OPTIONS,
-  );
-  await publishLedgerRecordStage(root, intent, candidate, undefined);
-  await expectStoreError(() => settle(stored.node), "recovery-required", "$stage");
-  equal(existsSync(intentPath), true);
-
-  deepEqual((await settle(null)).record, record);
-  deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
-  await expectStoreError(() => settle(null), "recovery-required", "$intent");
 });

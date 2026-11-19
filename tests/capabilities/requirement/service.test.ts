@@ -1,6 +1,7 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -277,6 +278,123 @@ test("发布：缺确认阻塞并给摘要，确认后 ready，apply 写记录�
     throw new Error("Expected a mutation.");
   equal(recovered.disposition, "recovered");
   equal(recovered.package.stateDigest, applied.package.stateDigest);
+});
+
+test("发布被打断在暂存阶段：recover 没有可恢复的记录，同一个请求再发一次把它做完（ADR-0031，5a 的 A 行）", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const request = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput(workspace, { confirmation: { confirmedAt: CONFIRMED_AT } }),
+  };
+  const ready = await executeRequirementPublicationRequest(request, { clock });
+  if (
+    ready.kind !== "WakeflowRequirementPublicationPreview" ||
+    ready.planDigest === null ||
+    typeof ready.requirementId !== "string"
+  )
+    throw new Error("Expected a ready preview.");
+  // 进程死在暂存写到一半时留下的样子：只有暂存目录和一个成员，记录没有生效，磁盘上没有任何日志。
+  const stage = path.join(root, "Ledger", "transactions", `.${ready.requirementId}.stage`);
+  mkdirSync(stage);
+  chmodSync(stage, 0o755);
+  writeFileSync(path.join(stage, "landing.md"), FIXTURE_LANDING_MARKDOWN);
+  chmodSync(path.join(stage, "landing.md"), 0o644);
+
+  // recover 只把已经生效的记录后面的收尾做完；记录没有生效就没有东西可恢复。
+  await expectFailure(
+    executeRequirementPublicationRequest(
+      { root, mode: "recover", operationId: ready.requirementId },
+      { clock },
+    ),
+    "not-found",
+    "record-absent",
+  );
+  const applied = await executeRequirementPublicationRequest(
+    { ...request, mode: "apply", planDigest: ready.planDigest },
+    { clock },
+  );
+  if (applied.kind !== "WakeflowRequirementPublicationMutation")
+    throw new Error("Expected a mutation.");
+  equal(applied.disposition, "published");
+  equal(applied.package.requirementId, ready.requirementId);
+  equal(existsSync(stage), false);
+  equal(
+    readFileSync(
+      path.join(root, "Ledger", "requirements", ready.requirementId, "landing.md"),
+      "utf8",
+    ),
+    FIXTURE_LANDING_MARKDOWN,
+  );
+});
+
+test("创建被打断在认领之前：同一个请求再发一次沿用标记里的时间把它做完（ADR-0031，5a 的 B 行）", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const publishRequest = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput(workspace, { confirmation: { confirmedAt: CONFIRMED_AT } }),
+  };
+  const ready = await executeRequirementPublicationRequest(publishRequest, { clock });
+  if (ready.kind !== "WakeflowRequirementPublicationPreview" || ready.planDigest === null)
+    throw new Error("Expected a ready preview.");
+  const published = await executeRequirementPublicationRequest(
+    { ...publishRequest, mode: "apply", planDigest: ready.planDigest },
+    { clock },
+  );
+  if (published.kind !== "WakeflowRequirementPublicationMutation")
+    throw new Error("Expected a mutation.");
+  const createRequest = {
+    root,
+    mode: "apply",
+    requirementId: published.package.requirementId,
+    demand: {
+      title: "被打断的认领",
+      goal: "验证创建被打断之后重发续上。",
+      completionDefinition: "重发得到同一个 Demand。",
+    },
+  };
+  // 让看板目录写不进去：Demand 根已经改名生效、根里留着发布标记，认领没有落账——创建停在半路。
+  const boardPath = path.join(root, ".wakeflow-active/current/board");
+  const indexPath = path.join(boardPath, "index.md");
+  chmodSync(boardPath, 0o500);
+  const firstAt = parseUtcInstant("2026-09-04T12:00:00.000Z");
+  try {
+    await rejects(executeDemandCreationRequest(createRequest, { clock: () => firstAt }));
+  } finally {
+    chmodSync(boardPath, 0o700);
+  }
+  const stillPending = await executeBoardInspectionRequest({
+    root,
+    view: "package",
+    requirementId: published.package.requirementId,
+  });
+  if (stillPending.kind !== "WakeflowBoardPackage") throw new Error("Expected a package view.");
+  equal(stillPending.package.status, "pending");
+
+  // 时钟已经往前走了。重发的请求读到标记、沿用它记下的时间，得到同一份事务，各步按"已经做过"重入。
+  const replayed = await executeDemandCreationRequest(createRequest, {
+    clock: () => parseUtcInstant("2026-09-04T12:30:00.000Z"),
+  });
+  if (replayed.kind !== "WakeflowDemandCreationMutation") throw new Error("Expected a mutation.");
+  equal(replayed.publication.claim.requirementId, published.package.requirementId);
+  const demandRoot = path.join(root, ".wakeflow-active/current", replayed.publication.demandId);
+  const identity = JSON.parse(readFileSync(path.join(demandRoot, "identity.json"), "utf8")) as {
+    createdAt: string;
+  };
+  equal(identity.createdAt, firstAt);
+  equal(existsSync(path.join(demandRoot, "transactions", "publication.json")), false);
+  equal(existsSync(indexPath), true);
 });
 
 test("阻塞：缺章、隐私命中、测试决策与类型不符；未知窗口与设计面是错误", {

@@ -50,19 +50,18 @@ test("Ledger static catalog separates the durable requirements root from private
   }
 });
 
-test("concrete Ledger record catalog binds aggregate, facts, intent, and lock", () => {
+test("concrete Ledger record catalog binds aggregate, facts, and lock", () => {
   const record = createRequirementRecord(requirementRecordDraft(), {
     clock: () => FIXTURE_RECORDED_AT,
   });
   const catalog = createLedgerAuthorityResourceCatalog(record);
-  equal(catalog.length, 6);
-  const [root, manifest, landing, requirement, intent, lock] = catalog;
+  equal(catalog.length, 5);
+  const [root, manifest, landing, requirement, lock] = catalog;
   if (
     root === undefined ||
     manifest === undefined ||
     landing === undefined ||
     requirement === undefined ||
-    intent === undefined ||
     lock === undefined
   ) {
     throw new Error("Ledger catalog is incomplete.");
@@ -95,9 +94,8 @@ test("concrete Ledger record catalog binds aggregate, facts, intent, and lock", 
     requirement.placement.relativePath,
     `requirements/${FIXTURE_REQUIREMENT_ID}/requirement.md`,
   );
-  equal(intent.placement.relativePath, `transactions/${FIXTURE_REQUIREMENT_ID}.intent.json`);
   equal(lock.placement.relativePath, `transactions/${FIXTURE_REQUIREMENT_ID}.lock`);
-  for (const transaction of [intent, lock]) {
+  for (const transaction of [lock]) {
     deepEqual(transaction.tracking, {
       disposition: "ignored",
       privacy: "runtime-private",

@@ -43,7 +43,6 @@ import {
   demandFinalRootRef,
   demandPublicationLockRef,
   demandPublicationStageRef,
-  demandPublicationTransactionRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
@@ -233,13 +232,6 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "transaction-artifact:exact-retire",
       },
       {
-        declarationId: `${prefix}.publication-transaction`,
-        ownerId: "demand-publication",
-        relativePath: demandPublicationTransactionRef(DEMAND_ID),
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
-      },
-      {
         declarationId: `${prefix}.publication-lock`,
         ownerId: "demand-publication",
         relativePath: demandPublicationLockRef(DEMAND_ID),
@@ -248,7 +240,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 14);
+  equal(catalog.length, 13);
   equal(
     catalog.every(
       (entry) =>

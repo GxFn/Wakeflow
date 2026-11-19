@@ -114,6 +114,14 @@ test("预览零写并给出生成的需求包；工作区正忙、仓库不在�
     ok(preview.summary.requirement.includes("\n\\# 这一行不是标题\n"));
     ok(preview.summary.requirement.includes("- AC-2 别的文件没有改动"));
     ok(preview.summary.landing.includes("controller-only"));
+    // 1.4 第 6 段现场：生成的文字要明说“提交”。只写在 commitExpectation 里时，目标窗口的 auto 模式把
+    // git commit 当成没人要求的动作拒绝了；完成定义、完成预期与投递文本各说一次。
+    ok(
+      /已提交在仓库的当前分支上|is committed on the current branch/u.test(
+        preview.summary.requirement,
+      ),
+      preview.summary.requirement,
+    );
     // 预览没有发布任何东西：账本里的需求包还是原来那些。
     deepEqual(readdirSync(ledger).sort(), packagesBefore);
 
@@ -162,6 +170,29 @@ test("预览零写并给出生成的需求包；工作区正忙、仓库不在�
       readonly next: unknown;
     };
     ok(delivery.permit.prompt.includes("在 README 的开头加一行安装命令。"), delivery.permit.prompt);
+    ok(
+      /把改动提交在当前分支上，不要推送|Commit the change on the current branch and do not push/u.test(
+        delivery.permit.prompt,
+      ),
+      delivery.permit.prompt,
+    );
+    const taskPackagesRoot = path.join(
+      fixture.workspacePath,
+      ".wakeflow-active",
+      "current",
+      applied.demandId ?? "",
+      "artifacts",
+      "task-packages",
+    );
+    const taskPackage = JSON.parse(
+      readFileSync(path.join(taskPackagesRoot, readdirSync(taskPackagesRoot)[0] ?? ""), "utf8"),
+    ) as { readonly completionExpectations: readonly string[] };
+    ok(
+      taskPackage.completionExpectations.some((entry) =>
+        /已提交在本仓库的当前分支上|is committed on the current branch/u.test(entry),
+      ),
+      JSON.stringify(taskPackage.completionExpectations),
+    );
     deepEqual(plain(applied.next), plain(delivery.next));
     // 需求仍然是一份两个文档的需求包，就在账本里；Demand 是普通的 Demand。
     const packageRoot = path.join(ledger, applied.requirementId ?? "");

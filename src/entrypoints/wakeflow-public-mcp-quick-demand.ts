@@ -58,7 +58,8 @@ const TEXT = Object.freeze({
     nonGoals: "Non-goals",
     criteria: "Acceptance criteria",
     confirmation: "User confirmation",
-    completionBody: "The goal above is met and every acceptance criterion below holds.",
+    completionBody:
+      "The goal above is met, every acceptance criterion below holds, and the change is committed on the current branch of the repository without being pushed.",
     nonGoalsBody:
       "Anything beyond the goal above. This is a quick Demand: one repository, one implementation task, no separate test target.",
     confirmationBody:
@@ -83,7 +84,9 @@ const TEXT = Object.freeze({
     forbidden: "Changing another repository.",
     probe: "Check the change against this criterion and say what you observed.",
     expected: "The criterion holds as written.",
-    boundary: "Stay inside this repository and do nothing beyond the goal.",
+    commit: "The change is committed on the current branch of this repository; nothing is pushed.",
+    boundary:
+      "Stay inside this repository and do nothing beyond the goal. Commit the change on the current branch and do not push.",
   }),
   "zh-Hans": Object.freeze({
     goal: "目标",
@@ -91,7 +94,8 @@ const TEXT = Object.freeze({
     nonGoals: "非目标",
     criteria: "验收标准",
     confirmation: "用户确认",
-    completionBody: "上面的目标达成，并且下面每一条验收标准都成立。",
+    completionBody:
+      "上面的目标达成，下面每一条验收标准都成立，并且改动已提交在仓库的当前分支上、没有推送。",
     nonGoalsBody:
       "上述目标之外的任何改动。这是一个快速 Demand：一个仓库、一个实现任务、没有单独的测试目标。",
     confirmationBody:
@@ -115,7 +119,8 @@ const TEXT = Object.freeze({
     forbidden: "改动其他仓库。",
     probe: "对照这条标准核对改动，并说出你实际看到的。",
     expected: "这条标准如其所写地成立。",
-    boundary: "只在本仓库内完成，不做目标之外的事。",
+    commit: "改动已提交在本仓库的当前分支上，没有推送。",
+    boundary: "只在本仓库内完成，不做目标之外的事。把改动提交在当前分支上，不要推送。",
   }),
 });
 
@@ -444,8 +449,9 @@ function taskPackageOf(plan: Readonly<QuickPlan>, requirementId: string, recordD
       outOfScope: [text.outOfScope],
       forbidden: [text.forbidden],
     },
-    completionExpectations: plan.criteria.map((entry) => entry.text),
-    // 四条保证之一：结果绑定到提交。
+    // 四条保证之一：结果绑定到提交。除了 `commitExpectation`，这句话也写进完成预期与投递文本：1.4 第 6 段的
+    // 现场里，生成的文字没有一处说“提交”，目标窗口的 auto 模式把 `git commit` 当成没人要求的动作拒绝了。
+    completionExpectations: [...plan.criteria.map((entry) => entry.text), text.commit],
     commitExpectation: "commit",
     acceptanceAnchors: plan.criteria.map((entry) => ({
       anchorId: entry.itemId,

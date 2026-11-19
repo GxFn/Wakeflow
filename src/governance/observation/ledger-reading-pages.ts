@@ -37,6 +37,7 @@ import {
   type DemandArchivePageLanguage,
   type DemandArchivePageReviewHistory,
   demandArchivePageHistoryOf,
+  demandArchiveResultAccountsOf,
   demandArchiveSessionPromptsOf,
   demandArchivePageLine,
   demandArchivePageMarker,
@@ -283,6 +284,7 @@ async function readHistoryOrNull(
     return demandArchivePageHistoryOf(
       await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal),
       demandArchiveSessionPromptsOf(events),
+      demandArchiveResultAccountsOf(events),
     );
   } catch (error: unknown) {
     const reason =

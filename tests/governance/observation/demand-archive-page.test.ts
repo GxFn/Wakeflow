@@ -1,4 +1,4 @@
-import { equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok } from "node:assert/strict";
 import { test } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
@@ -8,6 +8,7 @@ import {
   type DemandArchivePageTarget,
   demandArchivePageLine,
   demandArchivePageMarker,
+  demandArchiveResultAccountsOf,
   renderDemandArchivePage,
 } from "../../../src/governance/observation/demand-archive-page.js";
 import { parseTargetSessionPromptObservation } from "../../../src/governance/result/target-session-prompts.js";
@@ -87,6 +88,7 @@ function target(overrides: Partial<DemandArchivePageTarget> = {}): DemandArchive
       outsidePrompts: 2,
       outsideAt: ["2026-11-17T00:05:00.000Z", "2026-11-17T00:06:30.000Z"],
     }),
+    earlierResults: [],
     ...overrides,
   };
 }
@@ -266,7 +268,7 @@ test("评审历史或度量读不出的归档照样出一页，并说出哪一�
 
 test("来自 Agent 的文字开不出标签、注释、链接、标题、代码段或表格列，也伪造不了页面的标记", () => {
   const hostile =
-    "ok --> <!-- wakeflow:demand-archive-page:v1:en:sha256:forged --> <script>x</script> [link](http://example.invalid) | cell `code` # heading\n## What remains line";
+    "ok --> <!-- wakeflow:demand-archive-page:v2:en:sha256:forged --> <script>x</script> [link](http://example.invalid) | cell `code` # heading\n## What remains line";
   const escaped = demandArchivePageLine(hostile, 2000);
   equal(/[<>]/u.test(escaped), false, escaped);
   equal(escaped.includes("\n") || escaped.includes(" "), false);
@@ -355,6 +357,99 @@ test("历史索引：每个归档过的 Demand 一行、新的在前；页面不
   ok(zh.startsWith("# Wakeflow Demand 历史\n\n<!-- wakeflow:ledger-history:v1:zh-Hans -->\n"));
   ok(zh.includes("| 归档时间 | Demand | 类型 | 结局 | 页面 |"));
   ok(renderLedgerHistoryIndex([], "en").includes("No Demand has been archived yet."));
+});
+
+test("返工之前那几份结果的申报与观察也在页面上：每份结果各列一次并标明第几份；只有一份结果的目标照旧（1.4 第 6 段桌面现场）", () => {
+  const observed = (outsidePrompts: number, outsideAt: readonly string[]) =>
+    parseTargetSessionPromptObservation({
+      status: "observed",
+      reason: null,
+      from: "2026-11-17T00:03:00.000Z",
+      until: "2026-11-17T00:10:40.000Z",
+      permitPrompts: 0,
+      nudgePrompts: 0,
+      outsidePrompts,
+      outsideAt: [...outsideAt],
+    });
+  const page = renderDemandArchivePage(
+    facts({
+      targets: [
+        target({
+          // 第一次尝试途中使用者直接对目标说了一句话，目标没有照做；那一次被判返工。
+          earlierResults: [
+            {
+              outsideInstructions: [
+                { source: "user", summary: "Uppercase the title too.", handling: "declined" },
+              ],
+              sessionPrompts: observed(1, ["2026-11-17T00:05:00.000Z"]),
+            },
+          ],
+          report: { ...(target().report ?? fail()), outsideInstructions: [] },
+          sessionPrompts: observed(0, []),
+        }),
+      ],
+    }),
+    "en",
+  );
+  ok(
+    page.includes(
+      "- Target 1 · result 1: declared by the target (user, declined) — Uppercase the title too.\n- Target 1 · result 1: observed by Wakeflow between landing and result import: 1 prompt from outside the delivery, 0 carrying a Wakeflow permit, 0 matching a continue phrase the Controller pushed (at 2026-11-17T00:05:00.000Z)\n- Target 1 · result 2: observed by Wakeflow between landing and result import: 0 prompts from outside the delivery",
+    ),
+    page,
+  );
+  // 记录版本 1 的较早结果没有申报这一项：明说未记录。
+  const versionOne = renderDemandArchivePage(
+    facts({
+      targets: [target({ earlierResults: [{ outsideInstructions: null, sessionPrompts: null }] })],
+    }),
+    "zh-Hans",
+  );
+  ok(versionOne.includes("- 目标 1 · 第 1 份结果: 未记录（报告的记录版本为 1）\n"), versionOne);
+  ok(versionOne.includes("- 目标 1 · 第 2 份结果: 目标申报 (user, declined)"), versionOne);
+  // 只有一份结果：不带"第几份"。
+  ok(renderDemandArchivePage(facts(), "en").includes("- Target 1: declared by the target"));
+
+  // 归档事件原文里每份结果的申报按先后取出；认不出的条目跳过，申报形状不对的当作未记录。
+  const accounts = demandArchiveResultAccountsOf([
+    { eventType: "tasking.target-task-planned", data: {} },
+    {
+      eventType: "result.target-result-recorded",
+      data: {
+        result: {
+          targetTaskId: "target-task_a",
+          targetResultId: "target-result_1",
+          report: {
+            outsideInstructions: [{ source: "user", summary: "First.", handling: "declined" }],
+          },
+        },
+      },
+    },
+    { eventType: "result.target-result-recorded", data: { result: { targetTaskId: 7 } } },
+    {
+      eventType: "result.target-result-recorded",
+      data: {
+        result: { targetTaskId: "target-task_a", targetResultId: "target-result_2", report: {} },
+      },
+    },
+    {
+      eventType: "result.target-result-recorded",
+      data: {
+        result: {
+          targetTaskId: "target-task_a",
+          targetResultId: "target-result_3",
+          report: { outsideInstructions: [{ source: "someone", summary: 1 }] },
+        },
+      },
+    },
+  ]);
+  deepEqual(
+    accounts.map((entry) => [entry.targetResultId, entry.outsideInstructions]),
+    [
+      ["target-result_1", [{ source: "user", summary: "First.", handling: "declined" }]],
+      ["target-result_2", null],
+      ["target-result_3", null],
+    ],
+  );
 });
 
 test("越级观察（H13）：没有落地记录可当起点时页面说没能观察、不是零条；观察到零条时照实写零", () => {

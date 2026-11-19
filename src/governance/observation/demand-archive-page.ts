@@ -5,7 +5,10 @@ import {
   implementationReportOutsideInstructions,
 } from "../result/implementation-target-result-report.js";
 import type { TargetResult } from "../result/target-result.js";
-import type { TargetResultOutsideInstruction } from "../result/target-result-outside-instructions.js";
+import {
+  parseTargetResultOutsideInstructions,
+  type TargetResultOutsideInstruction,
+} from "../result/target-result-outside-instructions.js";
 import type { ControllerReviewDecision } from "../review/controller-review-decision.js";
 import type {
   DemandResultReviewSnapshot,
@@ -36,7 +39,7 @@ import type { DemandArchiveMeasures } from "./demand-archive-measures.js";
 export type DemandArchivePageLanguage = "en" | "zh-Hans";
 
 /** 页面渲染器的版本：改渲染就加一，现存页面的标记随之失配，下一次刷新重写。 */
-const DEMAND_ARCHIVE_PAGE_VERSION = 1 as const;
+const DEMAND_ARCHIVE_PAGE_VERSION = 2 as const;
 
 export interface DemandArchivePageAnchor {
   readonly anchorId: string;
@@ -91,6 +94,24 @@ export interface DemandArchivePageTarget {
   readonly decisions: readonly Readonly<DemandArchivePageDecision>[];
   /** 导入那一刻 Wakeflow 对目标会话的越级观察（open-items H13）；1.4 之前的结果没有，为 null。 */
   readonly sessionPrompts: Readonly<TargetSessionPromptObservation> | null;
+  /**
+   * 这个目标在当前结果之前导入过的结果（返工之前的那几次、被取代的那几份）各自的越级记录，按导入先后。
+   * 1.4 第 6 段的桌面现场：使用者在第一次尝试途中直接对目标说话，那一次被判返工，页面上就看不到这句话了。
+   */
+  readonly earlierResults: readonly Readonly<DemandArchivePageEarlierResult>[];
+}
+
+/** 一份较早的结果留下的越级记录：目标的申报（记录版本 1 没有，为 null）与 Wakeflow 自己的观察。 */
+export interface DemandArchivePageEarlierResult {
+  readonly outsideInstructions: readonly Readonly<TargetResultOutsideInstruction>[] | null;
+  readonly sessionPrompts: Readonly<TargetSessionPromptObservation> | null;
+}
+
+/** 归档事件里一份结果的申报，按事件先后；`demandArchiveResultAccountsOf` 的产出。 */
+export interface DemandArchiveResultAccount {
+  readonly targetTaskId: string;
+  readonly targetResultId: string;
+  readonly outsideInstructions: readonly Readonly<TargetResultOutsideInstruction>[] | null;
 }
 
 export interface DemandArchivePageFacts {
@@ -196,6 +217,7 @@ function repositoryIdOf(taskPackage: Readonly<TaskPackage>): string | null {
 function targetOf(
   target: Readonly<DemandResultReviewTarget>,
   observations: ReadonlyMap<string, Readonly<TargetSessionPromptObservation>>,
+  accounts: readonly Readonly<DemandArchiveResultAccount>[],
 ): DemandArchivePageTarget | null {
   // 还在等结果的目标只带任务包的标识与摘要，没有正文：页面在"还剩什么"里按标识列出它。
   if (target.status === "awaiting-result") return null;
@@ -213,6 +235,20 @@ function targetOf(
     report: reportOf(target.targetResult),
     decisions: Object.freeze(decisions),
     sessionPrompts: observations.get(target.targetResult.targetResultId) ?? null,
+    earlierResults: Object.freeze(
+      accounts
+        .filter(
+          (account) =>
+            account.targetTaskId === target.targetTaskId &&
+            account.targetResultId !== target.targetResult.targetResultId,
+        )
+        .map((account) =>
+          Object.freeze({
+            outsideInstructions: account.outsideInstructions,
+            sessionPrompts: observations.get(account.targetResultId) ?? null,
+          }),
+        ),
+    ),
   });
 }
 
@@ -225,11 +261,12 @@ export interface DemandArchivePageReviewHistory {
 export function demandArchivePageHistoryOf(
   snapshot: Readonly<DemandResultReviewSnapshot>,
   observations: ReadonlyMap<string, Readonly<TargetSessionPromptObservation>> = new Map(),
+  accounts: readonly Readonly<DemandArchiveResultAccount>[] = [],
 ): Readonly<DemandArchivePageReviewHistory> {
   const targets: Readonly<DemandArchivePageTarget>[] = [];
   const pending: Readonly<DemandArchivePagePendingTarget>[] = [];
   for (const target of snapshot.targets) {
-    const shaped = targetOf(target, observations);
+    const shaped = targetOf(target, observations, accounts);
     if (shaped !== null) {
       targets.push(shaped);
       continue;
@@ -328,6 +365,7 @@ const TEXT = Object.freeze({
     unobserved: (reason: string) =>
       `Wakeflow could not observe the target session (${reason}); this is not a count of zero`,
     outsideNotRecorded: "not recorded (report record version 1)",
+    resultNumber: (position: number) => `result ${position}`,
     notAccepted: "Not accepted when archived",
     noResult: "No result when archived",
     branchLeft: (branch: string) =>
@@ -389,6 +427,7 @@ const TEXT = Object.freeze({
     observedAt: "时刻",
     unobserved: (reason: string) => `Wakeflow 没能观察目标会话（${reason}）；这不是零条`,
     outsideNotRecorded: "未记录（报告的记录版本为 1）",
+    resultNumber: (position: number) => `第 ${position} 份结果`,
     notAccepted: "归档时未被接受",
     noResult: "归档时没有结果",
     branchLeft: (branch: string) =>
@@ -666,15 +705,15 @@ function verifiedSection(context: RenderContext, facts: DemandArchivePageInput):
   ];
 }
 
-/** 一个目标申报的任务包之外的指示：记录版本 1 的报告没有记录，明说未记录。 */
+/** 一份结果申报的任务包之外的指示：记录版本 1 的报告没有记录，明说未记录。 */
 function outsideLines(
   context: RenderContext,
   label: string,
-  report: Readonly<DemandArchivePageReport>,
+  outsideInstructions: DemandArchivePageReport["outsideInstructions"],
 ): readonly string[] {
   const { text, limits } = context;
-  if (report.outsideInstructions === null) return [`- ${label}: ${text.outsideNotRecorded}`];
-  return report.outsideInstructions
+  if (outsideInstructions === null) return [`- ${label}: ${text.outsideNotRecorded}`];
+  return outsideInstructions
     .slice(0, limits.list)
     .map(
       (entry) =>
@@ -716,9 +755,21 @@ function interventionsSection(
       ? [text.notRecorded]
       : capped(facts.targets, limits.targets, text, (target, index) => {
           const label = `${text.target} ${index + 1}`;
+          // 返工之前的结果先列，各自带上是第几份；只有一份结果的目标照旧只写目标的序号。
+          const earlier = target.earlierResults.slice(-limits.list);
+          const first = target.earlierResults.length - earlier.length;
+          const numbered = (position: number) => `${label} · ${text.resultNumber(position)}`;
+          const current =
+            target.earlierResults.length === 0 ? label : numbered(target.earlierResults.length + 1);
           return [
-            ...(target.report === null ? [] : outsideLines(context, label, target.report)),
-            ...observedLines(context, label, target.sessionPrompts),
+            ...earlier.flatMap((entry, position) => [
+              ...outsideLines(context, numbered(first + position + 1), entry.outsideInstructions),
+              ...observedLines(context, numbered(first + position + 1), entry.sessionPrompts),
+            ]),
+            ...(target.report === null
+              ? []
+              : outsideLines(context, current, target.report.outsideInstructions)),
+            ...observedLines(context, current, target.sessionPrompts),
           ];
         });
   return [
@@ -833,6 +884,72 @@ export function renderDemandArchivePage(
   ]
     .join("\n")
     .trimEnd()}\n`;
+}
+
+class OutsideInstructionShapeError extends Error {}
+
+/** 一份结果里申报的任务包之外的指示；没有这一项（记录版本 1）或形状不对都当作没有记录。 */
+function outsideInstructionsOrNull(
+  value: unknown,
+): readonly Readonly<TargetResultOutsideInstruction>[] | null {
+  if (value === undefined) return null;
+  try {
+    return parseTargetResultOutsideInstructions(value, "$", {
+      record: (entry) => {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+          throw new OutsideInstructionShapeError();
+        }
+        return entry as Readonly<Record<string, unknown>>;
+      },
+      text: (entry) => {
+        if (typeof entry !== "string") throw new OutsideInstructionShapeError();
+        return entry;
+      },
+      fail: () => {
+        throw new OutsideInstructionShapeError();
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof OutsideInstructionShapeError) return null;
+    throw error;
+  }
+}
+
+/**
+ * 归档事件里每一份导入过的结果各自申报了什么，按事件先后。页面用它把返工之前那几次的申报也列出来；
+ * 读的是事件原文，认不出的那一条跳过——页面是投影，不为一条旁证失败。
+ */
+export function demandArchiveResultAccountsOf(
+  events: readonly Readonly<{
+    readonly eventType: string;
+    readonly data: Readonly<Record<string, unknown>>;
+  }>[],
+): readonly Readonly<DemandArchiveResultAccount>[] {
+  const accounts: Readonly<DemandArchiveResultAccount>[] = [];
+  for (const event of events) {
+    if (event.eventType !== "result.target-result-recorded") continue;
+    const result = event.data.result;
+    if (typeof result !== "object" || result === null) continue;
+    const { targetTaskId, targetResultId, report } = result as {
+      readonly targetTaskId?: unknown;
+      readonly targetResultId?: unknown;
+      readonly report?: unknown;
+    };
+    if (typeof targetTaskId !== "string" || typeof targetResultId !== "string") continue;
+    accounts.push(
+      Object.freeze({
+        targetTaskId,
+        targetResultId,
+        outsideInstructions:
+          typeof report === "object" && report !== null
+            ? outsideInstructionsOrNull(
+                (report as { readonly outsideInstructions?: unknown }).outsideInstructions,
+              )
+            : null,
+      }),
+    );
+  }
+  return Object.freeze(accounts);
 }
 
 /**

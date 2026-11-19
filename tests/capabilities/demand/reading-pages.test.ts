@@ -67,7 +67,7 @@ test("完成之后账本里有这个 Demand 的一页与历史索引；内容来
       readFileSync(path.join(demandArchives, revision, "manifest.json"), "utf8"),
     ) as { readonly manifestDigest: string; readonly archivedAt: string };
     ok(
-      page.includes(`<!-- wakeflow:demand-archive-page:v1:en:${manifest.manifestDigest} -->`),
+      page.includes(`<!-- wakeflow:demand-archive-page:v2:en:${manifest.manifestDigest} -->`),
       page,
     );
     ok(page.includes(`- Demand: \`${demandId}\``));

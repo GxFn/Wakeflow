@@ -128,9 +128,9 @@ A recorded decision is a step boundary, not a stop: go on from its `next` while 
 
 ### Step 12 - Complete and archive
 
-When every target is accepted, call `wakeflow_complete_demand`. Preview runs
-the gates and lists blockers without writing; apply seals the archive and
-deletes the active root in one transaction. `wakeflow_cancel_demand` ends a
+When every target is accepted, call `wakeflow_complete_demand` with apply: it
+runs the gates and, when none blocks, seals the archive and deletes the active
+root in one transaction; a blocked one writes nothing and lists the blockers. `wakeflow_cancel_demand` ends a
 Demand that will not be finished (results and evidence are kept);
 `wakeflow_continue_demand` reopens a completed one for follow-up work. Check
 `requirement-coverage` against the entire frozen acceptance list; the reference

@@ -29,7 +29,7 @@ import { ControllerImplementationReviewDecisionError, parseControllerImplementat
 import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
 import { computeTaskPackageDigest, } from "../../governance/tasking/task-package.js";
 import { createInitialTestExecutionAttempt, createRerunTestExecutionAttempt, TestExecutionAttemptError, } from "../../governance/testing/test-execution-attempt.js";
-import { runAppendCommand, } from "../../kernel/append-command.js";
+import { bindAppendAtCurrentRevision, runAppendCommand, UNOBSERVED_STREAM_REVISION, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { readHelperObservationFile, } from "../../kernel/helper-observation-file.js";
@@ -179,6 +179,10 @@ async function closeContext(context) {
     catch (error) {
         mapContextError(error);
     }
+}
+/** 请求没有给流修订时按当前修订来；给了就原样保留（见内核的同名规则）。 */
+function bindingAt(context, binding) {
+    return bindAppendAtCurrentRevision(binding, context.authority.loaded.aggregate.streamRevision);
 }
 /** 追加前先核对观察到的流修订：过期修订不该先取声明再在提交边界失败。 */
 function assertFreshRevision(context, binding) {
@@ -657,8 +661,9 @@ async function rejectedTargetRoute(context, target, workType, taskPackage) {
 async function admittedRoute(context, known, taskPackage) {
     return known ?? loadRoute(context, taskPackage.assignment.windowId);
 }
-async function executePrepare(context, input, binding) {
+async function executePrepare(context, input, requestedBinding) {
     const { authority, options } = context;
+    const binding = bindingAt(context, requestedBinding);
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
     const bound = await boundCommit(repository, binding, options.signal);
     if (bound !== null) {
@@ -1090,7 +1095,7 @@ export async function executePrepareDeliveryRequest(facade, value, options = {})
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({
                     targetTaskId: request.targetTaskId,
@@ -1399,8 +1404,9 @@ async function observedOutcomeDecision(context, input, envelope, sessionId, curr
         throw error;
     }
 }
-async function executeOutcome(context, requested, binding) {
+async function executeOutcome(context, requested, requestedBinding) {
     const { authority, options } = context;
+    const binding = bindingAt(context, requestedBinding);
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
     const bound = await boundCommit(repository, binding, options.signal);
     if (bound !== null) {
@@ -1544,7 +1550,7 @@ export async function executeRecordDeliveryOutcomeRequest(facade, value, options
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({
                     deliveryId: request.deliveryId,
@@ -1684,8 +1690,9 @@ async function executeCallbackReissue(context, target, binding) {
         eventId: stored.eventId,
     });
 }
-async function executeRearm(context, input, binding) {
+async function executeRearm(context, input, requestedBinding) {
     const { authority, options } = context;
+    const binding = bindingAt(context, requestedBinding);
     const repository = new DemandEventSourcingRepository(authority.demandRoot);
     const bound = await boundCommit(repository, binding, options.signal);
     if (bound !== null) {
@@ -1786,7 +1793,7 @@ export async function executeRearmDeliveryRequest(facade, value, options = {}) {
                     root: request.root,
                     demandId: request.demandId,
                     idempotencyKey: request.idempotencyKey,
-                    expectedStreamRevision: request.expectedStreamRevision,
+                    expectedStreamRevision: request.expectedStreamRevision ?? UNOBSERVED_STREAM_REVISION,
                 }),
                 input: Object.freeze({ deliveryId: request.deliveryId }),
             });

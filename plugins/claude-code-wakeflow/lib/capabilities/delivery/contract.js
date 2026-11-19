@@ -79,7 +79,7 @@ export const PREPARE_DELIVERY_TOOL_REGISTRATION = Object.freeze({
     shape: "append",
     executor: "prepareDelivery",
     title: "Prepare Wakeflow Delivery",
-    description: "Prepare one delivery for a planned, rework-requested, product-defect-rework-requested, test-another-attempt-requested, or rejected-before-send (rearm-exhausted) target in one call with the observed stream revision and a client idempotency key: Wakeflow takes the window work claim, renders the prompt skeleton around the Controller's goal, focus, and boundary, appends the envelope with its fence token, and returns the one-shot permit (prompt, host action, fence). Implementation and test targets share this tool. Sending is the Agent host effect; record it with wakeflow_record_delivery_outcome.",
+    description: "Prepare one delivery for a planned, rework-requested, product-defect-rework-requested, test-another-attempt-requested, or rejected-before-send (rearm-exhausted) target in one call with a client idempotency key: Wakeflow takes the window work claim, renders the prompt skeleton around the Controller's goal, focus, and boundary, appends the envelope with its fence token, and returns the one-shot permit (prompt, host action, fence). Implementation and test targets share this tool. Sending is the Agent host effect; record it with wakeflow_record_delivery_outcome.",
     requestSchema: WAKEFLOW_PREPARE_DELIVERY_REQUEST_SCHEMA,
     resultSchema: WAKEFLOW_PREPARE_DELIVERY_RESULT_SCHEMA,
     annotations: APPEND_ANNOTATIONS,

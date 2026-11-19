@@ -39,7 +39,7 @@ import { ControllerProductDefectRemediationAuthorizationError, createControllerP
 import { normalizeControllerReviewEscalation, normalizeControllerReviewResumption, normalizeControllerTestReviewEscalation, } from "../../governance/review/controller-review-decision-contract.js";
 import { ControllerTestReviewDecisionError, createControllerTestReviewDecision, } from "../../governance/review/controller-test-review-decision.js";
 import { buildDemandResultReviewSnapshotFromHistory, computeReportedReviewUnitDigest, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
-import { runAppendCommand, } from "../../kernel/append-command.js";
+import { runAppendCommand, UNOBSERVED_STREAM_REVISION, } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { listHelperNudgeRecords } from "../../kernel/helper-observation-file.js";
@@ -340,8 +340,6 @@ function receipts(commandResult) {
         stateDigest: last.resultingStateDigest,
     };
 }
-/** 信封里"未断言流修订"的占位：导入与评审决定的请求 Schema 下限都是 1，0 不会是调用方给出的值。 */
-const UNOBSERVED_STREAM_REVISION = 0;
 /** 回调许可一经签发（含重放），prompt 就以文件落在 Demand 根下，目标侧助手按 `promptRef` 读取并核对摘要（K6）。 */
 async function materializedCallbackPermit(context, outcome) {
     await materializeDeliveryPermitPrompt(context.authority.demandRoot, "callback", outcome.callback.callbackId, outcome.callback.portablePrompt, signalOptions(context.options.signal));

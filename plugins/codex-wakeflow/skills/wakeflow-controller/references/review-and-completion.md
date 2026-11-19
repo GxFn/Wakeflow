@@ -152,15 +152,16 @@ without it is refused rather than silently overwriting the escalation.
 
 ## Step 12 - Completion, cancellation and continuation
 
-`wakeflow_complete_demand` previews the gates and lists blockers without
-writing, then applies as one transaction: the completion event, the sealed
-archive under the ledger with its verify report, the requirement package marked
-archived, and the active root deleted. Run the preview early enough that the
-blockers are still cheap to fix.
+`wakeflow_complete_demand` takes one call: apply with no `planDigest` runs the
+gates and, when none blocks, commits one transaction - the completion event,
+the sealed archive under the ledger with its verify report, the requirement
+package marked archived, and the active root deleted. A blocked apply writes
+nothing and hands back the blockers; preview still exists for looking at the
+gates early, while the blockers are cheap to fix.
 
-Completion is not a confirmation point. When the preview reports no blocker
-and the completion definition holds, apply, then report what was archived;
-stop before applying only when something is left for the user to decide. The
+Completion is not a confirmation point. When the completion definition holds,
+apply, then report what was archived; stop before applying only when something
+is left for the user to decide. The
 steps the user gates - merging and pushing - are outside Wakeflow, and an
 archived Demand can be reopened with `wakeflow_continue_demand`.
 
